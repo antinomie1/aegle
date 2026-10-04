@@ -10,7 +10,7 @@
 | Windows | Windows 11，x86_64/aarch64，存在兼容 Vulkan 驱动 | ash/Vulkan；原生窗口与 TSF，必要时 IMM 兼容 |
 | macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 原生 Metal；AppKit、NSTextInputClient |
 
-这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 不实现 X11；基础普通窗口要求 xdg-shell，shell 表面另要求 layer-shell。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 不属于首版支持范围；scene 接口允许后续增加 CPU renderer，不先实现它。
+这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 不实现 X11；基础普通窗口要求 xdg-shell，shell 表面另要求 layer-shell。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。
 
 Linux 使用一个连接和事件队列承载普通窗口及可选 layer-shell，补齐预编辑、提交、周边文字/删除、焦点和提交时序。SCTK 的 input_method 面向输入法程序，不代替普通客户端 text-input-v3。默认不会引入 winit 再维护另一套窗口循环。
 

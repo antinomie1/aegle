@@ -10,11 +10,12 @@
 | --- | --- | --- |
 | aegle-types | 几何、颜色、资源 ID、通用错误与能力描述；无平台依赖 | 无 |
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
-| aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid | types |
+| aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；不依赖应用 | types、core |
 | aegle-text | 字体、段落测量、文字布局和编辑模型 | types |
 | aegle-glyph | Swash 字形光栅化与有界 CPU 字形缓存 | types |
 | aegle-scene | 二维绘制命令、裁剪、资源请求及 renderer 契约 | types |
 | aegle-render-vulkan | Vulkan 实现、上传、图集与呈现 | types、scene |
+| aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene |
 | aegle-render-metal | Metal 实现、上传、图集与呈现 | types、scene |
 | aegle-platform-wayland | Wayland 窗口、事件、IME、输出与平台偏好 | types |
 | aegle-platform-win32 | Win32 窗口、TSF/必要兼容路径及平台偏好 | types |
