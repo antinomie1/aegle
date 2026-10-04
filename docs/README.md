@@ -1,0 +1,21 @@
+# Aegle GUI 设计
+
+v0.1，2026-10-05。设计与选型已收敛；仓库当前只有设计文档，没有 GUI 库实现或性能测试结果。用户授权剩余决定由设计者完成，本轮不再扩展范围。
+
+Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示例和直接的命令式 API。Linux/Windows 使用 Vulkan，macOS 使用原生 Metal；CJK、IME、系统无障碍、主题与动画共同设计，模块独立选用。
+
+## 阅读入口
+
+- [需求](requirements.md)、[决策记录](design-tree.md)、[术语](GLOSSARY.md)
+- [整体架构与生命周期](architecture.md)、[模块与构建组合](modules.md)
+- [Rust API](rust-api.md)、[标记语言](markup.md)
+- [默认组件、主题与动画](components-theme-animation.md)
+- [文字与输入](text-input.md)、[系统无障碍](accessibility.md)
+- [平台与绘制](platform-rendering.md)、[依赖版本](dependencies.md)
+- [资源目标](resources.md)、[验收与交付边界](quality.md)
+
+[早期候选取舍](selection-candidates.md)与[平台事实来源](platform-facts.md)保留作依据；最终决定以以上专题为准。
+
+重要决策：[无障碍与自绘](adr/0001-accessibility-and-custom-controls.md)、[标记双执行路径](adr/0002-dual-markup-execution.md)、[独立模块和显式更新](adr/0003-independent-modules-and-imperative-ui.md)。
+
+本文档的 API 是设计规范，预算是待测工程目标。尚未编译或实机验证，不能将“设计已完成”解读为“库已实现或达标”。
