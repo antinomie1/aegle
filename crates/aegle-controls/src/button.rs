@@ -71,6 +71,7 @@ impl Button {
             self.cancel()
         };
         result.repaint = true;
+        result.semantics = true;
         result
     }
 
@@ -141,6 +142,7 @@ impl Button {
             _ => {}
         }
         result.repaint |= before != (self.focused, self.hovered, self.press);
+        result.semantics |= before.0 != self.focused;
         result
     }
 

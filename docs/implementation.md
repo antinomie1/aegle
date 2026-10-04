@@ -12,6 +12,7 @@
 - aegle-text：复用 Parley/Fontique 的 Unicode shaping、字体选择、回退、换行与定位；Paragraph 保留文字和排版结果，宽度变化只重排，颜色覆盖无需重新 shaping。显式字体为默认，system-fonts、text-dictionary、text-a11y、scene 独立选用；缺字与无可用字体分别报告。
 - Editor：复用同一 TextSystem 的 Parley PlainEditor，提供单/多行、选择/命中、视觉移动、grapheme 删除、精确 UTF-8 替换、只读、组合输入模型及有界差量撤销/重做。预编辑只保留被替换片段，提交值不随预编辑改变；取消恢复原选区。文字、装饰和候选区域来自同一布局。apply_ime 在完整验证后应用删除/提交/预编辑事务，删除与提交合成一次撤销；surrounding 无分配地借出有界周边文字。编辑、宽度和样式改变目前仍会重新 shaping，不宣称增量编辑引擎。
 - aegle-controls：无皮肤 Button 的键盘/指针/语义激活、capture 和取消状态；可选 text 提供复用 Editor 的 TextField。宿主拥有树、命中和焦点；controls 默认只依赖 types，不依赖窗口或 renderer。
+- aegle-access：平台回调经 Mailbox/Handlers 排队并唤醒 UI；可选 UnixAdapter 复用 AccessKit AT-SPI。示例从同一控件树按脏标记导出语义，系统 Focus/Click/SetTextSelection 回到同一焦点、按钮和 Editor。text-a11y 提供文字 run 与有校验的选择转换；不是完整跨平台无障碍。
 - aegle-glyph：复用 Swash/Skrifa，按需生成灰度字形与 COLRv0/嵌入位图，LRU 同时约束图像字节和条目数；缓存不持有字体文件。PNG 位图使用有解码预算的 png crate；库不内嵌字体。
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 
@@ -49,7 +50,7 @@ cargo run -p aegle-platform-wayland --example editor --release
 
 ## 原生 Wayland 集成
 
-`aegle-platform-wayland --example editor` 是可交互的软件绘制窗口：一棵 Tree/Taffy 树保存文字标签、TextField、Button 和局部 scene，Route/Focus 管理路由及遍历，按钮回调修改文本框。CJK、键盘编辑、拖选、滚动、撤销及 IME 使用共享行为与同一 Editor，绘制直接写 SHM。示例使用有限覆盖的 OFL 测试字体，无系统字体发现成本；它不是未来的10行 facade API，未接系统无障碍或主题组件。
+`aegle-platform-wayland --example editor` 是可交互的软件绘制窗口：一棵 Tree/Taffy 树保存文字标签、TextField、Button 和局部 scene，Route/Focus 管理路由及遍历，按钮回调修改文本框。CJK、键盘编辑、拖选、滚动、撤销及 IME 使用共享行为与同一 Editor，绘制直接写 SHM。示例使用有限覆盖的 OFL 测试字体，无系统字体发现成本；它不是未来的10行 facade API，可选启用 Unix 系统无障碍，未接主题组件。
 
 在隔离的 Sway 1.12/wlroots 0.20 headless + Pixman compositor 上验证，不连接用户桌面。原生窗口截图已目视检查，CJK 字形、选择字段与裁剪正常；两次启动的首帧均成功。真实协议探针通过 fake input-method-v2 和持有的 virtual-keyboard 对 text-input-v3 发送 CJK 预编辑、隐藏光标、删除/提交同批次、空预编辑重置、stale/current serial、跨窗口焦点、立即取消与旧会话延迟结果，暴露并修复了焦点重启和取消会话串写问题。这是实际客户端/服务端协议验证，尚未进行 fcitx/IBus 的完整真人候选窗验收。
 
@@ -82,8 +83,21 @@ IME 场景还需要 compositor 提供 input-method-v2、virtual-keyboard-v1；�
 - release 组合示例3秒无输入运行呈现2帧，字形图像11629 B / 121项；这是短时无持续重绘检查，未测量完整空闲 CPU/PSS。
 - 本机编译与运行不等于 MSRV、其他操作系统或完整无障碍验收；Clippy 仍未安装。
 
+## Unix 无障碍与文字选择验证
+
+通过 `--features example-accessibility` 在原生 editor 示例中启用 AT-SPI。`aegle-access` 不保存第二份控件树；初次/重新激活全量导出，其后提交语义脏控件，布局与滚动使用绘制的同一逻辑几何。平台线程只排队并使用懒创建的 Wayland wake handle 唤醒 UI；按钮纯 hover/pressed 不再连带语义失效。
+
+私有 Sway/Pixman 与 `dbus-run-session` 上的真实 AT-SPI 方法调用验证：7个系统可查询元素（应用根加6个逻辑节点）的角色/名称/父子关系，CJK 文本及 Unicode scalar 数量，文本框和按钮焦点，选择一个中文字、设置 caret、按钮激活清空文字，以及停用后重新启用时的完整树和焦点恢复。Registry/Status 为最小测试服务，不是真实屏幕阅读器验收；未连接用户桌面。探针还发现并修正了示例 Label 应使用 value 导出名称的映射问题。
+
+- workspace all-features 共20个常规集成场景通过；两个原生 Wayland 场景显式运行通过，含新增后台线程唤醒。all-targets/all-features、默认 access 构建、严格 Rustdoc、fmt/diff 检查通过。
+- 实现8450行、测试1974行（18.94%，不含 examples），最大源文件483行。新文本场景覆盖 CJK/组合字符、run 端点、只读、无效/过期选择、预编辑与空文本。临时 RTL/bidi 探针验证12种混排/换行场景中的799个位置，不将其扩张成仓库测试套件。
+- 同一800×480私有输出、有限测试字体、release配置下，不启用/启用 Unix 无障碍的发布文件分别为4520968 / 8410296 B。两者 `ldd` 仍为 libxkbcommon、libgcc_s、libm、libc 与 loader；AT-SPI 增加的 Rust 协议代码静态进入文件，并另需运行中的 D-Bus/AT-SPI 服务。
+- 在初帧后约200 ms、无输入时的一次 `/proc` 快照：不启用时 RSS/PSS 为9424/6325 KiB、1线程；已激活并读取语义树时为12520/9430 KiB、4线程。计量只含示例进程，未计 compositor、测试服务或真实辅助技术，也不是30秒稳态、峰值或嵌入式验收。未启用样本3秒共呈现2帧。
+
+仍缺 Unix EditableText（上游0.22.1未实现）、密码保护、预编辑期间辅助选择的完整协调、总线故障恢复/状态报告及真实屏幕阅读器验收。Wayland 不伪造全局屏幕原点。线程、无界队列和语义映射的实际寿命见[资源](resources.md)。
+
 ## 下一阶段与缺口
 
-下一步把已共享的控件行为、路由和原生输入组成应用层，并接入系统无障碍；随后完成其他平台、Vulkan/Metal、组件、主题、动画、标记语言及发布组合。原生示例已可运行，但完整 GUI facade 仍未交付。
+下一步把控件行为、原生输入及已接通的语义能力组成应用层，继续补齐无障碍缺口；随后完成其他平台、Vulkan/Metal、组件、主题、动画、标记语言及发布组合。原生示例已可运行，但完整 GUI facade 仍未交付。
 
-当前尚无系统剪贴板、密码编辑、系统无障碍 adapter、GPU renderer、通用图像命令、主题动画或 DSL。text-a11y 仅启用上游布局能力；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪与绘制组仍待应用层组装。设计文档是目标，不能当作实现证据。
+当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令、主题动画或 DSL。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪与绘制组仍待应用层组装。设计文档是目标，不能当作实现证据。

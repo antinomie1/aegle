@@ -1,6 +1,6 @@
 # 模块、依赖与构建组合
 
-状态：v0.1 模块设计。types、core、layout、scene、text、glyph、controls、软件 renderer 与 Wayland 平台已建立；表中其余模块及已建立模块的完整职责仍是设计目标，具体进度见[实现状态](implementation.md)。
+状态：v0.1 模块设计。types、core、layout、scene、text、glyph、controls、access、软件 renderer 与 Wayland 平台已建立；表中其余模块及已建立模块的完整职责仍是设计目标，具体进度见[实现状态](implementation.md)。
 
 ## 拆分尺度
 
@@ -21,7 +21,7 @@
 | aegle-platform-win32 | Win32 窗口、TSF/必要兼容路径及平台偏好 | types |
 | aegle-platform-appkit | AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-shell-wayland | layer-shell 表面策略，共享 Wayland 连接和事件队列 | types、platform-wayland |
-| aegle-access | 语义快照/差量和目标平台 AccessKit adapter | types |
+| aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix 显式启用 |
 | aegle-theme | 有类型的主题 token、局部覆盖与状态取值 | types |
 | aegle-motion | 时间、补间、过渡及可选弹簧；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
@@ -46,7 +46,9 @@
 
 `aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。尚未实现 layer-shell 或 GPU surface 接口。
 
-`aegle-controls` 默认只有无分配的 Button 状态及借用 Input/Outcome；`text` 增加复用 Editor 的 TextField。它不依赖 core、布局、主题、renderer 或窗口。宿主在自己的树中保存行为状态，负责命中、焦点和 capture；键盘、指针及语义激活经过同一默认行为。Wayland editor 示例使用 core 的 Route/Focus 连接这套行为，不再另写编辑快捷键与 IME 文本替换。完整系统无障碍仍需 adapter。
+`aegle-controls` 默认只有无分配的 Button 状态及借用 Input/Outcome；`text` 增加复用 Editor 的 TextField。它不依赖 core、布局、主题、renderer 或窗口。宿主在自己的树中保存行为状态，负责命中、焦点和 capture；键盘、指针及语义激活经过同一默认行为。Wayland editor 示例使用 core 的 Route/Focus 连接这套行为，不再另写编辑快捷键与 IME 文本替换。可选 aegle-access/unix 已在示例接通 AT-SPI 的查询、焦点、按钮及文字选择，完整系统无障碍仍未完成。
+
+`aegle-access` 的 Mailbox/Handlers 将原生线程上的请求交给宿主自己的 UI 线程，不引入另一棵应用树。UnixAdapter 复用 AccessKit 的系统协议与语义缓存，收到初次请求时完整导出，其后按脏标记更新。text-a11y 文本桥补充 run 身份/范围校验；平台、控件和文字依赖仍可分开选择。
 
 没有独立的“每个控件 crate”或“每个颜色类型 crate”。当一个模块的多种选择只影响内部小函数时使用 feature，不为包装一个转发函数增加新的包。
 

@@ -140,6 +140,9 @@ pub struct Outcome {
     pub handled: bool,
     /// Visual interaction state may have changed.
     pub repaint: bool,
+    /// Focus or enabled state changed independently of pixels. Text value and
+    /// selection invalidation also remain available through the editor.
+    pub semantics: bool,
     /// Semantic action to dispatch through the host's ordinary action handler.
     pub action: Option<Action>,
     /// Ask the focus owner to focus this control.

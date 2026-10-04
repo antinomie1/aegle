@@ -97,7 +97,8 @@ impl App {
     pub fn scroll(&mut self, position: Point, amount: f32) -> Result<()> {
         if self.bounds(self.field).contains(position) {
             self.scroll = (self.scroll + amount).max(0.0);
-            self.tree.mark_dirty(self.field, Dirty::PAINT)?;
+            self.tree
+                .mark_dirty(self.field, Dirty::PAINT | Dirty::SEMANTICS)?;
             self.ime_sync = true;
         }
         Ok(())
@@ -133,7 +134,7 @@ impl App {
     }
 
     /// The route snapshots topology, so listeners and actions hold no tree borrow.
-    fn dispatch(&mut self, target: NodeId, input: Input<'_>) -> Result<()> {
+    pub(super) fn dispatch(&mut self, target: NodeId, input: Input<'_>) -> Result<()> {
         let mut route = std::mem::take(&mut self.route);
         route.rebuild(&self.tree, self.root, target)?;
         let mut event = EventControl::default();
@@ -199,8 +200,10 @@ impl App {
 
     fn effects(&mut self, target: NodeId, outcome: Outcome) -> Result<()> {
         if outcome.repaint {
-            self.tree
-                .mark_dirty(target, Dirty::PAINT | Dirty::SEMANTICS)?;
+            self.tree.mark_dirty(target, Dirty::PAINT)?;
+        }
+        if outcome.semantics {
+            self.tree.mark_dirty(target, Dirty::SEMANTICS)?;
         }
         self.ime_reset |= outcome.reset_ime;
         self.ime_sync |= outcome.reset_ime;
@@ -218,7 +221,7 @@ impl App {
         Ok(())
     }
 
-    fn change_focus(&mut self, change: FocusChange) -> Result<()> {
+    pub(super) fn change_focus(&mut self, change: FocusChange) -> Result<()> {
         if !change.changed() {
             return Ok(());
         }

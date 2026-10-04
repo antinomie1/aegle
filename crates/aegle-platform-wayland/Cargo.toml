@@ -13,7 +13,11 @@ xkbcommon = { version = "0.8.0", default-features = false }
 wayland-client = "0.31.15"
 wayland-protocols = { version = "0.32.13", features = ["client", "unstable"] }
 
+[features]
+example-accessibility = ["aegle-access/unix", "aegle-text/text-a11y"]
+
 [dev-dependencies]
+aegle-access.workspace = true
 aegle-controls = { workspace = true, features = ["text"] }
 aegle-core.workspace = true
 aegle-layout.workspace = true

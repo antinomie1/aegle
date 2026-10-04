@@ -1,6 +1,6 @@
 # 无障碍与可检查的控件树
 
-状态：v0.1 设计基线。使用兼容版本组中的 AccessKit 平台 adapters，默认 desktop 启用；逻辑节点使用代数 ID，语义按需差量同步。具体实现仍需真实平台验收。关联 R04–R07、R12–R14、R18–R21。
+状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI adapter、保留编辑器文本桥及 Wayland 示例接入；尚未完成完整跨平台无障碍。未来 desktop 组合默认启用系统适配，当前各独立模块显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
 
 ## 已确认的行为目标
 
@@ -37,7 +37,7 @@
 
 ## 平台事实与选型候选
 
-以下事实于 2026-10-05 核实，属于文档调查，未进行三平台实机测试。
+以下系统接口事实于 2026-10-05 核实。Linux 的当前协议验证范围见下文；未进行三平台辅助技术实机验收。
 
 | 平台 | 系统接口与已核实能力 | 仍需验证 |
 | --- | --- | --- |
@@ -54,11 +54,36 @@ Wayland 不自动为自绘控件提供 AT-SPI 语义。窗口接入与无障碍�
 
 AccessKit 当前上游 README 表示已发布适配支持单行和多行输入，但仍有未覆盖的元素/属性，rich text / hypertext 尚有缺口。最终选择必须以锁定版本和本项目控件清单验证，不能把某个库的存在等同于需求已满足。
 
-最终选择按目标平台接入 AccessKit 独立 adapter，版本见 dependencies.md；adapter 的树、线程和异步任务都计入资源。Parley 发布版的 text-a11y 提供文本节点与选区转换。
+最终选择按目标平台接入 AccessKit 独立 adapter，版本见 [依赖基线](dependencies.md)；adapter 的树、线程和异步任务都计入资源。已接入的文本桥复用 Parley 的节点和选区转换，补充 Aegle 编辑状态边界。
+
+## 当前接入与行为边界
+
+`aegle-access` 默认仅依赖 AccessKit schema，提供与窗口循环无关的 `Mailbox/Handlers`。`unix` feature 才编译 `UnixAdapter` 与 Unix AT-SPI 依赖；Wayland 模块不因此永久绑定无障碍实现。`editor` 示例通过 `example-accessibility` feature 组合它们，从现有 Taffy/控件树派生窗口、标签、按钮、文本框及文字 run，并用 `Dirty::SEMANTICS` 提交变化。首次激活或重新激活提交完整树，其后提交发生变化的逻辑控件及其文字 run；当前没有每个文字 run 的独立差量比较缓存。
+
+AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handlers 只排队并唤醒主线程；`Wayland::wake_handle()` 复用 calloop 的事件唤醒，不增加轮询定时器。激活回调返回 `None`，宿主收到 `InitialTree` 后立即在 UI 线程构建完整树，即使没有像素需要重画。`UnixAdapter::update_if_active` 的闭包只在原生适配处于活动或待初始化状态时调用；逻辑控件焦点和原生窗口激活分别同步；当前辅助 Focus 不会请求 xdg-activation 来激活后台窗口。按钮 Click 经过与物理输入共用的 `Input::Activate`，Focus 经过现有焦点策略，过期或不适用的目标不会直接访问已失效控件。
+
+`aegle-text/text-a11y` 的 `EditorDriver::accessibility` 导出当前显示文本、布局几何、只读状态及选区；显示文本包含 IME 预编辑及下划线，不能视为已提交值。`select_accessibility` 使用最近一次导出的 run 身份验证范围，布局重建后须重新导出。AccessKit 的 run 内位置以可选择的 shaping cluster 计数，AT-SPI 外部偏移以 Unicode scalar 计数；平台 adapter 与 Parley 依据 run 的字符长度完成转换，不能直接传递 UTF-8 字节偏移。
+
+只读编辑器仍接受合法选择。活动预编辑期间 `select_accessibility` 返回 `CompositionActive`，当前示例报告并拒绝该次选择，不隐式取消组合或重解释旧范围；需要接受此操作的宿主应先显式结束 IME 会话，再发布恢复后的文本并接受基于新快照的选择。未知 run、越界位置或重排后尚未重新发布的选择返回 `InvalidRange`。当前桥只处理普通文本，尚不支持密码保护导出。
+
+当前 Unix 平台能力如下；API 已存在与系统能力已验证必须分别表述。
+
+| 能力 | 当前结果 |
+| --- | --- |
+| 控件树、名称、角色、父子关系 | 示例通过 AT-SPI 查询验证 |
+| 按钮动作、文本框与按钮焦点 | AT-SPI GrabFocus/DoAction 经过保留控件状态验证 |
+| CJK 文本、字符数、选择和 caret | AT-SPI Text 查询及选择动作通过；本地桥覆盖只读、run 边界、失效范围与 IME 拒绝 |
+| 通过辅助技术替换文本 | 上游 `accesskit_unix` 0.22.1 未实现 `org.a11y.atspi.EditableText`；当前不能宣称支持 |
+| 几何 | 从绘制使用的逻辑窗口几何与滚动偏移派生；Wayland 无全局窗口位置，不调用 set_root_window_bounds；adapter 的默认原点不能作为真实屏幕位置，也未完成屏幕定位验收 |
+| macOS / Windows、真实屏幕阅读器、密码控件 | 尚未接入或验收 |
+
+协议验证使用独立 headless Wayland compositor、私有 `dbus-run-session`、最小假 Status/Registry 服务，以及真实 D-Bus AT-SPI 查询/动作：遍历树、读取 CJK、改变选择/caret、切换焦点、激活按钮并观察文字清空，以及停用/重新启用后的完整树与焦点恢复。这证明 adapter 与当前示例的协议和状态连接，不等于真实 AT-SPI registry、屏幕阅读器或全部桌面环境验收。测试总线未修改用户桌面设置。
+
+上游 Unix adapter 首次构造启动进程级 worker，窗口销毁后该 worker 仍保留；它没有公开总线错误或就绪状态接口，构造成功不能证明辅助技术已连接。初始总线/服务失败可能结束 worker，当前没有可承诺的自动恢复路径。停用和线程、队列、语义缓存成本见 [资源边界](resources.md)。
 
 ## 检查能力的范围
 
-用户已要求可检查的控件树。建议区分系统辅助技术/检查工具所见的语义树，与框架开发工具所见的逻辑控件、状态及关联信息。首版以 debug-only 的本地树快照接口输出逻辑关系、语义映射、几何和状态；不建立常驻服务器、远程调试协议或运行时反射系统。密码内容始终隐藏。
+用户已要求可检查的控件树。当前示例的系统语义树可经 AT-SPI 查询；框架开发工具所见的完整逻辑控件、状态与语义映射快照仍待实现。计划使用 debug-only 的本地树快照接口输出逻辑关系、语义映射、几何和状态，不建立常驻服务器、远程调试协议或运行时反射系统；密码内容应始终隐藏。
 
 检查输出应能解释一个逻辑控件为何被合并、隐藏或映射为多个语义元素，方便第三方组件作者排查问题。发布物不能默认携带完整开发工具而不计入成本。
 
@@ -78,6 +103,9 @@ AccessKit 当前上游 README 表示已发布适配支持单行和多行输入�
 - [Microsoft：UI Automation provider](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-providersoverview)
 - [GNOME：AT-SPI Accessible](https://gnome.pages.gitlab.gnome.org/at-spi2-core/libatspi/class.Accessible.html)
 - [AccessKit 上游说明](https://github.com/AccessKit/accesskit#readme)
+- [AccessKit Unix 0.22.1：adapter API](https://docs.rs/crate/accesskit_unix/0.22.1/source/src/adapter.rs)
+- [AccessKit Unix 0.22.1：worker 与激活生命周期](https://docs.rs/crate/accesskit_unix/0.22.1/source/src/context.rs)
+- [AccessKit Unix 0.22.1：实际注册的 AT-SPI interfaces](https://docs.rs/crate/accesskit_unix/0.22.1/source/src/atspi/bus.rs)
 - [Apple：减少动态效果](https://developer.apple.com/documentation/appkit/nsworkspace/accessibilitydisplayshouldreducemotion)
 - [Apple：提高对比度](https://developer.apple.com/documentation/appkit/nsworkspace/accessibilitydisplayshouldincreasecontrast)
 - [Apple：辅助显示偏好变化通知](https://developer.apple.com/documentation/appkit/nsworkspace/accessibilitydisplayoptionsdidchangenotification)

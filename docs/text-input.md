@@ -1,6 +1,6 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层、Windows/macOS 输入、剪贴板、密码控件和系统无障碍仍未实现。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层、Windows/macOS 输入、剪贴板和密码控件仍未实现，Unix 无障碍已接入部分查询与选择能力。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
 
 ## 当前显示接口
 
@@ -74,7 +74,7 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 Wayland 已接入上述 text-input-v3；Windows 的 TSF/兼容路径及 macOS 的 NSTextInputClient 仍为待实现目标。文字引擎不代替这些平台协议。候选窗采用当前呈现几何，主题、缩放或动画更新时同步，不重建编辑器。
 
-`text-a11y` 当前仅启用 Parley 的可选 AccessKit 布局接口，不自动创建语义树或系统 adapter。后续无障碍模块负责文字布局节点、选择范围及平台 adapter；文字变化和选择变化发送必要通知，纯颜色或装饰动画不制造朗读噪声。
+`text-a11y` 提供 `EditorDriver::accessibility` 导出显示文字 run、几何、预编辑下划线和选区；`select_accessibility` 校验最近导出的身份/cluster 索引并作用于同一个 Editor。布局重建后旧映射无效；活动组合期间明确返回 CompositionActive，不能把显示范围直接套到取消后的已提交值。Unix 示例通过独立 aegle-access 接到 AT-SPI 查询、选择和焦点，当前上游缺少 EditableText，不能声称支持辅助技术文字替换；详见[无障碍边界](accessibility.md)。
 
 平台缺少 IME 协议时报告 ImeUnavailable 并保留基础键盘输入；要求组合输入的应用可以将其设为启动必需能力。正式 CJK/IME 验收必须在具备对应协议和真实输入法的环境进行。
 

@@ -115,6 +115,8 @@ pub(crate) struct Composition {
 /// This is an editing model, not an OS input-method or clipboard connection.
 pub struct Editor {
     pub(crate) inner: PlainEditor<Color>,
+    #[cfg(feature = "text-a11y")]
+    pub(crate) access_runs: Vec<(accesskit::NodeId, usize)>,
     pub(crate) composition: Option<Composition>,
     pub(crate) history: History,
     pub(crate) changes: EditChanges,
@@ -273,6 +275,8 @@ impl TextSystem {
         validate_content(text, options.multiline)?;
         let mut editor = Editor {
             inner: PlainEditor::new(style.size),
+            #[cfg(feature = "text-a11y")]
+            access_runs: Vec::new(),
             composition: None,
             history: History::new(options.history_bytes),
             changes: EditChanges::default(),

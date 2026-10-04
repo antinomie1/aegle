@@ -9,8 +9,9 @@ layout, retained Unicode paragraphs/editors, on-demand CJK glyphs, drawing recor
 and software rasterization work today. The independent Wayland backend adds
 native windows, bounded SHM presentation, keyboard/pointer input and text-input-v3.
 Shared Button/TextField behavior now connects routed input and focus to the same
-retained tree and editor. System accessibility, other OS backends and GPU
-rendering remain unimplemented.
+retained tree and editor. Optional Unix accessibility now exposes controls, CJK
+text, selection, focus and button actions through AT-SPI. Native text replacement,
+other OS backends and GPU rendering remain unimplemented.
 See the [implementation status](docs/implementation.md) and [design](docs/README.md).
 
 ```sh
@@ -30,6 +31,7 @@ plain editing, composition and bounded delta undo), `aegle-glyph` (on-demand
 rasterization and a bounded image cache),
 `aegle-render-software` (borrowed framebuffers and linear-light compositing),
 `aegle-controls` (unskinned Button and optional TextField behavior),
+`aegle-access` (UI-thread callback mailbox and optional Unix accessibility),
 and `aegle-platform-wayland` (windows and native input, independent of rendering).
 Text support is opt-in for scene/software rendering. Geometry-only builds have
 no font stack; application font bytes remain shared, with no bundled font atlas.
@@ -48,5 +50,16 @@ It needs a Wayland compositor with xdg-shell and wl_compositor version 4 or newe
 native composition additionally needs text-input-v3 and an input method. Building
 requires libxkbcommon development metadata for pkg-config; running needs the
 libxkbcommon runtime. This low-level example is not yet the planned widget/app API.
+
+Enable the native accessibility example with:
+
+```sh
+cargo run -p aegle-platform-wayland --example editor --features example-accessibility --release
+```
+
+This needs session D-Bus and AT-SPI services. The adapter shares the existing
+control/editor state and wakes the UI without polling. It adds a process-wide
+worker and semantic cache; current limitations, including missing EditableText
+and Wayland screen positioning, are documented in [accessibility](docs/accessibility.md).
 
 Licensed under [LGPL-3.0-only](LICENSE); the incorporated GPLv3 text is in [COPYING](COPYING).

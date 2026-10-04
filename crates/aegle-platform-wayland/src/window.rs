@@ -4,7 +4,9 @@ use smithay_client_toolkit::{
     compositor::{CompositorState, FrameCallbackData},
     output::OutputState,
     reexports::{
-        calloop::{EventLoop, Interest, Mode, PostAction, RegistrationToken, generic::Generic},
+        calloop::{
+            EventLoop, Interest, Mode, PostAction, RegistrationToken, generic::Generic, ping,
+        },
         calloop_wayland_source::WaylandSource,
     },
     registry::RegistryState,
@@ -35,6 +37,20 @@ pub struct Wayland {
     qh: QueueHandle<State>,
     next_id: u64,
     source: RegistrationToken,
+    wake: Option<(WakeHandle, RegistrationToken)>,
+}
+
+/// Cloneable cross-thread signal for a host work queue, without a polling timer.
+/// A handle keeps only its signal resource alive, never the window or UI state.
+#[derive(Clone, Debug)]
+pub struct WakeHandle(ping::Ping);
+
+impl WakeHandle {
+    /// Requests [`Event::Wake`]. Store work in the host queue before calling.
+    /// Requests after the backend is destroyed cannot deliver an event.
+    pub fn wake(&self) {
+        self.0.ping();
+    }
 }
 
 impl Wayland {
@@ -77,7 +93,25 @@ impl Wayland {
             qh,
             next_id: 0,
             source,
+            wake: None,
         })
+    }
+
+    /// Lazily creates one wake source for background work or accessibility.
+    /// Subsequent calls share the source; unused backends allocate no signal FD.
+    pub fn wake_handle(&mut self) -> Result<WakeHandle, Error> {
+        if self.wake.is_none() {
+            let (sender, source) = ping::make_ping().map_err(Error::backend)?;
+            let token = self
+                .event_loop
+                .handle()
+                .insert_source(source, |_, _, state| {
+                    state.events.push_back(Event::Wake);
+                })
+                .map_err(Error::backend)?;
+            self.wake = Some((WakeHandle(sender), token));
+        }
+        Ok(self.wake.as_ref().unwrap().0.clone())
     }
 
     /// Creates an ordinary toplevel and requests its initial configure.
@@ -303,5 +337,8 @@ impl Drop for Wayland {
         // Explicitly remove the source before field destruction: queued protocol
         // objects may hold loop handles, so merely dropping EventLoop is not enough.
         self.event_loop.handle().remove(self.source);
+        if let Some((_, token)) = self.wake.take() {
+            self.event_loop.handle().remove(token);
+        }
     }
 }

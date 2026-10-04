@@ -1,5 +1,7 @@
 //! Application-specific composition of independent retained modules.
 
+#[cfg(feature = "example-accessibility")]
+mod accessibility;
 mod input;
 
 use aegle_controls::{Button, TextField};
@@ -54,6 +56,8 @@ pub struct App {
     pub ime_reset: bool,
     pub cause: ImeCause,
     scroll: f32,
+    #[cfg(feature = "example-accessibility")]
+    next_access_id: u64,
 }
 
 impl App {
@@ -164,6 +168,8 @@ impl App {
             ime_reset: false,
             cause: ImeCause::Other,
             scroll: 0.0,
+            #[cfg(feature = "example-accessibility")]
+            next_access_id: 7,
         })
     }
 
@@ -231,8 +237,9 @@ impl App {
                     }
                 },
             )?;
+            self.tree.mark_dirty(self.root, Dirty::SEMANTICS)?;
             for id in self.leaves {
-                self.tree.mark_dirty(id, Dirty::PAINT)?;
+                self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             }
             let width = (self.bounds(self.field).size.width - INSET * 2.0).max(1.0);
             let Content::Field(field) = &mut self.tree.get_mut(self.field).unwrap().context.content

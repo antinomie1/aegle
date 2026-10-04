@@ -1,6 +1,6 @@
 # 资源预算与性能策略
 
-状态：整体性能数值为待实测的设计目标；当前软件 mask、CPU 字形缓存及编辑历史的已实现边界在下文单列。不能将缓存上限当作已达到的整机性能。对应 R04、R15、R16。资源优先级是：先满足交互延迟，再依次降低空闲 CPU/唤醒、常驻 RAM、发布体积和额外帧吞吐。
+状态：整体性能数值为待实测的设计目标；当前软件 mask、CPU 字形缓存、编辑历史及无障碍接入的已实现边界在下文单列。不能将缓存上限当作已达到的整机性能。对应 R04、R15、R16。资源优先级是：先满足交互延迟，再依次降低空闲 CPU/唤醒、常驻 RAM、发布体积和额外帧吞吐。
 
 ## 统一比较环境
 
@@ -71,6 +71,16 @@ PlainEditor 当前在内容、宽度/对齐和样式变化时完整重建排版�
 窗口尺寸和 scale 决定物理像素，renderer 的 mask 与平台 SHM allowance 相互独立；增加 SHM allowance 不自动增加 mask 预算。过大窗口或高缩放可能返回明确预算错误，宿主负责选择合适配置。当前窗口示例与真实协议探针属于桌面软件路径验证，不能替代嵌入式 PSS、空闲 CPU 或 GPU 成本测量。
 
 
+### 当前无障碍资源边界
+
+`aegle-access` 默认不编译原生 adapter；仅启用 `text-a11y` 也不会创建系统无障碍 worker。创建 `UnixAdapter` 后，上游 AccessKit 启动进程级后台 worker，持有总线连接、executor 及协议状态；所依赖异步运行时自身的资源也须计入。所有窗口 adapter 共享该 worker，它在最后一个 adapter 销毁后仍可存活，不能把“无活动辅助技术”或“窗口已关闭”说成零线程、零内存。当前有本机六节点示例的单次发布体积、线程与 PSS 快照比较，见[实现状态](implementation.md)；没有完成资源目标场景或嵌入式验收。
+
+首次激活才由 UI 线程导出完整语义树，原生 adapter 保存语义快照及文字属性。Aegle Mailbox 不复制控件树，也不额外缓存完整语义树，但使用无界标准库通道；上游 worker 消息通道同样无界。宿主须每次唤醒及时清空回调、保持动作处理短小。两层队列、序列化缓冲、文字副本及上游语义缓存当前没有统一字节预算；不能将其他缓存的上限宣传为包含无障碍的总 RAM 保证。
+
+文本桥每次导出为文字 run 分配文本和几何属性。Parley 保留 span 与语义 ID 的双向映射以及 cluster→span 映射；Aegle 另保存最近导出的 `(NodeId, character_count)` 数组，用于验证外部选区。布局重建清除该数组的有效内容并保留容量；重新导出前拒绝旧范围。适配停用后上游可释放活动语义树，但当前示例仍保留 Editor 的这些映射和容量，未实现专用停用回收 API。文字 run 重新导出和 adapter 更新期间的短期分配也另计。
+
+Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping source，回调先入队再唤醒 UI，未加入周期轮询。语义只在首次请求或脏标记变化时导出，文字内容、选择或滚动导致的变化仍会重新导出相应控件的文字 run。私有 AT-SPI 协议验证确认这些更新与动作连通；它不证明上述整机资源目标已经达到。
+
 ## 低成本更新
 
 保存控件与局部绘制记录，以失效标记决定工作。首版只在像素改变时绘制，但一旦绘制就提交整个窗口；不先实现复杂的局部损伤合成系统。GPU 使用 FIFO 呈现、默认最多两帧在途，静止时不持续 present。
@@ -81,7 +91,7 @@ PlainEditor 当前在内容、宽度/对齐和样式变化时完整重建排版�
 
 ## 发布清单
 
-默认不随包附送字体，允许系统字体；嵌入式须明确指定或打包有合法分发许可的字体。Linux 运行环境列出 libwayland-client、libxkbcommon、Fontconfig、Vulkan loader/driver，以及启用无障碍时的 D-Bus/AT-SPI 服务。它们可由系统提供，但不能从依赖清单消失。
+默认不随包附送字体，允许系统字体；嵌入式须明确指定或打包有合法分发许可的字体。Linux 运行前提按实际组合列出：当前 Wayland 软件路径需要 libxkbcommon runtime，采用 Rust Wayland backend；未来 system backend 需要 libwayland-client，系统字体/Vulkan 组合另列 Fontconfig 与 Vulkan loader/driver。启用 Unix 无障碍还需要会话 D-Bus 与 AT-SPI 服务；zbus 使用 Rust 协议实现，不因此新增 libdbus 链接要求。系统提供的库与服务也必须写入对应发布清单。
 
 Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText/Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 

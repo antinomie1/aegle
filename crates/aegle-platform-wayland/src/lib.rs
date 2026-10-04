@@ -21,6 +21,6 @@ pub use smithay_client_toolkit::seat::{
     pointer::PointerEventKind,
 };
 pub use wayland_client::protocol::wl_seat::WlSeat;
-pub use window::Wayland;
+pub use window::{WakeHandle, Wayland};
 
 use state::State;

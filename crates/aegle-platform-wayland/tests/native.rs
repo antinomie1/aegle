@@ -107,6 +107,17 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
         }
         assert!(Instant::now() < deadline, "native loop did not become idle");
     }
+    let wake = platform.wake_handle().unwrap();
+    let worker = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(20));
+        wake.wake();
+    });
+    let start = Instant::now();
+    platform.dispatch(Some(Duration::from_secs(1))).unwrap();
+    worker.join().unwrap();
+    assert!(start.elapsed() < Duration::from_millis(500));
+    assert!(std::iter::from_fn(|| platform.next_event()).any(|event| matches!(event, Event::Wake)));
+
     let invalid = ImeRequest {
         surrounding: Some("汉".into()),
         cursor: 1,

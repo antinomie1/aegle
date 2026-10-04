@@ -8,7 +8,8 @@
 //! `text-dictionary` enables Parley's dictionary word segmentation. Without it,
 //! basic CJK display and line wrapping remain supported, but dictionary-based
 //! word navigation and some Southeast Asian segmentation are unavailable.
-//! `text-a11y` enables upstream AccessKit layout support without an OS adapter.
+//! `text-a11y` adds AccessKit text runs and selection actions through the same
+//! editor/layout, without an OS adapter or a second text buffer.
 //! `scene` adds paragraph painting into Aegle's retained scene records; it rejects
 //! synthetic bold/oblique faces until those rasterization operations are supported.
 //!
@@ -16,6 +17,8 @@
 //! history using the same fonts and drawing path. Platform IME and clipboard
 //! protocols remain the host's responsibility.
 
+#[cfg(feature = "text-a11y")]
+mod accessibility;
 mod compose;
 mod edit;
 mod editor;

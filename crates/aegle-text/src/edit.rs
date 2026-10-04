@@ -375,12 +375,14 @@ impl EditorDriver<'_> {
         }
     }
     pub(crate) fn rebuilt(&mut self, value: bool) {
+        #[cfg(feature = "text-a11y")]
+        self.editor.access_runs.clear();
         self.editor.diagnostics = diagnose(self.editor.display_text(), self.editor.layout());
         self.editor.changes.value |= value;
         self.editor.changes.layout = true;
         self.editor.changes.selection = true;
     }
-    fn moved(&mut self, before: parley::Generation) {
+    pub(crate) fn moved(&mut self, before: parley::Generation) {
         self.editor.history.break_group();
         self.editor.changes.selection |= before != self.editor.inner.generation();
     }

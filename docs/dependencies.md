@@ -17,14 +17,19 @@
 | 共享字体资源 | linebender_resource_handle 0.1.1 | scene/text 仅借助该轻量句柄共享字体字节，不引入 shaping |
 | 字形缓存索引 | hashbrown 0.17.1、lru-slab 0.1.3 | 哈希索引和 LRU 槽位复用现成实现，命中不分配 |
 | 语义 | AccessKit 0.24.1 | 与 Parley 可选 text-a11y 使用同一 schema |
-| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 三者均属于上述 AccessKit 兼容线，只编译目标平台 |
+| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 当前仅 Unix 通过可选 feature 接入；三者属于上述 AccessKit 兼容线 |
+| Unix 无障碍传输 | accesskit_atspi_common 0.19.1、atspi 0.29.0、zbus 5.19.0 | 复用 AccessKit 适配；采用 async-io，无 Tokio |
 | 路径 | lyon_tessellation 1.0.22 | 可选，不依赖完整通用图形框架 |
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
 | SVG | resvg/usvg 0.48.1 | 构建期优先；运行时可选，关闭 text/system-fonts 等默认 feature |
 
-设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG 及 Wayland 平台依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 接口也已通过全 features 构建。系统无障碍 adapters、其他 OS、GPU 与其余待建模块仍未据此宣称可用，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
+设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG 及 Wayland 平台依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。其他 OS adapters、GPU 与其余待建模块仍未据此宣称可用；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
-`aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；PlainEditor 已有的选择、bidi、点命中和组合布局继续复用，不另带 Unicode 或编辑框架。`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它，启用也不等于已有系统无障碍 adapter。
+`aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；PlainEditor 已有的选择、bidi、点命中和组合布局继续复用，不另带 Unicode 或编辑框架。`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它；该 feature 提供文本语义桥，系统接入另选 `aegle-access/unix`。
+
+`aegle-access` 默认依赖 AccessKit schema 与标准库通道，不带原生 adapter、异步运行时或窗口库。`unix` 仅在非 macOS 的 Unix 目标启用 AccessKit Unix 0.22.1，关闭其默认 features 并显式选择 `async-io`；上游不允许同时启用 `async-io` 与 `tokio`。该闭包含 AccessKit consumer 0.38.0、AT-SPI、Serde、zbus 及其异步组件，不能描述为只有一个小型运行依赖。consumer 使用的 hashbrown 0.16 与字形缓存的 0.17 同时存在于锁定图，不为统一版本私自修改上游依赖。上游 adapter/consumer 声明 MSRV 1.85，zbus 5.19 声明 1.87；完整 MSRV 仍须实际工具链验收。
+
+Wayland 库本身没有 AccessKit 正常依赖；`example-accessibility` 只为其示例组合 dev-dependencies 的 Unix adapter 和 `text-a11y`。构建时纳入 async-io/zbus 不等于启动即创建线程，首次构造 UnixAdapter 才启动上游 worker；此后 worker 的生命周期、无界队列和语义缓存成本见[资源](resources.md)。Unix 原生文字选择可用，但当前上游缺少 AT-SPI EditableText 接口；不能用依赖版本声明代替完整控件支持。
 
 `aegle-glyph` 用 Swash std/render 和与 Parley 相同的 Skrifa 0.44 解析字体；使用 png 的有界解码接口处理嵌入 PNG，避免无上限的中间解码分配。`aegle-render-software/text` 才引入此依赖闭包；默认纯几何构建的正常依赖树没有 Parley、Swash 或 PNG。Cargo 测试/示例的 dev-dependencies 不代表库的发布依赖，仍需核查最终应用的 feature 合并。
 

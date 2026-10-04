@@ -77,6 +77,9 @@ impl WindowInfo {
 /// Native events in dispatch order. Coordinates use logical surface pixels.
 #[derive(Debug)]
 pub enum Event {
+    /// An external producer requested a wake; drain the host's own work queue.
+    /// Multiple requests may coalesce into one event.
+    Wake,
     /// Geometry or activation changed.
     Configure {
         /// Target window.

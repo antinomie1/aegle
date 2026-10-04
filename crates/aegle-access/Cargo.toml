@@ -1,0 +1,20 @@
+[package]
+name = "aegle-access"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Event-driven accessibility adapters over retained application state"
+
+[features]
+default = []
+unix = ["dep:accesskit_unix"]
+
+[dependencies]
+accesskit.workspace = true
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+accesskit_unix = { version = "0.22.1", optional = true, default-features = false, features = ["async-io"] }
+
+[lints]
+workspace = true

@@ -62,6 +62,7 @@ impl TextField {
         };
         result.reset_ime |= was_ime && !enabled;
         result.repaint = true;
+        result.semantics = true;
         result
     }
 
@@ -83,6 +84,7 @@ impl TextField {
                     self.cancel(fonts)
                 };
                 result.repaint |= changed;
+                result.semantics |= changed;
                 result.reset_ime |= changed && !focused;
                 Ok(result)
             }

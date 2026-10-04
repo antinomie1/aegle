@@ -17,6 +17,8 @@ aegle-render-software = { path = "crates/aegle-render-software" }
 aegle-text = { path = "crates/aegle-text" }
 aegle-glyph = { path = "crates/aegle-glyph" }
 aegle-controls = { path = "crates/aegle-controls" }
+aegle-access = { path = "crates/aegle-access" }
+accesskit = { version = "0.24.1", default-features = false }
 linebender_resource_handle = { version = "0.1.1", default-features = false }
 parley = { version = "0.11.1", default-features = false, features = ["std"] }
 swash = { version = "0.2.10", default-features = false, features = ["std", "render"] }

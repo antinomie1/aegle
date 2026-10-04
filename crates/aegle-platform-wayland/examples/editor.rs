@@ -27,6 +27,11 @@ fn main() -> Result<()> {
         ..Default::default()
     })?;
     let mut app = App::new()?;
+    #[cfg(feature = "example-accessibility")]
+    let mut accessibility = {
+        let wake = backend.wake_handle()?;
+        aegle_access::UnixAdapter::new(move || wake.wake())
+    };
     app.resize(backend.window_info(window)?.size)?;
     let mut renderer = Renderer::default();
     let mut presented = 0;
@@ -46,7 +51,11 @@ fn main() -> Result<()> {
                     backend.remove_window(window)?;
                     return Ok(());
                 }
-                Event::Configure { info, .. } => app.resize(info.size)?,
+                Event::Configure { info, .. } => {
+                    app.resize(info.size)?;
+                    #[cfg(feature = "example-accessibility")]
+                    accessibility.set_window_focused(info.active);
+                }
                 Event::Redraw { .. } => ready = true,
                 Event::KeyboardFocus { seat, focused, .. } => {
                     if focused {
@@ -123,9 +132,26 @@ fn main() -> Result<()> {
                 backend.configure_ime(window, None)?;
             }
         }
+        #[cfg(feature = "example-accessibility")]
+        let mut initial_access = false;
+        #[cfg(feature = "example-accessibility")]
+        while let Some(event) = accessibility.next_event() {
+            match event {
+                aegle_access::Event::InitialTree => initial_access = true,
+                aegle_access::Event::Action(action) => app.access_action(action)?,
+                aegle_access::Event::Deactivate => {}
+            }
+        }
+        if std::mem::take(&mut app.ime_reset) && backend.ime_available() {
+            backend.configure_ime(window, None)?;
+        }
         let info = backend.window_info(window)?;
         if app.refresh(info.size)? {
             backend.request_redraw(window)?;
+        }
+        #[cfg(feature = "example-accessibility")]
+        if initial_access || app.access_dirty() {
+            accessibility.update_if_active(|initial| app.accessibility(initial));
         }
         if std::mem::take(&mut app.ime_sync) && backend.ime_available() {
             backend.configure_ime(window, app.ime_request())?;
