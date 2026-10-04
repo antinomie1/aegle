@@ -14,6 +14,11 @@ aegle-core = { path = "crates/aegle-core" }
 aegle-layout = { path = "crates/aegle-layout" }
 aegle-scene = { path = "crates/aegle-scene" }
 aegle-render-software = { path = "crates/aegle-render-software" }
+aegle-text = { path = "crates/aegle-text" }
+aegle-glyph = { path = "crates/aegle-glyph" }
+linebender_resource_handle = { version = "0.1.1", default-features = false }
+parley = { version = "0.11.1", default-features = false, features = ["std"] }
+swash = { version = "0.2.10", default-features = false, features = ["std", "render"] }
 taffy = { version = "0.14.0", default-features = false, features = ["std", "flexbox", "block_layout", "content_size"] }
 tiny-skia = { version = "0.12.0", default-features = false, features = ["std", "simd"] }
 

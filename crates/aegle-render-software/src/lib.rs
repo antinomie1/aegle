@@ -9,6 +9,8 @@ mod blend;
 mod path;
 mod raster;
 mod surface;
+#[cfg(feature = "text")]
+mod text;
 
 pub use raster::{Frame, Renderer};
 pub use surface::Surface;
@@ -30,6 +32,11 @@ pub enum RenderError {
     Allocation,
     /// Transformed geometry exceeds the rasterizer's representable range.
     Coordinates,
+    /// The scene requests a capability not enabled in this renderer build.
+    UnsupportedCommand,
+    /// Glyph generation or its resource budget failed.
+    #[cfg(feature = "text")]
+    Glyph(aegle_glyph::GlyphError),
 }
 
 impl std::fmt::Display for RenderError {
@@ -41,6 +48,11 @@ impl std::fmt::Display for RenderError {
             }
             Self::Allocation => f.write_str("could not allocate rendering mask"),
             Self::Coordinates => f.write_str("geometry exceeds software rasterizer range"),
+            Self::UnsupportedCommand => {
+                f.write_str("scene capability is not enabled in this renderer")
+            }
+            #[cfg(feature = "text")]
+            Self::Glyph(error) => error.fmt(f),
         }
     }
 }

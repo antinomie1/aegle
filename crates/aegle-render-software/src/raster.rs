@@ -6,14 +6,17 @@ use crate::{RenderError, Surface, blend::Solid, path};
 
 /// Reusable CPU rendering state with an explicit coverage/clip mask budget.
 ///
-/// The default budget is 2 MiB. A draw reserves one byte per surface pixel for
-/// coverage, plus one byte per pixel per nested clip. Masks are retained for the
+/// The default budget is 2 MiB. Shape/clip draws reserve one byte per surface pixel
+/// for coverage, plus one byte per pixel per nested clip. Text without clips
+/// needs no surface-sized mask. Masks are retained for the
 /// largest clip depth at the current surface size. Path/stack storage and the
 /// rasterizer's temporary scanline buffers are not included in this budget.
 /// Devices without a GPU can use this crate without any platform library.
 pub struct Renderer {
     mask_budget: usize,
-    masks: Vec<Mask>,
+    pub(crate) masks: Vec<Mask>,
+    #[cfg(feature = "text")]
+    pub(crate) glyphs: aegle_glyph::GlyphCache,
     dimensions: (u32, u32),
     stack: Vec<State>,
     path: PathBuilder,
@@ -31,6 +34,8 @@ impl Renderer {
         Self {
             mask_budget,
             masks: Vec::new(),
+            #[cfg(feature = "text")]
+            glyphs: aegle_glyph::GlyphCache::default(),
             dimensions: (0, 0),
             stack: Vec::new(),
             path: PathBuilder::new(),
@@ -63,16 +68,41 @@ impl Renderer {
         self.masks.iter().map(|mask| mask.data().len()).sum()
     }
 
+    /// On-demand glyph cache statistics and configuration, separate from masks.
+    #[cfg(feature = "text")]
+    pub fn glyph_cache(&self) -> &aegle_glyph::GlyphCache {
+        &self.glyphs
+    }
+
+    /// Accesses the glyph cache to clear it or replace it with different limits.
+    #[cfg(feature = "text")]
+    pub fn glyph_cache_mut(&mut self) -> &mut aegle_glyph::GlyphCache {
+        &mut self.glyphs
+    }
+
     /// Releases reusable masks, paths and traversal storage when memory is needed.
     /// The next drawing operation allocates again. Transfer LUTs remain shared.
+    /// Glyph scaling scratch is released, but completed glyph images remain;
+    /// clear them separately through `glyph_cache_mut().clear()` with `text`.
     pub fn release_scratch(&mut self) {
         self.masks = Vec::new();
         self.stack = Vec::new();
         self.path = PathBuilder::new();
+        #[cfg(feature = "text")]
+        self.glyphs.release_scratch();
     }
 
     fn prepare(&mut self, scene: &Scene, surface: &Surface<'_>) -> Result<(), RenderError> {
-        let count = scene.max_clip_depth() + 1;
+        let needs_masks = scene.max_clip_depth() > 0
+            || scene
+                .commands()
+                .iter()
+                .any(|command| matches!(command, Command::Fill { .. } | Command::Stroke { .. }));
+        let count = if needs_masks {
+            scene.max_clip_depth() + 1
+        } else {
+            0
+        };
         let pixels = surface.data.len() / 4;
         let required = pixels.checked_mul(count).unwrap_or(usize::MAX);
         if required > self.mask_budget {
@@ -102,8 +132,8 @@ impl Renderer {
 /// A failed draw may have modified pixels: discard that frame instead of
 /// presenting it. Completed scenes remain valid and reusable after failures.
 pub struct Frame<'r, 's, 'p> {
-    renderer: &'r mut Renderer,
-    surface: &'s mut Surface<'p>,
+    pub(crate) renderer: &'r mut Renderer,
+    pub(crate) surface: &'s mut Surface<'p>,
 }
 
 impl Frame<'_, '_, '_> {
@@ -142,6 +172,9 @@ impl Frame<'_, '_, '_> {
                     color,
                     width,
                 } => self.paint(shape, color, Some(width), state)?,
+                #[cfg(feature = "text")]
+                Command::Glyphs(index) => self.paint_text(&scene.glyph_runs()[index], state)?,
+                _ => return Err(RenderError::UnsupportedCommand),
             }
         }
         Ok(())
@@ -214,18 +247,18 @@ impl Frame<'_, '_, '_> {
 }
 
 #[derive(Clone, Copy)]
-struct State {
-    transform: Affine,
-    clips: usize,
-    bounds: Bounds,
+pub(crate) struct State {
+    pub(crate) transform: Affine,
+    pub(crate) clips: usize,
+    pub(crate) bounds: Bounds,
 }
 
 #[derive(Clone, Copy)]
-struct Bounds {
-    left: usize,
-    top: usize,
-    right: usize,
-    bottom: usize,
+pub(crate) struct Bounds {
+    pub(crate) left: usize,
+    pub(crate) top: usize,
+    pub(crate) right: usize,
+    pub(crate) bottom: usize,
 }
 
 impl Bounds {
@@ -251,7 +284,7 @@ impl Bounds {
             bottom: b.bottom().ceil().clamp(0.0, surface.height as f32) as usize,
         }
     }
-    fn intersect(self, other: Self) -> Self {
+    pub(crate) fn intersect(self, other: Self) -> Self {
         let result = Self {
             left: self.left.max(other.left),
             top: self.top.max(other.top),
@@ -264,10 +297,10 @@ impl Bounds {
             result
         }
     }
-    fn is_empty(self) -> bool {
+    pub(crate) fn is_empty(self) -> bool {
         self.left >= self.right || self.top >= self.bottom
     }
-    fn rows(self, width: usize) -> impl Iterator<Item = std::ops::Range<usize>> {
+    pub(crate) fn rows(self, width: usize) -> impl Iterator<Item = std::ops::Range<usize>> {
         (self.top..self.bottom).map(move |y| y * width + self.left..y * width + self.right)
     }
 }
@@ -284,6 +317,6 @@ fn rasterize(mask: &mut Mask, path: &Path, bounds: Bounds) {
     mask.fill_path(path, FillRule::EvenOdd, true, Transform::identity());
 }
 
-fn coverage_product(a: u8, b: u8) -> u8 {
+pub(crate) fn coverage_product(a: u8, b: u8) -> u8 {
     ((u16::from(a) * u16::from(b) + 127) / 255) as u8
 }

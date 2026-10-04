@@ -1,0 +1,22 @@
+[package]
+name = "aegle-text"
+description = "Retained paragraphs and explicit font ownership for Aegle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+system-fonts = ["parley/system"]
+text-dictionary = ["parley/complex-scripts"]
+text-a11y = ["parley/accesskit"]
+scene = ["dep:aegle-scene", "aegle-scene/text"]
+
+[dependencies]
+aegle-types.workspace = true
+parley.workspace = true
+aegle-scene = { workspace = true, optional = true }
+
+[lints]
+workspace = true

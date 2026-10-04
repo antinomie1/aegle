@@ -15,10 +15,14 @@ extern crate alloc;
 
 mod builder;
 mod geometry;
+#[cfg(feature = "text")]
+mod text;
 
 pub use aegle_types::{Color, Point, Rect};
 pub use builder::{Scene, SceneBuilder};
 pub use geometry::{Affine, RoundedRect};
+#[cfg(feature = "text")]
+pub use text::{Blob, FontData, Glyph, GlyphRun};
 
 /// Maximum combined transform and clip nesting depth.
 pub const MAX_SCOPE_DEPTH: usize = 64;
@@ -28,6 +32,7 @@ pub const MAX_SCOPE_DEPTH: usize = 64;
 /// Constructing a command directly cannot insert it into a scene. Use the builder
 /// to enforce geometry, composed-transform and balanced-scope invariants.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Command {
     /// Fill a rectangle with optional uniformly rounded corners.
     Fill {
@@ -51,6 +56,9 @@ pub enum Command {
     PushClip(RoundedRect),
     /// Restore the state preceding the most recent transform or clip push.
     Pop,
+    /// Draw a positioned glyph run from [`Scene::glyph_runs`].
+    #[cfg(feature = "text")]
+    Glyphs(usize),
 }
 
 /// Invalid geometry or scope usage at the drawing-record boundary.
@@ -70,6 +78,8 @@ pub enum SceneError {
     UnexpectedPop,
     /// Finishing a scene with one or more open scopes.
     UnclosedScope,
+    /// A glyph run has a nonpositive font size or out-of-range variation value.
+    InvalidText,
 }
 
 impl core::fmt::Display for SceneError {
@@ -82,6 +92,7 @@ impl core::fmt::Display for SceneError {
             Self::ScopeLimit => "drawing scope nesting limit exceeded",
             Self::UnexpectedPop => "drawing scope pop has no matching push",
             Self::UnclosedScope => "drawing scene has unclosed scopes",
+            Self::InvalidText => "invalid glyph run size or variation coordinate",
         })
     }
 }

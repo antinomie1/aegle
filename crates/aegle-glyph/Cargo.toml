@@ -1,0 +1,18 @@
+[package]
+name = "aegle-glyph"
+description = "On-demand glyph rasterization with a bounded CPU image cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+linebender_resource_handle.workspace = true
+swash.workspace = true
+skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
+png = { version = "0.18.1", default-features = false }
+hashbrown = { version = "0.17.1", default-features = false }
+lru-slab = "0.1.3"
+
+[lints]
+workspace = true

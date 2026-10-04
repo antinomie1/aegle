@@ -1,6 +1,6 @@
 # 模块、依赖与构建组合
 
-状态：v0.1 设计决定。下面是实现时建立的 workspace crate 职责，不表示当前已创建这些 crate。
+状态：v0.1 模块设计。types、core、layout、scene、text、glyph 与软件 renderer 已建立；表中其余模块及已建立模块的完整职责仍是设计目标，具体进度见[实现状态](implementation.md)。
 
 ## 拆分尺度
 
@@ -11,11 +11,11 @@
 | aegle-types | 几何、颜色、资源 ID、通用错误与能力描述；无平台依赖 | 无 |
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；不依赖应用 | types、core |
-| aegle-text | 字体、段落测量、文字布局和编辑模型 | types |
-| aegle-glyph | Swash 字形光栅化与有界 CPU 字形缓存 | types |
-| aegle-scene | 二维绘制命令、裁剪、资源请求及 renderer 契约 | types |
+| aegle-text | 字体、保留段落测量和布局；后续编辑模型 | types；scene 按 feature 接入 |
+| aegle-glyph | Swash 字形光栅化与有界 CPU 字形缓存 | 无 |
+| aegle-scene | 二维绘制命令、裁剪及可选字形记录 | types |
 | aegle-render-vulkan | Vulkan 实现、上传、图集与呈现 | types、scene |
-| aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene |
+| aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene；glyph 按 text feature 接入 |
 | aegle-render-metal | Metal 实现、上传、图集与呈现 | types、scene |
 | aegle-platform-wayland | Wayland 窗口、事件、IME、输出与平台偏好 | types |
 | aegle-platform-win32 | Win32 窗口、TSF/必要兼容路径及平台偏好 | types |
@@ -36,7 +36,11 @@
 
 表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`，映射 Parley 的可选 AccessKit 支持；基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
 
-当前 `aegle-scene` 使用 no_std + alloc，只依赖 types，拥有经校验的矩形、圆角、描边、变换与裁剪命令。`aegle-render-software` 直接消费这些记录并借用调用方像素缓冲，不依赖 core、Taffy、窗口或字体。它使用关闭默认 features 的 tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化；颜色合成为小型线性光 SourceOver 实现。PNG 仅用于示例的 dev-dependency。其他模块与绘制能力按实现状态文档追踪。
+当前 `aegle-scene` 使用 no_std + alloc，默认只依赖 types；`text` 仅增加轻量的 `linebender_resource_handle`，通过共享 `FontData` 及独立 run 旁表保存字形记录，不引入 Parley 或 Swash。纯几何命令不携带完整字体/run 数据。
+
+`aegle-render-software` 借用调用方像素缓冲，不依赖 core、Taffy 或窗口；默认是纯几何构建，没有字体栈和 PNG 运行依赖。tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化，小型自有实现完成线性光 SourceOver。`text` 显式增加 aegle-glyph，其 PNG 解码器用于字体内嵌位图。软件后端不依赖 aegle-text，其他 shaping 宿主也可提供 scene 字形记录。
+
+`aegle-text` 默认仅启用 Parley std；系统字体、词典、文字无障碍和 scene 桥接分别可选。`aegle-glyph` 独立接受共享字体句柄，复用 Swash、Skrifa、hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落及 scene 的字体句柄维持各自资源寿命。
 
 没有独立的“每个控件 crate”或“每个颜色类型 crate”。当一个模块的多种选择只影响内部小函数时使用 feature，不为包装一个转发函数增加新的包。
 

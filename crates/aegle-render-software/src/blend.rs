@@ -42,6 +42,28 @@ fn sample(table: &[f32; INTERVALS + 1], value: f32) -> f32 {
     table[index] + (table[index + 1] - table[index]) * (position - index as f32)
 }
 
+#[cfg(feature = "text")]
+pub(crate) fn linear_rgba(rgba: [u8; 4]) -> [f32; 4] {
+    let table = Transfer::get();
+    let a = rgba[3] as f32 / 255.0;
+    let mut result = rgba.map(|value| sample(&table.decode, value as f32 / 255.0) * a);
+    result[3] = a;
+    result
+}
+
+#[cfg(feature = "text")]
+pub(crate) fn encoded_rgba(linear: [f32; 4]) -> [u8; 4] {
+    if linear[3] <= 0.0 {
+        return [0; 4];
+    }
+    let table = Transfer::get();
+    let mut result = linear.map(|value| {
+        (sample(&table.encode, (value / linear[3]).clamp(0.0, 1.0)) * 255.0).round() as u8
+    });
+    result[3] = (linear[3] * 255.0).round() as u8;
+    result
+}
+
 /// Prepared solid paint; reuse across all covered pixels of one primitive.
 pub(crate) struct Solid {
     rgba: [u8; 4],

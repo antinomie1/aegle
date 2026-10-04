@@ -134,6 +134,15 @@ impl Affine {
         .map_err(|_| SceneError::CoordinateRange)
     }
 
+    /// Inverts the transform, rejecting a result made singular by `f32` rounding.
+    pub fn inverse(self) -> Result<Self, SceneError> {
+        let [a, b, c, d, e, f] = self.0.map(f64::from);
+        let determinant = a * d - b * c;
+        Self::new(
+            [d, -b, -c, a, c * f - d * e, b * e - a * f].map(|value| (value / determinant) as f32),
+        )
+    }
+
     pub(crate) fn validate_shape(self, shape: RoundedRect, outset: f32) -> Result<(), SceneError> {
         let rect = shape.rect;
         let x0 = rect.origin.x - outset;

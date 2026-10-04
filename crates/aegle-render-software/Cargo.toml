@@ -6,15 +6,25 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+default = []
+text = ["aegle-scene/text", "dep:aegle-glyph"]
+
 [dependencies]
 aegle-types.workspace = true
 aegle-scene.workspace = true
 tiny-skia.workspace = true
+aegle-glyph = { workspace = true, optional = true }
 
 [dev-dependencies]
 aegle-core.workspace = true
 aegle-layout.workspace = true
+aegle-text = { workspace = true, features = ["scene"] }
 png = "0.18.1"
 
 [lints]
 workspace = true
+
+[[example]]
+name = "text_scene"
+required-features = ["text"]

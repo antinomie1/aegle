@@ -6,6 +6,8 @@ use crate::{Affine, Color, Command, MAX_SCOPE_DEPTH, RoundedRect, SceneError};
 #[derive(Debug, Default)]
 pub struct Scene {
     commands: Vec<Command>,
+    #[cfg(feature = "text")]
+    glyph_runs: Vec<crate::GlyphRun>,
     max_depth: usize,
     max_clip_depth: usize,
 }
@@ -36,9 +38,26 @@ impl Scene {
         self.max_clip_depth
     }
 
-    /// Reserved command-buffer bytes, excluding the inline scene header.
+    /// Reserved command and glyph-run storage, including glyph/variation arrays.
+    ///
+    /// Excludes the inline scene header, allocator overhead and shared font bytes.
     pub fn allocated_bytes(&self) -> usize {
-        self.commands.capacity() * core::mem::size_of::<Command>()
+        let bytes = self.commands.capacity() * core::mem::size_of::<Command>();
+        #[cfg(feature = "text")]
+        let bytes = bytes
+            + self.glyph_runs.capacity() * core::mem::size_of::<crate::GlyphRun>()
+            + self
+                .glyph_runs
+                .iter()
+                .map(crate::GlyphRun::allocated_bytes)
+                .sum::<usize>();
+        bytes
+    }
+
+    /// Positioned glyph resources addressed by [`Command::Glyphs`].
+    #[cfg(feature = "text")]
+    pub fn glyph_runs(&self) -> &[crate::GlyphRun] {
+        &self.glyph_runs
     }
 
     /// Reopens this balanced scene for appending, preserving its command storage.
@@ -56,7 +75,7 @@ impl Scene {
 ///
 /// A rejected operation leaves the builder unchanged. Transform state uses a
 /// fixed inline stack (about 1.6 KiB), avoiding a second heap allocation while
-/// recording. Only the command buffer is retained in the completed scene.
+/// recording. Only commands and their resources remain in the completed scene.
 #[derive(Debug)]
 pub struct SceneBuilder {
     scene: Scene,
@@ -89,6 +108,8 @@ impl SceneBuilder {
     /// Discards the record and open scopes, retaining command-buffer capacity.
     pub fn clear(&mut self) {
         self.scene.commands.clear();
+        #[cfg(feature = "text")]
+        self.scene.glyph_runs.clear();
         self.scene.max_depth = 0;
         self.scene.max_clip_depth = 0;
         self.transform = Affine::IDENTITY;
@@ -101,6 +122,24 @@ impl SceneBuilder {
         if !shape.is_empty() {
             self.transform.validate_shape(shape, 0.0)?;
             self.scene.commands.push(Command::Fill { shape, color });
+        }
+        Ok(self)
+    }
+
+    /// Records positioned glyphs, retaining a shared font handle, never bitmaps.
+    /// The rasterizer owns any glyph cache. Empty runs produce no command.
+    #[cfg(feature = "text")]
+    pub fn glyphs(&mut self, run: crate::GlyphRun) -> Result<&mut Self, SceneError> {
+        for glyph in run.glyphs() {
+            let p = self.transform.map_point(glyph.position);
+            if !p.x.is_finite() || !p.y.is_finite() {
+                return Err(SceneError::CoordinateRange);
+            }
+        }
+        if !run.glyphs().is_empty() {
+            let index = self.scene.glyph_runs.len();
+            self.scene.glyph_runs.push(run);
+            self.scene.commands.push(Command::Glyphs(index));
         }
         Ok(self)
     }
