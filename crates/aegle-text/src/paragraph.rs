@@ -108,26 +108,30 @@ impl Paragraph {
     }
 
     pub(crate) fn update_diagnostics(&mut self) {
-        let mut shaped_bytes = 0;
-        let mut missing_glyphs = 0;
-        for line in self.layout.lines() {
-            for run in line.runs() {
-                for cluster in run.clusters() {
-                    let range = cluster.text_range();
-                    // An empty paragraph uses an internal synthetic space for metrics.
-                    if self.text.is_empty() {
-                        continue;
-                    }
-                    shaped_bytes += range.len();
-                    if !self.text[range].chars().all(char::is_control) {
-                        missing_glyphs += cluster.glyphs().filter(|glyph| glyph.id == 0).count();
-                    }
+        self.diagnostics = diagnose(&self.text, &self.layout);
+    }
+}
+
+pub(crate) fn diagnose(text: &str, layout: &Layout<Color>) -> TextDiagnostics {
+    let mut shaped_bytes = 0;
+    let mut missing_glyphs = 0;
+    for line in layout.lines() {
+        for run in line.runs() {
+            for cluster in run.clusters() {
+                let range = cluster.text_range();
+                // An empty paragraph uses an internal synthetic space for metrics.
+                if text.is_empty() {
+                    continue;
+                }
+                shaped_bytes += range.len();
+                if !text[range].chars().all(char::is_control) {
+                    missing_glyphs += cluster.glyphs().filter(|glyph| glyph.id == 0).count();
                 }
             }
         }
-        self.diagnostics = TextDiagnostics {
-            missing_glyphs,
-            unshaped_bytes: self.text.len().saturating_sub(shaped_bytes),
-        };
+    }
+    TextDiagnostics {
+        missing_glyphs,
+        unshaped_bytes: text.len().saturating_sub(shaped_bytes),
     }
 }

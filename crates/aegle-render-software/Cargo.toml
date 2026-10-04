@@ -28,3 +28,7 @@ workspace = true
 [[example]]
 name = "text_scene"
 required-features = ["text"]
+
+[[example]]
+name = "editor_scene"
+required-features = ["text"]

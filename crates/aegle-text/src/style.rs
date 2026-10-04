@@ -2,10 +2,11 @@ use crate::{FontStyle, FontWeight, FontWidth, Language, LineHeight};
 use aegle_types::Color;
 use std::{error::Error, fmt};
 
-/// Default styling for one display paragraph, in logical pixels.
+/// Styling for a display paragraph or plain text editor, in logical pixels.
 ///
 /// Family names use CSS syntax, for example `"Noto Sans CJK SC", sans-serif`.
-/// The style is borrowed only while shaping and is not stored in the paragraph.
+/// Paragraphs borrow this while shaping; editors retain owned styling so later
+/// edits can use it without keeping this borrowed configuration alive.
 #[derive(Clone, Debug)]
 pub struct TextStyle<'a> {
     /// Ordered font family names or generic families.
@@ -49,6 +50,21 @@ impl Default for TextStyle<'_> {
 }
 
 impl TextStyle<'_> {
+    pub(crate) fn common_properties(&self) -> [parley::StyleProperty<'static, Color>; 9] {
+        use parley::StyleProperty::*;
+        [
+            FontSize(self.size),
+            FontWeight(self.weight),
+            FontWidth(self.width),
+            FontStyle(self.slant),
+            Locale(self.locale),
+            Brush(self.color),
+            LineHeight(self.line_height),
+            LetterSpacing(self.letter_spacing),
+            WordSpacing(self.word_spacing),
+        ]
+    }
+
     pub(crate) fn validate(&self) -> Result<(), TextError> {
         let line_height = match self.line_height {
             LineHeight::MetricsRelative(value)
@@ -73,7 +89,7 @@ impl TextStyle<'_> {
     }
 }
 
-/// Invalid input to font registration or paragraph layout.
+/// Invalid input to fonts, layout or retained editing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextError {
     /// The blob did not contain any fonts that Fontique could register.
@@ -84,6 +100,18 @@ pub enum TextError {
     InvalidWidth,
     /// Text exceeds the engine's 32-bit byte indexing range.
     TextTooLong,
+    /// A UTF-8 byte range is reversed, out of bounds or splits a codepoint.
+    InvalidRange,
+    /// Hit-test coordinates or caret thickness are invalid.
+    InvalidPosition,
+    /// A user edit was requested while read-only.
+    ReadOnly,
+    /// A single-line editor was given a hard line separator.
+    SingleLine,
+    /// Finish or cancel preedit before ordinary selection/editing operations.
+    CompositionActive,
+    /// Text has no font-backed layout from which to derive a cursor.
+    MissingFont,
 }
 
 impl fmt::Display for TextError {
@@ -93,6 +121,12 @@ impl fmt::Display for TextError {
             Self::InvalidStyle => "text style contains an invalid numeric value",
             Self::InvalidWidth => "text width must be finite and nonnegative",
             Self::TextTooLong => "text exceeds the 32-bit layout indexing limit",
+            Self::InvalidRange => "text range must use valid UTF-8 boundaries",
+            Self::InvalidPosition => "text coordinates or caret width are invalid",
+            Self::ReadOnly => "text editor is read-only",
+            Self::SingleLine => "single-line editor rejects line breaks",
+            Self::CompositionActive => "finish or cancel preedit before this operation",
+            Self::MissingFont => "text has no font-backed layout",
         })
     }
 }

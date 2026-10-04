@@ -12,8 +12,16 @@
 //! `scene` adds paragraph painting into Aegle's retained scene records; it rejects
 //! synthetic bold/oblique faces until those rasterization operations are supported.
 //!
-//! This module currently supplies display paragraphs; it is not an editor or
-//! native IME implementation. See [`Paragraph::diagnostics`] for missing fonts.
+//! [`Editor`] retains plain text, selection, IME composition and bounded delta
+//! history using the same fonts and drawing path. Platform IME and clipboard
+//! protocols remain the host's responsibility.
+
+mod compose;
+mod edit;
+mod editor;
+#[cfg(feature = "scene")]
+mod editor_paint;
+mod history;
 
 #[cfg(feature = "scene")]
 mod paint;
@@ -21,6 +29,10 @@ mod paragraph;
 mod style;
 mod system;
 
+pub use edit::{EditorDriver, HitSelection, Movement};
+pub use editor::{EditChanges, Editor, EditorOptions, HistoryStats, Selection, TextValue};
+#[cfg(feature = "scene")]
+pub use editor_paint::EditorPaint;
 #[cfg(feature = "scene")]
 pub use paint::PaintError;
 pub use paragraph::{Paragraph, TextDiagnostics};

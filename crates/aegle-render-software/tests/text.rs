@@ -115,3 +115,83 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
     assert!(surface.data()[(2 * 64 + 4) * 4 + 3] > 0);
     Ok(())
 }
+
+#[test]
+fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dyn std::error::Error>>
+{
+    use aegle_text::{EditorOptions, EditorPaint, Selection};
+    let mut fonts = TextSystem::new();
+    fonts.register_fonts(Blob::from(
+        include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec(),
+    ))?;
+    let mut editor = fonts.editor(
+        "你好",
+        &TextStyle {
+            families: "Aegle Test CJK",
+            size: 20.0,
+            ..Default::default()
+        },
+        EditorOptions::default(),
+    )?;
+    fonts.edit(&mut editor).select(Selection {
+        anchor: 0,
+        focus: 6,
+    })?;
+    let mut pixels = vec![0; 80 * 48 * 4];
+    let mut surface = Surface::new(&mut pixels, 80, 48)?;
+    let mut renderer = Renderer::default();
+    for visible in [false, true] {
+        fonts
+            .edit(&mut editor)
+            .set_preedit("世界", visible.then_some(Selection::default()))?;
+        let mut builder = SceneBuilder::new();
+        builder.push_transform(Affine::translation(4.0, 4.0)?)?;
+        editor.paint(
+            &mut builder,
+            EditorPaint {
+                caret: Some(Color::rgb(255, 0, 0)),
+                preedit: Some(Color::rgb(0, 255, 0)),
+                ..Default::default()
+            },
+        )?;
+        builder.pop()?;
+        renderer
+            .begin_frame(&mut surface, Color::WHITE)
+            .draw(&builder.finish()?, Affine::IDENTITY)?;
+        assert_eq!(
+            surface
+                .data()
+                .chunks_exact(4)
+                .any(|p| p == [255, 0, 0, 255]),
+            visible
+        );
+        assert!(
+            surface
+                .data()
+                .chunks_exact(4)
+                .any(|p| p == [0, 255, 0, 255])
+        );
+        assert_eq!(editor.text(), "你好");
+    }
+    fonts.edit(&mut editor).cancel_preedit();
+    assert_eq!(editor.selected_text(), "你好");
+    let mut builder = SceneBuilder::new();
+    editor.paint(
+        &mut builder,
+        EditorPaint {
+            selection: Some(Color::rgb(0, 0, 255)),
+            caret: None,
+            ..Default::default()
+        },
+    )?;
+    renderer
+        .begin_frame(&mut surface, Color::WHITE)
+        .draw(&builder.finish()?, Affine::IDENTITY)?;
+    assert!(
+        surface
+            .data()
+            .chunks_exact(4)
+            .any(|p| p == [0, 0, 255, 255])
+    );
+    Ok(())
+}

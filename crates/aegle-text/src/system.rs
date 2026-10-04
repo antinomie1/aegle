@@ -12,8 +12,8 @@ use parley::{FontContext, LayoutContext, StyleProperty};
 /// memory pressure to release it. Font metadata and fonts referenced by live
 /// paragraphs remain owned; this is not a byte-budgeted glyph bitmap cache.
 pub struct TextSystem {
-    fonts: FontContext,
-    context: LayoutContext<Color>,
+    pub(crate) fonts: FontContext,
+    pub(crate) context: LayoutContext<Color>,
 }
 
 impl TextSystem {
@@ -139,15 +139,9 @@ impl TextSystem {
             .context
             .ranged_builder(&mut self.fonts, &paragraph.text, 1.0, false);
         builder.push_default(StyleProperty::FontFamily(style.families.into()));
-        builder.push_default(StyleProperty::FontSize(style.size));
-        builder.push_default(StyleProperty::FontWeight(style.weight));
-        builder.push_default(StyleProperty::FontWidth(style.width));
-        builder.push_default(StyleProperty::FontStyle(style.slant));
-        builder.push_default(StyleProperty::Locale(style.locale));
-        builder.push_default(StyleProperty::Brush(style.color));
-        builder.push_default(StyleProperty::LineHeight(style.line_height));
-        builder.push_default(StyleProperty::LetterSpacing(style.letter_spacing));
-        builder.push_default(StyleProperty::WordSpacing(style.word_spacing));
+        for property in style.common_properties() {
+            builder.push_default(property);
+        }
         builder.build_into(&mut paragraph.layout, &paragraph.text);
         paragraph.content_widths = paragraph.layout.calculate_content_widths();
         paragraph.break_lines();

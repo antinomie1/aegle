@@ -11,7 +11,7 @@
 | aegle-types | 几何、颜色、资源 ID、通用错误与能力描述；无平台依赖 | 无 |
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；不依赖应用 | types、core |
-| aegle-text | 字体、保留段落测量和布局；后续编辑模型 | types；scene 按 feature 接入 |
+| aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |
 | aegle-glyph | Swash 字形光栅化与有界 CPU 字形缓存 | 无 |
 | aegle-scene | 二维绘制命令、裁剪及可选字形记录 | types |
 | aegle-render-vulkan | Vulkan 实现、上传、图集与呈现 | types、scene |
@@ -40,7 +40,9 @@
 
 `aegle-render-software` 借用调用方像素缓冲，不依赖 core、Taffy 或窗口；默认是纯几何构建，没有字体栈和 PNG 运行依赖。tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化，小型自有实现完成线性光 SourceOver。`text` 显式增加 aegle-glyph，其 PNG 解码器用于字体内嵌位图。软件后端不依赖 aegle-text，其他 shaping 宿主也可提供 scene 字形记录。
 
-`aegle-text` 默认仅启用 Parley std；系统字体、词典、文字无障碍和 scene 桥接分别可选。`aegle-glyph` 独立接受共享字体句柄，复用 Swash、Skrifa、hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落及 scene 的字体句柄维持各自资源寿命。
+`aegle-text` 默认启用 Parley std，并复用其已有的 ICU 分段包处理 grapheme 删除；系统字体、词典、文字无障碍和 scene 桥接分别可选。段落与 Editor 共用 TextSystem 字体/shaping 上下文，Editor 包装 PlainEditor 并补充稳定提交值、可取消组合和有界 delta 历史；不另建编辑引擎或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由后续平台/应用层连接。
+
+`aegle-glyph` 独立接受共享字体句柄，复用 Swash、Skrifa、hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。
 
 没有独立的“每个控件 crate”或“每个颜色类型 crate”。当一个模块的多种选择只影响内部小函数时使用 feature，不为包装一个转发函数增加新的包。
 

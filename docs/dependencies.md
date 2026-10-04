@@ -11,6 +11,7 @@
 | Windows | windows 0.62.2 | 只启用所需 Win32/COM/TSF/UIA 能力 |
 | macOS | objc2 0.6.4、objc2-metal 0.3.2 | AppKit/Metal 系统绑定；不采用已弃用 metal crate 或 MoltenVK |
 | 文本 | Parley/Fontique 0.11.1 | 基础排版、字体回退及纯文本编辑 |
+| grapheme 分段 | icu_segmenter 2.3.0 | 直接复用 Parley 已锁定的包及 compiled_data，编辑删除不另带分段引擎 |
 | shaping / 字体解析 | HarfRust 0.12.0、Skrifa 0.44.0 | 按 Parley 兼容版本线，避免追最新产生双份依赖 |
 | 字形 | Swash 0.2.10 | 按需光栅化；有界缓存由 aegle-glyph 管理 |
 | 共享字体资源 | linebender_resource_handle 0.1.1 | scene/text 仅借助该轻量句柄共享字体字节，不引入 shaping |
@@ -23,7 +24,7 @@
 
 设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄及缓存/PNG 依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 接口也已通过全 features 构建。平台 adapters、GPU 与其余待建模块仍未据此宣称可用，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
-`aegle-text` 默认只启用 Parley std；`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它，启用也不等于已有系统无障碍 adapter。
+`aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；PlainEditor 已有的选择、bidi、点命中和组合布局继续复用，不另带 Unicode 或编辑框架。`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它，启用也不等于已有系统无障碍 adapter。
 
 `aegle-glyph` 用 Swash std/render 和与 Parley 相同的 Skrifa 0.44 解析字体；使用 png 的有界解码接口处理嵌入 PNG，避免无上限的中间解码分配。`aegle-render-software/text` 才引入此依赖闭包；默认纯几何构建的正常依赖树没有 Parley、Swash 或 PNG。Cargo 测试/示例的 dev-dependencies 不代表库的发布依赖，仍需核查最终应用的 feature 合并。
 

@@ -1,6 +1,6 @@
 [package]
 name = "aegle-text"
-description = "Retained paragraphs and explicit font ownership for Aegle"
+description = "Retained Unicode paragraphs and editors with shared font resources"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -16,6 +16,7 @@ scene = ["dep:aegle-scene", "aegle-scene/text"]
 [dependencies]
 aegle-types.workspace = true
 parley.workspace = true
+icu_segmenter = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
 aegle-scene = { workspace = true, optional = true }
 
 [lints]

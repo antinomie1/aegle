@@ -1,4 +1,4 @@
-use crate::Paragraph;
+use crate::{Layout, Paragraph, TextDiagnostics};
 use aegle_scene::{Glyph, GlyphRun, SceneBuilder, SceneError};
 use aegle_types::{Color, Point};
 use parley::PositionedLayoutItem;
@@ -15,7 +15,7 @@ impl Paragraph {
     /// styles are errors. A scene-geometry error can leave earlier runs appended;
     /// discard that record if the host requires the entire paragraph to be atomic.
     pub fn paint(&self, builder: &mut SceneBuilder) -> Result<(), PaintError> {
-        self.paint_impl(builder, None)
+        paint_layout(&self.layout, self.diagnostics, builder, None)
     }
 
     /// Appends text using one foreground color without reshaping the paragraph.
@@ -28,50 +28,51 @@ impl Paragraph {
         builder: &mut SceneBuilder,
         color: Color,
     ) -> Result<(), PaintError> {
-        self.paint_impl(builder, Some(color))
+        paint_layout(&self.layout, self.diagnostics, builder, Some(color))
     }
+}
 
-    fn paint_impl(
-        &self,
-        builder: &mut SceneBuilder,
-        color: Option<Color>,
-    ) -> Result<(), PaintError> {
-        if self.diagnostics.unshaped_bytes != 0 {
-            return Err(PaintError::MissingFont);
-        }
-        for line in self.layout.lines() {
-            for run in line.runs() {
-                if run.synthesis().embolden() || run.synthesis().skew().is_some() {
-                    return Err(PaintError::SyntheticStyle);
-                }
-            }
-        }
-        for line in self.layout.lines() {
-            for item in line.items() {
-                let PositionedLayoutItem::GlyphRun(positioned) = item else {
-                    continue;
-                };
-                let run = positioned.run();
-                let glyphs = positioned
-                    .positioned_glyphs()
-                    .map(|glyph| {
-                        Ok(Glyph {
-                            id: glyph.id.try_into().map_err(|_| PaintError::GlyphIndex)?,
-                            position: Point::new(glyph.x, glyph.y),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, PaintError>>()?;
-                builder.glyphs(GlyphRun::new(
-                    run.font().clone(),
-                    run.font_size(),
-                    color.unwrap_or(positioned.style().brush),
-                    run.normalized_coords().to_vec(),
-                    glyphs,
-                )?)?;
-            }
-        }
-        Ok(())
+pub(crate) fn paint_layout(
+    layout: &Layout<Color>,
+    diagnostics: TextDiagnostics,
+    builder: &mut SceneBuilder,
+    color: Option<Color>,
+) -> Result<(), PaintError> {
+    if diagnostics.unshaped_bytes != 0 {
+        return Err(PaintError::MissingFont);
     }
+    for line in layout.lines() {
+        for run in line.runs() {
+            if run.synthesis().embolden() || run.synthesis().skew().is_some() {
+                return Err(PaintError::SyntheticStyle);
+            }
+        }
+    }
+    for line in layout.lines() {
+        for item in line.items() {
+            let PositionedLayoutItem::GlyphRun(positioned) = item else {
+                continue;
+            };
+            let run = positioned.run();
+            let glyphs = positioned
+                .positioned_glyphs()
+                .map(|glyph| {
+                    Ok(Glyph {
+                        id: glyph.id.try_into().map_err(|_| PaintError::GlyphIndex)?,
+                        position: Point::new(glyph.x, glyph.y),
+                    })
+                })
+                .collect::<Result<Vec<_>, PaintError>>()?;
+            builder.glyphs(GlyphRun::new(
+                run.font().clone(),
+                run.font_size(),
+                color.unwrap_or(positioned.style().brush),
+                run.normalized_coords().to_vec(),
+                glyphs,
+            )?)?;
+        }
+    }
+    Ok(())
 }
 
 /// A paragraph cannot be completely represented by the scene text operation.
