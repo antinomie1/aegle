@@ -1,0 +1,20 @@
+[package]
+name = "aegle-render-software"
+description = "Bounded software rendering of Aegle scenes without a GPU"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+aegle-types.workspace = true
+aegle-scene.workspace = true
+tiny-skia.workspace = true
+
+[dev-dependencies]
+aegle-core.workspace = true
+aegle-layout.workspace = true
+png = "0.18.1"
+
+[lints]
+workspace = true

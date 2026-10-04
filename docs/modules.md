@@ -36,6 +36,8 @@
 
 表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`，映射 Parley 的可选 AccessKit 支持；基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
 
+当前 `aegle-scene` 使用 no_std + alloc，只依赖 types，拥有经校验的矩形、圆角、描边、变换与裁剪命令。`aegle-render-software` 直接消费这些记录并借用调用方像素缓冲，不依赖 core、Taffy、窗口或字体。它使用关闭默认 features 的 tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化；颜色合成为小型线性光 SourceOver 实现。PNG 仅用于示例的 dev-dependency。其他模块与绘制能力按实现状态文档追踪。
+
 没有独立的“每个控件 crate”或“每个颜色类型 crate”。当一个模块的多种选择只影响内部小函数时使用 feature，不为包装一个转发函数增加新的包。
 
 ## 依赖方向

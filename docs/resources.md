@@ -38,6 +38,12 @@
 
 窗口像素、活动文本或单张资源本身超过预算时返回 BudgetExceeded 或接受调用者显式提高预算；不无限扩容，也不静默破坏编辑状态。图片先验证尺寸及溢出，默认单张解码结果最多 16 MiB。
 
+### 当前软件后端的内存边界
+
+调用方拥有颜色缓冲，开销为宽×高×4。renderer 的默认 mask 预算为 2 MiB；一次场景绘制需要宽×高×(1 + 最深 clip 层数) 字节，分别用于一个覆盖率缓冲及每层裁剪。预算检查先于新增 mask 分配，超限返回 `RenderError::MaskBudget`，不删掉 clip 继续画。多个节点记录串行复用这些缓冲，内存按最深记录计，不按全树节点数累加。
+
+mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲，`release_scratch()` 可显式释放可复用存储。绘制只清理及合成图元触及的范围，不为每个图元清空整个窗口的覆盖率数据。路径与作用域数组可复用；tiny-skia 自身仍有短期边/扫描线分配，另有约 8 KiB 共享转换表，因此 mask 预算不等于 renderer 总内存。具体示例开销见[实现状态](implementation.md)，不与完整 GUI PSS 混淆。
+
 ## 低成本更新
 
 保存控件与局部绘制记录，以失效标记决定工作。首版只在像素改变时绘制，但一旦绘制就提交整个窗口；不先实现复杂的局部损伤合成系统。GPU 使用 FIFO 呈现、默认最多两帧在途，静止时不持续 present。
@@ -52,4 +58,4 @@
 
 Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText/Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 
-发布配置采用优化等级 s、LTO、单 codegen unit 和 strip；不默认 panic=abort 以换体积，公开边界使用 Result，后台/平台回调不得展开跨 FFI。具体性能配置可按测量调整，但必须保留配置记录。
+当前发布配置采用优化等级 3、thin LTO、单 codegen unit 和 strip debuginfo，优先运行性能；不默认 panic=abort 以换体积，公开边界使用 Result，后台/平台回调不得展开跨 FFI。具体性能配置可按测量调整，但必须保留配置记录。

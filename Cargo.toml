@@ -12,7 +12,10 @@ license = "LGPL-3.0-only"
 aegle-types = { path = "crates/aegle-types" }
 aegle-core = { path = "crates/aegle-core" }
 aegle-layout = { path = "crates/aegle-layout" }
+aegle-scene = { path = "crates/aegle-scene" }
+aegle-render-software = { path = "crates/aegle-render-software" }
 taffy = { version = "0.14.0", default-features = false, features = ["std", "flexbox", "block_layout", "content_size"] }
+tiny-skia = { version = "0.12.0", default-features = false, features = ["std", "simd"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

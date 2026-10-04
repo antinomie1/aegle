@@ -1,0 +1,13 @@
+[package]
+name = "aegle-scene"
+description = "Validated backend-independent drawing commands for Aegle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+aegle-types.workspace = true
+
+[lints]
+workspace = true

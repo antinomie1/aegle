@@ -1,0 +1,48 @@
+//! Software rendering with shared scenes, linear-light blending and bounded masks.
+//!
+//! Framebuffers are borrowed. One coverage mask and one mask per active clip
+//! are reused across frames; their total size is limited by the caller. Tiny-skia
+//! supplies antialiased geometry, with PNG support disabled in normal builds.
+//! Its transient path/scanline allocations are separate from the mask budget.
+
+mod blend;
+mod path;
+mod raster;
+mod surface;
+
+pub use raster::{Frame, Renderer};
+pub use surface::Surface;
+
+/// A rendering failure. Do not present a frame after any drawing call fails.
+/// Earlier operations in that frame may already have changed its pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RenderError {
+    /// Invalid framebuffer dimensions or a byte slice of the wrong length.
+    SurfaceSize,
+    /// Required coverage/clip masks exceed the configured byte limit.
+    MaskBudget {
+        /// Bytes needed for this draw's masks.
+        required: usize,
+        /// Configured mask limit in bytes.
+        limit: usize,
+    },
+    /// Memory for a mask could not be reserved.
+    Allocation,
+    /// Transformed geometry exceeds the rasterizer's representable range.
+    Coordinates,
+}
+
+impl std::fmt::Display for RenderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SurfaceSize => f.write_str("invalid RGBA framebuffer size"),
+            Self::MaskBudget { required, limit } => {
+                write!(f, "masks require {required} bytes; limit is {limit}")
+            }
+            Self::Allocation => f.write_str("could not allocate rendering mask"),
+            Self::Coordinates => f.write_str("geometry exceeds software rasterizer range"),
+        }
+    }
+}
+
+impl std::error::Error for RenderError {}

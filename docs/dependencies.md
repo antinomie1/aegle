@@ -5,6 +5,7 @@
 | 职责 | 基线 | 说明 |
 | --- | --- | --- |
 | 布局 | Taffy 0.14.0 | Flex/Block 默认，Grid 可选；低层树适配 |
+| 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由小型自有实现完成 |
 | Vulkan | ash 0.38.0+1.3.281 | 自行封装资源、同步与 unsafe；不采用 wgpu/vulkano |
 | Wayland | wayland-client 0.31.15、SCTK 0.21.1 | system backend；客户端 IME 由平台层补齐 |
 | Windows | windows 0.62.2 | 只启用所需 Win32/COM/TSF/UIA 能力 |
@@ -18,7 +19,7 @@
 | PNG | png 0.18.1 | 可选独立解码，不默认带整个 image crate |
 | SVG | resvg/usvg 0.48.1 | 构建期优先；运行时可选，关闭 text/system-fonts 等默认 feature |
 
-版本来自 crates.io 发布记录及发布包 manifest 的只读核查，未构建、未实测。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时提交 Cargo.lock 并检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
+设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy 与 tiny-skia 已进入 Cargo.lock 并在当前工具链构建验证；其余尚未实现的模块未据此宣称可用，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
 默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。默认桌面启用 parley/accesskit；只使用文字模块的应用可关闭。
 
