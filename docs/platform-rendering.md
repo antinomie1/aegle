@@ -44,7 +44,7 @@ Wayland 通常不向普通客户端公开全局窗口位置。平台能力必须
 
 已实现部分以 `SceneBuilder → Scene → Renderer::begin_frame → Frame::draw` 连接。`Scene` 为不可变局部绘制记录；重新构建时可以取回并清空 builder，复用命令分配。每次 draw 传入布局位置与设备缩放组成的 Affine，移动控件不必重建其局部图元。场景的变换/裁剪作用域只在本次 draw 内生效，不泄漏到其他记录。
 
-目前支持实色矩形、统一圆角、居中边框、二维仿射变换及嵌套矩形/圆角裁剪；可选 `text` 支持定位后的字形。builder 检查非有限几何、负尺寸、不可逆变换及作用域配对，总嵌套最多 64 层。空形状不绘制，空 clip 排除绘制；软件后端拒绝超出 ±1,048,576 的设备路径/字形坐标。通用图片、任意路径、组透明度和高级特效尚未实现。当前没有原生窗口呈现、输入/IME 或 GPU 后端。
+目前支持实色矩形、统一圆角、居中边框、二维仿射变换及嵌套矩形/圆角裁剪；可选 `text` 支持定位后的字形。builder 检查非有限几何、负尺寸、不可逆变换及作用域配对，总嵌套最多 64 层。空形状不绘制，空 clip 排除绘制；软件后端拒绝超出 ±1,048,576 的设备路径/字形坐标。通用图片、任意路径、组透明度和高级特效尚未实现。Wayland 原生软件呈现与输入已接入；GPU 后端仍未实现。
 
 scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基线位置；`aegle-text/scene` 可从保留段落生成它们。软件 `text` 必须显式启用：如果 Cargo 统一开启了 scene/text 而 renderer/text 关闭，遇到字形命令返回 `UnsupportedCommand`，不能跳过文字后假称成功。
 
@@ -55,3 +55,13 @@ scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基
 `Surface` 借用紧密排列、从上到下的 RGBA8 字节切片，要求长度准确等于宽×高×4。平台呈现方负责 stride 或 BGRA 等格式转换。begin_frame 清空整帧，draw 按调用次序合成保留记录；无像素变化时宿主不调用绘制。错误可能发生在部分像素已更新之后，失败帧不得呈现。
 
 tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、按需初始化转换表，避免逐像素幂运算；每次绘制量化到 RGBA8，完全不透明覆盖直接复制。透明背景、半透明叠加与旋转已有像素级验证。裁剪 mask 的预算、复用与释放见[资源](resources.md)。
+
+## 当前 Wayland 接口
+
+`Wayland::connect/create_window/dispatch/next_event/present` 提供一个连接上的多个 xdg-toplevel。需要 wl_compositor ≥4、xdg-shell 与 wl_shm；text-input-v3 可查询，启用缺失能力返回 `ImeUnavailable`。窗口初始 configure 前不分配像素或呈现；SCTK 处理 configure acknowledgement，宿主使用最新 `WindowInfo` 的逻辑尺寸和整数 scale 生成物理 framebuffer。输出变换由 compositor 处理，当前不提供 fractional-scale/viewport 协议。
+
+`request_redraw` 合并变化，仅在已配置、前一 frame callback 完成且有空闲缓冲时通知宿主。每次实际提交才请求下一次 frame callback；没有变化不会持续呈现。`dispatch(None)` 使用 calloop/WaylandSource 的 FD 等待和 prepare-read 流程；已有应用事件时只做非阻塞分发。帧失败不附着，宿主显式请求重试；同时保持活动窗口的最新状态。
+
+`present` 借出紧密排列的 RGBA8 预乘缓冲，成功绘制后就地转换为 Wayland 必备 ARGB8888 的本机字节序，再 attach/commit。不使用额外完整颜色缓冲。每窗口至多两个独立 SlotPool，尺寸变化仅释放空闲旧缓冲，不改写 compositor 尚未 release 的映射；具体预算见[资源](resources.md)。
+
+输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。触摸、剪贴板、客户端窗口装饰、平台偏好、layer-shell、原生 GPU 句柄及系统无障碍仍待接入。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。

@@ -1,6 +1,6 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制及保留式纯文本编辑模型已实现；平台 IME、窗口、剪贴板、密码控件和系统无障碍尚未接入。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。原生编辑示例连接了这些模块；通用应用/组件层、Windows/macOS 输入、剪贴板、密码控件和系统无障碍仍未实现。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
 
 ## 当前显示接口
 
@@ -40,16 +40,40 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 `cancel_preedit` 或空预编辑恢复原内容及原选区；`commit` 将结果记为一次撤销操作，空提交表示删除原范围，与取消不同。普通插入、移动、选择、外部替换和撤销要求先明确提交或取消活动组合，避免宿主无意改变输入法会话。预编辑只标记布局/选择变化，实际提交值变化才设置 value 标记。
 
-以上是可被平台驱动的状态模型，不表示输入法协议已接通。后续焦点离开时按平台协商结束组合，销毁时取消会话，不自行重复提交。平台需要 UTF-16 等单位时显式转换并验证范围；周边文字删除不能直接使用未经校验的偏移。
+上述模型与平台协议分别维护文档状态和原生会话。Wayland 示例已将二者连接；焦点离开或手动编辑时明确取消组合，不自行重复提交。协议要求“移除旧预编辑并留下光标”时，不能直接调用会恢复原选区的 `cancel_preedit`；示例对已有组合的空重置使用空提交，保留原选区被替换后的语义及撤销能力。未来平台需要 UTF-16 等单位时仍须显式转换并验证范围；周边文字删除不能直接使用未经校验的偏移。
 
 密码模式、系统剪贴板及辅助技术编辑动作仍待集成。密码内容不得进入检查树、日志或普通剪贴板复制；系统语义须遵守受保护文本模式。外部辅助技术的选择/编辑动作将走同一编辑模型。
 
+## 当前 Wayland 原生接口
+
+`aegle-platform-wayland` 在窗口使用的同一连接、队列和事件循环上，为每个 seat 创建一个 text-input-v3 对象，当前绑定协议版本 1。`Wayland::configure_ime(window, Some(ImeRequest))` 保存该窗口所聚焦编辑控件的状态；`None` 结束其会话。平台模块不依赖文字引擎或 renderer。`Event::Ime` 携带窗口、seat 和 `Entered/Left/Update`，序号与原生会话按 seat 独立维护；应用层仍需决定多 seat 对控件焦点和同一编辑器的操作规则。
+
+`ImeRequest` 包含 surrounding、光标/anchor 字节偏移、候选窗矩形、内容提示、用途及变更原因。接口校验 surrounding 最多 4000 UTF-8 字节且无 NUL、两个偏移均在字符边界，矩形有限且尺寸非负，向外取整后可用协议的 i32 坐标表示；版本 2 的提示位返回错误。矩形采用 surface 局部逻辑坐标，宿主须先应用布局和滚动变换，不能再乘 buffer scale。文字或选择的外部变化使用 `ImeCause::Other`，来自 IME 的更新使用 `InputMethod`。
+
+宿主提供的 excerpt 必须包含完整选区，排除预编辑，并保留正确的相对偏移。组合期间 `Editor::text()` 为撤销语义保留了原选区片段，不能原样用作协议 surrounding；示例从 display 的预编辑前后切片生成有界 excerpt，并将被替换选区折叠为光标。当前接口尚未提供“未知 surrounding”的可选表示；超过 4000 字节的选区无法完整报告，示例明确报错，不截断选区后伪造偏移。
+
+### 批次、同步与会话边界
+
+`preedit_string`、`commit_string` 和 `delete_surrounding_text` 暂存至 `done` 后，以一个 `ImeUpdate` 交给宿主；每次交付后清空暂存值。未出现 preedit 的批次表示空预编辑，不能继续显示上一批文字。预编辑光标必须是两个合法 UTF-8 端点，或 `-1/-1` 表示隐藏；不合法的范围产生错误，不悄悄吸附。`commit: None` 和 `Some("")` 分别表示没有提交事件和显式空提交。
+
+宿主按协议顺序处理：移除旧预编辑到光标、删除选区/预编辑两侧要求的字节、插入提交文字、确定 surrounding，再放入新预编辑及其光标。删除长度不包含原选区；平台层没有文档内容，宿主必须在编辑器边界验证长度与 UTF-8 端点。应先处理完已排队的输入批次，再以最终编辑状态调用 `configure_ime`，避免逐条回复中间状态。
+
+同一启用会话中的旧 serial 更新仍须应用。`ImeUpdate::current = false` 时，后端只缓存新的 surrounding 等状态，等待与最新 commit 计数匹配的 `done`；匹配后由宿主应用本批并重新提供最终状态，后端不提前发送旧缓存。计数包含 disable 的 commit，并按 u32 环绕。完全相同的配置不再发送，避免空批次往返产生持续更新。
+
+取消会话是独立的生命周期操作：`configure_ime(None)` 即使在等待匹配 serial 时也立即 disable/commit。同一窗口内切换编辑控件必须先传 `None`，再启用新控件；每次 enable 记录序号边界，取消会话后排队到达的旧批次不会编辑新控件，也不会阻止新会话启用。`leave` 清除本地焦点和预编辑暂存；下一次 `enter` 先结束仍启用的旧服务端会话，再按当前控件重新启用并完整发送内容类型、surrounding 和矩形。无编辑控件的窗口保持禁用。
+
+### 当前集成与验证边界
+
+`cargo run -p aegle-platform-wayland --example editor --release` 展示原生窗口中的 CJK 编辑、选择、撤销/重做、滚动、IME 与同一 scene/software renderer。桥接代码位于该示例的 `editor_support`，尚未成为通用控件或跨平台原子编辑 API。示例随附小型测试字体，只覆盖其清单中的字符；正式应用应配置所需字体。示例中的删除与提交可合为一次精确替换，但这不等于所有组合/删除/选区操作已经具有统一的跨平台撤销事务。
+
+已通过隔离 Sway 中的原生协议验证：测试输入法使用 input-method-v2，经真实 compositor 将 CJK 预编辑、提交、周边删除和批次重置传递给本库的 text-input-v3；还验证了同会话旧 serial 延迟同步、焦点往返，以及取消后延迟批次与新会话的隔离。测试程序模拟输入法协议端点，不是 fcitx/IBus 用户操作验收；真实输入法切换、候选列表交互、复杂组合和桌面集成仍待端到端验证。详细运行环境与证据见[实现状态](implementation.md)。
+
 ## 平台和无障碍衔接
 
-Wayland 接入 text-input-v3，Windows 接入 TSF 和明确的兼容路径，macOS 实现 NSTextInputClient。文字引擎不代替这些平台协议。候选窗采用当前呈现几何，主题、缩放或动画更新时同步，不重建编辑器。
+Wayland 已接入上述 text-input-v3；Windows 的 TSF/兼容路径及 macOS 的 NSTextInputClient 仍为待实现目标。文字引擎不代替这些平台协议。候选窗采用当前呈现几何，主题、缩放或动画更新时同步，不重建编辑器。
 
 `text-a11y` 当前仅启用 Parley 的可选 AccessKit 布局接口，不自动创建语义树或系统 adapter。后续无障碍模块负责文字布局节点、选择范围及平台 adapter；文字变化和选择变化发送必要通知，纯颜色或装饰动画不制造朗读噪声。
 
 平台缺少 IME 协议时报告 ImeUnavailable 并保留基础键盘输入；要求组合输入的应用可以将其设为启动必需能力。正式 CJK/IME 验收必须在具备对应协议和真实输入法的环境进行。
 
-来源：[PlainEditor 发布源码](https://docs.rs/crate/parley/0.11.1/source/src/editing/editor.rs)、[Parley analysis](https://docs.rs/crate/parley/0.11.1/source/src/analysis/mod.rs)、[ICU4X CJK 换行说明](https://docs.rs/crate/icu_segmenter/2.3.0/source/src/line.rs)。
+来源：[PlainEditor 发布源码](https://docs.rs/crate/parley/0.11.1/source/src/editing/editor.rs)、[Parley analysis](https://docs.rs/crate/parley/0.11.1/source/src/analysis/mod.rs)、[ICU4X CJK 换行说明](https://docs.rs/crate/icu_segmenter/2.3.0/source/src/line.rs)、[text-input-v3 协议](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/unstable/text-input/text-input-unstable-v3.xml)。

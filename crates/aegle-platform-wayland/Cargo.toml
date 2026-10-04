@@ -1,0 +1,23 @@
+[package]
+name = "aegle-platform-wayland"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Event-driven Wayland windows, bounded software presentation and text-input-v3"
+
+[dependencies]
+aegle-types.workspace = true
+smithay-client-toolkit = "0.21.1"
+xkbcommon = { version = "0.8.0", default-features = false }
+wayland-client = "0.31.15"
+wayland-protocols = { version = "0.32.13", features = ["client", "unstable"] }
+
+[dev-dependencies]
+wayland-protocols-misc = { version = "0.3.12", features = ["client"] }
+aegle-text = { workspace = true, features = ["scene"] }
+aegle-scene = { workspace = true, features = ["text"] }
+aegle-render-software = { workspace = true, features = ["text"] }
+
+[lints]
+workspace = true

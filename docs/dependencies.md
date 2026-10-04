@@ -7,7 +7,7 @@
 | 布局 | Taffy 0.14.0 | Flex/Block 默认，Grid 可选；低层树适配 |
 | 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由小型自有实现完成 |
 | Vulkan | ash 0.38.0+1.3.281 | 自行封装资源、同步与 unsafe；不采用 wgpu/vulkano |
-| Wayland | wayland-client 0.31.15、SCTK 0.21.1 | system backend；客户端 IME 由平台层补齐 |
+| Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 当前软件路径用 Rust client backend；text-input-v3 由平台层补齐，Vulkan 原生句柄阶段再启用 system backend |
 | Windows | windows 0.62.2 | 只启用所需 Win32/COM/TSF/UIA 能力 |
 | macOS | objc2 0.6.4、objc2-metal 0.3.2 | AppKit/Metal 系统绑定；不采用已弃用 metal crate 或 MoltenVK |
 | 文本 | Parley/Fontique 0.11.1 | 基础排版、字体回退及纯文本编辑 |
@@ -22,7 +22,7 @@
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
 | SVG | resvg/usvg 0.48.1 | 构建期优先；运行时可选，关闭 text/system-fonts 等默认 feature |
 
-设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄及缓存/PNG 依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 接口也已通过全 features 构建。平台 adapters、GPU 与其余待建模块仍未据此宣称可用，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
+设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG 及 Wayland 平台依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 接口也已通过全 features 构建。系统无障碍 adapters、其他 OS、GPU 与其余待建模块仍未据此宣称可用，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
 `aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；PlainEditor 已有的选择、bidi、点命中和组合布局继续复用，不另带 Unicode 或编辑框架。`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它，启用也不等于已有系统无障碍 adapter。
 
@@ -31,3 +31,7 @@
 SVG 默认以路径图标/构建期资产为主；可选运行时 resvg 不处理 SVG text、外部 URL 或网络资源。需要 SVG 文字时在构建期转轮廓。构建期转换为位图需要指定尺寸/缩放档位，不能宣称与任意动态缩放完全等价。
 
 来源：[Parley 发布清单](https://docs.rs/crate/parley/0.11.1/source/Cargo.toml)、[Swash 发布清单](https://docs.rs/crate/swash/0.2.10/source/Cargo.toml)、[AccessKit](https://github.com/AccessKit/accesskit)、[resvg 发布清单](https://docs.rs/crate/resvg/0.48.1/source/Cargo.toml.orig)。其他原始调查来源保留在[选型记录](selection-candidates.md)。
+
+Wayland 软件后端使用 SCTK 0.21.1/calloop 0.14，键盘使用同一版本的 xkbcommon 0.8 包；不引入 winit、Tokio、softbuffer 或 wgpu。SCTK 自带自动重复计时器不提供完整取消接口，因此平台持有自身 repeat token，在焦点/设备/窗口销毁和 backend drop 时移除。按键翻译仍复用 SCTK，重复状态额外持有一份 XKB keymap/state 用于按键可重复性与 modifier 更新；这是实际额外内存，不宣称零成本封装。后续上游若提供借用 keymap 与取消 timer 接口，可移除此重复状态。
+
+构建需 libxkbcommon 的开发链接与 pkg-config 信息，发布需对应 runtime；SDK 不打包进程序。当前机器仅安装 runtime，验证时在 `/tmp/aegle-xkb-dev` 创建了指向已有系统库的开发链接与 `.pc`，未修改系统或项目构建配置。当前软件路径未启用 wayland-client/system，因此不将 libwayland-client 误写成该示例的实际动态依赖；最终以构建的依赖树和二进制链接结果为准。
