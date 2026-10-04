@@ -17,8 +17,10 @@ use crate::Error;
 /// matching compositor acknowledgement; canceled-session batches are discarded.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImeRequest {
-    /// Surrounding committed text, excluding the preedit and containing no NUL.
-    pub surrounding: String,
+    /// Surrounding committed text, excluding preedit and containing no NUL.
+    /// `None` enables composition without surrounding-text support, for example
+    /// when the complete selection cannot fit within the protocol's 4000 bytes.
+    pub surrounding: Option<String>,
     /// UTF-8 byte offset of the active selection endpoint.
     pub cursor: usize,
     /// UTF-8 byte offset of the fixed selection endpoint.
@@ -37,7 +39,7 @@ pub struct ImeRequest {
 impl Default for ImeRequest {
     fn default() -> Self {
         Self {
-            surrounding: String::new(),
+            surrounding: Some(String::new()),
             cursor: 0,
             anchor: 0,
             cursor_rect: Rect::default(),
@@ -50,13 +52,21 @@ impl Default for ImeRequest {
 
 impl ImeRequest {
     pub(crate) fn validate(&self) -> Result<[i32; 4], Error> {
-        if self.surrounding.len() > 4000 || self.surrounding.contains('\0') {
+        if self
+            .surrounding
+            .as_ref()
+            .is_some_and(|text| text.len() > 4000 || text.contains('\0'))
+        {
             return Err(Error::InvalidIme(
                 "surrounding text exceeds 4000 bytes or contains NUL",
             ));
         }
-        if !self.surrounding.is_char_boundary(self.cursor)
-            || !self.surrounding.is_char_boundary(self.anchor)
+        if self
+            .surrounding
+            .as_ref()
+            .map_or(self.cursor != 0 || self.anchor != 0, |text| {
+                !text.is_char_boundary(self.cursor) || !text.is_char_boundary(self.anchor)
+            })
         {
             return Err(Error::InvalidIme(
                 "surrounding offsets must be UTF-8 boundaries",

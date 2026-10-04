@@ -22,6 +22,8 @@ mod editor;
 #[cfg(feature = "scene")]
 mod editor_paint;
 mod history;
+mod ime;
+mod surrounding;
 
 #[cfg(feature = "scene")]
 mod paint;
@@ -33,10 +35,12 @@ pub use edit::{EditorDriver, HitSelection, Movement};
 pub use editor::{EditChanges, Editor, EditorOptions, HistoryStats, Selection, TextValue};
 #[cfg(feature = "scene")]
 pub use editor_paint::EditorPaint;
+pub use ime::ImeEdit;
 #[cfg(feature = "scene")]
 pub use paint::PaintError;
 pub use paragraph::{Paragraph, TextDiagnostics};
 pub use style::{TextError, TextStyle};
+pub use surrounding::Surrounding;
 pub use system::TextSystem;
 
 pub use parley::fontique::{

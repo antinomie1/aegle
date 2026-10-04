@@ -1,0 +1,18 @@
+[package]
+name = "aegle-controls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Reusable retained control behavior without a skin or platform"
+
+[features]
+default = []
+text = ["dep:aegle-text"]
+
+[dependencies]
+aegle-types.workspace = true
+aegle-text = { workspace = true, optional = true }
+
+[lints]
+workspace = true

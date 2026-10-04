@@ -1,6 +1,6 @@
 # Rust 命令式 API
 
-状态：v0.1 公共接口设计。代码表达约定的 API 形态，当前仓库没有实现，不能宣称这些示例已编译。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
+状态：v0.1 公共接口设计。下文 App/句柄/组件宏表达目标 API 形态，尚未实现；不能宣称这些示例已编译。底层可用接口另见文末。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
 
 ## 完整 Hello world
 
@@ -81,3 +81,9 @@ pub fn QuietButton(parent: &Container, text: &str) -> Result<Button> {
 App 拥有控件树；控件句柄为弱引用和代数 ID。处理器可以捕获其他控件句柄而不形成强拥有环。后台线程只能使用 UiProxy，不发送 UI 句柄；投递后在主线程重新定位 ID，目标已销毁时返回/报告 DeadHandle。
 
 第三方任务系统接入通过显式 post/取消句柄。框架不要求应用把所有函数变成 async，不让文本输入处理等待任意网络任务。
+
+## 当前可用的底层接口
+
+`Tree` 保存实际状态，`Route::rebuild/iter` 构造捕获/目标/冒泡路径，`Focus::set/advance` 按宿主策略处理焦点；这不是第二套函数式 UI 入口。`Button::handle(Input)` 返回激活、capture、焦点和绘制效果，`TextField::handle(&mut TextSystem, Input)` 在同一个 Editor 上实现编辑行为。控件不隐式获取平台服务。
+
+IME 数据通过 `EditorDriver::apply_ime` 一次验证并应用，`Editor::surrounding` 借出有界周边文字。调用方消费 `Outcome` 与 `Editor::take_changes` 后同步布局、平台和绘制。可运行组合位于 `aegle-platform-wayland --example editor`；目前需要显式组装，尚未达到上面的 7 行应用入口。

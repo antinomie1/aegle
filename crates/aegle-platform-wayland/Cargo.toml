@@ -14,6 +14,9 @@ wayland-client = "0.31.15"
 wayland-protocols = { version = "0.32.13", features = ["client", "unstable"] }
 
 [dev-dependencies]
+aegle-controls = { workspace = true, features = ["text"] }
+aegle-core.workspace = true
+aegle-layout.workspace = true
 wayland-protocols-misc = { version = "0.3.12", features = ["client"] }
 aegle-text = { workspace = true, features = ["scene"] }
 aegle-scene = { workspace = true, features = ["text"] }

@@ -64,4 +64,6 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 `present` 借出紧密排列的 RGBA8 预乘缓冲，成功绘制后就地转换为 Wayland 必备 ARGB8888 的本机字节序，再 attach/commit。不使用额外完整颜色缓冲。每窗口至多两个独立 SlotPool，尺寸变化仅释放空闲旧缓冲，不改写 compositor 尚未 release 的映射；具体预算见[资源](resources.md)。
 
+`configure_ime` 使用带可选周边文字的 ImeRequest；长选区不能完整容纳时可保留组合输入而不报告 surrounding。显式禁用立即结束会话并清除该窗口已排队的 IME Update，避免焦点切换后的串写；其余序号、批次和编辑事务见[文字](text-input.md)。
+
 输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。触摸、剪贴板、客户端窗口装饰、平台偏好、layer-shell、原生 GPU 句柄及系统无障碍仍待接入。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。

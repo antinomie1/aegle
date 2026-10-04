@@ -33,6 +33,7 @@ struct SeatInput {
     content: Option<(
         zwp_text_input_v3::ContentHint,
         zwp_text_input_v3::ContentPurpose,
+        bool,
     )>,
     serial: u32,
     enable_serial: u32,
@@ -63,7 +64,11 @@ impl SeatInput {
             self.disable();
             return;
         };
-        let content = (request.hints, request.purpose);
+        let content = (
+            request.hints,
+            request.purpose,
+            request.surrounding.is_some(),
+        );
         if self.server_enabled && self.content != Some(content) {
             // Leave invalidates local content, but does not necessarily disable
             // the server object. Reset that session after the next enter, when
@@ -79,11 +84,13 @@ impl SeatInput {
         }
         self.object.set_content_type(request.hints, request.purpose);
         self.object.set_text_change_cause(request.cause);
-        self.object.set_surrounding_text(
-            request.surrounding.clone(),
-            request.cursor as i32,
-            request.anchor as i32,
-        );
+        if let Some(text) = &request.surrounding {
+            self.object.set_surrounding_text(
+                text.clone(),
+                request.cursor as i32,
+                request.anchor as i32,
+            );
+        }
         self.object
             .set_cursor_rectangle(rect[0], rect[1], rect[2], rect[3]);
         self.commit();

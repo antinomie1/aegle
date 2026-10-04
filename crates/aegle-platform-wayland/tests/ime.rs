@@ -31,6 +31,8 @@ struct InputMethod {
     serial: u32,
     active: bool,
     surrounding: String,
+    activations: u32,
+    surrounding_events: u32,
 }
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for InputMethod {
     fn event(
@@ -53,9 +55,15 @@ impl Dispatch<ZwpInputMethodV2, ()> for InputMethod {
         _: &QueueHandle<Self>,
     ) {
         match event {
-            zwp_input_method_v2::Event::Activate => state.active = true,
+            zwp_input_method_v2::Event::Activate => {
+                state.active = true;
+                state.activations += 1;
+            }
             zwp_input_method_v2::Event::Deactivate => state.active = false,
-            zwp_input_method_v2::Event::SurroundingText { text, .. } => state.surrounding = text,
+            zwp_input_method_v2::Event::SurroundingText { text, .. } => {
+                state.surrounding = text;
+                state.surrounding_events += 1;
+            }
             zwp_input_method_v2::Event::Done => state.serial = state.serial.wrapping_add(1),
             zwp_input_method_v2::Event::Unavailable => {
                 panic!("private seat already has an input method")
@@ -180,7 +188,7 @@ fn native_ime_batches_and_session_boundaries() {
     };
     let first = p.app.create_window(WindowOptions::default()).unwrap();
     let mut req = ImeRequest {
-        surrounding: "你好 world".into(),
+        surrounding: Some("你好 world".into()),
         cursor: 6,
         anchor: 6,
         ..Default::default()
@@ -219,7 +227,7 @@ fn native_ime_batches_and_session_boundaries() {
     assert!(stale.preedit.text.is_empty());
     assert_eq!((stale.delete_before, stale.delete_after), (0, 0));
     let serial = p.state.serial;
-    req.surrounding = "你古好 world".into();
+    req.surrounding = Some("你古好 world".into());
     req.cursor = 6;
     req.anchor = 6;
     req.cause = ImeCause::InputMethod;
@@ -231,11 +239,35 @@ fn native_ime_batches_and_session_boundaries() {
     );
     p.commit("今");
     assert!(p.update().current);
-    req.surrounding = "你古今好 world".into();
+    req.surrounding = Some("你古今好 world".into());
     req.cursor = 9;
     req.anchor = 9;
     p.app.configure_ime(first, Some(req.clone())).unwrap();
-    p.pump(|p| p.state.surrounding == req.surrounding);
+    p.pump(|p| Some(&p.state.surrounding) == req.surrounding.as_ref());
+
+    // A selection too large for surrounding text still supports composition.
+    let activations = p.state.activations;
+    let surroundings = p.state.surrounding_events;
+    p.app
+        .configure_ime(
+            first,
+            Some(ImeRequest {
+                surrounding: None,
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    p.pump(|p| p.state.activations > activations);
+    assert!(p.state.active);
+    assert_eq!(p.state.surrounding_events, surroundings);
+    p.events.clear();
+    p.method.set_preedit_string("无".into(), 3, 3);
+    p.method.commit(p.state.serial);
+    assert_eq!(p.update().preedit.text, "无");
+    let activations = p.state.activations;
+    p.app.configure_ime(first, Some(req.clone())).unwrap();
+    p.pump(|p| p.state.activations > activations);
+    assert_eq!(Some(&p.state.surrounding), req.surrounding.as_ref());
 
     let second = p.app.create_window(WindowOptions::default()).unwrap();
     p.pump(|p| p.events.contains(&(first, ImeEvent::Left)));
@@ -243,7 +275,21 @@ fn native_ime_batches_and_session_boundaries() {
     p.events.clear();
     p.app.remove_window(second).unwrap();
     p.pump(|p| p.state.active && p.events.contains(&(first, ImeEvent::Entered)));
-    assert_eq!(p.state.surrounding, req.surrounding);
+    assert_eq!(Some(&p.state.surrounding), req.surrounding.as_ref());
+
+    // Cancellation also discards edits already dispatched into the app queue.
+    p.events.clear();
+    p.commit("queued before cancel");
+    p.queue.roundtrip(&mut p.state).unwrap();
+    p.app.dispatch(Some(Duration::from_millis(100))).unwrap();
+    p.app.configure_ime(first, None).unwrap();
+    p.app.configure_ime(first, Some(req.clone())).unwrap();
+    p.pump(|p| p.state.active);
+    assert!(
+        !p.events
+            .iter()
+            .any(|(_, event)| matches!(event, ImeEvent::Update(_)))
+    );
 
     // A queued old-editor transaction must not enter the newly enabled editor.
     p.events.clear();

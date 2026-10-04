@@ -8,7 +8,9 @@ Implementation is in progress: compact shared types, retained trees, Taffy
 layout, retained Unicode paragraphs/editors, on-demand CJK glyphs, drawing records
 and software rasterization work today. The independent Wayland backend adds
 native windows, bounded SHM presentation, keyboard/pointer input and text-input-v3.
-System accessibility, other OS backends and GPU rendering remain unimplemented.
+Shared Button/TextField behavior now connects routed input and focus to the same
+retained tree and editor. System accessibility, other OS backends and GPU
+rendering remain unimplemented.
 See the [implementation status](docs/implementation.md) and [design](docs/README.md).
 
 ```sh
@@ -27,6 +29,7 @@ state with no third-party dependencies), `aegle-layout` (Taffy over that tree),
 plain editing, composition and bounded delta undo), `aegle-glyph` (on-demand
 rasterization and a bounded image cache),
 `aegle-render-software` (borrowed framebuffers and linear-light compositing),
+`aegle-controls` (unskinned Button and optional TextField behavior),
 and `aegle-platform-wayland` (windows and native input, independent of rendering).
 Text support is opt-in for scene/software rendering. Geometry-only builds have
 no font stack; application font bytes remain shared, with no bundled font atlas.
@@ -38,7 +41,9 @@ is a development dependency; the optional glyph module also uses a PNG decoder
 for embedded color font bitmaps. Portable test fonts and their OFL notices are in
 `tests/assets/`; library builds embed no fonts.
 
-The Wayland `editor` example is an interactive software-rendered CJK text field.
+The Wayland `editor` example combines a CJK text field and button in one retained
+Taffy tree, with routed actions, Tab focus and pointer capture. Keyboard editing
+and IME use the shared controls and atomic text transaction APIs.
 It needs a Wayland compositor with xdg-shell and wl_compositor version 4 or newer;
 native composition additionally needs text-input-v3 and an input method. Building
 requires libxkbcommon development metadata for pkg-config; running needs the

@@ -1,6 +1,6 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。原生编辑示例连接了这些模块；通用应用/组件层、Windows/macOS 输入、剪贴板、密码控件和系统无障碍仍未实现。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层、Windows/macOS 输入、剪贴板、密码控件和系统无障碍仍未实现。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
 
 ## 当前显示接口
 
@@ -40,7 +40,9 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 `cancel_preedit` 或空预编辑恢复原内容及原选区；`commit` 将结果记为一次撤销操作，空提交表示删除原范围，与取消不同。普通插入、移动、选择、外部替换和撤销要求先明确提交或取消活动组合，避免宿主无意改变输入法会话。预编辑只标记布局/选择变化，实际提交值变化才设置 value 标记。
 
-上述模型与平台协议分别维护文档状态和原生会话。Wayland 示例已将二者连接；焦点离开或手动编辑时明确取消组合，不自行重复提交。协议要求“移除旧预编辑并留下光标”时，不能直接调用会恢复原选区的 `cancel_preedit`；示例对已有组合的空重置使用空提交，保留原选区被替换后的语义及撤销能力。未来平台需要 UTF-16 等单位时仍须显式转换并验证范围；周边文字删除不能直接使用未经校验的偏移。
+`EditorDriver::apply_ime(ImeEdit)` 是共享的 UTF-8 事务入口：先验证提交、预编辑、两侧删除及长度，再修改文字、历史和失效标记，失败不产生部分编辑。两侧删除与提交合为一次撤销；单纯续写预编辑保留原选区，预编辑期间的两侧删除仍是可撤销的已提交变化。协议空重置移除旧预编辑及其被替换选区，与恢复原内容的显式 `cancel_preedit` 不同。
+
+文档状态和原生会话仍分别管理；TextField 在失焦和必要手动编辑时取消组合，并通过 `Outcome::reset_ime` 要求宿主重置平台会话。未来平台的 UTF-16 等单位须先转换为合法 UTF-8 范围，再进入同一事务接口。
 
 密码模式、系统剪贴板及辅助技术编辑动作仍待集成。密码内容不得进入检查树、日志或普通剪贴板复制；系统语义须遵守受保护文本模式。外部辅助技术的选择/编辑动作将走同一编辑模型。
 
@@ -50,7 +52,7 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 `ImeRequest` 包含 surrounding、光标/anchor 字节偏移、候选窗矩形、内容提示、用途及变更原因。接口校验 surrounding 最多 4000 UTF-8 字节且无 NUL、两个偏移均在字符边界，矩形有限且尺寸非负，向外取整后可用协议的 i32 坐标表示；版本 2 的提示位返回错误。矩形采用 surface 局部逻辑坐标，宿主须先应用布局和滚动变换，不能再乘 buffer scale。文字或选择的外部变化使用 `ImeCause::Other`，来自 IME 的更新使用 `InputMethod`。
 
-宿主提供的 excerpt 必须包含完整选区，排除预编辑，并保留正确的相对偏移。组合期间 `Editor::text()` 为撤销语义保留了原选区片段，不能原样用作协议 surrounding；示例从 display 的预编辑前后切片生成有界 excerpt，并将被替换选区折叠为光标。当前接口尚未提供“未知 surrounding”的可选表示；超过 4000 字节的选区无法完整报告，示例明确报错，不截断选区后伪造偏移。
+`Editor::surrounding(max_bytes)` 提供最多两个无分配借用切片，包含完整选区及相对字节偏移；组合期间同时排除预编辑和原被替换片段，将选区折叠为光标。选区本身超预算则返回 None，不能截断选区后伪造偏移。Wayland `ImeRequest::surrounding = None` 表示支持组合但不支持周边文字，此时 cursor/anchor 必须为 0。Some/None 切换通过 disable/enable 更新该协议能力；只有原生 API 要求连续字符串时才分配有界副本。
 
 ### 批次、同步与会话边界
 
@@ -60,11 +62,11 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 同一启用会话中的旧 serial 更新仍须应用。`ImeUpdate::current = false` 时，后端只缓存新的 surrounding 等状态，等待与最新 commit 计数匹配的 `done`；匹配后由宿主应用本批并重新提供最终状态，后端不提前发送旧缓存。计数包含 disable 的 commit，并按 u32 环绕。完全相同的配置不再发送，避免空批次往返产生持续更新。
 
-取消会话是独立的生命周期操作：`configure_ime(None)` 即使在等待匹配 serial 时也立即 disable/commit。同一窗口内切换编辑控件必须先传 `None`，再启用新控件；每次 enable 记录序号边界，取消会话后排队到达的旧批次不会编辑新控件，也不会阻止新会话启用。`leave` 清除本地焦点和预编辑暂存；下一次 `enter` 先结束仍启用的旧服务端会话，再按当前控件重新启用并完整发送内容类型、surrounding 和矩形。无编辑控件的窗口保持禁用。
+取消会话是独立的生命周期操作：`configure_ime(None)` 即使在等待匹配 serial 时也立即 disable/commit。同一窗口内切换编辑控件必须先传 `None`，再启用新控件；每次 enable 记录序号边界，取消会话后排队到达的旧批次不会编辑新控件，也不会阻止新会话启用；显式 None 还会删除已分发到应用事件队列但尚未取出的该窗口 Update。`leave` 清除本地焦点和预编辑暂存；下一次 `enter` 先结束仍启用的旧服务端会话，再按当前控件重新启用并完整发送内容类型、surrounding 和矩形。无编辑控件的窗口保持禁用。
 
 ### 当前集成与验证边界
 
-`cargo run -p aegle-platform-wayland --example editor --release` 展示原生窗口中的 CJK 编辑、选择、撤销/重做、滚动、IME 与同一 scene/software renderer。桥接代码位于该示例的 `editor_support`，尚未成为通用控件或跨平台原子编辑 API。示例随附小型测试字体，只覆盖其清单中的字符；正式应用应配置所需字体。示例中的删除与提交可合为一次精确替换，但这不等于所有组合/删除/选区操作已经具有统一的跨平台撤销事务。
+`cargo run -p aegle-platform-wayland --example editor --release` 使用同一 Tree/Taffy 保存 TextField、Button 和文字标签。Route/Focus 处理路由及 Tab 顺序，controls 处理按键、选择、capture 和 IME，保留 scene/software renderer 显示 CJK 与焦点状态；按钮回调可以修改文本框。`controls_support` 只负责示例组装、原生归一化及绘制，不另建编辑事务。示例为活动键盘 seat 设置单一逻辑焦点域；多 seat 产品策略尚未作为通用 App API 交付。示例字体仅覆盖有限清单，正式应用应配置所需字体。
 
 已通过隔离 Sway 中的原生协议验证：测试输入法使用 input-method-v2，经真实 compositor 将 CJK 预编辑、提交、周边删除和批次重置传递给本库的 text-input-v3；还验证了同会话旧 serial 延迟同步、焦点往返，以及取消后延迟批次与新会话的隔离。测试程序模拟输入法协议端点，不是 fcitx/IBus 用户操作验收；真实输入法切换、候选列表交互、复杂组合和桌面集成仍待端到端验证。详细运行环境与证据见[实现状态](implementation.md)。
 

@@ -108,7 +108,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
         assert!(Instant::now() < deadline, "native loop did not become idle");
     }
     let invalid = ImeRequest {
-        surrounding: "汉".into(),
+        surrounding: Some("汉".into()),
         cursor: 1,
         ..ImeRequest::default()
     };

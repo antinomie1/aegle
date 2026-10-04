@@ -233,7 +233,17 @@ impl Wayland {
         request: Option<ImeRequest>,
     ) -> Result<(), Error> {
         self.window_info(id)?;
-        self.state.ime.configure(id, request)
+        let disabled = request.is_none();
+        self.state.ime.configure(id, request)?;
+        if disabled {
+            // Native events can already be in the host queue when a pointer or
+            // focus handler replaces the editor. They belong to the old session.
+            self.state.events.retain(|event| {
+                !matches!(event,
+                Event::Ime { window, event: crate::ImeEvent::Update(_), .. } if *window == id)
+            });
+        }
+        Ok(())
     }
 
     /// Draws directly into an idle SHM buffer as premultiplied sRGB RGBA8.

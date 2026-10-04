@@ -2,6 +2,14 @@
 
 状态：v0.1 设计基线。三者共用属性、状态、生命周期和失效规则，不建立独立于控件系统的第二套运行时。对应 R12、R17–R21。
 
+## 当前行为接口
+
+`aegle-controls::Button` 保存 enabled/focused/hovered/pressed，不含标签或绘制。指针按下请求 capture，匹配释放且仍在命中区才激活；Space 在释放时激活，Enter 只在首次按下时激活，重复按键不重复触发。失焦、取消和禁用释放 capture，不产生激活；语义 `Input::Activate` 同样检查启用状态。
+
+可选 `text` 的 `TextField` 直接拥有 Editor，复用选择、按词/行移动、grapheme 删除、撤销、单行提交和原子 IME 事务。宿主提供当前文字局部坐标，应用 `Outcome` 的焦点/capture/重绘/IME 重置请求，并消费 Editor 的失效标记。只读仍可选择；失焦或禁用取消组合且恢复已提交值。剪贴板、密码和平台差异快捷键尚未全部接入。
+
+这些行为可由不同皮肤共享；当前示例的颜色和绘制为演示代码，主题、动画、默认 widgets 与系统语义导出尚未实现。控件行为层不创建窗口或定时器。
+
 ## 默认组件范围
 
 默认皮肤采用跨平台一致的中性极简外观。首版包含 Box/Row/Column、Text、Button、CheckBox、Switch、Slider、Progress、TextField、TextArea、ScrollView、等高虚拟 ListView，以及窗口内 Popup/Menu/Tooltip。Grid、图像格式、路径图标和高级特效按 feature 提供。
