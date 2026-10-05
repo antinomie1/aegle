@@ -73,7 +73,7 @@ pub use aegle_motion::{Easing, Transition};
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::Options as VulkanOptions;
 pub use aegle_scene as scene;
-pub use aegle_text::{ImeEdit, TextSystem};
+pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, VisualState};
 pub use aegle_types::{Color, Point, Size};
 pub use handles::{Button, Container, Label, Node, TextField};

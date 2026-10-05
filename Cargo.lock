@@ -80,7 +80,9 @@ dependencies = [
  "aegle-app",
  "aegle-loader",
  "aegle-macros",
+ "aegle-render-software",
  "aegle-text",
+ "png",
 ]
 
 [[package]]

@@ -321,3 +321,9 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - Linux 默认组合运行时链接的第三方 crate 由 141 个降为 86 个（不再包含 zbus/atspi/async-io 等）；release `hello` 由 7,581,768 B 降为 4,224,192 B，`controls` 由 7,610,440 B 降为 4,256,960 B。私有 Pixman Sway 上默认 release `controls` 正常显示，PSS 约 9.6 MB、1 个线程。默认、显式启用 `unix-accessibility`、all-features 与 Windows 目标的检查和测试通过。
 - 随后按用户决定同样关闭 `windows-accessibility` 默认启用；默认 desktop 不再含 `accessibility` 语义导出，需要时显式选择 `accessibility`、`unix-accessibility` 或 `windows-accessibility`。Windows 默认组合运行时第三方 crate 由 71 个降为 66 个，交叉编译 release `hello.exe` 由 3,864,064 B 降为 3,247,616 B，`controls.exe` 由 3,889,664 B 降为 3,273,216 B；Linux 默认组合降为 84 个 crate，release 文件大小不变（未用的导出代码此前已被链接器去除）。默认、单独 `accessibility`、两个适配器 feature 与 Windows 目标的检查和测试通过。
 
+## 开发者文档与控件截图
+
+- 新增 `docs/developer/api.md`（依赖与 feature、应用与窗口、控件树、布局、样式/主题/皮肤、事件、动画、标记、嵌入宿主、错误）与 `docs/developer/controls.md`（每个默认控件的创建、方法、事件、标记写法与状态截图）。两份文档中的 Rust 片段已放入临时示例编译通过后移除；标记片段按[标记语言](markup.md)规则书写。
+- `cargo run -p aegle --example gallery` 用无窗口 `Ui`、软件 renderer 与仓库测试字体以 2 倍缩放生成 17 张 PNG（约 368 KB），每个状态是独立 Ui，悬停/按下经指针事件、聚焦经 `focus()` 产生；无需合成器，facade 只增加 png 与 aegle-render-software 两个开发依赖。截图暴露的已知问题：高对比主题中禁用控件与启用控件外观相同（`muted` 为白色）。
+- app 重新导出 `Selection`，使 `TextField::select` 无需直接依赖 aegle-text。
+

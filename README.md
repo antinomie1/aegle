@@ -52,6 +52,10 @@ fn main() -> Result<()> {
 }
 ```
 
+Developer documentation (Chinese): the [API guide](docs/developer/api.md) and the
+[control reference](docs/developer/controls.md) with screenshots of every default control in its states.
+Regenerate the screenshots with `cargo run -p aegle --example gallery`.
+
 The current `aegle` defaults are native windows (Linux Wayland / Windows Win32), software rendering and system fonts,
 with markup (including the dynamic markup engine) and transitions enabled. System accessibility adapters are opt-in:
 `--features unix-accessibility` (AT-SPI; needs session D-Bus and adds the zbus stack) or

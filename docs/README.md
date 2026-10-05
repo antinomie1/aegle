@@ -4,6 +4,11 @@ v0.1，2026-10-05。设计作为实现基线；当前已开始底层框架实现
 
 Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示例和直接的命令式 API。Linux/Windows 使用 Vulkan，macOS 使用原生 Metal；CJK、IME、系统无障碍、主题与动画共同设计，模块独立选用。
 
+## 开发者文档
+
+- [API 指南](developer/api.md)：依赖与 feature、应用与窗口、布局、样式、事件、动画、标记与嵌入宿主
+- [控件参考](developer/controls.md)：每个默认控件的用法与各状态截图
+
 ## 阅读入口
 
 - [需求](requirements.md)、[决策记录](design-tree.md)、[术语](GLOSSARY.md)

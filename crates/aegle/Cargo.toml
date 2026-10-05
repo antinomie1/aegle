@@ -31,6 +31,8 @@ aegle-loader = { workspace = true, optional = true }
 
 [dev-dependencies]
 aegle-text.workspace = true
+aegle-render-software = { workspace = true, features = ["text"] }
+png = "0.18.1"
 
 [[example]]
 name = "hello"
@@ -70,3 +72,6 @@ required-features = ["native", "system-fonts"]
 [[example]]
 name = "dynamic"
 required-features = ["native", "system-fonts", "markup"]
+
+[[example]]
+name = "gallery"
