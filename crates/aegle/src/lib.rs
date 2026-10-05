@@ -7,6 +7,8 @@
 //! remain independent; no macOS host is currently implemented.
 
 pub use aegle_app::*;
+/// Bounded PNG decoding into scene images, e.g. `ImageView` sources.
+pub use aegle_glyph::{DecodeError, DecodedImage, decode_image, decode_png};
 extern crate self as aegle;
 
 /// Compile a `.aegle` file to ordinary retained control construction.

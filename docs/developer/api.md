@@ -128,6 +128,8 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `image(&Image)` | `ImageView` | 图像 |
 | `canvas(painter)` | `Canvas` | 自定义绘制 |
 
+`Image` 是共享的、不可变的 RGBA8 像素（非预乘 sRGB，自上而下）。从文件加载 PNG 用 `aegle::decode_image(&bytes)?`，或用 `aegle::decode_png` 取得原始像素；任意色彩类型、调色板、`tRNS` 和 16 位都会转为 RGBA8，伽马与 ICC 块被忽略，默认解码结果不超过 64 MiB（`decode_png_with_limit` 可调整），宽高不超过 16,384，超限返回 `DecodeError::TooLarge`，不是 PNG 返回 `NotPng`，损坏返回 `Invalid`。目前只支持 PNG。
+
 所有类型化句柄都解引用为 `Node`，共享以下方法：
 
 | `Node` 方法 | 说明 |

@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use skrifa::bitmap::{BitmapData, BitmapGlyph, Origin};
 
 use crate::raster::{encoded, image_size, linear};
@@ -59,10 +57,9 @@ pub(crate) fn render(
                 dst[3] = src[3];
             }
         }
-        BitmapData::Png(data) => decode_png(
+        BitmapData::Png(data) => crate::decode::decode_png_into(
             data,
-            bitmap.width,
-            bitmap.height,
+            [bitmap.width, bitmap.height],
             limits.bitmap_bytes,
             &mut source,
         )?,
@@ -117,48 +114,4 @@ pub(crate) fn render(
         content: if color { Content::Color } else { Content::Mask },
         data: pixels,
     })
-}
-
-fn decode_png(
-    data: &[u8],
-    w: u32,
-    h: u32,
-    limit: usize,
-    output: &mut [u8],
-) -> Result<(), GlyphError> {
-    let mut decoder = png::Decoder::new(Cursor::new(data));
-    decoder.set_limits(png::Limits { bytes: limit });
-    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
-    let mut reader = decoder.read_info().map_err(png_error)?;
-    if reader.info().width != w || reader.info().height != h {
-        return Err(GlyphError::InvalidFont);
-    }
-    let size = reader
-        .output_buffer_size()
-        .ok_or(GlyphError::BitmapBudget)?;
-    if size > output.len() {
-        return Err(GlyphError::BitmapBudget);
-    }
-    let info = reader.next_frame(output).map_err(png_error)?;
-    let channels = info.color_type.samples();
-    // Expand back-to-front in the already reserved RGBA buffer.
-    for i in (0..w as usize * h as usize).rev() {
-        let p = i * channels;
-        let rgba = match info.color_type {
-            png::ColorType::Rgba => continue,
-            png::ColorType::Rgb => [output[p], output[p + 1], output[p + 2], 255],
-            png::ColorType::Grayscale => [output[p], output[p], output[p], 255],
-            png::ColorType::GrayscaleAlpha => [output[p], output[p], output[p], output[p + 1]],
-            png::ColorType::Indexed => return Err(GlyphError::InvalidFont),
-        };
-        output[i * 4..i * 4 + 4].copy_from_slice(&rgba);
-    }
-    Ok(())
-}
-
-fn png_error(error: png::DecodingError) -> GlyphError {
-    match error {
-        png::DecodingError::LimitsExceeded => GlyphError::BitmapBudget,
-        _ => GlyphError::InvalidFont,
-    }
 }

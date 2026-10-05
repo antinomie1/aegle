@@ -27,6 +27,7 @@ unix-accessibility = ["aegle-app/unix-accessibility"]
 
 [dependencies]
 aegle-app.workspace = true
+aegle-glyph = { workspace = true, features = ["scene"] }
 aegle-macros = { workspace = true, optional = true }
 aegle-loader = { workspace = true, optional = true }
 

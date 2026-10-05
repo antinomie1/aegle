@@ -19,5 +19,9 @@ png = { version = "0.18.1", default-features = false }
 hashbrown = { version = "0.17.1", default-features = false }
 lru-slab = "0.1.3"
 
+[dev-dependencies]
+# Encoder for decoder tests; the library itself only decodes.
+png = "0.18.1"
+
 [lints]
 workspace = true

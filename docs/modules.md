@@ -12,7 +12,7 @@
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；不依赖应用 | types、core |
 | aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |
-| aegle-glyph | Swash 字形光栅化、有界 CPU 缓存及共用字形身份/变换策略 | scene 按 feature 接入 |
+| aegle-glyph | Swash 字形光栅化、有界 CPU 缓存、共用字形身份/变换策略及有界 PNG 解码（应用图像与字体内嵌位图共用） | scene 按 feature 接入 |
 | aegle-scene | 二维绘制命令、裁剪、共享图像/路径资源及可选字形记录 | types |
 | aegle-gpu | GPU 后端共用、与图形 API 无关的部分：图元/裁剪记录、场景遍历、货架装箱、图像与路径 mask 放置、WGSL 着色器 | types、scene；vector feature 增加 zeno |
 | aegle-render-vulkan | 几何、可选字形图集、裁剪、离屏读回与可选原生 swapchain | types、scene；glyph 按 text feature 接入 |
@@ -26,7 +26,7 @@
 | aegle-motion | 时间、补间、过渡及可选弹簧；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
 | aegle-widgets | 默认中性极简皮肤和常用组件 | controls、theme、scene；motion 按 feature 接入 |
-| aegle-assets | 有界 PNG 解码与可选运行时 SVG 光栅化 | types |
+| aegle-assets（暂不创建） | 运行时 SVG 光栅化；有界 PNG 解码已由 aegle-glyph 提供，SVG 引入前不单独成 crate | types |
 | aegle-markup | 有界解析、跨度、内建控件 schema、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |
 | aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载 | app、markup |

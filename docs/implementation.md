@@ -267,12 +267,18 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 验证：重构前后的 Vulkan 三个 ignored 场景（几何/失败帧恢复、CJK 与图集恢复、图像与路径）在 RADV 与 llvmpipe 上都通过；wgpu 两个 ignored 场景在两个适配器上通过；私有 Sway 上带 Khronos validation 与同步检查的 Vulkan `scrolling` 通过且无验证错误，wgpu 的 `scrolling` 与 `visuals` 通过，截图目视确认没有上下翻转。新增 `aegle-gpu/tests/records.rs`：遍历记录、裁剪边界、透明填充不入行、字节上限、九层裁剪拒绝、视口符号、货架换行。workspace all-targets 检查通过。
 - 不改变公开 API：两个后端的 `Error` 增加从 `aegle_gpu::Error` 的转换，wgpu 增加 `Allocation`。没有测量帧时间或体积变化。
 
+## aegle-glyph 的 PNG 解码辅助
+
+- 原先只服务字体内嵌位图的私有解码器提升为公开 API：`decode_png`/`decode_png_with_limit` 返回非预乘 sRGB RGBA8 的 `DecodedImage`，`scene` feature 增加 `decode_image` 与 `DecodedImage::into_image`；`aegle` facade 重新导出。灰度、灰度加透明、RGB、RGBA、调色板（含 `tRNS`）、1–16 位都转为 RGBA8；伽马与 ICC 忽略；APNG 取默认图像。
+- 有界：先检查 PNG 签名（非 PNG 返回 `NotPng`），再从文件头检查宽高不超过 16,384 与输出字节不超过上限（默认 64 MiB），通过后才分配像素缓冲，并以同一上限约束解码器；损坏或截断返回 `Invalid`。字体位图路径改用同一核心，只多了期望尺寸校验。不增加依赖，没有 SVG，也没有 PNG 以外的格式。
+- 验证：`aegle-glyph/tests/decode.rs` 用 png 编码器（仅开发依赖）覆盖六种编码的逐字节结果、非 PNG/空/截断输入、边界上限（8 字节通过、7 字节拒绝）和超宽拒绝，以及到 scene 图像的转换；rustdoc 示例解码内嵌的 70 字节 PNG；原有 sbix PNG 字形测试与软件/Vulkan 文字测试仍通过。未测试交错 PNG（编码器不能生成），也未测量解码耗时。
+
 ## 当前进度与剩余工作
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale 与客户端装饰；真实桌面 portal 与 Windows 设置变更的实机验收。
-- 组件/绘制：惯性、可变高度列表、自定义控件输入行为、PNG 等解码辅助、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
+- 组件/绘制：惯性、可变高度列表、自定义控件输入行为、PNG 以外的图像格式与 SVG、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
 - 标记语言：宿主动作、事件 let、record 列表与 `key` 表达式、slot、组件事件、类型化属性过渡、可配置执行/传播限额；loader 当前错误只带字节跨度，不带文件名。
 - 主题/动画：token 级部分覆盖、系统文本缩放、缩放/旋转动画。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。

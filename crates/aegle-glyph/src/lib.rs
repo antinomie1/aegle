@@ -10,6 +10,10 @@
 //! separate costs. [`GlyphCache::release_scratch`] releases scaling workspaces;
 //! [`GlyphCache::clear`] releases all retained allocations.
 //!
+//! [`decode_png`] (and, with the `scene` feature, `decode_image`) turn PNG files
+//! into straight sRGB RGBA8 under explicit size limits; the cache uses the same
+//! decoder for color-font strikes.
+//!
 //! Supports grayscale outlines, COLRv0 palette layers, and embedded PNG/BGRA/
 //! alpha bitmaps. Color sampling and layer composition use linear-light
 //! premultiplied arithmetic, then expose straight sRGB pixels. COLRv1 glyphs
@@ -17,12 +21,18 @@
 
 mod bitmap;
 mod cache;
+mod decode;
 mod key;
 mod raster;
 #[cfg(feature = "scene")]
 mod transform;
 
 pub use cache::GlyphCache;
+#[cfg(feature = "scene")]
+pub use decode::decode_image;
+pub use decode::{
+    DEFAULT_MAX_BYTES, DecodeError, DecodedImage, MAX_EXTENT, decode_png, decode_png_with_limit,
+};
 pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};
 pub use swash::zeno::Placement;

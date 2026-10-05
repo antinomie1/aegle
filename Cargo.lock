@@ -78,6 +78,7 @@ name = "aegle"
 version = "0.1.0"
 dependencies = [
  "aegle-app",
+ "aegle-glyph",
  "aegle-loader",
  "aegle-macros",
  "aegle-render-software",
