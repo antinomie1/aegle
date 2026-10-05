@@ -18,6 +18,9 @@ aegle-text = { path = "crates/aegle-text" }
 aegle-glyph = { path = "crates/aegle-glyph" }
 aegle-controls = { path = "crates/aegle-controls" }
 aegle-access = { path = "crates/aegle-access" }
+aegle-theme = { path = "crates/aegle-theme" }
+aegle-app = { path = "crates/aegle-app" }
+aegle-platform-wayland = { path = "crates/aegle-platform-wayland" }
 accesskit = { version = "0.24.1", default-features = false }
 linebender_resource_handle = { version = "0.1.1", default-features = false }
 parley = { version = "0.11.1", default-features = false, features = ["std"] }
@@ -33,4 +36,4 @@ missing_docs = "warn"
 opt-level = 3
 lto = "thin"
 codegen-units = 1
-strip = "debuginfo"
+strip = "symbols"

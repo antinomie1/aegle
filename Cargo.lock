@@ -60,11 +60,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aegle"
+version = "0.1.0"
+dependencies = [
+ "aegle-app",
+]
+
+[[package]]
 name = "aegle-access"
 version = "0.1.0"
 dependencies = [
  "accesskit",
  "accesskit_unix",
+]
+
+[[package]]
+name = "aegle-app"
+version = "0.1.0"
+dependencies = [
+ "aegle-access",
+ "aegle-controls",
+ "aegle-core",
+ "aegle-layout",
+ "aegle-platform-wayland",
+ "aegle-render-software",
+ "aegle-scene",
+ "aegle-text",
+ "aegle-theme",
+ "aegle-types",
+ "wayland-client",
 ]
 
 [[package]]
@@ -150,6 +174,13 @@ dependencies = [
  "aegle-types",
  "icu_segmenter",
  "parley",
+]
+
+[[package]]
+name = "aegle-theme"
+version = "0.1.0"
+dependencies = [
+ "aegle-types",
 ]
 
 [[package]]

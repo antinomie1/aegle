@@ -1,0 +1,32 @@
+[package]
+name = "aegle-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Retained imperative UI composition and optional native application host"
+
+[features]
+default = []
+system-fonts = ["aegle-text/system-fonts"]
+accessibility = ["dep:aegle-access", "aegle-text/text-a11y"]
+wayland = ["dep:aegle-platform-wayland", "dep:aegle-render-software", "dep:wayland-client"]
+unix-accessibility = ["wayland", "accessibility", "aegle-access/unix"]
+
+[dependencies]
+aegle-types.workspace = true
+aegle-core.workspace = true
+aegle-layout.workspace = true
+aegle-theme.workspace = true
+aegle-scene = { workspace = true, features = ["text"] }
+aegle-text = { workspace = true, features = ["scene"] }
+aegle-controls = { workspace = true, features = ["text"] }
+aegle-access = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+aegle-platform-wayland = { workspace = true, optional = true }
+aegle-render-software = { workspace = true, features = ["text"], optional = true }
+wayland-client = { version = "0.31.15", optional = true }
+
+[lints]
+workspace = true

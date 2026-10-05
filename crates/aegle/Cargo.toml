@@ -1,0 +1,29 @@
+[package]
+name = "aegle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "A small retained GUI with imperative controls and composable backends"
+
+[features]
+default = ["desktop"]
+desktop = ["wayland", "system-fonts", "unix-accessibility"]
+wayland = ["aegle-app/wayland"]
+system-fonts = ["aegle-app/system-fonts"]
+accessibility = ["aegle-app/accessibility"]
+unix-accessibility = ["aegle-app/unix-accessibility"]
+
+[dependencies]
+aegle-app.workspace = true
+
+[[example]]
+name = "hello"
+required-features = ["wayland", "system-fonts"]
+
+[[example]]
+name = "controls"
+required-features = ["wayland", "system-fonts"]
+
+[lints]
+workspace = true

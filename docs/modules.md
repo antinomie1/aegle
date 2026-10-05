@@ -1,6 +1,6 @@
 # 模块、依赖与构建组合
 
-状态：v0.1 模块设计。types、core、layout、scene、text、glyph、controls、access、软件 renderer 与 Wayland 平台已建立；表中其余模块及已建立模块的完整职责仍是设计目标，具体进度见[实现状态](implementation.md)。
+状态：v0.1 模块设计。types、core、layout、scene、text、glyph、controls、access、theme、app、便捷入口、软件 renderer 与 Wayland 平台已建立；实际覆盖范围见下文。其余模块及已建立模块的完整职责仍是设计目标，验证记录见[实现状态](implementation.md)。
 
 ## 拆分尺度
 
@@ -22,7 +22,7 @@
 | aegle-platform-appkit | AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-shell-wayland | layer-shell 表面策略，共享 Wayland 连接和事件队列 | types、platform-wayland |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix 显式启用 |
-| aegle-theme | 有类型的主题 token、局部覆盖与状态取值 | types |
+| aegle-theme | 当前为无分配的类型化颜色/尺寸快照；局部 token 覆盖与命名空间扩展是后续目标 | types |
 | aegle-motion | 时间、补间、过渡及可选弹簧；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
 | aegle-widgets | 默认中性极简皮肤和常用组件 | controls、theme、scene；motion 按 feature 接入 |
@@ -31,7 +31,7 @@
 | aegle-markup | 解析、跨度、类型化中间表示与语言校验 | types |
 | aegle-macros | ui! 编译与组件元数据生成，仅编译期运行 | markup |
 | aegle-loader | 可选运行时加载、表达式执行与显式重载 | types、markup、core |
-| aegle-app | 将窗口、UI、布局、绘制、文本与可选能力连接起来 | core、layout、scene；其余按构建组合启用 |
+| aegle-app | 无窗口 Ui 与可选原生 App，连接保留控件、布局、绘制、文本、主题及语义 | types、core、layout、scene、text、controls、theme；平台/renderer/access 按 feature |
 | aegle | 应用便捷入口与重导出，不提供另一套实现 | app；其他按 feature 重导出 |
 
 表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`，映射 Parley 的可选 AccessKit 支持；基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
@@ -49,6 +49,12 @@
 `aegle-controls` 默认只有无分配的 Button 状态及借用 Input/Outcome；`text` 增加复用 Editor 的 TextField。它不依赖 core、布局、主题、renderer 或窗口。宿主在自己的树中保存行为状态，负责命中、焦点和 capture；键盘、指针及语义激活经过同一默认行为。Wayland editor 示例使用 core 的 Route/Focus 连接这套行为，不再另写编辑快捷键与 IME 文本替换。可选 aegle-access/unix 已在示例接通 AT-SPI 的查询、焦点、按钮及文字选择，完整系统无障碍仍未完成。
 
 `aegle-access` 的 Mailbox/Handlers 将原生线程上的请求交给宿主自己的 UI 线程，不引入另一棵应用树。UnixAdapter 复用 AccessKit 的系统协议与语义缓存，收到初次请求时完整导出，其后按脏标记更新。text-a11y 文本桥补充 run 身份/范围校验；平台、控件和文字依赖仍可分开选择。
+
+`aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；自定义值在宿主接受时验证。当前没有主题注册表、系统偏好监听或动画运行时。
+
+`aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、标签、按钮、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` 在 Linux 增加原生 App 与软件呈现；各窗口独立拥有 Ui，共享连接、字体和 renderer。当前基础皮肤直接由 app 使用，尚未抽出独立 widgets crate；只有出现实际可复用的自定义皮肤接口时再形成该模块。
+
+`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **Linux Wayland + 软件绘制 + 系统字体 + Unix 无障碍**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Windows/macOS 原生宿主、GPU、标记语言和动画仍待实现。
 
 没有独立的“每个控件 crate”或“每个颜色类型 crate”。当一个模块的多种选择只影响内部小函数时使用 feature，不为包装一个转发函数增加新的包。
 
@@ -73,7 +79,9 @@ flowchart TD
 
 这是一张依赖图，不是每次更新必须经过的多层调用链。core 不依赖 app、widgets、loader、GPU 或操作系统库；renderer 不依赖控件或标记语言。
 
-## 默认组合与可裁剪组合
+## 目标默认组合与可裁剪组合
+
+本表为完整版本的设计目标；当前可编译 feature 以各 crate 清单及上面的实现说明为准。
 
 | 组合 | 包含 | 不自动包含 |
 | --- | --- | --- |

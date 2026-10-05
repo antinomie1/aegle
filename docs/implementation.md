@@ -17,12 +17,16 @@
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
+- aegle-theme：无分配的有类型配色/尺寸，浅色、深色与显式高对比主题；当前没有 token 注册表、局部主题继承或系统偏好监听。
+- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/text/button/text_field/text_area、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 
 图像缓存预算不包括字体映射、排版、缓存索引及上游栅格 scratch；具体边界见 [资源](resources.md)。合成/过滤使用线性预乘颜色，公共字形彩色图像为非预乘 sRGB RGBA8。
 
 ## 可运行的组合
 
 ```sh
+cargo run -p aegle --example hello --release
+cargo run -p aegle --example controls --release
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
@@ -30,7 +34,7 @@ cargo run -p aegle-render-software --features text --example editor_scene --rele
 cargo run -p aegle-platform-wayland --example editor --release
 ```
 
-前四个是无窗口示例。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
+hello 是 7 行 Rust 加 1 行文档注释的完整应用，controls 演示跨控件回调、CJK 编辑、主题和关闭窗口；两者使用系统字体。layout 与三个 renderer 示例没有窗口。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
 
 文字示例将 Paragraph 保留在同一棵树的节点中，以 Taffy 测量回调换行，并按最终布局宽度录制字形。真实显示拉丁文字、中文、日文、韩文及裁剪，输出 `target/aegle-text.png`；不是可交互控件或 GUI Hello world。测试字体共约 21 KiB，仅供测试/示例，附 OFL 原始声明和重建脚本。
 
@@ -96,8 +100,36 @@ IME 场景还需要 compositor 提供 input-method-v2、virtual-keyboard-v1；�
 
 仍缺 Unix EditableText（上游0.22.1未实现）、密码保护、预编辑期间辅助选择的完整协调、总线故障恢复/状态报告及真实屏幕阅读器验收。Wayland 不伪造全局屏幕原点。线程、无界队列和语义映射的实际寿命见[资源](resources.md)。
 
+## 命令式应用层验证
+
+Ui 的逻辑树同时用于布局、命中、焦点、编辑与语义；保留局部 scene，嵌套容器累计同一几何。控件句柄只持弱引用，删除、重挂父节点、隐藏/禁用及窗口销毁会协调焦点和捕获。回调暂时移出存储，在树与原生 runtime 借用外执行，注册版本阻止旧排队动作调用替换后的处理器；回调再次排队留待下一轮，并阻止空闲循环在仍有动作时睡眠。单行提交共用这套机制。
+
+基础主题直接用于默认控件。只改配色不重新 shaping，修改字号/尺寸更新布局；显式尺寸、最小尺寸、padding/gap 不被主题覆盖。主题变化保留同一 Editor、已提交值和预编辑。主题文本颜色也同步到语义 run。独立 Ui 的语义导出不会消耗尚未呈现的像素失效。
+
+验证结果：
+
+- workspace all-features 共 21 个普通集成场景通过；新增一个应用场景覆盖弱句柄、回调替换/延后/删除、父节点移动、主题/IME 状态、光标滚动、提交、禁用和语义父子关系。所有测试位于 crates/*/tests。
+- 新增的一个 ignored 原生场景在私有 Sway/Pixman 中显式通过：两个窗口共享事件循环，回调关闭自身、立即失效句柄、跨窗口后续动作、禁止嵌套 dispatch 和最后窗口退出。
+- 实际窗口验证 CJK 显示、Tab/Shift+Tab、清空按钮回调、键盘编辑、深色主题及关闭按钮；浅色/深色截图已目视检查。虚拟键盘探针需要等待 compositor 焦点建立后发送首键，否则按协议该键只出现在 enter 的已按下列表。
+- 私有 D-Bus/AT-SPI 探针验证新 App 的系统控件树、CJK/Unicode scalar、焦点、选择/caret、按钮清空和重新激活。它发现 AccessKit 0.24.1 的 clear_children 后追加不生效问题，文字桥改用显式空 children 列表，避免生成没有父节点的 run；集成场景已覆盖。
+- 独立临时原生 App 探针通过真实 input-method-v2/text-input-v3 验证：CJK 预编辑保留提交值、组合中切换深色主题、删除/提交同批次、焦点切换后旧结果隔离及新字段继续提交。它发现并修复非焦点文本框 setter 错误重启当前输入法会话的问题，覆盖加入既有应用场景；没有再增加一套仓库测试文件。
+- 同一探针移除全部键盘按键后也通过：首次 text-input Entered 可建立 seat/focus，不要求先收到 wl_keyboard 事件。
+- all-targets/all-features、无默认 feature 的 Ui/facade、严格 Rustdoc 均通过。MSRV、其他 OS、真实输入法候选窗和屏幕阅读器仍未验收，Clippy 未安装。
+- 实现11240行、测试2230行，占16.56%（不含 examples）；最大源文件483行。没有 src 内测试。
+
+默认应用启用系统字体，因此 Linux 动态依赖新增 Fontconfig；本机还间接带入 FreeType、Expat、zlib、bzip2、libpng 和 Brotli。它们来自本机 Fontconfig 的发行版依赖，不能只凭 Rust Cargo 树声称运行依赖没有增加。显式字体集合并关闭 system-fonts 可避开这组依赖；不启用 Unix adapter 也不会启动其后台 worker。
+
+发布 profile 改为 `strip = "symbols"`，保留优化/LTO 设置，减少发布文件的符号表占用；需要带符号排障时应使用覆盖配置的构建。当前 release 文件如下，均启用系统字体，不内嵌字体；不包括系统动态库和系统字体文件：
+
+| 示例 | 无 Unix adapter | 默认启用 Unix adapter |
+| --- | ---: | ---: |
+| hello | 3,925,184 B | 7,270,472 B |
+| controls | 3,962,048 B | 7,307,336 B |
+
+私有800×480 Sway/Pixman上的单次 controls 进程快照：无 adapter 时 RSS/PSS 为28,892/11,536 KiB、1线程；启用并激活 AT-SPI 时为31,976/14,593 KiB、4线程。前者启动后约1秒采样，后者初次树查询后约200 ms采样，未计 compositor/测试服务。无 adapter 样本随后3秒 CPU tick 增量为0（CLK_TCK=100），不等于30秒稳态、完整峰值或嵌入式验收。默认 hello 也已在隔离 compositor 启动并保持事件等待。
+
 ## 下一阶段与缺口
 
-下一步把控件行为、原生输入及已接通的语义能力组成应用层，继续补齐无障碍缺口；随后完成其他平台、Vulkan/Metal、组件、主题、动画、标记语言及发布组合。原生示例已可运行，但完整 GUI facade 仍未交付。
+下一步在已经可用的应用入口上接入编译型标记界面和可复用组件扩展，补齐动画与基础控件；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
 
-当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令、主题动画或 DSL。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪与绘制组仍待应用层组装。设计文档是目标，不能当作实现证据。
+当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令、动画或 DSL。基础主题已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、通用组件插入/自定义皮肤、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。

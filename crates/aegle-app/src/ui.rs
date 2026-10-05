@@ -1,0 +1,270 @@
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    error::Error,
+    fmt,
+    rc::Rc,
+};
+
+use aegle_core::{Focus, Route, Tree};
+use aegle_layout::{Dimension, Edges, FlexDirection, LayoutNode, LengthPercentage, Style};
+use aegle_scene::{Affine, Scene};
+use aegle_text::{Selection, TextSystem};
+use aegle_theme::Theme;
+use aegle_types::{Color, Rect, Size};
+
+use crate::{
+    Container, Node,
+    state::{Content, Element, State},
+};
+
+/// Application operation or callback result. Underlying module errors are preserved.
+pub type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
+
+/// Errors specific to retained ownership and imperative operations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UiError {
+    /// The owning UI or node has been destroyed.
+    DeadHandle,
+    /// The requested operation is unavailable for this node type.
+    WrongKind,
+    /// Parent and child belong to different UIs.
+    ForeignUi,
+    /// A public numeric parameter is non-finite or outside its documented range.
+    InvalidValue,
+    /// The UI root cannot be removed or reparented.
+    RootMutation,
+    /// A scene visitor tried to modify its currently borrowed UI.
+    ReentrantAccess,
+    /// A monotonically increasing identity counter exhausted its range.
+    IdentityExhausted,
+}
+impl fmt::Display for UiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::DeadHandle => "UI handle is no longer live",
+            Self::WrongKind => "operation is not supported by this control",
+            Self::ForeignUi => "nodes belong to different UIs",
+            Self::InvalidValue => "UI value must be finite and within its documented range",
+            Self::RootMutation => "UI root cannot be removed or reparented",
+            Self::ReentrantAccess => "UI state is already borrowed by a visitor",
+            Self::IdentityExhausted => "UI identity counter exhausted",
+        })
+    }
+}
+impl Error for UiError {}
+
+/// Bounded platform-neutral state for the focused editor's native IME session.
+#[derive(Debug)]
+pub struct ImeRequest {
+    /// Contiguous excerpt, or no surrounding capability when selection exceeds budget.
+    pub surrounding: Option<String>,
+    /// UTF-8 byte endpoints relative to the excerpt, zero when absent.
+    pub selection: Selection,
+    /// Caret geometry in window logical coordinates, including editor scrolling.
+    pub cursor_rect: Rect,
+    /// Whether the focused editor accepts multiple lines.
+    pub multiline: bool,
+    /// The latest update came from the input method rather than application input.
+    pub input_method: bool,
+}
+/// A pending native IME synchronization; send a disable first when `reset` is true.
+#[derive(Debug)]
+pub struct ImeState {
+    /// Ends an old focus or composition session before publishing `request`.
+    pub reset: bool,
+    /// Current editable field; `None` disables native text input.
+    pub request: Option<ImeRequest>,
+}
+
+/// A retained UI with shared text resources and no native platform dependency.
+///
+/// This owner is deliberately not `Clone`: handles hold weak references, so
+/// dropping the UI destroys its controls even if application callbacks retain handles.
+pub struct Ui {
+    pub(crate) state: Rc<RefCell<State>>,
+}
+
+impl Ui {
+    /// Creates an empty root column. Fonts can be shared by all windows on this thread.
+    pub fn with_fonts(fonts: Rc<RefCell<TextSystem>>, theme: Theme) -> Result<Self> {
+        theme.validate()?;
+        let mut tree = Tree::new();
+        let mut element = Element::new(Content::Container);
+        #[cfg(feature = "accessibility")]
+        {
+            element.access_id = aegle_access::accesskit::NodeId(1);
+        }
+        #[cfg(not(feature = "accessibility"))]
+        let _ = &mut element;
+        let root = tree.insert(
+            None,
+            LayoutNode::with_style(container_style(&theme, true), element),
+        )?;
+        Ok(Self {
+            state: Rc::new(RefCell::new(State {
+                tree,
+                root,
+                order: vec![root],
+                topology_dirty: false,
+                fonts,
+                theme,
+                size: Size::default(),
+                focus: Focus::new(),
+                last_focus: None,
+                route: Route::new(),
+                capture: None,
+                hover: None,
+                ime_dirty: true,
+                ime_reset: false,
+                input_method: false,
+                repaint: true,
+                callbacks: HashMap::new(),
+                pending: VecDeque::new(),
+                dispatching: false,
+                callback_version: 0,
+                #[cfg(feature = "accessibility")]
+                next_access_id: 2,
+            })),
+        })
+    }
+
+    /// The root column; all public handles remain weak.
+    pub fn root(&self) -> Container {
+        Container(Node {
+            state: Rc::downgrade(&self.state),
+            id: self.state.borrow().root,
+        })
+    }
+
+    /// Window clear color from the current theme.
+    pub fn background(&self) -> Color {
+        self.state.borrow().theme.background
+    }
+
+    /// Changes the viewport's logical size. Zero is valid for a suspended surface.
+    pub fn resize(&self, size: Size) -> Result {
+        if ![size.width, size.height]
+            .into_iter()
+            .all(|v| v.is_finite() && v >= 0.0)
+        {
+            return Err(UiError::InvalidValue.into());
+        }
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        if state.size == size {
+            return Ok(());
+        }
+        state.size = size;
+        let root = state.root;
+        let mut style = state.tree.get(root).unwrap().style().clone();
+        style.size = aegle_layout::Size {
+            width: Dimension::length(size.width),
+            height: Dimension::length(size.height),
+        };
+        aegle_layout::set_style(&mut state.tree, root, style)?;
+        state.repaint = true;
+        state.ime_dirty = true;
+        Ok(())
+    }
+
+    /// Updates layout and only invalidated scene records. Returns whether pixels changed.
+    pub fn refresh(&self) -> Result<bool> {
+        self.state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?
+            .refresh()
+    }
+
+    /// Visits visible records in paint order under their window-space translations.
+    /// The callback may render immediately but must not mutate this UI.
+    pub fn visit_scenes(&self, mut visit: impl FnMut(&Scene, Affine) -> Result) -> Result {
+        let state = self
+            .state
+            .try_borrow()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        for &id in &state.order {
+            let element = &state.tree.get(id).unwrap().context;
+            if element.effective_visible && !element.scene.commands().is_empty() {
+                visit(
+                    &element.scene,
+                    Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Consumes pending IME synchronization after refresh and event callbacks.
+    pub fn take_ime_state(&self, max_bytes: usize) -> Result<Option<ImeState>> {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        if !state.ime_dirty {
+            return Ok(None);
+        }
+        state.ime_dirty = false;
+        let reset = std::mem::take(&mut state.ime_reset);
+        let request = state.focus.current(&state.tree).and_then(|id| {
+            let element = &state.tree.get(id).unwrap().context;
+            let Content::Field(field) = &element.content else {
+                return None;
+            };
+            if !field.accepts_ime() {
+                return None;
+            }
+            let surrounding = field.editor().surrounding(max_bytes);
+            let selection = surrounding.map(|s| s.selection).unwrap_or_default();
+            let mut cursor_rect = field.editor().ime_rect();
+            let padding = element.padding.unwrap_or(state.theme.padding);
+            cursor_rect.origin.x += element.bounds.origin.x + padding - element.scroll.x;
+            cursor_rect.origin.y += element.bounds.origin.y + padding - element.scroll.y;
+            Some(ImeRequest {
+                surrounding: surrounding.map(|s| s.to_string()),
+                selection,
+                cursor_rect,
+                multiline: field.editor().is_multiline(),
+                input_method: state.input_method,
+            })
+        });
+        Ok(Some(ImeState { reset, request }))
+    }
+
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
+    pub(crate) fn close(&self) -> Result {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        let root = state.root;
+        state.tree.remove(root)?;
+        state.order.clear();
+        state.pending.clear();
+        state.callbacks.clear();
+        state.capture = None;
+        state.hover = None;
+        Ok(())
+    }
+}
+
+pub(crate) fn container_style(theme: &Theme, root: bool) -> Style {
+    let gap = LengthPercentage::length(theme.gap);
+    let padding = LengthPercentage::length(if root { theme.padding } else { 0.0 });
+    Style {
+        flex_direction: FlexDirection::Column,
+        gap: aegle_layout::Size {
+            width: gap,
+            height: gap,
+        },
+        padding: Edges {
+            left: padding,
+            right: padding,
+            top: padding,
+            bottom: padding,
+        },
+        ..Default::default()
+    }
+}

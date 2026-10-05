@@ -1,0 +1,13 @@
+[package]
+name = "aegle-theme"
+description = "Small typed theme values for retained user interfaces"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+aegle-types.workspace = true
+
+[lints]
+workspace = true

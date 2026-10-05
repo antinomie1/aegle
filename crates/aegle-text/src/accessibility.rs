@@ -44,7 +44,9 @@ impl EditorDriver<'_> {
         } else {
             node.clear_read_only();
         }
-        node.clear_children();
+        // AccessKit 0.24 keeps a cleared property slot as None; push_child only
+        // appends to a vector slot. Install an empty vector before Parley appends.
+        node.set_children(Vec::new());
         node.clear_value();
         node.clear_text_selection();
         let start = update.nodes.len();

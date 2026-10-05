@@ -69,3 +69,9 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。触摸、剪贴板、客户端窗口装饰、平台偏好、layer-shell、原生 GPU 句柄及完整系统无障碍仍待接入。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。
 
 `wake_handle()` 按需创建一个共享的 calloop ping source，克隆句柄可从后台线程请求 `Event::Wake`；宿主先将工作入自己的队列，再发信号，不引入轮询。该连接点已用于可选 Unix 无障碍回调。示例启用 `example-accessibility` 后，由独立 aegle-access adapter 导出同一控件树；Wayland 库的正常依赖仍不包含它。
+
+## 当前应用宿主
+
+`aegle-app/wayland` 将这些平台接口接到可独立使用的 Ui；每窗口独立保留树，应用共享 TextSystem、软件 renderer 和字形缓存。`App::run` 在最后窗口关闭后返回，`dispatch(timeout)` 可由已有主循环显式驱动。嵌套 dispatch 返回重入错误，回调产生的新动作在下一轮执行，有待执行动作时不会进入无限期平台等待。
+
+窗口、输入和辅助技术动作使用同一个 Ui。每个相关事件后刷新布局并取消旧 IME 会话，再处理下一条排队输入；不存在 text-input-v3 时，请求编辑会话返回能力错误。每窗口由活动键盘 seat 管理一个逻辑焦点域；失焦取消组合/手势，返回时恢复仍可用的原控件。原生双击计数、触摸、系统剪贴板与动态窗口属性尚未接入应用 API。
