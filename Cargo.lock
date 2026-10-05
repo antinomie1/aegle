@@ -114,6 +114,7 @@ dependencies = [
  "aegle-text",
  "aegle-theme",
  "aegle-types",
+ "aegle-widgets",
  "wayland-client",
 ]
 
@@ -300,6 +301,15 @@ dependencies = [
 [[package]]
 name = "aegle-types"
 version = "0.1.0"
+
+[[package]]
+name = "aegle-widgets"
+version = "0.1.0"
+dependencies = [
+ "aegle-scene",
+ "aegle-theme",
+ "aegle-types",
+]
 
 [[package]]
 name = "allocator-api2"

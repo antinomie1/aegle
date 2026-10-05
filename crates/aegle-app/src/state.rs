@@ -36,14 +36,7 @@ pub(crate) struct ToggleContent {
     pub mixed: bool,
 }
 
-/// How a two-state control draws and exports its value.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Mark {
-    Check,
-    Switch,
-    /// Exclusive among radio siblings of the same parent.
-    Radio,
-}
+pub(crate) use aegle_widgets::Mark;
 
 /// Semantic and painting role of composite controls built from plain nodes.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]

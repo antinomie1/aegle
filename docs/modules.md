@@ -25,13 +25,15 @@
 | aegle-theme | 无分配的 Theme、视觉状态、Appearance/Style 和纯函数 Skin；局部 token 继承与命名空间扩展是后续目标 | types |
 | aegle-motion | 时间、补间、过渡及可选弹簧；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
-| aegle-widgets | 默认中性极简皮肤和常用组件 | controls、theme、scene；motion 按 feature 接入 |
+| aegle-widgets | 无状态的默认皮肤绘制（复选框、单选、开关、滑块、进度、下拉箭头）与滚动条/滚动几何；有状态组件仍在 aegle-app | types、scene、theme |
 | aegle-assets（暂不创建） | 运行时 SVG 光栅化；有界 PNG 解码已由 aegle-glyph 提供，SVG 引入前不单独成 crate | types |
 | aegle-markup | 有界解析、跨度、内建控件 schema、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |
 | aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载 | app、markup |
 | aegle-app | 无窗口 Ui 与可选原生 App，连接保留控件、布局、绘制、文本、主题及语义 | types、core、layout、scene、text、controls、theme；平台/renderer/access 按 feature |
 | aegle | 应用便捷入口与重导出，不提供另一套实现 | app；其他按 feature 重导出 |
+
+`aegle-widgets` 只收纯函数：从尺寸、状态和 `Appearance` 到场景命令或几何，不触碰保留树，所以自带控件树的宿主也能直接复用默认外观。有行为的组件没有拆出：滑块、开关、弹出层、虚拟列表、表格和滚动视图是 `aegle-app` 里封闭的 `Content` 枚举的变体，输入、焦点、语义、布局与绘制按变体分派并读写同一个 `State`；把它们移到下层 crate 需要先把 `Content` 改成开放的接口，这是另一次架构决定，没有现成的第二个使用者支撑，所以不做。
 
 表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`，映射 Parley 的可选 AccessKit 支持；基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
 

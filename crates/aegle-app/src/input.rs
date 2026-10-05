@@ -198,7 +198,7 @@ impl State {
     pub fn control(&mut self, target: NodeId, input: Input<'_>) -> Result<Outcome> {
         let element = &mut self.tree.get_mut(target).unwrap().context;
         let (_, extent) =
-            crate::widget_paint::slider_track(element.bounds.size, element.inset(&self.theme));
+            aegle_widgets::slider_track(element.bounds.size, element.inset(&self.theme));
         let mut radio = false;
         let outcome = match &mut element.content {
             Content::Button(button, _) => button.handle(input),
@@ -372,8 +372,7 @@ impl State {
         }
         if matches!(element.content, Content::Slider(_)) {
             local.x -=
-                crate::widget_paint::slider_track(element.bounds.size, element.inset(&self.theme))
-                    .0;
+                aegle_widgets::slider_track(element.bounds.size, element.inset(&self.theme)).0;
         }
         Input::Pointer(PointerInput {
             id,

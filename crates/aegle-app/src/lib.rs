@@ -67,7 +67,6 @@ mod theme;
 mod ui;
 mod value_handles;
 mod visual_handles;
-mod widget_paint;
 
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 #[cfg(feature = "motion")]

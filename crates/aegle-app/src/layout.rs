@@ -61,7 +61,7 @@ impl State {
                             text.size().width
                                 + 2.0 * padding
                                 + if element.semantic == Semantic::Dropdown {
-                                    gap + crate::widget_paint::CHEVRON
+                                    gap + aegle_widgets::CHEVRON
                                 } else {
                                     0.0
                                 },

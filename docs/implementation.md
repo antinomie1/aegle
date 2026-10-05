@@ -273,6 +273,12 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 有界：先检查 PNG 签名（非 PNG 返回 `NotPng`），再从文件头检查宽高不超过 16,384 与输出字节不超过上限（默认 64 MiB），通过后才分配像素缓冲，并以同一上限约束解码器；损坏或截断返回 `Invalid`。字体位图路径改用同一核心，只多了期望尺寸校验。不增加依赖，没有 SVG，也没有 PNG 以外的格式。
 - 验证：`aegle-glyph/tests/decode.rs` 用 png 编码器（仅开发依赖）覆盖六种编码的逐字节结果、非 PNG/空/截断输入、边界上限（8 字节通过、7 字节拒绝）和超宽拒绝，以及到 scene 图像的转换；rustdoc 示例解码内嵌的 70 字节 PNG；原有 sbix PNG 字形测试与软件/Vulkan 文字测试仍通过。未测试交错 PNG（编码器不能生成），也未测量解码耗时。
 
+## 拆出 aegle-widgets：无状态默认皮肤与滚动几何
+
+- 评估：`aegle-app` 的组件行为不能原样拆到下层 crate。滑块、开关、弹出层、虚拟列表、表格和滚动视图是封闭的 `Content` 枚举的变体，输入、焦点、语义、布局、绘制都按变体分派并读写同一个 `State`，下层 crate 会反向依赖它而形成环；要拆就得先把 `Content` 改成开放接口，这是另一次架构决定。所以只拆出确实无状态的部分。
+- 新增 `aegle-widgets`（依赖 types、scene、theme）：`toggle`（复选/混合/开关/单选；标签由调用方的闭包绘制，因此不依赖 aegle-text）、`range`（滑块与进度）、`slider_track`、`check_mark`、`chevron`；`scrollbar::Bar`（布局、命中位置、抓取点、拖动比例）与 `paint`；`reveal_delta`、`intersection`、`clamp_anchor`。`aegle-app` 删除 `widget_paint.rs`，`scrollbar.rs` 只剩手势、命中与颜色；`Mark` 移到 widgets。`aegle-app` 由 7,221 行降到 6,839 行，widgets 为 492 行。
+- 验证：重构前后 `aegle --example gallery` 重新生成的 17 张控件截图与已提交的文件逐字节相同，说明绘制没有变化；`aegle-app --all-features` 全部测试通过（滚动、数值控件、组合控件、外观、动画）；新增 `aegle-widgets/tests/widgets.rs`（166 行）：各控件绘制的命令、标签闭包只在有标签时调用、滚动条随偏移变化、抓取/拖动比例与越界夹紧、双轴留角、编辑器无横向条、揭示与裁剪辅助。没有测量体积或性能。
+
 ## 当前进度与剩余工作
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。

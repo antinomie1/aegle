@@ -4,10 +4,10 @@ use aegle_core::NodeId;
 use aegle_layout::{Dimension, Edges, LengthPercentageAuto, Overflow, Position, Style};
 use aegle_theme::Theme;
 use aegle_types::Rect;
+use aegle_widgets::intersection;
 
 use crate::{
     Container, Node, Result, ScrollView, Ui, UiError,
-    scroll::intersection,
     state::{Content, State},
     ui::container_style,
 };

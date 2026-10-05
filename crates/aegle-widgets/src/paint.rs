@@ -1,21 +1,60 @@
-use crate::{Appearance, Result, Size, state::Mark};
-use aegle_scene::{Affine, Color, FillRule, PathBuilder, Point, Rect, RoundedRect, SceneBuilder};
-use aegle_text::Paragraph;
+//! Check boxes, radio buttons, switches, sliders, progress bars and dropdown marks.
+use aegle_scene::{
+    Affine, Color, FillRule, PathBuilder, Point, Rect, RoundedRect, SceneBuilder, SceneError,
+};
+use aegle_theme::Appearance;
+use aegle_types::Size;
 
 /// Width of the dropdown chevron, shared with layout.
-pub(crate) const CHEVRON: f32 = 8.0;
+pub const CHEVRON: f32 = 8.0;
 
-pub(crate) fn toggle(
+/// How a two-state control draws its marker.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mark {
+    /// Square box with a check or, when mixed, a bar.
+    Check,
+    /// Pill track with a sliding thumb.
+    Switch,
+    /// Round marker with a dot; exclusive among siblings by convention.
+    Radio,
+}
+
+/// Geometry and state of a toggle's marker and optional label.
+#[derive(Clone, Copy, Debug)]
+pub struct ToggleSpec {
+    /// Control bounds.
+    pub size: Size,
+    /// Inset from the control edge to the marker.
+    pub padding: f32,
+    /// Space between the marker and its label.
+    pub gap: f32,
+    /// Marker shape.
+    pub mark: Mark,
+    /// Whether the control is on.
+    pub checked: bool,
+    /// A check box shown as partially checked.
+    pub mixed: bool,
+    /// Height of the label, or `None` when there is no label to paint.
+    pub label_height: Option<f32>,
+}
+
+/// Paints a toggle. `label` receives the builder, already translated to the
+/// label origin, and the foreground color; it runs only when the spec has a label.
+pub fn toggle<E: From<SceneError>>(
     builder: &mut SceneBuilder,
-    size: Size,
-    padding: f32,
-    gap: f32,
-    mark: Mark,
-    checked: bool,
-    mixed: bool,
-    text: &Paragraph,
+    spec: &ToggleSpec,
     appearance: Appearance,
-) -> Result {
+    label: impl FnOnce(&mut SceneBuilder, Color) -> Result<(), E>,
+) -> Result<(), E> {
+    let ToggleSpec {
+        size,
+        padding,
+        gap,
+        mark,
+        checked,
+        mixed,
+        label_height,
+    } = *spec;
     builder.push_clip(RoundedRect::new(
         Rect::new(0.0, 0.0, size.width, size.height),
         0.0,
@@ -76,33 +115,35 @@ pub(crate) fn toggle(
     } else if checked {
         check_mark(builder, x, y, width, appearance.indicator)?;
     }
-    if !text.text().is_empty() {
+    if let Some(height) = label_height {
         builder.push_transform(Affine::translation(
             x + width + gap,
-            (size.height - text.size().height) * 0.5,
+            (size.height - height) * 0.5,
         )?)?;
-        text.paint_with_color(builder, appearance.foreground)?;
+        label(builder, appearance.foreground)?;
         builder.pop()?;
     }
     builder.pop()?;
     Ok(())
 }
 
-// Shared with pointer-to-value mapping; the thumb stays inside tiny controls.
-pub(crate) fn slider_track(size: Size, padding: f32) -> (f32, f32) {
+/// Start and length of a slider's track, shared with pointer-to-value mapping.
+/// The thumb stays inside tiny controls.
+pub fn slider_track(size: Size, padding: f32) -> (f32, f32) {
     let diameter = 16.0_f32.min(size.width).min(size.height);
     let start = (padding + diameter * 0.5).min(size.width * 0.5);
     (start, (size.width - 2.0 * start).max(0.0))
 }
 
-pub(crate) fn range(
+/// Paints a slider (with thumb) or progress bar filled to `fraction`.
+pub fn range(
     builder: &mut SceneBuilder,
     size: Size,
     padding: f32,
     fraction: f64,
     slider: bool,
     appearance: Appearance,
-) -> Result {
+) -> Result<(), SceneError> {
     builder.push_clip(RoundedRect::new(
         Rect::new(0.0, 0.0, size.width, size.height),
         0.0,
@@ -141,14 +182,23 @@ pub(crate) fn range(
     Ok(())
 }
 
-fn fill(builder: &mut SceneBuilder, rect: Rect, radius: f32, color: Color) -> Result {
+fn fill(
+    builder: &mut SceneBuilder,
+    rect: Rect,
+    radius: f32,
+    color: Color,
+) -> Result<(), SceneError> {
     if !rect.is_empty() && color.to_rgba()[3] != 0 {
         builder.fill(RoundedRect::new(rect, radius)?, color)?;
     }
     Ok(())
 }
 
-fn border(builder: &mut SceneBuilder, rect: Rect, appearance: Appearance) -> Result {
+fn border(
+    builder: &mut SceneBuilder,
+    rect: Rect,
+    appearance: Appearance,
+) -> Result<(), SceneError> {
     let width = appearance
         .border_width
         .min(rect.size.width.min(rect.size.height) * 0.5);
@@ -171,13 +221,14 @@ fn border(builder: &mut SceneBuilder, rect: Rect, appearance: Appearance) -> Res
     Ok(())
 }
 
-pub(crate) fn check_mark(
+/// A check mark filling a `size`-pixel box whose corner is `(x, y)`.
+pub fn check_mark(
     builder: &mut SceneBuilder,
     x: f32,
     y: f32,
     size: f32,
     color: Color,
-) -> Result {
+) -> Result<(), SceneError> {
     let half_thickness = size * 0.0575;
     let cosine = std::f32::consts::FRAC_1_SQRT_2;
     for (start_x, start_y, length, sine) in
@@ -208,7 +259,7 @@ pub(crate) fn check_mark(
 }
 
 /// A downward chevron centered at `(x, y)`, for dropdowns.
-pub(crate) fn chevron(builder: &mut SceneBuilder, x: f32, y: f32, color: Color) -> Result {
+pub fn chevron(builder: &mut SceneBuilder, x: f32, y: f32, color: Color) -> Result<(), SceneError> {
     let mut path = PathBuilder::new();
     path.move_to(Point::new(x - CHEVRON * 0.5, y - CHEVRON * 0.25));
     path.line_to(Point::new(x + CHEVRON * 0.5, y - CHEVRON * 0.25));

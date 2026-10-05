@@ -306,11 +306,11 @@ impl Ui {
             cursor_rect.origin.y += element.bounds.origin.y + padding - element.scroll.y;
             // Keep a manually scrolled-out composition alive. Its candidate
             // anchor collapses at the nearest visible edge until it re-enters.
-            cursor_rect = crate::scroll::clamp_anchor(cursor_rect, element.bounds);
+            cursor_rect = aegle_widgets::clamp_anchor(cursor_rect, element.bounds);
             if let Some(clip) = element.clip {
-                cursor_rect = crate::scroll::clamp_anchor(cursor_rect, clip);
+                cursor_rect = aegle_widgets::clamp_anchor(cursor_rect, clip);
             }
-            cursor_rect = crate::scroll::clamp_anchor(
+            cursor_rect = aegle_widgets::clamp_anchor(
                 cursor_rect,
                 Rect::new(0.0, 0.0, state.size.width, state.size.height),
             );

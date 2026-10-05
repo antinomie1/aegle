@@ -49,9 +49,11 @@ cargo doc --workspace --all-features --no-deps
 - `aegle-text`：段落、字体回退、纯文本编辑、组合与有界 delta 撤销。
 - `aegle-glyph`：按需字形光栅化与有界图像缓存。
 - `aegle-render-software`：借用帧缓冲与线性光合成。
+- `aegle-gpu`：Vulkan 与 wgpu 后端共用、与图形 API 无关的图元/裁剪记录、场景遍历、图集装箱、图像与路径 mask 放置及 WGSL 着色器。
 - `aegle-render-vulkan`：几何与文字、原生 swapchain、有界分配、显式离屏读回。
 - `aegle-render-wgpu`：可选的全平台几何、文字、图像与路径，离屏或原生 surface。
 - `aegle-controls`：无皮肤的 Button/Toggle/Slider 行为、共享数值 Range 与可选 TextField。
+- `aegle-widgets`：无状态的默认皮肤绘制与滚动条/滚动几何，可被自带控件树的宿主复用。
 - `aegle-access`：UI 线程回调邮箱与可选的 Unix/Windows 无障碍。
 - `aegle-platform-wayland`、`aegle-platform-win32`：窗口与原生输入，不依赖绘制。
 - `aegle-theme`：无分配的调色板、基于状态的皮肤与局部样式值。

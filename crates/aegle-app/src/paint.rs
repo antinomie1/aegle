@@ -1,12 +1,12 @@
 use crate::{
     Result,
     state::{Content, Semantic, State},
-    widget_paint::{CHEVRON, check_mark, chevron},
 };
 use aegle_core::NodeId;
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
 use aegle_text::EditorPaint;
 use aegle_types::Size;
+use aegle_widgets::{CHEVRON, ToggleSpec, check_mark, chevron};
 
 impl State {
     pub fn record(&mut self, id: NodeId) -> Result {
@@ -92,20 +92,24 @@ impl State {
                         },
                     )?;
                     builder.pop()?.pop()?;
-                    crate::scrollbar::paint(&mut builder, bars, bar_color, theme.radius)?;
+                    aegle_widgets::scrollbar::paint(&mut builder, bars, bar_color, theme.radius)?;
                 }
-                Content::Toggle(toggle) => crate::widget_paint::toggle(
+                Content::Toggle(toggle) => aegle_widgets::toggle(
                     &mut builder,
-                    size,
-                    padding,
-                    theme.gap,
-                    toggle.mark,
-                    toggle.control.is_checked(),
-                    toggle.mixed,
-                    &toggle.text,
+                    &ToggleSpec {
+                        size,
+                        padding,
+                        gap: theme.gap,
+                        mark: toggle.mark,
+                        checked: toggle.control.is_checked(),
+                        mixed: toggle.mixed,
+                        label_height: (!toggle.text.text().is_empty())
+                            .then(|| toggle.text.size().height),
+                    },
                     appearance,
+                    |builder, color| toggle.text.paint_with_color(builder, color),
                 )?,
-                Content::Slider(slider) => crate::widget_paint::range(
+                Content::Slider(slider) => aegle_widgets::range(
                     &mut builder,
                     size,
                     padding,
@@ -113,7 +117,7 @@ impl State {
                     true,
                     appearance,
                 )?,
-                Content::Progress(range) => crate::widget_paint::range(
+                Content::Progress(range) => aegle_widgets::range(
                     &mut builder,
                     size,
                     padding,
@@ -139,7 +143,7 @@ impl State {
         if let Content::Scroll(overlay) = &mut element.content {
             let mut builder = std::mem::take(&mut **overlay).into_builder();
             builder.clear();
-            crate::scrollbar::paint(&mut builder, bars, bar_color, theme.radius)?;
+            aegle_widgets::scrollbar::paint(&mut builder, bars, bar_color, theme.radius)?;
             **overlay = builder.finish()?;
         }
         Ok(())
