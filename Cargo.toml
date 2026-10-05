@@ -23,6 +23,7 @@ aegle-app = { path = "crates/aegle-app" }
 aegle-platform-wayland = { path = "crates/aegle-platform-wayland" }
 aegle-markup = { path = "crates/aegle-markup" }
 aegle-macros = { path = "crates/aegle-macros" }
+aegle-motion = { path = "crates/aegle-motion" }
 accesskit = { version = "0.24.1", default-features = false }
 linebender_resource_handle = { version = "0.1.1", default-features = false }
 parley = { version = "0.11.1", default-features = false, features = ["std"] }

@@ -14,6 +14,10 @@ mod callbacks;
 mod handles;
 mod input;
 mod layout;
+#[cfg(feature = "motion")]
+mod motion;
+#[cfg(feature = "motion")]
+mod motion_handles;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 mod native;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
@@ -29,6 +33,8 @@ mod theme;
 mod ui;
 
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
+#[cfg(feature = "motion")]
+pub use aegle_motion::{Easing, Transition};
 pub use aegle_text::{ImeEdit, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, VisualState};
 pub use aegle_types::{Color, Point, Size};

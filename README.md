@@ -13,6 +13,8 @@ text fields with light/dark/high-contrast themes. Compiled `.aegle` markup and
 simple imperative Rust create the same retained controls. Local colors, typography
 and small theme/state skin functions let component libraries reuse those controls. Shared control
 behavior connects input and focus to the retained tree and editor.
+Optional paint transitions share the same state, with frame-driven sampling,
+smooth retargeting and explicit reduced-motion support.
 Optional Unix accessibility exposes controls, CJK
 text, selection, focus and button actions through AT-SPI. Native text replacement,
 other OS backends and GPU rendering remain unimplemented.
@@ -51,9 +53,9 @@ fn main() -> Result<()> {
 ```
 
 The current `aegle` defaults are Linux Wayland, software rendering, system fonts
-and Unix accessibility, with markup compilation enabled. System fonts must cover the requested text. Native IME
+and Unix accessibility, with markup compilation and paint transitions enabled. System fonts must cover the requested text. Native IME
 requires text-input-v3; focusing an editable field without it returns a capability
-error. GPU, Windows/macOS hosts and animation remain in development.
+error. GPU, Windows/macOS hosts and geometry animation remain in development.
 
 ```sh
 cargo run -p aegle --example hello --release
@@ -79,7 +81,8 @@ rasterization and a bounded image cache),
 `aegle-controls` (unskinned Button and optional TextField behavior),
 `aegle-access` (UI-thread callback mailbox and optional Unix accessibility),
 `aegle-platform-wayland` (windows and native input, independent of rendering),
-`aegle-theme` (allocation-free palettes, state-based skins and local style values), `aegle-app` (retained
+`aegle-theme` (allocation-free palettes, state-based skins and local style values),
+`aegle-motion` (allocation-free elapsed-time tweens), `aegle-app` (retained
 imperative UI, with the native host behind features), and `aegle-markup` (bounded
 parsing and static component checking). `aegle-macros` generates compiled views.
 

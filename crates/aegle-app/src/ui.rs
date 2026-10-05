@@ -121,6 +121,8 @@ impl Ui {
                 repaint: true,
                 callbacks: HashMap::new(),
                 decorations: HashMap::new(),
+                #[cfg(feature = "motion")]
+                motion: Default::default(),
                 pending: VecDeque::new(),
                 dispatching: false,
                 callback_version: 0,
@@ -246,6 +248,11 @@ impl Ui {
         state.pending.clear();
         state.callbacks.clear();
         state.decorations.clear();
+        #[cfg(feature = "motion")]
+        {
+            state.motion.tracks.clear();
+            state.motion.active.clear();
+        }
         state.capture = None;
         state.hover = None;
         Ok(())

@@ -19,4 +19,6 @@ pub mod prelude {
         Appearance, Button, Color, Container, ControlKind, Label, Node, Result, Skin, Style,
         TextField, Theme, Ui, VisualState,
     };
+    #[cfg(feature = "motion")]
+    pub use aegle_app::{Easing, Transition};
 }

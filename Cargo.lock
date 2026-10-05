@@ -84,6 +84,7 @@ dependencies = [
  "aegle-controls",
  "aegle-core",
  "aegle-layout",
+ "aegle-motion",
  "aegle-platform-wayland",
  "aegle-render-software",
  "aegle-scene",
@@ -140,6 +141,13 @@ dependencies = [
 [[package]]
 name = "aegle-markup"
 version = "0.1.0"
+
+[[package]]
+name = "aegle-motion"
+version = "0.1.0"
+dependencies = [
+ "aegle-types",
+]
 
 [[package]]
 name = "aegle-platform-wayland"

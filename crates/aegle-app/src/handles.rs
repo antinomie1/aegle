@@ -58,6 +58,11 @@ impl Node {
             state.tree.remove_with(id, |node, _| {
                 state.callbacks.remove(&node);
                 state.decorations.remove(&node);
+                #[cfg(feature = "motion")]
+                {
+                    state.motion.tracks.remove(&node);
+                    state.motion.active.remove(&node);
+                }
             })?;
             state
                 .pending

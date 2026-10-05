@@ -11,7 +11,7 @@ default = []
 text = ["aegle-scene/text", "dep:aegle-glyph"]
 
 [dependencies]
-aegle-types.workspace = true
+aegle-types = { workspace = true, features = ["color-math"] }
 aegle-scene.workspace = true
 tiny-skia.workspace = true
 aegle-glyph = { workspace = true, optional = true }

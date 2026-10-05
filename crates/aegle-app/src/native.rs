@@ -1,6 +1,10 @@
+#[cfg(feature = "motion")]
+use crate::Transition;
 use crate::{Container, Modifiers, Result, Size, TextSystem, Theme, Ui, UiError};
 use aegle_platform_wayland::{PixelSize, Wayland, WindowId, WlSeat};
 use aegle_render_software::Renderer;
+#[cfg(feature = "motion")]
+use std::time::Instant;
 use std::{
     cell::{Cell, RefCell},
     ops::Deref,
@@ -16,6 +20,14 @@ pub struct AppOptions {
     pub theme: Theme,
     /// Reusable software coverage and clipping storage. Default: 2 MiB.
     pub mask_budget: usize,
+    /// Initial transition policy for each window's subsequently created buttons
+    /// and editors. Defaults to 120 ms ease-out; `None` disables this policy.
+    #[cfg(feature = "motion")]
+    pub transition: Option<Transition>,
+    /// Explicit reduced-motion preference for new windows. Defaults to false;
+    /// operating-system preference discovery is not performed here.
+    #[cfg(feature = "motion")]
+    pub reduced_motion: bool,
 }
 
 impl Default for AppOptions {
@@ -24,6 +36,10 @@ impl Default for AppOptions {
             app_id: "org.aegle.app".into(),
             theme: Theme::default(),
             mask_budget: 2 * 1024 * 1024,
+            #[cfg(feature = "motion")]
+            transition: Some(Transition::default()),
+            #[cfg(feature = "motion")]
+            reduced_motion: false,
         }
     }
 }
@@ -67,6 +83,8 @@ pub(crate) struct Runtime {
     pub fonts: Rc<RefCell<TextSystem>>,
     pub renderer: Renderer,
     pub options: AppOptions,
+    #[cfg(feature = "motion")]
+    pub clock: Instant,
 }
 
 pub(crate) struct Entry {
@@ -130,6 +148,8 @@ impl App {
             fonts: Rc::new(RefCell::new(fonts)),
             renderer: Renderer::new(options.mask_budget),
             options,
+            #[cfg(feature = "motion")]
+            clock: Instant::now(),
         };
         Ok(Self {
             runtime: Rc::new(RefCell::new(runtime)),
@@ -149,6 +169,14 @@ impl App {
             runtime.fonts.clone(),
             runtime.options.theme,
         )?);
+        // New windows join the application clock before callers can start a
+        // transition, including windows created long after the first dispatch.
+        #[cfg(feature = "motion")]
+        {
+            ui.advance_animations(runtime.clock.elapsed())?;
+            ui.set_default_transition(runtime.options.transition)?;
+            ui.set_reduced_motion(runtime.options.reduced_motion)?;
+        }
         ui.resize(Size::new(options.width as f32, options.height as f32))?;
         #[cfg(feature = "unix-accessibility")]
         let wake = runtime.backend.wake_handle()?;
@@ -215,6 +243,17 @@ impl Window {
 
     /// Applies a new theme to this window without replacing retained controls.
     pub fn set_theme(&self, theme: Theme) -> Result<()> {
+        self.ui()?.set_theme(theme)
+    }
+
+    /// Sets this window's explicit reduced-motion preference. Enabling it snaps
+    /// active paint transitions to their targets without changing focus or text.
+    #[cfg(feature = "motion")]
+    pub fn set_reduced_motion(&self, reduced: bool) -> Result<()> {
+        self.ui()?.set_reduced_motion(reduced)
+    }
+
+    fn ui(&self) -> Result<Rc<Ui>> {
         let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
         let ui = runtime
             .borrow()
@@ -224,7 +263,7 @@ impl Window {
             .ok_or(UiError::DeadHandle)?
             .ui
             .clone();
-        ui.set_theme(theme)
+        Ok(ui)
     }
 }
 

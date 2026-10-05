@@ -1,6 +1,6 @@
 # 默认组件、主题与动画
 
-状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤和小型 Theme；任意绘制/行为组件扩展、局部主题继承与动画仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
+状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤和小型 Theme；任意绘制/行为组件扩展、局部主题继承与几何动画仍是目标；外观过渡已接入。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
 
 ## 当前行为接口
 
@@ -8,7 +8,7 @@
 
 可选 `text` 的 `TextField` 直接拥有 Editor，复用选择、按词/行移动、grapheme 删除、撤销、单行提交和原子 IME 事务。宿主提供当前文字局部坐标，应用 `Outcome` 的焦点/capture/重绘/IME 重置请求，并消费 Editor 的失效标记。`Outcome::semantics` 独立表达焦点/启用状态变化，普通 hover/pressed 绘制不会因此重新导出语义。只读仍可选择；失焦或禁用取消组合且恢复已提交值。剪贴板、密码和平台差异快捷键尚未全部接入。
 
-这些行为可由不同皮肤共享；当前 `aegle-app` 已将它们与 row/column、标签及单行/多行编辑器组合，使用统一 Theme 绘制中性基础外观，并同步布局、命中、IME 和可选 Unix 系统语义。`set_skin` 可替换现有控件的配色、边框、圆角和文字装饰，不重写行为。尚无独立 widgets crate、任意绘制/新行为注册接口、动画或完整跨平台组件集成。控件行为层不创建窗口或定时器。
+这些行为可由不同皮肤共享；当前 `aegle-app` 已将它们与 row/column、标签及单行/多行编辑器组合，使用统一 Theme 绘制中性基础外观，并同步布局、命中、IME 和可选 Unix 系统语义。`set_skin` 可替换现有控件的配色、边框、圆角和文字装饰，不重写行为。尚无独立 widgets crate、任意绘制/新行为注册接口或完整跨平台组件集成。控件行为层不创建窗口或定时器。
 
 ## 当前局部样式与组件复用
 
@@ -18,11 +18,11 @@
 
 `Node::set_style(Style)` 设置稀疏本地覆盖；`set_background`、`set_foreground`、`set_radius` 等是简短命令式入口。`style()` 读取覆盖，`appearance()` 读取当前解析结果。`None` 恢复皮肤值；`set_style(Style::default())` 清除覆盖，`clear_skin()` 单独恢复默认皮肤。局部字号通过 `set_font_size` / `clear_font_size` 控制，仅适用于文字控件，不向子节点继承。
 
-解析顺序为默认/自定义皮肤 → 本地基础覆盖 → 本地 disabled、pressed 或 hover 覆盖。高优先状态没有指定覆盖时保留基础值，不回落到其他状态；focus 环最后独立绘制，仅在有效启用且聚焦时出现。边框与 focus 宽度为零可关闭，相对于自身矩形向内绘制，不侵入相邻控件；容器圆角不隐含对子树的裁剪。hover/focus 覆盖限按钮/编辑器，pressed 覆盖限按钮，selection/caret 限编辑器，不适用时 setter 返回 WrongKind，标记属性在编译期拒绝。
+解析顺序为默认/自定义皮肤 → 本地基础覆盖 → 本地 disabled、pressed 或 hover 覆盖。高优先状态没有指定覆盖时保留基础值，不回落到其他状态；focus 环最后独立绘制；有效启用且聚焦时才有非零目标宽度，失焦过渡可短暂保留渐隐的呈现轮廓。边框与 focus 宽度为零可关闭，相对于自身矩形向内绘制，不侵入相邻控件；容器圆角不隐含对子树的裁剪。hover/focus 覆盖限按钮/编辑器，pressed 覆盖限按钮，selection/caret 限编辑器，不适用时 setter 返回 WrongKind，标记属性在编译期拒绝。
 
 局部视觉数据按 NodeId 放在 Ui 的稀疏表中，无样式节点不保存一份完整 Style。纯配色/边框变化只失效绘制，前景色同时失效语义；自定义皮肤可随交互状态改变前景，相关状态变化会同时刷新语义。字号改变才重排文字及布局，保持编辑器、组合输入、选择和控件身份。
 
-普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用；它不是完整 MD3 套件。新控件行为、任意 painter、组件标记导入、系统主题观察和动画尚未实现。
+普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用；它不是完整 MD3 套件。新控件行为、任意 painter、组件标记导入、系统主题观察、几何动画和动画完成回调尚未实现。
 
 ## 默认组件范围
 
@@ -66,7 +66,17 @@
 
 默认跟随系统深浅色、对比度、文本缩放与减少动态效果；应用可显式选 Light/Dark/System。系统没有提供某项偏好时用默认值并允许应用配置。系统字体缩放与设备像素缩放各应用一次，不能重复放大。
 
-## 动画契约
+## 当前外观过渡
+
+可选 `motion` 已提供 `Node::set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))`，同时过渡背景、文字、边框、圆角、焦点环、选择和 caret 的外观值。`appearance()` 返回逻辑目标，`presented_appearance()` 返回最近采样值；失焦/禁用的焦点宽度目标为零，绘制使用相同呈现值。前景动画同步语义颜色，不重新成形文字，也不延迟焦点、文本、预编辑或命中状态。布局、字号、transform 和窗口清屏背景当前不做过渡。
+
+`clear_transition()` 移除策略并在刷新时回到目标；`finish_transition()` 立即到达当前目标；`cancel_transition()` 将最近呈现写为本地外观覆盖，替换状态颜色覆盖，保留后续设置的过渡策略。焦点轮廓的可见性仍受真实行为约束。尚无完成回调、关键帧、弹簧或循环 API。
+
+无窗口 Ui 默认不安装过渡。`set_default_transition` 只影响随后创建的按钮和编辑器；首次刷新直接建立呈现值，不做入场动画。原生 App 在启用 motion 时默认安装120ms EaseOut，`AppOptions.transition=None` 可关闭自动安装。各 App 共用一个单调时钟，通过 Wayland frame callback 推进；没有活动动画时不请求动画帧，无轮询定时器。隐藏子树刷新时直接到目标；compositor 暂停窗口帧回调时不主动唤醒，恢复时采样当前时刻。
+
+`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映最近刷新后是否仍活动，节点删除和窗口关闭立即清理对应动画。`Ui/Window::set_reduced_motion(true)` 立即到目标，保留最后一帧重绘；期间不启动新过渡。AppOptions 可设置初始偏好，尚未自动读取 OS 偏好。
+
+## 后续动画契约
 
 默认 motion 只提供标量、二维向量和颜色的补间及属性过渡：linear、ease_in、ease_out、ease_in_out。颜色在预乘线性空间插值。关键帧和阻尼弹簧为可选模块能力；无通用时间线编辑器或动画脚本。
 

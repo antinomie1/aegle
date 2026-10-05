@@ -1,10 +1,12 @@
 //! Small reusable component factories share native control behavior and semantics.
 use aegle::prelude::*;
+use std::time::Duration;
 
 fn action_button(parent: &Container, text: &str) -> Result<Button> {
     let button = parent.button(text)?;
     button.set_skin(primary)?;
     button.set_padding(18.0)?;
+    button.set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))?;
     Ok(button)
 }
 

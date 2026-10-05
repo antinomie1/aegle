@@ -9,6 +9,7 @@ Window {
     title: "你好\n\u4e16\u754c\ud83d\ude80\"\\\/\b\f\r\t"
     theme: dark; enabled: true; ratio: -1.25e+2; gap: 8dp
     surface: #A1b2C3; overlay: #12345678
+    duration: 18446744073709551615ms; instant: 0ms
     Column {
         Text { text: "日本語" } // A comment preserves the line separator.
         Button { text: "OK"; enabled: false }
@@ -27,6 +28,8 @@ Window {
     assert_eq!(root.properties[4].value, Value::Length(8.0));
     assert_eq!(root.properties[5].value, Value::Color([161, 178, 195, 255]));
     assert_eq!(root.properties[6].value, Value::Color([18, 52, 86, 120]));
+    assert_eq!(root.properties[7].value, Value::Duration(u64::MAX));
+    assert_eq!(root.properties[8].value, Value::Duration(0));
     assert_eq!(root.children[0].children.len(), 2);
     assert_eq!(
         &source[root.properties[4].value_span.start..root.properties[4].value_span.end],
@@ -66,6 +69,10 @@ Window {
         "Window { a: 1e }",
         "Window { a: 1. }",
         "Window { a: - }",
+        "Window { a: 0.5ms }",
+        "Window { a: 1e2ms }",
+        "Window { a: -1ms }",
+        "Window { a: 18446744073709551616ms }",
         "Window { a: #fff }",
         "Window { a: #1234567 }",
         "Window { a: #12345z }",

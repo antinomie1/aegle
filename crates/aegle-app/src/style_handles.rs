@@ -61,11 +61,7 @@ impl Node {
     }
     /// Resolves and validates the visible skin and local overrides in the current state.
     pub fn appearance(&self) -> Result<Appearance> {
-        self.change(|state, id| {
-            let appearance = state.appearance(id);
-            appearance.validate()?;
-            Ok(appearance)
-        })
+        self.change(|state, id| state.appearance(id))
     }
     /// Reads effective enabled, focus, pointer and editor policy state for a skin.
     /// Hover/focus are available on buttons/editors, pressed on buttons; other
@@ -103,7 +99,7 @@ impl Node {
         set_radius(radius: f32) => radius;
         /// Sets the independent focus outline color.
         set_focus_color(color: Color) => focus_color;
-        /// Sets nonnegative focus outline width; drawn only while enabled and focused.
+        /// Sets nonnegative focus width; its target is zero when disabled or unfocused.
         set_focus_width(width: f32) => focus_width;
         /// Sets an editor's selection fill, paired with its text foreground.
         set_selection_color(color: Color) => selection;

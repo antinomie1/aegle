@@ -8,7 +8,8 @@ description = "A small retained GUI with imperative controls and composable back
 
 [features]
 default = ["desktop"]
-desktop = ["wayland", "system-fonts", "unix-accessibility", "markup"]
+desktop = ["wayland", "system-fonts", "unix-accessibility", "markup", "motion"]
+motion = ["aegle-app/motion"]
 markup = ["dep:aegle-macros"]
 wayland = ["aegle-app/wayland"]
 system-fonts = ["aegle-app/system-fonts"]
@@ -40,7 +41,7 @@ required-features = ["wayland", "system-fonts", "markup"]
 
 [[example]]
 name = "components"
-required-features = ["wayland", "system-fonts", "markup"]
+required-features = ["wayland", "system-fonts", "markup", "motion"]
 
 [lints]
 workspace = true

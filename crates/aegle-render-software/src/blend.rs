@@ -1,84 +1,22 @@
-use aegle_types::Color;
-use std::sync::OnceLock;
-
-const INTERVALS: usize = 1024;
-
-// The surface stores RGBA bytes with sRGB-encoded RGB premultiplied by alpha.
-// Compositing itself occurs in linear light. Interpolated transfer tables avoid
-// per-pixel powers, including for non-byte unpremultiplied destination channels.
-struct Transfer {
-    decode: [f32; INTERVALS + 1],
-    encode: [f32; INTERVALS + 1],
-}
-
-impl Transfer {
-    fn get() -> &'static Self {
-        static TABLES: OnceLock<Transfer> = OnceLock::new();
-        TABLES.get_or_init(|| Self {
-            decode: std::array::from_fn(|i| {
-                let value = i as f32 / INTERVALS as f32;
-                if value <= 0.04045 {
-                    value / 12.92
-                } else {
-                    ((value + 0.055) / 1.055).powf(2.4)
-                }
-            }),
-            encode: std::array::from_fn(|i| {
-                let value = i as f32 / INTERVALS as f32;
-                if value <= 0.0031308 {
-                    value * 12.92
-                } else {
-                    1.055 * value.powf(1.0 / 2.4) - 0.055
-                }
-            }),
-        })
-    }
-}
-
-#[inline]
-fn sample(table: &[f32; INTERVALS + 1], value: f32) -> f32 {
-    let position = value * INTERVALS as f32;
-    let index = (position as usize).min(INTERVALS - 1);
-    table[index] + (table[index + 1] - table[index]) * (position - index as f32)
-}
-
 #[cfg(feature = "text")]
-pub(crate) fn linear_rgba(rgba: [u8; 4]) -> [f32; 4] {
-    let table = Transfer::get();
-    let a = rgba[3] as f32 / 255.0;
-    let mut result = rgba.map(|value| sample(&table.decode, value as f32 / 255.0) * a);
-    result[3] = a;
-    result
-}
-
-#[cfg(feature = "text")]
-pub(crate) fn encoded_rgba(linear: [f32; 4]) -> [u8; 4] {
-    if linear[3] <= 0.0 {
-        return [0; 4];
-    }
-    let table = Transfer::get();
-    let mut result = linear.map(|value| {
-        (sample(&table.encode, (value / linear[3]).clamp(0.0, 1.0)) * 255.0).round() as u8
-    });
-    result[3] = (linear[3] * 255.0).round() as u8;
-    result
-}
+pub(crate) use aegle_types::color_math::{encoded_rgba, linear_rgba};
+use aegle_types::{Color, color_math::SrgbTransfer};
 
 /// Prepared solid paint; reuse across all covered pixels of one primitive.
 pub(crate) struct Solid {
     rgba: [u8; 4],
     linear: [f32; 3],
     alpha: f32,
-    transfer: &'static Transfer,
+    transfer: &'static SrgbTransfer,
 }
 
 impl Solid {
     pub(crate) fn new(color: Color) -> Self {
         let rgba = color.to_rgba();
-        let transfer = Transfer::get();
+        let transfer = SrgbTransfer::get();
         Self {
             rgba,
-            linear: std::array::from_fn(|i| sample(&transfer.decode, rgba[i] as f32 / 255.0)),
+            linear: std::array::from_fn(|i| transfer.decode(rgba[i] as f32 / 255.0)),
             alpha: rgba[3] as f32 / 255.0,
             transfer,
         }
@@ -110,10 +48,10 @@ impl Solid {
         let unpremultiply = 1.0 / dst[3] as f32;
         let normalize = 1.0 / output_alpha;
         for (i, channel) in dst[..3].iter_mut().enumerate() {
-            let destination = sample(&self.transfer.decode, *channel as f32 * unpremultiply);
+            let destination = self.transfer.decode(*channel as f32 * unpremultiply);
             let linear =
                 (self.linear[i] * source_alpha + destination * destination_weight) * normalize;
-            let encoded = sample(&self.transfer.encode, linear);
+            let encoded = self.transfer.encode(linear);
             *channel = ((encoded * output_alpha * 255.0).round() as u8).min(alpha);
         }
         dst[3] = alpha;

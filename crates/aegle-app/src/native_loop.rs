@@ -131,7 +131,11 @@ impl Runtime {
     }
 
     fn refresh(&mut self) -> Result<()> {
+        #[cfg(feature = "motion")]
+        let now = self.clock.elapsed();
         for entry in &mut self.windows {
+            #[cfg(feature = "motion")]
+            entry.ui.advance_animations(now)?;
             if entry.ui.refresh()? {
                 self.backend.request_redraw(entry.id)?;
             }
@@ -192,6 +196,12 @@ impl Runtime {
                     })
                 })
                 .map_err(|error| format!("present: {error}"))?;
+            // The backend waits for a frame callback and a free buffer. An
+            // occluded window therefore adds no animation timer or idle poll.
+            #[cfg(feature = "motion")]
+            if entry.ui.has_animations() {
+                self.backend.request_redraw(entry.id)?;
+            }
         }
         Ok(())
     }

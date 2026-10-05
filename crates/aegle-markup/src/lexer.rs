@@ -6,6 +6,7 @@ pub(crate) enum Kind<'a> {
     String(String),
     Number(f32),
     Length(f32),
+    Duration(u64),
     Color([u8; 4]),
     Open,
     Close,
@@ -131,7 +132,18 @@ impl<'a> Lexer<'a> {
                 return Err(self.error(start, "expected digits in the exponent"));
             }
         }
-        let number = self.source[start..self.cursor]
+        let literal = &self.source[start..self.cursor];
+        if self.source[self.cursor..].starts_with("ms") {
+            self.cursor += 2;
+            if !literal.bytes().all(|byte| byte.is_ascii_digit()) {
+                return Err(self.error(start, "duration requires nonnegative whole milliseconds"));
+            }
+            let duration = literal
+                .parse::<u64>()
+                .map_err(|_| self.error(start, "duration milliseconds must fit in u64"))?;
+            return Ok(Kind::Duration(duration));
+        }
+        let number = literal
             .parse::<f32>()
             .map_err(|_| self.error(start, "invalid number"))?;
         if !number.is_finite() {

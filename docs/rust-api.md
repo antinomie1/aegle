@@ -16,9 +16,9 @@ fn main() -> Result<()> {
 
 源码位于 `crates/aegle/examples/hello.rs`，7 行 Rust 加 1 行文档注释，包含导入、入口、初始化和事件循环；运行入口为 `cargo run -p aegle --example hello`。当前需要 Linux Wayland 和可显示所用字符的系统字体。按 rustfmt 后非空源码行计数，不将多个语句强压在同一行。Cargo 清单不计；任何必须手写的应用初始化辅助文件计入。
 
-当前 `App::new` 连接 Wayland 并建立系统字体上下文；`run(self)` 在主线程接管循环，最后一个窗口关闭后退出。各窗口的控件树独立，字体系统和软件 renderer 共享。`App::with_fonts` 接受显式字体集合，可关闭 `system-fonts`；`AppOptions` 配置 app_id、初始主题和软件 mask 预算，`WindowOptions` 配置初始尺寸与 SHM 预算。shell 显式生命周期、GPU 和其他原生平台尚未实现。
+当前 `App::new` 连接 Wayland 并建立系统字体上下文；`run(self)` 在主线程接管循环，最后一个窗口关闭后退出。各窗口的控件树独立，字体系统和软件 renderer 共享。`App::with_fonts` 接受显式字体集合，可关闭 `system-fonts`；`AppOptions` 配置 app_id、初始主题和软件 mask 预算；motion feature 另提供 transition 与 reduced_motion，`WindowOptions` 配置初始尺寸与 SHM 预算。shell 显式生命周期、GPU 和其他原生平台尚未实现。
 
-`aegle` 当前默认启用 Wayland、系统字体、Unix 无障碍与编译型静态标记。嵌入式宿主可直接使用无默认平台 feature 的 `aegle-app::Ui::with_fonts(Rc<RefCell<TextSystem>>, Theme)`，取得 root 后创建同样的控件；通过输入、`refresh`、`visit_scenes`、IME 和可选语义接口对接自己的宿主。
+`aegle` 当前默认启用 Wayland、系统字体、Unix 无障碍、编译型静态标记与外观过渡。嵌入式宿主可直接使用无默认平台 feature 的 `aegle-app::Ui::with_fonts(Rc<RefCell<TextSystem>>, Theme)`，取得 root 后创建同样的控件；通过输入、`refresh`、`visit_scenes`、IME 和可选语义接口对接自己的宿主。
 
 界面优先写在 `.aegle` 文件中；`App::run_ui(aegle::ui!("main.aegle"))` 完成默认初始化、构造和运行。`let view = aegle::ui!(&window, "panel.aegle")?` 返回带 `root` 和各 `id` 字段的有类型弱句柄集合，可直接给 `view.done.on_click(...)` 绑定下面的普通 Rust 回调。文件路径相对使用者包清单目录，编译器跟踪其变化；完整已实现属性见[标记语言](markup.md)。
 
@@ -51,7 +51,7 @@ button.on_click(move |_| {
 | Button | `set_text`、`activate`、`on_click`、`clear_on_click` |
 | Ui / Window | `set_theme`；Window 另有 `close` |
 
-`bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的解析值，当前没有通用属性表、局部主题树或动画呈现值查询。
+`bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。启用 motion 后用 `set_transition(Transition::default())` 安装外观过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期；详见[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或局部主题树。
 
 ## 当前可用的组件皮肤
 

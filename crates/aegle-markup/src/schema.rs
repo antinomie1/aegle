@@ -115,6 +115,10 @@ pub enum PropertyName {
     DisabledForeground,
     /// Positive font size in logical pixels for text-bearing controls.
     FontSize,
+    /// Whole milliseconds for subsequent appearance transitions; requires motion support.
+    Transition,
+    /// Transition easing; requires a sibling `transition` property.
+    Easing,
 }
 
 /// Checks a parsed document without loading fonts or creating any UI objects.
@@ -199,6 +203,17 @@ fn check_node(
             span: property.span,
         });
     }
+    if seen.contains(&PropertyName::Easing) && !seen.contains(&PropertyName::Transition) {
+        let property = result
+            .properties
+            .iter()
+            .find(|property| property.name == PropertyName::Easing)
+            .unwrap();
+        return Err(Error::new(
+            property.span,
+            "easing requires a transition duration on the same component",
+        ));
+    }
     for child in node.children {
         result
             .children
@@ -238,6 +253,8 @@ fn property_name(name: &str) -> Option<PropertyName> {
         "disabled_background" => DisabledBackground,
         "disabled_foreground" => DisabledForeground,
         "font_size" => FontSize,
+        "transition" => Transition,
+        "easing" => Easing,
         _ => return None,
     })
 }
@@ -278,6 +295,13 @@ fn validate(kind: Kind, name: PropertyName, value: &Value) -> Result<(), String>
         )
         | (Grow, Value::Number(n)) => n.is_finite() && *n >= 0.0,
         (FontSize, Value::Length(n)) => n.is_finite() && *n > 0.0,
+        (Transition, Value::Duration(_)) => true,
+        (Easing, Value::Identifier(name)) => {
+            matches!(
+                name.as_str(),
+                "linear" | "ease_in" | "ease_out" | "ease_in_out"
+            )
+        }
         (
             Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
             | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground,
@@ -302,6 +326,8 @@ fn validate(kind: Kind, name: PropertyName, value: &Value) -> Result<(), String>
             "a nonnegative dp length"
         }
         FontSize => "a positive dp length",
+        Transition => "nonnegative whole milliseconds with the ms suffix",
+        Easing => "linear, ease_in, ease_out or ease_in_out",
         Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
         | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground => {
             "a #RRGGBB or #RRGGBBAA color"

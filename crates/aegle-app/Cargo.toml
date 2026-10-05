@@ -8,6 +8,7 @@ description = "Retained imperative UI composition and optional native applicatio
 
 [features]
 default = []
+motion = ["dep:aegle-motion"]
 system-fonts = ["aegle-text/system-fonts"]
 accessibility = ["dep:aegle-access", "aegle-text/text-a11y"]
 wayland = ["dep:aegle-platform-wayland", "dep:aegle-render-software", "dep:wayland-client"]
@@ -18,6 +19,7 @@ aegle-types.workspace = true
 aegle-core.workspace = true
 aegle-layout.workspace = true
 aegle-theme.workspace = true
+aegle-motion = { workspace = true, optional = true }
 aegle-scene = { workspace = true, features = ["text"] }
 aegle-text = { workspace = true, features = ["scene"] }
 aegle-controls = { workspace = true, features = ["text"] }

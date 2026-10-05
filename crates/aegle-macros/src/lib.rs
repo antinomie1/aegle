@@ -25,6 +25,8 @@ use syn::{Expr, ExprLit, Lit, LitStr, Token, parse::Parse, parse::ParseStream};
 /// every markup `id`. Bind Rust callbacks through those fields after creation.
 /// Dropping the view keeps its retained controls alive. A construction failure
 /// removes the new subtree; it never removes the parent supplied by the caller.
+/// Transition properties require the facade's `motion` feature. Transitions are
+/// installed after every static property, so initial construction does not animate.
 ///
 /// Paths are relative to `CARGO_MANIFEST_DIR`, including explicit `../` paths.
 /// The generated dependency marker makes file edits trigger recompilation.

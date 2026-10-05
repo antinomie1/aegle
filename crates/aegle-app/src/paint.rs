@@ -10,8 +10,9 @@ use aegle_types::Size;
 impl State {
     pub fn record(&mut self, id: NodeId) -> Result {
         let visual = self.visual_state(id);
-        let appearance = self.appearance_for(id, visual);
-        appearance.validate()?;
+        let appearance = self.appearance_for(id, visual)?;
+        #[cfg(feature = "motion")]
+        let appearance = self.transition_appearance(id, appearance)?;
         let element = &mut self.tree.get_mut(id).unwrap().context;
         let padding = element.inset(self.theme.padding);
         let size = element.bounds.size;
@@ -67,15 +68,13 @@ impl State {
                 }
                 Content::Container => {}
             }
-            if visual.enabled && visual.focused {
-                outline(
-                    &mut builder,
-                    size,
-                    appearance.radius,
-                    appearance.focus_width,
-                    appearance.focus_color,
-                )?;
-            }
+            outline(
+                &mut builder,
+                size,
+                appearance.radius,
+                appearance.focus_width,
+                appearance.focus_color,
+            )?;
         }
         element.scene = builder.finish()?;
         Ok(())

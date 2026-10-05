@@ -164,7 +164,13 @@ impl State {
                 continue;
             }
             let enabled = self.usable(id);
-            let color = self.appearance(id).foreground;
+            #[cfg(not(feature = "motion"))]
+            let appearance = self.appearance(id);
+            #[cfg(feature = "motion")]
+            let appearance = self.presented_appearance(id);
+            let color = appearance
+                .expect("refresh validated the appearance")
+                .foreground;
             let [red, green, blue, alpha] = color.to_rgba();
             let foreground = aegle_access::accesskit::Color {
                 red,

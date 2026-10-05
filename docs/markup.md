@@ -67,10 +67,14 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `focus_color`、`focus_width` | Button/TextField/TextArea 的焦点颜色与非负 `dp` 宽度 |
 | `selection_color`、`caret_color` | TextField/TextArea 的选择与 caret/预编辑颜色 |
 | `font_size` | Text/Button/TextField/TextArea 的正 `dp` |
+| `transition` | 全节点外观过渡，非负整数毫秒，如 `120ms`；零表示立即到目标 |
+| `easing` | 同节点须有 transition；linear/ease_in/ease_out/ease_in_out，默认 ease_out |
 
 Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
 
-声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；当前不支持百分比或时长字面量。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
+声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出；当前不支持百分比。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
+
+`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。宏在整棵结构创建及全部静态属性设置后安装过渡，首次显示没有初始样式动画。它控制同一套 Node 外观 API，不改变几何、字号或文本行为。
 
 独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits` 和内建 schema 的 `check`。默认解析上限为 1 MiB、64 层、10,000 节点；显式解析深度最多 256，schema 检查最多 256 层/10,000 节点。`ui!` 使用默认上限。运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
 

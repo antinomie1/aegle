@@ -25,6 +25,8 @@ Window {
             focus_color: #A78BE8
             focus_width: 2dp
             caret_color: #A78BE8
+            transition: 120ms
+            easing: ease_out
         }
     }
     Row { id: actions; gap: 12dp }

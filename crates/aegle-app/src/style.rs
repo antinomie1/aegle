@@ -33,18 +33,22 @@ impl State {
         }
     }
 
-    pub fn appearance(&self, id: NodeId) -> Appearance {
+    pub fn appearance(&self, id: NodeId) -> Result<Appearance> {
         self.appearance_for(id, self.visual_state(id))
     }
 
-    pub fn appearance_for(&self, id: NodeId, state: VisualState) -> Appearance {
+    pub fn appearance_for(&self, id: NodeId, state: VisualState) -> Result<Appearance> {
         let decoration = self.decorations.get(&id);
         let skin = decoration.and_then(|d| d.skin).unwrap_or(Appearance::new);
         let mut appearance = skin(&self.theme, state);
         if let Some(decoration) = decoration {
             decoration.style.apply(&mut appearance, state);
         }
-        appearance
+        appearance.validate()?;
+        if !state.enabled || !state.focused {
+            appearance.focus_width = 0.0;
+        }
+        Ok(appearance)
     }
 
     pub fn text_style(&self, id: NodeId) -> TextStyle<'static> {

@@ -84,6 +84,8 @@ pub(crate) struct State {
     pub repaint: bool,
     pub callbacks: HashMap<NodeId, Handler>,
     pub decorations: HashMap<NodeId, Decoration>,
+    #[cfg(feature = "motion")]
+    pub motion: crate::motion::Motion,
     pub pending: VecDeque<(NodeId, u64)>,
     pub dispatching: bool,
     pub callback_version: u64,
@@ -172,6 +174,21 @@ impl State {
         let id = self
             .tree
             .insert(Some(parent), LayoutNode::with_style(style, element))?;
+        #[cfg(feature = "motion")]
+        if matches!(
+            self.tree.get(id).unwrap().context.content,
+            Content::Button(..) | Content::Field(_)
+        ) {
+            if let Some(timing) = self.motion.default {
+                self.motion.tracks.insert(
+                    id,
+                    crate::motion::Track {
+                        timing,
+                        presented: None,
+                    },
+                );
+            }
+        }
         self.invalidate_structure();
         Ok(id)
     }

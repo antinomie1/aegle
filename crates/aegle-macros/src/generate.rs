@@ -25,6 +25,7 @@ pub(super) fn builder(document: &CheckedDocument, facade: &TokenStream) -> Token
     let Output {
         creations,
         setters,
+        transitions,
         fields,
         values,
         ..
@@ -40,6 +41,7 @@ pub(super) fn builder(document: &CheckedDocument, facade: &TokenStream) -> Token
             let __aegle_result = (|| -> #facade::Result<#view> {
                 #(#creations)*
                 #(#setters)*
+                #(#transitions)*
                 ::core::result::Result::Ok(#view {
                     root: #root_handle.clone(),
                     #(#values)*
@@ -61,6 +63,7 @@ struct Output {
     count: usize,
     creations: Vec<TokenStream>,
     setters: Vec<TokenStream>,
+    transitions: Vec<TokenStream>,
     fields: Vec<TokenStream>,
     values: Vec<TokenStream>,
 }
@@ -81,6 +84,9 @@ impl Output {
             if let Some(setter) = setter(node.kind, property, handle, facade) {
                 self.setters.push(setter);
             }
+        }
+        if let Some(transition) = transition(node, handle, facade) {
+            self.transitions.push(transition);
         }
         for child in &node.children {
             self.count += 1;
@@ -158,7 +164,7 @@ fn setter(
 ) -> Option<TokenStream> {
     use PropertyName::*;
     let name = match property.name {
-        Title | Text => return None,
+        Title | Text | Transition | Easing => return None,
         Width | Height if kind == Kind::Window => return None,
         Width => "set_width",
         Height => "set_height",
@@ -205,7 +211,42 @@ fn setter(
             quote! { #facade::Theme::#name() }
         }
         Value::Identifier(_) => quote! { ::core::option::Option::None },
+        Value::Duration(_) => unreachable!("transitions are emitted after static setters"),
     };
     let method = Ident::new(name, Span::call_site());
     Some(quote! { #handle.#method(#argument)?; })
+}
+
+fn transition(node: &CheckedNode, handle: &Ident, facade: &TokenStream) -> Option<TokenStream> {
+    let property = node
+        .properties
+        .iter()
+        .find(|property| property.name == PropertyName::Transition)?;
+    let Value::Duration(milliseconds) = property.value else {
+        unreachable!()
+    };
+    let easing = node
+        .properties
+        .iter()
+        .find(|property| property.name == PropertyName::Easing)
+        .map(|property| {
+            let Value::Identifier(name) = &property.value else {
+                unreachable!()
+            };
+            match name.as_str() {
+                "linear" => "Linear",
+                "ease_in" => "EaseIn",
+                "ease_out" => "EaseOut",
+                "ease_in_out" => "EaseInOut",
+                _ => unreachable!(),
+            }
+        })
+        .unwrap_or("EaseOut");
+    let easing = Ident::new(easing, Span::call_site());
+    Some(quote! {
+        #handle.set_transition(#facade::Transition::new(
+            ::core::time::Duration::from_millis(#milliseconds),
+            #facade::Easing::#easing,
+        ))?;
+    })
 }

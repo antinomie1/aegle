@@ -1,5 +1,5 @@
 //! Compiled markup shares the imperative tree, callbacks and weak lifetimes.
-#![cfg(feature = "markup")]
+#![cfg(all(feature = "markup", feature = "motion"))]
 
 use aegle::{Result, Size, TextSystem, Theme, Ui, UiError};
 use aegle_text::{Blob, GenericFamily};
@@ -26,6 +26,7 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
     assert_eq!(evaluations, 1);
     ui.resize(Size::new(320.0, 320.0))?;
     ui.refresh()?;
+    assert!(!ui.has_animations());
     assert_eq!(view.panel.bounds()?, view.root.bounds()?);
     assert_eq!(view.panel.bounds()?.size.width, 240.0);
     assert_eq!(view.clear.bounds()?.size.width, 80.0);

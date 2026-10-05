@@ -17,6 +17,7 @@
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
+- aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。当前没有 token 注册表、局部主题继承或系统偏好监听。
 - aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/text/button/text_field/text_area、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/Text/Button/TextField/TextArea 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
@@ -157,8 +158,22 @@ Ui 的逻辑树同时用于布局、命中、焦点、编辑与语义；保留�
 - Wayland + 系统字体 + markup、无 Unix adapter 的本机 release 文件：hello 为 3,929,280 B（较前阶段增加 4096 B），controls 为 3,962,048 B（不变），components 为 3,982,528 B。没有新发布依赖。大小受链接/对齐影响，不能据此宣称零运行成本。
 - 同一800×480私有输出上的 controls 单次快照：RSS/PSS 为28,796/11,526 KiB、1线程；随后3秒 CPU tick 增量为0（CLK_TCK=100）。这只是一份短时进程样本，不是峰值、稳定基准或嵌入式验收。当前目标上的 `size_of`：Appearance 36 B、Style 104 B、VisualState 6 B；不含稀疏表桶、字号/函数指针和 allocator 开销。
 
+## 外观过渡与帧驱动验证
+
+新增独立 `aegle-motion`，没有第三方依赖、定时器或堆分配；Tween 支持标量、Point 与预乘线性 Color，以及四种 easing。软件 renderer 和 motion 共用 types/color-math 的8200 B转换表数据，types 默认仍是 no_std；现有软件合成像素场景保持通过。
+
+app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/呈现查询、中途改目标、取消、完成和清除策略。原生按钮/编辑器默认120ms EaseOut；无窗口 Ui 默认关闭，可手动推进单调时钟。`.aegle` 支持整数毫秒 transition 与 easing，静态设置完成后才安装策略。外观变化不重建 Editor，前景采样同步语义。此次复核修复了减少动态效果丢失最后重绘、失焦轮廓直接消失，以及取消失焦过渡后重新启动的问题。
+
+- workspace all-features 共27个常规集成场景通过。新增两组综合场景覆盖补间端点/有限值/线性透明颜色、改目标连续性、实际焦点轮廓、取消/完成、时钟倒退、隐藏/删除、减少动态效果、CJK 预编辑保留与语义前景；已有标记场景扩展时长和首帧无动画检查。测试全部在 crates/*/tests。
+- all-targets/all-features、app/facade 无默认 feature、独立 motion 与 types 默认 no_std 检查、严格 Rustdoc、fmt/diff 检查通过。最后的焦点取消修复后，相关 motion 场景在有/无 accessibility 两种组合重新通过。实现13747行、测试2832行，占17.08%（不含 examples），最大源文件483行。
+- 外部小探针在私有 Sway/Pixman 上运行400ms过渡，实测406ms、27次 Wayland frame 请求；全程 app.dispatch(None)，没有后续输入或主动 wake。结束并排空已有平台事件后，600ms等待完整阻塞，新增 frame 请求和皮肤采样均为0。还验证了动画中删除控件、关闭窗口、晚建窗口共享时钟及减少动态效果；不把此桌面协议样本当作硬件帧时保证。
+- Wayland + 系统字体 + markup + motion、关闭 Unix adapter 的本机 release：hello 3,949,760 B、controls 3,982,528 B、components 4,003,008 B，分别比前阶段增加20,480 B。没有新增第三方运行依赖，发布配置保持相同。
+- 800×480私有输出的 release controls 单次快照：RSS/PSS 28,776/11,450 KiB，1线程，随后3秒 CPU tick 增量0（CLK_TCK=100）。波动范围内的单次样本不能解释为内存改善，也不是峰值、持续动画成本或嵌入式验收。
+
+本阶段没有增加几何动画、完成回调、系统偏好监听或新的原生 IME/AT-SPI 协议。未重复完整真实输入法/屏幕阅读器验收；Clippy、MSRV、其他 OS 与 GPU 的未验证范围保持不变。
+
 ## 下一阶段与缺口
 
-下一步继续补齐动画、基础控件和任意绘制/行为组件扩展，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
+下一步继续补齐基础控件、动画完成通知/几何和任意绘制/行为组件扩展，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
 
-当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。
+当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或几何动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。
