@@ -65,13 +65,22 @@ impl Surface {
             handle,
         })
     }
-    pub fn format(&self, physical: vk::PhysicalDevice) -> Result<vk::SurfaceFormatKHR> {
+    /// Prefers an sRGB format for direct opaque rendering unless transparency
+    /// needs the UNORM encoding pass; UNORM remains the fallback.
+    pub fn format(
+        &self,
+        physical: vk::PhysicalDevice,
+        transparent: bool,
+    ) -> Result<vk::SurfaceFormatKHR> {
         // SAFETY: The surface and physical device belong to the same live instance.
         let formats = unsafe {
             self.loader
                 .get_physical_device_surface_formats(physical, self.handle)?
         };
-        for format in [vk::Format::B8G8R8A8_UNORM, vk::Format::R8G8B8A8_UNORM] {
+        let srgb = [vk::Format::B8G8R8A8_SRGB, vk::Format::R8G8B8A8_SRGB];
+        let unorm = [vk::Format::B8G8R8A8_UNORM, vk::Format::R8G8B8A8_UNORM];
+        let direct = if transparent { &[][..] } else { &srgb[..] };
+        for &format in direct.iter().chain(&unorm) {
             if let Some(choice) = formats
                 .iter()
                 .find(|f| f.format == format && f.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR)
@@ -86,7 +95,7 @@ impl Surface {
             });
         }
         Err(Error::Unsupported(
-            "surface needs RGBA8/BGRA8 UNORM in sRGB color space",
+            "surface needs RGBA8/BGRA8 UNORM or sRGB in sRGB color space",
         ))
     }
     pub fn supports(
@@ -112,7 +121,7 @@ impl Surface {
                 return Err(Error::Unsupported("VK_KHR_swapchain is required"));
             }
         }
-        let _ = self.format(physical)?;
+        let _ = self.format(physical, false)?;
         Ok(())
     }
 }

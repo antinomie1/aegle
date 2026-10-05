@@ -60,7 +60,11 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
         assert_eq!(raster.size(), options.size);
         assert!(raster.hint());
         let origin = raster.origin(Point::new(1.12, -0.14)).unwrap();
-        assert_eq!(origin.offset(), [0.25, 0.75]);
+        assert_eq!(
+            origin.offset(),
+            [0.25, 0.0],
+            "baselines snap to whole pixels"
+        );
         assert_eq!(
             origin
                 .image_transform(Placement {
@@ -70,7 +74,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
                     height: 6,
                 })
                 .unwrap(),
-            Affine::translation(1.0, -4.0).unwrap()
+            Affine::translation(1.0, -3.0).unwrap()
         );
         assert!(matches!(
             raster.origin(Point::new(1_048_576.0, 0.0)),

@@ -1,13 +1,15 @@
 //! Vulkan pipeline objects; all handles share the renderer's device lifetime.
 #![allow(unsafe_code)]
 
-use crate::{Result, device::Device, geometry::Primitive};
+use crate::{Result, device::Device};
 use ash::vk;
 
 pub(crate) struct Pipeline {
     raw: ash::Device,
     #[cfg(feature = "window")]
     pub output_format: vk::Format,
+    /// Pass 0 blends directly into an sRGB swapchain image; no encoding pass.
+    pub direct: bool,
     pub passes: [vk::RenderPass; 2],
     pub layouts: [vk::PipelineLayout; 2],
     pub pipelines: [vk::Pipeline; 2],
@@ -17,19 +19,26 @@ pub(crate) struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(device: &Device) -> Result<Self> {
+    pub fn new(device: &Device, #[cfg(feature = "window")] transparent: bool) -> Result<Self> {
         let format = vk::Format::R8G8B8A8_UNORM;
         let window = false;
         #[cfg(feature = "window")]
         let (format, window) = if let Some(surface) = &device.surface {
-            (surface.format(device.physical)?.format, true)
+            (surface.format(device.physical, transparent)?.format, true)
         } else {
             (format, window)
         };
+        // sRGB attachments blend in linear light, matching the RGBA16F path for
+        // opaque output while avoiding its image, bandwidth and second pass.
+        let direct = matches!(
+            format,
+            vk::Format::B8G8R8A8_SRGB | vk::Format::R8G8B8A8_SRGB
+        );
         let mut this = Self {
             raw: device.raw.clone(),
             #[cfg(feature = "window")]
             output_format: format,
+            direct,
             passes: [vk::RenderPass::null(); 2],
             layouts: [vk::PipelineLayout::null(); 2],
             pipelines: [vk::Pipeline::null(); 2],
@@ -37,38 +46,47 @@ impl Pipeline {
             set_layouts: [vk::DescriptorSetLayout::null(); 2],
             pool: vk::DescriptorPool::null(),
         };
-        let types = [
-            vk::DescriptorType::STORAGE_BUFFER,
-            vk::DescriptorType::SAMPLED_IMAGE,
+        let binding = |binding, ty, stages| {
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(binding)
+                .descriptor_type(ty)
+                .descriptor_count(1)
+                .stage_flags(stages)
+        };
+        let storage = vk::DescriptorType::STORAGE_BUFFER;
+        let fragment = vk::ShaderStageFlags::FRAGMENT;
+        // Set 0 holds clips and instanced primitive records; set 1 the resolve input.
+        let bindings: [&[_]; 2] = [
+            &[
+                binding(0, storage, fragment),
+                binding(1, storage, fragment | vk::ShaderStageFlags::VERTEX),
+            ],
+            &[binding(0, vk::DescriptorType::SAMPLED_IMAGE, fragment)],
         ];
         // SAFETY: Device remains live; slices only back synchronous creation calls.
         // The partially constructed owner destroys every successfully created handle.
         unsafe {
-            for (i, descriptor_type) in types.iter().copied().enumerate() {
-                let binding = [vk::DescriptorSetLayoutBinding::default()
-                    .binding(0)
-                    .descriptor_type(descriptor_type)
-                    .descriptor_count(1)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
+            for (i, bindings) in bindings.into_iter().enumerate() {
                 this.set_layouts[i] = this.raw.create_descriptor_set_layout(
-                    &vk::DescriptorSetLayoutCreateInfo::default().bindings(&binding),
+                    &vk::DescriptorSetLayoutCreateInfo::default().bindings(bindings),
                     None,
                 )?;
                 let layouts = [this.set_layouts[i]];
-                let ranges = [vk::PushConstantRange::default()
-                    .offset(0)
-                    .size(size_of::<Primitive>() as u32)
-                    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)];
-                let mut info = vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts);
-                if i == 0 {
-                    info = info.push_constant_ranges(&ranges);
-                }
-                this.layouts[i] = this.raw.create_pipeline_layout(&info, None)?;
+                this.layouts[i] = this.raw.create_pipeline_layout(
+                    &vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts),
+                    None,
+                )?;
             }
-            let sizes = types.map(|ty| vk::DescriptorPoolSize {
-                ty,
-                descriptor_count: 1,
-            });
+            let sizes = [
+                vk::DescriptorPoolSize {
+                    ty: storage,
+                    descriptor_count: 2,
+                },
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::SAMPLED_IMAGE,
+                    descriptor_count: 1,
+                },
+            ];
             this.pool = this.raw.create_descriptor_pool(
                 &vk::DescriptorPoolCreateInfo::default()
                     .max_sets(2)
@@ -82,13 +100,35 @@ impl Pipeline {
             )?;
             this.sets.copy_from_slice(&sets);
         }
-        this.passes[0] = render_pass(
+        this.passes[0] = if direct {
+            render_pass(
+                &this.raw,
+                format,
+                vk::ImageLayout::PRESENT_SRC_KHR,
+                vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                vk::AccessFlags::empty(),
+            )?
+        } else {
+            render_pass(
+                &this.raw,
+                vk::Format::R16G16B16A16_SFLOAT,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                vk::AccessFlags::SHADER_READ,
+            )?
+        };
+        this.pipelines[0] = graphics(
             &this.raw,
-            vk::Format::R16G16B16A16_SFLOAT,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
-            vk::AccessFlags::SHADER_READ,
+            this.passes[0],
+            this.layouts[0],
+            true,
+            include_bytes!(concat!(env!("OUT_DIR"), "/geometry.vert.spv")),
+            include_bytes!(concat!(env!("OUT_DIR"), "/geometry.frag.spv")),
+            c"fs_main",
         )?;
+        if direct {
+            return Ok(this);
+        }
         this.passes[1] = render_pass(
             &this.raw,
             format,
@@ -108,15 +148,6 @@ impl Pipeline {
                 vk::AccessFlags::TRANSFER_READ
             },
         )?;
-        this.pipelines[0] = graphics(
-            &this.raw,
-            this.passes[0],
-            this.layouts[0],
-            true,
-            include_bytes!(concat!(env!("OUT_DIR"), "/geometry.vert.spv")),
-            include_bytes!(concat!(env!("OUT_DIR"), "/geometry.frag.spv")),
-            c"fs_main",
-        )?;
         this.pipelines[1] = graphics(
             &this.raw,
             this.passes[1],
@@ -134,20 +165,29 @@ impl Pipeline {
         self.set_layouts[0]
     }
 
-    pub fn update(&self, clip: vk::Buffer, bytes: u64, image: vk::ImageView) {
-        let buffer = [vk::DescriptorBufferInfo::default()
-            .buffer(clip)
-            .offset(0)
-            .range(bytes)];
+    /// Binds whole clip and primitive buffers plus any resolve input.
+    pub fn update(&self, clips: vk::Buffer, primitives: vk::Buffer, image: Option<vk::ImageView>) {
+        let info = |buffer| {
+            [vk::DescriptorBufferInfo::default()
+                .buffer(buffer)
+                .offset(0)
+                .range(vk::WHOLE_SIZE)]
+        };
+        let (clips, primitives) = (info(clips), info(primitives));
         let texture = [vk::DescriptorImageInfo::default()
-            .image_view(image)
+            .image_view(image.unwrap_or_default())
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let writes = [
             vk::WriteDescriptorSet::default()
                 .dst_set(self.sets[0])
                 .dst_binding(0)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&buffer),
+                .buffer_info(&clips),
+            vk::WriteDescriptorSet::default()
+                .dst_set(self.sets[0])
+                .dst_binding(1)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&primitives),
             vk::WriteDescriptorSet::default()
                 .dst_set(self.sets[1])
                 .dst_binding(0)
@@ -156,8 +196,9 @@ impl Pipeline {
         ];
         // SAFETY: Called only after the previous submission completed. Both views
         // remain owned by Renderer throughout the next submitted command buffer.
+        let count = if image.is_some() { 3 } else { 2 };
         unsafe {
-            self.raw.update_descriptor_sets(&writes, &[]);
+            self.raw.update_descriptor_sets(&writes[..count], &[]);
         }
     }
 }

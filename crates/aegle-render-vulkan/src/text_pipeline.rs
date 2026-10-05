@@ -6,7 +6,6 @@ use ash::vk;
 use crate::{
     Error, Result,
     device::Device,
-    geometry::Primitive,
     pipeline::{Pipeline, graphics},
 };
 
@@ -66,14 +65,8 @@ impl TextPipeline {
                 None,
             )?;
             let layouts = [geometry.clip_layout(), this.page_layout];
-            let ranges = [vk::PushConstantRange::default()
-                .offset(0)
-                .size(size_of::<Primitive>() as u32)
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)];
             this.layout = this.raw.create_pipeline_layout(
-                &vk::PipelineLayoutCreateInfo::default()
-                    .set_layouts(&layouts)
-                    .push_constant_ranges(&ranges),
+                &vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts),
                 None,
             )?;
             let sizes = [

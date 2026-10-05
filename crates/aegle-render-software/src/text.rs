@@ -18,6 +18,12 @@ impl Frame<'_, '_, '_> {
         let aligned = raster.hint();
         let solid = Solid::new(run.color());
         let [r, g, blue, opacity] = run.color().to_rgba();
+        let contrast = (aegle_glyph::mask_contrast(run.color().to_rgba()) * 255.0).round() as i32;
+        // Integer form of the shared monotonic curve: c + c(255 - c)k / 255².
+        let adjust = |c: u8| {
+            let c = i32::from(c);
+            (c + c * (255 - c) * contrast / 65_025) as u8
+        };
         for glyph in run.glyphs() {
             let origin = raster
                 .origin(glyph.position)
@@ -60,7 +66,9 @@ impl Frame<'_, '_, '_> {
                     };
                     let coverage = clip.map_or(255, |mask| mask[i]);
                     match image.content {
-                        Content::Mask => solid.blend(pixel, coverage_product(rgba[3], coverage)),
+                        Content::Mask => {
+                            solid.blend(pixel, coverage_product(adjust(rgba[3]), coverage))
+                        }
                         Content::Color => {
                             Solid::new(Color::rgba(
                                 rgba[0],

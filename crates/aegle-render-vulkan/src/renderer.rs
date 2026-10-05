@@ -2,7 +2,7 @@ use crate::{
     Error, Result,
     commands::Commands,
     device::Device,
-    geometry::{Clip, Recording},
+    geometry::{Clip, Primitive, Recording},
     memory::Buffer,
     pipeline::Pipeline,
     target::Target,
@@ -13,7 +13,8 @@ use ash::vk;
 /// Fixed configuration; budgets are independent of hidden driver allocations.
 #[derive(Clone, Copy, Debug)]
 pub struct Options {
-    /// Vulkan enumeration index, or prefer a suitable hardware device when absent.
+    /// Vulkan enumeration index. When absent, prefers a suitable integrated GPU,
+    /// then discrete, virtual and finally CPU devices.
     pub device_index: Option<u32>,
     /// Bytes of explicit VkDeviceMemory allocations, including alignment/readback,
     /// plus the opaque swapchain image estimate when presenting to a window.
@@ -23,6 +24,11 @@ pub struct Options {
     /// Independent glyph raster, atlas and upload limits; enabled only by `text`.
     #[cfg(feature = "text")]
     pub text: crate::TextOptions,
+    /// Window only: keep premultiplied window alpha. This adds the RGBA16F
+    /// working image and encoding pass. Otherwise a window renders directly into
+    /// an sRGB swapchain image when the surface offers one, and needs opaque clears.
+    #[cfg(feature = "window")]
+    pub transparent: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -32,6 +38,8 @@ impl Default for Options {
             recording_budget: 1024 * 1024,
             #[cfg(feature = "text")]
             text: crate::TextOptions::default(),
+            #[cfg(feature = "window")]
+            transparent: false,
         }
     }
 }
@@ -61,7 +69,8 @@ pub struct Renderer {
     pub(crate) swapchain: Option<crate::swapchain::Swapchain>,
     #[cfg(feature = "window")]
     pub(crate) window_size: [u32; 2],
-    clips: Option<Buffer>,
+    /// Host-visible clip and primitive storage, rewritten after each fence.
+    buffers: [Option<Buffer>; 2],
     readback: Option<Buffer>,
     #[cfg(feature = "text")]
     text: crate::text::Text,
@@ -69,7 +78,7 @@ pub struct Renderer {
     commands: Commands,
     pub(crate) device: Device,
     recording: Recording,
-    options: Options,
+    pub(crate) options: Options,
     name: String,
     busy: bool,
     image_ready: bool,
@@ -89,6 +98,9 @@ impl Renderer {
         .expect("Vulkan guarantees a terminated physical device name")
         .to_string_lossy()
         .into_owned();
+        #[cfg(feature = "window")]
+        let pipeline = Pipeline::new(&device, options.transparent)?;
+        #[cfg(not(feature = "window"))]
         let pipeline = Pipeline::new(&device)?;
         let commands = Commands::new(&device)?;
         #[cfg(feature = "text")]
@@ -99,7 +111,7 @@ impl Renderer {
             swapchain: None,
             #[cfg(feature = "window")]
             window_size: [0; 2],
-            clips: None,
+            buffers: [None, None],
             readback: None,
             #[cfg(feature = "text")]
             text,
@@ -215,7 +227,7 @@ impl Renderer {
         Stats {
             device_bytes: self.base_bytes() + self.text_bytes(),
             swapchain_bytes: self.swapchain_bytes(),
-            recording_bytes: self.recording.draws.capacity() * size_of::<crate::geometry::Draw>()
+            recording_bytes: self.recording.primitives.capacity() * size_of::<Primitive>()
                 + self.recording.clips.capacity() * size_of::<Clip>(),
         }
     }
@@ -234,7 +246,7 @@ impl Renderer {
         #[cfg(feature = "window")]
         self.release_swapchain()?;
         self.target = None;
-        self.clips = None;
+        self.buffers = [None, None];
         self.readback = None;
         self.recording = Recording::default();
         #[cfg(feature = "text")]
@@ -260,7 +272,12 @@ impl Renderer {
 
     fn base_bytes(&self) -> u64 {
         self.target.as_ref().map_or(0, Target::bytes)
-            + self.clips.as_ref().map_or(0, |b| b.allocation)
+            + self
+                .buffers
+                .iter()
+                .flatten()
+                .map(|b| b.allocation)
+                .sum::<u64>()
             + self.readback.as_ref().map_or(0, |b| b.allocation)
     }
 
@@ -276,20 +293,29 @@ impl Renderer {
     }
 
     fn submit(&mut self, clear: Color) -> Result {
-        let bytes = (self.recording.clips.len().max(1) * size_of::<Clip>()) as u64;
-        if self.clips.as_ref().is_none_or(|b| b.size < bytes) {
-            self.clips = None;
-            self.clips = Some(Buffer::new(
-                &self.device,
-                bytes,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                vk::MemoryPropertyFlags::HOST_VISIBLE,
-                self.remaining(),
-            )?);
-        }
-        let clips = self.clips.as_mut().unwrap();
-        if !self.recording.clips.is_empty() {
-            clips.write(0, bytemuck::cast_slice(&self.recording.clips))?;
+        for index in 0..2 {
+            let data: &[u8] = if index == 0 {
+                bytemuck::cast_slice(&self.recording.clips)
+            } else {
+                bytemuck::cast_slice(&self.recording.primitives)
+            };
+            // Storage bindings must be nonempty even for a clear-only frame.
+            let bytes = data
+                .len()
+                .max(size_of::<Primitive>().max(size_of::<Clip>())) as u64;
+            if self.buffers[index].as_ref().is_none_or(|b| b.size < bytes) {
+                self.buffers[index] = None;
+                self.buffers[index] = Some(Buffer::new(
+                    &self.device,
+                    bytes,
+                    vk::BufferUsageFlags::STORAGE_BUFFER,
+                    vk::MemoryPropertyFlags::HOST_VISIBLE,
+                    self.remaining(),
+                )?);
+            }
+            if !data.is_empty() {
+                self.buffers[index].as_mut().unwrap().write(0, data)?;
+            }
         }
         #[cfg(feature = "text")]
         self.text.atlas.prepare_upload(
@@ -297,10 +323,11 @@ impl Renderer {
             self.options.memory_budget - self.base_bytes() - self.swapchain_bytes(),
         )?;
         let target = self.target.as_ref().unwrap();
+        let [clips, primitives] = &self.buffers;
         self.pipeline.update(
-            self.clips.as_ref().unwrap().handle,
-            bytes,
-            target.linear.view,
+            clips.as_ref().unwrap().handle,
+            primitives.as_ref().unwrap().handle,
+            target.linear.as_ref().map(|image| image.view),
         );
         self.commands.begin()?;
         #[cfg(feature = "text")]

@@ -2,7 +2,6 @@ use std::mem::size_of;
 
 use aegle_scene::{Affine, Command, RoundedRect, Scene};
 use aegle_types::{Color, Point, Rect, color_math::linear_rgba};
-use ash::vk;
 use bytemuck::{Pod, Zeroable};
 
 use crate::{Error, Result};
@@ -10,7 +9,8 @@ use crate::{Error, Result};
 const NO_CLIP: u32 = u32::MAX;
 const MAX_COORDINATE: f32 = 1_048_576.0;
 
-/// Matches the 112-byte push-constant block in geometry.wgsl.
+/// Matches the 112-byte storage record in geometry.wgsl. `bounds` is already
+/// limited to the integer scissor of its clip scope, so no per-draw scissor exists.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub(crate) struct Primitive {
@@ -35,14 +35,9 @@ pub(crate) struct Clip {
 
 const _: () = assert!(size_of::<Primitive>() == 112 && size_of::<Clip>() == 64);
 
-pub(crate) struct Draw {
-    pub primitive: Primitive,
-    pub scissor: vk::Rect2D,
-}
-
 #[derive(Default)]
 pub(crate) struct Recording {
-    pub draws: Vec<Draw>,
+    pub primitives: Vec<Primitive>,
     pub clips: Vec<Clip>,
 }
 
@@ -63,7 +58,7 @@ struct LocalShape {
 
 impl Recording {
     pub fn clear(&mut self) {
-        self.draws.clear();
+        self.primitives.clear();
         self.clips.clear();
     }
 
@@ -158,7 +153,7 @@ impl Recording {
             ];
         }
         let local = local_shape(shape, transform, -1.0)?;
-        reserve(&mut self.clips, &mut self.draws, limit)?;
+        reserve(&mut self.clips, &mut self.primitives, limit)?;
         let index = u32::try_from(self.clips.len()).map_err(|_| Error::Coordinates)?;
         if index == NO_CLIP {
             return Err(Error::Coordinates);
@@ -201,39 +196,20 @@ impl Recording {
                 header: [state.clip, 0, 0, 0],
             },
             state.bounds,
-            width,
-            height,
             limit,
         )
     }
 
-    pub fn record(
-        &mut self,
-        primitive: Primitive,
-        clip: [f32; 4],
-        width: u32,
-        height: u32,
-        limit: usize,
-    ) -> Result {
+    /// Limits the quad to its integer clip-scope bounds, which covers exactly
+    /// the pixel centers a scissor of the same rectangle would admit.
+    pub fn record(&mut self, mut primitive: Primitive, clip: [f32; 4], limit: usize) -> Result {
         let clipped = intersection(primitive.bounds, clip);
         if clipped[0] >= clipped[2] || clipped[1] >= clipped[3] {
             return Ok(());
         }
-        let left = clipped[0].floor().max(0.0) as i32;
-        let top = clipped[1].floor().max(0.0) as i32;
-        let right = clipped[2].ceil().min(width as f32) as i32;
-        let bottom = clipped[3].ceil().min(height as f32) as i32;
-        reserve(&mut self.draws, &mut self.clips, limit)?;
-        self.draws.push(Draw {
-            primitive,
-            scissor: vk::Rect2D {
-                offset: vk::Offset2D { x: left, y: top },
-                extent: vk::Extent2D {
-                    width: (right - left) as u32,
-                    height: (bottom - top) as u32,
-                },
-            },
-        });
+        primitive.bounds = clipped;
+        reserve(&mut self.primitives, &mut self.clips, limit)?;
+        self.primitives.push(primitive);
         Ok(())
     }
 }

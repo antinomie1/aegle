@@ -24,6 +24,7 @@ impl Swapchain {
         width: u32,
         height: u32,
         budget: u64,
+        transparent: bool,
     ) -> Result<Option<Self>> {
         let surface = device.surface.as_ref().unwrap();
         // SAFETY: Native owners and instance keep this surface valid throughout.
@@ -75,16 +76,22 @@ impl Swapchain {
                 .ok_or(Error::InvalidSize)
         };
         crate::memory::check_budget(estimate(u64::from(count))?, budget)?;
-        let alpha = [
+        // Direct sRGB output stores encoded premultiplied-linear values, which are
+        // exact only for opaque pixels; it prefers opaque composition.
+        let mut alphas = [
             vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
             vk::CompositeAlphaFlagsKHR::OPAQUE,
-        ]
-        .into_iter()
-        .find(|alpha| caps.supported_composite_alpha.contains(*alpha))
-        .ok_or(Error::Unsupported(
-            "surface requires premultiplied or opaque composition",
-        ))?;
-        let format = surface.format(device.physical)?;
+        ];
+        if pipeline.direct {
+            alphas.reverse();
+        }
+        let alpha = alphas
+            .into_iter()
+            .find(|alpha| caps.supported_composite_alpha.contains(*alpha))
+            .ok_or(Error::Unsupported(
+                "surface requires premultiplied or opaque composition",
+            ))?;
+        let format = surface.format(device.physical, transparent)?;
         if format.format != pipeline.output_format {
             return Err(Error::Unsupported(
                 "surface color format changed; recreate window renderer",
@@ -114,7 +121,7 @@ impl Swapchain {
             extent,
             bytes: 0,
             dirty: false,
-            transparent: alpha == vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+            transparent: !pipeline.direct && alpha == vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
         };
         // SAFETY: The selected graphics family can present; formats/caps were queried.
         // Partial initialization is reclaimed by Drop, before the device/surface.
@@ -145,7 +152,7 @@ impl Swapchain {
                 this.frames.push(
                     this.raw.create_framebuffer(
                         &vk::FramebufferCreateInfo::default()
-                            .render_pass(pipeline.passes[1])
+                            .render_pass(pipeline.passes[usize::from(!pipeline.direct)])
                             .attachments(&[view])
                             .width(extent.width)
                             .height(extent.height)

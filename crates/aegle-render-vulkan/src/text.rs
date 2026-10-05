@@ -48,6 +48,7 @@ impl Text {
             return Ok(());
         }
         let raster = RasterTransform::new(state.transform, run.size())?;
+        let contrast = aegle_glyph::mask_contrast([r, g, b, alpha]);
         for glyph in run.glyphs() {
             let origin = raster.origin(glyph.position)?;
             let mut geometry = None;
@@ -94,7 +95,7 @@ impl Text {
                     row0: [a, c, e, 0.0],
                     row1: [b, d, f, 0.0],
                     rect: image.rect,
-                    params: [0.0, 0.0, width as f32, height as f32],
+                    params: [contrast, 0.0, width as f32, height as f32],
                     color: if mask {
                         linear_rgba(run.color().to_rgba())
                     } else {
@@ -103,8 +104,6 @@ impl Text {
                     header: [state.clip, if mask { 1 } else { 2 }, image.page, 0],
                 },
                 state.bounds,
-                width,
-                height,
                 recording_budget,
             )?;
         }

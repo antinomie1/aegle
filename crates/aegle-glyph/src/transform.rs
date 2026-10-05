@@ -5,8 +5,9 @@ use crate::{GlyphError, Placement, key::validate_size};
 /// Shared font raster size and baseline policy under a scene transform.
 ///
 /// Uses the greater affine column length for raster resolution. Positive,
-/// axis-aligned uniform scales hint and snap origins to quarter-pixel phases;
-/// other transforms keep unsnapped origins and use transformed bitmap sampling.
+/// axis-aligned uniform scales hint, snap baselines to whole pixels so horizontal
+/// stems stay sharp, and keep quarter-pixel horizontal phases for spacing. Other
+/// transforms keep unsnapped origins and use transformed bitmap sampling.
 #[derive(Clone, Copy, Debug)]
 pub struct RasterTransform {
     transform: Affine,
@@ -42,7 +43,7 @@ impl RasterTransform {
         self.hint
     }
 
-    /// Maps a local baseline and applies the shared quarter-pixel policy.
+    /// Maps a local baseline and applies the shared pixel-snapping policy.
     /// Rejects nonfinite or device coordinates beyond ±1,048,576.
     pub fn origin(self, point: Point) -> Result<GlyphOrigin, GlyphError> {
         let mut point = self.transform.map_point(point);
@@ -55,7 +56,7 @@ impl RasterTransform {
         }
         if self.hint {
             point.x = (point.x * 4.0).round() * 0.25;
-            point.y = (point.y * 4.0).round() * 0.25;
+            point.y = point.y.round();
         }
         Ok(GlyphOrigin {
             raster: self,

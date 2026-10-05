@@ -46,7 +46,7 @@ mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲
 
 ### 当前 Vulkan 离屏边界
 
-默认 `memory_budget` 为 16 MiB，计入实际 VkDeviceMemory allocation：RGBA16F 线性 attachment、RGBA8 输出、裁剪上传缓冲、可选字形图集/上传及按需读回缓冲，包括驱动报告的对齐要求。两张图像的未对齐像素量合计为宽×高×12，显式读回另需宽×高×4；这只是估算，实际预算按 memory requirements 检查。`recording_budget` 默认 1 MiB，单独限制 CPU draw/clip Vec 的 capacity；`stats` 分别报告这两种口径。
+默认 `memory_budget` 为 16 MiB，计入实际 VkDeviceMemory allocation：RGBA16F 线性 attachment、RGBA8 输出、裁剪与图元上传缓冲（每图元 112 B）、可选字形图集/上传及按需读回缓冲，包括驱动报告的对齐要求。两张图像的未对齐像素量合计为宽×高×12，显式读回另需宽×高×4；这只是估算，实际预算按 memory requirements 检查。不透明窗口的直接 sRGB 路径没有 RGBA16F 与 RGBA8 图像。`recording_budget` 默认 1 MiB，单独限制 CPU 图元/clip Vec 的 capacity；`stats` 分别报告这两种口径。
 
 同尺寸帧复用图像和缓冲，最多一次在途提交；下次 begin_frame 或读回等待 fence，不另建等待帧资源。resize 等待并释放旧 attachment/读回缓冲，再申请新尺寸；失败会使旧图像失效，图集仍保留。`release_images` 等待后释放图像、缓冲、CPU 记录及字形缓存，保留 pipeline。renderer 没有自己的轮询或呈现循环。驱动 command/pipeline 等内部存储、loader、调用方 Scene 和输出 Vec 不计入上述预算；原生 swapchain 的估计与小型应用验证见本页末尾，尚无完整 GPU 应用 PSS/嵌入式验收，详见 [Vulkan 契约](vulkan.md)。
 
@@ -133,6 +133,6 @@ Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS
 
 ### 当前原生 GPU 与 Windows 成本边界
 
-Vulkan App 不分配 Wayland SHM/GDI整帧缓冲，不上传软件渲染结果；每窗口保留 RGBA16F 目标与驱动给出的 swapchain 图像，输出直接 resolve。设备分配与 WSI 图像估计分别统计并联合检查预算，详见 Vulkan 契约。多个 GPU 窗口当前分别拥有设备、pipeline和字形图集，字体/shaping仍共用；不把单窗样本外推为多窗最优。
+Vulkan App 不分配 Wayland SHM/GDI整帧缓冲，不上传软件渲染结果；不透明窗口只保留驱动给出的 sRGB swapchain 图像并直接绘制，透明窗口另保留 RGBA16F 目标并编码写入 swapchain。设备分配与 WSI 图像估计分别统计并联合检查预算，详见 Vulkan 契约。多个 GPU 窗口当前分别拥有设备、pipeline和字形图集，字体/shaping仍共用；不把单窗样本外推为多窗最优。
 
 Wayland gpu feature 用 system/dlopen 获取已有连接的 libwayland 原生句柄，发布需 libwayland-client；软件独立构建仍可用 Rust backend。Win32 CPU buffer 仅一份，GDI/DWM 内部复制不可计入该上限。Windows 软件应用只需相应系统 API；Vulkan 另需 Vulkan loader/driver。不增加常驻框架计时线程；Windows 持续软件动画用 DWM 同步节拍，空闲消息等待，实际驱动/UIA线程成本另测。

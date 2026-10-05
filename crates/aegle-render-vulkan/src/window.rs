@@ -6,9 +6,11 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 /// Vulkan FIFO presentation for a retained native Wayland or Win32 owner.
 ///
-/// Shares the offscreen renderer's scene/text pipelines; the color encoding pass
-/// writes directly into a swapchain image, with no CPU framebuffer/readback or
-/// redundant RGBA8 offscreen image. One graphics submission is in flight at a time.
+/// Shares the offscreen renderer's scene/text pipelines. Opaque windows blend
+/// directly into an sRGB swapchain image when available; transparent windows (or
+/// UNORM-only surfaces) use the RGBA16F image plus an encoding pass that writes the
+/// swapchain image. No CPU framebuffer/readback or redundant RGBA8 offscreen image
+/// exists. One graphics submission is in flight at a time.
 /// The native event loop remains the caller's responsibility.
 pub struct WindowRenderer<W> {
     renderer: Renderer,
@@ -128,6 +130,7 @@ impl Renderer {
                 width,
                 height,
                 self.remaining(),
+                self.options.transparent,
             )?;
             self.window_size = [width, height];
         }

@@ -8,7 +8,7 @@
 
 以 Vulkan 1.1 为基线，复用 ash 0.38 调用驱动，bytemuck 1.25 检查 CPU/shader 数据布局；Naga 30 仅在构建期将 WGSL 转为 SPIR-V 1.3，不引入 wgpu 或运行时 shader 编译器。使用传统 render pass、一个 graphics queue 和可复用 fence，不要求可选 GPU feature。
 
-每个图元一条 draw，顶点由 shader 生成；目前没有相邻批次合并。CPU 只记录变换、颜色和裁剪链，不栅格化整帧。整数 scissor 缩小工作范围，shader 计算小数、圆角和仿射裁剪覆盖率，最多八层（含外部 clip）；共享父索引避免为每个图元复制整条裁剪链。局部几何等比归一化后传入 shader，避免极大/极小局部单位造成距离计算溢出。映射后的几何范围限定为 ±1,048,576，不能表示的逆变换返回错误。
+图元记录写入 host-visible storage buffer，顶点由 shader 按 instance 生成；相邻且 pipeline/图集页相同的图元合并为一次 instanced draw，无逐图元 push constant 或 scissor。CPU 只记录变换、颜色和裁剪链，不栅格化整帧。图元四边形先与裁剪作用域的整数范围相交，覆盖的像素中心与同尺寸 scissor 一致；shader 计算小数、圆角和仿射裁剪覆盖率，最多八层（含外部 clip）；共享父索引避免为每个图元复制整条裁剪链。局部几何等比归一化后传入 shader，避免极大/极小局部单位造成距离计算溢出。映射后的几何范围限定为 ±1,048,576，不能表示的逆变换返回错误。
 
 绘制遵守记录顺序。解析覆盖率使用 shader 导数估计边缘，不承诺与软件覆盖率逐像素相同；内部实色、颜色混合和裁剪边界分别验证。
 
@@ -16,7 +16,7 @@ window feature 仅增加 raw-window-handle 0.6.2，复用现有平台循环、IM
 
 ## 可选文字与图集
 
-软件和 Vulkan 通过 `aegle-glyph/scene` 共用 RasterTransform：正轴向均匀缩放采用 hinting 与四分之一像素相位，其他仿射按最大列长选择光栅字号，再过滤采样。完整 GlyphKey 包含字体资源身份、face、glyph、字号、相位、hint、变化轴及必要前景；不把单个 hash 或 CPU LRU 槽位作为身份。灰度忽略前景色，彩色前景层使用不透明 run RGB，run alpha 在 GPU 上只应用一次。
+软件和 Vulkan 通过 `aegle-glyph/scene` 共用 RasterTransform：正轴向均匀缩放采用 hinting、整像素基线与水平四分之一像素相位，灰度覆盖率经共用对比曲线，其他仿射按最大列长选择光栅字号，再过滤采样。完整 GlyphKey 包含字体资源身份、face、glyph、字号、相位、hint、变化轴及必要前景；不把单个 hash 或 CPU LRU 槽位作为身份。灰度忽略前景色，彩色前景层使用不透明 run RGB，run alpha 在 GPU 上只应用一次。
 
 图集先查询自身完整身份，命中不访问 CPU 字形缓存；缺失才通过共享 GlyphCache 按需光栅化。R8_UNORM 灰度与 RGBA8_SRGB 彩色页独立使用简单 shelf 排布，每个字形保留一像素透明边。新建/重置页由 GPU 清零，CPU 只上传紧密字形补丁，不保留页大小的 CPU 镜像。彩色上传先在线性空间预乘，再编码 RGB；纹理硬件解码、插值后得到正确线性预乘值，避免透明彩色边缘出现色晕。灰度乘前景，彩色保留调色板颜色。
 
@@ -72,7 +72,7 @@ cargo run -p aegle-render-vulkan --features text --example text_scene -- /tmp/ae
 
 geometry 示例只用标准库写 PPM，不增加 PNG 运行依赖。示例能生成图片不等于 native swapchain 接入，也不证明嵌入式帧耗时、空闲 CPU 或 PSS 达标。Lavapipe 的结果属于 Vulkan 软件驱动验证，硬件 GPU 必须单列设备与执行结果；正式证据汇总见[实现状态](implementation.md)。
 
-文字综合场景另验证CJK、四相位、几何/文字顺序、仿射/clip、透明COLRv0和PNG字形，与软件像素比较允许3级通道量化误差；覆盖小CPU缓存下的GPU命中、脏页取消恢复、整页淘汰、工作集/字号错误和释放重建。text_scene使用带OFL许可的测试子集展示三种CJK文字；库自身仍不内嵌字体。
+文字综合场景另验证CJK、水平相位、几何/文字顺序、仿射/clip、透明COLRv0和PNG字形，与软件像素比较允许3级通道量化误差；覆盖小CPU缓存下的GPU命中、脏页取消恢复、整页淘汰、工作集/字号错误和释放重建。text_scene使用带OFL许可的测试子集展示三种CJK文字；库自身仍不内嵌字体。
 
 ## 原生窗口生命周期与预算
 
@@ -80,7 +80,7 @@ geometry 示例只用标准库写 PPM，不增加 PNG 运行依赖。示例能�
 
 `begin_frame(width, height, clear)` 在零尺寸时释放尺寸相关目标并返回 None；同尺寸复用，否则等待设备/呈现队列后释放旧 swapchain 并重建。Frame::extent 返回实际 extent。Frame::finish 才获取图像、等待 acquire fence、提交并 present；弃帧不获取图像。SurfaceOutOfDate 保持 dirty 等待重试，DeviceLost/SurfaceLost 返回错误，不隐式切换后端。当前 graphics/present 必须为同一 queue。
 
-呈现使用 FIFO、RGBA8/BGRA8_UNORM + SRGB_NONLINEAR，优先 PRE_MULTIPLIED composite alpha，否则选择 OPAQUE 并拒绝非不透明清屏色。线性 RGBA16F resolve 直接写 swapchain，不保留第二张 RGBA8 离屏目标、不经 CPU 读回或 SHM 转送。每窗口一个设备，一次 graphics submission 在途；render-finished semaphore 按 swapchain image 保存，重建等待 device idle，不能把 graphics fence 当作 presentation 完成证明。
+呈现使用 FIFO 与 SRGB_NONLINEAR。默认 `Options::transparent = false`：表面提供 BGRA8/RGBA8_SRGB 时，几何与文字直接在 sRGB swapchain 图像上由硬件线性混合，没有 RGBA16F 目标和编码 pass；优先 OPAQUE composite alpha，并要求不透明清屏色。`transparent = true` 或表面只有 UNORM 时，保留 RGBA16F 线性目标并由编码 pass 写入 UNORM swapchain，优先 PRE_MULTIPLIED，否则选择 OPAQUE 并拒绝非不透明清屏色。两条路径都不保留第二张 RGBA8 离屏目标、不经 CPU 读回或 SHM 转送。未指定设备时优先集成 GPU，其次独显、虚拟设备和 CPU 驱动。每窗口一个设备，一次 graphics submission 在途；render-finished semaphore 按 swapchain image 保存，重建等待 device idle，不能把 graphics fence 当作 presentation 完成证明。
 
 `Stats.swapchain_bytes` 为 extent×4×驱动返回的实际图像数估计，单列并计入 memory_budget；WSI 不暴露这些图像的实际 memory requirements，不声称此值包含驱动分配/压缩/对齐。device_bytes 继续报告显式分配；驱动内部资源和线程另计。App 的每窗口设备/图集当前独立，尚无跨窗口共享 GPU 缓存。默认16 MiB设备预算适合小窗口，较大窗口须通过 AppOptions.vulkan 显式调整；不隐藏超预算错误。
 

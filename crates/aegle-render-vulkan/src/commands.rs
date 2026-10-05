@@ -73,11 +73,12 @@ impl Commands {
         }];
         // SAFETY: Command buffer is recording on the graphics queue. All objects
         // belong to the same live device and remain valid until its fence signals.
-        // Push bytes are Pod with the build-time shader ABI; scissors are clipped
-        // to the target by geometry recording. Descriptor ranges were updated.
+        // Instance ranges index the uploaded primitive buffer, whose bounds are
+        // already clipped to the target. Descriptor ranges were updated.
         unsafe {
             self.raw.cmd_set_viewport(self.buffer, 0, &viewport);
-            for pass in 0..2 {
+            let passes = if pipeline.direct { 1 } else { 2 };
+            for pass in 0..passes {
                 let values = [vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: if pass == 0 { clear } else { [0.0; 4] },
@@ -87,7 +88,11 @@ impl Commands {
                     self.buffer,
                     &vk::RenderPassBeginInfo::default()
                         .render_pass(pipeline.passes[pass])
-                        .framebuffer(if pass == 0 { target.frames[0] } else { output })
+                        .framebuffer(if pass == 0 && !pipeline.direct {
+                            target.frames[0]
+                        } else {
+                            output
+                        })
                         .render_area(target.area())
                         .clear_values(&values),
                     vk::SubpassContents::INLINE,
@@ -105,58 +110,55 @@ impl Commands {
                     &[pipeline.sets[pass]],
                     &[],
                 );
-                if pass == 0 {
-                    #[cfg(feature = "text")]
-                    let mut current = (false, u32::MAX);
-                    for draw in &recording.draws {
-                        #[cfg(feature = "text")]
-                        let mut layout = pipeline.layouts[pass];
-                        #[cfg(not(feature = "text"))]
-                        let layout = pipeline.layouts[pass];
-                        #[cfg(feature = "text")]
-                        {
-                            let is_text = draw.primitive.header[1] != 0;
-                            if current.0 != is_text {
-                                self.raw.cmd_bind_pipeline(
-                                    self.buffer,
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    if is_text {
-                                        text.pipeline
-                                    } else {
-                                        pipeline.pipelines[0]
-                                    },
-                                );
-                                current = (is_text, u32::MAX);
-                            }
-                            if is_text {
-                                layout = text.layout;
-                                let page = draw.primitive.header[2];
-                                if current.1 != page {
-                                    self.raw.cmd_bind_descriptor_sets(
-                                        self.buffer,
-                                        vk::PipelineBindPoint::GRAPHICS,
-                                        layout,
-                                        0,
-                                        &[pipeline.sets[0], text.set(page)],
-                                        &[],
-                                    );
-                                    current.1 = page;
-                                }
-                            }
-                        }
-                        self.raw.cmd_set_scissor(self.buffer, 0, &[draw.scissor]);
-                        self.raw.cmd_push_constants(
-                            self.buffer,
-                            layout,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                            0,
-                            bytemuck::bytes_of(&draw.primitive),
-                        );
-                        self.raw.cmd_draw(self.buffer, 6, 1, 0, 0);
-                    }
-                } else {
-                    self.raw.cmd_set_scissor(self.buffer, 0, &[target.area()]);
+                self.raw.cmd_set_scissor(self.buffer, 0, &[target.area()]);
+                if pass == 1 {
                     self.raw.cmd_draw(self.buffer, 3, 1, 0, 0);
+                    self.raw.cmd_end_render_pass(self.buffer);
+                    continue;
+                }
+                // Adjacent records sharing a pipeline and atlas page form one draw.
+                let key = |primitive: &crate::geometry::Primitive| {
+                    (primitive.header[1] != 0, primitive.header[2])
+                };
+                let primitives = &recording.primitives;
+                let mut first = 0;
+                #[cfg(feature = "text")]
+                let mut current = (false, u32::MAX);
+                while first < primitives.len() {
+                    let batch = key(&primitives[first]);
+                    let count = primitives[first..]
+                        .iter()
+                        .take_while(|primitive| key(primitive) == batch)
+                        .count();
+                    #[cfg(feature = "text")]
+                    {
+                        if current.0 != batch.0 {
+                            self.raw.cmd_bind_pipeline(
+                                self.buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                if batch.0 {
+                                    text.pipeline
+                                } else {
+                                    pipeline.pipelines[0]
+                                },
+                            );
+                            current.0 = batch.0;
+                        }
+                        if batch.0 && current.1 != batch.1 {
+                            self.raw.cmd_bind_descriptor_sets(
+                                self.buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                text.layout,
+                                1,
+                                &[text.set(batch.1)],
+                                &[],
+                            );
+                            current.1 = batch.1;
+                        }
+                    }
+                    self.raw
+                        .cmd_draw(self.buffer, 6, count as u32, 0, first as u32);
+                    first += count;
                 }
                 self.raw.cmd_end_render_pass(self.buffer);
             }

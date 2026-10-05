@@ -17,7 +17,7 @@ fn main() {
         let source = fs::read_to_string(&path).expect("read shader source");
         let module = naga::front::wgsl::parse_str(&source)
             .unwrap_or_else(|error| panic!("{path}: {}", error.emit_to_string(&source)));
-        let info = Validator::new(ValidationFlags::all(), Capabilities::IMMEDIATES)
+        let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|error| panic!("{path}: {}", error.emit_to_string(&source)));
         let mut options = Options {

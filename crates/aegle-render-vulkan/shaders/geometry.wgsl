@@ -1,5 +1,5 @@
-// The immutable parent chain is uniform for every fragment of one primitive.
-// Storage-buffer loads obscure that fact from the WGSL uniformity analysis.
+// A flat primitive index and its immutable parent chain are uniform for every
+// fragment of one primitive; storage loads obscure that from WGSL analysis.
 diagnostic(off, derivative_uniformity);
 
 struct Primitive {
@@ -7,7 +7,7 @@ struct Primitive {
     row0: vec4<f32>,
     row1: vec4<f32>,
     rect: vec4<f32>, // shape rect or atlas origin and glyph size, excluding gutter
-    params: vec4<f32>, // radius, stroke width (-1 for fill), viewport width/height
+    params: vec4<f32>, // radius or mask contrast, stroke width (-1 for fill), viewport size
     color: vec4<f32>, // linear premultiplied paint, or repeated color-glyph opacity
     header: vec4<u32>, // clip head, geometry/mask/color kind, CPU atlas page, reserved
 }
@@ -19,20 +19,30 @@ struct Clip {
     extra: vec4<u32>, // radius bits, parent index, reserved
 }
 
-var<immediate> primitive: Primitive;
+struct Vertex {
+    @builtin(position) position: vec4<f32>,
+    @location(0) @interpolate(flat) index: u32,
+}
+
 @group(0) @binding(0) var<storage, read> clips: array<Clip>;
+@group(0) @binding(1) var<storage, read> primitives: array<Primitive>;
 @group(1) @binding(0) var glyph_page: texture_2d<f32>;
 @group(1) @binding(1) var glyph_sampler: sampler;
 
+// One instance per primitive, so adjacent primitives share a single draw.
 @vertex
-fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
+fn vs_main(
+    @builtin(vertex_index) index: u32,
+    @builtin(instance_index) instance: u32,
+) -> Vertex {
+    let primitive = primitives[instance];
     let corners = array<vec2<f32>, 6>(
         vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0),
         vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0),
     );
     let point = mix(primitive.bounds.xy, primitive.bounds.zw, corners[index]);
     // Positive Vulkan viewport height; the SPIR-V writer must not flip Y.
-    return vec4(point / primitive.params.zw * 2.0 - 1.0, 0.0, 1.0);
+    return Vertex(vec4(point / primitive.params.zw * 2.0 - 1.0, 0.0, 1.0), instance);
 }
 
 fn local_point(point: vec2<f32>, row0: vec4<f32>, row1: vec4<f32>) -> vec2<f32> {
@@ -57,9 +67,9 @@ fn coverage(point: vec2<f32>, rect: vec4<f32>, radius: f32) -> f32 {
     return min(box_alpha, clamp(0.5 - distance / max(fwidth(distance), 0.000001), 0.0, 1.0));
 }
 
-fn clip_coverage(position: vec2<f32>) -> f32 {
+fn clip_coverage(position: vec2<f32>, first: u32) -> f32 {
     var alpha = 1.0;
-    var head = primitive.header.x;
+    var head = first;
     for (var depth = 0u; depth < 8u; depth += 1u) {
         if head == 0xffffffffu {
             break;
@@ -73,7 +83,9 @@ fn clip_coverage(position: vec2<f32>) -> f32 {
 }
 
 @fragment
-fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+fn fs_main(input: Vertex) -> @location(0) vec4<f32> {
+    let primitive = primitives[input.index];
+    let position = input.position;
     let point = local_point(position.xy, primitive.row0, primitive.row1);
     let radius = primitive.params.x;
     let width = primitive.params.y;
@@ -92,19 +104,23 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         }
     }
     // No coverage-dependent branch precedes derivatives in the clip chain.
-    return primitive.color * (alpha * clip_coverage(position.xy));
+    return primitive.color * (alpha * clip_coverage(position.xy, primitive.header.x));
 }
 
 @fragment
-fn fs_text(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+fn fs_text(input: Vertex) -> @location(0) vec4<f32> {
+    let primitive = primitives[input.index];
+    let position = input.position;
     let local = local_point(position.xy, primitive.row0, primitive.row1);
     // A rotated device bounding box includes points far outside the glyph quad.
     // Clamp to transparent gutter texel centers, never a neighboring allocation.
     let bounded = clamp(local, vec2(-0.5), primitive.rect.zw + 0.5);
     let uv = (primitive.rect.xy + bounded) / vec2<f32>(textureDimensions(glyph_page));
     let texel = textureSampleLevel(glyph_page, glyph_sampler, uv, 0.0);
-    // R8 coverage modulates the complete premultiplied paint. Color atlas texels
-    // decode/filter as linear premultiplied RGBA and receive only run opacity.
-    let sampled = select(texel, vec4(texel.r), primitive.header.y == 1u);
-    return sampled * primitive.color * clip_coverage(position.xy);
+    // R8 coverage, after the shared contrast curve, modulates the complete
+    // premultiplied paint. Color atlas texels decode/filter as linear
+    // premultiplied RGBA and receive only run opacity.
+    let coverage = texel.r + texel.r * (1.0 - texel.r) * primitive.params.x;
+    let sampled = select(texel, vec4(coverage), primitive.header.y == 1u);
+    return sampled * primitive.color * clip_coverage(position.xy, primitive.header.x);
 }

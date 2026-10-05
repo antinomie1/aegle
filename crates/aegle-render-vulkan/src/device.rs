@@ -153,9 +153,11 @@ fn initialize(
             return Err(Error::Unsupported("Vulkan device index is out of range"));
         }
     } else {
+        // Lower power first: an integrated GPU shares memory and avoids waking a
+        // discrete one; CPU drivers remain the last resort.
         candidates.sort_by_key(|(_, _, properties)| match properties.device_type {
-            vk::PhysicalDeviceType::DISCRETE_GPU => 0,
-            vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+            vk::PhysicalDeviceType::INTEGRATED_GPU => 0,
+            vk::PhysicalDeviceType::DISCRETE_GPU => 1,
             vk::PhysicalDeviceType::CPU => 3,
             _ => 2,
         });

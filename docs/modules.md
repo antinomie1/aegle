@@ -46,7 +46,7 @@
 
 `aegle-glyph` 独立接受共享字体句柄，复用 Swash、Skrifa、hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。
 
-该模块公开共用的借用/拥有字形缓存身份；可选 `scene` feature 依赖 `aegle-scene/text`，提供 renderer 共用的字体缩放、四相位基线和 bitmap 仿射策略。默认字形缓存仍不依赖 scene。
+该模块公开共用的借用/拥有字形缓存身份；可选 `scene` feature 依赖 `aegle-scene/text`，提供 renderer 共用的字体缩放、整像素基线与水平四相位、灰度对比曲线和 bitmap 仿射策略。默认字形缓存仍不依赖 scene。
 
 `aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。gpu feature 提供带生命周期的原生 surface 租约，启用 libwayland system backend；layer-shell 仍未实现。
 

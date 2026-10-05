@@ -259,3 +259,10 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 默认主题圆角改为 0，复选框、开关、滑块、进度条与按钮/编辑器统一使用主题圆角，因此默认全部直角；正的主题 radius 仍统一圆化。ScrollView 与多行编辑器新增覆盖式滚动条，不占布局、不新增依赖或计时器。视口的滑块保存在自身单独记录中，`visit_scenes` 按后序子树终点在子树之后输出，滚动只重录该小记录，不重录子控件或重排文字。拖动在窗口坐标中处理，经同一 `scroll_to`/几何更新路径同步裁剪、命中、IME 与语义。
 
 - workspace all-features 测试通过；新增一个滚动条场景覆盖最上层记录、拖到两端、拖动不激活下方按钮，以及不溢出时指针归还给控件。Vulkan 与软件后端复用同一 Scene，未新增 renderer 路径；本阶段未做真人窗口拖动验收。
+
+## 文字清晰度与 Vulkan 低功耗路径
+
+- 字形：hinting 的轴向文字基线取整到设备像素，水平保留四分之一相位；横笔不再因小数基线跨两行发虚，每字形相位变体由 16 个降为 4 个。灰度覆盖率经共用 `aegle_glyph::mask_contrast` 曲线 `c + c(1-c)k`，k 由前景亮度给出：深色字加重、浅色字减轻，软件整数实现与 Vulkan shader 同式。浅/深底 12–20px 中英文样张在两个 renderer 上目视检查；GPU/软件 ±3 级对比测试通过。整像素基线下空格等无像素字形不驻留图集，每帧回到 CPU 缓存命中，测试已按此更新。
+- Vulkan 批处理：图元记录改为 storage buffer，相邻且 pipeline/图集页相同的图元合并为一次 instanced draw，移除逐图元 push constant 与 scissor。release 离屏 800×480 探针（2000 矩形 + 30 行中英文，约 3800 图元，预热 40 帧后 300 帧，主机 wall time 含 fence 等待）：RX 6800 XT 平均 1.412 → 0.448 ms，Lavapipe 23.894 → 4.198 ms；两种驱动的读回像素与改动前逐字节相同。图元缓冲按每图元 112 B 计入设备预算。
+- 直接 sRGB 窗口：不透明窗口默认直接在 BGRA8/RGBA8_SRGB swapchain 上绘制，没有 RGBA16F 目标与编码 pass；`Options::transparent` 保留原透明路径。私有 headless Sway（RADV 用 GLES2，Lavapipe 用 Pixman）同一场景 300 帧：设备分配 RADV 4,350,736 → 664,336 B、Lavapipe 3,582,736 → 664,336 B；每帧工作时间 RADV 0.579 → 0.555 ms、Lavapipe 4.441 → 3.918 ms；Lavapipe 进程 CPU 每帧 30.5 → 26.2 ms（含其光栅线程），RADV 均为 0.433 ms。两条路径截图最大通道差 1 级，占 2.1% 通道。
+- 未指定设备时改为优先集成 GPU；本机没有集成 GPU，未实测该选择。Vulkan 窗口生命周期场景在 RADV 与 Lavapipe 上通过；Vulkan 版 scrolling 示例目视确认直角控件、覆盖式滚动条与 CJK 文字。本轮机器未安装 Khronos validation layer，没有验证层诊断。以上为桌面样本，不是嵌入式功耗或帧时保证。

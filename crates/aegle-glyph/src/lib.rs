@@ -29,6 +29,18 @@ pub use swash::zeno::Placement;
 #[cfg(feature = "scene")]
 pub use transform::{GlyphOrigin, RasterTransform};
 
+/// Coverage contrast for a mask glyph painted in a straight sRGB `color`.
+///
+/// Linear-light blending thins dark text on light backgrounds and thickens light
+/// text on dark ones. Renderers map mask coverage `c` to `c + c * (1 - c) * k`,
+/// where `k` is this value in `[-1, 1]`: dark text gains weight, light text loses
+/// some, and empty or full coverage is unchanged. The curve stays monotonic.
+pub fn mask_contrast(color: [u8; 4]) -> f32 {
+    let [r, g, b, _] = color.map(|channel| f32::from(channel) / 255.0);
+    // Encoded luma approximates perceived lightness without a transfer function.
+    1.0 - 2.0 * (0.2126 * r + 0.7152 * g + 0.0722 * b)
+}
+
 /// Pixel data interpretation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Content {

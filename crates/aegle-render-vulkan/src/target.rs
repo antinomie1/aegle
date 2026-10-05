@@ -1,4 +1,5 @@
-//! The linear working attachment and final premultiplied sRGB image.
+//! The linear working attachment and final premultiplied sRGB image. A direct
+//! window target owns neither: pass 0 renders into the acquired swapchain image.
 #![allow(unsafe_code)]
 
 use crate::{Result, device::Device, memory::Image, pipeline::Pipeline};
@@ -7,7 +8,7 @@ use ash::vk;
 pub(crate) struct Target {
     raw: ash::Device,
     pub frames: [vk::Framebuffer; 2],
-    pub linear: Image,
+    pub linear: Option<Image>,
     pub output: Option<Image>,
     pub width: u32,
     pub height: u32,
@@ -21,14 +22,18 @@ impl Target {
         height: u32,
         budget: u64,
     ) -> Result<Self> {
-        let linear = Image::new(
-            device,
-            width,
-            height,
-            vk::Format::R16G16B16A16_SFLOAT,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
-            budget,
-        )?;
+        let linear = if pipeline.direct {
+            None
+        } else {
+            Some(Image::new(
+                device,
+                width,
+                height,
+                vk::Format::R16G16B16A16_SFLOAT,
+                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+                budget,
+            )?)
+        };
         let window = false;
         #[cfg(feature = "window")]
         let window = window || device.surface.is_some();
@@ -41,7 +46,7 @@ impl Target {
                 height,
                 vk::Format::R8G8B8A8_UNORM,
                 vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
-                budget - linear.allocation,
+                budget - linear.as_ref().map_or(0, |image| image.allocation),
             )?)
         };
         let mut this = Self {
@@ -52,9 +57,10 @@ impl Target {
             width,
             height,
         };
-        for (i, view) in std::iter::once(this.linear.view)
-            .chain(this.output.as_ref().map(|image| image.view))
+        for (i, view) in [&this.linear, &this.output]
+            .into_iter()
             .enumerate()
+            .filter_map(|(i, image)| image.as_ref().map(|image| (i, image.view)))
         {
             let attachments = [view];
             // SAFETY: Images match the render pass format/sample count and extent;
@@ -74,7 +80,11 @@ impl Target {
         Ok(this)
     }
     pub fn bytes(&self) -> u64 {
-        self.linear.allocation + self.output.as_ref().map_or(0, |image| image.allocation)
+        [&self.linear, &self.output]
+            .into_iter()
+            .flatten()
+            .map(|image| image.allocation)
+            .sum()
     }
     pub fn area(&self) -> vk::Rect2D {
         vk::Rect2D {

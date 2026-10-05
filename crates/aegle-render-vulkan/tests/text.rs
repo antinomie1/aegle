@@ -78,7 +78,11 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
     let cold = renderer.text_stats();
     assert!(cold.raster_requests > 1 && cold.glyph_cache.entries == 1);
     assert_eq!(compare(&mut renderer, &plain, transform, clip, 64)?, first);
-    assert_eq!(renderer.text_stats().raster_requests, cold.raster_requests);
+    // Only the pixel-less space, never resident in the atlas, asks the CPU cache.
+    assert_eq!(
+        renderer.text_stats().raster_requests,
+        cold.raster_requests + 1
+    );
 
     // Geometry before and after the text exercises pipeline/set switching in order.
     let mut frame = renderer.begin_frame(64, 64, Color::TRANSPARENT)?;
