@@ -1,0 +1,35 @@
+[package]
+name = "aegle-render-wgpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Minimal portable wgpu rendering of retained Aegle scenes"
+
+[features]
+default = []
+window = ["dep:raw-window-handle"]
+text = ["aegle-scene/text", "dep:aegle-glyph", "dep:hashbrown"]
+
+[dependencies]
+aegle-scene.workspace = true
+aegle-types = { workspace = true, features = ["color-math"] }
+bytemuck = { version = "1.25.0", features = ["derive"] }
+pollster = "1.0.1"
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "vulkan", "dx12", "metal"] }
+aegle-glyph = { workspace = true, optional = true, features = ["scene"] }
+hashbrown = { version = "0.17.1", default-features = false, optional = true }
+raw-window-handle = { version = "0.6.2", optional = true }
+
+[dev-dependencies]
+aegle-scene = { workspace = true, features = ["text"] }
+aegle-render-software = { workspace = true, features = ["text"] }
+aegle-text = { workspace = true, features = ["scene"] }
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
+[[example]]
+name = "scene"
+required-features = ["text"]

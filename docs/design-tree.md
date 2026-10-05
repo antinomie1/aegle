@@ -8,7 +8,7 @@
 | Q4–Q6 | 标记构建期编译与可选加载；创建一次、句柄显式更新；能力可独立使用 |
 | Q7–Q8 | 三平台普通窗口，Linux 可选 layer-shell/多显示器；高级绘制独立按需启用 |
 | Q9–Q11 | 完整系统语义及可检查控件树；不要求原生控件；中性极简并适配系统偏好 |
-| Q12 | Linux/Windows 使用 ash/Vulkan，macOS 使用原生 Metal；加入独立 CPU 软件 renderer 支持无 GPU 设备 |
+| Q12 | Linux/Windows 使用 ash/Vulkan；放弃原生 Metal，改增可选的最小 wgpu 后端作为全平台通用路径；加入独立 CPU 软件 renderer 支持无 GPU 设备 |
 | Q13 | 独立原生平台适配；Linux 复用 SCTK/wayland-client，补齐客户端 IME |
 | Q14–Q15 | Parley/Fontique/HarfRust/Swash 文本栈；AccessKit 独立平台适配；锁定兼容版本组 |
 | Q16–Q18 | 花括号标记、受限表达式与命令式事件；Tkinter 式直接创建/修改；完整手写源码计行 |

@@ -6,7 +6,7 @@
 
 macOS 不原生提供 Vulkan。MoltenVK 将 Vulkan 映射到 Metal，可以采用静态或动态集成；静态链接减少独立文件数量，并不消除对应实现的代码体积。完整 Vulkan SDK 不是必需的发布依赖。
 
-因此需要比较“通过 MoltenVK 复用 Vulkan 绘制路径”与“额外实现 Metal 绘制后端”的包体、维护成本和能力限制，不能同时无条件许诺原生 Vulkan 与 macOS 零移植成本。
+因此需要比较“通过 MoltenVK 复用 Vulkan 绘制路径”与“额外实现 Metal 绘制后端”的包体、维护成本和能力限制，不能同时无条件许诺原生 Vulkan 与 macOS 零移植成本。结论：放弃原生 Metal 与 MoltenVK 两条路线，macOS 的 GPU 绘制由可选 wgpu 后端承担，见 [wgpu](wgpu.md)。
 
 来源：[Khronos 平台说明](https://github.com/KhronosGroup/Vulkan-Guide/blob/main/chapters/platforms.adoc)、[MoltenVK 运行时集成指南](https://github.com/KhronosGroup/MoltenVK/blob/main/Docs/MoltenVK_Runtime_UserGuide.md)。
 

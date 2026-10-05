@@ -3,7 +3,7 @@
 //! The default desktop host selects Wayland on Linux or Win32 on Windows with
 //! software rendering and system fonts. System accessibility adapters are
 //! opt-in through `unix-accessibility` and `windows-accessibility`. Enable `vulkan`
-//! and select `RendererBackend::Vulkan` for GPU presentation. Lower-level crates
+//! or `wgpu` and select `RendererBackend::Vulkan` or `RendererBackend::Wgpu` for GPU presentation. Lower-level crates
 //! remain independent; no macOS host is currently implemented.
 
 pub use aegle_app::*;

@@ -6,12 +6,13 @@
 | --- | --- | --- |
 | 布局 | Taffy 0.14.0 | Flex/Block 默认，Grid 可选；低层树适配 |
 | 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由小型自有实现完成 |
-| Vulkan | ash 0.38.0+1.3.281 | 当前离屏/原生窗口几何及可选文字；loaded/std 动态加载，资源与同步由小型封装管理，不采用 wgpu/vulkano |
+| Vulkan | ash 0.38.0+1.3.281 | 当前离屏/原生窗口几何及可选文字；loaded/std 动态加载，资源与同步由小型封装管理，不采用 vulkano；wgpu 只用于下一行的可选后端 |
+| 跨平台 GPU | wgpu 30.0.1、pollster 1.0.1 | 仅 `aegle-render-wgpu`：关闭默认 feature，启用 std、parking_lot、wgsl、vulkan、dx12、metal；不启用 GLES（无顶点存储缓冲）；pollster 阻塞式等待适配器与设备请求 |
 | GPU 数据布局 | bytemuck 1.25（当前锁定 1.25.2） | Pod/Zeroable 与安全字节转换；shader 布局按显式契约对应 |
 | Vulkan shader 编译 | Naga 30.0.1 | 仅构建期 wgsl-in/spv-out，生成 Vulkan 1.1 SPIR-V，不进入发布运行依赖 |
 | Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 软件独立构建用 Rust client backend；gpu feature 启用 system/dlopen 获取 libwayland 原生句柄，保留同一连接 |
 | Windows | windows 0.62.2 | 按模块启用所需 Win32/GDI/IMM/UIA 能力，TSF 尚未实现 |
-| macOS | objc2 0.6.4、objc2-metal 0.3.2 | AppKit/Metal 系统绑定；不采用已弃用 metal crate 或 MoltenVK |
+| macOS | objc2 0.6.4 | AppKit 系统绑定，尚未实现；原生 Metal 方案已放弃，Metal 只经 wgpu 使用，不采用已弃用 metal crate 或 MoltenVK |
 | 文本 | Parley/Fontique 0.11.1 | 基础排版、字体回退及纯文本编辑 |
 | grapheme 分段 | icu_segmenter 2.3.0 | 直接复用 Parley 已锁定的包及 compiled_data，编辑删除不另带分段引擎 |
 | shaping / 字体解析 | HarfRust 0.12.0、Skrifa 0.44.0 | 按 Parley 兼容版本线，避免追最新产生双份依赖 |

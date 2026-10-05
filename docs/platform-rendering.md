@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | ash/Vulkan；SCTK + wayland-client；text-input-v3 |
 | Windows | Windows 11，x86_64/aarch64，存在兼容 Vulkan 驱动 | ash/Vulkan；原生窗口与 TSF，必要时 IMM 兼容 |
-| macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 原生 Metal；AppKit、NSTextInputClient |
+| macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 绘制经可选 wgpu 使用 Metal，窗口平台未实现；AppKit、NSTextInputClient |
 
 这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 不实现 X11；基础普通窗口要求 xdg-shell，shell 表面另要求 layer-shell。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。
 
@@ -20,7 +20,7 @@ Linux 使用一个连接和事件队列承载普通窗口及可选 layer-shell�
 
 Vulkan 最低 API 1.1，采用传统 render pass、普通 descriptor、fence 与 binary semaphore；不要求 descriptor indexing、timeline semaphore 或 dynamic rendering。还必须检查 graphics/present queue、swapchain、surface format 和所用纹理格式能力。
 
-Metal 使用系统设备、CAMetalLayer 和常规 command buffer。shader 在构建期编译：Vulkan 使用匹配 Vulkan 1.1 的 SPIR-V，macOS 生成 metallib；开发工具不进入运行依赖。维护两套小型二维实现，不建立通用三维 RHI。
+可选 wgpu 后端是全平台通用的第二条 GPU 路径，经 wgpu 选择 Vulkan、Metal 或 Direct3D 12，shader 以 WGSL 在运行时交给 wgpu；原生 Metal 后端方案已放弃。Vulkan 的 shader 在构建期编译为 SPIR-V，开发工具不进入运行依赖。两个小型二维实现共用 Scene，不建立通用三维 RHI；契约见 [wgpu](wgpu.md)。
 
 基础绘制目标包括文字图集、RGBA 图像、矩形/圆角/边框、透明度、二维仿射变换和裁剪。颜色在线性空间混合，输出转换遵循目标色彩格式。默认字形用灰度抗锯齿，不依赖 LCD 子像素排列。
 

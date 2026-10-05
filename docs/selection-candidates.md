@@ -10,7 +10,7 @@
 
 ash 是薄绑定，不自动验证 Vulkan 调用，需要项目自行承担 unsafe、同步、分配、对象和交换链生命周期。vulkano 增加检查与资源管理，并不是现成 GUI 绘制器。Metal 减少携带 Vulkan→Metal 实现的需求，但增加另一套绘制与 shader 维护；MoltenVK 反之，并需考虑 portability subset。没有证据证明某一方案在所有负载下更快或更小。
 
-此建议不引入 wgpu。具体 shader 工具、路径/特效算法、最低 GPU 能力和是否提供 CPU 绘制后端，在绘制路线确定后继续选择。
+此建议不引入 wgpu。后续决定：放弃原生 Metal，改增可选的最小 wgpu 后端，见 [wgpu](wgpu.md)；ash 仍是默认 GPU 路径。具体 shader 工具、路径/特效算法、最低 GPU 能力和是否提供 CPU 绘制后端，在绘制路线确定后继续选择。
 
 ## Q13：窗口与平台输入
 

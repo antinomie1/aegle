@@ -244,6 +244,15 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - Wine10 + 私有 Xvfb 兼容环境执行 Win32 native 综合场景通过：隐藏创建、软件像素、Unicode代理对、IMM上下文启停、resize、持续redraw期间消息公平性、两窗关闭/租约寿命及wake。App同一个双窗口场景分别以软件、Vulkan（Lavapipe经Wine Win32 WSI）运行通过；UIA adapter安装/销毁已实际执行，但没有系统客户端文本/动作查询验收。这是兼容层及软件ICD证据。该Xvfb不支持硬件RADV所需DRI3，硬件Windows/Wine呈现未验证；库本身没有新增X11后端。
 - 实现21777行、测试4153行，占16.02%（不含examples/build.rs）；最大源文件489行，测试都在crate的tests目录。新增小型Win32边界/native场景与一个Vulkan native场景，App沿用已有native场景切换平台/renderer。
 
+## 放弃 Metal，新增最小 wgpu 后端
+
+- 按用户决定放弃原生 Metal 方案，各设计文档与依赖表中的 `aegle-render-metal`、objc2-metal、MoltenVK 路线改为"Metal 仅经 wgpu 使用"；ash/Vulkan 仍是默认 GPU 路径。macOS 窗口、输入与无障碍仍未实现，状态不变。
+- 新增 `aegle-render-wgpu`（wgpu 30.0.1，pollster）：几何、八层裁剪、mask/color 字形图集、离屏读回，以及 `window` feature 的 raw-window-handle surface。`aegle-app` 增加 `wgpu` feature、`RendererBackend::Wgpu` 与 `AppOptions::wgpu`。图像与路径未实现，返回 `UnsupportedCommand`。契约与取舍见 [wgpu](wgpu.md)。
+- 验证：综合场景 `tests/render.rs`（默认 ignored）在 RX 6800 XT（RADV NAVI21）与 llvmpipe 上通过，对照软件渲染器，并覆盖图集中途清空和失败帧恢复；Windows、Metal、DX12 没有运行，也没有为 Windows 目标交叉编译。离屏示例在 RADV 上写出图片，目视确认 CJK 文字与圆角卡片。
+- App 集成：私有 Sway（GLES2 compositor）上以 RADV 运行 `native,wgpu,system-fonts,markup` 的 release `scrolling`，经真实指针滚轮、Tab 焦点显露、滚动按钮与关闭回调通过，截图目视确认 CJK、嵌套裁剪与滚动条；未连接用户桌面，没有开启 Khronos validation。`wayland,software`、`wayland,vulkan`、`wayland,wgpu,vulkan,software` 与无窗口 `wgpu` 的 App 检查，以及 workspace all-targets 检查、严格 Rustdoc 与格式检查通过；本机没有 Clippy。
+- 体积：native,wgpu,system-fonts,markup 的 release `controls` 为 8,578,728 B，同组合换成 vulkan 为 4,449,928 B（均 strip，Linux），wgpu 版多 4,128,800 B。没有测量帧时间、空闲 CPU 或 PSS，也没有与 Vulkan 后端比较性能。
+- 实现 1,683 行 Rust 加 154 行 WGSL，综合场景 142 行，测试占该 crate Rust 源码的 7.8%；最大源文件 387 行。后续：Windows/macOS 实机、图像与路径、设备丢失恢复、与 Vulkan 后端合并共享的记录构建。
+
 ## 当前进度与剩余工作
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。

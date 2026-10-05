@@ -121,7 +121,7 @@ Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping sou
 
 默认不随包附送字体，允许系统字体；嵌入式须明确指定或打包有合法分发许可的字体。Linux 运行前提按实际组合列出：当前 Wayland 软件路径需要 libxkbcommon runtime，采用 Rust Wayland backend；gpu feature 的 system/dlopen backend 需要 libwayland-client，系统字体另需 Fontconfig。独立 Vulkan renderer 通过 ash 动态加载 Vulkan loader/driver；Naga 仅在构建期使用，validation layer 仅用于显式验证。启用 Unix 无障碍还需要会话 D-Bus 与 AT-SPI 服务；zbus 使用 Rust 协议实现，不因此新增 libdbus 链接要求。系统提供的库与服务也必须写入对应发布清单。
 
-Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText/Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
+Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText，GPU 绘制经可选 wgpu 使用 Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 
 当前发布配置采用优化等级 3、thin LTO、单 codegen unit 和 strip debuginfo，优先运行性能；不默认 panic=abort 以换体积，公开边界使用 Result，后台/平台回调不得展开跨 FFI。具体性能配置可按测量调整，但必须保留配置记录。
 

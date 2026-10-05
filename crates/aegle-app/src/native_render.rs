@@ -3,7 +3,7 @@
 
 use crate::Result;
 use crate::native::{RendererBackend, Runtime};
-#[cfg(any(feature = "software", feature = "vulkan"))]
+#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
 use {crate::Ui, aegle_scene::Affine, aegle_types::Rect};
 
 pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
@@ -13,6 +13,9 @@ pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
         }
         RendererBackend::Vulkan if !cfg!(feature = "vulkan") => {
             Err("Vulkan rendering requires the vulkan feature".into())
+        }
+        RendererBackend::Wgpu if !cfg!(feature = "wgpu") => {
+            Err("wgpu rendering requires the wgpu feature".into())
         }
         _ => Ok(()),
     }
@@ -34,7 +37,23 @@ pub(crate) fn create_gpu(
     }))
 }
 
-#[cfg(any(feature = "software", feature = "vulkan"))]
+#[cfg(feature = "wgpu")]
+pub(crate) fn create_wgpu(
+    runtime: &Runtime,
+    id: crate::platform::WindowId,
+) -> Result<Option<aegle_render_wgpu::WindowRenderer<crate::platform::WindowSurface>>> {
+    if runtime.options.renderer != RendererBackend::Wgpu {
+        return Ok(None);
+    }
+    let window = runtime.backend.window_surface(id)?;
+    // SAFETY: WindowSurface owns the native window and connection. Its public API
+    // cannot revoke these handles; Runtime drops the presenter before its platform.
+    Ok(Some(unsafe {
+        aegle_render_wgpu::WindowRenderer::new(window, runtime.options.wgpu)?
+    }))
+}
+
+#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
 fn scenes(
     ui: &Ui,
     factor: f32,
@@ -60,9 +79,9 @@ impl Runtime {
             if !std::mem::take(&mut entry.ready) {
                 continue;
             }
-            #[cfg(any(feature = "software", feature = "vulkan"))]
+            #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
             let info = self.backend.window_info(entry.id)?;
-            #[cfg(any(feature = "software", feature = "vulkan"))]
+            #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
             let background = entry.ui.background();
             match self.options.renderer {
                 #[cfg(feature = "software")]
@@ -109,6 +128,31 @@ impl Runtime {
                             }
                         });
                     if !result.map_err(|error| format!("Vulkan present: {error}"))? {
+                        self.backend.request_redraw(entry.id)?;
+                    }
+                }
+                #[cfg(feature = "wgpu")]
+                RendererBackend::Wgpu => {
+                    let renderer = entry.wgpu.as_mut().unwrap();
+                    let result = self
+                        .backend
+                        .present_external(entry.id, |size| -> Result<bool> {
+                            let mut frame =
+                                match renderer.begin_frame(size.width, size.height, background) {
+                                    Ok(Some(frame)) => frame,
+                                    Ok(None) | Err(aegle_render_wgpu::Error::SurfaceOutOfDate) => {
+                                        return Ok(false);
+                                    }
+                                    Err(error) => return Err(error.into()),
+                                };
+                            scenes(&entry.ui, info.scale as f32, |scene, transform, clip| {
+                                frame.draw_clipped(scene, transform, clip)?;
+                                Ok(())
+                            })?;
+                            frame.finish()?;
+                            Ok(true)
+                        });
+                    if !result.map_err(|error| format!("wgpu present: {error}"))? {
                         self.backend.request_redraw(entry.id)?;
                     }
                 }

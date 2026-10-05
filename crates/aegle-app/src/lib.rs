@@ -3,7 +3,7 @@
 //! [`Ui`] works without a window or renderer. It owns the retained tree; control
 //! handles are weak references and dropping a handle does not remove a node.
 //! Native applications enable `wayland` on Linux or `windows` on Windows, plus
-//! an explicit `software` or `vulkan` renderer feature for `App`.
+//! an explicit `software`, `vulkan` or `wgpu` renderer feature for `App`.
 //! `system-fonts` adds system discovery; explicit fonts remain available without
 //! it. `accessibility` exports semantic trees, while `unix-accessibility` also
 //! connects them to AT-SPI; `windows-accessibility` connects Windows UI Automation.
@@ -74,6 +74,8 @@ pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 pub use aegle_motion::{Easing, Transition};
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::Options as VulkanOptions;
+#[cfg(feature = "wgpu")]
+pub use aegle_render_wgpu::Options as WgpuOptions;
 pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, VisualState};

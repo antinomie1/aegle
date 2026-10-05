@@ -21,6 +21,7 @@ aegle = { path = "../aegle/crates/aegle" }
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
 | `motion` | ✓ | 外观/位移过渡与动画 |
 | `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译 |
+| `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何与文字；不含图像与路径），可与其他后端同时编译 |
 | `accessibility` |  | 语义树导出（`Ui::accessibility`），不接系统 |
 | `unix-accessibility` |  | Linux AT-SPI 适配，引入 zbus |
 | `windows-accessibility` |  | Windows UI Automation 适配 |
@@ -87,7 +88,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 | `window.close()` | 关闭窗口并使其所有控件句柄失效 |
 | `window.set_theme(theme)` / `window.set_reduced_motion(b)` | 窗口级主题与减少动态效果 |
 
-`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Vulkan`，编译了软件绘制时默认软件）；`vulkan`（Vulkan 预算）；`mask_budget`；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
+`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Vulkan`/`Wgpu`，编译了软件绘制时默认软件）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
 
 `WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限），Linux 另有 `layer: Option<LayerOptions>`，用 wlr layer-shell 创建面板/背景/覆盖层：
 

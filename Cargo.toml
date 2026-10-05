@@ -15,6 +15,7 @@ aegle-layout = { path = "crates/aegle-layout" }
 aegle-scene = { path = "crates/aegle-scene" }
 aegle-render-software = { path = "crates/aegle-render-software" }
 aegle-render-vulkan = { path = "crates/aegle-render-vulkan" }
+aegle-render-wgpu = { path = "crates/aegle-render-wgpu" }
 aegle-text = { path = "crates/aegle-text" }
 aegle-glyph = { path = "crates/aegle-glyph" }
 aegle-controls = { path = "crates/aegle-controls" }

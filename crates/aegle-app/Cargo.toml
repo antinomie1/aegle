@@ -15,6 +15,7 @@ wayland = ["dep:aegle-platform-wayland", "dep:wayland-client"]
 windows = ["dep:aegle-platform-win32"]
 software = ["dep:aegle-render-software"]
 vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
+wgpu = ["dep:aegle-render-wgpu", "aegle-platform-wayland?/gpu"]
 windows-accessibility = ["windows", "accessibility", "aegle-access/windows"]
 unix-accessibility = ["wayland", "accessibility", "aegle-access/unix"]
 
@@ -30,6 +31,7 @@ aegle-controls = { workspace = true, features = ["text"] }
 aegle-access = { workspace = true, optional = true }
 aegle-render-software = { workspace = true, features = ["text"], optional = true }
 aegle-render-vulkan = { workspace = true, features = ["text", "window"], optional = true }
+aegle-render-wgpu = { workspace = true, features = ["text", "window"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aegle-platform-wayland = { workspace = true, optional = true }

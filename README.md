@@ -3,6 +3,7 @@
 A modular retained-mode GUI library in Rust 2024, focused on low memory use,
 event-driven updates, CJK and native input methods. Software rendering and an
 Vulkan geometry/text rendering are available, including direct native window presentation.
+An optional minimal wgpu backend renders the same scenes portably (geometry and text).
 
 Implementation is in progress: compact shared types, retained trees, Taffy
 layout, retained Unicode paragraphs/editors, on-demand CJK glyphs, drawing records
@@ -87,6 +88,7 @@ plain editing, composition and bounded delta undo), `aegle-glyph` (on-demand
 rasterization and a bounded image cache),
 `aegle-render-software` (borrowed framebuffers and linear-light compositing),
 `aegle-render-vulkan` (geometry/text, native swapchains, bounded allocations and explicit offscreen readback),
+`aegle-render-wgpu` (optional portable geometry/text over wgpu, offscreen or native surfaces),
 `aegle-controls` (unskinned Button/Toggle/Slider behavior, shared numeric Range and optional TextField),
 `aegle-access` (UI-thread callback mailbox and optional Unix/Windows accessibility),
 `aegle-platform-wayland` and `aegle-platform-win32` (windows and native input, independent of rendering),
@@ -106,6 +108,8 @@ For a Vulkan-only application, with no software renderer in its runtime dependen
 ```sh
 cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,markup --example scrolling --release
 ```
+
+The portable wgpu backend (`wgpu` feature, `RendererBackend::Wgpu`) draws geometry and text only; image and path commands fail the frame with an error. `WGPU_BACKEND` and `WGPU_ADAPTER_NAME` choose the adapter. See the [wgpu contract](docs/wgpu.md).
 
 When both renderers are compiled, set `AppOptions.renderer` to `RendererBackend::Vulkan` explicitly; software remains the default. Driver/feature/budget failures return errors. A minimal Vulkan-only build defaults to Vulkan. Native Vulkan currently creates a device per window; large windows may require increasing `AppOptions.vulkan.memory_budget`.
 

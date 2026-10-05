@@ -25,12 +25,20 @@ pub enum RendererBackend {
     /// Vulkan geometry and glyph rendering directly into a native swapchain.
     /// Requires the `vulkan` feature and a Vulkan-capable driver.
     Vulkan,
+    /// Portable wgpu geometry and glyph rendering directly into a native surface
+    /// on Vulkan, Metal or Direct3D 12. Requires the `wgpu` feature. Images and
+    /// paths are not implemented and fail the frame with an error.
+    Wgpu,
 }
 
 impl Default for RendererBackend {
     fn default() -> Self {
-        if cfg!(all(feature = "vulkan", not(feature = "software"))) {
+        if cfg!(feature = "software") {
+            Self::Software
+        } else if cfg!(feature = "vulkan") {
             Self::Vulkan
+        } else if cfg!(feature = "wgpu") {
+            Self::Wgpu
         } else {
             Self::Software
         }
@@ -56,6 +64,9 @@ pub struct AppOptions {
     /// Per-window Vulkan device, recording and glyph-cache budgets.
     #[cfg(feature = "vulkan")]
     pub vulkan: crate::VulkanOptions,
+    /// Per-window wgpu glyph atlas size and transparency.
+    #[cfg(feature = "wgpu")]
+    pub wgpu: crate::WgpuOptions,
     /// Reusable software coverage and clipping storage. Default: 2 MiB.
     pub mask_budget: usize,
     /// Initial transition policy for each window's subsequently created interactive
@@ -78,6 +89,8 @@ impl Default for AppOptions {
             renderer: RendererBackend::default(),
             #[cfg(feature = "vulkan")]
             vulkan: crate::VulkanOptions::default(),
+            #[cfg(feature = "wgpu")]
+            wgpu: crate::WgpuOptions::default(),
             mask_budget: 2 * 1024 * 1024,
             #[cfg(feature = "motion")]
             transition: Some(Transition::default()),
@@ -95,7 +108,7 @@ pub struct WindowOptions {
     /// Preferred height in logical pixels; the compositor may override it.
     pub height: u32,
     /// Maximum software presentation bytes for this window. Default: 16 MiB.
-    /// Vulkan uses `AppOptions::vulkan` instead.
+    /// GPU renderers use `AppOptions::vulkan` or `AppOptions::wgpu` instead.
     pub buffer_budget: usize,
     /// Wayland layer-shell placement instead of a toplevel, for panels,
     /// docks and overlays. Default: `None`.
@@ -144,6 +157,8 @@ pub(crate) struct Runtime {
 pub(crate) struct Entry {
     #[cfg(feature = "vulkan")]
     pub gpu: Option<aegle_render_vulkan::WindowRenderer<crate::platform::WindowSurface>>,
+    #[cfg(feature = "wgpu")]
+    pub wgpu: Option<aegle_render_wgpu::WindowRenderer<crate::platform::WindowSurface>>,
     pub id: WindowId,
     pub ui: Rc<Ui>,
     #[cfg(any(
@@ -282,6 +297,14 @@ impl App {
                 return Err(error);
             }
         };
+        #[cfg(feature = "wgpu")]
+        let wgpu = match crate::native_render::create_wgpu(&runtime, id) {
+            Ok(wgpu) => wgpu,
+            Err(error) => {
+                runtime.backend.remove_window(id)?;
+                return Err(error);
+            }
+        };
         #[cfg(any(
             all(feature = "unix-accessibility", target_os = "linux"),
             all(feature = "windows-accessibility", target_os = "windows")
@@ -291,6 +314,8 @@ impl App {
             Err(error) => {
                 #[cfg(feature = "vulkan")]
                 drop(gpu);
+                #[cfg(feature = "wgpu")]
+                drop(wgpu);
                 runtime.backend.remove_window(id)?;
                 return Err(error);
             }
@@ -299,6 +324,8 @@ impl App {
         runtime.windows.push(Entry {
             #[cfg(feature = "vulkan")]
             gpu,
+            #[cfg(feature = "wgpu")]
+            wgpu,
             id,
             ui,
             #[cfg(target_os = "linux")]
