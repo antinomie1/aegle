@@ -1,6 +1,6 @@
 # 默认组件、主题与动画
 
-状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤和小型 Theme；任意绘制/行为组件扩展、局部主题继承与几何动画仍是目标；外观过渡已接入。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
+状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调已接入；任意行为组件扩展、缩放/旋转动画仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
 
 ## 当前行为接口
 
@@ -38,7 +38,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 局部视觉数据按 NodeId 放在 Ui 的稀疏表中，无样式节点不保存一份完整 Style。纯配色/边框变化只失效绘制，前景色同时失效语义；自定义皮肤可随交互状态改变前景，相关状态变化会同时刷新语义。字号改变才重排文字及布局，保持编辑器、组合输入、选择和控件身份。
 
-普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用；它不是完整 MD3 套件。`Canvas` 提供只读绘制扩展，`ListView` 提供等高虚拟列表，`ImageView` 显示共享图像；自定义输入行为、组件标记导入、系统主题观察、几何动画和动画完成回调尚未实现。
+普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用，并用局部深色主题和滑出后关闭演示继承与完成回调；它不是完整 MD3 套件。`Canvas` 提供只读绘制扩展，`ListView` 提供等高虚拟列表，`ImageView` 显示共享图像；自定义输入行为、组件标记导入和系统主题观察尚未实现。
 
 ## 默认组件范围
 
@@ -70,7 +70,9 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 当前可用的 `aegle-theme::Theme` 是公开字段的无分配快照：颜色为 `background/surface/foreground/muted/accent/border/hover/pressed/selection`，尺寸为 `font_size/padding/gap/radius/control_height`。`light()`、`dark()`、`high_contrast()` 提供显式配色；`Default` 为浅色。三种配色共用正文 14、padding 8、gap 8、圆角 0、控件高 36 的逻辑像素尺寸；窗口可用 `set_padding` 独立增加外侧留白。`validate()` 拒绝非有限或负尺寸，并要求正文大小和控件高度大于零。accent 用于焦点/标记，selection 与普通 foreground 配对，不隐含另一套文本颜色。
 
-`Ui::set_theme` 和 `Window::set_theme` 更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析；没有局部主题树、token 注册表或系统偏好监听。以下是进一步扩展时的目标契约。
+`Ui::set_theme` 和 `Window::set_theme` 更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析。
+
+`Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。局部主题是整份快照，不按 token 部分覆盖；没有 token 注册表。以下是进一步扩展时的目标契约。
 
 主题使用类型化 token：Color、Length、Font、Radius、Duration 等。Rust 常量提供类型检查，标记使用具名 token。名称只在主题/注册阶段解析为紧凑索引，不给每个控件复制一份字符串样式字典。
 
@@ -84,19 +86,23 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 当前外观过渡
 
-可选 `motion` 已提供 `Node::set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))`，同时过渡背景、文字、边框、圆角、焦点环、选择和 caret 的外观值。`appearance()` 返回逻辑目标，`presented_appearance()` 返回最近采样值；失焦/禁用的焦点宽度目标为零，绘制使用相同呈现值。前景动画同步语义颜色，不重新成形文字，也不延迟焦点、文本、预编辑或命中状态。布局、字号、transform 和窗口清屏背景当前不做过渡。
+可选 `motion` 已提供 `Node::set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))`，同时过渡背景、文字、边框、圆角、焦点环、选择和 caret 的外观值。`appearance()` 返回逻辑目标，`presented_appearance()` 返回最近采样值；失焦/禁用的焦点宽度目标为零，绘制使用相同呈现值。前景动画同步语义颜色，不重新成形文字，也不延迟焦点、文本、预编辑或命中状态。布局、字号、缩放/旋转和窗口清屏背景当前不做过渡。
 
-`clear_transition()` 移除策略并在刷新时回到目标；`finish_transition()` 立即到达当前目标；`cancel_transition()` 将最近呈现写为本地外观覆盖，替换状态颜色覆盖，保留后续设置的过渡策略。焦点轮廓的可见性仍受真实行为约束。尚无完成回调、关键帧、弹簧或循环 API。
+`Node::set_offset(Point)` 在布局后平移节点及其子树，不改变布局或滚动范围；`bounds`、命中、裁剪、IME 候选锚点和无障碍边界都使用呈现位移。没有 motion 或过渡策略时立即生效；有策略时从当前呈现位移开始补间，请求在下一次刷新时以宿主当前时钟开始，因而回调中设置也不会因旧时间戳直接结束。位移采样只更新几何，不重新录制绘制记录。`offset()` 返回逻辑目标。运行中的位移保留开始时的时长。
+
+`clear_transition()` 移除策略并立即回到目标；`finish_transition()` 立即到达当前目标；`cancel_transition()` 将最近呈现写为本地外观覆盖和位移目标，替换状态颜色覆盖，保留后续设置的过渡策略。焦点轮廓的可见性仍受真实行为约束。
+
+`on_transition_end(callback)` 在节点所有活动过渡（外观和位移）到达目标后排队一次，与点击回调共用版本化队列，在借用外执行。正常结束、`finish_transition()`，以及有策略时因减少动态效果、隐藏或零时长而直接跳到目标的变化都会完成；取消、`clear_transition()`、删除节点或关闭窗口不完成，已排队的通知随节点删除丢弃。尚无关键帧、弹簧或循环 API。
 
 无窗口 Ui 默认不安装过渡。`set_default_transition` 只影响随后创建的交互控件；首次刷新直接建立呈现值，不做入场动画。原生 App 在启用 motion 时为交互控件默认安装120ms EaseOut，`AppOptions.transition=None` 可关闭自动安装。各 App 共用一个单调时钟，通过 Wayland frame callback 推进；没有活动动画时不请求动画帧，无轮询定时器。隐藏子树刷新时直接到目标；compositor 暂停窗口帧回调时不主动唤醒，恢复时采样当前时刻。
 
-`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映最近刷新后是否仍活动，节点删除和窗口关闭立即清理对应动画。`Ui/Window::set_reduced_motion(true)` 立即到目标，保留最后一帧重绘；期间不启动新过渡。AppOptions 可设置初始偏好，尚未自动读取 OS 偏好。
+`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观或位移过渡是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui/Window::set_reduced_motion(true)` 立即到目标并完成，保留最后一帧重绘；期间不启动新过渡。AppOptions 可设置初始偏好，尚未自动读取 OS 偏好。
 
 ## 后续动画契约
 
 默认 motion 只提供标量、二维向量和颜色的补间及属性过渡：linear、ease_in、ease_out、ease_in_out。颜色在预乘线性空间插值。关键帧和阻尼弹簧为可选模块能力；无通用时间线编辑器或动画脚本。
 
-默认 hover/焦点过渡 120 ms，开关/选择 160 ms，面板出现 180 ms。几何动画可以修改 transform，命中与候选窗跟随呈现变换；width/height 动画明确触发布局，不伪装成免费合成动画。
+默认 hover/焦点过渡 120 ms，开关/选择 160 ms，面板出现 180 ms。几何动画可以修改 transform，命中与候选窗跟随呈现变换（当前已实现平移）；width/height 动画明确触发布局，不伪装成免费合成动画。
 
 新目标从当前呈现值继续过渡。cancel 将当前呈现值固化为本地目标并解除该属性绑定，随后移除动画；finish 立即到达逻辑目标。完成回调只在正常完成/显式 finish 且节点仍存活时执行，取消或销毁不执行完成回调。
 

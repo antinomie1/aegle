@@ -149,15 +149,18 @@ impl Container {
         self.toggle_control(text, checked, true).map(Switch)
     }
     fn toggle_control(&self, text: &str, checked: bool, switch: bool) -> Result<Node> {
-        self.add(|state| {
-            let text = state.fonts.borrow_mut().paragraph(text, &state.style())?;
+        self.add(|state, theme| {
+            let text = state
+                .fonts
+                .borrow_mut()
+                .paragraph(text, &crate::state::text_style(theme))?;
             Ok((
                 Content::Toggle(Box::new(ToggleContent {
                     control: aegle_controls::Toggle::new(checked),
                     text,
                     switch,
                 })),
-                control_style(state.theme.control_height),
+                control_style(theme.control_height),
             ))
         })
     }
@@ -165,10 +168,10 @@ impl Container {
     /// span; finite initial values clamp to them. Use set_step for discrete steps.
     pub fn slider(&self, min: f64, max: f64, value: f64) -> Result<Slider> {
         let range = Range::new(min, max, value, 0.0)?;
-        self.add(|state| {
+        self.add(|_, theme| {
             Ok((
                 Content::Slider(Box::new(aegle_controls::Slider::new(range))),
-                control_style(state.theme.control_height),
+                control_style(theme.control_height),
             ))
         })
         .map(Slider)
@@ -176,10 +179,10 @@ impl Container {
     /// Appends a determinate progress bar with finite increasing bounds.
     pub fn progress(&self, min: f64, max: f64, value: f64) -> Result<Progress> {
         let range = Range::new(min, max, value, 0.0)?;
-        self.add(|state| {
+        self.add(|_, theme| {
             Ok((
                 Content::Progress(range),
-                control_style(state.theme.control_height / 2.0),
+                control_style(theme.control_height / 2.0),
             ))
         })
         .map(Progress)

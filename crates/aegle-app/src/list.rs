@@ -59,7 +59,7 @@ impl Container {
             let mut style = state.tree.get(id).unwrap().style().clone();
             style.flex_shrink = 1.0;
             aegle_layout::set_style(&mut state.tree, id, style)?;
-            let mut style = container_style(&state.theme, false);
+            let mut style = container_style(state.theme_of(id), false);
             style.size.height = Dimension::length(height);
             style.flex_shrink = 0.0;
             let spacer = state.insert(id, usize::MAX, Content::Container, style)?;
@@ -192,7 +192,7 @@ impl State {
             if rows.get(position).is_some_and(|&(r, _)| r == row) {
                 continue;
             }
-            let style = row_style(&self.theme, row, row_height);
+            let style = row_style(self.theme_of(spacer), row, row_height);
             let node = self.insert(spacer, position, Content::Container, style)?;
             rows.insert(position, (row, node));
             created.push((row, node));

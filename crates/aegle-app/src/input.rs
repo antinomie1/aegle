@@ -191,10 +191,8 @@ impl State {
     }
     pub fn control(&mut self, target: NodeId, input: Input<'_>) -> Result<Outcome> {
         let element = &mut self.tree.get_mut(target).unwrap().context;
-        let (_, extent) = crate::widget_paint::slider_track(
-            element.bounds.size,
-            element.inset(self.theme.padding),
-        );
+        let (_, extent) =
+            crate::widget_paint::slider_track(element.bounds.size, element.inset(&self.theme));
         Ok(match &mut element.content {
             Content::Button(button, _) => button.handle(input),
             Content::Toggle(toggle) => toggle.control.handle(input),
@@ -341,16 +339,16 @@ impl State {
             position.y - element.bounds.origin.y,
         );
         if matches!(element.content, Content::Field(_)) {
-            let padding = element.padding.unwrap_or(self.theme.padding);
+            let padding = element
+                .padding
+                .unwrap_or(element.theme_or(&self.theme).padding);
             local.x += element.scroll.x - padding;
             local.y += element.scroll.y - padding;
         }
         if matches!(element.content, Content::Slider(_)) {
-            local.x -= crate::widget_paint::slider_track(
-                element.bounds.size,
-                element.inset(self.theme.padding),
-            )
-            .0;
+            local.x -=
+                crate::widget_paint::slider_track(element.bounds.size, element.inset(&self.theme))
+                    .0;
         }
         Input::Pointer(PointerInput {
             id,

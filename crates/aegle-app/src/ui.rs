@@ -156,9 +156,10 @@ impl Ui {
         })
     }
 
-    /// Window clear color from the current theme.
+    /// Window clear color from the root's resolved theme.
     pub fn background(&self) -> Color {
-        self.state.borrow().theme.background
+        let state = self.state.borrow();
+        state.theme_of(state.root).background
     }
 
     /// Changes the viewport's logical size. Zero is valid for a suspended surface.
@@ -286,7 +287,9 @@ impl Ui {
             let surrounding = field.editor().surrounding(max_bytes);
             let selection = surrounding.map(|s| s.selection).unwrap_or_default();
             let mut cursor_rect = field.editor().ime_rect();
-            let padding = element.padding.unwrap_or(state.theme.padding);
+            let padding = element
+                .padding
+                .unwrap_or(element.theme_or(&state.theme).padding);
             cursor_rect.origin.x += element.bounds.origin.x + padding - element.scroll.x;
             cursor_rect.origin.y += element.bounds.origin.y + padding - element.scroll.y;
             // Keep a manually scrolled-out composition alive. Its candidate
@@ -330,6 +333,8 @@ impl Ui {
         {
             state.motion.tracks.clear();
             state.motion.active.clear();
+            state.motion.moving.clear();
+            state.motion.ends.clear();
         }
         state.capture = None;
         state.drag = None;

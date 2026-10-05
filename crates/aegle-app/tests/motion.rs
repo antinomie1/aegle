@@ -139,3 +139,66 @@ fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
     assert!(!ui.refresh()?);
     Ok(())
 }
+
+#[test]
+fn offsets_move_hit_testing_and_complete_once() -> Result {
+    use aegle_app::{Modifiers, Point, PointerId, PointerKind};
+    use std::cell::Cell;
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.root().set_padding(0.0)?;
+    let panel = ui.root().column()?;
+    let button = panel.button("")?;
+    button.set_size(Some(40.0), Some(20.0))?;
+    ui.resize(Size::new(300.0, 100.0))?;
+    panel.set_offset(Point::new(50.0, 0.0))?; // No policy: applies at once.
+    ui.refresh()?;
+    assert_eq!(button.bounds()?.origin, Point::new(50.0, 0.0));
+    let ends = Rc::new(Cell::new(0));
+    let count = ends.clone();
+    panel.on_transition_end(move |_| {
+        count.set(count.get() + 1);
+        Ok(())
+    })?;
+    panel.set_transition(Transition::new(Duration::from_millis(100), Easing::Linear))?;
+    panel.set_offset(Point::new(150.0, 0.0))?;
+    ui.refresh()?; // Starts at the current host time.
+    ui.advance_animations(Duration::from_millis(50))?;
+    ui.refresh()?;
+    assert_eq!(panel.offset()?.x, 150.0);
+    assert_eq!(button.bounds()?.origin.x, 100.0);
+    // Hit testing follows the presented offset.
+    ui.pointer(
+        PointerId(1),
+        PointerKind::Move,
+        Point::new(110.0, 10.0),
+        Modifiers::default(),
+    )?;
+    assert!(button.visual_state()?.hovered);
+    ui.advance_animations(Duration::from_millis(100))?;
+    ui.refresh()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!((button.bounds()?.origin.x, ends.get()), (150.0, 1));
+    assert!(!ui.has_animations());
+    // Cancel freezes the presented offset without completing.
+    panel.set_offset(Point::new(50.0, 0.0))?;
+    ui.refresh()?;
+    ui.advance_animations(Duration::from_millis(150))?;
+    panel.cancel_transition()?;
+    ui.refresh()?;
+    assert_eq!(panel.offset()?.x, 100.0);
+    panel.set_offset(Point::new(0.0, 0.0))?;
+    panel.finish_transition()?;
+    ui.set_reduced_motion(true)?;
+    panel.set_offset(Point::new(10.0, 0.0))?;
+    ui.dispatch_callbacks()?;
+    assert_eq!((panel.offset()?.x, ends.get()), (10.0, 3));
+    ui.set_reduced_motion(false)?;
+    panel.set_offset(Point::new(20.0, 0.0))?;
+    assert!(panel.is_animating()?);
+    panel.remove()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(ends.get(), 3);
+    assert!(!ui.has_animations());
+    assert!(button.set_offset(Point::new(f32::NAN, 0.0)).is_err());
+    Ok(())
+}

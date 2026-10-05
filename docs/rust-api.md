@@ -46,6 +46,8 @@ button.on_click(move |_| {
 | Node / 所有控件句柄 | `is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
 | 布局 | `set_size`、`set_width`、`set_height`、`set_min_size`、`set_min_width`、`set_min_height`、`set_grow`、`set_padding`、`set_gap` |
 | 外观 | `set_style`、`style`、`set_skin`、`clear_skin`、`appearance`、`visual_state`；背景/前景、状态背景、边框、圆角、焦点环和编辑器颜色 setter |
+| 局部主题与位移 | `set_theme(Option<Theme>)`、`theme`；`set_offset(Point)`、`offset` |
+| 过渡（motion） | `set_transition`、`clear_transition`、`presented_appearance`、`is_animating`、`finish_transition`、`cancel_transition`、`on_transition_end`、`clear_on_transition_end` |
 | 字号 | `set_font_size`、`clear_font_size`，限文字控件，保留输入/组合状态 |
 | Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`set_password`、`on_submit`、`clear_on_submit` |
 | Button | `set_text`、`activate`、`on_click`、`clear_on_click` |
@@ -58,7 +60,7 @@ button.on_click(move |_| {
 | ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
 | Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果 |
 
-`bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。启用 motion 后用 `set_transition(Transition::default())` 安装外观过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期；详见[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或局部主题树。
+`bounds` 返回最近刷新后的窗口逻辑坐标，包含呈现位移。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。`Node::set_theme` 给子树一份局部主题，`theme` 读取解析结果；`set_offset` 在布局后平移子树。启用 motion 后用 `set_transition(Transition::default())` 安装外观与位移过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期，`on_transition_end` 接收完成；详见[主题契约](components-theme-animation.md#主题契约)与[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或 token 注册表。
 
 数值与切换控件的程序 setter 不触发用户修改回调；范围、步长、键盘及无障碍规则见[值控件契约](components-theme-animation.md#当前切换与数值控件)。
 

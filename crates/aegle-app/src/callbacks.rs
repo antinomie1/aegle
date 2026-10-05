@@ -1,4 +1,5 @@
-use crate::{Button, Node, Result, TextField, Ui, UiError};
+use crate::{Button, Node, Result, TextField, Ui, UiError, state::State};
+use aegle_core::NodeId;
 use std::rc::Rc;
 
 pub(crate) struct Handler {
@@ -52,6 +53,18 @@ impl Node {
     }
 }
 
+impl State {
+    /// The current handler with a queued version; versions are unique across kinds.
+    fn handler(&mut self, id: NodeId, version: u64) -> Option<&mut Handler> {
+        let handler = self.callbacks.get_mut(&id);
+        #[cfg(feature = "motion")]
+        let handler = handler
+            .filter(|h| h.version == version)
+            .or(self.motion.ends.get_mut(&id));
+        handler.filter(|h| h.version == version)
+    }
+}
+
 impl Ui {
     /// Invokes queued actions without holding the tree borrow. A callback queued
     /// by another callback waits until the next call, preventing recursive dispatch.
@@ -75,9 +88,7 @@ impl Ui {
                     break;
                 };
                 state
-                    .callbacks
-                    .get_mut(&id)
-                    .filter(|h| h.version == version)
+                    .handler(id, version)
                     .and_then(|h| h.callback.take())
                     .map(|callback| (id, version, callback))
             };
@@ -89,16 +100,9 @@ impl Ui {
                 state: Rc::downgrade(&self.state),
             });
             let mut state = self.state.borrow_mut();
-            if state
-                .callbacks
-                .get(&id)
-                .is_some_and(|h| h.version == version)
-            {
-                if result.is_ok() {
-                    state.callbacks.get_mut(&id).unwrap().callback = Some(callback);
-                } else {
-                    state.callbacks.remove(&id);
-                }
+            // A failing handler stays disabled until replaced.
+            if let Some(handler) = state.handler(id, version) {
+                handler.callback = result.is_ok().then_some(callback);
             }
             if let Err(error) = result {
                 state.dispatching = false;

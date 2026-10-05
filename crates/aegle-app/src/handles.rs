@@ -12,8 +12,8 @@ use aegle_text::EditorOptions;
 use aegle_types::{Rect, Size};
 
 use crate::{
-    Result, UiError,
-    state::{Content, State},
+    Result, Theme, UiError,
+    state::{Content, State, text_style},
     ui::container_style,
 };
 
@@ -74,7 +74,9 @@ impl Node {
                 state.cancel_subtree(id)?;
             }
             state.invalidate_structure();
-            Ok(())
+            let element = &state.tree.get(id).unwrap().context;
+            let local = element.theme.clone().filter(|_| element.local_theme);
+            state.propagate_theme(id, local)
         })
     }
     /// Shows or hides the entire subtree. Hidden controls take no layout space.
@@ -279,10 +281,12 @@ handle!(
 impl Container {
     pub(crate) fn add(
         &self,
-        create: impl FnOnce(&mut State) -> Result<(Content, Style)>,
+        create: impl FnOnce(&mut State, &Theme) -> Result<(Content, Style)>,
     ) -> Result<Node> {
         self.change(|state, parent| {
-            let (content, style) = create(state)?;
+            // New controls inherit the parent's resolved theme.
+            let theme = *state.theme_of(parent);
+            let (content, style) = create(state, &theme)?;
             let id = state.insert(parent, usize::MAX, content, style)?;
             Ok(Node {
                 state: self.state.clone(),
@@ -292,13 +296,13 @@ impl Container {
     }
     /// Appends a vertical container.
     pub fn column(&self) -> Result<Container> {
-        self.add(|state| Ok((Content::Container, container_style(&state.theme, false))))
+        self.add(|_, theme| Ok((Content::Container, container_style(theme, false))))
             .map(Container)
     }
     /// Appends a horizontal container.
     pub fn row(&self) -> Result<Container> {
-        self.add(|state| {
-            let mut style = container_style(&state.theme, false);
+        self.add(|_, theme| {
+            let mut style = container_style(theme, false);
             style.flex_direction = FlexDirection::Row;
             Ok((Content::Container, style))
         })
@@ -306,10 +310,13 @@ impl Container {
     }
     /// Appends a paragraph. Text wraps to available layout width.
     pub fn text(&self, text: &str) -> Result<Label> {
-        self.add(|state| {
+        self.add(|state, theme| {
             Ok((
                 Content::Label(Box::new(
-                    state.fonts.borrow_mut().paragraph(text, &state.style())?,
+                    state
+                        .fonts
+                        .borrow_mut()
+                        .paragraph(text, &text_style(theme))?,
                 )),
                 Style {
                     flex_shrink: 0.0,
@@ -321,16 +328,21 @@ impl Container {
     }
     /// Appends a neutral button with its visible text as the default accessible name.
     pub fn button(&self, text: &str) -> Result<Button> {
-        self.add(|state| {
+        self.add(|state, theme| {
             Ok((
                 Content::Button(
                     aegle_controls::Button::new(),
-                    Box::new(state.fonts.borrow_mut().paragraph(text, &state.style())?),
+                    Box::new(
+                        state
+                            .fonts
+                            .borrow_mut()
+                            .paragraph(text, &text_style(theme))?,
+                    ),
                 ),
                 Style {
                     size: aegle_layout::Size {
                         width: Dimension::auto(),
-                        height: Dimension::length(state.theme.control_height),
+                        height: Dimension::length(theme.control_height),
                     },
                     flex_shrink: 0.0,
                     ..Default::default()
@@ -348,10 +360,10 @@ impl Container {
         self.editor(text, true)
     }
     fn editor(&self, text: &str, multiline: bool) -> Result<TextField> {
-        self.add(|state| {
+        self.add(|state, theme| {
             let editor = state.fonts.borrow_mut().editor(
                 text,
-                &state.style(),
+                &text_style(theme),
                 EditorOptions {
                     multiline,
                     ..Default::default()
@@ -363,12 +375,12 @@ impl Container {
                     size: aegle_layout::Size {
                         width: Dimension::auto(),
                         height: Dimension::length(
-                            state.theme.control_height * if multiline { 4.0 } else { 1.0 },
+                            theme.control_height * if multiline { 4.0 } else { 1.0 },
                         ),
                     },
                     min_size: aegle_layout::Size {
                         width: LengthPercentageAuto::length(0.0),
-                        height: LengthPercentageAuto::length(state.theme.control_height),
+                        height: LengthPercentageAuto::length(theme.control_height),
                     },
                     flex_shrink: 0.0,
                     ..Default::default()

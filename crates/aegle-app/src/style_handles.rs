@@ -1,4 +1,4 @@
-use crate::{Appearance, Color, Node, Result, Skin, Style, VisualState};
+use crate::{Appearance, Color, Node, Point, Result, Skin, Style, UiError, VisualState};
 use aegle_core::Dirty;
 
 macro_rules! setters {
@@ -42,7 +42,7 @@ impl Node {
     /// validated during refresh. Local paint overrides keep their precedence.
     pub fn set_skin(&self, skin: Skin) -> Result {
         self.change(|state, id| {
-            skin(&state.theme, state.visual_state(id)).validate()?;
+            skin(state.theme_of(id), state.visual_state(id)).validate()?;
             state.decorations.entry(id).or_default().skin = Some(skin);
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             Ok(())
@@ -77,6 +77,36 @@ impl Node {
     /// Returns this text-bearing control to the current theme's font size.
     pub fn clear_font_size(&self) -> Result {
         self.change(|state, id| state.set_font_size(id, None))
+    }
+    /// Translates this subtree by a finite logical offset after layout, without
+    /// changing layout or scroll extents. Bounds, hit testing, clipping, the IME
+    /// anchor and accessibility follow it. With `motion`, a control with a
+    /// transition policy animates from its presented offset.
+    pub fn set_offset(&self, offset: Point) -> Result {
+        if !(offset.x.is_finite() && offset.y.is_finite()) {
+            return Err(UiError::InvalidValue.into());
+        }
+        self.change(|state, id| {
+            #[cfg(feature = "motion")]
+            return state.transition_offset(id, offset);
+            #[cfg(not(feature = "motion"))]
+            {
+                state.tree.get_mut(id).unwrap().context.offset = offset;
+                state.geometry_dirty = true;
+                state.repaint = true;
+                Ok(())
+            }
+        })
+    }
+    /// The logical target offset; [`Self::bounds`] reflects the presented one.
+    pub fn offset(&self) -> Result<Point> {
+        self.change(|state, id| {
+            #[cfg(feature = "motion")]
+            if let Some(active) = state.motion.moving.get(&id) {
+                return Ok(active.tween.target());
+            }
+            Ok(state.tree.get(id).unwrap().context.offset)
+        })
     }
     setters! {
         /// Sets the base background, taking precedence over the skin.

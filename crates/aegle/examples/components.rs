@@ -41,9 +41,19 @@ fn main() -> Result<()> {
     let view = aegle::ui!(&app, "examples/components.aegle")?;
     view.card.set_skin(card)?;
     action_button(&view.actions, "Clear text")?.on_click(move |_| view.editor.set_text(""))?;
-    let window = view.root.clone();
-    action_button(&view.actions, "Dark theme")?
-        .on_click(move |_| window.set_theme(Theme::dark()))?;
-    action_button(&view.actions, "Close")?.on_click(move |_| view.root.close())?;
+    // A local theme restyles only the card's subtree.
+    let panel = view.card.clone();
+    action_button(&view.actions, "Dark card")?.on_click(move |_| {
+        let dark = panel.theme()? == Theme::dark();
+        panel.set_theme((!dark).then(Theme::dark))
+    })?;
+    // Slide the card away, then close once the transition completes.
+    action_button(&view.actions, "Close")?.on_click(move |_| {
+        let window = view.root.clone();
+        view.card
+            .set_transition(Transition::new(Duration::from_millis(180), Easing::EaseIn))?;
+        view.card.on_transition_end(move |_| window.close())?;
+        view.card.set_offset(Point::new(0.0, 480.0))
+    })?;
     app.run()
 }

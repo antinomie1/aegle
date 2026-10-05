@@ -19,8 +19,8 @@
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放、事件等待、键盘/指针输入、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无触摸、平台偏好、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
 - aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
-- aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
-- aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。当前没有 token 注册表、局部主题继承或系统偏好监听。
+- aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转动画与系统偏好监听尚未实现。
+- aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；当前没有 token 注册表或系统偏好监听。
 - aegle-app 与 aegle：无窗口 Ui 和可选 Wayland/Win32 软件或 Vulkan 应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Text/Button/TextField/TextArea/CheckBox/Switch/Slider/Progress 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
 
@@ -250,7 +250,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale、系统偏好与客户端装饰。
 - 组件/绘制：惯性、可变高度列表、自定义控件输入行为、PNG 等解码辅助、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
 - 标记语言：目前只有静态结构/字面量与Rust回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。
-- 主题/动画：完整token/局部继承、系统偏好、几何动画与完成回调。
+- 主题/动画：token 级部分覆盖、系统偏好、缩放/旋转动画。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。
 - 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU多窗口共享设备/图集尚未实现。现有桌面样本不能替代这些证据。
 
@@ -288,3 +288,13 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - ListView 复用 ScrollView 的滚动、滚动条、裁剪与语义；`Ui::refresh` 在借用外建立/删除与可见区域相交的行，若首轮布局暴露新行则再刷新一次。行回调可使用任何句柄，删除列表、嵌套列表和回调错误均有处理。
 - 验证：`tests/visual.rs` 覆盖首屏只建 5 行、向下滚动新增 5/6 行、回滚在原有行前重建第 0 行且 Tab→Enter 激活第 1 行、`set_count`/`reload`/删除、非法行高与范围；图像固有尺寸与替换、Canvas 只在 invalidate 后重录。release 临时测量（本机，10,000 行 28 px 文字行，800×480）：ListView 首次刷新 0.24 ms、每滚一行加刷新 14 µs、RSS 增长约 1 MB；同内容普通 ScrollView 构建加首次刷新 49 ms、每步 98 µs、RSS 增长约 40 MB。
 - `visuals` 示例在私有 Pixman Sway（软件）与 GLES Sway（RADV Vulkan）下截图一致，wtype 键盘激活 Rotate 后 Canvas 重绘；两种后端静止 3 秒 CPU 时钟增量为 0，PSS 分别约 9.6 MB 与 21.8 MB（后者含驱动映射）。无头 Sway 没有指针设备，原生滚轮滚动列表未实测，滚动路径由集成测试覆盖。
+
+## 局部主题继承、平移动画与完成回调
+
+- `Node::set_theme(Option<Theme>)` 给子树一份主题快照，嵌套优先、`None` 恢复父级；`Ui::set_theme` 只作用于无局部主题的节点。每个元素缓存共享 `Rc<Theme>`，创建、reparent 与主题变化时向下传播；绘制、布局、命中、滚动条、IME、语义与创建默认值都改读节点解析主题。窗口清屏色取根节点主题。
+- `Node::set_offset(Point)` 在布局后平移子树：`update_geometry` 把呈现位移加入 bounds，命中、裁剪、IME 锚点、语义 transform 和场景平移随之一致，不改变布局或滚动范围。motion 下有过渡策略时补间，请求在下一次刷新时以宿主当前时钟开始；采样只置几何失效，不重录绘制。
+- `on_transition_end` 与点击回调共用版本化队列（版本跨类型唯一）；外观与位移都结束、`finish_transition`、或有策略时因减少动态效果/隐藏/零时长直接到目标会完成；取消、清除策略、删除与关闭不完成。没有新增依赖。
+- 验证：`tests/appearance.rs` 覆盖局部主题对控件高度/配色、后建控件、嵌套、全局主题不越过局部主题、reparent 继承、清除恢复和非法主题；`tests/motion.rs` 覆盖无策略立即平移、补间中途 bounds 与悬停命中、完成一次、取消冻结、finish 与减少动态效果完成、删除不完成。all-features 与无 feature 的 app 测试、私有 Pixman Sway 上的 native 测试通过。
+- release 临时探针（1000 个按钮，800×480，CPU 频率呈双峰）：首次刷新 0.65–2.1 ms、全局主题切换加刷新 0.14–0.27 ms，与改动前 0.71–2.05 ms、0.16–0.30 ms 在同一噪声范围；局部主题切换 0.14–0.27 ms；整组平移一步 6–14 µs，与无变化滚动同量级。
+- `components` 示例（debug）在私有 Pixman Sway 上截图验证：Dark card 只把卡片子树切为深色，窗口其余部分保持浅色；Close 截到卡片 EaseIn 滑动中途，完成回调随后关闭窗口、进程退出。过渡结束后 2×3 秒 CPU tick 增量为 0。
+

@@ -52,13 +52,13 @@
 
 `aegle-access` 的 Mailbox/Handlers 将原生线程上的请求交给宿主自己的 UI 线程，不引入另一棵应用树。UnixAdapter 复用 AccessKit 的系统协议与语义缓存，收到初次请求时完整导出，其后按脏标记更新。text-a11y 文本桥补充 run 身份/范围校验；平台、控件和文字依赖仍可分开选择。
 
-`aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点。当前没有主题注册表或系统偏好监听；可选过渡由 app 连接独立 motion 模块。
+`aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点；局部主题由子树节点共享一份 `Rc<Theme>`。当前没有主题注册表或系统偏好监听；可选外观/位移过渡由 app 连接独立 motion 模块。
 
 `aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、ScrollView、标签、按钮、复选框、开关、滑块、进度条、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` / `windows` 按目标增加原生 App；`software` / `vulkan` 分别增加 renderer。各窗口独立拥有 Ui，共享平台和字体；软件 renderer 共用，当前 Vulkan 设备/图集按窗口独立。当前基础皮肤和纯函数皮肤由 app 应用到现有控件；尚未抽出独立 widgets crate，出现更多真实行为/绘制消费者时再形成该模块。
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 app 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 app 派生的滚动几何。
 
-`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 目标平台无障碍 + 编译型静态标记 + 外观过渡**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主、动态标记与几何动画仍待实现。
+`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 目标平台无障碍 + 编译型静态标记 + 外观过渡**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主、动态标记与缩放/旋转动画仍待实现。
 
 `aegle-markup` 是无第三方依赖的有界解析器和静态 schema；不依赖 app 或任何平台，可供外部工具独立检查。`aegle-macros` 复用它，并用 syn/quote/proc-macro-crate 处理 Rust 宏参数、代码生成与依赖别名，避免自建 Rust 语法处理。facade 的可选 `markup` 只增加编译期宏；生成代码直接创建相同保留控件，发布程序不带解析器、AST 或字符串控件注册表。运行时 loader 和第三方组件导入仍未实现。
 

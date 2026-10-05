@@ -15,9 +15,9 @@ impl State {
         let appearance = self.transition_appearance(id, appearance)?;
         let bars = self.scrollbars(id);
         let bar_color = self.scrollbar_color(id);
-        let bar_radius = self.theme.radius;
+        let theme = *self.theme_of(id);
         let element = &mut self.tree.get_mut(id).unwrap().context;
-        let padding = element.inset(self.theme.padding);
+        let padding = element.inset(&theme);
         let size = element.bounds.size;
         let mut builder = std::mem::take(&mut element.scene).into_builder();
         builder.clear();
@@ -71,13 +71,13 @@ impl State {
                         },
                     )?;
                     builder.pop()?.pop()?;
-                    crate::scrollbar::paint(&mut builder, bars, bar_color, bar_radius)?;
+                    crate::scrollbar::paint(&mut builder, bars, bar_color, theme.radius)?;
                 }
                 Content::Toggle(toggle) => crate::widget_paint::toggle(
                     &mut builder,
                     size,
                     padding,
-                    self.theme.gap,
+                    theme.gap,
                     toggle.switch,
                     toggle.control.is_checked(),
                     &toggle.text,
@@ -117,7 +117,7 @@ impl State {
         if let Content::Scroll(overlay) = &mut element.content {
             let mut builder = std::mem::take(&mut **overlay).into_builder();
             builder.clear();
-            crate::scrollbar::paint(&mut builder, bars, bar_color, bar_radius)?;
+            crate::scrollbar::paint(&mut builder, bars, bar_color, theme.radius)?;
             **overlay = builder.finish()?;
         }
         Ok(())

@@ -238,9 +238,10 @@ impl State {
                 bounds.size.width.into(),
                 bounds.size.height.into(),
             ));
+            let offset = node_data.context.offset;
             node.set_transform(Affine::translate((
-                f64::from(bounds.origin.x - parent_scroll.x),
-                f64::from(bounds.origin.y - parent_scroll.y),
+                f64::from(bounds.origin.x + offset.x - parent_scroll.x),
+                f64::from(bounds.origin.y + offset.y - parent_scroll.y),
             )));
             if enabled && self.has_scroll_ancestor(id) {
                 node.add_action(Action::ScrollIntoView);
@@ -253,6 +254,7 @@ impl State {
                     .collect::<Vec<_>>(),
             );
             let element = &mut self.tree.get_mut(id).unwrap().context;
+            let (padding, scroll) = (element.inset(&self.theme), element.scroll);
             if !element.effective_visible {
                 node.set_hidden();
             }
@@ -371,10 +373,7 @@ impl State {
                                 self.next_access_id += 1;
                                 id
                             },
-                            Point::new(
-                                element.padding.unwrap_or(self.theme.padding) - element.scroll.x,
-                                element.padding.unwrap_or(self.theme.padding) - element.scroll.y,
-                            ),
+                            Point::new(padding - scroll.x, padding - scroll.y),
                         )
                         .expect("prepared text and geometry satisfy the accessibility boundary");
                     // Painting overrides the retained shaping brush on palette

@@ -70,17 +70,27 @@ pub(crate) struct Element {
     pub ensure_caret: bool,
     pub local_layout: u8,
     pub padding: Option<f32>,
+    /// Presented translation after layout, inherited by the subtree.
+    pub offset: Point,
+    /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
+    pub theme: Option<Rc<Theme>>,
+    /// Whether `theme` was set on this node rather than inherited.
+    pub local_theme: bool,
     #[cfg(feature = "accessibility")]
     pub access_id: aegle_access::accesskit::NodeId,
 }
 
 impl Element {
-    pub fn inset(&self, default: f32) -> f32 {
+    pub fn theme_or<'a>(&'a self, ui: &'a Theme) -> &'a Theme {
+        self.theme.as_deref().unwrap_or(ui)
+    }
+    /// Content padding: the local value, else zero for labels or the theme's.
+    pub fn inset(&self, ui: &Theme) -> f32 {
         self.padding
             .unwrap_or(if matches!(self.content, Content::Label(_)) {
                 0.0
             } else {
-                default
+                self.theme_or(ui).padding
             })
     }
     pub fn new(content: Content) -> Self {
@@ -97,6 +107,9 @@ impl Element {
             ensure_caret: false,
             local_layout: 0,
             padding: None,
+            offset: Point::default(),
+            theme: None,
+            local_theme: false,
             #[cfg(feature = "accessibility")]
             access_id: aegle_access::accesskit::NodeId(0),
         }
@@ -140,13 +153,19 @@ pub(crate) struct State {
     pub next_access_id: u64,
 }
 
+/// Default paragraph style for a theme.
+pub(crate) fn text_style(theme: &Theme) -> TextStyle<'static> {
+    TextStyle {
+        size: theme.font_size,
+        color: theme.foreground,
+        ..Default::default()
+    }
+}
+
 impl State {
-    pub fn style(&self) -> TextStyle<'static> {
-        TextStyle {
-            size: self.theme.font_size,
-            color: self.theme.foreground,
-            ..Default::default()
-        }
+    /// The theme resolved for a live node.
+    pub fn theme_of(&self, id: NodeId) -> &Theme {
+        self.tree.get(id).unwrap().context.theme_or(&self.theme)
     }
 
     pub fn rebuild_order(&mut self) {
@@ -230,6 +249,7 @@ impl State {
             style.overflow.y = aegle_layout::Overflow::Hidden;
         }
         let mut element = Element::new(content);
+        element.theme = self.tree.get(parent).unwrap().context.theme.clone();
         #[cfg(feature = "accessibility")]
         {
             element.access_id = aegle_access::accesskit::NodeId(self.next_access_id);
@@ -238,8 +258,6 @@ impl State {
                 .checked_add(1)
                 .ok_or(crate::UiError::IdentityExhausted)?;
         }
-        #[cfg(not(feature = "accessibility"))]
-        let _ = &mut element;
         let id = self
             .tree
             .insert_at(parent, position, LayoutNode::with_style(style, element))?;
@@ -272,6 +290,8 @@ impl State {
             {
                 self.motion.tracks.remove(&node);
                 self.motion.active.remove(&node);
+                self.motion.moving.remove(&node);
+                self.motion.ends.remove(&node);
             }
         })?;
         self.pending.retain(|(id, _)| self.tree.get(*id).is_some());

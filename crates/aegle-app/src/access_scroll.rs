@@ -71,7 +71,7 @@ impl State {
                     element.bounds.size.height
                 };
                 let amount = match unit {
-                    ScrollUnit::Item => self.theme.control_height,
+                    ScrollUnit::Item => element.theme_or(&self.theme).control_height,
                     ScrollUnit::Page => extent,
                 };
                 let sign = if matches!(action, Action::ScrollUp | Action::ScrollLeft) {

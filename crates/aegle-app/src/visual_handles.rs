@@ -23,7 +23,7 @@ impl Container {
     /// Appends an image whose intrinsic logical size is its pixel size. It keeps
     /// that size on the cross axis instead of stretching; `set_size` overrides it.
     pub fn image(&self, image: &Image) -> Result<ImageView> {
-        self.add(|_| {
+        self.add(|_, _| {
             Ok((
                 Content::Image(image.clone()),
                 Style {
@@ -43,7 +43,7 @@ impl Container {
         &self,
         painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
     ) -> Result<Canvas> {
-        self.add(|_| {
+        self.add(|_, _| {
             Ok((
                 Content::Canvas(Box::new(painter)),
                 Style {

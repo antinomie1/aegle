@@ -243,11 +243,8 @@ impl State {
                     self.tree.get(id).unwrap().context.content,
                     Content::Scroll(_)
                 ));
-        if active {
-            self.theme.muted
-        } else {
-            self.theme.border
-        }
+        let theme = self.theme_of(id);
+        if active { theme.muted } else { theme.border }
     }
 }
 

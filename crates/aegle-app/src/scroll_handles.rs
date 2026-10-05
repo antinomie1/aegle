@@ -22,8 +22,8 @@ impl Container {
     /// Appends a scrollable column. Children retain their state outside the viewport.
     /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
     pub fn scroll_view(&self) -> Result<ScrollView> {
-        self.add(|state| {
-            let mut style = container_style(&state.theme, false);
+        self.add(|_, theme| {
+            let mut style = container_style(theme, false);
             style.overflow.x = Overflow::Scroll;
             style.overflow.y = Overflow::Scroll;
             style.flex_shrink = 0.0;

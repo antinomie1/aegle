@@ -14,7 +14,7 @@ impl State {
                 Point::new(node.layout().scroll_width(), node.layout().scroll_height())
             }
             Content::Field(field) => {
-                let padding = node.context.inset(self.theme.padding) * 2.0;
+                let padding = node.context.inset(&self.theme) * 2.0;
                 let viewport = node.context.bounds.size;
                 let text = field.editor().size();
                 Point::new(
@@ -82,6 +82,8 @@ impl State {
             let limit = self.scroll_limit(id);
             let node = self.tree.get_mut(id).unwrap();
             let mut bounds = node.bounds();
+            bounds.origin.x += node.context.offset.x;
+            bounds.origin.y += node.context.offset.y;
             let mut visible = node.context.visible;
             let mut clip = None;
             if let Some((origin, parent_visible, parent_clip, offset)) = parent {
@@ -156,7 +158,7 @@ impl State {
         }
         let mut rect = element.bounds;
         let mut caret = if let Content::Field(field) = &element.content {
-            let padding = element.inset(self.theme.padding);
+            let padding = element.inset(&self.theme);
             let mut caret = field.editor().ime_rect();
             caret.origin.x += element.bounds.origin.x + padding - element.scroll.x;
             caret.origin.y += element.bounds.origin.y + padding - element.scroll.y;

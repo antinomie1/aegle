@@ -130,3 +130,41 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
     })?;
     Ok(())
 }
+
+#[test]
+fn local_themes_inherit_nest_and_follow_reparenting() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    let tall = Theme {
+        control_height: 50.0,
+        ..Theme::dark()
+    };
+    let panel = ui.root().column()?;
+    let inside = panel.button("")?;
+    let outside = ui.root().button("")?;
+    panel.set_theme(Some(tall))?;
+    let later = panel.button("")?;
+    let nested = panel.column()?;
+    nested.set_theme(Some(Theme::high_contrast()))?;
+    let deep = nested.button("")?;
+    ui.resize(Size::new(200.0, 400.0))?;
+    ui.refresh()?;
+    assert_eq!(inside.bounds()?.size.height, 50.0);
+    assert_eq!(later.bounds()?.size.height, 50.0);
+    assert_eq!(inside.appearance()?.background, Theme::dark().surface);
+    assert_eq!(deep.theme()?, Theme::high_contrast());
+    assert_eq!(outside.theme()?, Theme::light());
+    // The UI theme reaches only nodes without a local theme.
+    ui.set_theme(Theme::dark())?;
+    ui.refresh()?;
+    assert_eq!(outside.appearance()?.background, Theme::dark().surface);
+    assert_eq!(inside.theme()?, tall);
+    outside.reparent(&nested)?;
+    ui.refresh()?;
+    assert_eq!(outside.theme()?, Theme::high_contrast());
+    panel.set_theme(None)?;
+    ui.refresh()?;
+    assert_eq!(inside.bounds()?.size.height, 36.0);
+    assert_eq!(deep.theme()?, Theme::high_contrast());
+    assert!(panel.set_theme(Some(Theme { gap: -1.0, ..tall })).is_err());
+    Ok(())
+}

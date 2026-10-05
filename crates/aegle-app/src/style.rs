@@ -56,7 +56,7 @@ impl State {
     pub fn appearance_for(&self, id: NodeId, state: VisualState) -> Result<Appearance> {
         let decoration = self.decorations.get(&id);
         let skin = decoration.and_then(|d| d.skin).unwrap_or(Appearance::new);
-        let mut appearance = skin(&self.theme, state);
+        let mut appearance = skin(self.theme_of(id), state);
         if let Some(decoration) = decoration {
             decoration.style.apply(&mut appearance, state);
         }
@@ -68,14 +68,14 @@ impl State {
     }
 
     pub fn text_style(&self, id: NodeId) -> TextStyle<'static> {
+        let theme = self.theme_of(id);
         TextStyle {
             size: self
                 .decorations
                 .get(&id)
                 .and_then(|d| d.font_size)
-                .unwrap_or(self.theme.font_size),
-            color: self.theme.foreground,
-            ..Default::default()
+                .unwrap_or(theme.font_size),
+            ..crate::state::text_style(theme)
         }
     }
 
@@ -141,9 +141,10 @@ impl State {
         if old == size {
             return Ok(());
         }
+        let theme = self.theme_of(id);
         let style = TextStyle {
-            size: size.unwrap_or(self.theme.font_size),
-            ..self.style()
+            size: size.unwrap_or(theme.font_size),
+            ..crate::state::text_style(theme)
         };
         let content = &mut self.tree.get_mut(id).unwrap().context.content;
         if let Some(text) = content.paragraph_mut() {

@@ -8,6 +8,8 @@ use aegle_text::Alignment;
 
 impl State {
     pub fn refresh(&mut self) -> Result<bool> {
+        #[cfg(feature = "motion")]
+        self.start_offsets();
         self.rebuild_order();
         for index in 0..self.order.len() {
             let id = self.order[index];
@@ -25,8 +27,7 @@ impl State {
             }
         }
         if self.tree.dirty(self.root)?.intersects(Dirty::LAYOUT) {
-            let padding = self.theme.padding;
-            let gap = self.theme.gap;
+            let theme = &self.theme;
             let fonts = &self.fonts;
             let mut error = None;
             aegle_layout::compute(
@@ -37,7 +38,8 @@ impl State {
                     height: AvailableSpace::Definite(self.size.height),
                 },
                 |_, element, known, available| {
-                    let padding = element.inset(padding);
+                    let padding = element.inset(theme);
+                    let gap = element.theme_or(theme).gap;
                     let width = known.width.or(match available.width {
                         AvailableSpace::Definite(w) => Some(w),
                         AvailableSpace::MinContent => Some(0.0),
@@ -114,7 +116,7 @@ impl State {
                 // Ensure retained text geometry uses final layout constraints, even
                 // when Taffy's measurement callback last evaluated an intrinsic pass.
                 let width = node.bounds().size.width;
-                let padding = node.context.inset(padding);
+                let padding = node.context.inset(&self.theme);
                 match &mut node.context.content {
                     Content::Label(text) => {
                         text.reflow(Some((width - 2.0 * padding).max(0.0)), Alignment::Start)?;
@@ -138,15 +140,12 @@ impl State {
             let id = self.order[index];
             let focused = self.focus.current(&self.tree) == Some(id);
             let element = &mut self.tree.get_mut(id).unwrap().context;
+            let padding = element.inset(&self.theme);
             if let Content::Field(field) = &mut element.content {
                 let changes = field.editor_mut().take_changes();
                 let viewport = aegle_types::Size::new(
-                    (element.bounds.size.width
-                        - element.padding.unwrap_or(self.theme.padding) * 2.0)
-                        .max(0.0),
-                    (element.bounds.size.height
-                        - element.padding.unwrap_or(self.theme.padding) * 2.0)
-                        .max(0.0),
+                    (element.bounds.size.width - padding * 2.0).max(0.0),
+                    (element.bounds.size.height - padding * 2.0).max(0.0),
                 );
                 let caret = field.editor().ime_rect();
                 let size = field.editor().size();
