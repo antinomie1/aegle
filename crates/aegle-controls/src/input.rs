@@ -120,6 +120,8 @@ pub enum Input<'a> {
     Decrement,
     /// Set a finite numeric value through the enabled range behavior.
     SetValue(f64),
+    /// Replace an editor's selection with clipboard text as one undo group.
+    Paste(&'a str),
     /// Native IME transaction; its serial/session routing remains platform-owned.
     #[cfg(feature = "text")]
     Ime(aegle_text::ImeEdit<'a>),
@@ -134,6 +136,17 @@ pub enum Action {
     Submit,
     /// A toggle or range value actually changed through user or semantic input.
     Change,
+}
+
+/// Clipboard transfer performed by the host's native clipboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Clipboard {
+    /// Store the editor's selected text.
+    Copy,
+    /// Store the selected text, then delete it by delivering `Input::Paste("")`.
+    Cut,
+    /// Read text and deliver it as [`Input::Paste`].
+    Paste,
 }
 
 /// The host applies capture so a release reaches the original target.
@@ -163,4 +176,6 @@ pub struct Outcome {
     pub capture: Option<Capture>,
     /// Cancel the native IME session before publishing a fresh editor state.
     pub reset_ime: bool,
+    /// Clipboard transfer to perform for an editor shortcut.
+    pub clipboard: Option<Clipboard>,
 }

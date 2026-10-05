@@ -123,6 +123,8 @@ pub struct Editor {
     pub(crate) diagnostics: TextDiagnostics,
     pub(crate) multiline: bool,
     pub(crate) read_only: bool,
+    /// Committed password value; the Parley buffer then holds only masks.
+    pub(crate) secret: Option<String>,
     pub(crate) width: Option<f32>,
     pub(crate) alignment: Alignment,
 }
@@ -130,7 +132,9 @@ pub struct Editor {
 impl Editor {
     /// The committed value, excluding preedit and including its replaced selection.
     pub fn text(&self) -> TextValue<'_> {
-        if let Some(compose) = &self.composition {
+        if let Some(secret) = &self.secret {
+            TextValue([secret, "", ""])
+        } else if let Some(compose) = &self.composition {
             let range = self
                 .inner
                 .raw_compose()
@@ -147,6 +151,8 @@ impl Editor {
     }
 
     /// Display buffer, including transient preedit. Never use it as a committed value.
+    /// Password editors display one mask per character; selections and other
+    /// byte offsets always refer to this buffer.
     pub fn display_text(&self) -> &str {
         self.inner.raw_text()
     }
@@ -165,6 +171,7 @@ impl Editor {
         }
     }
     /// Selected committed text, or an empty slice for a collapsed selection.
+    /// Password editors return the masked display slice, never the value.
     pub fn selected_text(&self) -> &str {
         self.composition.as_ref().map_or_else(
             || &self.inner.raw_text()[self.selection().range()],
@@ -178,6 +185,10 @@ impl Editor {
     /// Whether keyboard/IME modifications are disabled; selection remains available.
     pub fn is_read_only(&self) -> bool {
         self.read_only
+    }
+    /// Whether the display masks the value; see [`crate::EditorDriver::set_password`].
+    pub fn is_password(&self) -> bool {
+        self.secret.is_some()
     }
     /// Whether hard line breaks and wrapping are enabled.
     pub fn is_multiline(&self) -> bool {
@@ -283,6 +294,7 @@ impl TextSystem {
             diagnostics: TextDiagnostics::default(),
             multiline: options.multiline,
             read_only: false,
+            secret: None,
             width: None,
             alignment: Alignment::Start,
         };

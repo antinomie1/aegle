@@ -137,6 +137,23 @@ fn key_id(key: u32) -> Key {
     }
 }
 
+/// Applies a clipboard request synchronously; a paste lands before refresh.
+pub(crate) fn clipboard(
+    backend: &mut crate::platform::Win32,
+    entry: &Entry,
+    request: crate::ClipboardRequest,
+) -> Result<()> {
+    match request {
+        crate::ClipboardRequest::Write(text) => backend.set_clipboard(entry.id, &text)?,
+        crate::ClipboardRequest::Read => {
+            if let Some(text) = backend.clipboard_text(entry.id)? {
+                entry.ui.paste(&text)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn ime_request(
     request: Option<crate::ImeRequest>,
 ) -> Option<crate::platform::ImeRequest> {

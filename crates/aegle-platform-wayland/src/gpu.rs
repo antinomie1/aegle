@@ -1,15 +1,12 @@
 //! Owned native surface leases for graphics APIs that retain platform handles.
 #![allow(unsafe_code)]
 
-use crate::{Error, PixelSize, PresentError, Wayland, WindowId};
+use crate::{Error, PixelSize, PresentError, Wayland, WindowId, state::Shell};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
     RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle, WindowHandle,
 };
-use smithay_client_toolkit::{
-    compositor::FrameCallbackData,
-    shell::{WaylandSurface, xdg::window::Window},
-};
+use smithay_client_toolkit::compositor::FrameCallbackData;
 use std::{marker::PhantomData, ptr::NonNull, rc::Rc};
 use wayland_client::{Connection, Proxy};
 
@@ -20,7 +17,7 @@ use wayland_client::{Connection, Proxy};
 /// This keeps handles valid throughout a graphics surface's destruction.
 #[derive(Clone, Debug)]
 pub struct WindowSurface {
-    window: Window,
+    window: Shell,
     connection: Connection,
     _thread: PhantomData<Rc<()>>,
 }

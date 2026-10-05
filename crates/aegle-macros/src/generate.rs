@@ -229,6 +229,7 @@ fn setter(
         Enabled => "set_enabled",
         Label => "set_accessible_label",
         ReadOnly => "set_read_only",
+        Password => "set_password",
         Theme => "set_theme",
         Background => "set_background",
         Foreground => "set_foreground",

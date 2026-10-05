@@ -122,13 +122,41 @@ impl EditorDriver<'_> {
         let changed = self.editor.text() != text;
         self.cancel_preedit();
         if changed {
-            self.editor.inner.set_text(text);
+            if let Some(secret) = &mut self.editor.secret {
+                secret.replace_range(.., text);
+                self.editor.inner.set_text(&mask(text));
+            } else {
+                self.editor.inner.set_text(text);
+            }
             self.engine().refresh_layout();
             self.engine().move_to_text_end();
             self.rebuilt(true);
         }
         self.editor.history.clear();
         Ok(())
+    }
+
+    /// Display one mask per character and keep the value outside the layout.
+    /// Toggling clears undo history and preedit; password editors keep no
+    /// history and reject IME transactions with [`TextError::Password`].
+    pub fn set_password(&mut self, password: bool) {
+        if self.editor.is_password() == password {
+            return;
+        }
+        self.cancel_preedit();
+        if password {
+            let value = self.editor.text().to_string();
+            self.editor.inner.set_text(&mask(&value));
+            self.editor.secret = Some(value);
+        } else {
+            let value = self.editor.secret.take().unwrap();
+            self.editor.inner.set_text(&value);
+        }
+        self.engine().refresh_layout();
+        self.engine().move_to_text_end();
+        self.rebuilt(false);
+        self.editor.history.clear();
+        self.editor.changes.policy = true;
     }
 
     /// Delete the selection, or the preceding Unicode extended grapheme.
@@ -300,6 +328,14 @@ impl EditorDriver<'_> {
             Ok(())
         }
     }
+    pub(crate) fn composable(&self) -> Result<(), TextError> {
+        self.writable()?;
+        if self.editor.is_password() {
+            Err(TextError::Password)
+        } else {
+            Ok(())
+        }
+    }
     pub(crate) fn ready(&self) -> Result<(), TextError> {
         if self.editor.diagnostics.unshaped_bytes != 0 {
             Err(TextError::MissingFont)
@@ -324,7 +360,9 @@ impl EditorDriver<'_> {
     pub(crate) fn replace_selected(&mut self, text: &str, merge: bool) {
         let before = self.editor.selection();
         let range = before.range();
-        if self.editor.display_text()[range.clone()] == *text {
+        let masked = self.conceal(&range, text);
+        let text = masked.as_deref().unwrap_or(text);
+        if masked.is_none() && self.editor.display_text()[range.clone()] == *text {
             if !range.is_empty() {
                 let generation = self.editor.inner.generation();
                 self.engine().move_to_byte(range.end);
@@ -339,7 +377,9 @@ impl EditorDriver<'_> {
     }
     pub(crate) fn replace_range(&mut self, range: Range<usize>, text: &str) {
         let before = self.editor.selection();
-        if self.editor.display_text()[range.clone()] == *text {
+        let masked = self.conceal(&range, text);
+        let text = masked.as_deref().unwrap_or(text);
+        if masked.is_none() && self.editor.display_text()[range.clone()] == *text {
             return;
         }
         let removed = self.capture(&range, text);
@@ -348,10 +388,21 @@ impl EditorDriver<'_> {
         self.rebuilt(true);
     }
     fn capture(&mut self, range: &Range<usize>, text: &str) -> Option<String> {
-        self.editor
-            .history
-            .prepare(range.len(), text.len())
+        (!self.editor.is_password() && self.editor.history.prepare(range.len(), text.len()))
             .then(|| self.editor.display_text()[range.clone()].to_owned())
+    }
+    /// Mirrors a display edit into the password value, returning its masks.
+    fn conceal(&mut self, range: &Range<usize>, text: &str) -> Option<String> {
+        let secret = self.editor.secret.as_mut()?;
+        let byte = |index: usize| {
+            secret
+                .char_indices()
+                .nth(index / MASK.len_utf8())
+                .map_or(secret.len(), |(byte, _)| byte)
+        };
+        let range = byte(range.start)..byte(range.end);
+        secret.replace_range(range, text);
+        Some(mask(text))
     }
     fn record(
         &mut self,
@@ -386,6 +437,12 @@ impl EditorDriver<'_> {
         self.editor.history.break_group();
         self.editor.changes.selection |= before != self.editor.inner.generation();
     }
+}
+
+const MASK: char = '\u{2022}';
+
+fn mask(text: &str) -> String {
+    std::iter::repeat_n(MASK, text.chars().count()).collect()
 }
 
 // Parley's public selection API snaps to shaping clusters. Its composition range

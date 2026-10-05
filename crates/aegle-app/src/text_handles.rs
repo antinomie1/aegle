@@ -1,6 +1,6 @@
 use crate::{Button, Label, Node, Result, TextField, UiError, state::Content};
 use aegle_core::Dirty;
-use aegle_text::Selection;
+use aegle_text::{EditorDriver, Selection, TextError};
 
 impl Label {
     /// Replaces text and invalidates its shared layout, scene and semantic state.
@@ -33,34 +33,34 @@ impl TextField {
     }
     /// Allows selection but rejects user edits when true.
     pub fn set_read_only(&self, read_only: bool) -> Result {
-        self.change(|state, id| {
-            let Content::Field(field) = &mut state.tree.get_mut(id).unwrap().context.content else {
-                unreachable!()
-            };
-            state
-                .fonts
-                .borrow_mut()
-                .edit(field.editor_mut())
-                .set_read_only(read_only);
-            if state.focus.current(&state.tree) == Some(id) {
-                state.ime_dirty = true;
-                state.ime_reset = true;
-                state.input_method = false;
-            }
+        self.edit(|editor| {
+            editor.set_read_only(read_only);
+            Ok(())
+        })
+    }
+    /// Masks the value with one bullet per character. Password fields keep no
+    /// undo history, open no IME composition, refuse copy/cut and expose only
+    /// the masks to accessibility. Selections then use display-buffer offsets.
+    pub fn set_password(&self, password: bool) -> Result {
+        self.edit(|editor| {
+            editor.set_password(password);
             Ok(())
         })
     }
     /// Changes the committed UTF-8 selection; active preedit must first be cancelled.
     pub fn select(&self, selection: Selection) -> Result {
+        self.edit(|editor| editor.select(selection))
+    }
+    /// Applies an editor change, then restarts a focused native IME session.
+    fn edit(
+        &self,
+        apply: impl FnOnce(&mut EditorDriver<'_>) -> std::result::Result<(), TextError>,
+    ) -> Result {
         self.change(|state, id| {
             let Content::Field(field) = &mut state.tree.get_mut(id).unwrap().context.content else {
                 unreachable!()
             };
-            state
-                .fonts
-                .borrow_mut()
-                .edit(field.editor_mut())
-                .select(selection)?;
+            apply(&mut state.fonts.borrow_mut().edit(field.editor_mut()))?;
             if state.focus.current(&state.tree) == Some(id) {
                 state.ime_dirty = true;
                 state.ime_reset = true;

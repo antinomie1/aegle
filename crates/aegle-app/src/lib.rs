@@ -78,6 +78,8 @@ pub use handles::{Button, Container, Label, Node, TextField};
     all(feature = "windows", target_os = "windows")
 ))]
 pub use native::{App, AppOptions, RendererBackend, Window, WindowOptions};
+#[cfg(all(feature = "wayland", target_os = "linux"))]
+pub use platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
 pub use scroll_handles::ScrollView;
-pub use ui::{ImeRequest, ImeState, Result, Ui, UiError};
+pub use ui::{ClipboardRequest, ImeRequest, ImeState, Result, Ui, UiError};
 pub use value_handles::{CheckBox, Progress, Slider, Switch};

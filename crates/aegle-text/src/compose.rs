@@ -12,7 +12,7 @@ impl EditorDriver<'_> {
     /// Cursor endpoints are relative UTF-8 bytes; `None` hides the caret. Empty
     /// preedit cancels, restoring the original value and directed selection.
     pub fn set_preedit(&mut self, text: &str, cursor: Option<Selection>) -> Result<(), TextError> {
-        self.writable()?;
+        self.composable()?;
         if let Some(cursor) = cursor {
             validate_selection(text, cursor)?;
         }

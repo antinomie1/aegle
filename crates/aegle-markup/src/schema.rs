@@ -98,6 +98,8 @@ pub enum PropertyName {
     Label,
     /// Editor read-only state.
     ReadOnly,
+    /// Single-line editor password masking.
+    Password,
     /// Named built-in window theme.
     Theme,
     /// Normal background color.

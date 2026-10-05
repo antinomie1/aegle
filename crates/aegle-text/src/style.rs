@@ -112,6 +112,8 @@ pub enum TextError {
     CompositionActive,
     /// Text has no font-backed layout from which to derive a cursor.
     MissingFont,
+    /// Password editors accept no input-method composition.
+    Password,
 }
 
 impl fmt::Display for TextError {
@@ -127,6 +129,7 @@ impl fmt::Display for TextError {
             Self::SingleLine => "single-line editor rejects line breaks",
             Self::CompositionActive => "finish or cancel preedit before this operation",
             Self::MissingFont => "text has no font-backed layout",
+            Self::Password => "password editor rejects input-method composition",
         })
     }
 }

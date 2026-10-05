@@ -6,6 +6,8 @@
 //! does not provide surrounding-text reconversion or the touch-keyboard contract.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#[cfg(windows)]
+mod clipboard;
 mod error;
 mod events;
 #[cfg(windows)]

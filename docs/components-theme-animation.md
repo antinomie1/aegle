@@ -6,7 +6,7 @@
 
 `aegle-controls::Button` 保存 enabled/focused/hovered/pressed，不含标签或绘制。指针按下请求 capture，匹配释放且仍在命中区才激活；Space 在释放时激活，Enter 只在首次按下时激活，重复按键不重复触发。失焦、取消和禁用释放 capture，不产生激活；语义 `Input::Activate` 同样检查启用状态。
 
-可选 `text` 的 `TextField` 直接拥有 Editor，复用选择、按词/行移动、grapheme 删除、撤销、单行提交和原子 IME 事务。宿主提供当前文字局部坐标，应用 `Outcome` 的焦点/capture/重绘/IME 重置请求，并消费 Editor 的失效标记。`Outcome::semantics` 独立表达焦点/启用状态变化，普通 hover/pressed 绘制不会因此重新导出语义。只读仍可选择；失焦或禁用取消组合且恢复已提交值。剪贴板、密码和平台差异快捷键尚未全部接入。
+可选 `text` 的 `TextField` 直接拥有 Editor，复用选择、按词/行移动、grapheme 删除、撤销、单行提交和原子 IME 事务。宿主提供当前文字局部坐标，应用 `Outcome` 的焦点/capture/重绘/IME 重置请求，并消费 Editor 的失效标记。`Outcome::semantics` 独立表达焦点/启用状态变化，普通 hover/pressed 绘制不会因此重新导出语义。只读仍可选择；失焦或禁用取消组合且恢复已提交值。复制/剪切/粘贴经 `Outcome::clipboard` 交给宿主，`Input::Paste` 回送文字；密码模式遮盖显示、拒绝复制与组合。更多平台差异快捷键尚未接入。
 
 这些行为可由不同皮肤共享；当前 `aegle-app` 已将它们与 row/column、标签及单行/多行编辑器组合，使用统一 Theme 绘制中性基础外观，并同步布局、命中、IME 和可选 Unix 系统语义。`set_skin` 可替换现有控件的配色、边框、圆角和文字装饰，不重写行为。尚无独立 widgets crate、任意绘制/新行为注册接口或完整跨平台组件集成。控件行为层不创建窗口或定时器。
 

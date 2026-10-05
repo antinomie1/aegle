@@ -83,6 +83,8 @@ struct Probe {
     method: ZwpInputMethodV2,
     state: InputMethod,
     events: Vec<(WindowId, ImeEvent)>,
+    seat: Option<aegle_platform_wayland::WlSeat>,
+    clipboard: Option<String>,
 }
 impl Probe {
     fn pump(&mut self, ready: impl Fn(&Self) -> bool) {
@@ -100,6 +102,8 @@ impl Probe {
                             .unwrap();
                     }
                     Event::Ime { window, event, .. } => self.events.push((window, event)),
+                    Event::Key { seat, .. } => self.seat = Some(seat),
+                    Event::Clipboard { text, .. } => self.clipboard = Some(text),
                     Event::Error(error) => panic!("native input failure: {error}"),
                     _ => {}
                 }
@@ -185,6 +189,8 @@ fn native_ime_batches_and_session_boundaries() {
         method,
         state,
         events: Vec::new(),
+        seat: None,
+        clipboard: None,
     };
     let first = p.app.create_window(WindowOptions::default()).unwrap();
     let mut req = ImeRequest {
@@ -310,5 +316,18 @@ fn native_ime_batches_and_session_boundaries() {
     p.pump(|p| !p.state.active);
     p.app.configure_ime(first, Some(req)).unwrap();
     p.pump(|p| p.state.active);
+
+    // A key press authorizes the selection. Pasting a selection larger than a
+    // pipe buffer from this same client streams through both non-blocking ends.
+    keyboard.key(0, 30, 1);
+    keyboard.key(1, 30, 0);
+    p.pump(|p| p.seat.is_some());
+    let seat = p.seat.clone().unwrap();
+    let text = "剪贴板".repeat(20_000);
+    p.app.set_clipboard(&seat, &text).unwrap();
+    p.pump(|_| true);
+    p.app.request_clipboard(first, &seat).unwrap();
+    p.pump(|p| p.clipboard.is_some());
+    assert!(p.clipboard.as_ref() == Some(&text));
     p.app.remove_window(first).unwrap();
 }

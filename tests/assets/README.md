@@ -7,7 +7,8 @@ font. This fixture is for portable shaping and rasterization tests; it is not a
 bundled application font or a substitute for a complete CJK font.
 
 The subset contains printable ASCII (`U+0020–U+007E`), `é`, combining acute
-(`U+0301`), and `你好世界中文日本語한글`, with relevant OpenType layout glyphs.
+(`U+0301`), the password mask `•` (`U+2022`), and `你好世界中文日本語한글`, with
+relevant OpenType layout glyphs.
 Hinting is removed. SFNT family, full, unique and PostScript names and CFF names
 are changed to **Aegle Test CJK**; the outlines are unchanged. Japanese-source
 ideograph forms are intentional.

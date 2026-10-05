@@ -14,7 +14,8 @@ mod toggle;
 
 pub use button::Button;
 pub use input::{
-    Action, Capture, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput, PointerKind,
+    Action, Capture, Clipboard, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,
+    PointerKind,
 };
 pub use range::{Range, RangeError};
 pub use slider::Slider;

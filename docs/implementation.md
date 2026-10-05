@@ -10,15 +10,15 @@
 - aegle-layout：Taffy 0.14.0 直接适配同一棵保留树，无第二份拓扑；共享默认样式、测量缓存、Flex/Block、可选 Grid。它不依赖字体、窗口或 renderer。
 - aegle-scene：no_std + alloc 的局部绘制记录；实色矩形、圆角、居中边框、仿射变换、嵌套裁剪。可选 text 保存定位字形、变体坐标与共享字体句柄，不依赖排版器或栅格器。
 - aegle-text：复用 Parley/Fontique 的 Unicode shaping、字体选择、回退、换行与定位；Paragraph 保留文字和排版结果，宽度变化只重排，颜色覆盖无需重新 shaping。显式字体为默认，system-fonts、text-dictionary、text-a11y、scene 独立选用；缺字与无可用字体分别报告。
-- Editor：复用同一 TextSystem 的 Parley PlainEditor，提供单/多行、选择/命中、视觉移动、grapheme 删除、精确 UTF-8 替换、只读、组合输入模型及有界差量撤销/重做。预编辑只保留被替换片段，提交值不随预编辑改变；取消恢复原选区。文字、装饰和候选区域来自同一布局。apply_ime 在完整验证后应用删除/提交/预编辑事务，删除与提交合成一次撤销；surrounding 无分配地借出有界周边文字。编辑、宽度和样式改变目前仍会重新 shaping，不宣称增量编辑引擎。
+- Editor：复用同一 TextSystem 的 Parley PlainEditor，提供单/多行、选择/命中、视觉移动、grapheme 删除、精确 UTF-8 替换、只读、组合输入模型及有界差量撤销/重做。预编辑只保留被替换片段，提交值不随预编辑改变；取消恢复原选区。文字、装饰和候选区域来自同一布局。密码模式只排版等量 `•`，明文另存且不记录历史、拒绝 IME 组合。apply_ime 在完整验证后应用删除/提交/预编辑事务，删除与提交合成一次撤销；surrounding 无分配地借出有界周边文字。编辑、宽度和样式改变目前仍会重新 shaping，不宣称增量编辑引擎。
 - aegle-controls：共享无分配 Range、Toggle、Slider 和无皮肤 Button 的键盘/指针/语义激活、capture 和取消状态；可选 text 提供复用 Editor 的 TextField。宿主拥有树、命中和焦点；controls 默认只依赖 types，不依赖窗口或 renderer。
 - aegle-access：平台回调经 Mailbox/Handlers 排队并唤醒 UI；可选 UnixAdapter/WindowsAdapter 复用 AccessKit AT-SPI/UIA。示例从同一控件树按脏标记导出语义，系统 Focus/Click/SetTextSelection 回到同一焦点、按钮和 Editor。text-a11y 提供文字 run 与有校验的选择转换；不是完整跨平台无障碍。
 - aegle-glyph：复用 Swash/Skrifa，按需生成灰度字形与 COLRv0/嵌入位图，LRU 同时约束图像字节和条目数；缓存不持有字体文件。PNG 位图使用有解码预算的 png crate；库不内嵌字体。
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 - aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；可选 window 已提供原生 swapchain，App 可显式选择。
 
-- aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
-- aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
+- aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放、事件等待、键盘/指针输入、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无触摸、平台偏好、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
+- aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。当前没有 token 注册表、局部主题继承或系统偏好监听。
 - aegle-app 与 aegle：无窗口 Ui 和可选 Wayland/Win32 软件或 Vulkan 应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
@@ -247,8 +247,8 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
-- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland layer-shell、剪贴板、触摸、fractional scale、系统偏好与客户端装饰。
-- 组件/绘制：惯性、列表虚拟化、自定义 painter 扩展、更多基础组件与布局属性、通用图像/路径/特效；密码编辑和后台 UiProxy。
+- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale、系统偏好与客户端装饰。
+- 组件/绘制：惯性、列表虚拟化、自定义 painter 扩展、更多基础组件与布局属性、通用图像/路径/特效；后台 UiProxy。
 - 标记语言：目前只有静态结构/字面量与Rust回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。
 - 主题/动画：完整token/局部继承、系统偏好、几何动画与完成回调。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。
@@ -266,3 +266,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - Vulkan 批处理：图元记录改为 storage buffer，相邻且 pipeline/图集页相同的图元合并为一次 instanced draw，移除逐图元 push constant 与 scissor。release 离屏 800×480 探针（2000 矩形 + 30 行中英文，约 3800 图元，预热 40 帧后 300 帧，主机 wall time 含 fence 等待）：RX 6800 XT 平均 1.412 → 0.448 ms，Lavapipe 23.894 → 4.198 ms；两种驱动的读回像素与改动前逐字节相同。图元缓冲按每图元 112 B 计入设备预算。
 - 直接 sRGB 窗口：不透明窗口默认直接在 BGRA8/RGBA8_SRGB swapchain 上绘制，没有 RGBA16F 目标与编码 pass；`Options::transparent` 保留原透明路径。私有 headless Sway（RADV 用 GLES2，Lavapipe 用 Pixman）同一场景 300 帧：设备分配 RADV 4,350,736 → 664,336 B、Lavapipe 3,582,736 → 664,336 B；每帧工作时间 RADV 0.579 → 0.555 ms、Lavapipe 4.441 → 3.918 ms；Lavapipe 进程 CPU 每帧 30.5 → 26.2 ms（含其光栅线程），RADV 均为 0.433 ms。两条路径截图最大通道差 1 级，占 2.1% 通道。
 - 未指定设备时改为优先集成 GPU；本机没有集成 GPU，未实测该选择。Vulkan 窗口生命周期场景在 RADV 与 Lavapipe 上通过；Vulkan 版 scrolling 示例目视确认直角控件、覆盖式滚动条与 CJK 文字。本轮机器未安装 Khronos validation layer，没有验证层诊断。以上为桌面样本，不是嵌入式功耗或帧时保证。
+
+## 剪贴板、密码编辑与 layer-shell
+
+- 剪贴板：TextField 的 Ctrl+C/X/V 只产生请求，App 在刷新前交给平台，不新增依赖或线程。Wayland 每 seat 一个 data device，选区数据以一份 `Rc<[u8]>` 保留到被其他客户端取代，写出/读取都是 4 KiB 一次的 calloop 非阻塞管道，读取上限 4 MiB；Win32 同步读写 `CF_UNICODETEXT`。
+- 密码：`set_password`/标记 `password` 让 PlainEditor 只排版 `•`，明文仅存一份；无撤销历史、拒绝 IME 组合与复制/剪切，语义导出 `PasswordInput` 与遮盖值。测试字体按重建脚本补入 U+2022。
+- layer-shell：`WindowOptions::layer` 在同一窗口表中创建 wlr layer 表面，复用输入、IME、SHM/Vulkan 呈现和帧门控；compositor 缺少协议时创建报错。不另设 shell crate。
+- 验证：workspace 全 features 测试通过；ui 场景覆盖剪切/粘贴（换行剥离、独立撤销）、密码输入拒绝复制与 IME 且语义树不含明文。私有 Pixman Sway 上 Wayland native 场景验证 TOP|LEFT|RIGHT 锚定面板拉伸到输出宽度、高度 96，ime 场景以真实键盘 serial 设置 180,000 B CJK 选区并经非阻塞管道读回一致。wtype 驱动的应用级探针在软件与 Vulkan（Lavapipe）下完成跨编辑器复制/粘贴、密码框拒绝复制后粘贴仍为原值，截图确认 layer 面板与遮盖显示。Wine10 + 私有 Xvfb 执行 Win32 native 场景的 UTF-16 代理对剪贴板往返；Wine 下所有者窗口的剪贴板消息会先于已置位的 wake 被派发，wake 在下一次 dispatch 送达，测试按此接受。真实 Windows 与 GNOME 等无 layer-shell 的 compositor 未验收。
+- 既有 Wayland native 场景在平铺 Sway 下会因窗口被放大超过 2 MiB SHM 预算失败（未改动的 HEAD 同样复现）；私有 Sway 以浮动规则运行，未改测试预算。

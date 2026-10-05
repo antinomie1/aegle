@@ -162,6 +162,7 @@ impl SeatHandler for State {
 
     fn new_seat(&mut self, _: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {
         self.ime.add_seat(&seat, qh);
+        self.clipboard.add_seat(qh, &seat);
         self.input.seats.push(SeatInput {
             seat,
             keyboard: None,
@@ -240,6 +241,7 @@ impl SeatHandler for State {
     }
 
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, seat: WlSeat) {
+        self.clipboard.remove_seat(&seat);
         if let Some(window) = self.ime.remove_seat(&seat) {
             self.events.push_back(Event::Ime {
                 window,
@@ -307,7 +309,7 @@ impl KeyboardHandler for State {
         _: &Connection,
         _: &QueueHandle<Self>,
         keyboard: &wl_keyboard::WlKeyboard,
-        _: u32,
+        serial: u32,
         key: KeyEvent,
     ) {
         if let Some(input) = self
@@ -316,6 +318,7 @@ impl KeyboardHandler for State {
             .iter_mut()
             .find(|input| input.keyboard.as_ref() == Some(keyboard))
         {
+            self.clipboard.input(&input.seat, serial);
             if input.focus.is_some() {
                 if let Err(error) = input.repeat.press(&key, keyboard) {
                     self.events.push_back(Event::Error(error));
@@ -452,6 +455,9 @@ impl PointerHandler for State {
                 continue;
             };
             let input = &mut self.input.seats[index];
+            if let PointerEventKind::Press { serial, .. } = event.kind {
+                self.clipboard.input(&input.seat, serial);
+            }
             let position = Point {
                 x: event.position.0 as f32,
                 y: event.position.1 as f32,

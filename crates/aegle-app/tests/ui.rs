@@ -1,5 +1,8 @@
 //! One retained lifecycle scenario across input, callbacks, IME, themes and destruction.
-use aegle_app::{ImeEdit, Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui, UiError};
+use aegle_app::{
+    ClipboardRequest, ImeEdit, Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui,
+    UiError,
+};
 use aegle_text::{Blob, GenericFamily, Selection};
 use std::{
     cell::{Cell, RefCell},
@@ -137,6 +140,41 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     })?;
     ui.dispatch_callbacks()?;
     assert_eq!(submits.get(), 1);
+
+    // Shortcuts hand clipboard work to the host; cut deletes immediately and
+    // single-line paste drops line breaks.
+    let shortcut = |key: char, control: bool| KeyInput {
+        key: Key::Character(key),
+        text: if control { "" } else { "!" },
+        modifiers: Modifiers {
+            control,
+            ..Modifiers::default()
+        },
+        pressed: true,
+        repeat: false,
+    };
+    single.select(Selection {
+        anchor: 0,
+        focus: 3,
+    })?;
+    ui.key(shortcut('x', true))?;
+    assert_eq!(
+        ui.take_clipboard()?,
+        Some(ClipboardRequest::Write("sub".into()))
+    );
+    ui.key(shortcut('v', true))?;
+    assert_eq!(ui.take_clipboard()?, Some(ClipboardRequest::Read));
+    ui.paste("re\nsub")?;
+    assert_eq!(single.text()?, "resubmit");
+    // Passwords keep their value behind masks and never reach the clipboard.
+    single.set_password(true)?;
+    ui.key(shortcut('1', false))?;
+    ui.key(shortcut('a', true))?;
+    ui.key(shortcut('c', true))?;
+    assert_eq!(ui.take_clipboard()?, None);
+    assert_eq!(single.text()?, "resubmit!");
+    ui.refresh()?;
+    assert!(ui.take_ime_state(4000)?.unwrap().request.is_none());
     ui.refresh()?;
     ui.take_ime_state(4000)?;
     field.select(Selection::default())?;
@@ -163,6 +201,17 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
             tree.nodes
                 .iter()
                 .any(|(_, node)| node.role() == aegle_access::accesskit::Role::MultilineTextInput)
+        );
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|(_, node)| node.role() == aegle_access::accesskit::Role::PasswordInput)
+        );
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|(_, node)| node.value().is_some_and(|value| value.contains("sub")))
         );
         assert!(!ui.access_dirty());
     }

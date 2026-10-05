@@ -1,4 +1,7 @@
-use crate::{Error, ImeEvent, KeyEvent, Modifiers, PointerEventKind, WlSeat};
+use crate::{
+    Anchor, Error, ImeEvent, KeyEvent, KeyboardInteractivity, Layer, Modifiers, PointerEventKind,
+    WlSeat,
+};
 use aegle_types::Point;
 
 /// Stable window identity, valid only on its originating connection.
@@ -25,6 +28,24 @@ pub struct WindowOptions<'a> {
     pub size: PixelSize,
     /// Maximum live SHM mapping bytes for this window. Default: 16 MiB.
     pub buffer_budget: usize,
+    /// Creates a wlr layer surface instead of a toplevel. Default: `None`.
+    pub layer: Option<LayerOptions>,
+}
+
+/// Placement of a `zwlr_layer_shell_v1` surface, such as a panel or overlay.
+///
+/// Anchoring both opposite edges stretches that axis to the output; otherwise
+/// the preferred size applies. `app_id` becomes the layer namespace.
+#[derive(Clone, Copy, Debug)]
+pub struct LayerOptions {
+    /// Stacking layer.
+    pub layer: Layer,
+    /// Edges the surface attaches to; empty centers it.
+    pub anchor: Anchor,
+    /// Logical pixels reserved along an anchored edge; -1 ignores other zones.
+    pub exclusive_zone: i32,
+    /// Keyboard focus policy.
+    pub keyboard: KeyboardInteractivity,
 }
 
 impl Default for WindowOptions<'_> {
@@ -37,6 +58,7 @@ impl Default for WindowOptions<'_> {
                 height: 480,
             },
             buffer_budget: 16 * 1024 * 1024,
+            layer: None,
         }
     }
 }
@@ -48,7 +70,7 @@ pub struct WindowInfo {
     pub size: PixelSize,
     /// Integer buffer scale; multiply logical drawing coordinates by this.
     pub scale: u32,
-    /// Whether the compositor marks this window active.
+    /// Whether the compositor marks this window active; always true for layers.
     pub active: bool,
     /// Whether an initial configure has arrived.
     pub configured: bool,
@@ -151,6 +173,15 @@ pub enum Event {
         seat: WlSeat,
         /// Protocol input event.
         event: ImeEvent,
+    },
+    /// Text requested by [`crate::Wayland::request_clipboard`].
+    Clipboard {
+        /// Requesting window.
+        window: WindowId,
+        /// Seat whose selection was read.
+        seat: WlSeat,
+        /// Complete UTF-8 selection.
+        text: String,
     },
     /// Asynchronous input or protocol setup failure.
     Error(Error),

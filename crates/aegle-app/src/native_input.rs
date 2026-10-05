@@ -13,7 +13,8 @@ pub(crate) fn target(event: &Event) -> Option<WindowId> {
         | Event::Key { window, .. }
         | Event::Modifiers { window, .. }
         | Event::Pointer { window, .. }
-        | Event::Ime { window, .. } => Some(*window),
+        | Event::Ime { window, .. }
+        | Event::Clipboard { window, .. } => Some(*window),
         Event::Wake | Event::Error(_) => None,
     }
 }
@@ -122,10 +123,29 @@ impl Entry {
                     ImeEvent::Entered => self.ui.request_ime_sync()?,
                 }
             }
+            Event::Clipboard { seat, text, .. } if self.seat.as_ref() == Some(&seat) => {
+                self.ui.paste(&text)?;
+            }
             _ => {}
         }
         Ok(())
     }
+}
+
+/// Offers or requests the clipboard of the window's active keyboard seat.
+pub(crate) fn clipboard(
+    backend: &mut crate::platform::Wayland,
+    entry: &Entry,
+    request: crate::ClipboardRequest,
+) -> Result<()> {
+    let Some(seat) = &entry.seat else {
+        return Ok(());
+    };
+    match request {
+        crate::ClipboardRequest::Write(text) => backend.set_clipboard(seat, &text)?,
+        crate::ClipboardRequest::Read => backend.request_clipboard(entry.id, seat)?,
+    }
+    Ok(())
 }
 
 fn normalize(value: aegle_platform_wayland::Modifiers) -> Modifiers {

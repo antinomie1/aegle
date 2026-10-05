@@ -123,6 +123,7 @@ pub(crate) struct State {
     pub ime_dirty: bool,
     pub ime_reset: bool,
     pub input_method: bool,
+    pub clipboard: Option<crate::ClipboardRequest>,
     pub repaint: bool,
     pub callbacks: HashMap<NodeId, Handler>,
     pub decorations: HashMap<NodeId, Decoration>,

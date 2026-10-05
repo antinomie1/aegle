@@ -12,7 +12,7 @@ use smithay_client_toolkit::{
     registry::RegistryState,
     seat::SeatState,
     shell::{
-        WaylandSurface,
+        wlr_layer::{Anchor, LayerShell},
         xdg::{XdgShell, window::WindowDecorations},
     },
     shm::Shm,
@@ -23,7 +23,11 @@ use wayland_client::{
 
 use crate::{
     Error, Event, ImeRequest, PixelSize, PresentError, State, WindowId, WindowInfo, WindowOptions,
-    buffers::SoftwareBuffers, ime::ImeState, input::InputState, state::WindowState,
+    buffers::SoftwareBuffers,
+    clipboard::ClipboardState,
+    ime::ImeState,
+    input::InputState,
+    state::{Shell, WindowState},
 };
 
 /// One Wayland connection and blocking event loop, shared by all its windows.
@@ -66,19 +70,23 @@ impl Wayland {
             return Err(Error::backend("wl_compositor version 4 is required"));
         }
         let shell = XdgShell::bind(&globals, &qh).map_err(Error::backend)?;
+        let layer_shell = LayerShell::bind(&globals, &qh).ok();
         let shm = Shm::bind(&globals, &qh).map_err(Error::backend)?;
         let seat_state = SeatState::new(&globals, &qh);
         let ime = ImeState::bind(&globals, &qh);
+        let clipboard = ClipboardState::bind(&globals, &qh);
         let mut state = State {
             registry_state: RegistryState::new(&globals),
             output_state: OutputState::new(&globals, &qh),
             seat_state,
             compositor,
             shell,
+            layer_shell,
             shm,
             loop_handle: event_loop.handle(),
             input: InputState::default(),
             ime,
+            clipboard,
             windows: Vec::new(),
             events: VecDeque::new(),
         };
@@ -114,8 +122,9 @@ impl Wayland {
         Ok(self.wake.as_ref().unwrap().0.clone())
     }
 
-    /// Creates an ordinary toplevel and requests its initial configure.
-    /// No pixel memory is allocated until the first presentation.
+    /// Creates an ordinary toplevel, or a layer surface when requested, and
+    /// requests its initial configure. No pixel memory is allocated until the
+    /// first presentation. Layers require `zwlr_layer_shell_v1`.
     pub fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
         let info = WindowInfo {
             size: options.size,
@@ -136,12 +145,42 @@ impl Wayland {
             .checked_add(1)
             .ok_or_else(|| Error::backend("window identity exhausted"))?;
         let surface = self.state.compositor.create_surface(&self.qh);
-        let window =
-            self.state
-                .shell
-                .create_window(surface, WindowDecorations::RequestServer, &self.qh);
-        window.set_title(options.title);
-        window.set_app_id(options.app_id);
+        let window = if let Some(layer) = options.layer {
+            let shell = self.state.layer_shell.as_ref().ok_or_else(|| {
+                surface.destroy();
+                Error::backend("zwlr_layer_shell_v1 is unavailable")
+            })?;
+            let native = shell.create_layer_surface(
+                &self.qh,
+                surface,
+                layer.layer,
+                Some(options.app_id),
+                None,
+            );
+            let stretch = |edges: Anchor, extent: u32| {
+                if layer.anchor.contains(edges) {
+                    0
+                } else {
+                    extent
+                }
+            };
+            native.set_size(
+                stretch(Anchor::LEFT | Anchor::RIGHT, options.size.width),
+                stretch(Anchor::TOP | Anchor::BOTTOM, options.size.height),
+            );
+            native.set_anchor(layer.anchor);
+            native.set_exclusive_zone(layer.exclusive_zone);
+            native.set_keyboard_interactivity(layer.keyboard);
+            Shell::Layer(native)
+        } else {
+            let native =
+                self.state
+                    .shell
+                    .create_window(surface, WindowDecorations::RequestServer, &self.qh);
+            native.set_title(options.title);
+            native.set_app_id(options.app_id);
+            Shell::Xdg(native)
+        };
         window.commit();
         self.state.windows.push(WindowState {
             id,
@@ -176,7 +215,8 @@ impl Wayland {
             | Event::Key { window, .. }
             | Event::Modifiers { window, .. }
             | Event::Pointer { window, .. }
-            | Event::Ime { window, .. } => *window != id,
+            | Event::Ime { window, .. }
+            | Event::Clipboard { window, .. } => *window != id,
             _ => true,
         });
         Ok(())

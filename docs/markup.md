@@ -59,6 +59,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `visible`、`enabled` | bool，作用于控件子树 |
 | `label` | 无障碍名称字符串 |
 | `read_only` | TextField/TextArea 的 bool |
+| `password` | TextField 的 bool；以 `•` 遮盖值，禁用复制/剪切、IME 组合与撤销历史 |
 | `theme` | Window 的 `light`、`dark`、`high_contrast` |
 | `background`、`foreground`、`border_color` | `#RRGGBB` 或 `#RRGGBBAA` 颜色 |
 | `hover_background`、`pressed_background` | hover 限 Button/TextField/TextArea/CheckBox/Switch/Slider，pressed 限 Button/CheckBox/Switch/Slider |

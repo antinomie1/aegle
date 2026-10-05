@@ -78,7 +78,7 @@ impl Default for AppOptions {
     }
 }
 
-/// Initial ordinary window size and presentation budget.
+/// Initial window size, presentation budget and Wayland surface role.
 #[derive(Clone, Copy, Debug)]
 pub struct WindowOptions {
     /// Preferred width in logical pixels; the compositor may override it.
@@ -88,6 +88,10 @@ pub struct WindowOptions {
     /// Maximum software presentation bytes for this window. Default: 16 MiB.
     /// Vulkan uses `AppOptions::vulkan` instead.
     pub buffer_budget: usize,
+    /// Wayland layer-shell placement instead of a toplevel, for panels,
+    /// docks and overlays. Default: `None`.
+    #[cfg(target_os = "linux")]
+    pub layer: Option<crate::platform::LayerOptions>,
 }
 
 impl Default for WindowOptions {
@@ -96,6 +100,8 @@ impl Default for WindowOptions {
             width: 800,
             height: 480,
             buffer_budget: 16 * 1024 * 1024,
+            #[cfg(target_os = "linux")]
+            layer: None,
         }
     }
 }
@@ -243,6 +249,8 @@ impl App {
                     height: options.height,
                 },
                 buffer_budget: options.buffer_budget,
+                #[cfg(target_os = "linux")]
+                layer: options.layer,
             })?;
         #[cfg(feature = "vulkan")]
         let gpu = match crate::native_render::create_gpu(&runtime, id) {

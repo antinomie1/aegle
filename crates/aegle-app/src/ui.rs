@@ -77,6 +77,15 @@ pub struct ImeState {
     pub request: Option<ImeRequest>,
 }
 
+/// Clipboard work requested by an editor shortcut; see [`Ui::take_clipboard`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClipboardRequest {
+    /// Store this text as the native clipboard selection.
+    Write(String),
+    /// Read native clipboard text and deliver it through [`Ui::paste`].
+    Read,
+}
+
 /// A retained UI with shared text resources and no native platform dependency.
 ///
 /// This owner is deliberately not `Clone`: handles hold weak references, so
@@ -123,6 +132,7 @@ impl Ui {
                 ime_dirty: true,
                 ime_reset: false,
                 input_method: false,
+                clipboard: None,
                 repaint: true,
                 callbacks: HashMap::new(),
                 decorations: HashMap::new(),
@@ -230,6 +240,17 @@ impl Ui {
             draw(view, true)?;
         }
         Ok(())
+    }
+
+    /// Consumes the latest copy, cut or paste request. Password fields never
+    /// request a write; cut has already deleted its selection.
+    pub fn take_clipboard(&self) -> Result<Option<ClipboardRequest>> {
+        Ok(self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?
+            .clipboard
+            .take())
     }
 
     /// Consumes pending IME synchronization after refresh and event callbacks.

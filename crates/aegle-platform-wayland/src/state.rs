@@ -10,6 +10,7 @@ use smithay_client_toolkit::{
     seat::SeatState,
     shell::{
         WaylandSurface,
+        wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
         xdg::{
             XdgShell,
             window::{Window, WindowConfigure, WindowHandler},
@@ -23,12 +24,32 @@ use wayland_client::{
 };
 
 use crate::{
-    Event, WindowId, WindowInfo, buffers::SoftwareBuffers, ime::ImeState, input::InputState,
+    Event, WindowId, WindowInfo, buffers::SoftwareBuffers, clipboard::ClipboardState,
+    ime::ImeState, input::InputState,
 };
+
+/// Surface role: an ordinary toplevel or a wlr layer surface.
+#[derive(Clone, Debug)]
+pub(crate) enum Shell {
+    Xdg(Window),
+    Layer(LayerSurface),
+}
+
+impl Shell {
+    pub(crate) fn wl_surface(&self) -> &wl_surface::WlSurface {
+        match self {
+            Self::Xdg(window) => window.wl_surface(),
+            Self::Layer(layer) => layer.wl_surface(),
+        }
+    }
+    pub(crate) fn commit(&self) {
+        self.wl_surface().commit();
+    }
+}
 
 pub(crate) struct WindowState {
     pub(crate) id: WindowId,
-    pub(crate) window: Window,
+    pub(crate) window: Shell,
     pub(crate) info: WindowInfo,
     pub(crate) buffers: SoftwareBuffers,
     pub(crate) dirty: bool,
@@ -44,10 +65,12 @@ pub(crate) struct State {
     pub(crate) output_state: OutputState,
     pub(crate) compositor: CompositorState,
     pub(crate) shell: XdgShell,
+    pub(crate) layer_shell: Option<LayerShell>,
     pub(crate) shm: Shm,
     pub(crate) loop_handle: LoopHandle<'static, State>,
     pub(crate) input: InputState,
     pub(crate) ime: ImeState,
+    pub(crate) clipboard: ClipboardState,
     pub(crate) windows: Vec<WindowState>,
     pub(crate) events: VecDeque<Event>,
 }
@@ -58,6 +81,30 @@ impl State {
             .iter()
             .find(|w| w.window.wl_surface() == surface)
             .map(|w| w.id)
+    }
+
+    /// Applies a configure; `None` keeps the current or preferred extent.
+    fn configured(
+        &mut self,
+        surface: &wl_surface::WlSurface,
+        size: (Option<u32>, Option<u32>),
+        active: bool,
+    ) {
+        if let Some(window) = self
+            .windows
+            .iter_mut()
+            .find(|w| w.window.wl_surface() == surface)
+        {
+            window.info.size.width = size.0.unwrap_or(window.info.size.width);
+            window.info.size.height = size.1.unwrap_or(window.info.size.height);
+            window.info.active = active;
+            window.info.configured = true;
+            window.dirty = true;
+            self.events.push_back(Event::Configure {
+                window: window.id,
+                info: window.info,
+            });
+        }
     }
 
     pub(crate) fn queue_redraws(&mut self) {
@@ -90,23 +137,36 @@ impl WindowHandler for State {
         configure: WindowConfigure,
         _: u32,
     ) {
-        if let Some(window) = self.windows.iter_mut().find(|w| w.window == *native) {
-            window.info.size.width = configure
-                .new_size
-                .0
-                .map_or(window.info.size.width, |v| v.get());
-            window.info.size.height = configure
-                .new_size
-                .1
-                .map_or(window.info.size.height, |v| v.get());
-            window.info.active = configure.is_activated();
-            window.info.configured = true;
-            window.dirty = true;
-            self.events.push_back(Event::Configure {
-                window: window.id,
-                info: window.info,
-            });
+        let size = (
+            configure.new_size.0.map(|v| v.get()),
+            configure.new_size.1.map(|v| v.get()),
+        );
+        self.configured(native.wl_surface(), size, configure.is_activated());
+    }
+}
+
+impl LayerShellHandler for State {
+    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, layer: &LayerSurface) {
+        if let Some(window) = self.window_id(layer.wl_surface()) {
+            self.events.push_back(Event::Close { window });
         }
+    }
+
+    fn configure(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        layer: &LayerSurface,
+        configure: LayerSurfaceConfigure,
+        _: u32,
+    ) {
+        // Zero leaves that axis to the client.
+        let (width, height) = configure.new_size;
+        let size = (
+            (width != 0).then_some(width),
+            (height != 0).then_some(height),
+        );
+        self.configured(layer.wl_surface(), size, true);
     }
 }
 

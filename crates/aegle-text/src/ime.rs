@@ -34,7 +34,7 @@ impl EditorDriver<'_> {
     /// eventual commit. Surrounding deletions remain committed edits even while
     /// preedit is active. History copies only affected fragments within its budget.
     pub fn apply_ime(&mut self, edit: ImeEdit<'_>) -> Result<(), TextError> {
-        self.writable()?;
+        self.composable()?;
         if self.editor.composition.is_none() {
             self.ready()?;
         }

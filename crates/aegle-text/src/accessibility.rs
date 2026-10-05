@@ -16,8 +16,8 @@ impl EditorDriver<'_> {
     ///
     /// Runs describe [`crate::Editor::display_text`], including IME preedit and
     /// its underline. They must not be treated as committed application values.
-    /// The committed value remains [`crate::Editor::text`]. Protected/password
-    /// text is not supported by this plain-text bridge.
+    /// The committed value remains [`crate::Editor::text`]. Password editors
+    /// expose the `PasswordInput` role and only their masked display runs.
     ///
     /// Parley retains run identities; Aegle additionally retains only each ID
     /// and its character count for checked actions. Emitting nodes allocates
@@ -34,7 +34,9 @@ impl EditorDriver<'_> {
         if !origin.x.is_finite() || !origin.y.is_finite() {
             return Err(TextError::InvalidPosition);
         }
-        node.set_role(if self.editor.multiline {
+        node.set_role(if self.editor.is_password() {
+            Role::PasswordInput
+        } else if self.editor.multiline {
             Role::MultilineTextInput
         } else {
             Role::TextInput

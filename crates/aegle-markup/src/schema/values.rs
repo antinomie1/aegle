@@ -17,6 +17,7 @@ pub(super) fn property_name(name: &str) -> Option<PropertyName> {
         "enabled" => Enabled,
         "label" => Label,
         "read_only" => ReadOnly,
+        "password" => Password,
         "theme" => Theme,
         "background" => Background,
         "foreground" => Foreground,
@@ -58,6 +59,7 @@ pub(super) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
                 | Kind::Switch
         ),
         ReadOnly | SelectionColor | CaretColor => matches!(kind, Kind::TextField | Kind::TextArea),
+        Password => kind == Kind::TextField,
         HoverBackground | FocusColor | FocusWidth => {
             matches!(
                 kind,
@@ -120,7 +122,7 @@ pub(super) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             | IndicatorColor,
             Literal::Color(_),
         ) => true,
-        (Visible | Enabled | ReadOnly | Checked, Literal::Bool(_)) => true,
+        (Visible | Enabled | ReadOnly | Password | Checked, Literal::Bool(_)) => true,
         (Theme, Literal::Identifier(name)) => {
             matches!(name.as_str(), "light" | "dark" | "high_contrast")
         }
@@ -146,7 +148,7 @@ pub(super) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         | IndicatorColor => "a #RRGGBB or #RRGGBBAA color",
         Grow | Step => "a finite nonnegative number",
         Min | Max | Value => "a finite number",
-        Visible | Enabled | ReadOnly | Checked => "true or false",
+        Visible | Enabled | ReadOnly | Password | Checked => "true or false",
         Theme => "light, dark or high_contrast",
     };
     Err(format!("{name:?} requires {expected}"))

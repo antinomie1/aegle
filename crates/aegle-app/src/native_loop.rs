@@ -135,6 +135,10 @@ impl Runtime {
         for entry in &mut self.windows {
             #[cfg(feature = "motion")]
             entry.ui.advance_animations(now)?;
+            // Synchronous pastes land before this refresh records them.
+            if let Some(request) = entry.ui.take_clipboard()? {
+                crate::native_input::clipboard(&mut self.backend, entry, request)?;
+            }
             if entry.ui.refresh()? {
                 self.backend.request_redraw(entry.id)?;
             }

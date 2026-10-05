@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Event-driven Wayland windows, bounded software presentation and text-input-v3"
+description = "Event-driven Wayland windows and layer surfaces, bounded software presentation, clipboard and text-input-v3"
 
 [dependencies]
 aegle-types.workspace = true

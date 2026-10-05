@@ -66,7 +66,7 @@ AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handl
 
 `aegle-text/text-a11y` 的 `EditorDriver::accessibility` 导出当前显示文本、布局几何、只读状态及选区；显示文本包含 IME 预编辑及下划线，不能视为已提交值。`select_accessibility` 使用最近一次导出的 run 身份验证范围，布局重建后须重新导出。AccessKit 的 run 内位置以可选择的 shaping cluster 计数，AT-SPI 外部偏移以 Unicode scalar 计数；平台 adapter 与 Parley 依据 run 的字符长度完成转换，不能直接传递 UTF-8 字节偏移。
 
-只读编辑器仍接受合法选择。活动预编辑期间 `select_accessibility` 返回 `CompositionActive`，当前示例报告并拒绝该次选择，不隐式取消组合或重解释旧范围；需要接受此操作的宿主应先显式结束 IME 会话，再发布恢复后的文本并接受基于新快照的选择。未知 run、越界位置或重排后尚未重新发布的选择返回 `InvalidRange`。当前桥只处理普通文本，尚不支持密码保护导出。
+只读编辑器仍接受合法选择。活动预编辑期间 `select_accessibility` 返回 `CompositionActive`，当前示例报告并拒绝该次选择，不隐式取消组合或重解释旧范围；需要接受此操作的宿主应先显式结束 IME 会话，再发布恢复后的文本并接受基于新快照的选择。未知 run、越界位置或重排后尚未重新发布的选择返回 `InvalidRange`。密码编辑器导出 `PasswordInput` 角色，值、文字 run 与选择只含 `•` 遮盖字符，选择按遮盖偏移转换。
 
 当前 Unix 平台能力如下；API 已存在与系统能力已验证必须分别表述。
 
@@ -78,7 +78,8 @@ AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handl
 | 通过辅助技术替换文本 | 上游 `accesskit_unix` 0.22.1 未实现 `org.a11y.atspi.EditableText`；当前不能宣称支持 |
 | 几何 | 从绘制使用的逻辑窗口几何与滚动偏移派生；Wayland 无全局窗口位置，不调用 set_root_window_bounds；adapter 的默认原点不能作为真实屏幕位置，也未完成屏幕定位验收 |
 | Windows | UIA adapter 已接入；兼容环境与实机证据见实现状态 |
-| macOS、真实屏幕阅读器、密码控件 | 尚未接入或验收 |
+| 密码控件 | 导出 `PasswordInput` 与遮盖值；无窗口 ui 场景验证语义树不含明文，AT-SPI/UIA 客户端未验收 |
+| macOS、真实屏幕阅读器 | 尚未接入或验收 |
 
 协议验证使用独立 headless Wayland compositor、私有 `dbus-run-session`、最小假 Status/Registry 服务，以及真实 D-Bus AT-SPI 查询/动作：遍历树、读取 CJK、改变选择/caret、切换焦点、激活按钮并观察文字清空，以及停用/重新启用后的完整树与焦点恢复。这证明 adapter 与当前示例的协议和状态连接，不等于真实 AT-SPI registry、屏幕阅读器或全部桌面环境验收。测试总线未修改用户桌面设置。
 

@@ -126,11 +126,22 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
     unsafe {
         assert!(!IsWindow(Some(hwnd)).as_bool());
     }
+    backend.set_clipboard(second, "剪贴板 😀")?;
+    assert_eq!(
+        backend.clipboard_text(second)?.as_deref(),
+        Some("剪贴板 😀")
+    );
     backend.remove_window(second)?;
     let wake = backend.wake_handle()?;
     std::thread::spawn(move || wake.wake()).join().unwrap();
     backend.dispatch(Some(Duration::from_secs(1)))?;
-    assert!(matches!(backend.next_event(), Some(Event::Wake)));
+    let mut event = backend.next_event();
+    if event.is_none() {
+        // Wine may first dispatch messages left by the clipboard owner; the wake stays signaled.
+        backend.dispatch(Some(Duration::from_secs(1)))?;
+        event = backend.next_event();
+    }
+    assert!(matches!(event, Some(Event::Wake)));
     println!("Win32 native lifecycle, pixels, Unicode, IMM context and owned surface passed");
     Ok(())
 }

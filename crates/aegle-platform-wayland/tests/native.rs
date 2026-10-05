@@ -3,7 +3,8 @@
 use std::time::{Duration, Instant};
 
 use aegle_platform_wayland::{
-    Error, Event, ImeRequest, PixelSize, PresentError, Wayland, WindowId, WindowOptions,
+    Anchor, Error, Event, ImeRequest, KeyboardInteractivity, Layer, LayerOptions, PixelSize,
+    PresentError, Wayland, WindowId, WindowOptions,
 };
 
 fn redraw(platform: &mut Wayland, target: WindowId) {
@@ -50,6 +51,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
             height: 96,
         },
         buffer_budget: 2 * 1024 * 1024,
+        layer: None,
     };
     let window = platform.create_window(options.clone()).unwrap();
     assert!(matches!(
@@ -156,13 +158,31 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
                 width: 256,
                 height: 192,
             },
-            ..options
+            ..options.clone()
         })
         .unwrap();
     assert_ne!(window, replacement);
     redraw(&mut platform, replacement);
     present(&mut platform, replacement);
     platform.remove_window(replacement).unwrap();
+
+    // A panel anchored to both horizontal edges takes the output's width.
+    let panel = platform
+        .create_window(WindowOptions {
+            layer: Some(LayerOptions {
+                layer: Layer::Top,
+                anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+                exclusive_zone: 24,
+                keyboard: KeyboardInteractivity::None,
+            }),
+            ..options
+        })
+        .unwrap();
+    redraw(&mut platform, panel);
+    let info = platform.window_info(panel).unwrap();
+    assert!(info.size.width > 128 && info.size.height == 96);
+    present(&mut platform, panel);
+    platform.remove_window(panel).unwrap();
     platform.dispatch(Some(Duration::ZERO)).unwrap();
     assert!(platform.next_event().is_none());
 }

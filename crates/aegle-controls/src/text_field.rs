@@ -1,6 +1,8 @@
+use std::borrow::Cow;
+
 use aegle_text::{Editor, HitSelection, Movement, Selection, TextError, TextSystem};
 
-use crate::{Action, Capture, Input, Key, KeyInput, Outcome, PointerId, PointerKind};
+use crate::{Action, Capture, Clipboard, Input, Key, KeyInput, Outcome, PointerId, PointerKind};
 
 /// Single- or multiline editing behavior backed by one retained [`Editor`].
 ///
@@ -43,8 +45,9 @@ impl TextField {
         self.focused
     }
     /// Whether this field should have a native editable IME session.
+    /// Password fields accept keys and paste, never composition.
     pub fn accepts_ime(&self) -> bool {
-        self.enabled && self.focused && !self.editor.is_read_only()
+        self.enabled && self.focused && !self.editor.is_read_only() && !self.editor.is_password()
     }
 
     /// Disabling ends capture and composition without replacing committed text.
@@ -95,6 +98,24 @@ impl TextField {
                 Ok(Outcome {
                     handled: true,
                     repaint: true,
+                    ..Outcome::default()
+                })
+            }
+            Input::Paste(text) if self.enabled && self.focused && !self.editor.is_read_only() => {
+                let reset_ime = fonts.edit(&mut self.editor).cancel_preedit();
+                // Single-line fields drop pasted line breaks, as browsers do.
+                let text = if self.editor.is_multiline() || !text.contains(BREAKS) {
+                    Cow::Borrowed(text)
+                } else {
+                    Cow::Owned(text.replace(BREAKS, ""))
+                };
+                self.editor.break_undo_group();
+                fonts.edit(&mut self.editor).insert(&text)?;
+                self.editor.break_undo_group();
+                Ok(Outcome {
+                    handled: true,
+                    repaint: true,
+                    reset_ime,
                     ..Outcome::default()
                 })
             }
@@ -181,6 +202,25 @@ impl TextField {
             Key::End => Some(Movement::LineEnd),
             _ => None,
         };
+        let clipboard = match key.key {
+            Key::Character('c' | 'C') if command => Some(Clipboard::Copy),
+            Key::Character('x' | 'X') if command => Some(Clipboard::Cut),
+            Key::Character('v' | 'V') if command => Some(Clipboard::Paste),
+            _ => None,
+        };
+        if let Some(request) = clipboard {
+            let copy = !self.editor.is_password() && !self.editor.selected_text().is_empty();
+            let allowed = match request {
+                Clipboard::Copy => copy,
+                Clipboard::Cut => copy && !self.editor.is_read_only(),
+                Clipboard::Paste => !self.editor.is_read_only(),
+            };
+            return Ok(Outcome {
+                handled: true,
+                clipboard: allowed.then_some(request),
+                ..Outcome::default()
+            });
+        }
         let select_all = command && matches!(key.key, Key::Character('a' | 'A'));
         let undo = command && matches!(key.key, Key::Character('z' | 'Z'));
         let redo = command && matches!(key.key, Key::Character('y' | 'Y'));
@@ -210,7 +250,7 @@ impl TextField {
                 .edit(&mut self.editor)
                 .move_cursor(movement, key.modifiers.shift)?;
         } else if select_all {
-            let len = self.editor.text().len();
+            let len = self.editor.display_text().len();
             fonts.edit(&mut self.editor).select(Selection {
                 anchor: 0,
                 focus: len,
@@ -248,3 +288,7 @@ impl TextField {
         Ok(result)
     }
 }
+
+const BREAKS: [char; 7] = [
+    '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
+];

@@ -1,9 +1,10 @@
 use crate::{
-    Result, Ui, UiError,
+    ClipboardRequest, Result, Ui, UiError,
     state::{Content, State, focus_policy},
 };
 use aegle_controls::{
-    Action, Capture, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput, PointerKind,
+    Action, Capture, Clipboard, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,
+    PointerKind,
 };
 use aegle_core::{Dirty, EventPhase, FocusChange, FocusDirection, NodeId};
 use aegle_text::ImeEdit;
@@ -133,6 +134,18 @@ impl Ui {
         }
         Ok(())
     }
+    /// Delivers native clipboard text to the focused editor, replacing its
+    /// selection. Single-line editors drop line breaks.
+    pub fn paste(&self, text: &str) -> Result {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        if let Some(id) = state.focus.current(&state.tree) {
+            state.dispatch(id, Input::Paste(text))?;
+        }
+        Ok(())
+    }
     /// Cancels local composition when the native text-input focus leaves the window.
     pub fn ime_left(&self) -> Result {
         let mut state = self
@@ -206,6 +219,21 @@ impl State {
             Some(Capture::Acquire(id)) => self.capture = Some((id, target)),
             Some(Capture::Release(id)) if self.capture == Some((id, target)) => self.capture = None,
             _ => {}
+        }
+        match outcome.clipboard {
+            Some(Clipboard::Paste) => self.clipboard = Some(ClipboardRequest::Read),
+            Some(request) => {
+                let Content::Field(field) = &self.tree.get(target).unwrap().context.content else {
+                    unreachable!("only editors request clipboard writes")
+                };
+                let text = field.editor().selected_text().to_owned();
+                self.clipboard = Some(ClipboardRequest::Write(text));
+                if request == Clipboard::Cut {
+                    let outcome = self.control(target, Input::Paste(""))?;
+                    self.effects(target, outcome)?;
+                }
+            }
+            None => {}
         }
         if matches!(
             outcome.action,
