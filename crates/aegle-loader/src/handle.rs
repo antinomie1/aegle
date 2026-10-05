@@ -1,0 +1,284 @@
+//! Typed control handles and the mapping from markup properties to setters.
+
+use std::rc::Rc;
+
+use aegle_app::{
+    Button, CheckBox, Color, Container, Label, Node, Progress, Result, ScrollView, Slider, Switch,
+    TextField,
+};
+use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
+
+use crate::{Data, eval::Env, eval::exec};
+
+/// A typed handle to a control created from markup.
+#[derive(Clone)]
+pub enum Handle {
+    /// The native window of a Window document root.
+    #[cfg(any(
+        all(feature = "wayland", target_os = "linux"),
+        all(feature = "windows", target_os = "windows")
+    ))]
+    Window(aegle_app::Window),
+    /// Column or Row.
+    Container(Container),
+    /// ScrollView.
+    ScrollView(ScrollView),
+    /// Text.
+    Label(Label),
+    /// Button.
+    Button(Button),
+    /// TextField or TextArea.
+    TextField(TextField),
+    /// CheckBox.
+    CheckBox(CheckBox),
+    /// Switch.
+    Switch(Switch),
+    /// Slider.
+    Slider(Slider),
+    /// Progress.
+    Progress(Progress),
+}
+
+/// Converts a [`Handle`] to the typed handle of its control, as generated views do.
+pub trait FromHandle: Sized {
+    /// The typed handle, or `None` for another control kind.
+    fn from_handle(handle: &Handle) -> Option<Self>;
+}
+
+macro_rules! from_handle {
+    ($($variant:ident($ty:ty)),*) => {$(
+        impl FromHandle for $ty {
+            fn from_handle(handle: &Handle) -> Option<Self> {
+                match handle {
+                    Handle::$variant(handle) => Some(handle.clone()),
+                    #[allow(unreachable_patterns)]
+                    _ => None,
+                }
+            }
+        }
+    )*};
+}
+
+from_handle!(
+    Container(Container),
+    ScrollView(ScrollView),
+    Label(Label),
+    Button(Button),
+    TextField(TextField),
+    CheckBox(CheckBox),
+    Switch(Switch),
+    Slider(Slider),
+    Progress(Progress)
+);
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
+from_handle!(Window(aegle_app::Window));
+
+impl Handle {
+    /// The control's node; a window's node is its root column.
+    pub fn node(&self) -> &Node {
+        match self {
+            #[cfg(any(
+                all(feature = "wayland", target_os = "linux"),
+                all(feature = "windows", target_os = "windows")
+            ))]
+            Self::Window(window) => window,
+            Self::Container(handle) => handle,
+            Self::ScrollView(handle) => handle,
+            Self::Label(handle) => handle,
+            Self::Button(handle) => handle,
+            Self::TextField(handle) => handle,
+            Self::CheckBox(handle) => handle,
+            Self::Switch(handle) => handle,
+            Self::Slider(handle) => handle,
+            Self::Progress(handle) => handle,
+        }
+    }
+
+    pub(crate) fn container(&self) -> &Container {
+        match self {
+            #[cfg(any(
+                all(feature = "wayland", target_os = "linux"),
+                all(feature = "windows", target_os = "windows")
+            ))]
+            Self::Window(window) => window,
+            Self::Container(handle) => handle,
+            Self::ScrollView(handle) => handle,
+            _ => unreachable!("checked: only containers have children"),
+        }
+    }
+
+    /// Reads a checked `self` field inside an event handler.
+    pub(crate) fn field(&self, field: &str) -> Result<Data> {
+        Ok(match (self, field) {
+            (Self::CheckBox(handle), "checked") => Data::Bool(handle.is_checked()?),
+            (Self::Switch(handle), "checked") => Data::Bool(handle.is_checked()?),
+            (Self::CheckBox(handle), _) => Data::String(handle.text()?.into()),
+            (Self::Switch(handle), _) => Data::String(handle.text()?.into()),
+            (Self::TextField(handle), _) => Data::String(handle.text()?.into()),
+            (Self::Slider(handle), _) => Data::Float(handle.value()? as f32),
+            _ => unreachable!("checked self fields"),
+        })
+    }
+}
+
+/// Literal properties consumed by a constructor or by the transition step.
+pub(crate) fn consumed(kind: Kind, name: PropertyName) -> bool {
+    use PropertyName::*;
+    matches!(
+        name,
+        Title | Text | Checked | Min | Max | Value | Transition | Easing
+    ) || (kind == Kind::Window && matches!(name, Width | Height))
+}
+
+fn literal<'a>(element: &'a Element, name: PropertyName) -> Option<&'a Literal> {
+    element
+        .properties
+        .iter()
+        .find_map(|(n, bound)| match bound {
+            Bound::Literal(value) if *n == name => Some(value),
+            _ => None,
+        })
+}
+
+/// Creates a non-window control with its literal constructor arguments.
+pub(crate) fn create(kind: Kind, element: &Element, parent: &Container) -> Result<Handle> {
+    let text = match literal(element, PropertyName::Text) {
+        Some(Literal::String(text)) => text.as_str(),
+        _ => "",
+    };
+    let checked = matches!(
+        literal(element, PropertyName::Checked),
+        Some(Literal::Bool(true))
+    );
+    let number = |name, default| match literal(element, name) {
+        Some(Literal::Number(value)) => f64::from(*value),
+        _ => default,
+    };
+    let range = (
+        number(PropertyName::Min, 0.0),
+        number(PropertyName::Max, 1.0),
+        number(PropertyName::Value, 0.0),
+    );
+    Ok(match kind {
+        Kind::Column => Handle::Container(parent.column()?),
+        Kind::Row => Handle::Container(parent.row()?),
+        Kind::ScrollView => Handle::ScrollView(parent.scroll_view()?),
+        Kind::Text => Handle::Label(parent.text(text)?),
+        Kind::Button => Handle::Button(parent.button(text)?),
+        Kind::TextField => Handle::TextField(parent.text_field(text)?),
+        Kind::TextArea => Handle::TextField(parent.text_area(text)?),
+        Kind::CheckBox => Handle::CheckBox(parent.check_box(text, checked)?),
+        Kind::Switch => Handle::Switch(parent.switch(text, checked)?),
+        Kind::Slider => Handle::Slider(parent.slider(range.0, range.1, range.2)?),
+        Kind::Progress => Handle::Progress(parent.progress(range.0, range.1, range.2)?),
+        Kind::Window => unreachable!("windows are opened from the App"),
+    })
+}
+
+/// Applies one checked property value through the imperative setters.
+pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Result {
+    use PropertyName::*;
+    let node = handle.node();
+    let color = |value: &Literal| {
+        let Literal::Color([r, g, b, a]) = *value else {
+            unreachable!("checked color")
+        };
+        Color::rgba(r, g, b, a)
+    };
+    match (name, value) {
+        (Width | Height, Literal::Identifier(_)) if name == Width => node.set_width(None),
+        (Width | Height, Literal::Identifier(_)) => node.set_height(None),
+        (Width, Literal::Length(n)) => node.set_width(Some(*n)),
+        (Height, Literal::Length(n)) => node.set_height(Some(*n)),
+        (MinWidth, Literal::Length(n)) => node.set_min_width(*n),
+        (MinHeight, Literal::Length(n)) => node.set_min_height(*n),
+        (Padding, Literal::Length(n)) => node.set_padding(*n),
+        (Gap, Literal::Length(n)) => node.set_gap(*n),
+        (Grow, Literal::Number(n)) => node.set_grow(*n),
+        (BorderWidth, Literal::Length(n)) => node.set_border_width(*n),
+        (Radius, Literal::Length(n)) => node.set_radius(*n),
+        (FocusWidth, Literal::Length(n)) => node.set_focus_width(*n),
+        (FontSize, Literal::Length(n)) => node.set_font_size(*n),
+        (Visible, Literal::Bool(v)) => node.set_visible(*v),
+        (Enabled, Literal::Bool(v)) => node.set_enabled(*v),
+        (Label, Literal::String(text)) => node.set_accessible_label(text),
+        (Background, value) => node.set_background(color(value)),
+        (Foreground, value) => node.set_foreground(color(value)),
+        (BorderColor, value) => node.set_border_color(color(value)),
+        (FocusColor, value) => node.set_focus_color(color(value)),
+        (SelectionColor, value) => node.set_selection_color(color(value)),
+        (CaretColor, value) => node.set_caret_color(color(value)),
+        (HoverBackground, value) => node.set_hover_background(color(value)),
+        (PressedBackground, value) => node.set_pressed_background(color(value)),
+        (DisabledBackground, value) => node.set_disabled_background(color(value)),
+        (DisabledForeground, value) => node.set_disabled_foreground(color(value)),
+        (IndicatorColor, value) => node.set_indicator_color(color(value)),
+        (Text, Literal::String(text)) => match handle {
+            Handle::Label(handle) => handle.set_text(text),
+            Handle::Button(handle) => handle.set_text(text),
+            Handle::TextField(handle) => handle.set_text(text),
+            Handle::CheckBox(handle) => handle.set_text(text),
+            Handle::Switch(handle) => handle.set_text(text),
+            _ => unreachable!("checked text property"),
+        },
+        (Checked, Literal::Bool(v)) => match handle {
+            Handle::CheckBox(handle) => handle.set_checked(*v),
+            Handle::Switch(handle) => handle.set_checked(*v),
+            _ => unreachable!("checked toggle property"),
+        },
+        (Value, Literal::Number(n)) => match handle {
+            Handle::Slider(handle) => handle.set_value(f64::from(*n)),
+            Handle::Progress(handle) => handle.set_value(f64::from(*n)),
+            _ => unreachable!("checked range property"),
+        },
+        (Step, Literal::Number(n)) => match handle {
+            Handle::Slider(handle) => handle.set_step(f64::from(*n)),
+            _ => unreachable!("checked step property"),
+        },
+        (ReadOnly | Password, Literal::Bool(v)) => match handle {
+            Handle::TextField(handle) if name == ReadOnly => handle.set_read_only(*v),
+            Handle::TextField(handle) => handle.set_password(*v),
+            _ => unreachable!("checked editor property"),
+        },
+        #[cfg(any(
+            all(feature = "wayland", target_os = "linux"),
+            all(feature = "windows", target_os = "windows")
+        ))]
+        (Theme, Literal::Identifier(theme)) => {
+            let Handle::Window(window) = handle else {
+                unreachable!("checked: themes apply to windows")
+            };
+            window.set_theme(match theme.as_str() {
+                "dark" => aegle_app::Theme::dark(),
+                "high_contrast" => aegle_app::Theme::high_contrast(),
+                _ => aegle_app::Theme::light(),
+            })
+        }
+        _ => unreachable!("checked property {name:?}"),
+    }
+}
+
+/// Installs an event block; it runs outside the UI borrow like any handler.
+pub(crate) fn listen(handle: &Handle, event: EventKind, steps: Rc<[Step]>, env: Env) -> Result {
+    match (event, handle) {
+        (EventKind::Clicked, Handle::Button(button)) => {
+            button.on_click(move |button| exec(&steps, &env, &Handle::Button(button)))
+        }
+        (EventKind::Changed, Handle::CheckBox(control)) => {
+            control.on_change(move |control| exec(&steps, &env, &Handle::CheckBox(control)))
+        }
+        (EventKind::Changed, Handle::Switch(control)) => {
+            control.on_change(move |control| exec(&steps, &env, &Handle::Switch(control)))
+        }
+        (EventKind::Changed, Handle::Slider(control)) => {
+            control.on_change(move |control| exec(&steps, &env, &Handle::Slider(control)))
+        }
+        (EventKind::Submitted, Handle::TextField(field)) => {
+            field.on_submit(move |field| exec(&steps, &env, &Handle::TextField(field)))
+        }
+        _ => unreachable!("checked event kinds"),
+    }
+}

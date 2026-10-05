@@ -4,6 +4,8 @@ use crate::{Error, Span};
 pub(crate) enum Kind<'a> {
     Identifier(&'a str),
     String(String),
+    /// A digit-only numeral without a unit that fits i64.
+    Integer(i64),
     Number(f32),
     Length(f32),
     Duration(u64),
@@ -12,6 +14,8 @@ pub(crate) enum Kind<'a> {
     Close,
     Colon,
     Separator,
+    /// Operators and delimiters used by expressions, types and statements.
+    Punct(&'static str),
     End,
 }
 
@@ -20,6 +24,12 @@ pub(crate) struct Token<'a> {
     pub kind: Kind<'a>,
     pub span: Span,
 }
+
+/// Longest first, so `<=` is not read as `<`.
+const PUNCTUATION: [&str; 23] = [
+    "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "=", "<", ">", "!", "+", "-", "*", "/", "%",
+    "(", ")", "[", "]", ",", ".",
+];
 
 pub(crate) struct Lexer<'a> {
     source: &'a str,
@@ -52,7 +62,7 @@ impl<'a> Lexer<'a> {
             Some(b'\n' | b';') => self.single(Kind::Separator),
             Some(b'"') => Kind::String(self.string()?),
             Some(b'#') => self.color()?,
-            Some(b'-' | b'0'..=b'9') => self.number()?,
+            Some(b'0'..=b'9') => self.number()?,
             Some(b'a'..=b'z' | b'A'..=b'Z' | b'_') => {
                 self.cursor += 1;
                 while self
@@ -64,10 +74,13 @@ impl<'a> Lexer<'a> {
                 Kind::Identifier(&self.source[start..self.cursor])
             }
             _ => {
-                return Err(self.error(
-                    start,
-                    "unsupported syntax; expected a literal or declaration (expressions are not supported)",
-                ));
+                let rest = &self.source[self.cursor..];
+                let punct = PUNCTUATION
+                    .iter()
+                    .find(|punct| rest.starts_with(**punct))
+                    .ok_or_else(|| self.error(start, "unsupported character"))?;
+                self.cursor += punct.len();
+                Kind::Punct(punct)
             }
         };
         Ok(Token {
@@ -111,9 +124,6 @@ impl<'a> Lexer<'a> {
 
     fn number(&mut self) -> Result<Kind<'a>, Error> {
         let start = self.cursor;
-        if self.peek() == Some(b'-') {
-            self.cursor += 1;
-        }
         if !self.digits() {
             return Err(self.error(start, "expected digits in a finite number"));
         }
@@ -152,6 +162,13 @@ impl<'a> Lexer<'a> {
         if self.source[self.cursor..].starts_with("dp") {
             self.cursor += 2;
             Ok(Kind::Length(number))
+        } else if let Some(integer) = literal
+            .bytes()
+            .all(|byte| byte.is_ascii_digit())
+            .then(|| literal.parse().ok())
+            .flatten()
+        {
+            Ok(Kind::Integer(integer))
         } else {
             Ok(Kind::Number(number))
         }

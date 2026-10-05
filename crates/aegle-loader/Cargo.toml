@@ -1,0 +1,24 @@
+[package]
+name = "aegle-loader"
+description = "Runtime engine for dynamic Aegle markup: states, bindings, events, blocks, components and loading"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+motion = ["aegle-app/motion"]
+wayland = ["aegle-app/wayland"]
+windows = ["aegle-app/windows"]
+
+[dependencies]
+aegle-app.workspace = true
+aegle-markup.workspace = true
+
+[dev-dependencies]
+aegle-access.workspace = true
+aegle-app = { workspace = true, features = ["accessibility"] }
+aegle-text.workspace = true
+
+[lints]
+workspace = true

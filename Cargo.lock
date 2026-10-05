@@ -78,6 +78,7 @@ name = "aegle"
 version = "0.1.0"
 dependencies = [
  "aegle-app",
+ "aegle-loader",
  "aegle-macros",
  "aegle-text",
 ]
@@ -144,6 +145,16 @@ dependencies = [
  "aegle-core",
  "aegle-types",
  "taffy",
+]
+
+[[package]]
+name = "aegle-loader"
+version = "0.1.0"
+dependencies = [
+ "aegle-access",
+ "aegle-app",
+ "aegle-markup",
+ "aegle-text",
 ]
 
 [[package]]

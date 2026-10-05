@@ -1,0 +1,4 @@
+// Imported components only.
+component Badge(value: int) {
+    Text { text: "badge " + str(value * 2); visible: value > 0 }
+}

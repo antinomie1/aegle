@@ -1,0 +1,365 @@
+//! Building elements, component instances, bindings and structural blocks.
+
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
+
+use aegle_app::{Container, Result};
+use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Kind, PropertyName, Value};
+
+use crate::{
+    Data, RuntimeError,
+    eval::{Env, Param, eval, truth},
+    handle::{Handle, apply, consumed, create, listen},
+    reactive::Effect,
+};
+
+/// Effects owned by one built region; dropping it stops their updates.
+pub(crate) type Block = Vec<Rc<Effect>>;
+
+/// Where children are appended.
+pub(crate) struct Parent<'a> {
+    pub container: &'a Container,
+    pub row: bool,
+    pub gap: Option<f32>,
+}
+
+impl<'a> Parent<'a> {
+    pub fn of(element: &Element, handle: &'a Handle) -> Self {
+        let gap = element
+            .properties
+            .iter()
+            .find_map(|(name, bound)| match bound {
+                Bound::Literal(Value::Length(gap)) if *name == PropertyName::Gap => Some(*gap),
+                _ => None,
+            });
+        Self {
+            container: handle.container(),
+            row: element.kind == ElementKind::Builtin(Kind::Row),
+            gap,
+        }
+    }
+}
+
+/// Builds `children` into `parent`, recording the top-level handles created.
+/// `ids` collects entry-level named controls outside blocks and components.
+pub(crate) fn children(
+    children: &[Child],
+    parent: &Parent,
+    env: &Env,
+    block: &mut Block,
+    created: &mut Vec<Handle>,
+    mut ids: Option<&mut [Option<Handle>]>,
+) -> Result {
+    for child in children {
+        match child {
+            Child::Element(child) => {
+                element(child, parent, env, block, created, ids.as_deref_mut())?
+            }
+            Child::If(condition, then, otherwise) => {
+                let wrapper = wrapper(parent)?;
+                created.push(Handle::Container(wrapper.clone()));
+                conditional(
+                    condition.clone(),
+                    then.clone(),
+                    otherwise.clone(),
+                    wrapper,
+                    parent,
+                    env,
+                    block,
+                )?;
+            }
+            Child::For(list, body) => {
+                let wrapper = wrapper(parent)?;
+                created.push(Handle::Container(wrapper.clone()));
+                repeat(list.clone(), body.clone(), wrapper, parent, env, block)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Builds one element or component instance. Its control is pushed to
+/// `created` as soon as it exists, so a failed build can still be removed.
+pub(crate) fn element(
+    element: &Element,
+    parent: &Parent,
+    env: &Env,
+    block: &mut Block,
+    created: &mut Vec<Handle>,
+    mut ids: Option<&mut [Option<Handle>]>,
+) -> Result {
+    let kind = match element.kind {
+        ElementKind::Builtin(kind) => kind,
+        ElementKind::Component(template) => {
+            let params = env.program.templates[template]
+                .params
+                .iter()
+                .zip(&element.arguments);
+            let params = params
+                .map(|((_, _, default), argument)| match argument {
+                    Some(expr) => Ok(Param::Bound(expr.clone(), env.clone())),
+                    None => eval(default.as_ref().unwrap(), env, None, None).map(Param::Value),
+                })
+                .collect::<Result<_>>()?;
+            let env = Env::instantiate(env.program.clone(), template, params, &|_, _| None)?;
+            let root = &env.program.templates[template].root;
+            return self::element(root, parent, &env, block, created, None);
+        }
+    };
+    let handle = create(kind, element, parent.container)?;
+    created.push(handle.clone());
+    if let (Some(index), Some(ids)) = (element.id, ids.as_deref_mut()) {
+        ids[index] = Some(handle.clone());
+    }
+    populate(element, &handle, env, block, ids)
+}
+
+/// Builds children, then applies properties, bindings, transitions and events.
+pub(crate) fn populate(
+    element: &Element,
+    handle: &Handle,
+    env: &Env,
+    block: &mut Block,
+    ids: Option<&mut [Option<Handle>]>,
+) -> Result {
+    if !element.children.is_empty() {
+        let parent = Parent::of(element, handle);
+        children(&element.children, &parent, env, block, &mut Vec::new(), ids)?;
+    }
+    decorate(element, handle, env, block)
+}
+
+/// Applies an element's own properties, bindings, transition and events.
+pub(crate) fn decorate(element: &Element, handle: &Handle, env: &Env, block: &mut Block) -> Result {
+    let ElementKind::Builtin(kind) = element.kind else {
+        unreachable!("component instances are expanded")
+    };
+    for (name, bound) in &element.properties {
+        match bound {
+            Bound::Literal(value) if !consumed(kind, *name) => apply(handle, *name, value)?,
+            Bound::Literal(_) => {}
+            Bound::Expr(expr) => {
+                block.push(binding(handle.clone(), *name, expr.clone(), env.clone())?)
+            }
+        }
+    }
+    transition(element, handle)?;
+    for (event, steps) in &element.events {
+        listen(handle, *event, steps.clone(), env.clone())?;
+    }
+    Ok(())
+}
+
+fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Result<Rc<Effect>> {
+    let mut last = None;
+    Effect::new(move |effect| {
+        // A control removed directly by the application no longer updates.
+        if !handle.node().is_alive() {
+            return Ok(());
+        }
+        let value = eval(&expr, &env, Some(effect), None)?;
+        if last.as_ref() != Some(&value) {
+            let literal = match &value {
+                Data::Bool(value) => Value::Bool(*value),
+                Data::Float(value) => Value::Number(*value),
+                Data::String(text) => Value::String(text.to_string()),
+                Data::Int(_) | Data::List(_) => unreachable!("checked binding types"),
+            };
+            apply(&handle, name, &literal)?;
+            last = Some(value);
+        }
+        Ok(())
+    })
+}
+
+#[cfg(feature = "motion")]
+fn transition(element: &Element, handle: &Handle) -> Result {
+    use aegle_app::{Easing, Transition};
+    let literal = |name| {
+        element
+            .properties
+            .iter()
+            .find_map(|(n, bound)| match bound {
+                Bound::Literal(value) if *n == name => Some(value),
+                _ => None,
+            })
+    };
+    let Some(Value::Duration(milliseconds)) = literal(PropertyName::Transition) else {
+        return Ok(());
+    };
+    let easing = match literal(PropertyName::Easing) {
+        Some(Value::Identifier(name)) if name == "linear" => Easing::Linear,
+        Some(Value::Identifier(name)) if name == "ease_in" => Easing::EaseIn,
+        Some(Value::Identifier(name)) if name == "ease_in_out" => Easing::EaseInOut,
+        _ => Easing::EaseOut,
+    };
+    let duration = std::time::Duration::from_millis(*milliseconds);
+    handle
+        .node()
+        .set_transition(Transition::new(duration, easing))
+}
+
+#[cfg(not(feature = "motion"))]
+fn transition(element: &Element, _: &Handle) -> Result {
+    if element
+        .properties
+        .iter()
+        .any(|(name, _)| *name == PropertyName::Transition)
+    {
+        return Err("markup transitions require the motion feature".into());
+    }
+    Ok(())
+}
+
+/// An internal row or column holding a block's children in the parent's flow.
+fn wrapper(parent: &Parent) -> Result<Container> {
+    let wrapper = if parent.row {
+        parent.container.row()?
+    } else {
+        parent.container.column()?
+    };
+    if let Some(gap) = parent.gap {
+        wrapper.set_gap(gap)?;
+    }
+    Ok(wrapper)
+}
+
+/// Removes built controls and drops the effects that updated them.
+fn clear(handles: &mut Vec<Handle>, block: &mut Block) -> Result {
+    for handle in handles.drain(..) {
+        handle.node().remove()?;
+    }
+    block.clear();
+    Ok(())
+}
+
+fn conditional(
+    condition: Rc<Expr>,
+    then: Rc<[Child]>,
+    otherwise: Rc<[Child]>,
+    wrapper: Container,
+    parent: &Parent,
+    env: &Env,
+    block: &mut Block,
+) -> Result {
+    let (row, gap, env) = (parent.row, parent.gap, env.clone());
+    let (mut shown, mut handles, mut owned) = (None, Vec::new(), Block::new());
+    block.push(Effect::new(move |effect| {
+        if !wrapper.is_alive() {
+            return Ok(());
+        }
+        let value = truth(eval(&condition, &env, Some(effect), None)?);
+        if shown == Some(value) {
+            return Ok(());
+        }
+        shown = None;
+        clear(&mut handles, &mut owned)?;
+        let parent = Parent {
+            container: &wrapper,
+            row,
+            gap,
+        };
+        let items = if value { &then } else { &otherwise };
+        children(items, &parent, &env, &mut owned, &mut handles, None)?;
+        wrapper.set_visible(!handles.is_empty())?;
+        shown = Some(value);
+        Ok(())
+    })?);
+    Ok(())
+}
+
+/// A `for` key: list items are ints or strings.
+#[derive(Hash, PartialEq, Eq)]
+enum Key {
+    Int(i64),
+    String(Rc<str>),
+}
+
+impl From<&Data> for Key {
+    fn from(data: &Data) -> Self {
+        match data {
+            Data::Int(value) => Self::Int(*value),
+            Data::String(value) => Self::String(value.clone()),
+            _ => unreachable!("checked list item types"),
+        }
+    }
+}
+
+struct Row {
+    item: Data,
+    handles: Vec<Handle>,
+    block: Block,
+}
+
+fn repeat(
+    list: Rc<Expr>,
+    body: Rc<[Child]>,
+    wrapper: Container,
+    parent: &Parent,
+    env: &Env,
+    block: &mut Block,
+) -> Result {
+    let (row, gap, env) = (parent.row, parent.gap, env.clone());
+    let mut rows: Vec<Row> = Vec::new();
+    block.push(Effect::new(move |effect| {
+        if !wrapper.is_alive() {
+            return Ok(());
+        }
+        let Data::List(items) = eval(&list, &env, Some(effect), None)? else {
+            unreachable!("checked list type")
+        };
+        let mut keys = HashSet::with_capacity(items.len());
+        if !items.iter().all(|item| keys.insert(Key::from(item))) {
+            return Err(
+                RuntimeError::new(list.span, "duplicate for item; the list is unchanged").into(),
+            );
+        }
+        // Retained rows keep their controls and local state; new rows are built
+        // at the end, so any other order needs one reparenting pass.
+        let mut old: HashMap<Key, (usize, Row)> = rows
+            .drain(..)
+            .enumerate()
+            .map(|(index, row)| (Key::from(&row.item), (index, row)))
+            .collect();
+        let (mut previous, mut built, mut moved) = (None, false, false);
+        let parent = Parent {
+            container: &wrapper,
+            row,
+            gap,
+        };
+        for item in items.iter() {
+            if let Some((index, retained)) = old.remove(&Key::from(item)) {
+                moved |= built || previous.is_some_and(|previous| index < previous);
+                previous = Some(index);
+                rows.push(retained);
+                continue;
+            }
+            built = true;
+            let mut row = Row {
+                item: item.clone(),
+                handles: Vec::new(),
+                block: Block::new(),
+            };
+            let env = env.with_item(item.clone());
+            let result = children(&body, &parent, &env, &mut row.block, &mut row.handles, None);
+            rows.push(row);
+            if let Err(error) = result {
+                // Rows not yet visited keep their controls and stay tracked.
+                rows.extend(old.into_values().map(|(_, row)| row));
+                return Err(error);
+            }
+        }
+        for (_, (_, mut row)) in old {
+            clear(&mut row.handles, &mut row.block)?;
+        }
+        if moved {
+            for handle in rows.iter().flat_map(|row| &row.handles) {
+                handle.node().reparent(&wrapper)?;
+            }
+        }
+        wrapper.set_visible(!rows.is_empty())
+    })?);
+    Ok(())
+}

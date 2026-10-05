@@ -10,10 +10,10 @@ description = "A small retained GUI with imperative controls and composable back
 default = ["desktop"]
 desktop = ["native", "software", "system-fonts", "unix-accessibility", "windows-accessibility", "markup", "motion"]
 native = ["wayland", "windows"]
-motion = ["aegle-app/motion"]
-markup = ["dep:aegle-macros"]
-wayland = ["aegle-app/wayland"]
-windows = ["aegle-app/windows"]
+motion = ["aegle-app/motion", "aegle-loader?/motion"]
+markup = ["dep:aegle-macros", "dep:aegle-loader"]
+wayland = ["aegle-app/wayland", "aegle-loader?/wayland"]
+windows = ["aegle-app/windows", "aegle-loader?/windows"]
 software = ["aegle-app/software"]
 vulkan = ["aegle-app/vulkan"]
 system-fonts = ["aegle-app/system-fonts"]
@@ -24,6 +24,7 @@ unix-accessibility = ["aegle-app/unix-accessibility"]
 [dependencies]
 aegle-app.workspace = true
 aegle-macros = { workspace = true, optional = true }
+aegle-loader = { workspace = true, optional = true }
 
 [dev-dependencies]
 aegle-text.workspace = true
@@ -62,3 +63,7 @@ required-features = ["native", "system-fonts", "markup"]
 [[example]]
 name = "visuals"
 required-features = ["native", "system-fonts"]
+
+[[example]]
+name = "dynamic"
+required-features = ["native", "system-fonts", "markup"]

@@ -1,4 +1,4 @@
-//! Source positions and the owned structural document.
+//! Source positions and the owned parsed document.
 
 /// A half-open byte range in the original UTF-8 source.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -9,32 +9,170 @@ pub struct Span {
     pub end: usize,
 }
 
-/// A parsed interface with exactly one root component.
+/// A parsed file: imports, component declarations and an optional root.
+///
+/// Entry documents require a root; imported files declare only components.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Document {
-    /// The root component and its nested declarations.
-    pub root: Node,
+    /// `use "relative.aegle"` imports, in source order.
+    pub uses: Vec<Use>,
+    /// `component Name(...) { ... }` declarations, in source order.
+    pub components: Vec<Component>,
+    /// The root component instance, if any.
+    pub root: Option<Node>,
 }
 
-/// A component declaration. Names are case-sensitive ASCII identifiers.
+impl Document {
+    /// Whether the document uses only literal structure, so it can be compiled
+    /// to direct construction without states, events, blocks or components.
+    pub fn is_static(&self) -> bool {
+        self.uses.is_empty()
+            && self.components.is_empty()
+            && self.root.as_ref().is_none_or(Node::is_static)
+    }
+}
+
+/// An import of every component declared in another file.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Use {
+    /// Path relative to the importing file, as written.
+    pub path: String,
+    /// The whole declaration.
+    pub span: Span,
+}
+
+/// A reusable component with typed input parameters and one root node.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Component {
+    /// Case-sensitive name used to instantiate the component.
+    pub name: String,
+    /// Typed parameters in declaration order.
+    pub params: Vec<Param>,
+    /// The single root node of the component body.
+    pub root: Node,
+    /// The whole declaration.
+    pub span: Span,
+}
+
+/// A typed component parameter with an optional constant default.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Param {
+    /// Parameter name.
+    pub name: String,
+    /// Declared type.
+    pub ty: Type,
+    /// Default value; a parameter without one is required.
+    pub default: Option<Expr>,
+    /// The whole parameter.
+    pub span: Span,
+}
+
+/// Value types of states, parameters and expressions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Type {
+    /// `bool`.
+    Bool,
+    /// `int`, a signed 64-bit integer.
+    Int,
+    /// `float`, a finite 32-bit number.
+    Float,
+    /// `string`, UTF-8 text.
+    String,
+    /// `list<int>` or `list<string>`; items double as `for` keys.
+    List(Box<Type>),
+}
+
+/// A component instance with properties, local declarations and children.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     /// Component type name.
     pub name: String,
     /// Property assignments, in source order.
     pub properties: Vec<Property>,
-    /// Nested components, in source order.
-    pub children: Vec<Node>,
+    /// `state name: type = value` declarations.
+    pub states: Vec<State>,
+    /// `on event { ... }` handlers.
+    pub events: Vec<Event>,
+    /// Nested nodes and structural blocks, in source order.
+    pub children: Vec<Item>,
     /// Entire declaration, including its closing brace.
     pub span: Span,
 }
 
-/// One literal property assignment.
+impl Node {
+    fn is_static(&self) -> bool {
+        self.states.is_empty()
+            && self.events.is_empty()
+            && self
+                .properties
+                .iter()
+                .all(|property| !matches!(property.value, Value::Expr(_)))
+            && self.children.iter().all(|item| match item {
+                Item::Node(node) => node.is_static(),
+                Item::If(..) | Item::For(..) => false,
+            })
+    }
+}
+
+/// A child of a node.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Item {
+    /// A nested component instance.
+    Node(Node),
+    /// `if condition { ... } else { ... }`.
+    If(Expr, Vec<Item>, Vec<Item>),
+    /// `for name in list { ... }`, keyed by each item value.
+    For(String, Expr, Vec<Item>),
+}
+
+/// A typed local state declaration.
+#[derive(Clone, Debug, PartialEq)]
+pub struct State {
+    /// State name.
+    pub name: String,
+    /// Declared type.
+    pub ty: Type,
+    /// Initial value.
+    pub value: Expr,
+    /// The whole declaration.
+    pub span: Span,
+}
+
+/// An event handler block.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Event {
+    /// Event name, such as `clicked`.
+    pub name: String,
+    /// Statements run when the event fires.
+    pub body: Vec<Statement>,
+    /// The whole handler.
+    pub span: Span,
+}
+
+/// An executable statement inside an event block.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Statement {
+    /// `name = value`, `name += value` or `name -= value`.
+    Assign {
+        /// Assigned state name.
+        target: String,
+        /// `=`, `+=` or `-=`.
+        operator: &'static str,
+        /// Assigned or combined value.
+        value: Expr,
+        /// The whole statement.
+        span: Span,
+    },
+    /// `if condition { ... } else { ... }`.
+    If(Expr, Vec<Statement>, Vec<Statement>),
+}
+
+/// One property assignment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Property {
     /// Property name.
     pub name: String,
-    /// Parsed literal or enum/name identifier.
+    /// Parsed literal, identifier or expression.
     pub value: Value,
     /// Entire assignment, excluding its separator.
     pub span: Span,
@@ -42,13 +180,15 @@ pub struct Property {
     pub value_span: Span,
 }
 
-/// Literal values supported by the structural markup parser.
+/// Literal values, plus expressions bound to states.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// Decoded UTF-8 string, with JSON escape semantics.
     String(String),
     /// `true` or `false`.
     Bool(bool),
+    /// A digit-only integer without a unit that fits i64.
+    Int(i64),
     /// A finite 32-bit number without a unit.
     Number(f32),
     /// A finite logical length, written with the `dp` suffix.
@@ -57,8 +197,51 @@ pub enum Value {
     Duration(u64),
     /// Unpremultiplied sRGB bytes, written as `#RRGGBB` or `#RRGGBBAA`.
     Color([u8; 4]),
-    /// An unquoted identifier, such as a node ID or enum value.
+    /// An unquoted identifier, such as an enum value or a state name.
     Identifier(String),
+    /// Any other expression; only dynamic documents accept it.
+    Expr(Box<Expr>),
+}
+
+/// An expression with its source range.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Expr {
+    /// Operation.
+    pub kind: ExprKind,
+    /// Source range.
+    pub span: Span,
+}
+
+/// Expression operations. Checking replaces names with resolved references.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ExprKind {
+    /// A literal; never `Value::Expr`.
+    Literal(Value),
+    /// An unresolved state, parameter or loop item name.
+    Name(String),
+    /// `self.field` inside an event block.
+    SelfField(String),
+    /// `!value` or `-value`.
+    Unary(&'static str, Box<Expr>),
+    /// Arithmetic, comparison or logical operator.
+    Binary(&'static str, Box<Expr>, Box<Expr>),
+    /// A built-in function: `str`, `len`, `int` or `float`.
+    Call(String, Vec<Expr>),
+    /// `[a, b, ...]`.
+    List(Vec<Expr>),
+    /// A checked reference.
+    Ref(Ref),
+}
+
+/// A resolved name in a checked expression.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ref {
+    /// Local state of the current document or component instance.
+    State(usize),
+    /// Parameter of the current component instance.
+    Param(usize),
+    /// Item of an enclosing `for`, outermost first.
+    Item(usize),
 }
 
 /// Explicit parsing budgets; the root counts as one node and one level.

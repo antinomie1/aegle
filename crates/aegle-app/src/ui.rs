@@ -137,6 +137,7 @@ impl Ui {
                 callbacks: HashMap::new(),
                 lists: Vec::new(),
                 decorations: HashMap::new(),
+                kept: HashMap::new(),
                 #[cfg(feature = "motion")]
                 motion: Default::default(),
                 pending: VecDeque::new(),
@@ -328,6 +329,7 @@ impl Ui {
         state.pending.clear();
         state.callbacks.clear();
         state.decorations.clear();
+        state.kept.clear();
         state.lists.clear();
         #[cfg(feature = "motion")]
         {

@@ -1,0 +1,8 @@
+component Task(title: string) {
+    state stars: int = 0
+    Row {
+        gap: 8dp
+        Text { text: title; grow: 1 }
+        Button { text: "★ " + str(stars); on clicked { stars += 1 } }
+    }
+}

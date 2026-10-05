@@ -144,6 +144,8 @@ pub(crate) struct State {
     /// Virtual list viewports and their realized rows.
     pub lists: Vec<(NodeId, crate::list::List)>,
     pub decorations: HashMap<NodeId, Decoration>,
+    /// Application values living exactly as long as their control.
+    pub kept: HashMap<NodeId, Vec<Box<dyn std::any::Any>>>,
     #[cfg(feature = "motion")]
     pub motion: crate::motion::Motion,
     pub pending: VecDeque<(NodeId, u64)>,
@@ -285,6 +287,7 @@ impl State {
         self.tree.remove_with(id, |node, _| {
             self.callbacks.remove(&node);
             self.decorations.remove(&node);
+            self.kept.remove(&node);
             self.lists.retain(|(list, _)| *list != node);
             #[cfg(feature = "motion")]
             {

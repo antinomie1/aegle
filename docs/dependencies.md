@@ -38,7 +38,7 @@ Wayland 库本身没有 AccessKit 正常依赖；`example-accessibility` 只为�
 
 SVG 默认以路径图标/构建期资产为主；可选运行时 resvg 不处理 SVG text、外部 URL 或网络资源。需要 SVG 文字时在构建期转轮廓。构建期转换为位图需要指定尺寸/缩放档位，不能宣称与任意动态缩放完全等价。
 
-`aegle-markup` 的静态语言语法很小，采用直接流式词法分析和递归下降，不引入通用脚本或表达式框架。`aegle-macros` 则复用 syn/quote 和 proc-macro-crate 的清单解析，避免重复实现 Rust 参数语法和重命名依赖规则；这些包只参与构建，不随应用运行。`markup` 的目标依赖闭包与发布体积须区分编译主机侧的宏依赖。
+`aegle-markup` 的语法很小，采用直接流式词法分析和递归下降，表达式按优先级爬升解析，不引入通用脚本或表达式框架；`aegle-loader` 以小型树解释已检查的表达式，同样没有第三方依赖。`aegle-macros` 则复用 syn/quote 和 proc-macro-crate 的清单解析，避免重复实现 Rust 参数语法和重命名依赖规则；这些包只参与构建，不随应用运行。`markup` 的目标依赖闭包与发布体积须区分编译主机侧的宏依赖。
 
 来源：[Parley 发布清单](https://docs.rs/crate/parley/0.11.1/source/Cargo.toml)、[Swash 发布清单](https://docs.rs/crate/swash/0.2.10/source/Cargo.toml)、[AccessKit](https://github.com/AccessKit/accesskit)、[resvg 发布清单](https://docs.rs/crate/resvg/0.48.1/source/Cargo.toml.orig)。其他原始调查来源保留在[选型记录](selection-candidates.md)。
 

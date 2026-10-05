@@ -102,7 +102,7 @@ impl Output {
     }
 }
 
-fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
+pub(super) fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
     let name = match kind {
         Kind::Window => "Window",
         Kind::Row | Kind::Column => "Container",
@@ -270,6 +270,9 @@ fn setter(
         }
         Literal::Identifier(_) => quote! { ::core::option::Option::None },
         Literal::Duration(_) => unreachable!("transitions are emitted after static setters"),
+        Literal::Int(_) | Literal::Expr(_) => {
+            unreachable!("static checking normalizes integers and rejects expressions")
+        }
     };
     let method = Ident::new(name, Span::call_site());
     Some(quote! { #handle.#method(#argument)?; })

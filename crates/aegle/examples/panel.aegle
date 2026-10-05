@@ -1,0 +1,6 @@
+Column {
+    gap: 8dp
+    state on: bool = true
+    Switch { text: "Loaded at run time"; checked: on; on changed { on = self.checked } }
+    if on { Text { text: "Edit examples/panel.aegle, then press Reload." } }
+}

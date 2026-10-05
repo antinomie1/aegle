@@ -1,6 +1,6 @@
 # Rust 命令式 API
 
-状态：v0.1。基础 Ui/App、弱句柄、命令式控件与静态标记编译已有源码；组件宏、动态标记和完整扩展接口仍是设计目标，下文分别标注。验证记录见[实现状态](implementation.md)。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
+状态：v0.1。基础 Ui/App、弱句柄、命令式控件、静态与动态标记编译及运行时加载已有源码；组件宏和完整扩展接口仍是设计目标，下文分别标注。验证记录见[实现状态](implementation.md)。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
 
 ## 完整 Hello world
 
@@ -18,9 +18,9 @@ fn main() -> Result<()> {
 
 当前 `App::new` 按目标连接 Wayland / Win32 并建立系统字体上下文；`run(self)` 在主线程接管循环，最后一个窗口关闭后退出。各窗口的控件树独立，字体系统和软件 renderer 共享。`App::with_fonts` 接受显式字体集合，可关闭 `system-fonts`；`AppOptions` 配置 app_id、浅色/深色/高对比主题（后两者可为 None）、renderer 选择、可选 Vulkan 预算和软件 mask 预算；motion feature 另提供 transition 与 `reduced_motion: Option<bool>`（None 跟随系统）；`App::preferences` 返回最近应用的系统偏好，`WindowOptions` 配置初始尺寸与 SHM 预算，Linux 上可选 `layer: Some(LayerOptions)` 创建 wlr layer-shell 面板/覆盖层（compositor 缺少协议时创建失败）。macOS 尚未实现；Vulkan 通过原生 swapchain 呈现，Windows 当前输入法为 IMM 兼容路径。
 
-`aegle` 当前默认启用 Wayland、系统字体、Unix 无障碍、编译型静态标记与外观过渡。嵌入式宿主可直接使用无默认平台 feature 的 `aegle-app::Ui::with_fonts(Rc<RefCell<TextSystem>>, Theme)`，取得 root 后创建同样的控件；通过输入、`refresh`、`visit_scenes`、IME 和可选语义接口对接自己的宿主。
+`aegle` 当前默认启用 Wayland、系统字体、Unix 无障碍、编译型标记（含动态标记引擎）与外观过渡。嵌入式宿主可直接使用无默认平台 feature 的 `aegle-app::Ui::with_fonts(Rc<RefCell<TextSystem>>, Theme)`，取得 root 后创建同样的控件；通过输入、`refresh`、`visit_scenes`、IME 和可选语义接口对接自己的宿主。
 
-界面优先写在 `.aegle` 文件中；`App::run_ui(aegle::ui!("main.aegle"))` 完成默认初始化、构造和运行。`let view = aegle::ui!(&window, "panel.aegle")?` 返回带 `root` 和各 `id` 字段的有类型弱句柄集合，可直接给 `view.done.on_click(...)` 绑定下面的普通 Rust 回调。文件路径相对使用者包清单目录，编译器跟踪其变化；完整已实现属性见[标记语言](markup.md)。
+界面优先写在 `.aegle` 文件中；`App::run_ui(aegle::ui!("main.aegle"))` 完成默认初始化、构造和运行。`let view = aegle::ui!(&window, "panel.aegle")?` 返回带 `root`、各 `id` 和入口 state（`loader::State<T>`）字段的有类型句柄集合，可直接给 `view.done.on_click(...)` 绑定下面的普通 Rust 回调。文件路径相对使用者包清单目录，编译器跟踪其变化；完整已实现属性见[标记语言](markup.md)。
 
 ## 创建、修改与事件
 
@@ -58,6 +58,8 @@ button.on_click(move |_| {
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |
 | ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter` |
 | ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
+| loader::Program / View | `load`、`from_sources`、`from_checked`、`build(&Container)`、`open(&App)`；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`；`State<T>` 有 `get`、`set` |
+| Node（生命周期） | `keep_alive(value)`：值随控件删除或窗口关闭释放 |
 | Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果 |
 
 `bounds` 返回最近刷新后的窗口逻辑坐标，包含呈现位移。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。`Node::set_theme` 给子树一份局部主题，`theme` 读取解析结果；`set_offset` 在布局后平移子树。启用 motion 后用 `set_transition(Transition::default())` 安装外观与位移过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期，`on_transition_end` 接收完成；详见[主题契约](components-theme-animation.md#主题契约)与[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或 token 注册表。

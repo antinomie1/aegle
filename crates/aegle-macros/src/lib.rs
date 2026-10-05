@@ -1,10 +1,15 @@
 //! Compile `.aegle` files into ordinary retained control construction.
 //!
-//! Parsing and schema validation run in the compiler. Generated applications
-//! contain only their handle constructors and property setters, without a
-//! markup parser, dynamic component registry or named-node lookup table.
+//! Parsing and checking run in the compiler. A static document becomes only
+//! handle constructors and property setters, without a markup parser, dynamic
+//! component registry or named-node lookup table. A document with states,
+//! bindings, events, `if`/`for` blocks, components or imports becomes Rust
+//! code that constructs its checked program; `aegle::loader` executes it,
+//! without a markup parser or checker in the binary.
 
+mod dynamic;
 mod generate;
+mod lower;
 
 use std::{fs::File, io::Read, path::Path};
 
@@ -22,7 +27,10 @@ use syn::{Expr, ExprLit, Lit, LitStr, Token, parse::Parse, parse::ParseStream};
 /// immediately and evaluates the parent expression once.
 ///
 /// The inferred view has a public `root` handle and a public typed field for
-/// every markup `id`. Bind Rust callbacks through those fields after creation.
+/// every markup `id`, plus a `loader::State<T>` field for every state of a
+/// dynamic document's root. Bind Rust callbacks through those fields after
+/// creation; IDs inside blocks and components are not exposed. Imports resolve
+/// against the importing file and are tracked for recompilation too.
 /// Dropping the view keeps its retained controls alive. A construction failure
 /// removes the new subtree; it never removes the parent supplied by the caller.
 /// Transition properties require the facade's `motion` feature. Transitions are
@@ -100,14 +108,18 @@ fn expand(arguments: Arguments) -> syn::Result<Tokens> {
         .map_err(io_error)?;
     let document = aegle_markup::parse(&source)
         .map_err(|error| diagnostic(error.render(&source, &relative)))?;
-    let plan = aegle_markup::check(document)
-        .map_err(|error| diagnostic(error.render(&source, &relative)))?;
     let path = path
         .to_str()
         .ok_or_else(|| diagnostic("markup path is not UTF-8".into()))?;
     let dependency = LitStr::new(path, file.span());
     let facade = facade(file)?;
-    let builder = generate::builder(&plan, &facade);
+    let builder = if document.is_static() {
+        let plan = aegle_markup::check(document)
+            .map_err(|error| diagnostic(error.render(&source, &relative)))?;
+        generate::builder(&plan, &facade)
+    } else {
+        dynamic::builder(&relative, Path::new(&manifest), file, &facade)?
+    };
     let invocation = match arguments.parent {
         Some(parent) => quote! {
             let __aegle_parent = &(#parent);

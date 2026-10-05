@@ -29,6 +29,16 @@ impl TextField {
     }
 }
 impl Node {
+    /// Keeps `value` until this control is removed or its window closes, tying
+    /// application state such as markup bindings to the control's lifetime.
+    /// The value is dropped while the UI is being modified, so its `Drop` must
+    /// not use this UI.
+    pub fn keep_alive(&self, value: impl std::any::Any) -> Result {
+        self.change(|state, id| {
+            state.kept.entry(id).or_default().push(Box::new(value));
+            Ok(())
+        })
+    }
     pub(crate) fn on_action(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
         self.change(|state, id| {
             state.callback_version = state

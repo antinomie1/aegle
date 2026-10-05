@@ -12,6 +12,10 @@ extern crate self as aegle;
 #[cfg(feature = "markup")]
 pub use aegle_macros::ui;
 
+/// Runtime engine for dynamic markup and run-time loading.
+#[cfg(feature = "markup")]
+pub use aegle_loader as loader;
+
 /// Common imperative application and control types.
 pub mod prelude {
     #[cfg(any(

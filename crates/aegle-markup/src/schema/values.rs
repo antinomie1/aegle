@@ -1,7 +1,7 @@
-use super::{CheckedNode, Kind, PropertyName};
-use crate::{Error, Value as Literal};
+use super::{Kind, PropertyName};
+use crate::{Error, Span, Value as Literal};
 
-pub(super) fn property_name(name: &str) -> Option<PropertyName> {
+pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
     use PropertyName::*;
     Some(match name {
         "title" => Title,
@@ -45,9 +45,10 @@ pub(super) fn property_name(name: &str) -> Option<PropertyName> {
     })
 }
 
-pub(super) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Result<(), String> {
+/// Whether a property applies to a component kind, regardless of its value.
+pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
     use PropertyName::*;
-    let allowed = match name {
+    match name {
         Title | Theme => kind == Kind::Window,
         Text | FontSize => matches!(
             kind,
@@ -87,8 +88,12 @@ pub(super) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
         ),
         _ => true,
-    };
-    if !allowed {
+    }
+}
+
+pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Result<(), String> {
+    use PropertyName::*;
+    if !allowed(kind, name) {
         return Err(format!("{name:?} is not supported on {kind:?}"));
     }
     let valid = match (name, value) {
@@ -154,29 +159,34 @@ pub(super) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
     Err(format!("{name:?} requires {expected}"))
 }
 
-pub(super) fn validate_range(node: &CheckedNode) -> Result<(), Error> {
-    if !matches!(node.kind, Kind::Slider | Kind::Progress) {
+/// Checks literal min/max of validated range properties.
+pub(crate) fn validate_range<'a>(
+    kind: Kind,
+    properties: impl Iterator<Item = (PropertyName, &'a Literal)>,
+    span: Span,
+) -> Result<(), Error> {
+    if !matches!(kind, Kind::Slider | Kind::Progress) {
         return Ok(());
     }
     let mut bounds = [0.0, 1.0];
-    for property in &node.properties {
-        let index = match property.name {
+    for (name, value) in properties {
+        let index = match name {
             PropertyName::Min => 0,
             PropertyName::Max => 1,
             _ => continue,
         };
-        let Literal::Number(value) = property.value else {
+        let Literal::Number(value) = value else {
             unreachable!()
         };
-        bounds[index] = f64::from(value);
+        bounds[index] = f64::from(*value);
     }
     if bounds[0] >= bounds[1] {
-        return Err(Error::new(node.span, "numeric range requires min < max"));
+        return Err(Error::new(span, "numeric range requires min < max"));
     }
     Ok(())
 }
 
-pub(super) fn valid_id(id: &str) -> bool {
+pub(crate) fn valid_id(id: &str) -> bool {
     let mut bytes = id.bytes();
     bytes
         .next()

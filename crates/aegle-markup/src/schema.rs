@@ -3,9 +3,9 @@
 mod values;
 
 use std::collections::HashSet;
-use values::{property_name, valid_id, validate, validate_range};
+pub(crate) use values::{allowed, property_name, valid_id, validate, validate_range};
 
-use crate::{Document, Error, Node, Span, Value};
+use crate::{Document, Error, Item, Node, Span, Value};
 
 /// A document checked against the currently implemented built-in components.
 #[derive(Debug)]
@@ -148,18 +148,67 @@ pub enum PropertyName {
     IndicatorColor,
 }
 
-/// Checks a parsed document without loading fonts or creating any UI objects.
+/// Checks a static document without loading fonts or creating any UI objects.
 ///
 /// IDs must be unique ASCII Rust identifiers other than keywords, `_` and
 /// `root`. Unknown components/properties and unsupported values are errors.
 /// Only containers accept children; a Window must be the document root.
 /// Manually constructed ASTs are limited to 256 levels and 10,000 nodes too.
+/// Documents with states, events, blocks, components or imports are rejected;
+/// check those with [`crate::check_program`].
 pub fn check(document: Document) -> Result<CheckedDocument, Error> {
+    let span = Span { start: 0, end: 0 };
+    if !document.is_static() {
+        return Err(Error::new(
+            span,
+            "states, events, if/for blocks, components and imports require check_program",
+        ));
+    }
+    let root = document
+        .root
+        .ok_or_else(|| Error::new(span, "the document has no root component"))?;
     let mut ids = HashSet::new();
     let mut remaining = 10_000;
     Ok(CheckedDocument {
-        root: check_node(document.root, 1, &mut remaining, &mut ids)?,
+        root: check_node(root, 1, &mut remaining, &mut ids)?,
     })
+}
+
+/// Resolves a built-in component name.
+pub(crate) fn kind(name: &str) -> Option<Kind> {
+    Some(match name {
+        "Window" => Kind::Window,
+        "Column" => Kind::Column,
+        "Row" => Kind::Row,
+        "ScrollView" => Kind::ScrollView,
+        "Text" => Kind::Text,
+        "Button" => Kind::Button,
+        "TextField" => Kind::TextField,
+        "TextArea" => Kind::TextArea,
+        "CheckBox" => Kind::CheckBox,
+        "Switch" => Kind::Switch,
+        "Slider" => Kind::Slider,
+        "Progress" => Kind::Progress,
+        _ => return None,
+    })
+}
+
+impl Kind {
+    /// Whether this component accepts children.
+    pub fn is_container(self) -> bool {
+        matches!(
+            self,
+            Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
+        )
+    }
+}
+
+/// Integer literals are numbers wherever a static property expects one.
+pub(crate) fn literal(value: Value) -> Value {
+    match value {
+        Value::Int(n) => Value::Number(n as f32),
+        value => value,
+    }
 }
 
 fn check_node(
@@ -175,29 +224,12 @@ fn check_node(
         ));
     }
     *remaining -= 1;
-    let kind = match node.name.as_str() {
-        "Window" => Kind::Window,
-        "Column" => Kind::Column,
-        "Row" => Kind::Row,
-        "ScrollView" => Kind::ScrollView,
-        "Text" => Kind::Text,
-        "Button" => Kind::Button,
-        "TextField" => Kind::TextField,
-        "TextArea" => Kind::TextArea,
-        "CheckBox" => Kind::CheckBox,
-        "Switch" => Kind::Switch,
-        "Slider" => Kind::Slider,
-        "Progress" => Kind::Progress,
-        _ => return Err(error(format!("unknown component `{}`", node.name))),
-    };
+    let kind =
+        kind(&node.name).ok_or_else(|| error(format!("unknown component `{}`", node.name)))?;
     if kind == Kind::Window && depth != 1 {
         return Err(error("Window is only allowed at the document root".into()));
     }
-    let container = matches!(
-        kind,
-        Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
-    );
-    if !container && !node.children.is_empty() {
+    if !kind.is_container() && !node.children.is_empty() {
         return Err(error(format!("{} does not accept children", node.name)));
     }
     let mut result = CheckedNode {
@@ -231,14 +263,19 @@ fn check_node(
         if !seen.insert(name) {
             return Err(error(format!("duplicate property `{}`", property.name)));
         }
-        validate(kind, name, &property.value).map_err(error)?;
+        let value = literal(property.value);
+        validate(kind, name, &value).map_err(error)?;
         result.properties.push(CheckedProperty {
             name,
-            value: property.value,
+            value,
             span: property.span,
         });
     }
-    validate_range(&result)?;
+    validate_range(
+        kind,
+        result.properties.iter().map(|p| (p.name, &p.value)),
+        result.span,
+    )?;
     if seen.contains(&PropertyName::Easing) && !seen.contains(&PropertyName::Transition) {
         let property = result
             .properties
@@ -251,6 +288,9 @@ fn check_node(
         ));
     }
     for child in node.children {
+        let Item::Node(child) = child else {
+            unreachable!("static documents contain only nodes")
+        };
         result
             .children
             .push(check_node(child, depth + 1, remaining, ids)?);

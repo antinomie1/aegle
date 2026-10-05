@@ -26,9 +26,9 @@
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
 | aegle-widgets | 默认中性极简皮肤和常用组件 | controls、theme、scene；motion 按 feature 接入 |
 | aegle-assets | 有界 PNG 解码与可选运行时 SVG 光栅化 | types |
-| aegle-markup | 有界静态结构解析、跨度、内建控件 schema 与类型化构造计划 | 无 |
-| aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；组件元数据仍为目标 | markup |
-| aegle-loader | 可选运行时加载、表达式执行与显式重载 | types、markup、core |
+| aegle-markup | 有界解析、跨度、内建控件 schema、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
+| aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |
+| aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载 | app、markup |
 | aegle-app | 无窗口 Ui 与可选原生 App，连接保留控件、布局、绘制、文本、主题及语义 | types、core、layout、scene、text、controls、theme；平台/renderer/access 按 feature |
 | aegle | 应用便捷入口与重导出，不提供另一套实现 | app；其他按 feature 重导出 |
 
@@ -58,9 +58,9 @@
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 app 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 app 派生的滚动几何。
 
-`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 目标平台无障碍 + 编译型静态标记 + 外观过渡**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主、动态标记与缩放/旋转动画仍待实现。
+`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 目标平台无障碍 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主与缩放/旋转动画仍待实现；动态标记由 `markup` 中的 loader 执行。
 
-`aegle-markup` 是无第三方依赖的有界解析器和静态 schema；不依赖 app 或任何平台，可供外部工具独立检查。`aegle-macros` 复用它，并用 syn/quote/proc-macro-crate 处理 Rust 宏参数、代码生成与依赖别名，避免自建 Rust 语法处理。facade 的可选 `markup` 只增加编译期宏；生成代码直接创建相同保留控件，发布程序不带解析器、AST 或字符串控件注册表。运行时 loader 和第三方组件导入仍未实现。
+`aegle-markup` 是无第三方依赖的有界解析器、schema 与类型检查器；不依赖 app 或任何平台，可供外部工具独立检查，I/O 由调用方的读取函数提供。`aegle-macros` 复用它，并用 syn/quote/proc-macro-crate 处理 Rust 宏参数、代码生成与依赖别名，避免自建 Rust 语法处理。facade 的可选 `markup` 增加编译期宏与 `aegle-loader`：静态文档生成直接创建控件的代码，不链接引擎；动态文档生成构造已检查程序的代码并由引擎执行，发布程序不带解析器。引擎以 state 单元和效果（effect）记录绑定依赖，绑定与块随控件通过 `Node::keep_alive` 释放；运行时加载额外链接解析器。
 
 `aegle-motion` 提供无分配、无时钟所有权的 Tween/Transition，支持 f32、Point、Color 与四种 easing；仅依赖 types 的可选 `color-math`。该 feature 需要 std，将软件合成与动画共用的 sRGB 转换表放在一个 OnceLock 中，types 默认仍为 no_std。app 的可选 `motion` 维护节点外观目标/呈现值并驱动失效；无需 motion 时不会编译其映射表或调度代码。
 
@@ -80,7 +80,7 @@ flowchart TD
   Facade --> Widgets[widgets / controls]
   Widgets --> Core
   Widgets --> Visual[theme / motion / scene]
-  Loader[可选 loader] --> Core
+  Loader[可选 loader] --> App
   Loader --> Markup[markup]
   Macros[构建期 macros] --> Markup
 ```

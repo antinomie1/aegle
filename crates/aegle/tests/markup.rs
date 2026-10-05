@@ -5,8 +5,7 @@ use aegle::{Point, Result, Size, TextSystem, Theme, Ui, UiError};
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-#[test]
-fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
+fn ui() -> Result<Ui> {
     let mut fonts = TextSystem::new();
     let families = fonts.register_fonts(Blob::new(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
@@ -14,7 +13,12 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
     fonts
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
-    let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
+    Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())
+}
+
+#[test]
+fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
+    let ui = ui()?;
     let mut evaluations = 0;
     let view = aegle::ui!(
         {
@@ -80,5 +84,24 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
         Some(UiError::DeadHandle)
     ));
     assert!(ui.root().is_alive());
+    Ok(())
+}
+
+#[test]
+fn compiled_dynamic_view_types_states_imports_and_bindings() -> Result {
+    let ui = ui()?;
+    let view = aegle::ui!(&ui.root(), "tests/fixtures/counter.aegle")?;
+    assert_eq!(
+        (view.count.get(), view.tags.get()),
+        (0, vec!["new".to_owned()])
+    );
+    view.add.activate()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(view.status.text()?, "count 1");
+    assert_eq!(view.tags.get(), ["new", "1"]);
+    let (count, status) = (view.count.clone(), view.status.clone());
+    drop(view); // Bindings live with the controls, not the view.
+    count.set(41)?;
+    assert_eq!(status.text()?, "count 41");
     Ok(())
 }

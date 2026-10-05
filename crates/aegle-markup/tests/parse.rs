@@ -1,6 +1,6 @@
 //! Structural syntax, UTF-8 diagnostics and bounded parsing.
 
-use aegle_markup::{Limits, Value, parse, parse_with_limits};
+use aegle_markup::{Item, Limits, Value, parse, parse_with_limits};
 
 #[test]
 fn utf8_literals_delimiters_and_resource_boundaries() {
@@ -16,7 +16,7 @@ Window {
     }
 }"#;
     let document = parse(source).unwrap();
-    let root = &document.root;
+    let root = document.root.as_ref().unwrap();
     assert_eq!(root.name, "Window");
     assert_eq!(
         root.properties[0].value,
@@ -30,7 +30,10 @@ Window {
     assert_eq!(root.properties[6].value, Value::Color([18, 52, 86, 120]));
     assert_eq!(root.properties[7].value, Value::Duration(u64::MAX));
     assert_eq!(root.properties[8].value, Value::Duration(0));
-    assert_eq!(root.children[0].children.len(), 2);
+    let Item::Node(column) = &root.children[0] else {
+        panic!("expected a node")
+    };
+    assert_eq!(column.children.len(), 2);
     assert_eq!(
         &source[root.properties[4].value_span.start..root.properties[4].value_span.end],
         "8dp"
@@ -56,14 +59,17 @@ Window {
         assert!(parse_with_limits(source, &limits).is_err());
     }
     for bad in [
-        "",
         "Window {",
         "Window {} Text {}",
         "Window { Text {} Button {} }",
         "Window { a: 1 b: 2 }",
-        "Window { a: 1 + 2 }",
-        "Window { a: str(count) }",
-        "Window { state count: int = 0 }",
+        "Window { a: 1 + }",
+        "Window { a: str(count }",
+        "Window { state count = 0 }",
+        "Window { on clicked { x == 1 } }",
+        "Window { if a { } else Text {} }",
+        "component A() { Text {} Text {} }",
+        "use path",
         "Window { a: 1e99 }",
         "Window { a: NaN }",
         "Window { a: 1e }",
@@ -86,8 +92,8 @@ Window {
     ] {
         assert!(parse(bad).is_err(), "accepted {bad}");
     }
-    let bad = "Window {\n text: \"你好\" + 1\n}";
+    let bad = "Window {\n text: \"你好\" @ 1\n}";
     let diagnostic = parse(bad).unwrap_err().render(bad, "你好.aegle");
     assert!(diagnostic.starts_with("你好.aegle:2:13:"), "{diagnostic}");
-    assert!(diagnostic.contains("expressions are not supported"));
+    assert!(diagnostic.contains("unsupported character"));
 }

@@ -1,0 +1,22 @@
+// States, bindings, events, if/for blocks and an imported component.
+use "tasks.aegle"
+Window {
+    title: "Aegle — dynamic markup"
+    width: 560dp
+    height: 440dp
+    padding: 16dp
+    gap: 12dp
+    state added: int = 0
+    state tasks: list<string> = ["Write markup", "Run it"]
+    state summary: bool = true
+    Row {
+        gap: 8dp
+        Button { text: "Add task"; on clicked { added += 1; tasks += ["Task " + str(added)] } }
+        Button { text: "Clear"; enabled: len(tasks) > 0; on clicked { tasks = [] } }
+        CheckBox { text: "Summary"; checked: summary; on changed { summary = self.checked } }
+    }
+    if summary { Text { text: str(len(tasks)) + " tasks, " + str(added) + " added" } }
+    ScrollView { grow: 1; for task in tasks { Task { title: task } } }
+    Row { gap: 8dp; Button { id: reload; text: "Reload panel.aegle" } }
+    Column { id: live }
+}
