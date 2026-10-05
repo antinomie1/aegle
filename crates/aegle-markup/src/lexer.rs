@@ -6,6 +6,7 @@ pub(crate) enum Kind<'a> {
     String(String),
     Number(f32),
     Length(f32),
+    Color([u8; 4]),
     Open,
     Close,
     Colon,
@@ -49,6 +50,7 @@ impl<'a> Lexer<'a> {
             Some(b':') => self.single(Kind::Colon),
             Some(b'\n' | b';') => self.single(Kind::Separator),
             Some(b'"') => Kind::String(self.string()?),
+            Some(b'#') => self.color()?,
             Some(b'-' | b'0'..=b'9') => self.number()?,
             Some(b'a'..=b'z' | b'A'..=b'Z' | b'_') => {
                 self.cursor += 1;
@@ -141,6 +143,34 @@ impl<'a> Lexer<'a> {
         } else {
             Ok(Kind::Number(number))
         }
+    }
+
+    fn color(&mut self) -> Result<Kind<'a>, Error> {
+        let start = self.cursor;
+        self.cursor += 1;
+        while self
+            .peek()
+            .is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        {
+            self.cursor += 1;
+        }
+        let digits = &self.source[start + 1..self.cursor];
+        let error = || {
+            self.error(
+                start,
+                "color requires exactly six or eight hexadecimal digits",
+            )
+        };
+        if !matches!(digits.len(), 6 | 8) {
+            return Err(error());
+        }
+        let mut channels = [0, 0, 0, 255];
+        for (channel, bytes) in channels.iter_mut().zip(digits.as_bytes().chunks_exact(2)) {
+            let high = (bytes[0] as char).to_digit(16).ok_or_else(error)?;
+            let low = (bytes[1] as char).to_digit(16).ok_or_else(error)?;
+            *channel = (high * 16 + low) as u8;
+        }
+        Ok(Kind::Color(channels))
     }
 
     fn string(&mut self) -> Result<String, Error> {

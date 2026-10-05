@@ -53,6 +53,8 @@ pub enum Value {
     Number(f32),
     /// A finite logical length, written with the `dp` suffix.
     Length(f32),
+    /// Unpremultiplied sRGB bytes, written as `#RRGGBB` or `#RRGGBBAA`.
+    Color([u8; 4]),
     /// An unquoted identifier, such as a node ID or enum value.
     Identifier(String),
 }

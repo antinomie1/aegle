@@ -172,10 +172,27 @@ fn setter(
         Label => "set_accessible_label",
         ReadOnly => "set_read_only",
         Theme => "set_theme",
+        Background => "set_background",
+        Foreground => "set_foreground",
+        BorderColor => "set_border_color",
+        BorderWidth => "set_border_width",
+        Radius => "set_radius",
+        FocusColor => "set_focus_color",
+        FocusWidth => "set_focus_width",
+        SelectionColor => "set_selection_color",
+        CaretColor => "set_caret_color",
+        HoverBackground => "set_hover_background",
+        PressedBackground => "set_pressed_background",
+        DisabledBackground => "set_disabled_background",
+        DisabledForeground => "set_disabled_foreground",
+        FontSize => "set_font_size",
     };
     let argument = match &property.value {
         Value::String(value) => quote! { #value },
         Value::Bool(value) => quote! { #value },
+        Value::Color([red, green, blue, alpha]) => {
+            quote! { #facade::Color::rgba(#red, #green, #blue, #alpha) }
+        }
         Value::Number(value) | Value::Length(value) => {
             if matches!(property.name, Width | Height) {
                 quote! { ::core::option::Option::Some(#value) }

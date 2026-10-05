@@ -10,7 +10,8 @@ and software rasterization work today. The independent Wayland backend adds
 native windows, bounded SHM presentation, keyboard/pointer input and text-input-v3.
 The application layer offers windows, rows, columns, labels, buttons and plain
 text fields with light/dark/high-contrast themes. Compiled `.aegle` markup and
-simple imperative Rust create the same retained controls. Shared control
+simple imperative Rust create the same retained controls. Local colors, typography
+and small theme/state skin functions let component libraries reuse those controls. Shared control
 behavior connects input and focus to the retained tree and editor.
 Optional Unix accessibility exposes controls, CJK
 text, selection, focus and button actions through AT-SPI. Native text replacement,
@@ -59,6 +60,7 @@ cargo run -p aegle --example hello --release
 cargo run -p aegle --example controls --release
 cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
+cargo run -p aegle --example components --release
 cargo test --workspace --all-features
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
@@ -77,7 +79,7 @@ rasterization and a bounded image cache),
 `aegle-controls` (unskinned Button and optional TextField behavior),
 `aegle-access` (UI-thread callback mailbox and optional Unix accessibility),
 `aegle-platform-wayland` (windows and native input, independent of rendering),
-`aegle-theme` (allocation-free typed palettes/metrics), `aegle-app` (retained
+`aegle-theme` (allocation-free palettes, state-based skins and local style values), `aegle-app` (retained
 imperative UI, with the native host behind features), and `aegle-markup` (bounded
 parsing and static component checking). `aegle-macros` generates compiled views.
 

@@ -2,11 +2,30 @@ Column {
     id: panel
     padding: 3dp
     width: 240dp
+    background: #F6F7F9FF
+    border_color: #737D8C
+    border_width: 1dp
+    radius: 8dp
     Row {
         gap: 4dp
         Text { id: status; text: "等待" }
-        Button { id: clear; text: "Clear"; width: 80dp }
+        Button {
+            id: clear; text: "Clear"; width: 80dp
+            foreground: #FFFFFF
+            background: #6750A4
+            hover_background: #5B4482
+            pressed_background: #422D67
+            disabled_background: #737D8C
+            disabled_foreground: #20242B
+            focus_color: #A78BE8
+            focus_width: 3dp
+        }
     }
-    TextField { id: editor; text: "你好"; label: "Editor" }
+    TextField {
+        id: editor; text: "你好"; label: "Editor"
+        font_size: 16dp
+        caret_color: #6750A4
+        selection_color: #D5DFFF
+    }
     TextArea { id: multiline; text: "one\ntwo"; height: 70dp; min_height: 0dp }
 }

@@ -22,13 +22,15 @@ mod native_input;
 mod native_loop;
 mod paint;
 mod state;
+mod style;
+mod style_handles;
 mod text_handles;
 mod theme;
 mod ui;
 
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 pub use aegle_text::{ImeEdit, TextSystem};
-pub use aegle_theme::Theme;
+pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, VisualState};
 pub use aegle_types::{Color, Point, Size};
 pub use handles::{Button, Container, Label, Node, TextField};
 #[cfg(all(feature = "wayland", target_os = "linux"))]

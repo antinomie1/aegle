@@ -38,5 +38,9 @@ required-features = ["wayland", "system-fonts", "markup"]
 name = "markup_controls"
 required-features = ["wayland", "system-fonts", "markup"]
 
+[[example]]
+name = "components"
+required-features = ["wayland", "system-fonts", "markup"]
+
 [lints]
 workspace = true

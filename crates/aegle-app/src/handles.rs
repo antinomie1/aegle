@@ -57,6 +57,7 @@ impl Node {
             state.cancel_subtree(id)?;
             state.tree.remove_with(id, |node, _| {
                 state.callbacks.remove(&node);
+                state.decorations.remove(&node);
             })?;
             state
                 .pending

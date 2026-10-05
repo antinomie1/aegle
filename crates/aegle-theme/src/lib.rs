@@ -10,6 +10,10 @@
 
 #![no_std]
 
+mod appearance;
+
+pub use appearance::{Appearance, ControlKind, InvalidStyle, Skin, Style, VisualState};
+
 use aegle_types::Color;
 use core::fmt;
 

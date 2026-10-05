@@ -1,0 +1,31 @@
+Window {
+    title: "Aegle — reusable components"
+    width: 680dp
+    height: 440dp
+    padding: 24dp
+    gap: 16dp
+    Text { text: "A small component library"; font_size: 24dp }
+    Text { text: "Markup structure. Rust behavior. One retained tree." }
+    Column {
+        id: card
+        padding: 20dp
+        gap: 12dp
+        radius: 12dp
+        border_color: #8993A4
+        border_width: 1dp
+        grow: 1
+        Text { text: "CJK and native input"; font_size: 18dp }
+        TextArea {
+            id: editor
+            text: "Hello, 世界\n你好 / 日本語 / 한글"
+            label: "Text editor"
+            grow: 1
+            font_size: 16dp
+            radius: 8dp
+            focus_color: #A78BE8
+            focus_width: 2dp
+            caret_color: #A78BE8
+        }
+    }
+    Row { id: actions; gap: 12dp }
+}

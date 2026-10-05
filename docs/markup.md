@@ -60,10 +60,17 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `label` | 无障碍名称字符串 |
 | `read_only` | TextField/TextArea 的 bool |
 | `theme` | Window 的 `light`、`dark`、`high_contrast` |
+| `background`、`foreground`、`border_color` | `#RRGGBB` 或 `#RRGGBBAA` 颜色 |
+| `hover_background`、`pressed_background` | hover 限 Button/TextField/TextArea，pressed 限 Button |
+| `disabled_background`、`disabled_foreground` | 对应禁用状态的颜色覆盖 |
+| `border_width`、`radius` | 非负 `dp`；边框宽度为零时关闭 |
+| `focus_color`、`focus_width` | Button/TextField/TextArea 的焦点颜色与非负 `dp` 宽度 |
+| `selection_color`、`caret_color` | TextField/TextArea 的选择与 caret/预编辑颜色 |
+| `font_size` | Text/Button/TextField/TextArea 的正 `dp` |
 
 Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
 
-声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`；当前不支持百分比、颜色或时长字面量。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。
+声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；当前不支持百分比或时长字面量。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 
 独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits` 和内建 schema 的 `check`。默认解析上限为 1 MiB、64 层、10,000 节点；显式解析深度最多 256，schema 检查最多 256 层/10,000 节点。`ui!` 使用默认上限。运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
 

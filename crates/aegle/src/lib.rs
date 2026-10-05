@@ -15,5 +15,8 @@ pub use aegle_macros::ui;
 pub mod prelude {
     #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub use aegle_app::{App, AppOptions, Window, WindowOptions};
-    pub use aegle_app::{Button, Container, Label, Node, Result, TextField, Theme, Ui};
+    pub use aegle_app::{
+        Appearance, Button, Color, Container, ControlKind, Label, Node, Result, Skin, Style,
+        TextField, Theme, Ui, VisualState,
+    };
 }

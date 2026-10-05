@@ -17,7 +17,7 @@
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
-- aegle-theme：无分配的有类型配色/尺寸，浅色、深色与显式高对比主题；当前没有 token 注册表、局部主题继承或系统偏好监听。
+- aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。当前没有 token 注册表、局部主题继承或系统偏好监听。
 - aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/text/button/text_field/text_area、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/Text/Button/TextField/TextArea 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
 
@@ -30,6 +30,7 @@ cargo run -p aegle --example hello --release
 cargo run -p aegle --example controls --release
 cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
+cargo run -p aegle --example components --release
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
@@ -143,8 +144,21 @@ Ui 的逻辑树同时用于布局、命中、焦点、编辑与语义；保留�
 - 同一工具链/profile、Wayland + 系统字体 + markup、关闭 Unix adapter 的发布文件：hello 与 hello_markup 均为 3,925,184 B，controls 与 markup_controls 均为 3,962,048 B。此样本标记入口没有增加最终文件大小，不代表所有界面均有相同大小，也不是 RAM/CPU 测量。解析器、AST 与 syn/quote 等仅在编译主机运行。
 - 实现 12463 行、测试 2441 行，占 16.38%（不含 examples）；最大源文件 483 行。独立复核未发现需修复的问题。MSRV/Clippy/其他 OS/真实输入法候选窗与屏幕阅读器的未验收范围保持不变。
 
+## 局部外观与可复用皮肤验证
+
+默认控件和自定义皮肤使用同一套行为、文本、IME 与语义。`set_skin` 接受无捕获的纯主题/状态函数；Style 是有类型的局部覆盖，按节点放在稀疏表中。已有控件可通过普通 Rust 工厂函数复用外观，不需要注册器或组件宏。局部字号在主题变化及文字替换后保留；字号改变重排同一编辑器，配色改变只覆盖绘制。边框和独立焦点环在控件范围内绘制；容器圆角不隐式裁剪子树。
+
+`.aegle` 支持六/八位颜色字面量及背景、前景、状态背景、边框、圆角、焦点环、选择/caret 和字号属性。复核发现状态属性适用范围与实际行为不一致，已同步收紧 schema 和运行时：hover/focus 限按钮/编辑器，pressed 限按钮，selection/caret 限编辑器。不适用的设置明确拒绝，不接受后悄悄忽略。
+
+- workspace all-features 共 25 个常规集成场景通过；新增一个场景覆盖局部样式、无效值不修改状态、主题/字号/预编辑共存、语义前景、按压/禁用优先级、回调文字替换与字体恢复。原有标记测试加入颜色与适用范围检查，生成代码在真实 Ui 测试中执行；没有逐 setter 测试套件。
+- all-targets/all-features、无默认 feature 的应用场景与仅 markup 的 facade 场景、严格 Rustdoc、格式和 diff 检查通过；所有测试在 crates/*/tests。实现 13086 行、测试 2606 行，占 16.61%（不含 examples）；最大源文件 483 行。
+- `components` 示例采用 `.aegle` 结构、一个可复用按钮工厂和主题皮肤；私有 Sway/Pixman 上验证 CJK 显示、Tab/Shift+Tab、清空、编辑、深色主题及关闭回调，浅色/深色截图已检查。它只是圆角填色组件示例，不是完整 MD3。当前未新增 OS 协议，也未重复完整原生 IME/AT-SPI 探针。
+- 外部小型状态探针验证自定义皮肤悬停/离开时的前景与语义差量一致、离开确实触发重绘，以及后续状态返回无效半径时报错、清除皮肤后可恢复。未扩张正式测试套件。
+- Wayland + 系统字体 + markup、无 Unix adapter 的本机 release 文件：hello 为 3,929,280 B（较前阶段增加 4096 B），controls 为 3,962,048 B（不变），components 为 3,982,528 B。没有新发布依赖。大小受链接/对齐影响，不能据此宣称零运行成本。
+- 同一800×480私有输出上的 controls 单次快照：RSS/PSS 为28,796/11,526 KiB、1线程；随后3秒 CPU tick 增量为0（CLK_TCK=100）。这只是一份短时进程样本，不是峰值、稳定基准或嵌入式验收。当前目标上的 `size_of`：Appearance 36 B、Style 104 B、VisualState 6 B；不含稀疏表桶、字号/函数指针和 allocator 开销。
+
 ## 下一阶段与缺口
 
-下一步在现有标记和命令式入口上补齐可复用组件扩展、动画与基础控件，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
+下一步继续补齐动画、基础控件和任意绘制/行为组件扩展，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
 
-当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、通用组件插入/自定义皮肤、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。
+当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。

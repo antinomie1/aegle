@@ -3,87 +3,51 @@ use crate::{
     state::{Content, State},
 };
 use aegle_core::NodeId;
-use aegle_scene::{Affine, Rect, RoundedRect};
+use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
 use aegle_text::EditorPaint;
+use aegle_types::Size;
 
 impl State {
     pub fn record(&mut self, id: NodeId) -> Result {
-        let enabled = self.usable(id);
+        let visual = self.visual_state(id);
+        let appearance = self.appearance_for(id, visual);
+        appearance.validate()?;
         let element = &mut self.tree.get_mut(id).unwrap().context;
-        let theme = self.theme;
-        let padding = element.inset(theme.padding);
+        let padding = element.inset(self.theme.padding);
         let size = element.bounds.size;
         let mut builder = std::mem::take(&mut element.scene).into_builder();
         builder.clear();
         if element.effective_visible {
+            let shape = RoundedRect::new(
+                Rect::new(0.0, 0.0, size.width, size.height),
+                appearance.radius,
+            )?;
+            if appearance.background.to_rgba()[3] != 0 {
+                builder.fill(shape, appearance.background)?;
+            }
+            outline(
+                &mut builder,
+                size,
+                appearance.radius,
+                appearance.border_width,
+                appearance.border_color,
+            )?;
             match &element.content {
                 Content::Label(label) => {
                     builder.push_transform(Affine::translation(padding, padding)?)?;
-                    label.paint_with_color(&mut builder, theme.foreground)?;
+                    label.paint_with_color(&mut builder, appearance.foreground)?;
                     builder.pop()?;
                 }
-                Content::Button(button, label) => {
-                    let shape = RoundedRect::new(
-                        Rect::new(
-                            0.5,
-                            0.5,
-                            (size.width - 1.0).max(0.0),
-                            (size.height - 1.0).max(0.0),
-                        ),
-                        theme.radius,
-                    )?;
-                    let color = if button.is_pressed() {
-                        theme.pressed
-                    } else if button.is_hovered() {
-                        theme.hover
-                    } else {
-                        theme.surface
-                    };
-                    builder.fill(shape, color)?;
-                    builder.stroke(
-                        shape,
-                        if button.is_focused() {
-                            theme.accent
-                        } else {
-                            theme.border
-                        },
-                        1.0,
-                    )?;
+                Content::Button(_, label) => {
                     builder.push_clip(shape)?;
                     builder.push_transform(Affine::translation(
                         (size.width - label.size().width) / 2.0,
                         (size.height - label.size().height) / 2.0,
                     )?)?;
-                    label.paint_with_color(
-                        &mut builder,
-                        if enabled {
-                            theme.foreground
-                        } else {
-                            theme.muted
-                        },
-                    )?;
+                    label.paint_with_color(&mut builder, appearance.foreground)?;
                     builder.pop()?.pop()?;
                 }
                 Content::Field(field) => {
-                    let shape = RoundedRect::new(
-                        Rect::new(
-                            0.5,
-                            0.5,
-                            (size.width - 1.0).max(0.0),
-                            (size.height - 1.0).max(0.0),
-                        ),
-                        theme.radius,
-                    )?;
-                    builder.fill(shape, theme.surface)?;
-                    builder.stroke(
-                        shape,
-                        if field.is_focused() {
-                            theme.accent
-                        } else {
-                            theme.border
-                        },
-                        1.0,
-                    )?;
                     builder.push_clip(shape)?;
                     builder.push_transform(Affine::translation(
                         padding - element.scroll.x,
@@ -92,14 +56,10 @@ impl State {
                     field.editor().paint(
                         &mut builder,
                         EditorPaint {
-                            foreground: Some(if enabled {
-                                theme.foreground
-                            } else {
-                                theme.muted
-                            }),
-                            caret: field.is_focused().then_some(theme.accent),
-                            preedit: Some(theme.accent),
-                            selection: Some(theme.selection),
+                            foreground: Some(appearance.foreground),
+                            caret: visual.focused.then_some(appearance.caret),
+                            preedit: Some(appearance.caret),
+                            selection: Some(appearance.selection),
                             ..Default::default()
                         },
                     )?;
@@ -107,8 +67,39 @@ impl State {
                 }
                 Content::Container => {}
             }
+            if visual.enabled && visual.focused {
+                outline(
+                    &mut builder,
+                    size,
+                    appearance.radius,
+                    appearance.focus_width,
+                    appearance.focus_color,
+                )?;
+            }
         }
         element.scene = builder.finish()?;
         Ok(())
     }
+}
+
+// Keep centered scene strokes inside the logical bounds. Large requested widths
+// saturate at the smaller extent, so they never draw into neighboring controls.
+fn outline(
+    builder: &mut SceneBuilder,
+    size: Size,
+    radius: f32,
+    width: f32,
+    color: Color,
+) -> Result {
+    let width = width.min(size.width).min(size.height);
+    if width == 0.0 || color.to_rgba()[3] == 0 {
+        return Ok(());
+    }
+    let inset = width / 2.0;
+    let shape = RoundedRect::new(
+        Rect::new(inset, inset, size.width - width, size.height - width),
+        (radius - inset).max(0.0),
+    )?;
+    builder.stroke(shape, color, width)?;
+    Ok(())
 }

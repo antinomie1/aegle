@@ -120,6 +120,7 @@ impl Ui {
                 input_method: false,
                 repaint: true,
                 callbacks: HashMap::new(),
+                decorations: HashMap::new(),
                 pending: VecDeque::new(),
                 dispatching: false,
                 callback_version: 0,
@@ -244,6 +245,7 @@ impl Ui {
         state.order.clear();
         state.pending.clear();
         state.callbacks.clear();
+        state.decorations.clear();
         state.capture = None;
         state.hover = None;
         Ok(())

@@ -164,9 +164,18 @@ impl State {
                 continue;
             }
             let enabled = self.usable(id);
+            let color = self.appearance(id).foreground;
+            let [red, green, blue, alpha] = color.to_rgba();
+            let foreground = aegle_access::accesskit::Color {
+                red,
+                green,
+                blue,
+                alpha,
+            };
             let node_data = self.tree.get(id).unwrap();
             let bounds = node_data.bounds();
             let mut node = Node::new(Role::GenericContainer);
+            node.set_foreground_color(foreground);
             node.set_bounds(Rect::new(
                 0.0,
                 0.0,
@@ -240,19 +249,8 @@ impl State {
                         .expect("prepared text and geometry satisfy the accessibility boundary");
                     // Painting overrides the retained shaping brush on palette
                     // changes; semantic text must report that same visible color.
-                    let color = if enabled {
-                        self.theme.foreground
-                    } else {
-                        self.theme.muted
-                    };
-                    let [red, green, blue, alpha] = color.to_rgba();
                     for (_, run) in &mut update.nodes[start..] {
-                        run.set_foreground_color(aegle_access::accesskit::Color {
-                            red,
-                            green,
-                            blue,
-                            alpha,
-                        });
+                        run.set_foreground_color(foreground);
                     }
                     if !enabled {
                         node.remove_action(Action::SetTextSelection);

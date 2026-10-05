@@ -3,6 +3,7 @@
 //! Structural nodes and literal properties are supported. Declarations are
 //! separated by a newline or semicolon; the last declaration may end at `}`.
 //! Strings use JSON escapes, comments start with `//`, and lengths use `dp`.
+//! Colors use six or eight hexadecimal digits: `#RRGGBB` or `#RRGGBBAA`.
 //! Expressions and executable statements are explicitly rejected.
 //!
 //! Parsing does not create controls. A host validates the resulting document

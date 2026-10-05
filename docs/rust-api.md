@@ -45,11 +45,30 @@ button.on_click(move |_| {
 | --- | --- |
 | Node / 所有控件句柄 | `is_alive`、`bounds`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
 | 布局 | `set_size`、`set_width`、`set_height`、`set_min_size`、`set_min_width`、`set_min_height`、`set_grow`、`set_padding`、`set_gap` |
+| 外观 | `set_style`、`style`、`set_skin`、`clear_skin`、`appearance`、`visual_state`；背景/前景、状态背景、边框、圆角、焦点环和编辑器颜色 setter |
+| 字号 | `set_font_size`、`clear_font_size`，限文字控件，保留输入/组合状态 |
 | Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`on_submit`、`clear_on_submit` |
 | Button | `set_text`、`activate`、`on_click`、`clear_on_click` |
 | Ui / Window | `set_theme`；Window 另有 `close` |
 
-`bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding 和 gap 在切换主题后仍生效；当前没有通用属性表、局部主题树或动画呈现值查询。
+`bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的解析值，当前没有通用属性表、局部主题树或动画呈现值查询。
+
+## 当前可用的组件皮肤
+
+普通函数组合已有控件即可复用输入与语义；不要求组件宏或注册器。例如：
+
+```rust
+fn primary(parent: &Container, text: &str) -> Result<Button> {
+    let button = parent.button(text)?;
+    button.set_background(Color::rgb(103, 80, 164))?;
+    button.set_foreground(Color::WHITE)?;
+    button.set_hover_background(Color::rgb(91, 68, 130))?;
+    button.set_radius(18.0)?;
+    Ok(button)
+}
+```
+
+需要随主题、禁用、按压和焦点改变外观时使用 `set_skin` 纯函数入口；可执行示例为 `cargo run -p aegle --example components`，规则见[组件样式](components-theme-animation.md)。当前仅修改已有控件外观，下文任意绘制/行为扩展仍为目标。
 
 ## 目标接口族
 

@@ -144,6 +144,7 @@ impl Parser<'_, '_> {
             Kind::String(value) => Ok(Value::String(value)),
             Kind::Number(value) => Ok(Value::Number(value)),
             Kind::Length(value) => Ok(Value::Length(value)),
+            Kind::Color(value) => Ok(Value::Color(value)),
             Kind::Identifier("true") => Ok(Value::Bool(true)),
             Kind::Identifier("false") => Ok(Value::Bool(false)),
             Kind::Identifier("NaN" | "Infinity" | "inf") => {

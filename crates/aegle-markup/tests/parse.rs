@@ -8,6 +8,7 @@ fn utf8_literals_delimiters_and_resource_boundaries() {
 Window {
     title: "你好\n\u4e16\u754c\ud83d\ude80\"\\\/\b\f\r\t"
     theme: dark; enabled: true; ratio: -1.25e+2; gap: 8dp
+    surface: #A1b2C3; overlay: #12345678
     Column {
         Text { text: "日本語" } // A comment preserves the line separator.
         Button { text: "OK"; enabled: false }
@@ -24,6 +25,8 @@ Window {
     assert_eq!(root.properties[2].value, Value::Bool(true));
     assert_eq!(root.properties[3].value, Value::Number(-125.0));
     assert_eq!(root.properties[4].value, Value::Length(8.0));
+    assert_eq!(root.properties[5].value, Value::Color([161, 178, 195, 255]));
+    assert_eq!(root.properties[6].value, Value::Color([18, 52, 86, 120]));
     assert_eq!(root.children[0].children.len(), 2);
     assert_eq!(
         &source[root.properties[4].value_span.start..root.properties[4].value_span.end],
@@ -63,6 +66,10 @@ Window {
         "Window { a: 1e }",
         "Window { a: 1. }",
         "Window { a: - }",
+        "Window { a: #fff }",
+        "Window { a: #1234567 }",
+        "Window { a: #12345z }",
+        "Window { a: #123456789 }",
         r#"Window { a: "\ud800" }"#,
         r#"Window { a: "\ud800\u0041" }"#,
         r#"Window { a: "\udc00" }"#,

@@ -87,6 +87,34 @@ pub enum PropertyName {
     ReadOnly,
     /// Named built-in window theme.
     Theme,
+    /// Normal background color.
+    Background,
+    /// Normal text foreground color.
+    Foreground,
+    /// Outline color.
+    BorderColor,
+    /// Nonnegative outline thickness in logical pixels.
+    BorderWidth,
+    /// Nonnegative corner radius in logical pixels.
+    Radius,
+    /// Focus outline color for buttons and editors.
+    FocusColor,
+    /// Nonnegative focus outline thickness for buttons and editors, in logical pixels.
+    FocusWidth,
+    /// Editor selection highlight color.
+    SelectionColor,
+    /// Editor caret color.
+    CaretColor,
+    /// Background color while hovered, for buttons and editors.
+    HoverBackground,
+    /// Button background color while pressed.
+    PressedBackground,
+    /// Background color while disabled.
+    DisabledBackground,
+    /// Text foreground color while disabled.
+    DisabledForeground,
+    /// Positive font size in logical pixels for text-bearing controls.
+    FontSize,
 }
 
 /// Checks a parsed document without loading fonts or creating any UI objects.
@@ -196,6 +224,20 @@ fn property_name(name: &str) -> Option<PropertyName> {
         "label" => Label,
         "read_only" => ReadOnly,
         "theme" => Theme,
+        "background" => Background,
+        "foreground" => Foreground,
+        "border_color" => BorderColor,
+        "border_width" => BorderWidth,
+        "radius" => Radius,
+        "focus_color" => FocusColor,
+        "focus_width" => FocusWidth,
+        "selection_color" => SelectionColor,
+        "caret_color" => CaretColor,
+        "hover_background" => HoverBackground,
+        "pressed_background" => PressedBackground,
+        "disabled_background" => DisabledBackground,
+        "disabled_foreground" => DisabledForeground,
+        "font_size" => FontSize,
         _ => return None,
     })
 }
@@ -204,11 +246,15 @@ fn validate(kind: Kind, name: PropertyName, value: &Value) -> Result<(), String>
     use PropertyName::*;
     let allowed = match name {
         Title | Theme => kind == Kind::Window,
-        Text => matches!(
+        Text | FontSize => matches!(
             kind,
             Kind::Text | Kind::Button | Kind::TextField | Kind::TextArea
         ),
-        ReadOnly => matches!(kind, Kind::TextField | Kind::TextArea),
+        ReadOnly | SelectionColor | CaretColor => matches!(kind, Kind::TextField | Kind::TextArea),
+        HoverBackground | FocusColor | FocusWidth => {
+            matches!(kind, Kind::Button | Kind::TextField | Kind::TextArea)
+        }
+        PressedBackground => kind == Kind::Button,
         Gap => matches!(kind, Kind::Window | Kind::Column | Kind::Row),
         _ => true,
     };
@@ -225,8 +271,18 @@ fn validate(kind: Kind, name: PropertyName, value: &Value) -> Result<(), String>
             n.is_finite() && *n > 0.0 && n.fract() == 0.0 && f64::from(*n) <= f64::from(u32::MAX)
         }
         (Width | Height, Value::Identifier(name)) => kind != Kind::Window && name == "auto",
-        (Width | Height | MinWidth | MinHeight | Padding | Gap, Value::Length(n))
+        (
+            Width | Height | MinWidth | MinHeight | Padding | Gap | BorderWidth | Radius
+            | FocusWidth,
+            Value::Length(n),
+        )
         | (Grow, Value::Number(n)) => n.is_finite() && *n >= 0.0,
+        (FontSize, Value::Length(n)) => n.is_finite() && *n > 0.0,
+        (
+            Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
+            | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground,
+            Value::Color(_),
+        ) => true,
         (Visible | Enabled | ReadOnly, Value::Bool(_)) => true,
         (Theme, Value::Identifier(name)) => {
             matches!(name.as_str(), "light" | "dark" | "high_contrast")
@@ -242,7 +298,14 @@ fn validate(kind: Kind, name: PropertyName, value: &Value) -> Result<(), String>
         Text | Label => "a string",
         Width | Height if kind == Kind::Window => "a positive whole dp length fitting u32",
         Width | Height => "a nonnegative dp length or auto",
-        MinWidth | MinHeight | Padding | Gap => "a nonnegative dp length",
+        MinWidth | MinHeight | Padding | Gap | BorderWidth | Radius | FocusWidth => {
+            "a nonnegative dp length"
+        }
+        FontSize => "a positive dp length",
+        Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
+        | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground => {
+            "a #RRGGBB or #RRGGBBAA color"
+        }
         Grow => "a finite nonnegative number",
         Visible | Enabled | ReadOnly => "true or false",
         Theme => "light, dark or high_contrast",

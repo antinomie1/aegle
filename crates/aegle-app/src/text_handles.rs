@@ -73,12 +73,7 @@ impl TextField {
 impl Node {
     fn set_text(&self, text: &str) -> Result {
         self.change(|state, id| {
-            let theme = state.theme;
-            let style = aegle_text::TextStyle {
-                size: theme.font_size,
-                color: theme.foreground,
-                ..Default::default()
-            };
+            let style = state.text_style(id);
             match &mut state.tree.get_mut(id).unwrap().context.content {
                 Content::Label(p) | Content::Button(_, p) => {
                     state.fonts.borrow_mut().update(p, text, &style)?

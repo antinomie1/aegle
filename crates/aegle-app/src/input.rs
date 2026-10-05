@@ -82,8 +82,12 @@ impl Ui {
             if let Some(old) = state.hover.take() {
                 let input = state.pointer_input(old, id, PointerKind::Leave, position, modifiers);
                 state.dispatch(old, input)?;
+                state.dirty_visual_state(old)?;
             }
             state.hover = hit;
+            if let Some(hit) = hit {
+                state.dirty_visual_state(hit)?;
+            }
         }
         if let Some(target) = target {
             let input = state.pointer_input(target, id, kind, position, modifiers);
@@ -188,7 +192,7 @@ impl State {
     }
     pub fn effects(&mut self, target: NodeId, outcome: Outcome) -> Result {
         if outcome.repaint {
-            self.tree.mark_dirty(target, Dirty::PAINT)?;
+            self.dirty_visual_state(target)?;
         }
         if outcome.semantics {
             self.tree.mark_dirty(target, Dirty::SEMANTICS)?;
@@ -282,6 +286,7 @@ impl State {
                 Modifiers::default(),
             );
             self.dispatch(id, input)?;
+            self.dirty_visual_state(id)?;
         }
         Ok(())
     }

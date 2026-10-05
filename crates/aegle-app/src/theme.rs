@@ -22,9 +22,15 @@ impl Ui {
         for index in 0..state.order.len() {
             let id = state.order[index];
             let is_root = id == state.root;
+            let font_changed = theme.font_size != old.font_size
+                && state
+                    .decorations
+                    .get(&id)
+                    .and_then(|d| d.font_size)
+                    .is_none();
             let node = state.tree.get_mut(id).unwrap();
             let mut style = node.style().clone();
-            if theme.font_size != old.font_size {
+            if font_changed {
                 let text_style = TextStyle {
                     size: theme.font_size,
                     color: theme.foreground,
@@ -83,9 +89,11 @@ impl Ui {
             if style != *node.style() {
                 aegle_layout::set_style(&mut state.tree, id, style)?;
             }
-            let dirty = if theme.font_size != old.font_size || theme.padding != old.padding {
+            let custom_skin = state.decorations.get(&id).is_some_and(|d| d.skin.is_some());
+            let dirty = if font_changed || theme.padding != old.padding {
                 Dirty::ALL
-            } else if theme.foreground != old.foreground || theme.muted != old.muted {
+            } else if theme.foreground != old.foreground || theme.muted != old.muted || custom_skin
+            {
                 Dirty::PAINT | Dirty::SEMANTICS
             } else {
                 Dirty::PAINT

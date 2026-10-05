@@ -12,7 +12,7 @@ use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::Theme;
 use aegle_types::{Point, Rect, Size};
 
-use crate::{Result, callbacks::Handler};
+use crate::{Result, callbacks::Handler, style::Decoration};
 
 pub(crate) enum Content {
     Container,
@@ -83,6 +83,7 @@ pub(crate) struct State {
     pub input_method: bool,
     pub repaint: bool,
     pub callbacks: HashMap<NodeId, Handler>,
+    pub decorations: HashMap<NodeId, Decoration>,
     pub pending: VecDeque<(NodeId, u64)>,
     pub dispatching: bool,
     pub callback_version: u64,
@@ -91,7 +92,7 @@ pub(crate) struct State {
 }
 
 impl State {
-    pub fn style(&self) -> TextStyle<'_> {
+    pub fn style(&self) -> TextStyle<'static> {
         TextStyle {
             size: self.theme.font_size,
             color: self.theme.foreground,
