@@ -16,7 +16,8 @@ use crate::{Result, callbacks::Handler, style::Decoration};
 
 pub(crate) enum Content {
     Container,
-    Scroll,
+    /// A viewport and its overlay record, drawn after the viewport's subtree.
+    Scroll(Box<Scene>),
     Label(Box<Paragraph>),
     Button(Button, Box<Paragraph>),
     Field(Box<TextField>),
@@ -104,6 +105,8 @@ pub(crate) struct State {
     pub tree: Tree<LayoutNode<Element>>,
     pub root: NodeId,
     pub order: Vec<NodeId>,
+    /// Scroll views in post-order with the end of their subtree in `order`.
+    pub overlays: Vec<(usize, NodeId)>,
     pub topology_dirty: bool,
     pub geometry_dirty: bool,
     pub reveal_target: Option<NodeId>,
@@ -114,6 +117,7 @@ pub(crate) struct State {
     pub last_focus: Option<NodeId>,
     pub route: Route,
     pub capture: Option<(PointerId, NodeId)>,
+    pub drag: Option<crate::scrollbar::Drag>,
     pub hover: Option<NodeId>,
     pub pointer: Option<(PointerId, Point)>,
     pub ime_dirty: bool,
@@ -145,6 +149,7 @@ impl State {
             return;
         }
         self.order.clear();
+        self.overlays.clear();
         self.order.push(self.root);
         let mut stack = vec![(self.root, 0)];
         while let Some((parent, next)) = stack.last_mut() {
@@ -153,7 +158,13 @@ impl State {
                 self.order.push(child);
                 stack.push((child, 0));
             } else {
-                stack.pop();
+                let (id, _) = stack.pop().unwrap();
+                if matches!(
+                    self.tree.get(id).unwrap().context.content,
+                    Content::Scroll(_)
+                ) {
+                    self.overlays.push((self.order.len(), id));
+                }
             }
         }
         self.topology_dirty = false;

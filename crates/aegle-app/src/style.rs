@@ -15,7 +15,7 @@ impl State {
     pub fn visual_state(&self, id: NodeId) -> VisualState {
         let content = &self.tree.get(id).unwrap().context.content;
         let (kind, pressed, read_only) = match content {
-            Content::Container | Content::Scroll => (ControlKind::Container, false, false),
+            Content::Container | Content::Scroll(_) => (ControlKind::Container, false, false),
             Content::Label(_) => (ControlKind::Label, false, false),
             Content::Button(button, _) => (ControlKind::Button, button.is_pressed(), false),
             Content::Field(field) => (ControlKind::TextField, false, field.editor().is_read_only()),

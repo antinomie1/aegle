@@ -75,6 +75,9 @@ impl Ui {
         state.pointer =
             (!matches!(kind, PointerKind::Leave | PointerKind::Cancel)).then_some((id, position));
         let hit = state.pointer.and_then(|_| state.hit(position));
+        if state.scrollbar_pointer(id, kind, position, hit)? {
+            return Ok(());
+        }
         let target = state
             .capture
             .filter(|(pointer, _)| *pointer == id)
@@ -252,6 +255,9 @@ impl State {
         {
             self.set_focus(None)?;
         }
+        if self.drag.is_some_and(|drag| self.contains(root, drag.node)) {
+            self.drag = None;
+        }
         if self.capture.is_some_and(|(_, id)| self.contains(root, id)) {
             let (_, id) = self.capture.take().unwrap();
             let outcome = self.control(id, Input::Cancel)?;
@@ -275,6 +281,7 @@ impl State {
     }
     fn cancel_pointer(&mut self) -> Result {
         self.pointer = None;
+        self.end_drag()?;
         if let Some((_, id)) = self.capture.take() {
             let outcome = self.control(id, Input::Cancel)?;
             self.effects(id, outcome)?;
@@ -327,6 +334,9 @@ impl State {
         })
     }
     fn hit(&self, position: Point) -> Option<NodeId> {
+        if let Some((id, _)) = self.scrollbar_at(position, None) {
+            return Some(id);
+        }
         self.order.iter().rev().copied().find(|&id| {
             let element = &self.tree.get(id).unwrap().context;
             element.effective_visible
@@ -340,6 +350,9 @@ impl State {
     /// Geometry may move under a stationary pointer. Refresh hover without
     /// generating slider drag updates, text selections or application callbacks.
     pub fn rehit_pointer(&mut self) -> Result {
+        if self.drag.is_some() {
+            return Ok(());
+        }
         if let Some((id, position)) = self.pointer {
             let hit = self.hit(position);
             self.update_hover(hit, id, position)?;

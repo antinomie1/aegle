@@ -106,6 +106,7 @@ impl Ui {
                 tree,
                 root,
                 order: vec![root],
+                overlays: Vec::new(),
                 topology_dirty: false,
                 geometry_dirty: true,
                 reveal_target: None,
@@ -116,6 +117,7 @@ impl Ui {
                 last_focus: None,
                 route: Route::new(),
                 capture: None,
+                drag: None,
                 hover: None,
                 pointer: None,
                 ime_dirty: true,
@@ -196,20 +198,36 @@ impl Ui {
             .state
             .try_borrow()
             .map_err(|_| UiError::ReentrantAccess)?;
-        for &id in &state.order {
+        // Scroll bars overlay their viewport's entire subtree.
+        let mut overlays = state.overlays.iter().peekable();
+        let mut draw = |id, overlay: bool| -> Result {
             let element = &state.tree.get(id).unwrap().context;
+            let scene = match &element.content {
+                Content::Scroll(scene) if overlay => scene,
+                _ => &element.scene,
+            };
             if element.effective_visible
                 && element
                     .clip
                     .is_none_or(|clip| clip.intersection(element.bounds).is_some())
-                && !element.scene.commands().is_empty()
+                && !scene.commands().is_empty()
             {
                 visit(
-                    &element.scene,
+                    scene,
                     Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?,
                     element.clip,
                 )?;
             }
+            Ok(())
+        };
+        for (index, &id) in state.order.iter().enumerate() {
+            while let Some(&(_, view)) = overlays.next_if(|&&(end, _)| end <= index) {
+                draw(view, true)?;
+            }
+            draw(id, false)?;
+        }
+        for &(_, view) in overlays {
+            draw(view, true)?;
         }
         Ok(())
     }
@@ -281,6 +299,7 @@ impl Ui {
             state.motion.active.clear();
         }
         state.capture = None;
+        state.drag = None;
         state.hover = None;
         state.pointer = None;
         state.reveal_target = None;

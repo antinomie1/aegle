@@ -22,7 +22,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `on_change(|control| ...)` 与按钮回调共用版本化队列，在树借用外执行。用户/语义操作真正改变值才排队；`set_checked` / `set_value` / `set_range` / `set_step` 是模型更新，不回调，方便多个控件同步且不会形成循环。处理器读取执行时的最新值，通知不保存每次中间值；替换处理器或销毁节点会丢弃旧通知。显式 `toggle`、`increment`、`decrement` 走用户行为并检查有效可见/启用状态。
 
-默认标志为18dp复选框或36×20dp开关；滑块圆点16dp，轨道2dp、完成部分4dp，以粗细差异辅助表达数值。小尺寸时缩小标志并裁剪至自身范围，布局宽度优先容纳可见标签；当前不做标签自动换行。字号/主题切换复用同一段落，值变化不重排文字。外观可用 Skin/Style 和 `indicator_color` 修改；四种控件的值、checked 与手柄位置即时更新，配色/焦点轮廓沿用现有外观过渡，尚无数值或开关位移动画。
+默认标志为18dp复选框或36×20dp开关；滑块手柄16dp，轨道2dp、完成部分4dp，以粗细差异辅助表达数值。小尺寸时缩小标志并裁剪至自身范围，布局宽度优先容纳可见标签；当前不做标签自动换行。字号/主题切换复用同一段落，值变化不重排文字。外观可用 Skin/Style 和 `indicator_color` 修改；四种控件的值、checked 与手柄位置即时更新，配色/焦点轮廓沿用现有外观过渡，尚无数值或开关位移动画。
 
 `widgets` 示例用 `.aegle` 构造四种控件和 CJK 编辑器，通过简短 Rust 回调实现互相同步、启禁编辑、进度更新、主题切换与窗口关闭。
 
@@ -60,7 +60,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 | on_accent | #FFFFFF | #15213F |
 | border | #737D8C | #788596 |
 
-尺寸采用 dp；基础正文 14 dp、辅助文字 12 dp、标题 20 dp，字体族使用带 locale 的系统 sans-serif 回退。间距为 4/8/12/16/24 dp，标准控件高 36 dp、紧凑模式 28 dp、触摸模式命中区域至少 44×44 dp。圆角默认为 6 dp，面板 10 dp，边框 1 dp，焦点环 2 dp。
+尺寸采用 dp；基础正文 14 dp、辅助文字 12 dp、标题 20 dp，字体族使用带 locale 的系统 sans-serif 回退。间距为 4/8/12/16/24 dp，标准控件高 36 dp、紧凑模式 28 dp、触摸模式命中区域至少 44×44 dp。默认控件、面板、标志、开关、滑块和进度条均为直角（主题圆角 0）；应用设置正的主题 radius 时这些默认控件统一圆化。边框 1 dp，焦点环 2 dp。
 
 默认不使用背景模糊、大面积阴影或持续装饰动画。hover/pressed 用轻度叠色，拖动响应直接；disabled 不只靠变淡区分，语义同步不可用状态。选中、错误和焦点不能仅靠颜色，应有形状/标记或文字反馈。
 
@@ -68,7 +68,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 主题契约
 
-当前可用的 `aegle-theme::Theme` 是公开字段的无分配快照：颜色为 `background/surface/foreground/muted/accent/border/hover/pressed/selection`，尺寸为 `font_size/padding/gap/radius/control_height`。`light()`、`dark()`、`high_contrast()` 提供显式配色；`Default` 为浅色。三种配色共用正文 14、padding 8、gap 8、圆角 6、控件高 36 的逻辑像素尺寸；窗口可用 `set_padding` 独立增加外侧留白。`validate()` 拒绝非有限或负尺寸，并要求正文大小和控件高度大于零。accent 用于焦点/标记，selection 与普通 foreground 配对，不隐含另一套文本颜色。
+当前可用的 `aegle-theme::Theme` 是公开字段的无分配快照：颜色为 `background/surface/foreground/muted/accent/border/hover/pressed/selection`，尺寸为 `font_size/padding/gap/radius/control_height`。`light()`、`dark()`、`high_contrast()` 提供显式配色；`Default` 为浅色。三种配色共用正文 14、padding 8、gap 8、圆角 0、控件高 36 的逻辑像素尺寸；窗口可用 `set_padding` 独立增加外侧留白。`validate()` 拒绝非有限或负尺寸，并要求正文大小和控件高度大于零。accent 用于焦点/标记，selection 与普通 foreground 配对，不隐含另一套文本颜色。
 
 `Ui::set_theme` 和 `Window::set_theme` 更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析；没有局部主题树、token 注册表或系统偏好监听。以下是进一步扩展时的目标契约。
 

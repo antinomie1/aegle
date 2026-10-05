@@ -78,6 +78,8 @@ pub struct Appearance {
 impl Appearance {
     /// Resolves the neutral default skin from a validated theme.
     ///
+    /// Every interactive and range control shares the theme radius, so the
+    /// default palettes draw square controls and marks.
     /// Disabled state suppresses pressed and hover feedback. Buttons and toggles
     /// use these background states. Enabled, focused interactive roles gain a
     /// separate 2 dp outline; their normal border remains unchanged.
@@ -114,12 +116,10 @@ impl Appearance {
                 Color::TRANSPARENT
             },
             border_width: if framed { 1.0 } else { 0.0 },
-            radius: match state.kind {
-                ControlKind::Button | ControlKind::TextField => theme.radius,
-                ControlKind::CheckBox => theme.radius.min(3.0),
-                ControlKind::Switch => 10.0,
-                ControlKind::Slider | ControlKind::Progress => 8.0,
-                _ => 0.0,
+            radius: if matches!(state.kind, ControlKind::Container | ControlKind::Label) {
+                0.0
+            } else {
+                theme.radius
             },
             focus_color: theme.accent,
             focus_width: if interactive && state.enabled && state.focused {

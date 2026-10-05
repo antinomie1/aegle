@@ -19,7 +19,8 @@ use core::fmt;
 
 /// A compact theme for neutral, minimal controls.
 ///
-/// Colors are unpremultiplied sRGB. Metrics use logical pixels; the host applies
+/// The supplied palettes use square corners; a positive [`Self::radius`] rounds
+/// every default control consistently. Colors are unpremultiplied sRGB. Metrics use logical pixels; the host applies
 /// device scale once during rendering. Fields are public so a component library
 /// can construct a theme without a builder or string-based token registry.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,7 +49,8 @@ pub struct Theme {
     pub padding: f32,
     /// Default space between sibling controls; finite and nonnegative.
     pub gap: f32,
-    /// Default corner radius; finite and nonnegative.
+    /// Corner radius shared by default controls; finite and nonnegative.
+    /// Zero, the default, gives square corners.
     pub radius: f32,
     /// Preferred control height; finite and strictly positive.
     pub control_height: f32,
@@ -70,7 +72,7 @@ impl Theme {
             font_size: 14.0,
             padding: 8.0,
             gap: 8.0,
-            radius: 6.0,
+            radius: 0.0,
             control_height: 36.0,
         }
     }

@@ -85,7 +85,7 @@ impl State {
                                     s.height + 2.0 * padding,
                                 )
                             }),
-                        Content::Container | Content::Scroll => Ok(aegle_types::Size::default()),
+                        Content::Container | Content::Scroll(_) => Ok(aegle_types::Size::default()),
                     };
                     match measured {
                         Ok(size) => Size {

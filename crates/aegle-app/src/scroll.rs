@@ -10,7 +10,7 @@ impl State {
     pub fn scroll_limit(&self, id: NodeId) -> Point {
         let node = self.tree.get(id).unwrap();
         match &node.context.content {
-            Content::Scroll => {
+            Content::Scroll(_) => {
                 Point::new(node.layout().scroll_width(), node.layout().scroll_height())
             }
             Content::Field(field) => {
@@ -39,13 +39,11 @@ impl State {
             return Ok(false);
         }
         element.scroll = offset;
-        let dirty = if matches!(element.content, Content::Scroll) {
+        // Scrolling a view moves retained child records; only its bars repaint.
+        if matches!(element.content, Content::Scroll(_)) {
             self.geometry_dirty = true;
-            Dirty::SEMANTICS
-        } else {
-            Dirty::PAINT | Dirty::SEMANTICS
-        };
-        self.tree.mark_dirty(id, dirty)?;
+        }
+        self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
         self.repaint = true;
         self.ime_dirty = true;
         Ok(true)
@@ -60,7 +58,7 @@ impl State {
             let id = self.order[index];
             let parent = self.tree.parent(id)?.map(|id| {
                 let parent = &self.tree.get(id).unwrap().context;
-                let scrolling = matches!(parent.content, Content::Scroll);
+                let scrolling = matches!(parent.content, Content::Scroll(_));
                 let clip = if scrolling {
                     Some(
                         parent
@@ -94,7 +92,7 @@ impl State {
             }
             let element = &mut node.context;
             let old_offset = element.scroll;
-            if visible && matches!(element.content, Content::Scroll) {
+            if visible && matches!(element.content, Content::Scroll(_)) {
                 element.scroll.x = element.scroll.x.min(limit.x);
                 element.scroll.y = element.scroll.y.min(limit.y);
             }
@@ -106,7 +104,15 @@ impl State {
             element.clip = clip;
             element.effective_visible = visible;
             if changed {
-                self.tree.mark_dirty(id, Dirty::SEMANTICS)?;
+                let bars = old_offset != element.scroll;
+                self.tree.mark_dirty(
+                    id,
+                    if bars {
+                        Dirty::PAINT | Dirty::SEMANTICS
+                    } else {
+                        Dirty::SEMANTICS
+                    },
+                )?;
             }
         }
         self.rehit_pointer()?;
@@ -126,7 +132,7 @@ impl State {
         let mut changed = false;
         while let Some(id) = target {
             let element = &self.tree.get(id).unwrap().context;
-            if matches!(element.content, Content::Scroll | Content::Field(_)) {
+            if matches!(element.content, Content::Scroll(_) | Content::Field(_)) {
                 let old = element.scroll;
                 changed |= self.scroll_to(id, Point::new(old.x + delta.x, old.y + delta.y))?;
                 let new = self.tree.get(id).unwrap().context.scroll;
@@ -161,7 +167,7 @@ impl State {
         let mut parent = self.tree.parent(id)?;
         while let Some(id) = parent {
             let element = &self.tree.get(id).unwrap().context;
-            if matches!(element.content, Content::Scroll) {
+            if matches!(element.content, Content::Scroll(_)) {
                 let viewport = element.bounds;
                 // Reveal a complete control when it fits. Oversized editors use
                 // their caret on the constrained axis instead of hiding it again.

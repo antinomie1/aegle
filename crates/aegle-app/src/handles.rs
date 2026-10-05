@@ -229,7 +229,10 @@ impl Node {
         valid(padding)?;
         self.change(|state, id| {
             let node = state.tree.get_mut(id).unwrap();
-            if matches!(node.context.content, Content::Container | Content::Scroll) {
+            if matches!(
+                node.context.content,
+                Content::Container | Content::Scroll(_)
+            ) {
                 node.context.local_layout |= 2;
                 let mut style = node.style().clone();
                 let p = LengthPercentage::length(padding);

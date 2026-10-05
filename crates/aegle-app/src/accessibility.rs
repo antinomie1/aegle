@@ -226,10 +226,10 @@ impl State {
                 .parent(id)
                 .unwrap()
                 .and_then(|parent| self.tree.get(parent))
-                .filter(|parent| matches!(parent.context.content, Content::Scroll))
+                .filter(|parent| matches!(parent.context.content, Content::Scroll(_)))
                 .map_or(Point::default(), |parent| parent.context.scroll);
-            let scroll_limit =
-                matches!(node_data.context.content, Content::Scroll).then(|| self.scroll_limit(id));
+            let scroll_limit = matches!(node_data.context.content, Content::Scroll(_))
+                .then(|| self.scroll_limit(id));
             let mut node = Node::new(Role::GenericContainer);
             node.set_foreground_color(foreground);
             node.set_bounds(Rect::new(
@@ -272,7 +272,7 @@ impl State {
                         node.set_label(title);
                     }
                 }
-                Content::Scroll => {
+                Content::Scroll(_) => {
                     node.set_role(Role::ScrollView);
                     node.set_clips_children();
                     // Hidden layout is zeroed by Taffy while retained offsets are

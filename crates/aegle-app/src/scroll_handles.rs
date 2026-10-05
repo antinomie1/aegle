@@ -27,7 +27,7 @@ impl Container {
             style.overflow.x = Overflow::Scroll;
             style.overflow.y = Overflow::Scroll;
             style.flex_shrink = 0.0;
-            Ok((Content::Scroll, style))
+            Ok((Content::Scroll(Box::default()), style))
         })
         .map(|node| ScrollView(Container(node)))
     }

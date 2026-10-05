@@ -54,6 +54,7 @@ use aegle_platform_win32 as platform;
 mod paint;
 mod scroll;
 mod scroll_handles;
+mod scrollbar;
 mod state;
 mod style;
 mod style_handles;

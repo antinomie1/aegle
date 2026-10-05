@@ -173,3 +173,52 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
     assert!(!ui.refresh()?, "idle scroll view kept repainting");
     Ok(())
 }
+
+#[test]
+fn overlay_scrollbar_drags_above_children_without_activating_them() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.root().set_padding(0.0)?;
+    let view = ui.root().scroll_view()?;
+    view.set_size(Some(200.0), Some(100.0))?;
+    let clicks = Rc::new(Cell::new(0));
+    for _ in 0..3 {
+        let count = clicks.clone();
+        let button = view.button("")?;
+        button.set_height(Some(60.0))?;
+        button.on_click(move |_| {
+            count.set(count.get() + 1);
+            Ok(())
+        })?;
+    }
+    ui.resize(Size::new(240.0, 240.0))?;
+    ui.refresh()?;
+    let mut last = 0;
+    ui.visit_scenes(|scene, _, _| {
+        last = scene.commands().len();
+        Ok(())
+    })?;
+    assert_eq!(last, 1, "thumb is not the topmost record");
+    let pointer = |kind, y| {
+        ui.pointer(
+            PointerId(1),
+            kind,
+            Point::new(195.0, y),
+            Modifiers::default(),
+        )
+    };
+    pointer(PointerKind::Down { clicks: 1 }, 2.0)?;
+    pointer(PointerKind::Move, 1000.0)?;
+    ui.refresh()?;
+    assert_eq!(view.offset()?, view.max_offset()?);
+    pointer(PointerKind::Move, -1000.0)?;
+    pointer(PointerKind::Up, -1000.0)?;
+    ui.dispatch_callbacks()?;
+    assert_eq!((view.offset()?.y, clicks.get()), (0.0, 0));
+    view.set_height(Some(400.0))?;
+    ui.refresh()?;
+    pointer(PointerKind::Down { clicks: 1 }, 20.0)?;
+    pointer(PointerKind::Up, 20.0)?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(clicks.get(), 1, "bar without overflow kept input");
+    Ok(())
+}

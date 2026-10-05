@@ -46,7 +46,7 @@ impl Ui {
                 }
             }
             match &node.context.content {
-                Content::Container | Content::Scroll => {
+                Content::Container | Content::Scroll(_) => {
                     if node.context.local_layout & 4 == 0 {
                         let gap = LengthPercentage::length(theme.gap);
                         style.gap = aegle_layout::Size {
