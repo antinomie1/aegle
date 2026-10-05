@@ -22,8 +22,10 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
                 Text { id: status; text: "Ready" }
             }
             TextField { id: title; text: "你好"; read_only: false }
-            TextArea { id: body; text: "第一行\n第二行"; read_only: true
-                selection_color: #33558880; caret_color: #112233
+            ScrollView { height: 100dp; gap: 4dp; padding: 3dp
+                TextArea { id: body; text: "第一行\n第二行"; read_only: true
+                    selection_color: #33558880; caret_color: #112233
+                }
             }
             CheckBox { text: "同意"; checked: true; font_size: 16dp; indicator_color: #123456 }
             Switch { text: "启用"; pressed_background: #123456; focus_width: 2dp }
@@ -59,6 +61,9 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "Slider { font_size: 12dp }",
         "Progress { hover_background: #112233 }",
         "Text { indicator_color: #112233 }",
+        "ScrollView { font_size: 14dp }",
+        "ScrollView { focus_width: 2dp }",
+        "ScrollView { scroll_y: 100dp }",
         "background: true",
         "border_width: -1dp",
         "font_size: 14dp",

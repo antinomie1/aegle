@@ -190,8 +190,17 @@ impl Runtime {
                 .present(entry.id, |pixels, size| {
                     let mut surface = Surface::new(pixels, size.width, size.height)?;
                     let mut frame = renderer.begin_frame(&mut surface, background);
-                    entry.ui.visit_scenes(|scene, transform| {
-                        frame.draw(scene, transform.then(scale)?)?;
+                    entry.ui.visit_scenes(|scene, transform, clip| {
+                        let clip = clip.map(|rect| {
+                            let factor = info.scale as f32;
+                            aegle_types::Rect::new(
+                                rect.origin.x * factor,
+                                rect.origin.y * factor,
+                                rect.size.width * factor,
+                                rect.size.height * factor,
+                            )
+                        });
+                        frame.draw_clipped(scene, transform.then(scale)?, clip)?;
                         Ok(())
                     })
                 })

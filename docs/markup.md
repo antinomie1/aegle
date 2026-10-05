@@ -45,7 +45,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 
 构造期间先建立子树再设置属性；任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。当前不是运行时原子重载 API。
 
-支持 Window、Column、Row、Text、Button、TextField、TextArea、CheckBox、Switch、Slider、Progress。只有前三种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
+支持 Window、Column、Row、ScrollView、Text、Button、TextField、TextArea、CheckBox、Switch、Slider、Progress。只有前四种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
 
 | 属性 | 值与适用范围 |
 | --- | --- |
@@ -54,7 +54,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `text` | Text/Button/TextField/TextArea/CheckBox/Switch 字符串；单行编辑器拒绝硬换行 |
 | `width`、`height` | 控件为非负 `dp` 或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
 | `min_width`、`min_height`、`padding` | 非负 `dp` |
-| `gap` | 容器的非负 `dp` |
+| `gap` | Window/Column/Row/ScrollView 的非负 `dp` |
 | `grow` | 有限非负数值 |
 | `visible`、`enabled` | bool，作用于控件子树 |
 | `label` | 无障碍名称字符串 |
@@ -77,6 +77,8 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 数值控件的 min/max/value 在全部属性收集完成后一起交给构造器，不依赖源码顺序；step 随后设置。当前标记数字保持有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。四种新控件均为叶，Progress 拒绝交互状态、text、font_size 和 step 等不适用属性。
 
 Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
+
+ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`、`width` 或 flex 分配约束视口即可产生滚动溢出。它接受普通容器的布局和外观属性，不接受 font_size、hover/pressed/focus 等交互状态属性。当前没有初始滚动偏移属性；通过具名 ScrollView 句柄调用 `scroll_to`，或对子控件调用 `ensure_visible`。布局刷新、裁剪、嵌套滚轮和保留状态遵守同一套 [Rust 滚动契约](rust-api.md#当前滚动契约)；完整示例为 `crates/aegle/examples/scrolling.aegle`。
 
 声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出；当前不支持百分比。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 

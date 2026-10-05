@@ -95,7 +95,7 @@ fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
     assert_eq!(field.appearance()?.focus_width, 0.0);
     assert_eq!(field.presented_appearance()?.focus_width, 1.0);
     let mut fading_focus = false;
-    ui.visit_scenes(|scene, _| {
+    ui.visit_scenes(|scene, _, _| {
         fading_focus |= scene.commands().iter().any(|command| {
             matches!(command, aegle_scene::Command::Stroke { color, width, .. }
                 if *color == Theme::light().accent && *width == 1.0)

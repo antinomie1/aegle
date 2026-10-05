@@ -44,6 +44,8 @@ Wayland 通常不向普通客户端公开全局窗口位置。平台能力必须
 
 已实现部分以 `SceneBuilder → Scene → Renderer::begin_frame → Frame::draw` 连接。`Scene` 为不可变局部绘制记录；重新构建时可以取回并清空 builder，复用命令分配。每次 draw 传入布局位置与设备缩放组成的 Affine，移动控件不必重建其局部图元。场景的变换/裁剪作用域只在本次 draw 内生效，不泄漏到其他记录。
 
+`Frame::draw_clipped(scene, transform, clip)` 接受可选设备坐标矩形，矩形不随节点 transform 再次变换，并与 scene 内部裁剪相交。它复用既有 mask 路径，增加一层预算；调用结束不影响后续 scene。Ui 的 `visit_scenes` 返回局部记录、窗口逻辑平移及可选祖先矩形；宿主必须同时缩放平移和裁剪，不能丢弃第三个参数。原生软件宿主已接入。多个 ScrollView 的祖先矩形先求交，所以嵌套滚动本身只增加一个外部 mask 层；控件自身的圆角裁剪另外计层。
+
 目前支持实色矩形、统一圆角、居中边框、二维仿射变换及嵌套矩形/圆角裁剪；可选 `text` 支持定位后的字形。builder 检查非有限几何、负尺寸、不可逆变换及作用域配对，总嵌套最多 64 层。空形状不绘制，空 clip 排除绘制；软件后端拒绝超出 ±1,048,576 的设备路径/字形坐标。通用图片、任意路径、组透明度和高级特效尚未实现。Wayland 原生软件呈现与输入已接入；GPU 后端仍未实现。
 
 scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基线位置；`aegle-text/scene` 可从保留段落生成它们。软件 `text` 必须显式启用：如果 Cargo 统一开启了 scene/text 而 renderer/text 关闭，遇到字形命令返回 `UnsupportedCommand`，不能跳过文字后假称成功。

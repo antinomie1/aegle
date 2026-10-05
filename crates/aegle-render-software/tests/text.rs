@@ -57,6 +57,19 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
             .begin_frame(&mut surface, Color::TRANSPARENT)
             .draw(&scene, Affine::IDENTITY)?;
         assert_eq!(surface.data(), first);
+        renderer
+            .begin_frame(&mut surface, Color::TRANSPARENT)
+            .draw_clipped(
+                &scene,
+                Affine::translation(2.0, 0.0)?,
+                Some(Rect::new(12.0, 0.0, 8.0, 48.0)),
+            )?;
+        assert!(surface.data().chunks_exact(4).any(|pixel| pixel[3] != 0));
+        for (i, pixel) in surface.data().chunks_exact(4).enumerate() {
+            if !(12..20).contains(&(i % 64)) || !(4..32).contains(&(i / 64)) {
+                assert_eq!(pixel, [0; 4]);
+            }
+        }
     }
     let mut builder = SceneBuilder::new();
     text.paint(&mut builder)?;
@@ -78,6 +91,19 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw(&scene, Affine::IDENTITY)?;
     assert_eq!(text_only.allocated_mask_bytes(), 0);
+    assert!(matches!(
+        text_only
+            .begin_frame(&mut surface, Color::TRANSPARENT)
+            .draw_clipped(
+                &scene,
+                Affine::IDENTITY,
+                Some(Rect::new(0.0, 0.0, 64.0, 48.0)),
+            ),
+        Err(aegle_render_software::RenderError::MaskBudget {
+            required: 6144,
+            limit: 0
+        })
+    ));
     renderer
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw(&scene, Affine::new([1.0, 0.0, 0.0, 1e-10, 0.0, 0.01])?)?;

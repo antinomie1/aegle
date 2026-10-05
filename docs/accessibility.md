@@ -122,3 +122,11 @@ AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handl
 - [Apple：提高对比度](https://developer.apple.com/documentation/appkit/nsworkspace/accessibilitydisplayshouldincreasecontrast)
 - [Apple：辅助显示偏好变化通知](https://developer.apple.com/documentation/appkit/nsworkspace/accessibilitydisplayoptionsdidchangenotification)
 - [Apple：有效外观](https://developer.apple.com/documentation/appkit/nsappearancecustomization/effectiveappearance)
+
+## 当前滚动语义
+
+ScrollView 导出同名角色、`clips_children`、横纵 offset/min/max；子节点的局部 transform 减去直接父 ScrollView 偏移，嵌套后的窗口边界与绘制/命中共用同一结果。被裁出的节点保留逻辑身份，不因离屏设置 hidden；真正隐藏的树仍使用 hidden，恢复时重新导出保留偏移和有效范围。
+
+共享动作入口支持 `SetScrollOffset`、四方向 `ScrollUnit::Item/Page`（一项为主题 control_height，一页为视口尺寸），以及无 Hint 的 `ScrollIntoView`。滚动动作先于可聚焦过滤，因此普通标签也可请求滚入；禁用祖先仍拒绝交互。`ScrollHint` 和 `ScrollToPoint` 暂不支持并明确返回 false，后者的目标坐标不能误作 offset。程序滚动和辅助滚动都不取消 IME 组合。
+
+这已验证 AccessKit schema/consumer 的嵌套边界和直接动作，不等于完整平台滚动协议验收。当前 AccessKit Unix 的过滤器会省略部分连续离屏兄弟节点，不能声称 AT-SPI 一次遍历可取得所有离屏控件。原生语义的 HiDPI/平台坐标转换与真实屏幕阅读器滚动交互仍需补齐验证。

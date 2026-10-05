@@ -1,5 +1,5 @@
 use crate::native::Entry;
-use crate::{ImeEdit, Key, KeyInput, Modifiers, PointerId, PointerKind, Result, Size};
+use crate::{ImeEdit, Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size};
 use aegle_platform_wayland::{Event, ImeEvent, Keysym, PointerEventKind, WindowId};
 use aegle_text::Selection;
 use wayland_client::Proxy;
@@ -83,8 +83,15 @@ impl Entry {
                     }
                     PointerEventKind::Release { button: 0x110, .. } => PointerKind::Up,
                     PointerEventKind::Leave { .. } => return self.ui.pointer_leave(),
-                    PointerEventKind::Axis { vertical, .. } => {
-                        return self.ui.scroll(position, vertical.absolute as f32);
+                    PointerEventKind::Axis {
+                        horizontal,
+                        vertical,
+                        ..
+                    } => {
+                        return self.ui.scroll_by(
+                            position,
+                            Point::new(horizontal.absolute as f32, vertical.absolute as f32),
+                        );
                     }
                     _ => return Ok(()),
                 };

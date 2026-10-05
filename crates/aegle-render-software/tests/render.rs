@@ -37,6 +37,24 @@ fn nested_clips_transform_borders_and_mask_reuse() -> Result<(), Box<dyn std::er
         assert_eq!(pixel(0, 30), [255, 0, 0, 255]);
         assert_eq!(renderer.allocated_mask_bytes(), 3 * 32 * 32);
     }
+    let clip = Some(Rect::new(12.0, 10.0, 14.0, 6.0));
+    assert_eq!(
+        renderer
+            .begin_frame(&mut surface, Color::WHITE)
+            .draw_clipped(&scene, Affine::IDENTITY, clip),
+        Err(RenderError::MaskBudget {
+            required: 4 * 32 * 32,
+            limit: 3 * 32 * 32
+        })
+    );
+    let mut clipped = Renderer::new(4 * 32 * 32);
+    clipped
+        .begin_frame(&mut surface, Color::WHITE)
+        .draw_clipped(&scene, Affine::translation(2.0, 0.0)?, clip)?;
+    for (x, y, expected) in [(12, 12, 187), (10, 12, 255), (24, 12, 255), (12, 8, 255)] {
+        assert_eq!(surface.data()[(y * 32 + x) * 4], expected);
+    }
+    assert_eq!(clipped.allocated_mask_bytes(), 4 * 32 * 32);
     let mut small = vec![0; 16 * 16 * 4];
     renderer
         .begin_frame(&mut Surface::new(&mut small, 16, 16)?, Color::WHITE)
@@ -74,6 +92,38 @@ fn transparent_linear_compositing_and_rotated_records() -> Result<(), Box<dyn st
         .draw(&scene, Affine::new([0.0, 1.0, -1.0, 0.0, 4.0, 0.0])?)?;
     assert_eq!(&surface.data()[..4], &[128, 128, 128, 128]);
     assert_eq!(&surface.data()[32..36], &[0, 0, 0, 0]);
+
+    {
+        let mut frame = renderer.begin_frame(&mut surface, Color::TRANSPARENT);
+        frame.draw_clipped(
+            &scene,
+            Affine::translation(1.0, 0.0)?,
+            Some(Rect::new(1.0, 0.0, 1.0, 1.0)),
+        )?;
+        frame.draw(&scene, Affine::translation(2.0, 2.0)?)?;
+    }
+    assert_eq!(&surface.data()[4..8], &[128; 4]);
+    assert_eq!(&surface.data()[8..12], &[0; 4]);
+    assert_eq!(&surface.data()[40..44], &[128; 4]); // Next draw is not clipped.
+    for clip in [Rect::new(0.0, 0.0, 0.0, 4.0), Rect::new(0.0, 0.0, 4.0, 0.0)] {
+        renderer
+            .begin_frame(&mut surface, Color::TRANSPARENT)
+            .draw_clipped(&scene, Affine::IDENTITY, Some(clip))?;
+        assert!(surface.data().iter().all(|v| *v == 0));
+    }
+    let empty = SceneBuilder::new().finish()?;
+    for clip in [
+        Rect::new(f32::NAN, 0.0, 1.0, 1.0),
+        Rect::new(0.0, 0.0, -1.0, 1.0),
+        Rect::new(1_048_577.0, 0.0, 0.0, 1.0),
+    ] {
+        assert_eq!(
+            renderer
+                .begin_frame(&mut surface, Color::TRANSPARENT)
+                .draw_clipped(&empty, Affine::IDENTITY, Some(clip)),
+            Err(RenderError::Coordinates)
+        );
+    }
 
     let mut builder = scene.into_builder();
     builder.clear();

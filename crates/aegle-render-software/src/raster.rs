@@ -1,5 +1,5 @@
 use aegle_scene::{Affine, Command, RoundedRect, Scene};
-use aegle_types::Color;
+use aegle_types::{Color, Rect};
 use tiny_skia::{FillRule, IntSize, Mask, Path, PathBuilder, Transform};
 
 use crate::{RenderError, Surface, blend::Solid, path};
@@ -92,17 +92,19 @@ impl Renderer {
         self.glyphs.release_scratch();
     }
 
-    fn prepare(&mut self, scene: &Scene, surface: &Surface<'_>) -> Result<(), RenderError> {
-        let needs_masks = scene.max_clip_depth() > 0
+    fn prepare(
+        &mut self,
+        scene: &Scene,
+        surface: &Surface<'_>,
+        external_clip: bool,
+    ) -> Result<(), RenderError> {
+        let depth = scene.max_clip_depth() + usize::from(external_clip);
+        let needs_masks = depth > 0
             || scene
                 .commands()
                 .iter()
                 .any(|command| matches!(command, Command::Fill { .. } | Command::Stroke { .. }));
-        let count = if needs_masks {
-            scene.max_clip_depth() + 1
-        } else {
-            0
-        };
+        let count = if needs_masks { depth + 1 } else { 0 };
         let pixels = surface.data.len() / 4;
         let required = pixels.checked_mul(count).unwrap_or(usize::MAX);
         if required > self.mask_budget {
@@ -144,15 +146,56 @@ impl Frame<'_, '_, '_> {
     /// rebuilding its local drawing record. Device path coordinates beyond
     /// ±1,048,576 are rejected explicitly by this backend.
     pub fn draw(&mut self, scene: &Scene, transform: Affine) -> Result<(), RenderError> {
+        self.draw_clipped(scene, transform, None)
+    }
+
+    /// Draws a retained scene intersected with an optional device-space rectangle.
+    ///
+    /// The clip is axis aligned and unaffected by `transform` or scene transforms.
+    /// It intersects every scene clip and applies to shapes and text, only for
+    /// this draw. `None` is identical to [`Self::draw`]. Zero extent excludes all
+    /// pixels. Invalid, negative or out-of-range clip geometry returns Coordinates,
+    /// including for empty scenes. An external clip adds one mask layer to the
+    /// draw's budget, plus the ordinary coverage mask when none was yet needed.
+    pub fn draw_clipped(
+        &mut self,
+        scene: &Scene,
+        transform: Affine,
+        clip: Option<Rect>,
+    ) -> Result<(), RenderError> {
+        let clip = clip
+            .map(|rect| {
+                let shape = RoundedRect::new(rect, 0.0).map_err(|_| RenderError::Coordinates)?;
+                if shape.is_empty() || scene.is_empty() {
+                    path::validate_bounds([
+                        rect.origin.x,
+                        rect.origin.y,
+                        rect.origin.x + rect.size.width,
+                        rect.origin.y + rect.size.height,
+                    ])?;
+                    Ok(None)
+                } else {
+                    self.geometry(shape, None, Affine::IDENTITY).map(Some)
+                }
+            })
+            .transpose()?;
         if scene.is_empty() {
             return Ok(());
         }
-        self.renderer.prepare(scene, self.surface)?;
+        self.renderer.prepare(scene, self.surface, clip.is_some())?;
         let mut state = State {
             transform,
             clips: 0,
             bounds: Bounds::surface(self.surface.width, self.surface.height),
         };
+        if let Some(clip) = clip {
+            if let Some(path) = clip {
+                self.push_clip_path(path, &mut state);
+            } else {
+                state.clips = 1;
+                state.bounds = Bounds::EMPTY;
+            }
+        }
         for command in scene.commands() {
             match *command {
                 Command::PushTransform(local) => {
@@ -191,13 +234,19 @@ impl Frame<'_, '_, '_> {
     }
 
     fn push_clip(&mut self, shape: RoundedRect, state: &mut State) -> Result<(), RenderError> {
-        let previous = state.clips;
-        state.clips += 1;
         if shape.is_empty() || state.bounds.is_empty() {
+            state.clips += 1;
             state.bounds = Bounds::EMPTY;
             return Ok(());
         }
         let path = self.geometry(shape, None, state.transform)?;
+        self.push_clip_path(path, state);
+        Ok(())
+    }
+
+    fn push_clip_path(&mut self, path: Path, state: &mut State) {
+        let previous = state.clips;
+        state.clips += 1;
         state.bounds = state.bounds.intersect(Bounds::path(&path, self.surface));
         let (earlier, next) = self.renderer.masks.split_at_mut(state.clips);
         let mask = &mut next[0];
@@ -212,7 +261,6 @@ impl Frame<'_, '_, '_> {
             }
         }
         self.renderer.path = path.clear();
-        Ok(())
     }
 
     fn paint(

@@ -107,6 +107,8 @@ impl Ui {
                 root,
                 order: vec![root],
                 topology_dirty: false,
+                geometry_dirty: true,
+                reveal_target: None,
                 fonts,
                 theme,
                 size: Size::default(),
@@ -115,6 +117,7 @@ impl Ui {
                 route: Route::new(),
                 capture: None,
                 hover: None,
+                pointer: None,
                 ime_dirty: true,
                 ime_reset: false,
                 input_method: false,
@@ -181,19 +184,30 @@ impl Ui {
             .refresh()
     }
 
-    /// Visits visible records in paint order under their window-space translations.
-    /// The callback may render immediately but must not mutate this UI.
-    pub fn visit_scenes(&self, mut visit: impl FnMut(&Scene, Affine) -> Result) -> Result {
+    /// Visits visible records with their window-space translation and ancestor clip.
+    /// The optional clip is in logical window coordinates, outside the translation.
+    /// Hosts must apply it (and their device scale) to preserve scroll clipping.
+    /// Call after refresh; the callback must not mutate this UI.
+    pub fn visit_scenes(
+        &self,
+        mut visit: impl FnMut(&Scene, Affine, Option<Rect>) -> Result,
+    ) -> Result {
         let state = self
             .state
             .try_borrow()
             .map_err(|_| UiError::ReentrantAccess)?;
         for &id in &state.order {
             let element = &state.tree.get(id).unwrap().context;
-            if element.effective_visible && !element.scene.commands().is_empty() {
+            if element.effective_visible
+                && element
+                    .clip
+                    .is_none_or(|clip| clip.intersection(element.bounds).is_some())
+                && !element.scene.commands().is_empty()
+            {
                 visit(
                     &element.scene,
                     Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?,
+                    element.clip,
                 )?;
             }
         }
@@ -225,6 +239,16 @@ impl Ui {
             let padding = element.padding.unwrap_or(state.theme.padding);
             cursor_rect.origin.x += element.bounds.origin.x + padding - element.scroll.x;
             cursor_rect.origin.y += element.bounds.origin.y + padding - element.scroll.y;
+            // Keep a manually scrolled-out composition alive. Its candidate
+            // anchor collapses at the nearest visible edge until it re-enters.
+            cursor_rect = crate::scroll::clamp_anchor(cursor_rect, element.bounds);
+            if let Some(clip) = element.clip {
+                cursor_rect = crate::scroll::clamp_anchor(cursor_rect, clip);
+            }
+            cursor_rect = crate::scroll::clamp_anchor(
+                cursor_rect,
+                Rect::new(0.0, 0.0, state.size.width, state.size.height),
+            );
             Some(ImeRequest {
                 surrounding: surrounding.map(|s| s.to_string()),
                 selection,
@@ -255,6 +279,8 @@ impl Ui {
         }
         state.capture = None;
         state.hover = None;
+        state.pointer = None;
+        state.reveal_target = None;
         Ok(())
     }
 }

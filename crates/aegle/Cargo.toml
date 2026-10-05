@@ -49,3 +49,7 @@ workspace = true
 [[example]]
 name = "widgets"
 required-features = ["wayland", "system-fonts", "markup", "motion"]
+
+[[example]]
+name = "scrolling"
+required-features = ["wayland", "system-fonts", "markup"]

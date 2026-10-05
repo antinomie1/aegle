@@ -80,7 +80,10 @@ pub(super) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             kind,
             Kind::CheckBox | Kind::Switch | Kind::Slider | Kind::Progress
         ),
-        Gap => matches!(kind, Kind::Window | Kind::Column | Kind::Row),
+        Gap => matches!(
+            kind,
+            Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
+        ),
         _ => true,
     };
     if !allowed {

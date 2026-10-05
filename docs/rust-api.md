@@ -33,7 +33,7 @@ button.on_click(move |_| {
 })?;
 ```
 
-控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。`parent.add(component)` 和生成的第三方组件函数仍是后续扩展目标。
+控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。`parent.add(component)` 和生成的第三方组件函数仍是后续扩展目标。
 
 同一个 `on_click` 再次设置时替换前一处理器，`clear_on_click` 删除处理器；单行编辑器的 `on_submit` 使用相同规则。排队的动作携带注册版本，旧动作不会误调用替换后的处理器。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。通用 `listen` 多订阅接口尚未实现。
 
@@ -43,7 +43,7 @@ button.on_click(move |_| {
 
 | 类型 | 已有接口 |
 | --- | --- |
-| Node / 所有控件句柄 | `is_alive`、`bounds`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
+| Node / 所有控件句柄 | `is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
 | 布局 | `set_size`、`set_width`、`set_height`、`set_min_size`、`set_min_width`、`set_min_height`、`set_grow`、`set_padding`、`set_gap` |
 | 外观 | `set_style`、`style`、`set_skin`、`clear_skin`、`appearance`、`visual_state`；背景/前景、状态背景、边框、圆角、焦点环和编辑器颜色 setter |
 | 字号 | `set_font_size`、`clear_font_size`，限文字控件，保留输入/组合状态 |
@@ -52,11 +52,20 @@ button.on_click(move |_| {
 | Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
 | CheckBox / Switch | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`、`clear_on_change` |
 | Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change`、`clear_on_change` |
+| ScrollView | `offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；解引用到 Container |
 | Ui / Window | `set_theme`；Window 另有 `close` |
 
 `bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。启用 motion 后用 `set_transition(Transition::default())` 安装外观过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期；详见[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或局部主题树。
 
 数值与切换控件的程序 setter 不触发用户修改回调；范围、步长、键盘及无障碍规则见[值控件契约](components-theme-animation.md#当前切换与数值控件)。
+
+## 当前滚动契约
+
+`ScrollView` 是保留状态的列容器；限制尺寸或 flex 分配后，两轴溢出均可滚动。`scroll_to(Point)` 和 `scroll_by(Point)` 接受有限逻辑坐标，先刷新布局再分别限制到各轴范围；负偏移归零。`offset` 是当前状态，`max_offset` 与 `content_size` 来自最近刷新布局，范围包含末尾 padding。隐藏保留偏移，但隐藏布局的范围需重新显示并刷新后才恢复。
+
+`ensure_visible` 先刷新布局，再逐层滚动祖先，使控件或编辑器 caret 可见，不改变焦点；隐藏节点无操作。Tab 焦点和 caret 更新也使用这条显露路径。`visible_bounds` 返回最近刷新几何与祖先滚动视口的交集；隐藏或完全裁剪时为 None，不额外裁剪到窗口边缘。移出视口不销毁控件。嵌套视口和编辑器通过 `Ui::scroll_by(position, delta)` 将未消费的双轴滚轮位移向外传递。
+
+滚动裁剪为直角矩形，不随外观圆角改变。自有宿主的 `Ui::visit_scenes` 回调接收 `(&Scene, Affine, Option<Rect>)`：分别为保留绘制记录、平移和窗口逻辑坐标裁剪；宿主必须应用裁剪。当前没有滚动条控件、ScrollView 独立键盘焦点、虚拟列表或滚动动画。可执行嵌套表单示例：`cargo run -p aegle --example scrolling`。
 
 ## 当前可用的组件皮肤
 

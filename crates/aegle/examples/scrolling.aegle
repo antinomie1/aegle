@@ -1,0 +1,46 @@
+Window {
+    title: "Aegle — nested scrolling"
+    width: 620dp
+    height: 540dp
+    padding: 24dp
+    gap: 16dp
+    Text { text: "一个可以滚动的表单"; font_size: 24dp }
+    Text { text: "滚轮浏览内容；Tab 切换字段；内部区域可以独立滚动。" }
+    ScrollView {
+        id: form
+        height: 320dp
+        padding: 12dp
+        gap: 12dp
+        border_color: #737D8C
+        border_width: 1dp
+        Text { text: "基本信息"; font_size: 18dp }
+        TextField { text: "你好，世界"; label: "姓名" }
+        TextField { text: "上海 / 東京 / 서울"; label: "城市" }
+        CheckBox { text: "接收更新通知"; checked: true }
+        Text { text: "偏好设置"; font_size: 18dp }
+        Switch { text: "启用提醒"; checked: true }
+        Slider { min: 0; max: 100; value: 50; step: 5; label: "提醒音量" }
+        Text { text: "嵌套区域"; font_size: 18dp }
+        ScrollView {
+            height: 120dp
+            padding: 8dp
+            gap: 8dp
+            border_color: #737D8C
+            border_width: 1dp
+            TextField { text: "内部第一项"; label: "第一项" }
+            TextField { text: "内部第二项"; label: "第二项" }
+            TextField { text: "内部第三项"; label: "第三项" }
+            TextField { text: "内部第四项"; label: "第四项" }
+        }
+        Text { text: "补充说明"; font_size: 18dp }
+        TextArea { text: "在这里输入多行说明。\n中文 / 日本語 / 한글"; label: "说明"; height: 100dp }
+        CheckBox { text: "我已检查上述信息" }
+        TextField { id: last; text: "这是表单末尾的字段"; label: "末尾字段" }
+    }
+    Row {
+        gap: 12dp
+        Button { id: top; text: "回到顶部" }
+        Button { id: bottom; text: "查看末尾" }
+        Button { id: close; text: "关闭" }
+    }
+}

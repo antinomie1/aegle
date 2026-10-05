@@ -114,3 +114,9 @@ Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping sou
 Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText/Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 
 当前发布配置采用优化等级 3、thin LTO、单 codegen unit 和 strip debuginfo，优先运行性能；不默认 panic=abort 以换体积，公开边界使用 Result，后台/平台回调不得展开跨 FFI。具体性能配置可按测量调整，但必须保留配置记录。
+
+### 当前滚动成本
+
+复用 Taffy 0.14 的 `scroll_width/scroll_height` 作为最大偏移，不另存布局树或内容尺寸副本。Element 复用原有 scroll 值，另缓存一个可选祖先 Rect（当前目标该字段20 B，结构体对齐另计），用于绘制、命中和候选位置。没有滚动祖先的节点不提交外部 clip。ScrollView 是 app 的一种内容，无新 crate、第三方依赖、线程或定时器。
+
+纯滚动执行一次前序几何更新，复用子控件局部 scene 和文本排版；完全裁出的控件不交给 renderer。悬停随静止指针更新，可能使受影响控件重新记录外观。软件绘制仍提交完整窗口，外部裁剪使用可复用的表面大小 mask，额外一层按 mask 预算计入；这不是 GPU scissor 或零成本裁剪。所有离屏控件和文字布局仍保留，尚未实现虚拟列表。

@@ -44,13 +44,16 @@ pub(crate) fn build(
         .and_then(|path| path.transform(Transform::from_row(a, b, c, d, e, f)))
         .ok_or(RenderError::Coordinates)?;
     let b = path.bounds();
-    if [b.left(), b.top(), b.right(), b.bottom()]
-        .iter()
-        .any(|v| v.abs() > MAX_COORDINATE)
-    {
+    validate_bounds([b.left(), b.top(), b.right(), b.bottom()])?;
+    Ok(path)
+}
+
+// Inputs are finite: RoundedRect or tiny-skia's completed path validates them.
+pub(crate) fn validate_bounds(bounds: [f32; 4]) -> Result<(), RenderError> {
+    if bounds.iter().any(|v| v.abs() > MAX_COORDINATE) {
         return Err(RenderError::Coordinates);
     }
-    Ok(path)
+    Ok(())
 }
 
 fn rounded(pb: &mut PathBuilder, [x, y, w, h]: [f32; 4], r: f32) {

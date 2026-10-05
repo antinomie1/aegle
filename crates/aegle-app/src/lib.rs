@@ -9,6 +9,8 @@
 //! implemented.
 
 #[cfg(feature = "accessibility")]
+mod access_scroll;
+#[cfg(feature = "accessibility")]
 mod accessibility;
 mod callbacks;
 mod handles;
@@ -25,6 +27,8 @@ mod native_input;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 mod native_loop;
 mod paint;
+mod scroll;
+mod scroll_handles;
 mod state;
 mod style;
 mod style_handles;
@@ -43,5 +47,6 @@ pub use aegle_types::{Color, Point, Size};
 pub use handles::{Button, Container, Label, Node, TextField};
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 pub use native::{App, AppOptions, Window, WindowOptions};
+pub use scroll_handles::ScrollView;
 pub use ui::{ImeRequest, ImeState, Result, Ui, UiError};
 pub use value_handles::{CheckBox, Progress, Slider, Switch};

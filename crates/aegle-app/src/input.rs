@@ -72,26 +72,21 @@ impl Ui {
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
         state.rebuild_order();
-        let hit = state.hit(position);
+        state.pointer =
+            (!matches!(kind, PointerKind::Leave | PointerKind::Cancel)).then_some((id, position));
+        let hit = state.pointer.and_then(|_| state.hit(position));
         let target = state
             .capture
             .filter(|(pointer, _)| *pointer == id)
             .map(|(_, id)| id)
             .or(hit);
-        if state.hover != hit {
-            if let Some(old) = state.hover.take() {
-                let input = state.pointer_input(old, id, PointerKind::Leave, position, modifiers);
-                state.dispatch(old, input)?;
-                state.dirty_visual_state(old)?;
-            }
-            state.hover = hit;
-            if let Some(hit) = hit {
-                state.dirty_visual_state(hit)?;
-            }
-        }
+        state.update_hover(hit, id, position)?;
         if let Some(target) = target {
             let input = state.pointer_input(target, id, kind, position, modifiers);
             state.dispatch(target, input)?;
+        }
+        if target != hit {
+            state.sync_hover(id, position)?;
         }
         Ok(())
     }
@@ -102,27 +97,24 @@ impl Ui {
             .map_err(|_| UiError::ReentrantAccess)?
             .cancel_pointer()
     }
-    /// Scrolls the editor under a point by a finite logical vertical displacement.
+    /// Scrolls at a window point by a finite logical vertical displacement.
+    /// Uses the same nested viewport/editor routing as [`Self::scroll_by`].
     pub fn scroll(&self, position: Point, amount: f32) -> Result {
-        if ![position.x, position.y, amount]
+        self.scroll_by(position, Point::new(0.0, amount))
+    }
+    /// Scrolls the nearest available viewport or editor under a window point.
+    /// Coordinates and both displacement axes must be finite logical pixels.
+    pub fn scroll_by(&self, position: Point, delta: Point) -> Result {
+        if ![position.x, position.y, delta.x, delta.y]
             .into_iter()
             .all(f32::is_finite)
         {
             return Err(UiError::InvalidValue.into());
         }
-        let mut state = self
-            .state
+        self.state
             .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
-        state.rebuild_order();
-        if let Some(id) = state.hit(position) {
-            let element = &mut state.tree.get_mut(id).unwrap().context;
-            if matches!(element.content, Content::Field(_)) {
-                element.scroll.y = (element.scroll.y + amount).max(0.0);
-                state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-                state.ime_dirty = true;
-            }
-        }
+            .map_err(|_| UiError::ReentrantAccess)?
+            .scroll_by_at(position, delta)?;
         Ok(())
     }
     /// Applies one validated native IME transaction to the focused editable field.
@@ -235,6 +227,7 @@ impl State {
         self.change_focus(change)
     }
     fn change_focus(&mut self, change: FocusChange) -> Result {
+        self.reveal_target = change.current;
         if !change.changed() {
             return Ok(());
         }
@@ -281,6 +274,7 @@ impl State {
         Ok(())
     }
     fn cancel_pointer(&mut self) -> Result {
+        self.pointer = None;
         if let Some((_, id)) = self.capture.take() {
             let outcome = self.control(id, Input::Cancel)?;
             self.effects(id, outcome)?;
@@ -327,7 +321,8 @@ impl State {
             id,
             kind,
             position: local,
-            inside: element.bounds.contains(position),
+            inside: element.bounds.contains(position)
+                && element.clip.is_none_or(|clip| clip.contains(position)),
             modifiers,
         })
     }
@@ -337,7 +332,54 @@ impl State {
             element.effective_visible
                 && self.usable(id)
                 && element.bounds.contains(position)
+                && element.clip.is_none_or(|clip| clip.contains(position))
                 && element.content.interactive()
         })
+    }
+
+    /// Geometry may move under a stationary pointer. Refresh hover without
+    /// generating slider drag updates, text selections or application callbacks.
+    pub fn rehit_pointer(&mut self) -> Result {
+        if let Some((id, position)) = self.pointer {
+            let hit = self.hit(position);
+            self.update_hover(hit, id, position)?;
+            self.sync_hover(id, position)?;
+        }
+        Ok(())
+    }
+
+    fn update_hover(&mut self, hit: Option<NodeId>, id: PointerId, position: Point) -> Result {
+        if self.hover == hit {
+            return Ok(());
+        }
+        if let Some(old) = self.hover.take() {
+            let input =
+                self.pointer_input(old, id, PointerKind::Leave, position, Modifiers::default());
+            let outcome = self.control(old, input)?;
+            self.effects(old, outcome)?;
+            self.dirty_visual_state(old)?;
+        }
+        self.hover = hit;
+        if let Some(hit) = hit {
+            self.dirty_visual_state(hit)?;
+        }
+        Ok(())
+    }
+
+    fn sync_hover(&mut self, id: PointerId, position: Point) -> Result {
+        if let Some(hit) = self.hover {
+            let owns_pointer = self.capture.is_none_or(|capture| capture == (id, hit));
+            if owns_pointer {
+                let input =
+                    self.pointer_input(hit, id, PointerKind::Move, position, Modifiers::default());
+                let outcome = match &mut self.tree.get_mut(hit).unwrap().context.content {
+                    Content::Slider(slider) => slider.update_hover(id, true),
+                    Content::Button(..) | Content::Toggle(_) => self.control(hit, input)?,
+                    _ => Outcome::default(),
+                };
+                self.effects(hit, outcome)?;
+            }
+        }
+        Ok(())
     }
 }

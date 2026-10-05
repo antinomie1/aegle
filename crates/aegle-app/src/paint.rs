@@ -95,7 +95,7 @@ impl State {
                     false,
                     appearance,
                 )?,
-                Content::Container => {}
+                Content::Container | Content::Scroll => {}
             }
             outline(
                 &mut builder,

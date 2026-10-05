@@ -106,6 +106,7 @@ fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
     let name = match kind {
         Kind::Window => "Window",
         Kind::Row | Kind::Column => "Container",
+        Kind::ScrollView => "ScrollView",
         Kind::Text => "Label",
         Kind::Button => "Button",
         Kind::TextField | Kind::TextArea => "TextField",
@@ -196,6 +197,7 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
     match node.kind {
         Kind::Row => quote! { #parent.row() },
         Kind::Column => quote! { #parent.column() },
+        Kind::ScrollView => quote! { #parent.scroll_view() },
         Kind::Text => quote! { #parent.text(#text) },
         Kind::Button => quote! { #parent.button(#text) },
         Kind::TextField => quote! { #parent.text_field(#text) },

@@ -1,7 +1,8 @@
-Column {
+ScrollView {
     id: panel
     padding: 3dp
     width: 240dp
+    height: 180dp
     background: #F6F7F9FF
     border_color: #737D8C
     border_width: 1dp

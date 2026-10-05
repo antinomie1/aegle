@@ -79,3 +79,9 @@ Wayland 已接入上述 text-input-v3；Windows 的 TSF/兼容路径及 macOS �
 平台缺少 IME 协议时报告 ImeUnavailable 并保留基础键盘输入；要求组合输入的应用可以将其设为启动必需能力。正式 CJK/IME 验收必须在具备对应协议和真实输入法的环境进行。
 
 来源：[PlainEditor 发布源码](https://docs.rs/crate/parley/0.11.1/source/src/editing/editor.rs)、[Parley analysis](https://docs.rs/crate/parley/0.11.1/source/src/analysis/mod.rs)、[ICU4X CJK 换行说明](https://docs.rs/crate/icu_segmenter/2.3.0/source/src/line.rs)、[text-input-v3 协议](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/unstable/text-input/text-input-unstable-v3.xml)。
+
+## 当前应用层滚动与候选区域
+
+ScrollView 仅平移既有控件几何，Editor 继续拥有自己的文字滚动和组合状态。滚轮先由命中的编辑器消费，到边界后剩余的横纵位移交给祖先滚动容器；内部文字溢出不计入外层内容高度。聚焦、选择或编辑会沿祖先从内到外滚入控件；编辑器大于视口的轴改为保证 caret 可见，纯滚轮不强行拉回焦点。
+
+候选矩形依次应用编辑器内部偏移、控件窗口位置和祖先偏移，再夹到控件、祖先可见矩形及窗口范围。手动将活动编辑器滚出视口时保持组合会话，候选锚点收缩到最近边界的零面积矩形；不因此发送 IME reset。重新编辑会揭示 caret。此几何策略已有无窗口组合场景验证，真实输入法对离屏零面积候选锚点的呈现仍需真人验收。

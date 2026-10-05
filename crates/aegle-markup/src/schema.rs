@@ -49,6 +49,8 @@ pub enum Kind {
     Column,
     /// Horizontal container.
     Row,
+    /// A clipped, scrollable vertical container.
+    ScrollView,
     /// Static text label.
     Text,
     /// Activatable text button.
@@ -175,6 +177,7 @@ fn check_node(
         "Window" => Kind::Window,
         "Column" => Kind::Column,
         "Row" => Kind::Row,
+        "ScrollView" => Kind::ScrollView,
         "Text" => Kind::Text,
         "Button" => Kind::Button,
         "TextField" => Kind::TextField,
@@ -188,7 +191,10 @@ fn check_node(
     if kind == Kind::Window && depth != 1 {
         return Err(error("Window is only allowed at the document root".into()));
     }
-    let container = matches!(kind, Kind::Window | Kind::Column | Kind::Row);
+    let container = matches!(
+        kind,
+        Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
+    );
     if !container && !node.children.is_empty() {
         return Err(error(format!("{} does not accept children", node.name)));
     }

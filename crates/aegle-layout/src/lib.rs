@@ -10,7 +10,7 @@ pub use node::LayoutNode;
 pub use taffy::geometry::{Rect as Edges, Size};
 pub use taffy::{
     AvailableSpace, Dimension, Display, FlexDirection, LengthPercentage, LengthPercentageAuto,
-    Style,
+    Overflow, Style,
 };
 
 use aegle_core::{Dirty, NodeId, Tree, TreeError};

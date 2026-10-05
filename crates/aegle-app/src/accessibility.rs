@@ -15,6 +15,7 @@ impl Ui {
     pub fn access_dirty(&self) -> bool {
         let state = self.state.borrow();
         state.topology_dirty
+            || state.geometry_dirty
             || state.order.iter().any(|&id| {
                 state
                     .tree
@@ -51,6 +52,8 @@ impl Ui {
     }
     /// Applies supported assistive actions through shared focus/control/editing paths.
     /// Returns false for unsupported/stale actions or selection during composition.
+    /// Scroll actions do not change focus or the editor's composition state.
+    /// ScrollIntoView currently accepts no hint; ScrollToPoint is unsupported.
     pub fn access_action(&self, request: ActionRequest) -> Result<bool> {
         if request.target_tree != TreeId::ROOT {
             return Ok(false);
@@ -68,9 +71,16 @@ impl Ui {
         else {
             return Ok(false);
         };
-        if !state.usable(target)
-            || focus_policy(target, state.tree.get(target).unwrap())
-                != aegle_core::FocusPolicy::Focusable
+        if !state.usable(target) {
+            return Ok(false);
+        }
+        let repaint = state.refresh()?;
+        state.repaint |= repaint;
+        if let Some(handled) = state.access_scroll(target, request.action, request.data.as_ref())? {
+            return Ok(handled);
+        }
+        if focus_policy(target, state.tree.get(target).unwrap())
+            != aegle_core::FocusPolicy::Focusable
         {
             return Ok(false);
         }
@@ -204,6 +214,15 @@ impl State {
             };
             let node_data = self.tree.get(id).unwrap();
             let bounds = node_data.bounds();
+            let parent_scroll = self
+                .tree
+                .parent(id)
+                .unwrap()
+                .and_then(|parent| self.tree.get(parent))
+                .filter(|parent| matches!(parent.context.content, Content::Scroll))
+                .map_or(Point::default(), |parent| parent.context.scroll);
+            let scroll_limit =
+                matches!(node_data.context.content, Content::Scroll).then(|| self.scroll_limit(id));
             let mut node = Node::new(Role::GenericContainer);
             node.set_foreground_color(foreground);
             node.set_bounds(Rect::new(
@@ -213,9 +232,12 @@ impl State {
                 bounds.size.height.into(),
             ));
             node.set_transform(Affine::translate((
-                bounds.origin.x.into(),
-                bounds.origin.y.into(),
+                f64::from(bounds.origin.x - parent_scroll.x),
+                f64::from(bounds.origin.y - parent_scroll.y),
             )));
+            if enabled && self.has_scroll_ancestor(id) {
+                node.add_action(Action::ScrollIntoView);
+            }
             node.set_children(
                 self.tree
                     .children(id)
@@ -238,6 +260,32 @@ impl State {
                     if id == self.root {
                         node.set_role(Role::Window);
                         node.set_label(title);
+                    }
+                }
+                Content::Scroll => {
+                    node.set_role(Role::ScrollView);
+                    node.set_clips_children();
+                    // Hidden layout is zeroed by Taffy while retained offsets are
+                    // preserved. Publish their ranges again after visible layout.
+                    if element.effective_visible {
+                        let limit = scroll_limit.unwrap();
+                        node.set_scroll_x(element.scroll.x.into());
+                        node.set_scroll_x_min(0.0);
+                        node.set_scroll_x_max(limit.x.into());
+                        node.set_scroll_y(element.scroll.y.into());
+                        node.set_scroll_y_min(0.0);
+                        node.set_scroll_y_max(limit.y.into());
+                        if enabled {
+                            node.add_action(Action::SetScrollOffset);
+                            if limit.x > 0.0 {
+                                node.add_action(Action::ScrollLeft);
+                                node.add_action(Action::ScrollRight);
+                            }
+                            if limit.y > 0.0 {
+                                node.add_action(Action::ScrollUp);
+                                node.add_action(Action::ScrollDown);
+                            }
+                        }
                     }
                 }
                 Content::Label(label) => {

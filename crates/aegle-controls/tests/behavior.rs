@@ -159,6 +159,12 @@ fn toggles_and_ranges_share_changes_capture_and_numeric_boundaries() {
         .unwrap();
     assert_eq!(slider.range().value(), 10.0);
     assert!(slider.is_pressed());
+    assert!(!slider.is_hovered());
+    assert!(!slider.update_hover(PointerId(2), true).repaint);
+    let hover = slider.update_hover(PointerId(1), true);
+    assert!(hover.repaint && slider.is_hovered() && slider.is_pressed());
+    assert_eq!((hover.action, hover.capture), (None, None));
+    assert_eq!(slider.range().value(), 10.0);
     let up = slider
         .handle(at(1, PointerKind::Up, -20.0, false), 100.0)
         .unwrap();

@@ -19,8 +19,8 @@
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。当前没有 token 注册表、局部主题继承或系统偏好监听。
-- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
-- aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/Text/Button/TextField/TextArea 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
+- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
+- aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Text/Button/TextField/TextArea/CheckBox/Switch/Slider/Progress 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
 
 图像缓存预算不包括字体映射、排版、缓存索引及上游栅格 scratch；具体边界见 [资源](resources.md)。合成/过滤使用线性预乘颜色，公共字形彩色图像为非预乘 sRGB RGBA8。
 
@@ -33,6 +33,7 @@ cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
 cargo run -p aegle --example widgets --release
+cargo run -p aegle --example scrolling --release
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
@@ -186,8 +187,22 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 本阶段实现二态、水平数值控件；三态、竖向、无限进度、滚轮调值、值/手柄位移动画未实现。MSRV/Clippy/其他 OS、GPU、真实屏幕阅读器与输入法完整验收的缺口仍保留。
 
+## 保留滚动容器与跨节点裁剪验证
+
+新增 ScrollView 和同名静态标记节点，复用 Taffy 的滚动范围、Element 既有偏移和软件 renderer 的裁剪 mask，没有新增依赖或 crate。纯滚动更新窗口几何及祖先 clip，复用局部 scene 与文字布局；横纵滚轮剩余量从编辑器/内层视口传到外层。控件命中、捕获释放、静止指针悬停、焦点揭示、IME 和语义使用同一几何。`visit_scenes` 的第三参数是必须由宿主应用的窗口逻辑裁剪。
+
+- workspace all-features 共30个常规集成场景通过。仅新增一组滚动生命周期场景，覆盖嵌套余量、保留记录、裁掉的捕获按钮、显式 refocus、CJK 组合/候选范围、语义动作、隐藏恢复、删除后范围缩小、横向及有限值边界。现有 renderer 场景追加外部/内部 clip 相交、文字、预算、空/非法 clip 和调用间隔离；控件场景补悬停更新不改滑块值。
+- all-targets/all-features、无默认功能的滚动场景、markup+motion 无窗口 facade 场景及严格 Rustdoc/格式/diff 检查通过。实现15647行、测试3436行，占18.01%（不含 examples），最大源文件483行，没有 src 内测试。
+- 外部 Taffy 探针确认 padding、嵌套滚动溢出隔离、隐藏恢复；AccessKit schema/consumer 探针验证嵌套语义边界等于 Ui 几何、四方向 Item/Page、SetScrollOffset、普通标签滚入、禁用/无效数据拒绝及 IME 组合保持。此阶段未重复真实 AT-SPI 滚动或真人输入法验收。
+- 测试发现并修复两处边界：内部滚动的 TextArea/自裁剪控件使用 Taffy Hidden overflow，避免其文字扩大外层内容范围；完全离屏的候选锚点依次夹到控件、祖先和窗口，保持组合而不返回视口外坐标。可完整容纳的编辑器整体滚入，过大的轴以 caret 为准。
+- 私有800×640 Sway/Pixman 中，release scrolling 通过真实 virtual-pointer 轴事件、Tab 连续滚入内外视口、顶部/末尾回调及关闭；滚动前后截图已目视检查。初次仅使用 swaymsg 的测试未产生 pointer capability，改用独立虚拟指针后轴输入生效，未连接用户桌面。
+- 同一 release 配置、Wayland + 系统字体 + markup + motion、关闭 Unix adapter：hello 3,970,240 B、controls 4,007,104 B、components 4,023,488 B、widgets 4,027,584 B，较上一阶段分别增加8192/12288/8192/8192 B；新 scrolling 为4,019,392 B。
+- scrolling 在800×480私有输出的一次进程快照：RSS/PSS 29,364/10,292 KiB，1线程，随后3秒 CPU tick 增量0（CLK_TCK=100）。示例内容、输出和系统映射均影响该样本；这不是对比改善、峰值、100控件、默认无障碍或嵌入式验收。
+
+此阶段没有滚动条、惯性/触摸、独立滚动容器键盘导航或列表虚拟化。所有离屏控件仍保留。系统无障碍离屏过滤、ScrollHint/ScrollToPoint 和 HiDPI 验收限制见[无障碍](accessibility.md#当前滚动语义)，其他平台/GPU仍未实现。
+
 ## 下一阶段与缺口
 
-下一步继续补齐滚动/列表等基础控件、任意绘制/行为组件扩展和动画完成通知/几何，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
+下一步继续补齐列表虚拟化/滚动条等基础能力、任意绘制/行为组件扩展和动画完成通知/几何，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
 
-当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或几何动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。
+当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或几何动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。

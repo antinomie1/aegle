@@ -85,7 +85,7 @@ impl State {
                                     s.height + 2.0 * padding,
                                 )
                             }),
-                        Content::Container => Ok(aegle_types::Size::default()),
+                        Content::Container | Content::Scroll => Ok(aegle_types::Size::default()),
                     };
                     match measured {
                         Ok(size) => Size {
@@ -104,19 +104,7 @@ impl State {
             }
             for index in 0..self.order.len() {
                 let id = self.order[index];
-                let parent = self.tree.parent(id)?;
-                let parent_info = parent.map(|id| {
-                    let parent = &self.tree.get(id).unwrap().context;
-                    (parent.bounds.origin, parent.effective_visible)
-                });
                 let node = self.tree.get_mut(id).unwrap();
-                node.context.bounds = node.bounds();
-                node.context.effective_visible = node.context.visible;
-                if let Some((origin, visible)) = parent_info {
-                    node.context.bounds.origin.x += origin.x;
-                    node.context.bounds.origin.y += origin.y;
-                    node.context.effective_visible &= visible;
-                }
                 // Ensure retained text geometry uses final layout constraints, even
                 // when Taffy's measurement callback last evaluated an intrinsic pass.
                 let width = node.bounds().size.width;
@@ -135,11 +123,14 @@ impl State {
                 }
                 self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             }
+            self.geometry_dirty = true;
             self.ime_dirty = true;
             self.repaint = true;
         }
+        self.update_geometry()?;
         for index in 0..self.order.len() {
             let id = self.order[index];
+            let focused = self.focus.current(&self.tree) == Some(id);
             let element = &mut self.tree.get_mut(id).unwrap().context;
             if let Content::Field(field) = &mut element.content {
                 let changes = field.editor_mut().take_changes();
@@ -155,6 +146,9 @@ impl State {
                 let size = field.editor().size();
                 if std::mem::take(&mut element.ensure_caret) || changes.layout || changes.selection
                 {
+                    if focused {
+                        self.reveal_target = Some(id);
+                    }
                     element.scroll.x = element
                         .scroll
                         .x
@@ -175,6 +169,14 @@ impl State {
                     .y
                     .clamp(0.0, (size.height - viewport.height).max(0.0));
             }
+        }
+        if let Some(target) = self.reveal_target.take() {
+            if self.tree.get(target).is_some() && self.usable(target) {
+                self.reveal(target)?;
+            }
+        }
+        for index in 0..self.order.len() {
+            let id = self.order[index];
             if self.tree.dirty(id)?.intersects(Dirty::PAINT) {
                 self.record(id)?;
                 self.tree.clear_dirty(id, Dirty::PAINT)?;

@@ -106,7 +106,7 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
     assert_eq!(field.text()?, "Done");
     ui.refresh()?;
     let mut local_runs = 0;
-    ui.visit_scenes(|scene, _| {
+    ui.visit_scenes(|scene, _, _| {
         for run in scene
             .glyph_runs()
             .iter()
@@ -124,7 +124,7 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
     field.clear_skin()?;
     assert_eq!(field.appearance()?.background, theme.surface);
     ui.refresh()?;
-    ui.visit_scenes(|scene, _| {
+    ui.visit_scenes(|scene, _, _| {
         assert!(scene.glyph_runs().iter().all(|run| run.size() == 18.0));
         Ok(())
     })?;

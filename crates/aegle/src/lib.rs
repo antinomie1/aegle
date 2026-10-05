@@ -17,7 +17,7 @@ pub mod prelude {
     pub use aegle_app::{App, AppOptions, Window, WindowOptions};
     pub use aegle_app::{
         Appearance, Button, CheckBox, Color, Container, ControlKind, Label, Node, Progress, Result,
-        Skin, Slider, Style, Switch, TextField, Theme, Ui, VisualState,
+        ScrollView, Skin, Slider, Style, Switch, TextField, Theme, Ui, VisualState,
     };
     #[cfg(feature = "motion")]
     pub use aegle_app::{Easing, Transition};

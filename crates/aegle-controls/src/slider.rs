@@ -1,7 +1,8 @@
 use crate::{
-    Action, Button, Capture, Input, Key, KeyInput, Outcome, PointerId, PointerKind, Range,
-    RangeError,
+    Action, Button, Capture, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,
+    PointerKind, Range, RangeError,
 };
+use aegle_types::Point;
 
 /// Allocation-free horizontal slider behavior sharing button focus and capture.
 ///
@@ -49,6 +50,21 @@ impl Slider {
     /// Whether a drag is active, including outside the hit region.
     pub fn is_pressed(&self) -> bool {
         self.drag.is_some()
+    }
+
+    /// Refreshes hit membership after host geometry changes, without changing
+    /// the value or capture. An active drag ignores other pointer identities.
+    pub fn update_hover(&mut self, id: PointerId, inside: bool) -> Outcome {
+        if self.drag.is_some_and(|drag| drag != id) {
+            return Outcome::default();
+        }
+        self.button.handle(Input::Pointer(PointerInput {
+            id,
+            kind: PointerKind::Move,
+            position: Point::default(),
+            inside,
+            modifiers: Modifiers::default(),
+        }))
     }
 
     /// Disabling releases an active capture and retains the last numeric value.

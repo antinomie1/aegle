@@ -1,7 +1,7 @@
 //! Compiled markup shares the imperative tree, callbacks and weak lifetimes.
 #![cfg(all(feature = "markup", feature = "motion"))]
 
-use aegle::{Result, Size, TextSystem, Theme, Ui, UiError};
+use aegle::{Point, Result, Size, TextSystem, Theme, Ui, UiError};
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
@@ -40,6 +40,8 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
     assert_eq!((view.slider.value()?, view.progress.value()?), (16.0, 10.0));
     assert_eq!(view.panel.bounds()?, view.root.bounds()?);
     assert_eq!(view.panel.bounds()?.size.width, 240.0);
+    assert_eq!(view.panel.offset()?, Point::default());
+    assert!(view.panel.content_size()?.height > view.panel.bounds()?.size.height);
     assert_eq!(view.clear.bounds()?.size.width, 80.0);
     assert_eq!(
         view.clear.appearance()?.background,

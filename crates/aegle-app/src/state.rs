@@ -16,6 +16,7 @@ use crate::{Result, callbacks::Handler, style::Decoration};
 
 pub(crate) enum Content {
     Container,
+    Scroll,
     Label(Box<Paragraph>),
     Button(Button, Box<Paragraph>),
     Field(Box<TextField>),
@@ -57,6 +58,7 @@ pub(crate) struct Element {
     pub content: Content,
     pub scene: Scene,
     pub bounds: Rect,
+    pub clip: Option<Rect>,
     pub scroll: Point,
     pub visible: bool,
     pub effective_visible: bool,
@@ -83,6 +85,7 @@ impl Element {
             content,
             scene: Scene::default(),
             bounds: Rect::default(),
+            clip: None,
             scroll: Point::default(),
             visible: true,
             effective_visible: true,
@@ -102,6 +105,8 @@ pub(crate) struct State {
     pub root: NodeId,
     pub order: Vec<NodeId>,
     pub topology_dirty: bool,
+    pub geometry_dirty: bool,
+    pub reveal_target: Option<NodeId>,
     pub fonts: Rc<RefCell<TextSystem>>,
     pub theme: Theme,
     pub size: Size,
@@ -110,6 +115,7 @@ pub(crate) struct State {
     pub route: Route,
     pub capture: Option<(PointerId, NodeId)>,
     pub hover: Option<NodeId>,
+    pub pointer: Option<(PointerId, Point)>,
     pub ime_dirty: bool,
     pub ime_reset: bool,
     pub input_method: bool,
@@ -190,8 +196,21 @@ impl State {
         &mut self,
         parent: NodeId,
         content: Content,
-        style: aegle_layout::Style,
+        mut style: aegle_layout::Style,
     ) -> Result<NodeId> {
+        // These controls clip their own contents and manage any text scrolling
+        // internally. Their intrinsic overflow must not enlarge an ancestor view.
+        if matches!(
+            content,
+            Content::Button(..)
+                | Content::Field(_)
+                | Content::Toggle(_)
+                | Content::Slider(_)
+                | Content::Progress(_)
+        ) {
+            style.overflow.x = aegle_layout::Overflow::Hidden;
+            style.overflow.y = aegle_layout::Overflow::Hidden;
+        }
         let mut element = Element::new(content);
         #[cfg(feature = "accessibility")]
         {
