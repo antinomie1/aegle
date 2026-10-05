@@ -42,9 +42,9 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 默认组件范围
 
-默认皮肤采用跨平台一致的中性极简外观。首版包含 Box/Row/Column、Text、Button、CheckBox、Switch、Slider、Progress、TextField、TextArea、ScrollView、等高虚拟 ListView，以及窗口内 Popup/Menu/Tooltip。Grid、图像格式、路径图标和高级特效按 feature 提供。
+默认皮肤采用跨平台一致的中性极简外观。首版包含 Box/Row/Column、Text、Button、CheckBox（含部分选中）、RadioButton、Switch、Slider、Progress、TextField、TextArea、ScrollView、等高与按内容变高的虚拟 ListView、基础 Table、Dropdown，以及窗口内 Popup；Menu/Tooltip 可由 Popup 组合，尚无专用控件。Grid、图像格式、路径图标和高级特效按 feature 提供。
 
-默认 Popup/Menu/Tooltip 在当前窗口的 overlay 层内显示，不承诺越过宿主窗口边缘；需要独立原生 popup 的 shell/应用通过平台扩展显式创建，走相同焦点及语义契约。首版没有表格引擎、富文档编辑器、可变高度虚拟列表或完整 MD3 套件；第三方可用公开接口实现这些组件。
+默认 Popup/Menu/Tooltip 在当前窗口的 overlay 层内显示，不承诺越过宿主窗口边缘；需要独立原生 popup 的 shell/应用通过平台扩展显式创建，走相同焦点及语义契约。当前 Popup 与 Dropdown 列表即在此层：显示于锚点下方（空间不足时上方），Escape 或按下外部关闭并归还焦点。首版的表格只有固定行高、表头与虚拟行，没有排序或列宽拖动；没有富文档编辑器或完整 MD3 套件，第三方可用公开接口实现。
 
 行为与皮肤分离：controls 负责激活、切换、调整、编辑、滚动等行为及语义，widgets 负责默认外观。第三方 MD3 库应复用 controls，并增加自己的 token、图标与绘制；不重写平台输入、CJK 或无障碍。
 
@@ -64,7 +64,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 默认不使用背景模糊、大面积阴影或持续装饰动画。hover/pressed 用轻度叠色，拖动响应直接；disabled 不只靠变淡区分，语义同步不可用状态。选中、错误和焦点不能仅靠颜色，应有形状/标记或文字反馈。
 
-普通文字对比度目标至少 4.5:1，交互轮廓/焦点目标至少 3:1。此处是设计与验收要求，不是认证声明。应用自定义颜色也要接受对比度检查。高对比模式把默认 token 调整为系统或黑白高对比配色；显式本地覆盖仍由应用负责。
+普通文字对比度目标至少 4.5:1，交互轮廓/焦点目标至少 3:1。此处是设计与验收要求，不是认证声明。应用自定义颜色也要接受对比度检查。高对比模式把默认 token 调整为系统或黑白高对比配色；内置 `high_contrast()` 为黑底白字与白色轮廓、黄色焦点和标记，禁用与次要文字使用对黑底 8:1 的灰色，使禁用控件与启用控件可区分。显式本地覆盖仍由应用负责。
 
 ## 主题契约
 

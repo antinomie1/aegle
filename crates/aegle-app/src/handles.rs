@@ -81,24 +81,7 @@ impl Node {
     }
     /// Shows or hides the entire subtree. Hidden controls take no layout space.
     pub fn set_visible(&self, visible: bool) -> Result {
-        self.change(|state, id| {
-            if state.tree.get(id).unwrap().context.visible == visible {
-                return Ok(());
-            }
-            if !visible {
-                state.cancel_subtree(id)?;
-            }
-            state.tree.get_mut(id).unwrap().context.visible = visible;
-            let mut style = state.tree.get(id).unwrap().style().clone();
-            style.display = if visible {
-                aegle_layout::Display::Flex
-            } else {
-                aegle_layout::Display::None
-            };
-            aegle_layout::set_style(&mut state.tree, id, style)?;
-            state.repaint = true;
-            Ok(())
-        })
+        self.change(|state, id| state.set_visible(id, visible))
     }
     /// Disables interaction throughout this subtree, preserving its displayed values.
     pub fn set_enabled(&self, enabled: bool) -> Result {

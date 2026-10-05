@@ -1,6 +1,7 @@
 use crate::{
     Result,
-    state::{Content, State},
+    state::{Content, Semantic, State},
+    widget_paint::{CHEVRON, check_mark, chevron},
 };
 use aegle_core::NodeId;
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
@@ -16,9 +17,11 @@ impl State {
         let bars = self.scrollbars(id);
         let bar_color = self.scrollbar_color(id);
         let theme = *self.theme_of(id);
+        let chosen = self.option_selected(id) == Some(true);
         let element = &mut self.tree.get_mut(id).unwrap().context;
         let padding = element.inset(&theme);
         let size = element.bounds.size;
+        let semantic = element.semantic;
         let mut builder = std::mem::take(&mut element.scene).into_builder();
         builder.clear();
         if element.effective_visible {
@@ -47,12 +50,30 @@ impl State {
                 }
                 Content::Button(_, label) => {
                     builder.push_clip(shape)?;
+                    // Dropdowns and their choices read as lists: text starts at the padding.
+                    let listed = matches!(semantic, Semantic::Dropdown | Semantic::Option);
+                    let x = if listed {
+                        padding
+                    } else {
+                        (size.width - label.size().width) / 2.0
+                    };
                     builder.push_transform(Affine::translation(
-                        (size.width - label.size().width) / 2.0,
+                        x,
                         (size.height - label.size().height) / 2.0,
                     )?)?;
                     label.paint_with_color(&mut builder, appearance.foreground)?;
-                    builder.pop()?.pop()?;
+                    builder.pop()?;
+                    if semantic == Semantic::Dropdown {
+                        let x = size.width - padding - CHEVRON * 0.5;
+                        chevron(&mut builder, x, size.height * 0.5, appearance.foreground)?;
+                    }
+                    if chosen {
+                        // The current choice is marked by shape, not only color.
+                        let mark = 12.0_f32.min(size.height);
+                        let (x, y) = (size.width - padding - mark, (size.height - mark) * 0.5);
+                        check_mark(&mut builder, x, y, mark, appearance.indicator)?;
+                    }
+                    builder.pop()?;
                 }
                 Content::Field(field) => {
                     builder.push_clip(shape)?;
@@ -78,8 +99,9 @@ impl State {
                     size,
                     padding,
                     theme.gap,
-                    toggle.switch,
+                    toggle.mark,
                     toggle.control.is_checked(),
+                    toggle.mixed,
                     &toggle.text,
                     appearance,
                 )?,

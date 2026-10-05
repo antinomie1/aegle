@@ -54,12 +54,14 @@ use aegle_platform_wayland as platform;
 #[cfg(all(feature = "windows", target_os = "windows"))]
 use aegle_platform_win32 as platform;
 mod paint;
+mod popup;
 mod scroll;
 mod scroll_handles;
 mod scrollbar;
 mod state;
 mod style;
 mod style_handles;
+mod table;
 mod text_handles;
 mod theme;
 mod ui;
@@ -90,7 +92,9 @@ pub use native::{App, AppOptions, RendererBackend, Window, WindowOptions};
 pub use platform::Preferences;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 pub use platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
+pub use popup::{Dropdown, Popup};
 pub use scroll_handles::ScrollView;
+pub use table::{Table, TableColumn};
 pub use ui::{ClipboardRequest, ImeRequest, ImeState, Result, Ui, UiError};
-pub use value_handles::{CheckBox, Progress, Slider, Switch};
+pub use value_handles::{CheckBox, Progress, Radio, Slider, Switch};
 pub use visual_handles::{Canvas, ImageView};

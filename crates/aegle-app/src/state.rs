@@ -31,7 +31,35 @@ pub(crate) enum Content {
 pub(crate) struct ToggleContent {
     pub control: aegle_controls::Toggle,
     pub text: Paragraph,
-    pub switch: bool,
+    pub mark: Mark,
+    /// A check box shown as partially checked until the user changes it.
+    pub mixed: bool,
+}
+
+/// How a two-state control draws and exports its value.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Mark {
+    Check,
+    Switch,
+    /// Exclusive among radio siblings of the same parent.
+    Radio,
+}
+
+/// Semantic and painting role of composite controls built from plain nodes.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Semantic {
+    #[default]
+    None,
+    /// A button that opens a list of choices.
+    Dropdown,
+    /// A choice inside a dropdown list.
+    Option,
+    Table,
+    TableRow,
+    TableCell,
+    TableHeader,
+    /// An overlay shown above the window content.
+    Popup,
 }
 
 impl Content {
@@ -72,6 +100,7 @@ pub(crate) struct Element {
     pub padding: Option<f32>,
     /// Presented translation after layout, inherited by the subtree.
     pub offset: Point,
+    pub semantic: Semantic,
     /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
     pub theme: Option<Rc<Theme>>,
     /// Whether `theme` was set on this node rather than inherited.
@@ -108,6 +137,7 @@ impl Element {
             local_layout: 0,
             padding: None,
             offset: Point::default(),
+            semantic: Semantic::None,
             theme: None,
             local_theme: false,
             #[cfg(feature = "accessibility")]
@@ -143,6 +173,10 @@ pub(crate) struct State {
     pub callbacks: HashMap<NodeId, Handler>,
     /// Virtual list viewports and their realized rows.
     pub lists: Vec<(NodeId, crate::list::List)>,
+    /// Shown or hidden popups with their anchors, in showing order.
+    pub popups: Vec<crate::popup::PopupEntry>,
+    /// Dropdown anchors and their choices.
+    pub dropdowns: HashMap<NodeId, crate::popup::DropdownData>,
     pub decorations: HashMap<NodeId, Decoration>,
     /// Application values living exactly as long as their control.
     pub kept: HashMap<NodeId, Vec<Box<dyn std::any::Any>>>,
@@ -223,6 +257,25 @@ impl State {
         }
     }
 
+    pub fn set_visible(&mut self, id: NodeId, visible: bool) -> Result {
+        if self.tree.get(id).unwrap().context.visible == visible {
+            return Ok(());
+        }
+        if !visible {
+            self.cancel_subtree(id)?;
+        }
+        self.tree.get_mut(id).unwrap().context.visible = visible;
+        let mut style = self.tree.get(id).unwrap().style().clone();
+        style.display = if visible {
+            aegle_layout::Display::Flex
+        } else {
+            aegle_layout::Display::None
+        };
+        aegle_layout::set_style(&mut self.tree, id, style)?;
+        self.repaint = true;
+        Ok(())
+    }
+
     pub fn invalidate_structure(&mut self) {
         self.topology_dirty = true;
         self.repaint = true;
@@ -288,6 +341,7 @@ impl State {
             self.callbacks.remove(&node);
             self.decorations.remove(&node);
             self.kept.remove(&node);
+            self.dropdowns.remove(&node);
             self.lists.retain(|(list, _)| *list != node);
             #[cfg(feature = "motion")]
             {
@@ -299,7 +353,8 @@ impl State {
         })?;
         self.pending.retain(|(id, _)| self.tree.get(*id).is_some());
         self.invalidate_structure();
-        Ok(())
+        // Popups live under the root, apart from their anchors.
+        self.prune_popups()
     }
 }
 

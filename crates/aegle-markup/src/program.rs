@@ -286,7 +286,9 @@ impl Checker {
         for event in node.events {
             let event_kind = match (kind, event.name.as_str()) {
                 (Kind::Button, "clicked") => EventKind::Clicked,
-                (Kind::CheckBox | Kind::Switch | Kind::Slider, "changed") => EventKind::Changed,
+                (Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider, "changed") => {
+                    EventKind::Changed
+                }
                 (Kind::TextField, "submitted") => EventKind::Submitted,
                 _ => {
                     return Err(Error::new(
@@ -454,7 +456,7 @@ fn bindable(name: PropertyName) -> Option<Type> {
     use PropertyName::*;
     match name {
         Text | Label => Some(Type::String),
-        Visible | Enabled | Checked | ReadOnly => Some(Type::Bool),
+        Visible | Enabled | Checked | Mixed | ReadOnly => Some(Type::Bool),
         Value => Some(Type::Float),
         _ => None,
     }

@@ -16,8 +16,12 @@ use crate::{
 const MAX_EXTENT: f32 = 16_777_216.0;
 
 pub(crate) struct List {
+    /// The fixed height, or the estimate for rows not yet measured.
     row_height: f32,
     count: usize,
+    /// Row tops plus the total height (`count + 1` entries) when rows size to
+    /// their content; `None` for equal heights.
+    offsets: Option<Vec<f32>>,
     spacer: NodeId,
     /// Realized rows sorted by index; they are the spacer's only children.
     rows: Vec<(usize, NodeId)>,
@@ -25,7 +29,7 @@ pub(crate) struct List {
     reload: bool,
 }
 
-/// A vertical list of equal-height rows over a scroll viewport.
+/// A vertical list of equal-height or content-sized rows over a scroll viewport.
 ///
 /// Only rows intersecting the visible viewport (also clipped by ancestor views
 /// and the window) exist as controls. A row leaving that range is removed with
@@ -53,6 +57,29 @@ impl Container {
         count: usize,
         row: impl FnMut(&Container, usize) -> Result + 'static,
     ) -> Result<ListView> {
+        self.virtual_list(row_height, count, false, Box::new(row))
+    }
+
+    /// Appends a virtual list whose rows size to their content. Rows not yet
+    /// shown count as `estimate` high; shown rows are measured after layout and
+    /// later rows move accordingly. Scrolling back may shift content while
+    /// estimates are replaced. `count × estimate` must not exceed 16,777,216.
+    pub fn variable_list_view(
+        &self,
+        estimate: f32,
+        count: usize,
+        row: impl FnMut(&Container, usize) -> Result + 'static,
+    ) -> Result<ListView> {
+        self.virtual_list(estimate, count, true, Box::new(row))
+    }
+
+    fn virtual_list(
+        &self,
+        row_height: f32,
+        count: usize,
+        variable: bool,
+        row: Box<dyn FnMut(&Container, usize) -> Result>,
+    ) -> Result<ListView> {
         let height = extent(row_height, count)?;
         let view = self.scroll_view()?;
         view.change(|state, id| {
@@ -68,9 +95,10 @@ impl Container {
                 List {
                     row_height,
                     count,
+                    offsets: variable.then(|| (0..=count).map(|i| i as f32 * row_height).collect()),
                     spacer,
                     rows: Vec::new(),
-                    builder: Some(Box::new(row)),
+                    builder: Some(row),
                     reload: false,
                 },
             ));
@@ -94,7 +122,8 @@ impl ListView {
     pub fn count(&self) -> Result<usize> {
         self.list(|_, list| Ok(list.count))
     }
-    /// Returns the fixed logical row height.
+    /// Returns the fixed logical row height, or the estimate of a list whose
+    /// rows size to their content.
     pub fn row_height(&self) -> Result<f32> {
         self.list(|_, list| Ok(list.row_height))
     }
@@ -102,7 +131,14 @@ impl ListView {
     /// rows below it keep their controls.
     pub fn set_count(&self, count: usize) -> Result {
         self.list(|state, list| {
-            let height = extent(list.row_height, count)?;
+            let mut height = extent(list.row_height, count)?;
+            if let Some(offsets) = &mut list.offsets {
+                offsets.truncate(count.min(list.count) + 1);
+                while offsets.len() <= count {
+                    offsets.push(offsets.last().unwrap() + list.row_height);
+                }
+                height = offsets[count];
+            }
             list.count = count;
             let mut style = state.tree.get(list.spacer).unwrap().style().clone();
             style.size.height = Dimension::length(height);
@@ -130,16 +166,17 @@ fn extent(row_height: f32, count: usize) -> Result<f32> {
     }
 }
 
-fn row_style(theme: &Theme, index: usize, row_height: f32) -> Style {
+/// A row at `top`, of a fixed height or sized to its content.
+fn row_style(theme: &Theme, top: f32, height: Option<f32>) -> Style {
     let mut style = container_style(theme, false);
     style.position = Position::Absolute;
     style.inset = Edges {
         left: LengthPercentageAuto::length(0.0),
         right: LengthPercentageAuto::length(0.0),
-        top: LengthPercentageAuto::length(index as f32 * row_height),
+        top: LengthPercentageAuto::length(top),
         bottom: LengthPercentageAuto::auto(),
     };
-    style.size.height = Dimension::length(row_height);
+    style.size.height = height.map_or(Dimension::auto(), Dimension::length);
     // Row contents never widen the list's scrollable overflow.
     style.overflow.x = Overflow::Hidden;
     style.overflow.y = Overflow::Hidden;
@@ -164,13 +201,27 @@ impl State {
             window,
         );
         let count = self.lists[index].1.count;
-        let range = if view.effective_visible && !visible.is_empty() {
-            let first = ((visible.origin.y - top) / row_height).floor().max(0.0) as usize;
-            let end = ((visible.origin.y + visible.size.height - top) / row_height).ceil();
-            first.min(count)..(end.max(0.0) as usize).min(count)
-        } else {
+        let (start, end) = (
+            visible.origin.y - top,
+            visible.origin.y + visible.size.height - top,
+        );
+        let range = if !view.effective_visible || visible.is_empty() {
             0..0
+        } else if let Some(offsets) = &self.lists[index].1.offsets {
+            let first = offsets.partition_point(|&o| o <= start).saturating_sub(1);
+            first.min(count)..offsets.partition_point(|&o| o < end).min(count)
+        } else {
+            let first = (start / row_height).floor().max(0.0) as usize;
+            first.min(count)..((end / row_height).ceil().max(0.0) as usize).min(count)
         };
+        // Placements are read now: removing rows below may remove nested lists.
+        let placements: Vec<_> = range
+            .clone()
+            .map(|row| match &self.lists[index].1.offsets {
+                Some(offsets) => (offsets[row], None),
+                None => (row as f32 * row_height, Some(row_height)),
+            })
+            .collect();
         let mut removed = false;
         let mut i = 0;
         while i < rows.len() {
@@ -187,12 +238,14 @@ impl State {
             }
         }
         let mut created = Vec::new();
+        let placements_start = range.start;
         for row in range {
             let position = rows.partition_point(|&(r, _)| r < row);
             if rows.get(position).is_some_and(|&(r, _)| r == row) {
                 continue;
             }
-            let style = row_style(self.theme_of(spacer), row, row_height);
+            let (top, height) = placements[row - placements_start];
+            let style = row_style(self.theme_of(spacer), top, height);
             let node = self.insert(spacer, position, Content::Container, style)?;
             rows.insert(position, (row, node));
             created.push((row, node));
@@ -202,6 +255,60 @@ impl State {
             list.rows = rows;
         }
         Ok((created, removed))
+    }
+}
+
+impl State {
+    /// Measures the realized rows of content-sized lists after layout and moves
+    /// the rows after them. Returns whether any row moved.
+    pub fn measure_rows(&mut self) -> Result<bool> {
+        let mut changed = false;
+        for index in 0..self.lists.len() {
+            let list = &self.lists[index].1;
+            if list.offsets.is_none() {
+                continue;
+            }
+            let heights: Vec<_> = list
+                .rows
+                .iter()
+                .map(|&(row, node)| (row, self.tree.get(node).unwrap().bounds().size.height))
+                .collect();
+            let list = &mut self.lists[index].1;
+            let offsets = list.offsets.as_mut().unwrap();
+            let mut moved = false;
+            for (row, height) in heights {
+                let delta = height - (offsets[row + 1] - offsets[row]);
+                if delta.abs() > 0.001 {
+                    offsets[row + 1..]
+                        .iter_mut()
+                        .for_each(|offset| *offset += delta);
+                    moved = true;
+                }
+            }
+            if !moved {
+                continue;
+            }
+            changed = true;
+            let total = offsets[list.count];
+            if total > MAX_EXTENT {
+                return Err(UiError::InvalidValue.into());
+            }
+            let tops: Vec<_> = list
+                .rows
+                .iter()
+                .map(|&(row, node)| (node, offsets[row]))
+                .collect();
+            let spacer = list.spacer;
+            let mut style = self.tree.get(spacer).unwrap().style().clone();
+            style.size.height = Dimension::length(total);
+            aegle_layout::set_style(&mut self.tree, spacer, style)?;
+            for (node, top) in tops {
+                let mut style = self.tree.get(node).unwrap().style().clone();
+                style.inset.top = LengthPercentageAuto::length(top);
+                aegle_layout::set_style(&mut self.tree, node, style)?;
+            }
+        }
+        Ok(changed)
     }
 }
 

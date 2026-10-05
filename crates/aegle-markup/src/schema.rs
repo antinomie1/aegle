@@ -63,6 +63,8 @@ pub enum Kind {
     CheckBox,
     /// A labelled two-state switch.
     Switch,
+    /// A labelled choice, exclusive among its sibling radio buttons.
+    RadioButton,
     /// An interactive horizontal numeric range.
     Slider,
     /// A noninteractive horizontal numeric progress indicator.
@@ -136,6 +138,8 @@ pub enum PropertyName {
     Easing,
     /// Initial toggle state; defaults to false.
     Checked,
+    /// Whether a check box shows the mixed (partially checked) state.
+    Mixed,
     /// Finite numeric lower bound; defaults to zero.
     Min,
     /// Finite numeric upper bound, greater than min; defaults to one.
@@ -186,6 +190,7 @@ pub(crate) fn kind(name: &str) -> Option<Kind> {
         "TextField" => Kind::TextField,
         "TextArea" => Kind::TextArea,
         "CheckBox" => Kind::CheckBox,
+        "RadioButton" => Kind::RadioButton,
         "Switch" => Kind::Switch,
         "Slider" => Kind::Slider,
         "Progress" => Kind::Progress,

@@ -36,6 +36,7 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "transition" => Transition,
         "easing" => Easing,
         "checked" => Checked,
+        "mixed" => Mixed,
         "min" => Min,
         "max" => Max,
         "value" => Value,
@@ -58,6 +59,7 @@ pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
                 | Kind::TextArea
                 | Kind::CheckBox
                 | Kind::Switch
+                | Kind::RadioButton
         ),
         ReadOnly | SelectionColor | CaretColor => matches!(kind, Kind::TextField | Kind::TextArea),
         Password => kind == Kind::TextField,
@@ -69,19 +71,21 @@ pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
                     | Kind::TextArea
                     | Kind::CheckBox
                     | Kind::Switch
+                    | Kind::RadioButton
                     | Kind::Slider
             )
         }
         PressedBackground => matches!(
             kind,
-            Kind::Button | Kind::CheckBox | Kind::Switch | Kind::Slider
+            Kind::Button | Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider
         ),
-        Checked => matches!(kind, Kind::CheckBox | Kind::Switch),
+        Checked => matches!(kind, Kind::CheckBox | Kind::Switch | Kind::RadioButton),
+        Mixed => kind == Kind::CheckBox,
         Min | Max | Value => matches!(kind, Kind::Slider | Kind::Progress),
         Step => kind == Kind::Slider,
         IndicatorColor => matches!(
             kind,
-            Kind::CheckBox | Kind::Switch | Kind::Slider | Kind::Progress
+            Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider | Kind::Progress
         ),
         Gap => matches!(
             kind,
@@ -127,7 +131,7 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             | IndicatorColor,
             Literal::Color(_),
         ) => true,
-        (Visible | Enabled | ReadOnly | Password | Checked, Literal::Bool(_)) => true,
+        (Visible | Enabled | ReadOnly | Password | Checked | Mixed, Literal::Bool(_)) => true,
         (Theme, Literal::Identifier(name)) => {
             matches!(name.as_str(), "light" | "dark" | "high_contrast")
         }
@@ -153,7 +157,7 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         | IndicatorColor => "a #RRGGBB or #RRGGBBAA color",
         Grow | Step => "a finite nonnegative number",
         Min | Max | Value => "a finite number",
-        Visible | Enabled | ReadOnly | Password | Checked => "true or false",
+        Visible | Enabled | ReadOnly | Password | Checked | Mixed => "true or false",
         Theme => "light, dark or high_contrast",
     };
     Err(format!("{name:?} requires {expected}"))

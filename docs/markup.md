@@ -45,7 +45,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 
 构造期间先建立子树再设置属性；任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。编译型 View 不提供重载；运行时加载的 View 用 `reload` 原子替换。
 
-支持 Window、Column、Row、ScrollView、Text、Button、TextField、TextArea、CheckBox、Switch、Slider、Progress。只有前四种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
+支持 Window、Column、Row、ScrollView、Text、Button、TextField、TextArea、CheckBox、Switch、RadioButton、Slider、Progress。只有前四种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
 
 | 属性 | 值与适用范围 |
 | --- | --- |
@@ -68,7 +68,8 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `focus_color`、`focus_width` | Button/TextField/TextArea/CheckBox/Switch/Slider 的焦点颜色与非负 `dp` 宽度 |
 | `selection_color`、`caret_color` | TextField/TextArea 的选择与 caret/预编辑颜色 |
 | `font_size` | Text/Button/TextField/TextArea/CheckBox/Switch 的正 `dp` |
-| `checked` | CheckBox/Switch 的 bool，默认 false |
+| `checked` | CheckBox/Switch/RadioButton 的 bool，默认 false；同一父容器中的 RadioButton 互斥 |
+| `mixed` | CheckBox 的 bool，部分选中状态 |
 | `min`、`max`、`value` | Slider/Progress 的有限数，默认0/1/0；min须小于max，value按共享Range契约clamp |
 | `step` | Slider 的有限非负数，默认0连续，正值启用步进 |
 | `indicator_color` | CheckBox/Switch/Slider/Progress 的标志或完成部分颜色 |

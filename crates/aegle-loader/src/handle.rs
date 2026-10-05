@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use aegle_app::{
-    Button, CheckBox, Color, Container, Label, Node, Progress, Result, ScrollView, Slider, Switch,
-    TextField,
+    Button, CheckBox, Color, Container, Label, Node, Progress, Radio, Result, ScrollView, Slider,
+    Switch, TextField,
 };
 use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
 
@@ -33,6 +33,8 @@ pub enum Handle {
     CheckBox(CheckBox),
     /// Switch.
     Switch(Switch),
+    /// RadioButton.
+    Radio(Radio),
     /// Slider.
     Slider(Slider),
     /// Progress.
@@ -67,6 +69,7 @@ from_handle!(
     TextField(TextField),
     CheckBox(CheckBox),
     Switch(Switch),
+    Radio(Radio),
     Slider(Slider),
     Progress(Progress)
 );
@@ -92,6 +95,7 @@ impl Handle {
             Self::TextField(handle) => handle,
             Self::CheckBox(handle) => handle,
             Self::Switch(handle) => handle,
+            Self::Radio(handle) => handle,
             Self::Slider(handle) => handle,
             Self::Progress(handle) => handle,
         }
@@ -115,6 +119,8 @@ impl Handle {
         Ok(match (self, field) {
             (Self::CheckBox(handle), "checked") => Data::Bool(handle.is_checked()?),
             (Self::Switch(handle), "checked") => Data::Bool(handle.is_checked()?),
+            (Self::Radio(handle), "checked") => Data::Bool(handle.is_checked()?),
+            (Self::Radio(handle), _) => Data::String(handle.text()?.into()),
             (Self::CheckBox(handle), _) => Data::String(handle.text()?.into()),
             (Self::Switch(handle), _) => Data::String(handle.text()?.into()),
             (Self::TextField(handle), _) => Data::String(handle.text()?.into()),
@@ -172,6 +178,7 @@ pub(crate) fn create(kind: Kind, element: &Element, parent: &Container) -> Resul
         Kind::TextArea => Handle::TextField(parent.text_area(text)?),
         Kind::CheckBox => Handle::CheckBox(parent.check_box(text, checked)?),
         Kind::Switch => Handle::Switch(parent.switch(text, checked)?),
+        Kind::RadioButton => Handle::Radio(parent.radio(text, checked)?),
         Kind::Slider => Handle::Slider(parent.slider(range.0, range.1, range.2)?),
         Kind::Progress => Handle::Progress(parent.progress(range.0, range.1, range.2)?),
         Kind::Window => unreachable!("windows are opened from the App"),
@@ -222,17 +229,23 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
             Handle::TextField(handle) => handle.set_text(text),
             Handle::CheckBox(handle) => handle.set_text(text),
             Handle::Switch(handle) => handle.set_text(text),
+            Handle::Radio(handle) => handle.set_text(text),
             _ => unreachable!("checked text property"),
         },
         (Checked, Literal::Bool(v)) => match handle {
             Handle::CheckBox(handle) => handle.set_checked(*v),
             Handle::Switch(handle) => handle.set_checked(*v),
+            Handle::Radio(handle) => handle.set_checked(*v),
             _ => unreachable!("checked toggle property"),
         },
         (Value, Literal::Number(n)) => match handle {
             Handle::Slider(handle) => handle.set_value(f64::from(*n)),
             Handle::Progress(handle) => handle.set_value(f64::from(*n)),
             _ => unreachable!("checked range property"),
+        },
+        (Mixed, Literal::Bool(v)) => match handle {
+            Handle::CheckBox(handle) => handle.set_mixed(*v),
+            _ => unreachable!("checked mixed property"),
         },
         (Step, Literal::Number(n)) => match handle {
             Handle::Slider(handle) => handle.set_step(f64::from(*n)),
@@ -272,6 +285,9 @@ pub(crate) fn listen(handle: &Handle, event: EventKind, steps: Rc<[Step]>, env: 
         }
         (EventKind::Changed, Handle::Switch(control)) => {
             control.on_change(move |control| exec(&steps, &env, &Handle::Switch(control)))
+        }
+        (EventKind::Changed, Handle::Radio(control)) => {
+            control.on_change(move |control| exec(&steps, &env, &Handle::Radio(control)))
         }
         (EventKind::Changed, Handle::Slider(control)) => {
             control.on_change(move |control| exec(&steps, &env, &Handle::Slider(control)))

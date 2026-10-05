@@ -2,7 +2,7 @@
 
 每个默认控件的创建方式、常用方法、事件、标记写法和各状态截图。通用的布局、样式、主题、回调和句柄规则见 [API 指南](api.md)。
 
-截图由 `cargo run -p aegle --example gallery` 生成：每个状态是一个独立的无窗口 `Ui`，经与原生窗口相同的软件 renderer 以 2 倍设备缩放渲染，使用仓库自带的测试字体（Noto Sans CJK 子集）和浅色主题。修改控件外观后重新运行该命令即可更新本页图片。
+截图由 `cargo run -p aegle --example gallery` 生成：每个状态是一个独立的无窗口 `Ui`，经与原生窗口相同的软件 renderer 以 2 倍设备缩放渲染，使用仓库自带的测试字体（Noto Sans CJK 子集）和浅色主题；控件安装与原生 App 相同的默认 120 ms 过渡，在过渡结束后截取，与原生窗口静止时一致。修改控件外观后重新运行该命令即可更新本页图片。
 
 默认外观是中性直角风格：边框 1 dp，焦点环 2 dp 使用主题 `accent`；悬停和按下使用主题 `hover`/`pressed` 底色；禁用时文字使用 `muted`。焦点环只在控件获得键盘焦点时出现。所有控件都可以用局部样式、皮肤或主题修改外观，见 [API 指南第 6 节](api.md#6-外观主题样式与皮肤)。
 
@@ -13,11 +13,15 @@
 | [TextField / TextArea](#textfield--textarea) | `text_field(s)` / `text_area(s) -> TextField` | `TextField` / `TextArea` |
 | [CheckBox](#checkbox) | `check_box(s, checked) -> CheckBox` | `CheckBox` |
 | [Switch](#switch) | `switch(s, checked) -> Switch` | `Switch` |
+| [Radio](#radio) | `radio(s, checked) -> Radio` | `RadioButton` |
+| [Dropdown](#dropdown) | `dropdown(items, selected) -> Dropdown` | — |
+| [Popup](#popup) | `node.popup() -> Popup` | — |
 | [Slider](#slider) | `slider(min, max, value) -> Slider` | `Slider` |
 | [Progress](#progress) | `progress(min, max, value) -> Progress` | `Progress` |
 | [Column / Row](#column--row) | `column()` / `row() -> Container` | `Column` / `Row` |
 | [ScrollView](#scrollview) | `scroll_view() -> ScrollView` | `ScrollView` |
-| [ListView](#listview) | `list_view(h, n, row) -> ListView` | — |
+| [ListView](#listview) | `list_view(h, n, row)` / `variable_list_view(估计, n, row) -> ListView` | — |
+| [Table](#table) | `table(columns, h, n, cell) -> Table` | — |
 | [ImageView](#imageview) | `image(&Image) -> ImageView` | — |
 | [Canvas](#canvas) | `canvas(painter) -> Canvas` | — |
 
@@ -90,7 +94,7 @@ TextArea { text: "First line\nSecond line"; read_only: true }
 
 ## CheckBox
 
-<img src="images/check-box.png" width="750" alt="CheckBox：未选中、选中、悬停、聚焦、禁用">
+<img src="images/check-box.png" width="900" alt="CheckBox：未选中、选中、部分选中、悬停、聚焦、禁用">
 
 ```rust
 let agree = window.check_box("I agree", false)?;
@@ -99,15 +103,16 @@ agree.on_change(|control| {
     Ok(())
 })?;
 agree.set_checked(true)?;   // 程序设置，不触发 on_change
+agree.set_mixed(true)?;     // 部分选中（三态）
 ```
 
 ```text
 CheckBox { text: "I agree"; checked: agree; on changed { agree = self.checked } }
 ```
 
-- 方法：`is_checked`、`set_checked`、`toggle`（按用户操作规则切换并触发回调）、`text`、`set_text`、`on_change` / `clear_on_change`。
-- 标志 18 dp，选中时绘制对勾，不只依靠颜色区分；激活规则与 Button 相同。
-- 无障碍角色 CheckBox，带 Toggled 状态。
+- 方法：`is_checked`、`set_checked`、`is_mixed`、`set_mixed`、`toggle`（按用户操作规则切换并触发回调）、`text`、`set_text`、`on_change` / `clear_on_change`。
+- 标志 18 dp，选中绘制对勾、部分选中绘制横线，不只依靠颜色区分；激活规则与 Button 相同。用户从部分选中状态切换后变为选中；`set_checked` 也会结束部分选中。标记写 `mixed: true`。
+- 无障碍角色 CheckBox，Toggled 为 True / False / Mixed。
 
 ## Switch
 
@@ -127,6 +132,30 @@ Switch { text: "Wi-Fi"; checked: true }
 
 - 方法与 CheckBox 相同。开关 36×20 dp，滑块位置表示状态：开在右侧，关在左侧。
 - 无障碍角色 Switch。
+
+## Radio
+
+<img src="images/radio.png" width="600" alt="Radio：分组、悬停、聚焦、禁用">
+
+```rust
+let size = window.row()?;
+size.radio("Small", false)?;
+let medium = size.radio("Medium", true)?;
+size.radio("Large", false)?;
+medium.on_change(|radio| {
+    println!("medium chosen: {}", radio.is_checked()?);
+    Ok(())
+})?;
+```
+
+```text
+Row { RadioButton { text: "Small" }; RadioButton { text: "Medium"; checked: true } }
+```
+
+- 同一父容器中的单选按钮构成一组：用户或 `set_checked(true)` 选中一个时其余取消。再次激活已选中的按钮不产生变化。
+- 方法与 CheckBox 相同（无 mixed）；`on_change` 只在该按钮被用户选中时触发。
+- 聚焦时方向键在组内移动并选择上一个/下一个可用按钮（循环）。
+- 圆形标志 18 dp，选中时绘制实心圆点，与方形复选框可按形状区分。无障碍角色 RadioButton。
 
 ## Slider
 
@@ -231,7 +260,72 @@ rows.reload()?;            // 行数据变化，重建已显示的行
 - 等高虚拟列表：只有与可见区域相交的行真正存在，滚出的行被删除，进入的行调用回调重建。一万行首次刷新约 0.24 ms，内存增长约 1 MB。
 - `ListView` 解引用为 `ScrollView`，滚动接口和滚动条相同；另有 `count`、`set_count`、`row_height`、`reload`。
 - 回调在刷新期间、UI 借用之外执行，可以使用任意句柄；行内状态在行滚出后丢失，应保存在应用数据中。
-- `行高 × 行数` 不超过 16,777,216。可变高度列表尚未实现。
+- `行高 × 行数` 不超过 16,777,216。
+
+行高随内容变化时使用 `variable_list_view(估计行高, 行数, row)`：未显示的行按估计值占位，显示后测量实际高度并移动后续行；估计值被替换时滚动位置可能轻微跳动。
+
+<img src="images/variable-list.png" width="260" alt="可变高度列表">
+
+```rust
+let notes = window.variable_list_view(24.0, 500, move |row, index| {
+    row.text(&messages[index])?;
+    Ok(())
+})?;
+```
+
+## Table
+
+<img src="images/table.png" width="380" alt="Table：三列、一百行">
+
+```rust
+let columns = [
+    TableColumn { title: "Name", width: Some(120.0) },
+    TableColumn { title: "Size", width: None },   // 占剩余宽度
+];
+let table = window.table(&columns, 28.0, 100, |cell, row, column| {
+    cell.text(&format!("{row}:{column}"))?;
+    Ok(())
+})?;
+table.set_height(Some(240.0))?;
+table.rows().set_count(200)?;
+```
+
+- 带边框的表头行加等高虚拟行（基于 ListView）；`fill(cell, row, column)` 在行进入可见区域时填充单元格列，可放任意控件。`rows()` 返回行列表，用于 `set_count`、`reload` 和滚动。
+- 无障碍角色 Table / Row / Cell / ColumnHeader。不内置排序、列宽拖动或单元格选择，可在表头和单元格中放按钮实现。
+
+## Dropdown
+
+<img src="images/dropdown.png" width="600" alt="Dropdown：关闭、展开、聚焦">
+
+```rust
+let color = window.dropdown(&["Red", "Green", "Blue"], 1)?;
+color.on_change(|dropdown| {
+    println!("chosen {}", dropdown.selected()?);
+    Ok(())
+})?;
+color.set_items(&["One", "Two"], 0)?;   // 程序设置，不触发 on_change
+```
+
+- 按钮显示当前选项和下拉箭头；激活（点击、Space、Enter）在下方弹出选项列表，焦点位于当前选项，当前选项带对勾。Up/Down 移动，Enter 或点击选择并关闭；Escape 或点击外部关闭且不改变选择。
+- 方法：`selected`、`set_selected`、`items`、`set_items`、`on_change` / `clear_on_change`。
+- 无障碍角色 ComboBox（带展开状态）、ListBox 与 ListBoxOption（带选中状态）。
+
+## Popup
+
+<img src="images/popup.png" width="440" alt="Popup：隐藏、显示在锚点下方">
+
+```rust
+let menu = window.button("Menu")?;
+let popup = menu.popup()?;
+popup.text("Popup content")?;
+popup.button("Action")?;
+let shown = popup.clone();
+menu.on_click(move |_| if shown.is_shown()? { shown.hide() } else { shown.show() })?;
+```
+
+- 任意控件可用 `popup()` 创建锚定于自己的弹出层：一个可添加任意子控件的列，默认隐藏。
+- `show()` 时显示在锚点下方（空间不足时在上方）、至少与锚点同宽，绘制在窗口全部内容之上并优先命中，焦点移到其第一个可用控件；不占布局空间，只在当前窗口内显示。
+- Escape 或按下其外部（锚点除外）时隐藏，焦点回到打开前的位置；Up/Down 在其中移动焦点。删除锚点会一并删除弹出层。
 
 ## ImageView
 
@@ -276,6 +370,5 @@ canvas.invalidate()?;   // 数据变化后重新绘制
 
 ## 已知限制
 
-- 高对比主题中禁用控件与启用控件外观相同（`muted` 为白色），只能依靠语义区分。
-- 没有三态复选框、单选组、下拉菜单、弹出层、表格和可变高度列表；可以用现有控件与 Canvas 组合。
-- 悬停与按下截图通过指针事件生成；原生环境中的实际颜色还会受过渡（默认 120 ms）影响。
+- 弹出层只在所属窗口内显示，不越过窗口边缘。
+- 没有富文本编辑器和完整 MD3 组件集；可用现有控件、皮肤与 Canvas 组合。

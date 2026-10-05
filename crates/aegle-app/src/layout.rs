@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    state::{Content, State},
+    state::{Content, Mark, Semantic, State},
 };
 use aegle_core::Dirty;
 use aegle_layout::{AvailableSpace, Size};
@@ -58,17 +58,25 @@ impl State {
                                 )
                             }),
                         Content::Button(_, text) => Ok(aegle_types::Size::new(
-                            text.size().width + 2.0 * padding,
+                            text.size().width
+                                + 2.0 * padding
+                                + if element.semantic == Semantic::Dropdown {
+                                    gap + crate::widget_paint::CHEVRON
+                                } else {
+                                    0.0
+                                },
                             text.size().height + 2.0 * padding,
                         )),
                         Content::Toggle(toggle) => Ok(aegle_types::Size::new(
-                            if toggle.switch { 36.0 } else { 18.0 }
-                                + if toggle.text.text().is_empty() {
-                                    0.0
-                                } else {
-                                    gap + toggle.text.size().width
-                                }
-                                + 2.0 * padding,
+                            if toggle.mark == Mark::Switch {
+                                36.0
+                            } else {
+                                18.0
+                            } + if toggle.text.text().is_empty() {
+                                0.0
+                            } else {
+                                gap + toggle.text.size().width
+                            } + 2.0 * padding,
                             toggle.text.size().height.max(20.0) + 2.0 * padding,
                         )),
                         Content::Slider(_) | Content::Progress(_) => {
@@ -136,6 +144,11 @@ impl State {
             self.repaint = true;
         }
         self.update_geometry()?;
+        if self.place_popups() {
+            self.geometry_dirty = true;
+            self.repaint = true;
+            self.update_geometry()?;
+        }
         for index in 0..self.order.len() {
             let id = self.order[index];
             let focused = self.focus.current(&self.tree) == Some(id);

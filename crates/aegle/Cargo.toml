@@ -75,3 +75,4 @@ required-features = ["native", "system-fonts", "markup"]
 
 [[example]]
 name = "gallery"
+required-features = ["motion"]

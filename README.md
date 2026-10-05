@@ -134,8 +134,8 @@ Readback is explicit. See the [Vulkan contract](docs/vulkan.md) for limits and
 device verification; a CPU Vulkan driver is not hardware acceleration.
 
 ```sh
-cargo run -p aegle-render-vulkan --example geometry --release -- /tmp/aegle-vulkan.ppm
-cargo run -p aegle-render-vulkan --features text --example text_scene --release -- /tmp/aegle-vulkan-text.ppm
+cargo run -p aegle-render-vulkan --example geometry --release -- target/aegle-vulkan.ppm
+cargo run -p aegle-render-vulkan --features text --example text_scene --release -- target/aegle-vulkan-text.ppm
 ```
 
 The Wayland `editor` example combines a CJK text field and button in one retained

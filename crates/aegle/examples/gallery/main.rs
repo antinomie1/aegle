@@ -2,22 +2,28 @@
 //!
 //! Headless: each state is its own retained `Ui`, drawn by the same software
 //! renderer and scene path as native windows, with the bundled test font at a
-//! 2x device scale. No compositor is needed.
+//! 2x device scale. Controls use the native App's default 120 ms transitions,
+//! captured after they finish. No compositor is needed.
 //!
 //! `cargo run -p aegle --example gallery [-- OUTPUT_DIR]`
+mod composite;
+
 use aegle::{
     Container, Modifiers, Point, PointerId, PointerKind, Result, Selection, Size, TextSystem,
-    Theme, Ui,
+    Theme, Transition, Ui,
     scene::{Affine, Color, FillRule, Image, PathBuilder, Rect, Stroke},
 };
 use aegle_render_software::{Renderer, Surface};
 use aegle_text::{Blob, GenericFamily};
-use std::{cell::RefCell, fs::File, io::BufWriter, ops::Deref, path::Path, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell, fs::File, io::BufWriter, ops::Deref, path::Path, rc::Rc, sync::Arc,
+    time::Duration,
+};
 
 const SCALE: f32 = 2.0;
 
 /// Builds one cell's control into `host` and puts it into the shown state.
-type Setup = fn(&Ui, &Container) -> Result;
+pub(crate) type Setup = fn(&Ui, &Container) -> Result;
 
 fn center(node: &aegle::Node) -> Result<Point> {
     let bounds = node.bounds()?;
@@ -27,7 +33,7 @@ fn center(node: &aegle::Node) -> Result<Point> {
     ))
 }
 
-fn hover(ui: &Ui, node: &impl Deref<Target = aegle::Node>) -> Result {
+pub(crate) fn hover(ui: &Ui, node: &impl Deref<Target = aegle::Node>) -> Result {
     ui.refresh()?;
     let at = center(node)?;
     ui.pointer(PointerId(1), PointerKind::Move, at, Modifiers::default())
@@ -55,6 +61,7 @@ fn gallery(
     let mut uis = Vec::new();
     for (caption, setup) in cells {
         let ui = Ui::with_fonts(fonts.clone(), theme)?;
+        ui.set_default_transition(Some(Transition::default()))?;
         ui.resize(cell)?;
         let root = ui.root();
         root.set_padding(12.0)?;
@@ -64,6 +71,11 @@ fn gallery(
         label.set_foreground(theme.muted)?;
         let host = root.column()?;
         setup(&ui, &host)?;
+        ui.refresh()?;
+        ui.dispatch_callbacks()?;
+        ui.refresh()?;
+        // Show the resting state after state transitions, as a native window does.
+        ui.advance_animations(Duration::from_secs(1))?;
         ui.refresh()?;
         uis.push(ui);
     }
@@ -132,7 +144,7 @@ fn main() -> Result {
     std::fs::create_dir_all(dir)?;
     let mut text = TextSystem::new();
     let families = text.register_fonts(Blob::new(Arc::new(
-        include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+        include_bytes!("../../../../tests/assets/aegle-test-cjk.otf").as_slice(),
     )))?;
     text.collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
@@ -212,6 +224,7 @@ fn main() -> Result {
         &[
             ("unchecked", |_, h| h.check_box("Option", false).map(drop)),
             ("checked", |_, h| h.check_box("Option", true).map(drop)),
+            ("mixed", |_, h| h.check_box("Option", true)?.set_mixed(true)),
             ("hovered", |ui, h| hover(ui, &h.check_box("Option", false)?)),
             ("focused", |_, h| h.check_box("Option", true)?.focus()),
             ("disabled", |_, h| {
@@ -391,6 +404,7 @@ fn main() -> Result {
             }),
         ],
     )?;
+    composite::shots(&shot)?;
     for (name, theme) in [
         ("theme-light", Theme::light()),
         ("theme-dark", Theme::dark()),

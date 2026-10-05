@@ -1,14 +1,18 @@
-use crate::{Appearance, Result, Size};
-use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
+use crate::{Appearance, Result, Size, state::Mark};
+use aegle_scene::{Affine, Color, FillRule, PathBuilder, Point, Rect, RoundedRect, SceneBuilder};
 use aegle_text::Paragraph;
+
+/// Width of the dropdown chevron, shared with layout.
+pub(crate) const CHEVRON: f32 = 8.0;
 
 pub(crate) fn toggle(
     builder: &mut SceneBuilder,
     size: Size,
     padding: f32,
     gap: f32,
-    switch: bool,
+    mark: Mark,
     checked: bool,
+    mixed: bool,
     text: &Paragraph,
     appearance: Appearance,
 ) -> Result {
@@ -18,6 +22,7 @@ pub(crate) fn toggle(
     )?)?;
     let x = padding.min(size.width * 0.5);
     let y_padding = padding.min(size.height * 0.5);
+    let switch = mark == Mark::Switch;
     let (width, height) = if switch { (36.0, 20.0) } else { (18.0, 18.0) };
     let scale = ((size.width - 2.0 * x) / width)
         .min((size.height - 2.0 * y_padding) / height)
@@ -25,8 +30,32 @@ pub(crate) fn toggle(
     let (width, height) = (width * scale, height * scale);
     let y = (size.height - height) * 0.5;
     let marker = Rect::new(x, y, width, height);
-    border(builder, marker, appearance)?;
-    if switch {
+    // Radio buttons are round, so their shape differs from check boxes.
+    let frame = match mark {
+        Mark::Radio => Appearance {
+            radius: width * 0.5,
+            ..appearance
+        },
+        _ => appearance,
+    };
+    border(builder, marker, frame)?;
+    if mark == Mark::Radio {
+        if checked {
+            let diameter = width * 0.44;
+            let inset = (width - diameter) * 0.5;
+            let dot = Rect::new(x + inset, y + inset, diameter, diameter);
+            fill(builder, dot, diameter * 0.5, appearance.indicator)?;
+        }
+    } else if mixed {
+        let thickness = width * 0.115;
+        let bar = Rect::new(
+            x + width * 0.25,
+            y + (height - thickness) * 0.5,
+            width * 0.5,
+            thickness,
+        );
+        fill(builder, bar, 0.0, appearance.indicator)?;
+    } else if switch {
         let inset = (appearance.border_width + 2.0 * scale).min(height * 0.5);
         let diameter = (height - 2.0 * inset).max(0.0);
         let thumb_x = if checked {
@@ -142,7 +171,13 @@ fn border(builder: &mut SceneBuilder, rect: Rect, appearance: Appearance) -> Res
     Ok(())
 }
 
-fn check_mark(builder: &mut SceneBuilder, x: f32, y: f32, size: f32, color: Color) -> Result {
+pub(crate) fn check_mark(
+    builder: &mut SceneBuilder,
+    x: f32,
+    y: f32,
+    size: f32,
+    color: Color,
+) -> Result {
     let half_thickness = size * 0.0575;
     let cosine = std::f32::consts::FRAC_1_SQRT_2;
     for (start_x, start_y, length, sine) in
@@ -169,5 +204,16 @@ fn check_mark(builder: &mut SceneBuilder, x: f32, y: f32, size: f32, color: Colo
         )?;
         builder.pop()?;
     }
+    Ok(())
+}
+
+/// A downward chevron centered at `(x, y)`, for dropdowns.
+pub(crate) fn chevron(builder: &mut SceneBuilder, x: f32, y: f32, color: Color) -> Result {
+    let mut path = PathBuilder::new();
+    path.move_to(Point::new(x - CHEVRON * 0.5, y - CHEVRON * 0.25));
+    path.line_to(Point::new(x + CHEVRON * 0.5, y - CHEVRON * 0.25));
+    path.line_to(Point::new(x, y + CHEVRON * 0.35));
+    path.close();
+    builder.fill_path(&path.finish(FillRule::NonZero)?, color)?;
     Ok(())
 }

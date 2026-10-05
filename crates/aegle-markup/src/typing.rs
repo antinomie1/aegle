@@ -51,8 +51,11 @@ impl Checker {
                 ty
             }
             ExprKind::SelfField(field) => match (scope.source, field.as_str()) {
-                (Some(Kind::CheckBox | Kind::Switch), "checked") => Type::Bool,
-                (Some(Kind::CheckBox | Kind::Switch | Kind::TextField), "text") => Type::String,
+                (Some(Kind::CheckBox | Kind::Switch | Kind::RadioButton), "checked") => Type::Bool,
+                (
+                    Some(Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::TextField),
+                    "text",
+                ) => Type::String,
                 (Some(Kind::Slider), "value") => Type::Float,
                 (None, _) => return error("self is only available in event handlers".into()),
                 (Some(kind), field) => return error(format!("{kind:?} has no field `{field}`")),

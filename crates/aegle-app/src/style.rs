@@ -1,4 +1,4 @@
-use crate::state::{Content, State};
+use crate::state::{Content, Mark, State};
 use crate::{Appearance, ControlKind, Result, Skin, Style, UiError, VisualState};
 use aegle_core::{Dirty, NodeId};
 use aegle_text::TextStyle;
@@ -22,10 +22,10 @@ impl State {
             Content::Button(button, _) => (ControlKind::Button, button.is_pressed(), false),
             Content::Field(field) => (ControlKind::TextField, false, field.editor().is_read_only()),
             Content::Toggle(toggle) => (
-                if toggle.switch {
-                    ControlKind::Switch
-                } else {
-                    ControlKind::CheckBox
+                match toggle.mark {
+                    Mark::Check => ControlKind::CheckBox,
+                    Mark::Switch => ControlKind::Switch,
+                    Mark::Radio => ControlKind::RadioButton,
                 },
                 toggle.control.is_pressed(),
                 false,
@@ -45,7 +45,8 @@ impl State {
             pressed,
             focused: self.focus.current(&self.tree) == Some(id),
             read_only,
-            checked: matches!(content, Content::Toggle(toggle) if toggle.control.is_checked()),
+            checked: matches!(content, Content::Toggle(toggle)
+                if toggle.control.is_checked() && !toggle.mixed),
         }
     }
 

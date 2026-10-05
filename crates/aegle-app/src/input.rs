@@ -1,6 +1,6 @@
 use crate::{
     ClipboardRequest, Result, Ui, UiError,
-    state::{Content, State, focus_policy},
+    state::{Content, Mark, State, focus_policy},
 };
 use aegle_controls::{
     Action, Capture, Clipboard, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,
@@ -40,6 +40,9 @@ impl Ui {
             .state
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
+        if key.pressed && (state.popup_key(&key)? || state.radio_key(&key)?) {
+            return Ok(());
+        }
         if key.key == Key::Tab
             && key.pressed
             && !key.modifiers.control
@@ -73,6 +76,9 @@ impl Ui {
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
         state.rebuild_order();
+        if matches!(kind, PointerKind::Down { .. }) {
+            state.dismiss_popups(position)?;
+        }
         state.pointer =
             (!matches!(kind, PointerKind::Leave | PointerKind::Cancel)).then_some((id, position));
         let hit = state.pointer.and_then(|_| state.hit(position));
@@ -193,13 +199,32 @@ impl State {
         let element = &mut self.tree.get_mut(target).unwrap().context;
         let (_, extent) =
             crate::widget_paint::slider_track(element.bounds.size, element.inset(&self.theme));
-        Ok(match &mut element.content {
+        let mut radio = false;
+        let outcome = match &mut element.content {
             Content::Button(button, _) => button.handle(input),
-            Content::Toggle(toggle) => toggle.control.handle(input),
+            Content::Toggle(toggle) => {
+                let was = toggle.control.is_checked();
+                let mut outcome = toggle.control.handle(input);
+                if outcome.action == Some(Action::Change) {
+                    if toggle.mark == Mark::Radio {
+                        // Choosing the chosen radio button changes nothing.
+                        toggle.control.set_checked(true);
+                        radio = !was;
+                        outcome.action = radio.then_some(Action::Change);
+                    } else if std::mem::take(&mut toggle.mixed) {
+                        toggle.control.set_checked(true);
+                    }
+                }
+                outcome
+            }
             Content::Slider(slider) => slider.handle(input, extent)?,
             Content::Field(field) => field.handle(&mut self.fonts.borrow_mut(), input)?,
             _ => Outcome::default(),
-        })
+        };
+        if radio {
+            self.select_radio(target)?;
+        }
+        Ok(outcome)
     }
     pub fn effects(&mut self, target: NodeId, outcome: Outcome) -> Result {
         if outcome.repaint {
@@ -360,12 +385,17 @@ impl State {
         })
     }
     fn hit(&self, position: Point) -> Option<NodeId> {
-        if let Some((id, _)) = self.scrollbar_at(position, None) {
-            return Some(id);
+        // A shown popup covers everything below it, including its padding.
+        let popup = self.popup_at(position);
+        if popup.is_none() {
+            if let Some((id, _)) = self.scrollbar_at(position, None) {
+                return Some(id);
+            }
         }
         self.order.iter().rev().copied().find(|&id| {
             let element = &self.tree.get(id).unwrap().context;
-            element.effective_visible
+            popup.is_none_or(|popup| self.contains(popup, id))
+                && element.effective_visible
                 && self.usable(id)
                 && element.bounds.contains(position)
                 && element.clip.is_none_or(|clip| clip.contains(position))

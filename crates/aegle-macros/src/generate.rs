@@ -111,6 +111,7 @@ pub(super) fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
         Kind::Button => "Button",
         Kind::TextField | Kind::TextArea => "TextField",
         Kind::CheckBox => "CheckBox",
+        Kind::RadioButton => "Radio",
         Kind::Switch => "Switch",
         Kind::Slider => "Slider",
         Kind::Progress => "Progress",
@@ -152,7 +153,7 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
         };
     }
     let text = text.unwrap_or("");
-    if matches!(node.kind, Kind::CheckBox | Kind::Switch) {
+    if matches!(node.kind, Kind::CheckBox | Kind::Switch | Kind::RadioButton) {
         let checked = node
             .properties
             .iter()
@@ -167,10 +168,10 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
                 }
             })
             .unwrap_or(false);
-        return if node.kind == Kind::CheckBox {
-            quote! { #parent.check_box(#text, #checked) }
-        } else {
-            quote! { #parent.switch(#text, #checked) }
+        return match node.kind {
+            Kind::CheckBox => quote! { #parent.check_box(#text, #checked) },
+            Kind::Switch => quote! { #parent.switch(#text, #checked) },
+            _ => quote! { #parent.radio(#text, #checked) },
         };
     }
     if matches!(node.kind, Kind::Slider | Kind::Progress) {
@@ -202,7 +203,12 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
         Kind::Button => quote! { #parent.button(#text) },
         Kind::TextField => quote! { #parent.text_field(#text) },
         Kind::TextArea => quote! { #parent.text_area(#text) },
-        Kind::Window | Kind::CheckBox | Kind::Switch | Kind::Slider | Kind::Progress => {
+        Kind::Window
+        | Kind::CheckBox
+        | Kind::Switch
+        | Kind::RadioButton
+        | Kind::Slider
+        | Kind::Progress => {
             unreachable!()
         }
     }
@@ -246,6 +252,7 @@ fn setter(
         DisabledForeground => "set_disabled_foreground",
         FontSize => "set_font_size",
         Step => "set_step",
+        Mixed => "set_mixed",
         IndicatorColor => "set_indicator_color",
     };
     let argument = match &property.value {

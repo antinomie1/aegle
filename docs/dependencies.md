@@ -44,6 +44,6 @@ SVG 默认以路径图标/构建期资产为主；可选运行时 resvg 不处�
 
 Wayland 软件后端使用 SCTK 0.21.1/calloop 0.14，键盘使用同一版本的 xkbcommon 0.8 包；不引入 winit、Tokio、softbuffer 或 wgpu。SCTK 自带自动重复计时器不提供完整取消接口，因此平台持有自身 repeat token，在焦点/设备/窗口销毁和 backend drop 时移除。按键翻译仍复用 SCTK，重复状态额外持有一份 XKB keymap/state 用于按键可重复性与 modifier 更新；这是实际额外内存，不宣称零成本封装。后续上游若提供借用 keymap 与取消 timer 接口，可移除此重复状态。
 
-构建需 libxkbcommon 的开发链接与 pkg-config 信息，发布需对应 runtime；SDK 不打包进程序。当前机器仅安装 runtime，验证时在 `/tmp/aegle-xkb-dev` 创建了指向已有系统库的开发链接与 `.pc`，未修改系统或项目构建配置。当前软件路径未启用 wayland-client/system，因此不将 libwayland-client 误写成该示例的实际动态依赖；最终以构建的依赖树和二进制链接结果为准。
+构建需 libxkbcommon 的开发链接与 pkg-config 信息，发布需对应 runtime；SDK 不打包进程序。当前验证机器仅安装 runtime，验证时在临时目录创建了指向已有系统库的开发链接与 `.pc` 并经 `PKG_CONFIG_PATH` 引用，未修改系统或项目构建配置。当前软件路径未启用 wayland-client/system，因此不将 libwayland-client 误写成该示例的实际动态依赖；最终以构建的依赖树和二进制链接结果为准。
 
 原生 window 复用 raw-window-handle 0.6.2；不引入 winit/ash-window。Win32 平台仅启用 windows crate 所需 API；UIA 在 aegle-access/windows 中额外编译 accesskit_windows 0.34.0，与现有 schema/consumer 兼容。Windows 的 target-specific 依赖不会将 Unix D-Bus、Wayland 或 Fontconfig 链入 Windows 程序。

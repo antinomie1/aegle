@@ -35,8 +35,8 @@ cargo run -p aegle --example controls --release
 cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
-cargo run -p aegle-render-vulkan --example geometry --release -- /tmp/aegle-vulkan.ppm
-cargo run -p aegle-render-vulkan --features text --example text_scene --release -- /tmp/aegle-vulkan-text.ppm
+cargo run -p aegle-render-vulkan --example geometry --release -- target/aegle-vulkan.ppm
+cargo run -p aegle-render-vulkan --features text --example text_scene --release -- target/aegle-vulkan-text.ppm
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
 cargo run -p aegle-layout --example retained --release
@@ -303,7 +303,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 - 两个平台 crate 新增相同形状的 `Preferences { dark, high_contrast, reduced_motion }` 与 `Event::Preferences`。Linux 不引入 D-Bus 库：`portal.rs` 以 EXTERNAL 认证连接会话总线，发送 Hello、SettingChanged 匹配规则和三个 `ReadOne`，连接时最多等待 100 ms，其后回复与信号由 calloop socket 源处理；只编码/解码所需的消息形状，单条超过 64 KiB 断开。Win32 读取注册表与 SPI，并在 `WM_SETTINGCHANGE` 时重读、去重后发出事件。
 - `AppOptions` 新增 `dark_theme`/`high_contrast_theme`（默认 `Theme::dark()`/`Theme::high_contrast()`，None 表示忽略该偏好），`reduced_motion` 改为 `Option<bool>`（None 跟随系统）。变化只更新仍等于原解析值的窗口；`App::preferences` 供自定义配色读取。
-- 验证（私有 dbus-daemon，严格校验消息，配合 scratchpad 中按原始协议实现的假 portal；未接触用户会话总线）：连接（含 Wayland 连接）1.3 ms 内取得 dark/high-contrast，`NotFound` 的 reduced-motion 保持 None，SettingChanged 产生事件；无 portal 服务 1.1 ms、无总线 0.7 ms 后偏好均为 None；portal 每次回复延迟 150 ms 时连接在 102 ms 返回，迟到回复依次以事件到达。`controls` 示例在私有 Pixman Sway 上以深色启动，信号后无重建地切到浅色（截图已检查），静止 3 秒 CPU tick 增量 0。Win32 路径在 Wine10 + 私有 Xvfb 的独立测试前缀中由临时探针执行：初始读取得到 dark None（键不存在）、high_contrast/reduced_motion Some(false)；写入 `AppsUseLightTheme` 并广播 `WM_SETTINGCHANGE` 后依次得到深色、浅色、未知事件，重复相同广播不重复发出，探针最后删除该值。Wine 未对 `SPI_SETCLIENTAREAANIMATION` 产生变化，真实 Windows 设置变更仍待验收。
+- 验证（私有 dbus-daemon，严格校验消息，配合临时目录中按原始协议实现的假 portal；未接触用户会话总线）：连接（含 Wayland 连接）1.3 ms 内取得 dark/high-contrast，`NotFound` 的 reduced-motion 保持 None，SettingChanged 产生事件；无 portal 服务 1.1 ms、无总线 0.7 ms 后偏好均为 None；portal 每次回复延迟 150 ms 时连接在 102 ms 返回，迟到回复依次以事件到达。`controls` 示例在私有 Pixman Sway 上以深色启动，信号后无重建地切到浅色（截图已检查），静止 3 秒 CPU tick 增量 0。Win32 路径在 Wine10 + 私有 Xvfb 的独立测试前缀中由临时探针执行：初始读取得到 dark None（键不存在）、high_contrast/reduced_motion Some(false)；写入 `AppsUseLightTheme` 并广播 `WM_SETTINGCHANGE` 后依次得到深色、浅色、未知事件，重复相同广播不重复发出，探针最后删除该值。Wine 未对 `SPI_SETCLIENTAREAANIMATION` 产生变化，真实 Windows 设置变更仍待验收。
 - Wayland + 系统字体 + markup + motion、无 Unix adapter 的 release `controls` 由 4,220,096 B 增至 4,248,768 B（+28,672 B）。没有新增第三方依赖；win32 只多启用 windows crate 的 Registry 与 Accessibility 绑定。没有新增自动化测试：协议、主题解析与窗口更新只在上述手工环境中验证。
 
 ## 动态标记、组件导入与运行时加载
@@ -326,4 +326,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 新增 `docs/developer/api.md`（依赖与 feature、应用与窗口、控件树、布局、样式/主题/皮肤、事件、动画、标记、嵌入宿主、错误）与 `docs/developer/controls.md`（每个默认控件的创建、方法、事件、标记写法与状态截图）。两份文档中的 Rust 片段已放入临时示例编译通过后移除；标记片段按[标记语言](markup.md)规则书写。
 - `cargo run -p aegle --example gallery` 用无窗口 `Ui`、软件 renderer 与仓库测试字体以 2 倍缩放生成 17 张 PNG（约 368 KB），每个状态是独立 Ui，悬停/按下经指针事件、聚焦经 `focus()` 产生；无需合成器，facade 只增加 png 与 aegle-render-software 两个开发依赖。截图暴露的已知问题：高对比主题中禁用控件与启用控件外观相同（`muted` 为白色）。
 - app 重新导出 `Selection`，使 `TextField::select` 无需直接依赖 aegle-text。
+
+## 高对比禁用态、选择控件、弹出层、表格与可变高度列表
+
+- 高对比主题的 `muted` 由白色改为对黑底 8:1 的灰色，禁用控件与次要文字可与启用控件区分。
+- 新增 Radio（同父容器互斥、方向键在组内移动选择、圆形标志）与 CheckBox 部分选中（横线标志、语义 Mixed）；标记语言增加 `RadioButton` 与 `mixed`。新增 `Node::popup()`：绝对定位于窗口根的末尾子节点，按锚点放置于下方或上方，绘制在最上层并阻挡下方命中，Escape/外部按下关闭并归还焦点，锚点删除时一并删除。Dropdown 由按钮与弹出层组成，打开时聚焦当前选项并以对勾标记。Table 为表头行加 ListView 行。`variable_list_view` 在布局后测量已显示行并维护行顶前缀和，`Ui::refresh` 最多追加四次测量刷新。语义导出相应角色。均复用现有控件、回调与布局路径，没有新增依赖。
+- 截图示例改为与原生 App 相同的 120 ms 默认过渡并在结束后截取，新增 radio、dropdown、popup、table、variable-list 与部分选中截图；修正文档中的绝对路径、无障碍文档的过时默认值与 ADR-0001 实现补充。
+- 验证：`tests/composite.rs` 覆盖单选互斥/重复激活/方向键、部分选中、弹出层位置/焦点/Escape/命中阻挡/外部关闭、Dropdown 键盘选择与静默设置、删除、表格按需建格与语义角色、可变高度行的范围与 `set_count`；标记 schema 与编译型视图覆盖 RadioButton/mixed。workspace all-features 测试、检查与严格 Rustdoc 通过。
 

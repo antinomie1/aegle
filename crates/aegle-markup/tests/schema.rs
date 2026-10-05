@@ -27,7 +27,8 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
                     selection_color: #33558880; caret_color: #112233
                 }
             }
-            CheckBox { text: "同意"; checked: true; font_size: 16dp; indicator_color: #123456 }
+            CheckBox { text: "同意"; checked: true; mixed: true; font_size: 16dp; indicator_color: #123456 }
+            RadioButton { text: "一"; checked: true; pressed_background: #123456 }
             Switch { text: "启用"; pressed_background: #123456; focus_width: 2dp }
             Slider { value: 200; max: 20; min: -10; step: 0.25; hover_background: #112233 }
             Progress { max: 10; min: 2; indicator_color: #123456 }
@@ -58,6 +59,7 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "Progress { step: 1 }",
         "CheckBox { checked: 1 }",
         "Switch { Text {} }",
+        "Switch { mixed: true }",
         "Slider { font_size: 12dp }",
         "Progress { hover_background: #112233 }",
         "Text { indicator_color: #112233 }",

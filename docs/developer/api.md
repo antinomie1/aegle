@@ -118,7 +118,11 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `text(s)` | `Label` | 文本 |
 | `button(s)` | `Button` | 按钮 |
 | `text_field(s)` / `text_area(s)` | `TextField` | 单行 / 多行编辑器 |
-| `check_box(s, checked)` / `switch(s, checked)` | `CheckBox` / `Switch` | 二态控件 |
+| `check_box(s, checked)` / `switch(s, checked)` | `CheckBox` / `Switch` | 二态控件；复选框可 `set_mixed` 为三态 |
+| `radio(s, checked)` | `Radio` | 单选按钮，同一父容器内互斥 |
+| `dropdown(items, selected)` | `Dropdown` | 下拉选择 |
+| `table(columns, row_height, rows, cell)` | `Table` | 表头加虚拟行的表格 |
+| `variable_list_view(estimate, count, row)` | `ListView` | 行高随内容变化的虚拟列表 |
 | `slider(min, max, value)` / `progress(min, max, value)` | `Slider` / `Progress` | 数值控件 |
 | `image(&Image)` | `ImageView` | 图像 |
 | `canvas(painter)` | `Canvas` | 自定义绘制 |
@@ -134,6 +138,7 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `focus()` / `ensure_visible()` | 聚焦 / 滚动祖先使其可见 |
 | `set_accessible_label(s)` | 无障碍名称 |
 | `keep_alive(value)` | 让任意值与控件同生命周期 |
+| `popup()` | 创建锚定于该控件的弹出层 `Popup`（`show` / `hide` / `is_shown`） |
 
 句柄是弱引用：丢弃句柄不会删除控件；删除控件或关闭窗口后，其句柄的调用返回 `UiError::DeadHandle`。句柄可以克隆后移入回调。
 
@@ -187,7 +192,7 @@ button.set_skin(primary)?;
 
 <img src="images/theme-light.png" width="280" alt="浅色主题"> <img src="images/theme-dark.png" width="280" alt="深色主题"> <img src="images/theme-high-contrast.png" width="280" alt="高对比主题">
 
-原生 App 默认跟随系统深浅色、高对比与减少动态效果（见第 3 节 `AppOptions`）。注意：当前高对比主题的 `muted` 为白色，禁用控件与启用控件外观相同，只能依靠语义区分。
+原生 App 默认跟随系统深浅色、高对比与减少动态效果（见第 3 节 `AppOptions`）。高对比主题以对黑底 8:1 的灰色显示禁用和次要文字，与白色的启用控件可区分。
 
 ## 7. 事件与回调
 
@@ -201,7 +206,7 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 | --- | --- | --- |
 | `Button` | `on_click(FnMut(Button) -> Result)` | `clear_on_click()` |
 | `TextField`（单行） | `on_submit(FnMut(TextField) -> Result)`，Enter 触发 | `clear_on_submit()` |
-| `CheckBox` / `Switch` / `Slider` | `on_change(FnMut(Self) -> Result)` | `clear_on_change()` |
+| `CheckBox` / `Switch` / `Radio` / `Slider` / `Dropdown` | `on_change(FnMut(Self) -> Result)` | `clear_on_change()` |
 | 任意控件（`motion`） | `on_transition_end(FnMut(Node) -> Result)` | `clear_on_transition_end()` |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。

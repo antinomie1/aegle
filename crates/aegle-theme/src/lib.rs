@@ -95,13 +95,15 @@ impl Theme {
 
     /// A dark high-contrast palette with white outlines and yellow focus marks.
     ///
-    /// This is an explicit fallback palette, not a query of system colors.
+    /// Disabled and secondary text use a distinct gray (8:1 on black) rather
+    /// than white, so disabled controls remain distinguishable from enabled
+    /// ones. This is an explicit fallback palette, not a query of system colors.
     pub const fn high_contrast() -> Self {
         Self {
             background: Color::BLACK,
             surface: Color::BLACK,
             foreground: Color::WHITE,
-            muted: Color::WHITE,
+            muted: Color::rgb(160, 160, 160),
             accent: Color::rgb(255, 255, 0),
             border: Color::WHITE,
             hover: Color::rgb(34, 34, 34),

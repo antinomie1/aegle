@@ -14,19 +14,18 @@ are changed to **Aegle Test CJK**; the outlines are unchanged. Japanese-source
 ideograph forms are intentional.
 
 Source: [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk), Debian
-`fonts-noto-cjk` version `1:20240730+repack1-1`, face 0 of
-`/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`. Its SHA-256 is
+`fonts-noto-cjk` version `1:20240730+repack1-1`, face 0 of the package's
+`opentype/noto/NotoSansCJK-Regular.ttc` font file. Its SHA-256 is
 `b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a`.
-The standalone license text comes from the package's
-`/usr/share/doc/fonts-noto-cjk/copyright`; the Adobe notice comes from the font's
-name table.
+The standalone license text comes from the package's `copyright` document; the
+Adobe notice comes from the font's name table.
 
 To reproduce from the same source, with Python and FontTools 4.62.1:
 
 ```sh
-python3 -m pip install --target /tmp/aegle-fonttools fonttools==4.62.1
-PYTHONPATH=/tmp/aegle-fonttools python3 tests/assets/subset-font.py \
-  /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+python3 -m pip install --target target/fonttools fonttools==4.62.1
+PYTHONPATH=target/fonttools python3 tests/assets/subset-font.py \
+  path/to/NotoSansCJK-Regular.ttc
 ```
 
 The script and FontTools are regeneration tools, not release dependencies.
@@ -43,5 +42,5 @@ bitmap decoding and per-glyph source selection; they are not application assets.
 Regenerate after the CJK fixture with:
 
 ```sh
-PYTHONPATH=/tmp/aegle-fonttools python3 tests/assets/color-font.py
+PYTHONPATH=target/fonttools python3 tests/assets/color-font.py
 ```

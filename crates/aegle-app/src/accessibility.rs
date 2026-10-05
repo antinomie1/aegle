@@ -1,6 +1,6 @@
 use crate::{
     Result, Ui, UiError,
-    state::{Content, State, focus_policy},
+    state::{Content, Mark, Semantic, State, focus_policy},
 };
 use aegle_access::accesskit::{
     Action, ActionData, ActionRequest, Affine, Node, NodeId, Rect, Role, Tree, TreeId, TreeUpdate,
@@ -253,6 +253,20 @@ impl State {
                     .map(|child| self.tree.get(child).unwrap().context.access_id)
                     .collect::<Vec<_>>(),
             );
+            // Composite controls refine the role their plain content would export.
+            let semantic = self.tree.get(id).unwrap().context.semantic;
+            let role = match semantic {
+                Semantic::Dropdown => Some(Role::ComboBox),
+                Semantic::Option => Some(Role::ListBoxOption),
+                Semantic::Popup if self.popup_lists(id) => Some(Role::ListBox),
+                Semantic::Table => Some(Role::Table),
+                Semantic::TableRow => Some(Role::Row),
+                Semantic::TableCell => Some(Role::Cell),
+                Semantic::TableHeader => Some(Role::ColumnHeader),
+                _ => None,
+            };
+            let expanded = (semantic == Semantic::Dropdown).then(|| self.dropdown_expanded(id));
+            let selected = self.option_selected(id);
             let element = &mut self.tree.get_mut(id).unwrap().context;
             let (padding, scroll) = (element.inset(&self.theme), element.scroll);
             if !element.effective_visible {
@@ -315,15 +329,18 @@ impl State {
                     }
                 }
                 Content::Toggle(toggle) => {
-                    node.set_role(if toggle.switch {
-                        Role::Switch
-                    } else {
-                        Role::CheckBox
+                    node.set_role(match toggle.mark {
+                        Mark::Check => Role::CheckBox,
+                        Mark::Switch => Role::Switch,
+                        Mark::Radio => Role::RadioButton,
                     });
-                    node.set_toggled(if toggle.control.is_checked() {
-                        aegle_access::accesskit::Toggled::True
+                    use aegle_access::accesskit::Toggled;
+                    node.set_toggled(if toggle.mixed {
+                        Toggled::Mixed
+                    } else if toggle.control.is_checked() {
+                        Toggled::True
                     } else {
-                        aegle_access::accesskit::Toggled::False
+                        Toggled::False
                     });
                     if element.label.is_empty() {
                         node.set_label(toggle.text.text());
@@ -385,6 +402,15 @@ impl State {
                         node.remove_action(Action::SetTextSelection);
                     }
                 }
+            }
+            if let Some(role) = role {
+                node.set_role(role);
+            }
+            if let Some(expanded) = expanded {
+                node.set_expanded(expanded);
+            }
+            if let Some(selected) = selected {
+                node.set_selected(selected);
             }
             update.nodes.push((element.access_id, node));
             self.tree.clear_dirty(id, Dirty::SEMANTICS).unwrap();

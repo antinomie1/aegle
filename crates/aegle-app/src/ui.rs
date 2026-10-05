@@ -136,6 +136,8 @@ impl Ui {
                 repaint: true,
                 callbacks: HashMap::new(),
                 lists: Vec::new(),
+                popups: Vec::new(),
+                dropdowns: HashMap::new(),
                 decorations: HashMap::new(),
                 kept: HashMap::new(),
                 #[cfg(feature = "motion")]
@@ -202,8 +204,17 @@ impl Ui {
         };
         self.realize_rows()?;
         let mut repaint = refresh()?;
-        // New layout can expose rows of resized or first-laid-out lists.
-        if self.realize_rows()? {
+        // New layout can expose rows of resized or first-laid-out lists, and
+        // measured content-sized rows can move the rows after them.
+        for _ in 0..4 {
+            let measured = self
+                .state
+                .try_borrow_mut()
+                .map_err(|_| UiError::ReentrantAccess)?
+                .measure_rows()?;
+            if !self.realize_rows()? && !measured {
+                break;
+            }
             repaint |= refresh()?;
         }
         Ok(repaint)
@@ -331,6 +342,8 @@ impl Ui {
         state.decorations.clear();
         state.kept.clear();
         state.lists.clear();
+        state.popups.clear();
+        state.dropdowns.clear();
         #[cfg(feature = "motion")]
         {
             state.motion.tracks.clear();

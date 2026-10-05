@@ -1,12 +1,12 @@
 # 无障碍与可检查的控件树
 
-状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI / Windows UIA adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍。当前 aegle 默认按目标启用 Unix / Windows 适配，独立模块仍显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
+状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI / Windows UIA adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍。facade 默认不启用系统适配（用户决定），应用按需选择 `unix-accessibility`、`windows-accessibility`，或只导出语义树的 `accessibility`；独立模块同样显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
 
 `Ui::accessibility(initial, title)` 可检查当前控件树及文本 run，使用与绘制相同的父子关系、布局与滚动几何；语义检查保留宿主尚未消费的重绘请求。身份由每个 Ui 单调分配，文本 run 与动态控件共用无冲突命名空间。`access_action` 对已经删除的节点、过期选择或预编辑期间的选择返回 false，原生应用不会因此退出。App 首次/重新激活完整导出，之后使用语义失效差量；文本的主题、局部样式及自定义皮肤前景同步到系统语义。自定义皮肤可依交互状态改变文字颜色，因此相关状态变化也标记语义失效；默认普通 hover/pressed 仍仅改变绘制。当前没有独立树检查器 GUI。
 
 ## 已确认的行为目标
 
-框架必须为自绘组件提供完整系统无障碍语义，并提供可检查的控件树。不要求每个控件均由平台原生控件实现；参见 [ADR-0001](adr/0001-accessibility-and-custom-controls.md)。
+框架必须为自绘组件提供完整系统无障碍语义，并提供可检查的控件树。不要求每个控件均由平台原生控件实现；参见 [ADR-0001](adr/0001-accessibility-and-custom-controls.md) 及其实现补充：语义由框架提供并始终可经 `accessibility` 检查，系统适配采用 AccessKit，并由应用显式启用。
 
 “完整”应按每种已支持控件的行为验收：按钮需要可被辅助技术识别并激活，输入框需要文本、选择、焦点及编辑行为，滑块需要数值范围和调整操作。只输出角色与名称、只暴露静态树或只支持内置组件，均不能覆盖该目标。框架声称支持某种控件前，应写明其语义与平台支持范围；不声称首版支持所有未来可能出现的控件类型。
 
@@ -127,7 +127,7 @@ AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handl
 
 ## 当前滚动语义
 
-ImageView 导出 Image 角色，Canvas 导出 Canvas 角色，名称来自 `set_accessible_label`。ListView 作为 ScrollView 导出，只包含已建立的行，不报告总行数或行位置。ScrollView 导出同名角色、`clips_children`、横纵 offset/min/max；子节点的局部 transform 减去直接父 ScrollView 偏移，嵌套后的窗口边界与绘制/命中共用同一结果。被裁出的节点保留逻辑身份，不因离屏设置 hidden；真正隐藏的树仍使用 hidden，恢复时重新导出保留偏移和有效范围。
+RadioButton 导出同名角色；复选框部分选中时 Toggled 为 Mixed。Dropdown 导出 ComboBox（带展开状态），其列表为 ListBox，选项为 ListBoxOption（带选中状态）；Table 导出 Table/Row/Cell/ColumnHeader；一般 Popup 为通用容器。ImageView 导出 Image 角色，Canvas 导出 Canvas 角色，名称来自 `set_accessible_label`。ListView 作为 ScrollView 导出，只包含已建立的行，不报告总行数或行位置。ScrollView 导出同名角色、`clips_children`、横纵 offset/min/max；子节点的局部 transform 减去直接父 ScrollView 偏移，嵌套后的窗口边界与绘制/命中共用同一结果。被裁出的节点保留逻辑身份，不因离屏设置 hidden；真正隐藏的树仍使用 hidden，恢复时重新导出保留偏移和有效范围。
 
 共享动作入口支持 `SetScrollOffset`、四方向 `ScrollUnit::Item/Page`（一项为主题 control_height，一页为视口尺寸），以及无 Hint 的 `ScrollIntoView`。滚动动作先于可聚焦过滤，因此普通标签也可请求滚入；禁用祖先仍拒绝交互。`ScrollHint` 和 `ScrollToPoint` 暂不支持并明确返回 false，后者的目标坐标不能误作 offset。程序滚动和辅助滚动都不取消 IME 组合。
 

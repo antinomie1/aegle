@@ -32,6 +32,7 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
     ui.refresh()?;
     assert!(!ui.has_animations());
     assert!(view.check.is_checked()? && !view.switch.is_checked()?);
+    assert!(view.radio.is_checked()?);
     assert_eq!(
         (
             view.slider.range()?,

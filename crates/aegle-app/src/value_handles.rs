@@ -1,10 +1,10 @@
 use crate::{
     Container, Node, Result, UiError,
     handles::handle,
-    state::{Content, ToggleContent},
+    state::{Content, Mark, State, ToggleContent},
 };
 use aegle_controls::{Input, Range, RangeError};
-use aegle_core::Dirty;
+use aegle_core::{Dirty, NodeId};
 use aegle_layout::{Dimension, Style};
 use std::ops::Deref;
 
@@ -15,6 +15,10 @@ handle!(
 handle!(
     Switch,
     "A retained binary switch with a text label and shared activation."
+);
+handle!(
+    Radio,
+    "A labeled choice that is exclusive among the radio buttons sharing its parent."
 );
 handle!(
     Slider,
@@ -34,13 +38,10 @@ macro_rules! toggles {
                 Ok(toggle.control.is_checked())
             })
         }
-        /// Sets the value without invoking the user-change callback.
+        /// Sets the value without invoking the user-change callback. A check
+        /// box leaves the mixed state; checking a radio button unchecks its siblings.
         pub fn set_checked(&self, checked: bool) -> Result {
-            self.change(|state, id| {
-                let Content::Toggle(toggle) = &mut state.tree.get_mut(id).unwrap().context.content else { unreachable!() };
-                let outcome = toggle.control.set_checked(checked);
-                state.effects(id, outcome)
-            })
+            self.change(|state, id| state.set_checked(id, checked))
         }
         /// Toggles through the same enabled/visible behavior as user activation.
         pub fn toggle(&self) -> Result {
@@ -59,7 +60,108 @@ macro_rules! toggles {
         pub fn clear_on_change(&self) -> Result { self.0.clear_on_action() }
     })* };
 }
-toggles!(CheckBox, Switch);
+toggles!(CheckBox, Switch, Radio);
+
+impl CheckBox {
+    /// Whether the box shows the mixed (partially checked) state.
+    pub fn is_mixed(&self) -> Result<bool> {
+        self.change(|state, id| {
+            let Content::Toggle(toggle) = &state.tree.get(id).unwrap().context.content else {
+                unreachable!()
+            };
+            Ok(toggle.mixed)
+        })
+    }
+    /// Shows or leaves the mixed state without invoking the change handler.
+    /// A user change from the mixed state checks the box.
+    pub fn set_mixed(&self, mixed: bool) -> Result {
+        self.change(|state, id| {
+            let Content::Toggle(toggle) = &mut state.tree.get_mut(id).unwrap().context.content
+            else {
+                unreachable!()
+            };
+            if toggle.mixed != mixed {
+                toggle.mixed = mixed;
+                state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+impl State {
+    pub fn set_checked(&mut self, id: NodeId, checked: bool) -> Result {
+        let Content::Toggle(toggle) = &mut self.tree.get_mut(id).unwrap().context.content else {
+            unreachable!()
+        };
+        let mut outcome = toggle.control.set_checked(checked);
+        if std::mem::take(&mut toggle.mixed) {
+            outcome.repaint = true;
+            outcome.semantics = true;
+        }
+        let radio = toggle.mark == Mark::Radio;
+        self.effects(id, outcome)?;
+        if radio && checked {
+            self.select_radio(id)?;
+        }
+        Ok(())
+    }
+
+    /// Arrow keys on a focused radio button focus and choose the previous or
+    /// next enabled radio sibling, wrapping. Returns whether the key was used.
+    pub fn radio_key(&mut self, key: &aegle_controls::KeyInput<'_>) -> Result<bool> {
+        use aegle_controls::Key;
+        let forward = match key.key {
+            Key::Down | Key::Right => true,
+            Key::Up | Key::Left => false,
+            _ => return Ok(false),
+        };
+        let Some(id) = self.focus.current(&self.tree) else {
+            return Ok(false);
+        };
+        let radio = |state: &State, node| {
+            matches!(&state.tree.get(node).unwrap().context.content,
+                Content::Toggle(toggle) if toggle.mark == Mark::Radio)
+                && state.usable(node)
+        };
+        let Some(parent) = self.tree.parent(id)?.filter(|_| radio(self, id)) else {
+            return Ok(false);
+        };
+        let group: Vec<_> = self
+            .tree
+            .children(parent)?
+            .filter(|&n| radio(self, n))
+            .collect();
+        let index = group.iter().position(|&n| n == id).unwrap();
+        let next = if forward {
+            (index + 1) % group.len()
+        } else {
+            (index + group.len() - 1) % group.len()
+        };
+        self.set_focus(Some(group[next]))?;
+        self.dispatch(group[next], Input::Activate)?;
+        Ok(true)
+    }
+
+    /// Unchecks the other radio buttons sharing this one's parent.
+    pub fn select_radio(&mut self, id: NodeId) -> Result {
+        let Some(parent) = self.tree.parent(id)? else {
+            return Ok(());
+        };
+        let siblings: Vec<_> = self.tree.children(parent)?.filter(|&n| n != id).collect();
+        for sibling in siblings {
+            if let Content::Toggle(toggle) =
+                &mut self.tree.get_mut(sibling).unwrap().context.content
+            {
+                if toggle.mark == Mark::Radio && toggle.control.is_checked() {
+                    let outcome = toggle.control.set_checked(false);
+                    self.effects(sibling, outcome)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 macro_rules! ranges {
     ($($ty:ident),*) => { $(impl $ty {
@@ -142,13 +244,24 @@ impl Node {
 impl Container {
     /// Appends a binary checkbox; the text is also its default accessible name.
     pub fn check_box(&self, text: &str, checked: bool) -> Result<CheckBox> {
-        self.toggle_control(text, checked, false).map(CheckBox)
+        self.toggle_control(text, checked, Mark::Check)
+            .map(CheckBox)
     }
     /// Appends a binary switch with a visible label.
     pub fn switch(&self, text: &str, checked: bool) -> Result<Switch> {
-        self.toggle_control(text, checked, true).map(Switch)
+        self.toggle_control(text, checked, Mark::Switch).map(Switch)
     }
-    fn toggle_control(&self, text: &str, checked: bool, switch: bool) -> Result<Node> {
+    /// Appends a radio button. Radio buttons sharing a parent form one group:
+    /// checking one, by the user or [`Radio::set_checked`], unchecks the others.
+    /// A newly created checked radio button unchecks its existing siblings.
+    pub fn radio(&self, text: &str, checked: bool) -> Result<Radio> {
+        let radio = self.toggle_control(text, checked, Mark::Radio)?;
+        if checked {
+            radio.change(|state, id| state.select_radio(id))?;
+        }
+        Ok(Radio(radio))
+    }
+    fn toggle_control(&self, text: &str, checked: bool, mark: Mark) -> Result<Node> {
         self.add(|state, theme| {
             let text = state
                 .fonts
@@ -158,7 +271,8 @@ impl Container {
                 Content::Toggle(Box::new(ToggleContent {
                     control: aegle_controls::Toggle::new(checked),
                     text,
-                    switch,
+                    mark,
+                    mixed: false,
                 })),
                 control_style(theme.control_height),
             ))

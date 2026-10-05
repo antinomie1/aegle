@@ -67,9 +67,9 @@ Options 包含可选 `device_index`、`memory_budget` 和 `recording_budget`；�
 
 ```sh
 cargo test -p aegle-render-vulkan --test render -- --ignored --nocapture
-cargo run -p aegle-render-vulkan --example geometry -- /tmp/aegle-vulkan.ppm
+cargo run -p aegle-render-vulkan --example geometry -- target/aegle-vulkan.ppm
 cargo test -p aegle-render-vulkan --features text --test text -- --ignored --nocapture
-cargo run -p aegle-render-vulkan --features text --example text_scene -- /tmp/aegle-vulkan-text.ppm
+cargo run -p aegle-render-vulkan --features text --example text_scene -- target/aegle-vulkan-text.ppm
 ```
 
 测试覆盖不透明/透明线性混合、外部裁剪与嵌套旋转、居中描边、draw 作用域隔离、非法尺寸、设备/记录预算、过深裁剪、不支持的文字、失败帧禁止提交，以及 resize/释放/重新创建。抽样避开后端抗锯齿边缘，颜色允许两级 RGBA8 量化误差；透明混合另与现有软件路径对照。

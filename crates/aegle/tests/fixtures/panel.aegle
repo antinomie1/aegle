@@ -35,6 +35,7 @@ ScrollView {
     TextArea { id: multiline; text: "one\ntwo"; height: 70dp; min_height: 0dp }
     CheckBox { id: check; text: "Accept"; checked: true; indicator_color: #6750A4 }
     Switch { id: switch; text: "Enabled"; indicator_color: #6750A4 }
+    Row { RadioButton { text: "One"; checked: true }; RadioButton { id: radio; text: "Two"; checked: true } }
     Slider { id: slider; value: 99; max: 20; min: 10; step: 3; indicator_color: #6750A4 }
     Progress { id: progress; value: -100; max: 20; min: 10; indicator_color: #6750A4 }
 }

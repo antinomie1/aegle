@@ -17,6 +17,8 @@ pub enum ControlKind {
     CheckBox,
     /// A labeled binary choice with a moving thumb.
     Switch,
+    /// A labeled choice that is exclusive among its sibling radio buttons.
+    RadioButton,
     /// An interactive bounded numeric value.
     Slider,
     /// A noninteractive bounded progress value.
@@ -41,7 +43,8 @@ pub struct VisualState {
     pub focused: bool,
     /// Whether an editor allows selection but disallows content changes.
     pub read_only: bool,
-    /// Whether a checkbox or switch is checked; false for other roles.
+    /// Whether a checkbox, switch or radio button is checked; false for other
+    /// roles and for a checkbox in the mixed state.
     pub checked: bool,
 }
 
@@ -84,22 +87,33 @@ impl Appearance {
     /// use these background states. Enabled, focused interactive roles gain a
     /// separate 2 dp outline; their normal border remains unchanged.
     pub fn new(theme: &Theme, state: VisualState) -> Self {
-        let toggle = matches!(state.kind, ControlKind::CheckBox | ControlKind::Switch);
+        let toggle = matches!(
+            state.kind,
+            ControlKind::CheckBox | ControlKind::Switch | ControlKind::RadioButton
+        );
         let framed = toggle || matches!(state.kind, ControlKind::Button | ControlKind::TextField);
         let interactive = framed || state.kind == ControlKind::Slider;
         let background = match state.kind {
             ControlKind::Container | ControlKind::Label => Color::TRANSPARENT,
-            ControlKind::Button | ControlKind::CheckBox | ControlKind::Switch
+            ControlKind::Button
+            | ControlKind::CheckBox
+            | ControlKind::Switch
+            | ControlKind::RadioButton
                 if state.enabled && state.pressed =>
             {
                 theme.pressed
             }
-            ControlKind::Button | ControlKind::CheckBox | ControlKind::Switch
+            ControlKind::Button
+            | ControlKind::CheckBox
+            | ControlKind::Switch
+            | ControlKind::RadioButton
                 if state.enabled && state.hovered =>
             {
                 theme.hover
             }
-            ControlKind::CheckBox | ControlKind::Switch => Color::TRANSPARENT,
+            ControlKind::CheckBox | ControlKind::Switch | ControlKind::RadioButton => {
+                Color::TRANSPARENT
+            }
             ControlKind::Slider | ControlKind::Progress => theme.border,
             _ => theme.surface,
         };
