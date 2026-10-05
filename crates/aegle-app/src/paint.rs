@@ -19,20 +19,23 @@ impl State {
         let mut builder = std::mem::take(&mut element.scene).into_builder();
         builder.clear();
         if element.effective_visible {
+            let range = matches!(element.content, Content::Slider(_) | Content::Progress(_));
             let shape = RoundedRect::new(
                 Rect::new(0.0, 0.0, size.width, size.height),
                 appearance.radius,
             )?;
-            if appearance.background.to_rgba()[3] != 0 {
+            if !range && appearance.background.to_rgba()[3] != 0 {
                 builder.fill(shape, appearance.background)?;
             }
-            outline(
-                &mut builder,
-                size,
-                appearance.radius,
-                appearance.border_width,
-                appearance.border_color,
-            )?;
+            if !range && !matches!(element.content, Content::Toggle(_)) {
+                outline(
+                    &mut builder,
+                    size,
+                    appearance.radius,
+                    appearance.border_width,
+                    appearance.border_color,
+                )?;
+            }
             match &element.content {
                 Content::Label(label) => {
                     builder.push_transform(Affine::translation(padding, padding)?)?;
@@ -66,6 +69,32 @@ impl State {
                     )?;
                     builder.pop()?.pop()?;
                 }
+                Content::Toggle(toggle) => crate::widget_paint::toggle(
+                    &mut builder,
+                    size,
+                    padding,
+                    self.theme.gap,
+                    toggle.switch,
+                    toggle.control.is_checked(),
+                    &toggle.text,
+                    appearance,
+                )?,
+                Content::Slider(slider) => crate::widget_paint::range(
+                    &mut builder,
+                    size,
+                    padding,
+                    slider.range().fraction(),
+                    true,
+                    appearance,
+                )?,
+                Content::Progress(range) => crate::widget_paint::range(
+                    &mut builder,
+                    size,
+                    padding,
+                    range.fraction(),
+                    false,
+                    appearance,
+                )?,
                 Content::Container => {}
             }
             outline(
@@ -82,7 +111,7 @@ impl State {
 }
 
 // Keep centered scene strokes inside the logical bounds. Large requested widths
-// saturate at the smaller extent, so they never draw into neighboring controls.
+// saturate at half the smaller extent, preserving a drawable center rectangle.
 fn outline(
     builder: &mut SceneBuilder,
     size: Size,
@@ -90,7 +119,7 @@ fn outline(
     width: f32,
     color: Color,
 ) -> Result {
-    let width = width.min(size.width).min(size.height);
+    let width = width.min(size.width.min(size.height) * 0.5);
     if width == 0.0 || color.to_rgba()[3] == 0 {
         return Ok(());
     }

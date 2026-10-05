@@ -1,4 +1,6 @@
-use aegle_markup::{CheckedDocument, CheckedNode, CheckedProperty, Kind, PropertyName, Value};
+use aegle_markup::{
+    CheckedDocument, CheckedNode, CheckedProperty, Kind, PropertyName, Value as Literal,
+};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 
@@ -107,6 +109,10 @@ fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
         Kind::Text => "Label",
         Kind::Button => "Button",
         Kind::TextField | Kind::TextArea => "TextField",
+        Kind::CheckBox => "CheckBox",
+        Kind::Switch => "Switch",
+        Kind::Slider => "Slider",
+        Kind::Progress => "Progress",
     };
     let name = Ident::new(name, Span::call_site());
     quote! { #facade::#name }
@@ -115,7 +121,7 @@ fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
 fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> TokenStream {
     let text = node.properties.iter().find_map(|property| {
         if matches!(property.name, PropertyName::Title | PropertyName::Text) {
-            let Value::String(value) = &property.value else {
+            let Literal::String(value) = &property.value else {
                 unreachable!()
             };
             Some(value.as_str())
@@ -131,7 +137,7 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
                 PropertyName::Height => quote! { height },
                 _ => return None,
             };
-            let Value::Length(value) = property.value else {
+            let Literal::Length(value) = property.value else {
                 unreachable!()
             };
             let value = value as u32;
@@ -145,6 +151,48 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
         };
     }
     let text = text.unwrap_or("");
+    if matches!(node.kind, Kind::CheckBox | Kind::Switch) {
+        let checked = node
+            .properties
+            .iter()
+            .find_map(|property| {
+                if property.name == PropertyName::Checked {
+                    let Literal::Bool(value) = property.value else {
+                        unreachable!()
+                    };
+                    Some(value)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(false);
+        return if node.kind == Kind::CheckBox {
+            quote! { #parent.check_box(#text, #checked) }
+        } else {
+            quote! { #parent.switch(#text, #checked) }
+        };
+    }
+    if matches!(node.kind, Kind::Slider | Kind::Progress) {
+        let mut range = [0.0_f64, 1.0, 0.0];
+        for property in &node.properties {
+            let index = match property.name {
+                PropertyName::Min => 0,
+                PropertyName::Max => 1,
+                PropertyName::Value => 2,
+                _ => continue,
+            };
+            let Literal::Number(value) = property.value else {
+                unreachable!()
+            };
+            range[index] = f64::from(value);
+        }
+        let [min, max, value] = range;
+        return if node.kind == Kind::Slider {
+            quote! { #parent.slider(#min, #max, #value) }
+        } else {
+            quote! { #parent.progress(#min, #max, #value) }
+        };
+    }
     match node.kind {
         Kind::Row => quote! { #parent.row() },
         Kind::Column => quote! { #parent.column() },
@@ -152,7 +200,9 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
         Kind::Button => quote! { #parent.button(#text) },
         Kind::TextField => quote! { #parent.text_field(#text) },
         Kind::TextArea => quote! { #parent.text_area(#text) },
-        Kind::Window => unreachable!(),
+        Kind::Window | Kind::CheckBox | Kind::Switch | Kind::Slider | Kind::Progress => {
+            unreachable!()
+        }
     }
 }
 
@@ -164,7 +214,7 @@ fn setter(
 ) -> Option<TokenStream> {
     use PropertyName::*;
     let name = match property.name {
-        Title | Text | Transition | Easing => return None,
+        Title | Text | Checked | Min | Max | Value | Transition | Easing => return None,
         Width | Height if kind == Kind::Window => return None,
         Width => "set_width",
         Height => "set_height",
@@ -192,26 +242,31 @@ fn setter(
         DisabledBackground => "set_disabled_background",
         DisabledForeground => "set_disabled_foreground",
         FontSize => "set_font_size",
+        Step => "set_step",
+        IndicatorColor => "set_indicator_color",
     };
     let argument = match &property.value {
-        Value::String(value) => quote! { #value },
-        Value::Bool(value) => quote! { #value },
-        Value::Color([red, green, blue, alpha]) => {
+        Literal::String(value) => quote! { #value },
+        Literal::Bool(value) => quote! { #value },
+        Literal::Color([red, green, blue, alpha]) => {
             quote! { #facade::Color::rgba(#red, #green, #blue, #alpha) }
         }
-        Value::Number(value) | Value::Length(value) => {
+        Literal::Number(value) | Literal::Length(value) => {
             if matches!(property.name, Width | Height) {
                 quote! { ::core::option::Option::Some(#value) }
+            } else if property.name == Step {
+                let value = f64::from(*value);
+                quote! { #value }
             } else {
                 quote! { #value }
             }
         }
-        Value::Identifier(value) if property.name == Theme => {
+        Literal::Identifier(value) if property.name == Theme => {
             let name = Ident::new(value, Span::call_site());
             quote! { #facade::Theme::#name() }
         }
-        Value::Identifier(_) => quote! { ::core::option::Option::None },
-        Value::Duration(_) => unreachable!("transitions are emitted after static setters"),
+        Literal::Identifier(_) => quote! { ::core::option::Option::None },
+        Literal::Duration(_) => unreachable!("transitions are emitted after static setters"),
     };
     let method = Ident::new(name, Span::call_site());
     Some(quote! { #handle.#method(#argument)?; })
@@ -222,7 +277,7 @@ fn transition(node: &CheckedNode, handle: &Ident, facade: &TokenStream) -> Optio
         .properties
         .iter()
         .find(|property| property.name == PropertyName::Transition)?;
-    let Value::Duration(milliseconds) = property.value else {
+    let Literal::Duration(milliseconds) = property.value else {
         unreachable!()
     };
     let easing = node
@@ -230,7 +285,7 @@ fn transition(node: &CheckedNode, handle: &Ident, facade: &TokenStream) -> Optio
         .iter()
         .find(|property| property.name == PropertyName::Easing)
         .map(|property| {
-            let Value::Identifier(name) = &property.value else {
+            let Literal::Identifier(name) = &property.value else {
                 unreachable!()
             };
             match name.as_str() {

@@ -26,6 +26,7 @@ impl State {
         }
         if self.tree.dirty(self.root)?.intersects(Dirty::LAYOUT) {
             let padding = self.theme.padding;
+            let gap = self.theme.gap;
             let fonts = &self.fonts;
             let mut error = None;
             aegle_layout::compute(
@@ -58,6 +59,19 @@ impl State {
                             text.size().width + 2.0 * padding,
                             text.size().height + 2.0 * padding,
                         )),
+                        Content::Toggle(toggle) => Ok(aegle_types::Size::new(
+                            if toggle.switch { 36.0 } else { 18.0 }
+                                + if toggle.text.text().is_empty() {
+                                    0.0
+                                } else {
+                                    gap + toggle.text.size().width
+                                }
+                                + 2.0 * padding,
+                            toggle.text.size().height.max(20.0) + 2.0 * padding,
+                        )),
+                        Content::Slider(_) | Content::Progress(_) => {
+                            Ok(aegle_types::Size::new(160.0, 20.0 + 2.0 * padding))
+                        }
                         Content::Field(field) => fonts
                             .borrow_mut()
                             .edit(field.editor_mut())

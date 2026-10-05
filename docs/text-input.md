@@ -1,6 +1,6 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层、Windows/macOS 输入、剪贴板和密码控件仍未实现，Unix 无障碍已接入部分查询与选择能力。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows/macOS 输入、剪贴板和密码控件仍未实现，Unix 无障碍已接入部分查询与选择能力。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
 
 ## 当前显示接口
 

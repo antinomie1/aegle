@@ -16,8 +16,8 @@ pub mod prelude {
     #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub use aegle_app::{App, AppOptions, Window, WindowOptions};
     pub use aegle_app::{
-        Appearance, Button, Color, Container, ControlKind, Label, Node, Result, Skin, Style,
-        TextField, Theme, Ui, VisualState,
+        Appearance, Button, CheckBox, Color, Container, ControlKind, Label, Node, Progress, Result,
+        Skin, Slider, Style, Switch, TextField, Theme, Ui, VisualState,
     };
     #[cfg(feature = "motion")]
     pub use aegle_app::{Easing, Transition};

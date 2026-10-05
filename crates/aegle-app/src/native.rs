@@ -20,8 +20,8 @@ pub struct AppOptions {
     pub theme: Theme,
     /// Reusable software coverage and clipping storage. Default: 2 MiB.
     pub mask_budget: usize,
-    /// Initial transition policy for each window's subsequently created buttons
-    /// and editors. Defaults to 120 ms ease-out; `None` disables this policy.
+    /// Initial transition policy for each window's subsequently created interactive
+    /// controls. Defaults to 120 ms ease-out; `None` disables this policy.
     #[cfg(feature = "motion")]
     pub transition: Option<Transition>,
     /// Explicit reduced-motion preference for new windows. Defaults to false;

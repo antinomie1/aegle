@@ -19,17 +19,31 @@ impl State {
             Content::Label(_) => (ControlKind::Label, false, false),
             Content::Button(button, _) => (ControlKind::Button, button.is_pressed(), false),
             Content::Field(field) => (ControlKind::TextField, false, field.editor().is_read_only()),
+            Content::Toggle(toggle) => (
+                if toggle.switch {
+                    ControlKind::Switch
+                } else {
+                    ControlKind::CheckBox
+                },
+                toggle.control.is_pressed(),
+                false,
+            ),
+            Content::Slider(slider) => (ControlKind::Slider, slider.is_pressed(), false),
+            Content::Progress(_) => (ControlKind::Progress, false, false),
         };
         VisualState {
             kind,
             enabled: self.usable(id),
             hovered: match content {
                 Content::Button(button, _) => button.is_hovered(),
+                Content::Toggle(toggle) => toggle.control.is_hovered(),
+                Content::Slider(slider) => slider.is_hovered(),
                 _ => self.hover == Some(id),
             },
             pressed,
             focused: self.focus.current(&self.tree) == Some(id),
             read_only,
+            checked: matches!(content, Content::Toggle(toggle) if toggle.control.is_checked()),
         }
     }
 
@@ -74,9 +88,17 @@ impl State {
     pub fn set_style(&mut self, id: NodeId, style: Style) -> Result {
         style.validate()?;
         let content = &self.tree.get(id).unwrap().context.content;
-        let button = matches!(content, Content::Button(..));
+        let button = matches!(
+            content,
+            Content::Button(..) | Content::Toggle(_) | Content::Slider(_)
+        );
         let field = matches!(content, Content::Field(_));
         if ((style.selection.is_some() || style.caret.is_some()) && !field)
+            || (style.indicator.is_some()
+                && !matches!(
+                    content,
+                    Content::Toggle(_) | Content::Slider(_) | Content::Progress(_)
+                ))
             || (style.pressed_background.is_some() && !button)
             || ((style.hover_background.is_some()
                 || style.focus_color.is_some()
@@ -109,10 +131,8 @@ impl State {
         if size.is_some_and(|v| !v.is_finite() || v <= 0.0) {
             return Err(UiError::InvalidValue.into());
         }
-        if matches!(
-            self.tree.get(id).unwrap().context.content,
-            Content::Container
-        ) {
+        let content = &self.tree.get(id).unwrap().context.content;
+        if content.paragraph().is_none() && !matches!(content, Content::Field(_)) {
             return Err(UiError::WrongKind.into());
         }
         let old = self.decorations.get(&id).and_then(|d| d.font_size);
@@ -123,16 +143,14 @@ impl State {
             size: size.unwrap_or(self.theme.font_size),
             ..self.style()
         };
-        match &mut self.tree.get_mut(id).unwrap().context.content {
-            Content::Label(text) | Content::Button(_, text) => {
-                self.fonts.borrow_mut().restyle(text, &style)?
-            }
-            Content::Field(field) => self
-                .fonts
+        let content = &mut self.tree.get_mut(id).unwrap().context.content;
+        if let Some(text) = content.paragraph_mut() {
+            self.fonts.borrow_mut().restyle(text, &style)?;
+        } else if let Content::Field(field) = content {
+            self.fonts
                 .borrow_mut()
                 .edit(field.editor_mut())
-                .restyle(&style)?,
-            Content::Container => unreachable!(),
+                .restyle(&style)?;
         }
         self.decorations.entry(id).or_default().font_size = size;
         self.trim_decoration(id);

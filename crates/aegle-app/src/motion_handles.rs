@@ -58,7 +58,11 @@ impl Node {
             let value = state.presented_appearance(id)?;
             let content = &state.tree.get(id).unwrap().context.content;
             let field = matches!(content, Content::Field(_));
-            let control = field || matches!(content, Content::Button(..));
+            let control = content.interactive();
+            let indicator = matches!(
+                content,
+                Content::Toggle(_) | Content::Slider(_) | Content::Progress(_)
+            );
             state.set_style(
                 id,
                 Style {
@@ -71,6 +75,7 @@ impl Node {
                     focus_width: control.then_some(value.focus_width),
                     selection: field.then_some(value.selection),
                     caret: field.then_some(value.caret),
+                    indicator: indicator.then_some(value.indicator),
                     ..Default::default()
                 },
             )?;
@@ -85,7 +90,7 @@ impl Node {
 }
 
 impl Ui {
-    /// Sets timing for subsequently created buttons and editors. Existing policies
+    /// Sets timing for subsequently created interactive controls. Existing policies
     /// are unchanged. Headless UIs default to None; native App opts into 120 ms.
     pub fn set_default_transition(&self, timing: Option<Transition>) -> Result {
         self.state

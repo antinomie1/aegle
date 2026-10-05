@@ -19,6 +19,38 @@ pub(crate) enum Content {
     Label(Box<Paragraph>),
     Button(Button, Box<Paragraph>),
     Field(Box<TextField>),
+    Toggle(Box<ToggleContent>),
+    Slider(Box<aegle_controls::Slider>),
+    Progress(aegle_controls::Range),
+}
+
+pub(crate) struct ToggleContent {
+    pub control: aegle_controls::Toggle,
+    pub text: Paragraph,
+    pub switch: bool,
+}
+
+impl Content {
+    pub fn interactive(&self) -> bool {
+        matches!(
+            self,
+            Self::Button(..) | Self::Field(_) | Self::Toggle(_) | Self::Slider(_)
+        )
+    }
+    pub fn paragraph(&self) -> Option<&Paragraph> {
+        match self {
+            Self::Label(text) | Self::Button(_, text) => Some(text),
+            Self::Toggle(toggle) => Some(&toggle.text),
+            _ => None,
+        }
+    }
+    pub fn paragraph_mut(&mut self) -> Option<&mut Paragraph> {
+        match self {
+            Self::Label(text) | Self::Button(_, text) => Some(text),
+            Self::Toggle(toggle) => Some(&mut toggle.text),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) struct Element {
@@ -175,10 +207,7 @@ impl State {
             .tree
             .insert(Some(parent), LayoutNode::with_style(style, element))?;
         #[cfg(feature = "motion")]
-        if matches!(
-            self.tree.get(id).unwrap().context.content,
-            Content::Button(..) | Content::Field(_)
-        ) {
+        if self.tree.get(id).unwrap().context.content.interactive() {
             if let Some(timing) = self.motion.default {
                 self.motion.tracks.insert(
                     id,
@@ -199,8 +228,9 @@ pub(crate) fn focus_policy(_: NodeId, node: &LayoutNode<Element>) -> aegle_core:
     if !node.context.visible || !node.context.enabled {
         return FocusPolicy::Prune;
     }
-    match node.context.content {
-        Content::Button(..) | Content::Field(_) => FocusPolicy::Focusable,
-        _ => FocusPolicy::Skip,
+    if node.context.content.interactive() {
+        FocusPolicy::Focusable
+    } else {
+        FocusPolicy::Skip
     }
 }

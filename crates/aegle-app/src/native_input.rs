@@ -143,6 +143,8 @@ fn key_id(value: Keysym) -> Key {
         Keysym::Down => Key::Down,
         Keysym::Home => Key::Home,
         Keysym::End => Key::End,
+        Keysym::Page_Up => Key::PageUp,
+        Keysym::Page_Down => Key::PageDown,
         value => value
             .key_char()
             .map(Key::Character)

@@ -45,13 +45,13 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 
 构造期间先建立子树再设置属性；任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。当前不是运行时原子重载 API。
 
-支持 Window、Column、Row、Text、Button、TextField、TextArea。只有前三种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
+支持 Window、Column、Row、Text、Button、TextField、TextArea、CheckBox、Switch、Slider、Progress。只有前三种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
 
 | 属性 | 值与适用范围 |
 | --- | --- |
 | `id` | 唯一标识符，生成有类型句柄 |
 | `title` | Window 字符串，最多 4000 UTF-8 字节且无 NUL |
-| `text` | Text/Button/TextField/TextArea 字符串；单行编辑器拒绝硬换行 |
+| `text` | Text/Button/TextField/TextArea/CheckBox/Switch 字符串；单行编辑器拒绝硬换行 |
 | `width`、`height` | 控件为非负 `dp` 或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
 | `min_width`、`min_height`、`padding` | 非负 `dp` |
 | `gap` | 容器的非负 `dp` |
@@ -61,14 +61,20 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `read_only` | TextField/TextArea 的 bool |
 | `theme` | Window 的 `light`、`dark`、`high_contrast` |
 | `background`、`foreground`、`border_color` | `#RRGGBB` 或 `#RRGGBBAA` 颜色 |
-| `hover_background`、`pressed_background` | hover 限 Button/TextField/TextArea，pressed 限 Button |
+| `hover_background`、`pressed_background` | hover 限 Button/TextField/TextArea/CheckBox/Switch/Slider，pressed 限 Button/CheckBox/Switch/Slider |
 | `disabled_background`、`disabled_foreground` | 对应禁用状态的颜色覆盖 |
 | `border_width`、`radius` | 非负 `dp`；边框宽度为零时关闭 |
-| `focus_color`、`focus_width` | Button/TextField/TextArea 的焦点颜色与非负 `dp` 宽度 |
+| `focus_color`、`focus_width` | Button/TextField/TextArea/CheckBox/Switch/Slider 的焦点颜色与非负 `dp` 宽度 |
 | `selection_color`、`caret_color` | TextField/TextArea 的选择与 caret/预编辑颜色 |
-| `font_size` | Text/Button/TextField/TextArea 的正 `dp` |
+| `font_size` | Text/Button/TextField/TextArea/CheckBox/Switch 的正 `dp` |
+| `checked` | CheckBox/Switch 的 bool，默认 false |
+| `min`、`max`、`value` | Slider/Progress 的有限数，默认0/1/0；min须小于max，value按共享Range契约clamp |
+| `step` | Slider 的有限非负数，默认0连续，正值启用步进 |
+| `indicator_color` | CheckBox/Switch/Slider/Progress 的标志或完成部分颜色 |
 | `transition` | 全节点外观过渡，非负整数毫秒，如 `120ms`；零表示立即到目标 |
 | `easing` | 同节点须有 transition；linear/ease_in/ease_out/ease_in_out，默认 ease_out |
+
+数值控件的 min/max/value 在全部属性收集完成后一起交给构造器，不依赖源码顺序；step 随后设置。当前标记数字保持有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。四种新控件均为叶，Progress 拒绝交互状态、text、font_size 和 step 等不适用属性。
 
 Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
 

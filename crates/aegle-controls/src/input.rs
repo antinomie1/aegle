@@ -45,6 +45,10 @@ pub enum Key {
     Home,
     /// End of line/document.
     End,
+    /// Move one page toward the start, or increase a range by a large step.
+    PageUp,
+    /// Move one page toward the end, or decrease a range by a large step.
+    PageDown,
     /// Key without a default control action.
     Unidentified,
 }
@@ -110,6 +114,12 @@ pub enum Input<'a> {
     Cancel,
     /// Semantic activation from an application or assistive technology.
     Activate,
+    /// Increase a range through the same behavior as the arrow keys.
+    Increment,
+    /// Decrease a range through the same behavior as the arrow keys.
+    Decrement,
+    /// Set a finite numeric value through the enabled range behavior.
+    SetValue(f64),
     /// Native IME transaction; its serial/session routing remains platform-owned.
     #[cfg(feature = "text")]
     Ime(aegle_text::ImeEdit<'a>),
@@ -118,10 +128,12 @@ pub enum Input<'a> {
 /// Semantic result independent of the input device.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
-    /// Button activation; a toggle skin can use it to change its checked value.
+    /// Button activation.
     Activate,
     /// Submit a single-line text field.
     Submit,
+    /// A toggle or range value actually changed through user or semantic input.
+    Change,
 }
 
 /// The host applies capture so a release reaches the original target.

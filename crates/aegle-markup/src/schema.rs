@@ -1,6 +1,9 @@
 //! The built-in static component schema, independent of any UI runtime.
 
+mod values;
+
 use std::collections::HashSet;
+use values::{property_name, valid_id, validate, validate_range};
 
 use crate::{Document, Error, Node, Span, Value};
 
@@ -54,6 +57,14 @@ pub enum Kind {
     TextField,
     /// Multiline editor.
     TextArea,
+    /// A labelled two-state check box.
+    CheckBox,
+    /// A labelled two-state switch.
+    Switch,
+    /// An interactive horizontal numeric range.
+    Slider,
+    /// A noninteractive horizontal numeric progress indicator.
+    Progress,
 }
 
 /// Properties shared with the imperative retained-control API.
@@ -97,17 +108,17 @@ pub enum PropertyName {
     BorderWidth,
     /// Nonnegative corner radius in logical pixels.
     Radius,
-    /// Focus outline color for buttons and editors.
+    /// Focus outline color for buttons, toggles, sliders and editors.
     FocusColor,
-    /// Nonnegative focus outline thickness for buttons and editors, in logical pixels.
+    /// Nonnegative focus outline thickness for focusable controls, in logical pixels.
     FocusWidth,
     /// Editor selection highlight color.
     SelectionColor,
     /// Editor caret color.
     CaretColor,
-    /// Background color while hovered, for buttons and editors.
+    /// Background color while hovered, for interactive controls.
     HoverBackground,
-    /// Button background color while pressed.
+    /// Background color while a button, toggle or slider is pressed.
     PressedBackground,
     /// Background color while disabled.
     DisabledBackground,
@@ -119,6 +130,18 @@ pub enum PropertyName {
     Transition,
     /// Transition easing; requires a sibling `transition` property.
     Easing,
+    /// Initial toggle state; defaults to false.
+    Checked,
+    /// Finite numeric lower bound; defaults to zero.
+    Min,
+    /// Finite numeric upper bound, greater than min; defaults to one.
+    Max,
+    /// Initial numeric value, clamped by the shared constructor; defaults to zero.
+    Value,
+    /// Slider interval; zero selects continuous movement.
+    Step,
+    /// Check mark, switch thumb, slider thumb or progress fill color.
+    IndicatorColor,
 }
 
 /// Checks a parsed document without loading fonts or creating any UI objects.
@@ -156,6 +179,10 @@ fn check_node(
         "Button" => Kind::Button,
         "TextField" => Kind::TextField,
         "TextArea" => Kind::TextArea,
+        "CheckBox" => Kind::CheckBox,
+        "Switch" => Kind::Switch,
+        "Slider" => Kind::Slider,
+        "Progress" => Kind::Progress,
         _ => return Err(error(format!("unknown component `{}`", node.name))),
     };
     if kind == Kind::Window && depth != 1 {
@@ -203,6 +230,7 @@ fn check_node(
             span: property.span,
         });
     }
+    validate_range(&result)?;
     if seen.contains(&PropertyName::Easing) && !seen.contains(&PropertyName::Transition) {
         let property = result
             .properties
@@ -220,185 +248,4 @@ fn check_node(
             .push(check_node(child, depth + 1, remaining, ids)?);
     }
     Ok(result)
-}
-
-fn property_name(name: &str) -> Option<PropertyName> {
-    use PropertyName::*;
-    Some(match name {
-        "title" => Title,
-        "text" => Text,
-        "width" => Width,
-        "height" => Height,
-        "min_width" => MinWidth,
-        "min_height" => MinHeight,
-        "padding" => Padding,
-        "gap" => Gap,
-        "grow" => Grow,
-        "visible" => Visible,
-        "enabled" => Enabled,
-        "label" => Label,
-        "read_only" => ReadOnly,
-        "theme" => Theme,
-        "background" => Background,
-        "foreground" => Foreground,
-        "border_color" => BorderColor,
-        "border_width" => BorderWidth,
-        "radius" => Radius,
-        "focus_color" => FocusColor,
-        "focus_width" => FocusWidth,
-        "selection_color" => SelectionColor,
-        "caret_color" => CaretColor,
-        "hover_background" => HoverBackground,
-        "pressed_background" => PressedBackground,
-        "disabled_background" => DisabledBackground,
-        "disabled_foreground" => DisabledForeground,
-        "font_size" => FontSize,
-        "transition" => Transition,
-        "easing" => Easing,
-        _ => return None,
-    })
-}
-
-fn validate(kind: Kind, name: PropertyName, value: &Value) -> Result<(), String> {
-    use PropertyName::*;
-    let allowed = match name {
-        Title | Theme => kind == Kind::Window,
-        Text | FontSize => matches!(
-            kind,
-            Kind::Text | Kind::Button | Kind::TextField | Kind::TextArea
-        ),
-        ReadOnly | SelectionColor | CaretColor => matches!(kind, Kind::TextField | Kind::TextArea),
-        HoverBackground | FocusColor | FocusWidth => {
-            matches!(kind, Kind::Button | Kind::TextField | Kind::TextArea)
-        }
-        PressedBackground => kind == Kind::Button,
-        Gap => matches!(kind, Kind::Window | Kind::Column | Kind::Row),
-        _ => true,
-    };
-    if !allowed {
-        return Err(format!("{name:?} is not supported on {kind:?}"));
-    }
-    let valid = match (name, value) {
-        (Title, Value::String(text)) => text.len() <= 4000 && !text.contains('\0'),
-        (Text, Value::String(text)) if kind == Kind::TextField => !text.contains([
-            '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
-        ]),
-        (Text | Label, Value::String(_)) => true,
-        (Width | Height, Value::Length(n)) if kind == Kind::Window => {
-            n.is_finite() && *n > 0.0 && n.fract() == 0.0 && f64::from(*n) <= f64::from(u32::MAX)
-        }
-        (Width | Height, Value::Identifier(name)) => kind != Kind::Window && name == "auto",
-        (
-            Width | Height | MinWidth | MinHeight | Padding | Gap | BorderWidth | Radius
-            | FocusWidth,
-            Value::Length(n),
-        )
-        | (Grow, Value::Number(n)) => n.is_finite() && *n >= 0.0,
-        (FontSize, Value::Length(n)) => n.is_finite() && *n > 0.0,
-        (Transition, Value::Duration(_)) => true,
-        (Easing, Value::Identifier(name)) => {
-            matches!(
-                name.as_str(),
-                "linear" | "ease_in" | "ease_out" | "ease_in_out"
-            )
-        }
-        (
-            Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
-            | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground,
-            Value::Color(_),
-        ) => true,
-        (Visible | Enabled | ReadOnly, Value::Bool(_)) => true,
-        (Theme, Value::Identifier(name)) => {
-            matches!(name.as_str(), "light" | "dark" | "high_contrast")
-        }
-        _ => false,
-    };
-    if valid {
-        return Ok(());
-    }
-    let expected = match name {
-        Title => "a string of at most 4000 bytes without NUL",
-        Text if kind == Kind::TextField => "a string without hard line separators",
-        Text | Label => "a string",
-        Width | Height if kind == Kind::Window => "a positive whole dp length fitting u32",
-        Width | Height => "a nonnegative dp length or auto",
-        MinWidth | MinHeight | Padding | Gap | BorderWidth | Radius | FocusWidth => {
-            "a nonnegative dp length"
-        }
-        FontSize => "a positive dp length",
-        Transition => "nonnegative whole milliseconds with the ms suffix",
-        Easing => "linear, ease_in, ease_out or ease_in_out",
-        Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
-        | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground => {
-            "a #RRGGBB or #RRGGBBAA color"
-        }
-        Grow => "a finite nonnegative number",
-        Visible | Enabled | ReadOnly => "true or false",
-        Theme => "light, dark or high_contrast",
-    };
-    Err(format!("{name:?} requires {expected}"))
-}
-
-fn valid_id(id: &str) -> bool {
-    let mut bytes = id.bytes();
-    bytes
-        .next()
-        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
-        && !matches!(
-            id,
-            "_" | "root"
-                | "as"
-                | "async"
-                | "await"
-                | "break"
-                | "const"
-                | "continue"
-                | "crate"
-                | "dyn"
-                | "else"
-                | "enum"
-                | "extern"
-                | "false"
-                | "fn"
-                | "for"
-                | "if"
-                | "impl"
-                | "in"
-                | "let"
-                | "loop"
-                | "match"
-                | "mod"
-                | "move"
-                | "mut"
-                | "pub"
-                | "ref"
-                | "return"
-                | "self"
-                | "Self"
-                | "static"
-                | "struct"
-                | "super"
-                | "trait"
-                | "true"
-                | "type"
-                | "unsafe"
-                | "use"
-                | "where"
-                | "while"
-                | "abstract"
-                | "become"
-                | "box"
-                | "do"
-                | "final"
-                | "gen"
-                | "macro"
-                | "override"
-                | "priv"
-                | "typeof"
-                | "unsized"
-                | "virtual"
-                | "yield"
-                | "try"
-        )
 }

@@ -42,6 +42,7 @@ impl Interpolate for Paint {
             focus_width: a.focus_width.interpolate(b.focus_width, progress),
             selection: a.selection.interpolate(b.selection, progress),
             caret: a.caret.interpolate(b.caret, progress),
+            indicator: a.indicator.interpolate(b.indicator, progress),
         })
     }
 }

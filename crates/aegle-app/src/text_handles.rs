@@ -71,38 +71,40 @@ impl TextField {
     }
 }
 impl Node {
-    fn set_text(&self, text: &str) -> Result {
+    pub(crate) fn set_text(&self, text: &str) -> Result {
         self.change(|state, id| {
             let style = state.text_style(id);
-            match &mut state.tree.get_mut(id).unwrap().context.content {
-                Content::Label(p) | Content::Button(_, p) => {
-                    state.fonts.borrow_mut().update(p, text, &style)?
+            let content = &mut state.tree.get_mut(id).unwrap().context.content;
+            if let Some(paragraph) = content.paragraph_mut() {
+                state.fonts.borrow_mut().update(paragraph, text, &style)?;
+            } else if let Content::Field(field) = content {
+                state
+                    .fonts
+                    .borrow_mut()
+                    .edit(field.editor_mut())
+                    .set_text(text)?;
+                if state.focus.current(&state.tree) == Some(id) {
+                    state.ime_dirty = true;
+                    state.ime_reset = true;
+                    state.input_method = false;
                 }
-                Content::Field(field) => {
-                    state
-                        .fonts
-                        .borrow_mut()
-                        .edit(field.editor_mut())
-                        .set_text(text)?;
-                    if state.focus.current(&state.tree) == Some(id) {
-                        state.ime_dirty = true;
-                        state.ime_reset = true;
-                        state.input_method = false;
-                    }
-                }
-                _ => return Err(UiError::WrongKind.into()),
+            } else {
+                return Err(UiError::WrongKind.into());
             }
             state.tree.mark_dirty(id, Dirty::ALL)?;
             Ok(())
         })
     }
-    fn text(&self) -> Result<String> {
+    pub(crate) fn text(&self) -> Result<String> {
         self.change(|state, id| {
-            Ok(match &state.tree.get(id).unwrap().context.content {
-                Content::Label(p) | Content::Button(_, p) => p.text().to_owned(),
-                Content::Field(field) => field.editor().text().to_string(),
-                _ => return Err(UiError::WrongKind.into()),
-            })
+            let content = &state.tree.get(id).unwrap().context.content;
+            if let Some(paragraph) = content.paragraph() {
+                Ok(paragraph.text().to_owned())
+            } else if let Content::Field(field) = content {
+                Ok(field.editor().text().to_string())
+            } else {
+                Err(UiError::WrongKind.into())
+            }
         })
     }
 }

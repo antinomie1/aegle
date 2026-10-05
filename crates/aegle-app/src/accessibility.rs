@@ -79,10 +79,34 @@ impl Ui {
             (Action::Click, _)
                 if matches!(
                     state.tree.get(target).unwrap().context.content,
-                    Content::Button(..)
+                    Content::Button(..) | Content::Toggle(_)
                 ) =>
             {
                 state.dispatch(target, Input::Activate)?
+            }
+            (Action::Increment | Action::Decrement, _)
+                if matches!(
+                    state.tree.get(target).unwrap().context.content,
+                    Content::Slider(_)
+                ) =>
+            {
+                state.dispatch(
+                    target,
+                    if request.action == Action::Increment {
+                        Input::Increment
+                    } else {
+                        Input::Decrement
+                    },
+                )?;
+            }
+            (Action::SetValue, Some(ActionData::NumericValue(value)))
+                if value.is_finite()
+                    && matches!(
+                        state.tree.get(target).unwrap().context.content,
+                        Content::Slider(_)
+                    ) =>
+            {
+                state.dispatch(target, Input::SetValue(value))?;
             }
             (Action::SetTextSelection, Some(ActionData::SetTextSelection(selection))) => {
                 let fonts = std::rc::Rc::clone(&state.fonts);
@@ -230,6 +254,46 @@ impl State {
                         node.add_action(Action::Click);
                     }
                 }
+                Content::Toggle(toggle) => {
+                    node.set_role(if toggle.switch {
+                        Role::Switch
+                    } else {
+                        Role::CheckBox
+                    });
+                    node.set_toggled(if toggle.control.is_checked() {
+                        aegle_access::accesskit::Toggled::True
+                    } else {
+                        aegle_access::accesskit::Toggled::False
+                    });
+                    if element.label.is_empty() {
+                        node.set_label(toggle.text.text());
+                    }
+                    if enabled {
+                        node.add_action(Action::Focus);
+                        node.add_action(Action::Click);
+                    }
+                }
+                Content::Slider(slider) => {
+                    node.set_role(Role::Slider);
+                    node.set_orientation(aegle_access::accesskit::Orientation::Horizontal);
+                    numeric(&mut node, slider.range());
+                    let range = slider.range();
+                    node.set_numeric_value_step(if range.step() == 0.0 {
+                        (range.max() - range.min()) / 100.0
+                    } else {
+                        range.step()
+                    });
+                    if enabled {
+                        node.add_action(Action::Focus);
+                        node.add_action(Action::SetValue);
+                        node.add_action(Action::Increment);
+                        node.add_action(Action::Decrement);
+                    }
+                }
+                Content::Progress(range) => {
+                    node.set_role(Role::ProgressIndicator);
+                    numeric(&mut node, range);
+                }
                 Content::Field(field) => {
                     node.set_clips_children();
                     if enabled {
@@ -268,4 +332,10 @@ impl State {
         }
         update
     }
+}
+
+fn numeric(node: &mut Node, range: &aegle_controls::Range) {
+    node.set_numeric_value(range.value());
+    node.set_min_numeric_value(range.min());
+    node.set_max_numeric_value(range.max());
 }

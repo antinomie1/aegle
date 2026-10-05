@@ -1,0 +1,41 @@
+Window {
+    title: "Aegle — retained widgets"
+    width: 620dp
+    height: 500dp
+    padding: 24dp
+    gap: 16dp
+    Text { text: "小而完整的交互"; font_size: 24dp }
+    Text { text: "复选框与开关同步；滑块控制进度。支持键盘与输入法。" }
+    Row {
+        gap: 24dp
+        CheckBox { id: edit_check; text: "允许编辑"; checked: true }
+        Switch { id: edit_switch; text: "编辑开关"; checked: true }
+    }
+    TextField {
+        id: editor
+        text: "你好，世界 / 日本語 / 한글"
+        label: "多语言文本"
+    }
+    Text { id: amount; text: "进度：40%" }
+    Slider {
+        id: slider
+        label: "进度调节"
+        min: 0
+        max: 100
+        value: 40
+        step: 5
+    }
+    Progress {
+        id: progress
+        label: "当前进度"
+        min: 0
+        max: 100
+        value: 40
+    }
+    Row {
+        gap: 12dp
+        Button { id: light; text: "浅色主题" }
+        Button { id: dark; text: "深色主题" }
+        Button { id: close; text: "关闭" }
+    }
+}

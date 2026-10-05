@@ -31,6 +31,8 @@ mod style_handles;
 mod text_handles;
 mod theme;
 mod ui;
+mod value_handles;
+mod widget_paint;
 
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 #[cfg(feature = "motion")]
@@ -42,3 +44,4 @@ pub use handles::{Button, Container, Label, Node, TextField};
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 pub use native::{App, AppOptions, Window, WindowOptions};
 pub use ui::{ImeRequest, ImeState, Result, Ui, UiError};
+pub use value_handles::{CheckBox, Progress, Slider, Switch};

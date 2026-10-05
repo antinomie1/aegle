@@ -49,9 +49,14 @@ button.on_click(move |_| {
 | 字号 | `set_font_size`、`clear_font_size`，限文字控件，保留输入/组合状态 |
 | Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`on_submit`、`clear_on_submit` |
 | Button | `set_text`、`activate`、`on_click`、`clear_on_click` |
+| Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
+| CheckBox / Switch | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`、`clear_on_change` |
+| Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change`、`clear_on_change` |
 | Ui / Window | `set_theme`；Window 另有 `close` |
 
 `bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。启用 motion 后用 `set_transition(Transition::default())` 安装外观过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期；详见[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或局部主题树。
+
+数值与切换控件的程序 setter 不触发用户修改回调；范围、步长、键盘及无障碍规则见[值控件契约](components-theme-animation.md#当前切换与数值控件)。
 
 ## 当前可用的组件皮肤
 

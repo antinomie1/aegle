@@ -11,7 +11,7 @@
 - aegle-scene：no_std + alloc 的局部绘制记录；实色矩形、圆角、居中边框、仿射变换、嵌套裁剪。可选 text 保存定位字形、变体坐标与共享字体句柄，不依赖排版器或栅格器。
 - aegle-text：复用 Parley/Fontique 的 Unicode shaping、字体选择、回退、换行与定位；Paragraph 保留文字和排版结果，宽度变化只重排，颜色覆盖无需重新 shaping。显式字体为默认，system-fonts、text-dictionary、text-a11y、scene 独立选用；缺字与无可用字体分别报告。
 - Editor：复用同一 TextSystem 的 Parley PlainEditor，提供单/多行、选择/命中、视觉移动、grapheme 删除、精确 UTF-8 替换、只读、组合输入模型及有界差量撤销/重做。预编辑只保留被替换片段，提交值不随预编辑改变；取消恢复原选区。文字、装饰和候选区域来自同一布局。apply_ime 在完整验证后应用删除/提交/预编辑事务，删除与提交合成一次撤销；surrounding 无分配地借出有界周边文字。编辑、宽度和样式改变目前仍会重新 shaping，不宣称增量编辑引擎。
-- aegle-controls：无皮肤 Button 的键盘/指针/语义激活、capture 和取消状态；可选 text 提供复用 Editor 的 TextField。宿主拥有树、命中和焦点；controls 默认只依赖 types，不依赖窗口或 renderer。
+- aegle-controls：共享无分配 Range、Toggle、Slider 和无皮肤 Button 的键盘/指针/语义激活、capture 和取消状态；可选 text 提供复用 Editor 的 TextField。宿主拥有树、命中和焦点；controls 默认只依赖 types，不依赖窗口或 renderer。
 - aegle-access：平台回调经 Mailbox/Handlers 排队并唤醒 UI；可选 UnixAdapter 复用 AccessKit AT-SPI。示例从同一控件树按脏标记导出语义，系统 Focus/Click/SetTextSelection 回到同一焦点、按钮和 Editor。text-a11y 提供文字 run 与有校验的选择转换；不是完整跨平台无障碍。
 - aegle-glyph：复用 Swash/Skrifa，按需生成灰度字形与 COLRv0/嵌入位图，LRU 同时约束图像字节和条目数；缓存不持有字体文件。PNG 位图使用有解码预算的 png crate；库不内嵌字体。
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
@@ -19,7 +19,7 @@
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。当前没有 token 注册表、局部主题继承或系统偏好监听。
-- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/text/button/text_field/text_area、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
+- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/Text/Button/TextField/TextArea 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
 
 图像缓存预算不包括字体映射、排版、缓存索引及上游栅格 scratch；具体边界见 [资源](resources.md)。合成/过滤使用线性预乘颜色，公共字形彩色图像为非预乘 sRGB RGBA8。
@@ -32,6 +32,7 @@ cargo run -p aegle --example controls --release
 cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
+cargo run -p aegle --example widgets --release
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
@@ -172,8 +173,21 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 本阶段没有增加几何动画、完成回调、系统偏好监听或新的原生 IME/AT-SPI 协议。未重复完整真实输入法/屏幕阅读器验收；Clippy、MSRV、其他 OS 与 GPU 的未验证范围保持不变。
 
+## 切换、滑块与进度组件验证
+
+新增复选框、开关、水平滑块与确定进度条，Rust 与 `.aegle` 入口共用相同构造器、行为、主题、过渡和语义。Toggle 复用 Button 生命周期，Slider 与 Progress 共用有限 Range/步长/clamp；段落访问由字号、文字与主题更新共用。没有新增第三方依赖。程序 setter 不触发用户修改回调，互相同步不会形成反馈循环。
+
+- workspace all-features 共29个常规场景通过；新增两组综合场景覆盖范围失败保持旧值、浮点步进/最大端点、多指针与捕获取消、键盘/语义同状态、禁用祖先、回调销毁、CJK 预编辑保持，以及局部 gap 下主题变化的布局失效和极小尺寸焦点绘制。旧标记场景扩展四种 typed handle、乱序范围属性、clamp/step。没有 src 内测试。
+- all-features/all-targets、无默认 features 的 app/controls、仅 markup+motion 的 facade 场景、严格 Rustdoc、格式与 diff 检查通过。实现14951行、测试3172行，占17.50%（不含 examples）；最大源文件483行。
+- 私有 Sway/Pixman 上的 release widgets 示例验证 checkbox/switch 同步启禁 CJK 字段、键盘输入、滑块同步进度、浅深主题与关闭，截图已检查。根据视觉复核将默认未填充轨道改用主题 border，完成部分4dp、轨道2dp；进度不只靠色相区分。外部4536组小尺寸/空标签/边框/圆角场景检查 scene 构造与裁剪，未扩展正式测试套件。
+- 私有 D-Bus 的实际 AT-SPI 查询/写入验证 CheckBox/Checked、Switch→ToggleButton/Pressed、Slider/Progress 的 Value。10..20/step3 的滑块初值10，写15得到16并经回调同步 Progress，写100得到20，写12得到13；祖先禁用后交互不能改变值。Slider 在 Unix 通过 Value/MinimumIncrement 调整，没有独立增减 Action。上游禁用 ProgressIndicator 的 Enabled/Sensitive 状态传播仍有缺口，详见[无障碍](accessibility.md#当前切换与数值控件)，未声称完整系统一致性。
+- 相同 release 配置，Wayland + 系统字体 + markup + motion、关闭 Unix adapter：hello 3,962,048 B、controls 3,994,816 B、components 4,015,296 B，较上一阶段各增加12,288 B；新 widgets 为4,019,392 B。
+- widgets 在800×480私有输出的单次快照：RSS/PSS 28,532/11,315 KiB、1线程，随后3秒 CPU tick 增量0（CLK_TCK=100）。它不是100控件基准，且与之前示例内容不同，不能当作内存下降证明；不包含 Unix worker，未进行嵌入式或跨平台性能验收。
+
+本阶段实现二态、水平数值控件；三态、竖向、无限进度、滚轮调值、值/手柄位移动画未实现。MSRV/Clippy/其他 OS、GPU、真实屏幕阅读器与输入法完整验收的缺口仍保留。
+
 ## 下一阶段与缺口
 
-下一步继续补齐基础控件、动画完成通知/几何和任意绘制/行为组件扩展，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
+下一步继续补齐滚动/列表等基础控件、任意绘制/行为组件扩展和动画完成通知/几何，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
 
 当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或几何动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。

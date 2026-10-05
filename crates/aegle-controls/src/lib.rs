@@ -6,12 +6,18 @@
 
 mod button;
 mod input;
+mod range;
+mod slider;
 #[cfg(feature = "text")]
 mod text_field;
+mod toggle;
 
 pub use button::Button;
 pub use input::{
     Action, Capture, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput, PointerKind,
 };
+pub use range::{Range, RangeError};
+pub use slider::Slider;
 #[cfg(feature = "text")]
 pub use text_field::TextField;
+pub use toggle::Toggle;

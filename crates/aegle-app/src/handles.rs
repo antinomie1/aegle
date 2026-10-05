@@ -123,6 +123,8 @@ impl Node {
             let outcome = match &mut state.tree.get_mut(id).unwrap().context.content {
                 Content::Button(button, _) => button.set_enabled(enabled),
                 Content::Field(field) => field.set_enabled(&mut fonts.borrow_mut(), enabled),
+                Content::Toggle(toggle) => toggle.control.set_enabled(enabled),
+                Content::Slider(slider) => slider.set_enabled(enabled),
                 _ => Default::default(),
             };
             state.effects(id, outcome)?;
@@ -270,6 +272,7 @@ macro_rules! handle {
         }
     };
 }
+pub(crate) use handle;
 handle!(
     Container,
     "A retained row or column. Creation methods append children once."
@@ -285,7 +288,10 @@ handle!(
 );
 
 impl Container {
-    fn add(&self, create: impl FnOnce(&mut State) -> Result<(Content, Style)>) -> Result<Node> {
+    pub(crate) fn add(
+        &self,
+        create: impl FnOnce(&mut State) -> Result<(Content, Style)>,
+    ) -> Result<Node> {
         self.change(|state, parent| {
             let (content, style) = create(state)?;
             let id = state.insert(parent, content, style)?;

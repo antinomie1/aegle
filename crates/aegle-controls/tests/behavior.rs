@@ -2,6 +2,7 @@
 
 use aegle_controls::{
     Action, Button, Capture, Input, Key, KeyInput, Modifiers, PointerId, PointerInput, PointerKind,
+    Range, Slider, Toggle,
 };
 use aegle_types::Point;
 
@@ -78,6 +79,127 @@ fn capture_keyboard_and_semantic_activation_share_lifecycle() {
         button.handle(Input::Activate).action,
         Some(Action::Activate)
     );
+}
+
+#[test]
+fn toggles_and_ranges_share_changes_capture_and_numeric_boundaries() {
+    let mut toggle = Toggle::new(false);
+    assert!(toggle.set_checked(true).semantics);
+    assert_eq!(toggle.set_checked(true).action, None);
+    assert_eq!(toggle.handle(Input::Activate).action, Some(Action::Change));
+    assert!(!toggle.is_checked());
+    toggle.handle(Input::Focus(true));
+    toggle.handle(key(Key::Character(' '), true, false));
+    assert_eq!(
+        toggle.handle(key(Key::Character(' '), true, true)).action,
+        None
+    );
+    assert_eq!(
+        toggle.handle(key(Key::Character(' '), false, false)).action,
+        Some(Action::Change)
+    );
+    toggle.set_enabled(false);
+    assert_eq!(toggle.handle(Input::Activate).action, None);
+
+    assert!(Range::new(-f64::MAX, f64::MAX, 0.0, 0.0).is_err());
+    let tiny = f64::from_bits(1);
+    let range = Range::new(-f64::MAX / 2.0, f64::MAX / 2.0, 1.0, tiny).unwrap();
+    assert_eq!(range.value(), 1.0);
+    assert_eq!(
+        Range::new(0.0, tiny * 2.0, tiny, tiny).unwrap().fraction(),
+        0.5
+    );
+    for step in [0.0, 0.1, 3.0, 20.0] {
+        let mut range = Range::new(-2.0, 10.0, 0.0, step).unwrap();
+        for index in 0..=100 {
+            range.set_value(f64::from(index) / 10.0).unwrap();
+            assert!(
+                !range.set_value(range.value()).unwrap(),
+                "unstable {range:?}"
+            );
+        }
+    }
+    let mut range = Range::new(0.0, 10.0, 1.5, 3.0).unwrap();
+    assert_eq!(range.value(), 3.0);
+    let before = range;
+    assert!(range.set_value(f64::NAN).is_err());
+    assert!(range.set_bounds(10.0, 0.0).is_err());
+    assert!(range.set_step(-1.0).is_err());
+    assert_eq!(range, before);
+    assert!(range.set_step(0.0).unwrap());
+    assert!(range.set_bounds(0.0, 2.0).unwrap());
+    assert_eq!(range.value(), 2.0);
+
+    let at = |id, kind, x, inside| {
+        Input::Pointer(PointerInput {
+            id: PointerId(id),
+            kind,
+            position: Point::new(x, 0.0),
+            inside,
+            modifiers: Modifiers::default(),
+        })
+    };
+    let down = PointerKind::Down { clicks: 1 };
+    let mut slider = Slider::new(Range::new(0.0, 10.0, 0.0, 3.0).unwrap());
+    assert!(slider.handle(at(1, down, f32::NAN, true), 100.0).is_err());
+    assert!(!slider.is_pressed());
+    let started = slider.handle(at(1, down, 30.0, true), 100.0).unwrap();
+    assert_eq!(started.capture, Some(Capture::Acquire(PointerId(1))));
+    assert_eq!(started.action, Some(Action::Change));
+    assert_eq!(
+        slider
+            .handle(at(2, PointerKind::Up, 90.0, true), 100.0)
+            .unwrap()
+            .action,
+        None
+    );
+    assert_eq!(slider.range().value(), 3.0);
+    slider
+        .handle(at(1, PointerKind::Move, 200.0, false), 100.0)
+        .unwrap();
+    assert_eq!(slider.range().value(), 10.0);
+    assert!(slider.is_pressed());
+    let up = slider
+        .handle(at(1, PointerKind::Up, -20.0, false), 100.0)
+        .unwrap();
+    assert_eq!(up.capture, Some(Capture::Release(PointerId(1))));
+    assert_eq!(slider.range().value(), 0.0);
+    slider.handle(at(1, down, 60.0, true), 100.0).unwrap();
+    assert_eq!(
+        slider.set_enabled(false).capture,
+        Some(Capture::Release(PointerId(1)))
+    );
+    assert_eq!(slider.handle(Input::Increment, 100.0).unwrap().action, None);
+    assert!(slider.handle(Input::SetValue(f64::NAN), 100.0).is_err());
+    assert_eq!(slider.range().value(), 6.0);
+    slider.set_enabled(true);
+    for expected in [9.0, 10.0, 10.0] {
+        let old = slider.range().value();
+        let changed = slider.handle(Input::Increment, 100.0).unwrap().action;
+        assert_eq!(changed, (old != expected).then_some(Action::Change));
+        assert_eq!(slider.range().value(), expected);
+    }
+    for expected in [9.0, 6.0] {
+        slider.handle(Input::Decrement, 100.0).unwrap();
+        assert_eq!(slider.range().value(), expected);
+    }
+    slider.handle(Input::Focus(true), 100.0).unwrap();
+    for (key_code, value) in [
+        (Key::PageDown, 0.0),
+        (Key::PageUp, 10.0),
+        (Key::Home, 0.0),
+        (Key::End, 10.0),
+    ] {
+        slider.handle(key(key_code, true, false), 0.0).unwrap();
+        assert_eq!(slider.range().value(), value);
+    }
+    slider.handle(at(1, down, 0.0, true), 0.0).unwrap();
+    assert_eq!(slider.range().value(), 10.0);
+    assert_eq!(
+        slider.handle(Input::Focus(false), 0.0).unwrap().capture,
+        Some(Capture::Release(PointerId(1)))
+    );
+    assert!(!slider.is_pressed());
 }
 
 #[test]

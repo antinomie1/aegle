@@ -36,15 +36,13 @@ impl Ui {
                     color: theme.foreground,
                     ..Default::default()
                 };
-                match &mut node.context.content {
-                    Content::Label(text) | Content::Button(_, text) => {
-                        fonts.borrow_mut().restyle(text, &text_style)?
-                    }
-                    Content::Field(field) => fonts
+                if let Some(text) = node.context.content.paragraph_mut() {
+                    fonts.borrow_mut().restyle(text, &text_style)?;
+                } else if let Content::Field(field) = &mut node.context.content {
+                    fonts
                         .borrow_mut()
                         .edit(field.editor_mut())
-                        .restyle(&text_style)?,
-                    Content::Container => {}
+                        .restyle(&text_style)?;
                 }
             }
             match &node.context.content {
@@ -66,8 +64,13 @@ impl Ui {
                         };
                     }
                 }
-                Content::Button(..) if node.context.local_layout & 1 == 0 => {
+                Content::Button(..) | Content::Toggle(_) | Content::Slider(_)
+                    if node.context.local_layout & 1 == 0 =>
+                {
                     style.size.height = Dimension::length(theme.control_height)
+                }
+                Content::Progress(_) if node.context.local_layout & 1 == 0 => {
+                    style.size.height = Dimension::length(theme.control_height / 2.0)
                 }
                 Content::Field(field) => {
                     if node.context.local_layout & 1 == 0 {
@@ -90,7 +93,12 @@ impl Ui {
                 aegle_layout::set_style(&mut state.tree, id, style)?;
             }
             let custom_skin = state.decorations.get(&id).is_some_and(|d| d.skin.is_some());
-            let dirty = if font_changed || theme.padding != old.padding {
+            let toggle_gap_changed = theme.gap != old.gap
+                && matches!(
+                    state.tree.get(id).unwrap().context.content,
+                    Content::Toggle(_)
+                );
+            let dirty = if font_changed || theme.padding != old.padding || toggle_gap_changed {
                 Dirty::ALL
             } else if theme.foreground != old.foreground || theme.muted != old.muted || custom_skin
             {

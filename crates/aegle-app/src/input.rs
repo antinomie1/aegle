@@ -182,13 +182,18 @@ impl State {
         result
     }
     pub fn control(&mut self, target: NodeId, input: Input<'_>) -> Result<Outcome> {
-        Ok(
-            match &mut self.tree.get_mut(target).unwrap().context.content {
-                Content::Button(button, _) => button.handle(input),
-                Content::Field(field) => field.handle(&mut self.fonts.borrow_mut(), input)?,
-                _ => Outcome::default(),
-            },
-        )
+        let element = &mut self.tree.get_mut(target).unwrap().context;
+        let (_, extent) = crate::widget_paint::slider_track(
+            element.bounds.size,
+            element.inset(self.theme.padding),
+        );
+        Ok(match &mut element.content {
+            Content::Button(button, _) => button.handle(input),
+            Content::Toggle(toggle) => toggle.control.handle(input),
+            Content::Slider(slider) => slider.handle(input, extent)?,
+            Content::Field(field) => field.handle(&mut self.fonts.borrow_mut(), input)?,
+            _ => Outcome::default(),
+        })
     }
     pub fn effects(&mut self, target: NodeId, outcome: Outcome) -> Result {
         if outcome.repaint {
@@ -207,7 +212,10 @@ impl State {
             Some(Capture::Release(id)) if self.capture == Some((id, target)) => self.capture = None,
             _ => {}
         }
-        if matches!(outcome.action, Some(Action::Activate | Action::Submit)) {
+        if matches!(
+            outcome.action,
+            Some(Action::Activate | Action::Submit | Action::Change)
+        ) {
             if let Some(handler) = self.callbacks.get(&target) {
                 self.pending.push_back((target, handler.version));
             }
@@ -308,6 +316,13 @@ impl State {
             local.x += element.scroll.x - padding;
             local.y += element.scroll.y - padding;
         }
+        if matches!(element.content, Content::Slider(_)) {
+            local.x -= crate::widget_paint::slider_track(
+                element.bounds.size,
+                element.inset(self.theme.padding),
+            )
+            .0;
+        }
         Input::Pointer(PointerInput {
             id,
             kind,
@@ -322,7 +337,7 @@ impl State {
             element.effective_visible
                 && self.usable(id)
                 && element.bounds.contains(position)
-                && matches!(element.content, Content::Button(..) | Content::Field(_))
+                && element.content.interactive()
         })
     }
 }

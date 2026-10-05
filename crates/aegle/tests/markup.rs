@@ -24,9 +24,20 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
         "tests/fixtures/panel.aegle"
     )?;
     assert_eq!(evaluations, 1);
-    ui.resize(Size::new(320.0, 320.0))?;
+    ui.resize(Size::new(320.0, 500.0))?;
     ui.refresh()?;
     assert!(!ui.has_animations());
+    assert!(view.check.is_checked()? && !view.switch.is_checked()?);
+    assert_eq!(
+        (
+            view.slider.range()?,
+            view.slider.step()?,
+            view.slider.value()?
+        ),
+        ((10.0, 20.0), 3.0, 20.0)
+    );
+    view.slider.set_value(15.0)?;
+    assert_eq!((view.slider.value()?, view.progress.value()?), (16.0, 10.0));
     assert_eq!(view.panel.bounds()?, view.root.bounds()?);
     assert_eq!(view.panel.bounds()?.size.width, 240.0);
     assert_eq!(view.clear.bounds()?.size.width, 80.0);

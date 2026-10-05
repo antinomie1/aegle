@@ -45,3 +45,7 @@ required-features = ["wayland", "system-fonts", "markup", "motion"]
 
 [lints]
 workspace = true
+
+[[example]]
+name = "widgets"
+required-features = ["wayland", "system-fonts", "markup", "motion"]

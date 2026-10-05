@@ -28,7 +28,7 @@ impl TextField {
     }
 }
 impl Node {
-    fn on_action(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
+    pub(crate) fn on_action(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
         self.change(|state, id| {
             state.callback_version = state
                 .callback_version
@@ -44,7 +44,7 @@ impl Node {
             Ok(())
         })
     }
-    fn clear_on_action(&self) -> Result {
+    pub(crate) fn clear_on_action(&self) -> Result {
         self.change(|state, id| {
             state.callbacks.remove(&id);
             Ok(())

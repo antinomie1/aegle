@@ -13,6 +13,14 @@ pub enum ControlKind {
     Button,
     /// A single-line or multiline text editor.
     TextField,
+    /// A labeled binary choice with a check mark.
+    CheckBox,
+    /// A labeled binary choice with a moving thumb.
+    Switch,
+    /// An interactive bounded numeric value.
+    Slider,
+    /// A noninteractive bounded progress value.
+    Progress,
 }
 
 /// A snapshot of retained behavior used to compute a control's appearance.
@@ -33,6 +41,8 @@ pub struct VisualState {
     pub focused: bool,
     /// Whether an editor allows selection but disallows content changes.
     pub read_only: bool,
+    /// Whether a checkbox or switch is checked; false for other roles.
+    pub checked: bool,
 }
 
 /// Resolved paint values, independent of layout and behavior.
@@ -61,20 +71,34 @@ pub struct Appearance {
     pub selection: Color,
     /// Text caret and preedit indicator color.
     pub caret: Color,
+    /// Check mark, selected switch thumb, range fill and slider thumb color.
+    pub indicator: Color,
 }
 
 impl Appearance {
     /// Resolves the neutral default skin from a validated theme.
     ///
-    /// Disabled state suppresses pressed and hover feedback. Only buttons use
-    /// these background states by default. Enabled, focused buttons and fields
-    /// gain a separate 2 dp outline; their normal border remains unchanged.
+    /// Disabled state suppresses pressed and hover feedback. Buttons and toggles
+    /// use these background states. Enabled, focused interactive roles gain a
+    /// separate 2 dp outline; their normal border remains unchanged.
     pub fn new(theme: &Theme, state: VisualState) -> Self {
-        let framed = matches!(state.kind, ControlKind::Button | ControlKind::TextField);
+        let toggle = matches!(state.kind, ControlKind::CheckBox | ControlKind::Switch);
+        let framed = toggle || matches!(state.kind, ControlKind::Button | ControlKind::TextField);
+        let interactive = framed || state.kind == ControlKind::Slider;
         let background = match state.kind {
             ControlKind::Container | ControlKind::Label => Color::TRANSPARENT,
-            ControlKind::Button if state.enabled && state.pressed => theme.pressed,
-            ControlKind::Button if state.enabled && state.hovered => theme.hover,
+            ControlKind::Button | ControlKind::CheckBox | ControlKind::Switch
+                if state.enabled && state.pressed =>
+            {
+                theme.pressed
+            }
+            ControlKind::Button | ControlKind::CheckBox | ControlKind::Switch
+                if state.enabled && state.hovered =>
+            {
+                theme.hover
+            }
+            ControlKind::CheckBox | ControlKind::Switch => Color::TRANSPARENT,
+            ControlKind::Slider | ControlKind::Progress => theme.border,
             _ => theme.surface,
         };
         Self {
@@ -90,15 +114,26 @@ impl Appearance {
                 Color::TRANSPARENT
             },
             border_width: if framed { 1.0 } else { 0.0 },
-            radius: if framed { theme.radius } else { 0.0 },
+            radius: match state.kind {
+                ControlKind::Button | ControlKind::TextField => theme.radius,
+                ControlKind::CheckBox => theme.radius.min(3.0),
+                ControlKind::Switch => 10.0,
+                ControlKind::Slider | ControlKind::Progress => 8.0,
+                _ => 0.0,
+            },
             focus_color: theme.accent,
-            focus_width: if framed && state.enabled && state.focused {
+            focus_width: if interactive && state.enabled && state.focused {
                 2.0
             } else {
                 0.0
             },
             selection: theme.selection,
             caret: theme.accent,
+            indicator: if state.enabled {
+                theme.accent
+            } else {
+                theme.muted
+            },
         }
     }
 
@@ -147,6 +182,8 @@ pub struct Style {
     pub selection: Option<Color>,
     /// Text caret and preedit indicator color override.
     pub caret: Option<Color>,
+    /// Check mark, selected switch thumb, range fill and slider thumb override.
+    pub indicator: Option<Color>,
     /// Fill used while enabled, hovered and not pressed.
     pub hover_background: Option<Color>,
     /// Fill used while enabled and pressed.
@@ -170,6 +207,7 @@ impl Style {
             (&mut appearance.focus_color, self.focus_color),
             (&mut appearance.selection, self.selection),
             (&mut appearance.caret, self.caret),
+            (&mut appearance.indicator, self.indicator),
         ] {
             if let Some(value) = value {
                 *target = value;

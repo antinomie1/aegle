@@ -13,8 +13,8 @@ macro_rules! setters {
 impl Node {
     /// Replaces local paint overrides, preserving the skin and typography.
     /// `Style::default()` removes all paint overrides. Values do not inherit.
-    /// Hover/focus overrides require a button or editor, pressed requires a
-    /// button, and selection/caret require an editor; otherwise returns WrongKind.
+    /// Hover/focus overrides require an interactive control, pressed requires a
+    /// button/toggle/slider, and selection/caret require an editor; otherwise returns WrongKind.
     pub fn set_style(&self, style: Style) -> Result {
         self.change(|state, id| state.set_style(id, style))
     }
@@ -64,13 +64,13 @@ impl Node {
         self.change(|state, id| state.appearance(id))
     }
     /// Reads effective enabled, focus, pointer and editor policy state for a skin.
-    /// Hover/focus are available on buttons/editors, pressed on buttons; other
-    /// controls report false. Read-only is meaningful only for editors.
+    /// Hover/focus are available on interactive controls; pressed on buttons,
+    /// toggles and sliders. Checked is meaningful for toggles, read-only for editors.
     pub fn visual_state(&self) -> Result<VisualState> {
         self.change(|state, id| Ok(state.visual_state(id)))
     }
     /// Sets a positive finite local text size, retaining text, selection and preedit.
-    /// Available on labels, buttons and editors; it does not inherit to children.
+    /// Available on labels, buttons, toggles and editors; it does not inherit to children.
     pub fn set_font_size(&self, size: f32) -> Result {
         self.change(|state, id| state.set_font_size(id, Some(size)))
     }
@@ -105,5 +105,7 @@ impl Node {
         set_selection_color(color: Color) => selection;
         /// Sets an editor's caret and preedit indicator color.
         set_caret_color(color: Color) => caret;
+        /// Sets checkbox/switch marks or slider/progress indicator colors.
+        set_indicator_color(color: Color) => indicator;
     }
 }

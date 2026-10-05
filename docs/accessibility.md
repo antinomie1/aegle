@@ -83,6 +83,16 @@ AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handl
 
 上游 Unix adapter 首次构造启动进程级 worker，窗口销毁后该 worker 仍保留；它没有公开总线错误或就绪状态接口，构造成功不能证明辅助技术已连接。初始总线/服务失败可能结束 worker，当前没有可承诺的自动恢复路径。停用和线程、队列、语义缓存成本见 [资源边界](resources.md)。
 
+## 当前切换与数值控件
+
+本地语义树将 CheckBox/Switch 暴露为相应角色、标签与 Toggled 状态，Slider 暴露为水平 Slider、数值/边界/步长以及 Focus/SetValue/Increment/Decrement 动作，Progress 为不可聚焦的 ProgressIndicator 与数值边界。动作回到共享 Toggle/Slider 行为，拒绝隐藏、禁用、错误类型和非有限数值；数值按同一 Range 契约 clamp/步进，回调仍在树借用外执行。程序 setter 只更新语义与绘制，不产生用户修改回调。
+
+私有 Sway/Pixman + D-Bus 已验证：CheckBox 对应 AT-SPI CheckBox/Checked，Switch 对应 ToggleButton/Pressed；两者 DoAction 更新保留状态。Slider/Progress 实际提供 org.a11y.atspi.Value，可读最小值、最大值、当前值，Slider 的 MinimumIncrement 对应步长。写 CurrentValue 经应用回调同步进度，越界和步进结果与 Rust API 一致；祖先禁用后交互写入不能改变值。
+
+当前上游 Unix adapter 仅将 click 映射为 Action，因此滑块的系统调整使用 Value + MinimumIncrement，没有独立 Increment/Decrement Action 接口。Progress 的 Value 写入也会得到 D-Bus 属性层的应答，但应用拒绝该非交互目标，值保持不变。应答不是已生效的证明，协议验证在处理队列后重新读取值。
+
+已知上游缺口：accesskit_unix 0.22.1 / accesskit_atspi_common 对不支持只读属性的 ProgressIndicator 未传播 disabled，禁用进度条的 AT-SPI GetState 仍包含 Enabled/Sensitive。本地 TreeUpdate 正确标记 disabled，CheckBox/Switch/Slider 的系统禁用状态及行为均已验证；不能把这一组合称为完整系统语义一致性。此缺口待上游修复或适配层补齐，未通过改变控件角色绕过。
+
 ## 检查能力的范围
 
 用户已要求可检查的控件树。当前示例的系统语义树可经 AT-SPI 查询；框架开发工具所见的完整逻辑控件、状态与语义映射快照仍待实现。计划使用 debug-only 的本地树快照接口输出逻辑关系、语义映射、几何和状态，不建立常驻服务器、远程调试协议或运行时反射系统；密码内容应始终隐藏。

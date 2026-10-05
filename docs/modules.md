@@ -46,13 +46,13 @@
 
 `aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。尚未实现 layer-shell 或 GPU surface 接口。
 
-`aegle-controls` 默认只有无分配的 Button 状态及借用 Input/Outcome；`text` 增加复用 Editor 的 TextField。它不依赖 core、布局、主题、renderer 或窗口。宿主在自己的树中保存行为状态，负责命中、焦点和 capture；键盘、指针及语义激活经过同一默认行为。Wayland editor 示例使用 core 的 Route/Focus 连接这套行为，不再另写编辑快捷键与 IME 文本替换。可选 aegle-access/unix 已在示例接通 AT-SPI 的查询、焦点、按钮及文字选择，完整系统无障碍仍未完成。
+`aegle-controls` 默认提供无分配的 Button/Toggle/Slider、共享 Range 状态及借用 Input/Outcome；`text` 增加复用 Editor 的 TextField。它不依赖 core、布局、主题、renderer 或窗口。宿主在自己的树中保存行为状态，负责命中、焦点和 capture；键盘、指针及语义激活经过同一默认行为。Wayland editor 示例使用 core 的 Route/Focus 连接这套行为，不再另写编辑快捷键与 IME 文本替换。可选 aegle-access/unix 已在示例接通 AT-SPI 的查询、焦点、按钮及文字选择，完整系统无障碍仍未完成。
 
 `aegle-access` 的 Mailbox/Handlers 将原生线程上的请求交给宿主自己的 UI 线程，不引入另一棵应用树。UnixAdapter 复用 AccessKit 的系统协议与语义缓存，收到初次请求时完整导出，其后按脏标记更新。text-a11y 文本桥补充 run 身份/范围校验；平台、控件和文字依赖仍可分开选择。
 
 `aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点。当前没有主题注册表或系统偏好监听；可选过渡由 app 连接独立 motion 模块。
 
-`aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、标签、按钮、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` 在 Linux 增加原生 App 与软件呈现；各窗口独立拥有 Ui，共享连接、字体和 renderer。当前基础皮肤和纯函数皮肤由 app 应用到现有控件；尚未抽出独立 widgets crate，出现更多真实行为/绘制消费者时再形成该模块。
+`aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、标签、按钮、复选框、开关、滑块、进度条、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` 在 Linux 增加原生 App 与软件呈现；各窗口独立拥有 Ui，共享连接、字体和 renderer。当前基础皮肤和纯函数皮肤由 app 应用到现有控件；尚未抽出独立 widgets crate，出现更多真实行为/绘制消费者时再形成该模块。
 
 `aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **Linux Wayland + 软件绘制 + 系统字体 + Unix 无障碍 + 编译型静态标记 + 外观过渡**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Windows/macOS 原生宿主、GPU、动态标记与几何动画仍待实现。
 
