@@ -26,8 +26,7 @@ pub enum RendererBackend {
     /// Requires the `vulkan` feature and a Vulkan-capable driver.
     Vulkan,
     /// Portable wgpu geometry and glyph rendering directly into a native surface
-    /// on Vulkan, Metal or Direct3D 12. Requires the `wgpu` feature. Images and
-    /// paths are not implemented and fail the frame with an error.
+    /// on Vulkan, Metal or Direct3D 12. Requires the `wgpu` feature.
     Wgpu,
 }
 

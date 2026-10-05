@@ -40,7 +40,7 @@
 
 `aegle-render-vulkan` 通过 ash 0.38 和 bytemuck 1.25 消费相同 Scene，支持几何、最多八层裁剪及显式 RGBA8 读回。默认纯几何不带字体；可选 `text` 用 glyph、scene/text 和 hashbrown 管理按需 R8/RGBA8_SRGB 图集，复用下述字形身份与光栅策略，不依赖 Parley。没有 core、平台窗口库或软件 renderer 的正常依赖；可选 window 仅增加 raw-window-handle；Naga 30 仅在构建期生成 SPIR-V。swapchain 与 App 显式后端选择已接入，详见 [Vulkan 契约](vulkan.md)。
 
-`aegle-render-wgpu` 消费相同 Scene，经 wgpu 30 在 Vulkan、Metal、Direct3D 12 上绘制几何、最多八层裁剪与 mask/color 字形，不依赖 Parley、Vulkan 后端或 ash；可选 `window` 只增加 raw-window-handle。图像与路径未实现并返回错误。它有自己的记录构建与 WGSL 副本，与 Vulkan 后端的重复及后续合并见 [wgpu 契约](wgpu.md)。
+`aegle-render-wgpu` 消费相同 Scene，经 wgpu 30 在 Vulkan、Metal、Direct3D 12 上绘制几何、最多八层裁剪与 mask/color 字形，不依赖 Parley、Vulkan 后端或 ash；可选 `window` 只增加 raw-window-handle。图像与 CPU 光栅的路径 mask 共用同一图集，放不下的得到专用纹理。它有自己的记录构建与 WGSL 副本，与 Vulkan 后端的重复及后续合并见 [wgpu 契约](wgpu.md)。
 
 `aegle-text` 默认启用 Parley std，并复用其已有的 ICU 分段包处理 grapheme 删除；系统字体、词典、文字无障碍和 scene 桥接分别可选。段落与 Editor 共用 TextSystem 字体/shaping 上下文，Editor 包装 PlainEditor 并补充稳定提交值、可取消组合和有界 delta 历史；不另建编辑引擎或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由平台/应用层连接。
 

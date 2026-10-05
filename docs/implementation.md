@@ -247,11 +247,18 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 ## 放弃 Metal，新增最小 wgpu 后端
 
 - 按用户决定放弃原生 Metal 方案，各设计文档与依赖表中的 `aegle-render-metal`、objc2-metal、MoltenVK 路线改为"Metal 仅经 wgpu 使用"；ash/Vulkan 仍是默认 GPU 路径。macOS 窗口、输入与无障碍仍未实现，状态不变。
-- 新增 `aegle-render-wgpu`（wgpu 30.0.1，pollster）：几何、八层裁剪、mask/color 字形图集、离屏读回，以及 `window` feature 的 raw-window-handle surface。`aegle-app` 增加 `wgpu` feature、`RendererBackend::Wgpu` 与 `AppOptions::wgpu`。图像与路径未实现，返回 `UnsupportedCommand`。契约与取舍见 [wgpu](wgpu.md)。
+- 新增 `aegle-render-wgpu`（wgpu 30.0.1，pollster）：几何、八层裁剪、mask/color 字形图集、离屏读回，以及 `window` feature 的 raw-window-handle surface。`aegle-app` 增加 `wgpu` feature、`RendererBackend::Wgpu` 与 `AppOptions::wgpu`。契约与取舍见 [wgpu](wgpu.md)。
 - 验证：综合场景 `tests/render.rs`（默认 ignored）在 RX 6800 XT（RADV NAVI21）与 llvmpipe 上通过，对照软件渲染器，并覆盖图集中途清空和失败帧恢复；Windows、Metal、DX12 没有运行，也没有为 Windows 目标交叉编译。离屏示例在 RADV 上写出图片，目视确认 CJK 文字与圆角卡片。
 - App 集成：私有 Sway（GLES2 compositor）上以 RADV 运行 `native,wgpu,system-fonts,markup` 的 release `scrolling`，经真实指针滚轮、Tab 焦点显露、滚动按钮与关闭回调通过，截图目视确认 CJK、嵌套裁剪与滚动条；未连接用户桌面，没有开启 Khronos validation。`wayland,software`、`wayland,vulkan`、`wayland,wgpu,vulkan,software` 与无窗口 `wgpu` 的 App 检查，以及 workspace all-targets 检查、严格 Rustdoc 与格式检查通过；本机没有 Clippy。
 - 体积：native,wgpu,system-fonts,markup 的 release `controls` 为 8,578,728 B，同组合换成 vulkan 为 4,449,928 B（均 strip，Linux），wgpu 版多 4,128,800 B。没有测量帧时间、空闲 CPU 或 PSS，也没有与 Vulkan 后端比较性能。
 - 实现 1,683 行 Rust 加 154 行 WGSL，综合场景 142 行，测试占该 crate Rust 源码的 7.8%；最大源文件 387 行。后续：Windows/macOS 实机、图像与路径、设备丢失恢复、与 Vulkan 后端合并共享的记录构建。
+
+## wgpu 后端补齐图像与路径
+
+- `aegle-render-wgpu` 的 `text` feature 现在绘制 RGBA 图像与填充/描边路径，补完与 Vulkan 后端相同的 Scene 命令集。图集拆为 `atlas.rs`，图像与路径在 `vector.rs`；新增依赖只有已在 aegle-glyph/swash 闭包中的 zeno。着色器恢复图像分支（边缘钳制与解析覆盖率）。放不进页的图像和路径 mask 使用按尺寸创建的专用纹理，最后一次使用后的下一帧释放；字形超大、图像或 mask 超过设备纹理上限返回 `TooLarge`（取代 `GlyphTooLarge`）。
+- 验证：新增 ignored 场景 `tests/vector.rs`，在 RX 6800 XT（RADV NAVI21）与 llvmpipe 上通过：缩放/平移/旋转的图像、偶奇填充星形与圆头二次/三次描边对照软件渲染器，平均通道差 0.29–0.31（界限 0.5）；未缩放图像的像素精确；整像素平移不增加条目，新的线性变换增加；超出页的 80×10 图像得到专用纹理，其后两帧不再绘制时释放。原有综合场景仍通过。
+- 私有 Sway（GLES2 compositor）上以 RADV 运行 `native,wgpu,system-fonts,markup` 的 release `visuals` 示例，截图目视确认渐变图像、填充加描边的星形、按钮、一万行虚拟列表及滚动条均正确显示；没有操作 Rotate 按钮，也没有开启 validation。
+- 实现 2,138 行 Rust 加 WGSL，测试 277 行，占该 crate Rust 源码的 11.5%；最大源文件 488 行。`cargo fmt --check`、workspace all-targets 检查与严格 Rustdoc 通过，本机无 Clippy。仍未做：Windows/macOS 实机、设备丢失恢复、与 Vulkan 后端共享记录构建，没有帧时间或内存测量。
 
 ## 当前进度与剩余工作
 

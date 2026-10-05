@@ -109,7 +109,7 @@ For a Vulkan-only application, with no software renderer in its runtime dependen
 cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,markup --example scrolling --release
 ```
 
-The portable wgpu backend (`wgpu` feature, `RendererBackend::Wgpu`) draws geometry and text only; image and path commands fail the frame with an error. `WGPU_BACKEND` and `WGPU_ADAPTER_NAME` choose the adapter. See the [wgpu contract](docs/wgpu.md).
+The portable wgpu backend (`wgpu` feature, `RendererBackend::Wgpu`) draws geometry, text, images and paths; `WGPU_BACKEND` and `WGPU_ADAPTER_NAME` choose the adapter. See the [wgpu contract](docs/wgpu.md).
 
 When both renderers are compiled, set `AppOptions.renderer` to `RendererBackend::Vulkan` explicitly; software remains the default. Driver/feature/budget failures return errors. A minimal Vulkan-only build defaults to Vulkan. Native Vulkan currently creates a device per window; large windows may require increasing `AppOptions.vulkan.memory_budget`.
 

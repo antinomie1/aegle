@@ -20,8 +20,9 @@ const OFFSCREEN: TextureFormat = TextureFormat::Rgba8Unorm;
 /// Fixed configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct Options {
-    /// Square glyph page extent, including one transparent pixel around every
-    /// glyph. Mask and color pages are allocated when first needed.
+    /// Square atlas page extent, including one transparent pixel around every
+    /// entry. Mask and color pages are allocated when first needed; larger images
+    /// and path masks get exact-size textures instead.
     #[cfg(feature = "text")]
     pub atlas_size: u32,
     /// Window only: keep premultiplied window alpha when the compositor offers it.
@@ -67,7 +68,7 @@ pub struct Renderer {
     buffers: Buffers,
     pub(crate) rec: Recording,
     #[cfg(feature = "text")]
-    pub(crate) atlas: crate::text::Atlas,
+    pub(crate) atlas: crate::atlas::Atlas,
     pub(crate) size: [u32; 2],
     clear: [f64; 4],
     /// True once a pass has cleared the linear image this frame.
@@ -91,7 +92,7 @@ impl Renderer {
             buffers: Buffers::default(),
             rec: Recording::default(),
             #[cfg(feature = "text")]
-            atlas: crate::text::Atlas::new(options.atlas_size),
+            atlas: crate::atlas::Atlas::new(options.atlas_size),
             size: [0; 2],
             clear: [0.0; 4],
             loaded: false,
@@ -101,6 +102,13 @@ impl Renderer {
     /// Name reported by the selected adapter (including CPU implementations).
     pub fn device_name(&self) -> &str {
         &self.gpu.name
+    }
+
+    /// Glyphs, images and path masks currently resident on the GPU. Exact-size
+    /// textures stay for one frame after their last use.
+    #[cfg(feature = "text")]
+    pub fn resident_entries(&self) -> usize {
+        self.atlas.len()
     }
 
     /// Begins a complete offscreen frame. Same-sized targets are reused.
@@ -136,6 +144,8 @@ impl Renderer {
             self.target = None;
             self.target = Some(self.create_target(width, height, offscreen));
         }
+        #[cfg(feature = "text")]
+        self.atlas.begin_frame();
         self.size = [width, height];
         self.clear = linear_rgba(clear.to_rgba()).map(f64::from);
         self.loaded = false;
@@ -313,9 +323,9 @@ impl Renderer {
         match kind {
             Kind::Geometry => pass.set_pipeline(&self.gpu.geometry),
             #[cfg(feature = "text")]
-            Kind::Mask | Kind::Color => {
+            Kind::Atlas(slot) => {
                 pass.set_pipeline(&self.gpu.text);
-                pass.set_bind_group(1, self.atlas.group(kind == Kind::Mask), &[]);
+                pass.set_bind_group(1, self.atlas.group(slot), &[]);
             }
         }
     }

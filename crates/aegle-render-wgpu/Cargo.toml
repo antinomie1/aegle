@@ -9,7 +9,7 @@ description = "Minimal portable wgpu rendering of retained Aegle scenes"
 [features]
 default = []
 window = ["dep:raw-window-handle"]
-text = ["aegle-scene/text", "dep:aegle-glyph", "dep:hashbrown"]
+text = ["aegle-scene/text", "dep:aegle-glyph", "dep:hashbrown", "dep:zeno"]
 
 [dependencies]
 aegle-scene.workspace = true
@@ -19,6 +19,8 @@ pollster = "1.0.1"
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "vulkan", "dx12", "metal"] }
 aegle-glyph = { workspace = true, optional = true, features = ["scene"] }
 hashbrown = { version = "0.17.1", default-features = false, optional = true }
+# Already used by aegle-glyph through swash; rasterizes path masks for the atlas.
+zeno = { version = "0.3.3", default-features = false, features = ["eval", "std"], optional = true }
 raw-window-handle = { version = "0.6.2", optional = true }
 
 [dev-dependencies]

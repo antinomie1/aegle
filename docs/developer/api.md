@@ -21,7 +21,7 @@ aegle = { path = "../aegle/crates/aegle" }
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
 | `motion` | ✓ | 外观/位移过渡与动画 |
 | `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译 |
-| `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何与文字；不含图像与路径），可与其他后端同时编译 |
+| `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），可与其他后端同时编译 |
 | `accessibility` |  | 语义树导出（`Ui::accessibility`），不接系统 |
 | `unix-accessibility` |  | Linux AT-SPI 适配，引入 zbus |
 | `windows-accessibility` |  | Windows UI Automation 适配 |

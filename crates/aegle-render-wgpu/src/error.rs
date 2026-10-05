@@ -31,9 +31,10 @@ pub enum Error {
     /// Glyph data or raster settings failed validation.
     #[cfg(feature = "text")]
     Glyph(aegle_glyph::GlyphError),
-    /// A glyph and its transparent border exceed the atlas page.
+    /// A glyph exceeds the atlas page, or an image or path mask exceeds the
+    /// device's texture size.
     #[cfg(feature = "text")]
-    GlyphTooLarge,
+    TooLarge,
     /// A transformed scene failed its shared geometry invariant.
     Scene(aegle_scene::SceneError),
     /// Copying pixels back to the CPU failed.
@@ -64,7 +65,7 @@ impl fmt::Display for Error {
             #[cfg(feature = "text")]
             Self::Glyph(e) => write!(f, "wgpu glyph: {e}"),
             #[cfg(feature = "text")]
-            Self::GlyphTooLarge => f.write_str("wgpu glyph exceeds atlas page dimensions"),
+            Self::TooLarge => f.write_str("wgpu glyph, image or path mask exceeds texture limits"),
             Self::Scene(e) => write!(f, "wgpu scene: {e}"),
             Self::Readback(e) => write!(f, "wgpu readback: {e}"),
             Self::FrameFailed => f.write_str("cannot submit a failed wgpu frame"),

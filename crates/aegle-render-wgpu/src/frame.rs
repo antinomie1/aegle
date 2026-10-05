@@ -122,6 +122,20 @@ impl Renderer {
                 Command::Glyphs(index) => {
                     self.glyphs(&scene.glyph_runs()[index], state)?;
                 }
+                #[cfg(feature = "text")]
+                Command::Image { image, rect } => {
+                    self.image(&scene.images()[image], rect, state)?;
+                }
+                #[cfg(feature = "text")]
+                Command::FillPath { path, color } => {
+                    self.path(&scene.paths()[path], color, None, state)?;
+                }
+                #[cfg(feature = "text")]
+                Command::StrokePath {
+                    path,
+                    color,
+                    stroke,
+                } => self.path(&scene.paths()[path], color, Some(stroke), state)?,
                 _ => return Err(Error::UnsupportedCommand),
             }
             self.flush_full()?;

@@ -23,7 +23,7 @@ pub(crate) struct Primitive {
     /// Radius or mask contrast, stroke width (-1 fills) and viewport size.
     pub params: [f32; 4],
     pub color: [f32; 4],
-    /// Clip head and glyph kind (1 mask, 2 color).
+    /// Clip head and atlas kind (1 mask, 2 color glyph, 3 image).
     pub header: [u32; 4],
 }
 
@@ -39,14 +39,12 @@ pub(crate) struct Clip {
 
 const _: () = assert!(size_of::<Primitive>() == 112 && size_of::<Clip>() == 64);
 
-/// Which pipeline and glyph page draws a run of primitives.
+/// Which pipeline and texture draws a run of primitives.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
     Geometry,
     #[cfg(feature = "text")]
-    Mask,
-    #[cfg(feature = "text")]
-    Color,
+    Atlas(crate::atlas::Slot),
 }
 
 /// Adjacent primitives sharing a pipeline and page: one instanced draw.
