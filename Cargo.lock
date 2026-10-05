@@ -54,6 +54,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "accesskit_windows"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1"
+dependencies = [
+ "accesskit",
+ "accesskit_consumer",
+ "hashbrown 0.16.1",
+ "static_assertions",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -74,6 +88,8 @@ version = "0.1.0"
 dependencies = [
  "accesskit",
  "accesskit_unix",
+ "accesskit_windows",
+ "raw-window-handle",
 ]
 
 [[package]]
@@ -86,7 +102,9 @@ dependencies = [
  "aegle-layout",
  "aegle-motion",
  "aegle-platform-wayland",
+ "aegle-platform-win32",
  "aegle-render-software",
+ "aegle-render-vulkan",
  "aegle-scene",
  "aegle-text",
  "aegle-theme",
@@ -162,11 +180,21 @@ dependencies = [
  "aegle-scene",
  "aegle-text",
  "aegle-types",
+ "raw-window-handle",
  "smithay-client-toolkit",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-misc",
  "xkbcommon",
+]
+
+[[package]]
+name = "aegle-platform-win32"
+version = "0.1.0"
+dependencies = [
+ "aegle-types",
+ "raw-window-handle",
+ "windows",
 ]
 
 [[package]]
@@ -188,6 +216,7 @@ name = "aegle-render-vulkan"
 version = "0.1.0"
 dependencies = [
  "aegle-glyph",
+ "aegle-platform-wayland",
  "aegle-render-software",
  "aegle-scene",
  "aegle-text",
@@ -196,6 +225,7 @@ dependencies = [
  "bytemuck",
  "hashbrown 0.17.1",
  "naga",
+ "raw-window-handle",
 ]
 
 [[package]]
@@ -1398,6 +1428,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "raw-window-handle"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
+
+[[package]]
 name = "read-fonts"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1441,6 +1477,12 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
+name = "scoped-tls"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
 
 [[package]]
 name = "serde"
@@ -1884,6 +1926,7 @@ dependencies = [
  "cc",
  "downcast-rs",
  "rustix",
+ "scoped-tls",
  "smallvec",
  "wayland-sys",
 ]
@@ -1990,6 +2033,9 @@ version = "0.31.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8eab23fefc9e41f8e841df4a9c707e8a8c4ed26e944ef69297184de2785e3be"
 dependencies = [
+ "dlib",
+ "log",
+ "once_cell",
  "pkg-config",
 ]
 

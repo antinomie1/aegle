@@ -15,7 +15,8 @@ use ash::vk;
 pub struct Options {
     /// Vulkan enumeration index, or prefer a suitable hardware device when absent.
     pub device_index: Option<u32>,
-    /// Bytes of explicit VkDeviceMemory allocations, including alignment and readback.
+    /// Bytes of explicit VkDeviceMemory allocations, including alignment/readback,
+    /// plus the opaque swapchain image estimate when presenting to a window.
     pub memory_budget: u64,
     /// Bytes of CPU draw/clip vector capacity; excludes driver command storage.
     pub recording_budget: usize,
@@ -40,6 +41,9 @@ impl Default for Options {
 pub struct Stats {
     /// Sum of bound VkDeviceMemory allocation sizes owned by this renderer.
     pub device_bytes: u64,
+    /// Estimated swapchain image bytes (width × height × 4 × image count), separate
+    /// from device_bytes because WSI allocations are opaque to Vulkan applications.
+    pub swapchain_bytes: u64,
     /// Capacity bytes of CPU primitive and clipping vectors.
     pub recording_bytes: usize,
 }
@@ -52,14 +56,18 @@ pub struct Stats {
 /// All access is serialized through mutable methods. No idle render loop is owned.
 pub struct Renderer {
     // Declaration order destroys children before their render passes and device.
-    target: Option<Target>,
+    pub(crate) target: Option<Target>,
+    #[cfg(feature = "window")]
+    pub(crate) swapchain: Option<crate::swapchain::Swapchain>,
+    #[cfg(feature = "window")]
+    pub(crate) window_size: [u32; 2],
     clips: Option<Buffer>,
     readback: Option<Buffer>,
     #[cfg(feature = "text")]
     text: crate::text::Text,
-    pipeline: Pipeline,
+    pub(crate) pipeline: Pipeline,
     commands: Commands,
-    device: Device,
+    pub(crate) device: Device,
     recording: Recording,
     options: Options,
     name: String,
@@ -71,7 +79,10 @@ impl Renderer {
     /// Loads the installed Vulkan loader and creates a Vulkan 1.1 graphics device.
     /// No image, upload buffer or readback allocation is made until first use.
     pub fn new(options: Options) -> Result<Self> {
-        let device = Device::new(options.device_index)?;
+        Self::with_device(options, Device::new(options.device_index)?)
+    }
+
+    pub(crate) fn with_device(options: Options, device: Device) -> Result<Self> {
         let name = std::ffi::CStr::from_bytes_until_nul(bytemuck::cast_slice(
             &device.properties.device_name,
         ))
@@ -84,6 +95,10 @@ impl Renderer {
         let text = crate::text::Text::new(&device, &pipeline, options.text)?;
         Ok(Self {
             target: None,
+            #[cfg(feature = "window")]
+            swapchain: None,
+            #[cfg(feature = "window")]
+            window_size: [0; 2],
             clips: None,
             readback: None,
             #[cfg(feature = "text")]
@@ -199,6 +214,7 @@ impl Renderer {
     pub fn stats(&self) -> Stats {
         Stats {
             device_bytes: self.base_bytes() + self.text_bytes(),
+            swapchain_bytes: self.swapchain_bytes(),
             recording_bytes: self.recording.draws.capacity() * size_of::<crate::geometry::Draw>()
                 + self.recording.clips.capacity() * size_of::<Clip>(),
         }
@@ -215,6 +231,8 @@ impl Renderer {
     /// requires a new completed frame.
     pub fn release_images(&mut self) -> Result {
         self.wait()?;
+        #[cfg(feature = "window")]
+        self.release_swapchain()?;
         self.target = None;
         self.clips = None;
         self.readback = None;
@@ -225,8 +243,19 @@ impl Renderer {
         Ok(())
     }
 
-    fn remaining(&self) -> u64 {
-        self.options.memory_budget - self.stats().device_bytes
+    pub(crate) fn remaining(&self) -> u64 {
+        self.options.memory_budget - self.stats().device_bytes - self.swapchain_bytes()
+    }
+
+    fn swapchain_bytes(&self) -> u64 {
+        #[cfg(feature = "window")]
+        {
+            self.swapchain.as_ref().map_or(0, |chain| chain.bytes)
+        }
+        #[cfg(not(feature = "window"))]
+        {
+            0
+        }
     }
 
     fn base_bytes(&self) -> u64 {
@@ -263,9 +292,10 @@ impl Renderer {
             clips.write(0, bytemuck::cast_slice(&self.recording.clips))?;
         }
         #[cfg(feature = "text")]
-        self.text
-            .atlas
-            .prepare_upload(&self.device, self.options.memory_budget - self.base_bytes())?;
+        self.text.atlas.prepare_upload(
+            &self.device,
+            self.options.memory_budget - self.base_bytes() - self.swapchain_bytes(),
+        )?;
         let target = self.target.as_ref().unwrap();
         self.pipeline.update(
             self.clips.as_ref().unwrap().handle,
@@ -277,19 +307,50 @@ impl Renderer {
         self.text
             .atlas
             .record_uploads(&self.device.raw, self.commands.buffer);
+        let output = target.frames[1];
+        #[cfg(feature = "window")]
+        let acquired = self
+            .swapchain
+            .as_mut()
+            .map(|chain| chain.acquire())
+            .transpose()?;
+        #[cfg(feature = "window")]
+        let output = if let Some((index, _, _)) = acquired {
+            self.swapchain.as_ref().unwrap().frames[index as usize]
+        } else {
+            output
+        };
         self.commands.render(
             target,
             &self.pipeline,
             &self.recording,
             aegle_types::color_math::linear_rgba(clear.to_rgba()),
+            output,
             #[cfg(feature = "text")]
             &self.text.pipeline,
         );
-        self.commands.submit(self.device.queue)?;
+        let signals: &[vk::Semaphore] = &[];
+        #[cfg(feature = "window")]
+        let signal;
+        #[cfg(feature = "window")]
+        let signals = if let Some((_, semaphore, _)) = acquired {
+            signal = [semaphore];
+            &signal[..]
+        } else {
+            signals
+        };
+        self.commands.submit_signal(self.device.queue, signals)?;
         #[cfg(feature = "text")]
         self.text.atlas.commit();
         self.busy = true;
         self.image_ready = true;
+        #[cfg(feature = "window")]
+        if let Some((index, _, suboptimal)) = acquired {
+            self.swapchain
+                .as_mut()
+                .unwrap()
+                .present(self.device.queue, index, suboptimal)?;
+        }
         Ok(())
     }
 }
@@ -298,6 +359,8 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         // A lost device may fail waiting; Vulkan still permits object destruction.
         let _ = self.wait();
+        #[cfg(feature = "window")]
+        let _ = self.release_swapchain();
     }
 }
 
@@ -310,6 +373,11 @@ pub struct Frame<'a> {
     failed: bool,
 }
 impl Frame<'_> {
+    /// Actual physical extent of this frame, including native surface constraints.
+    pub fn extent(&self) -> [u32; 2] {
+        let target = self.renderer.target.as_ref().unwrap();
+        [target.width, target.height]
+    }
     /// Appends a retained scene with a logical-to-device transform.
     pub fn draw(&mut self, scene: &Scene, transform: Affine) -> Result {
         self.draw_clipped(scene, transform, None)
@@ -322,7 +390,9 @@ impl Frame<'_> {
         }
         let target = self.renderer.target.as_ref().unwrap();
         #[cfg(feature = "text")]
-        let text_budget = self.renderer.options.memory_budget - self.renderer.base_bytes();
+        let text_budget = self.renderer.options.memory_budget
+            - self.renderer.base_bytes()
+            - self.renderer.swapchain_bytes();
         let result = self.renderer.recording.append(
             scene,
             transform,
@@ -347,8 +417,9 @@ impl Frame<'_> {
         self.failed |= result.is_err();
         result
     }
-    /// Submits graphics and color encoding, without waiting or copying pixels to CPU.
-    /// The next frame/readback waits on this submission's fence before reusing memory.
+    /// Submits graphics and color encoding without copying pixels to CPU. A native
+    /// window frame also acquires a FIFO image (which may block) and presents it.
+    /// The next frame/readback waits on the submission fence before reusing memory.
     pub fn finish(self) -> Result {
         if self.failed {
             return Err(Error::FrameFailed);

@@ -11,7 +11,11 @@ default = []
 motion = ["dep:aegle-motion"]
 system-fonts = ["aegle-text/system-fonts"]
 accessibility = ["dep:aegle-access", "aegle-text/text-a11y"]
-wayland = ["dep:aegle-platform-wayland", "dep:aegle-render-software", "dep:wayland-client"]
+wayland = ["dep:aegle-platform-wayland", "dep:wayland-client"]
+windows = ["dep:aegle-platform-win32"]
+software = ["dep:aegle-render-software"]
+vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
+windows-accessibility = ["windows", "accessibility", "aegle-access/windows"]
 unix-accessibility = ["wayland", "accessibility", "aegle-access/unix"]
 
 [dependencies]
@@ -24,11 +28,16 @@ aegle-scene = { workspace = true, features = ["text"] }
 aegle-text = { workspace = true, features = ["scene"] }
 aegle-controls = { workspace = true, features = ["text"] }
 aegle-access = { workspace = true, optional = true }
+aegle-render-software = { workspace = true, features = ["text"], optional = true }
+aegle-render-vulkan = { workspace = true, features = ["text", "window"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aegle-platform-wayland = { workspace = true, optional = true }
-aegle-render-software = { workspace = true, features = ["text"], optional = true }
 wayland-client = { version = "0.31.15", optional = true }
 
-[lints]
-workspace = true
+[target.'cfg(target_os = "windows")'.dependencies]
+aegle-platform-win32 = { path = "../aegle-platform-win32", optional = true }
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"

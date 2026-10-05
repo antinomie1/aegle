@@ -60,6 +60,7 @@ impl Commands {
         pipeline: &Pipeline,
         recording: &Recording,
         clear: [f32; 4],
+        output: vk::Framebuffer,
         #[cfg(feature = "text")] text: &crate::text_pipeline::TextPipeline,
     ) {
         let viewport = [vk::Viewport {
@@ -86,7 +87,7 @@ impl Commands {
                     self.buffer,
                     &vk::RenderPassBeginInfo::default()
                         .render_pass(pipeline.passes[pass])
-                        .framebuffer(target.frames[pass])
+                        .framebuffer(if pass == 0 { target.frames[0] } else { output })
                         .render_area(target.area())
                         .clear_values(&values),
                     vk::SubpassContents::INLINE,
@@ -189,7 +190,7 @@ impl Commands {
         unsafe {
             self.raw.cmd_copy_image_to_buffer(
                 self.buffer,
-                target.output.handle,
+                target.output.as_ref().unwrap().handle,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                 buffer,
                 &copy,
@@ -207,8 +208,14 @@ impl Commands {
     }
 
     pub fn submit(&self, queue: vk::Queue) -> Result {
+        self.submit_signal(queue, &[])
+    }
+
+    pub fn submit_signal(&self, queue: vk::Queue, signals: &[vk::Semaphore]) -> Result {
         let buffers = [self.buffer];
-        let submits = [vk::SubmitInfo::default().command_buffers(&buffers)];
+        let submits = [vk::SubmitInfo::default()
+            .command_buffers(&buffers)
+            .signal_semaphores(signals)];
         // SAFETY: Exclusive Renderer access serializes queue calls. The buffer is
         // recording and its reset fence is not associated with another submission.
         unsafe {

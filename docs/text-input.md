@@ -87,3 +87,9 @@ Wayland 已接入上述 text-input-v3；Windows 的 TSF/兼容路径及 macOS �
 ScrollView 仅平移既有控件几何，Editor 继续拥有自己的文字滚动和组合状态。滚轮先由命中的编辑器消费，到边界后剩余的横纵位移交给祖先滚动容器；内部文字溢出不计入外层内容高度。聚焦、选择或编辑会沿祖先从内到外滚入控件；编辑器大于视口的轴改为保证 caret 可见，纯滚轮不强行拉回焦点。
 
 候选矩形依次应用编辑器内部偏移、控件窗口位置和祖先偏移，再夹到控件、祖先可见矩形及窗口范围。手动将活动编辑器滚出视口时保持组合会话，候选锚点收缩到最近边界的零面积矩形；不因此发送 IME reset。重新编辑会揭示 caret。此几何策略已有无窗口组合场景验证，真实输入法对离屏零面积候选锚点的呈现仍需真人验收。
+
+## 当前 Windows 输入边界
+
+Win32 普通文本由 WM_CHAR/WM_UNICHAR 产生，UTF-16 surrogate pair 合并为 Unicode scalar；按键与文字分开送入同一 Ui/Editor，保留 AltGr/dead-key 的系统翻译。IMM 从自有 HIMC 读取组合/结果，UTF-16 cursor 检查边界后转成 UTF-8 偏移，候选窗使用 Ui 光标矩形按 DPI 向外取整；由 Editor 绘制预编辑，系统仍绘制候选窗。自行消费 WM_IME_COMPOSITION/WM_IME_CHAR，避免默认过程再次产生已提交文本。切换编辑器/关闭禁用旧会话、取消组合并清理已排队结果。
+
+当前提供 IMM 兼容路径，未实现 TSF text store、周边文字查询/重转换或触屏键盘支持。不能将系统提供 HIMC 或人工注入 WM_CHAR 当作真实中文输入法验证；实机 Microsoft Pinyin、候选窗、焦点切换与取消仍需验收。

@@ -1,6 +1,6 @@
 # 无障碍与可检查的控件树
 
-状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍。当前 aegle 默认启用 Unix 适配，独立模块仍显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
+状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI / Windows UIA adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍。当前 aegle 默认按目标启用 Unix / Windows 适配，独立模块仍显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
 
 `Ui::accessibility(initial, title)` 可检查当前控件树及文本 run，使用与绘制相同的父子关系、布局与滚动几何；语义检查保留宿主尚未消费的重绘请求。身份由每个 Ui 单调分配，文本 run 与动态控件共用无冲突命名空间。`access_action` 对已经删除的节点、过期选择或预编辑期间的选择返回 false，原生应用不会因此退出。App 首次/重新激活完整导出，之后使用语义失效差量；文本的主题、局部样式及自定义皮肤前景同步到系统语义。自定义皮肤可依交互状态改变文字颜色，因此相关状态变化也标记语义失效；默认普通 hover/pressed 仍仅改变绘制。当前没有独立树检查器 GUI。
 
@@ -77,7 +77,8 @@ AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handl
 | CJK 文本、字符数、选择和 caret | AT-SPI Text 查询及选择动作通过；本地桥覆盖只读、run 边界、失效范围与 IME 拒绝 |
 | 通过辅助技术替换文本 | 上游 `accesskit_unix` 0.22.1 未实现 `org.a11y.atspi.EditableText`；当前不能宣称支持 |
 | 几何 | 从绘制使用的逻辑窗口几何与滚动偏移派生；Wayland 无全局窗口位置，不调用 set_root_window_bounds；adapter 的默认原点不能作为真实屏幕位置，也未完成屏幕定位验收 |
-| macOS / Windows、真实屏幕阅读器、密码控件 | 尚未接入或验收 |
+| Windows | UIA adapter 已接入；兼容环境与实机证据见实现状态 |
+| macOS、真实屏幕阅读器、密码控件 | 尚未接入或验收 |
 
 协议验证使用独立 headless Wayland compositor、私有 `dbus-run-session`、最小假 Status/Registry 服务，以及真实 D-Bus AT-SPI 查询/动作：遍历树、读取 CJK、改变选择/caret、切换焦点、激活按钮并观察文字清空，以及停用/重新启用后的完整树与焦点恢复。这证明 adapter 与当前示例的协议和状态连接，不等于真实 AT-SPI registry、屏幕阅读器或全部桌面环境验收。测试总线未修改用户桌面设置。
 
@@ -130,3 +131,9 @@ ScrollView 导出同名角色、`clips_children`、横纵 offset/min/max；子�
 共享动作入口支持 `SetScrollOffset`、四方向 `ScrollUnit::Item/Page`（一项为主题 control_height，一页为视口尺寸），以及无 Hint 的 `ScrollIntoView`。滚动动作先于可聚焦过滤，因此普通标签也可请求滚入；禁用祖先仍拒绝交互。`ScrollHint` 和 `ScrollToPoint` 暂不支持并明确返回 false，后者的目标坐标不能误作 offset。程序滚动和辅助滚动都不取消 IME 组合。
 
 这已验证 AccessKit schema/consumer 的嵌套边界和直接动作，不等于完整平台滚动协议验收。当前 AccessKit Unix 的过滤器会省略部分连续离屏兄弟节点，不能声称 AT-SPI 一次遍历可取得所有离屏控件。原生语义的 HiDPI/平台坐标转换与真实屏幕阅读器滚动交互仍需补齐验证。
+
+## 当前 Windows UIA 接入
+
+`aegle-access/windows` 复用 accesskit_windows 0.34 的 SubclassingAdapter，在 HWND 首次显示之前安装，并持有原生租约到 subclass 卸载之后。WM_GETOBJECT 的激活回调仅排队并唤醒；上游临时 placeholder 由 UI 线程首次完整语义树替换。动作仍经 Mailbox 进入同一 Ui，原生查询不重入借用控件树。发布后先释放 AccessKit 借用再 raise 系统事件；上游直接处理窗口焦点消息。
+
+Ui 检查 API 继续使用逻辑坐标，Windows App 在语义根应用 DPI scale，UIA adapter 再负责 client-to-screen；DPI 改变重新发布。没有维护第二棵可修改的 UI 树；AccessKit 派生缓存、标准库消息队列及 COM/UIA 成本仍需计量。Windows 真实屏幕阅读器、文本模式及通知完整验收尚未完成。

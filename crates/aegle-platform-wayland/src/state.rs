@@ -34,6 +34,8 @@ pub(crate) struct WindowState {
     pub(crate) dirty: bool,
     pub(crate) redraw_queued: bool,
     pub(crate) frame_pending: bool,
+    // An external acquisition may fail before its pending surface state commits.
+    pub(crate) frame_requested: bool,
 }
 
 pub(crate) struct State {
@@ -153,6 +155,7 @@ impl CompositorHandler for State {
             .find(|w| w.window.wl_surface() == surface)
         {
             window.frame_pending = false;
+            window.frame_requested = false;
         }
     }
 

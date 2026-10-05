@@ -1,7 +1,12 @@
 #[cfg(feature = "motion")]
 use crate::Transition;
+#[cfg(target_os = "windows")]
+use crate::platform::Win32 as Platform;
+use crate::platform::{PixelSize, WindowId};
+#[cfg(target_os = "linux")]
+use crate::platform::{Wayland as Platform, WlSeat};
 use crate::{Container, Modifiers, Result, Size, TextSystem, Theme, Ui, UiError};
-use aegle_platform_wayland::{PixelSize, Wayland, WindowId, WlSeat};
+#[cfg(feature = "software")]
 use aegle_render_software::Renderer;
 #[cfg(feature = "motion")]
 use std::time::Instant;
@@ -11,6 +16,27 @@ use std::{
     rc::{Rc, Weak},
 };
 
+/// Explicit rendering policy. Backend failures are returned without switching.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RendererBackend {
+    /// CPU rendering into the platform's native software surface.
+    /// Requires the `software` feature.
+    Software,
+    /// Vulkan geometry and glyph rendering directly into a native swapchain.
+    /// Requires the `vulkan` feature and a Vulkan-capable driver.
+    Vulkan,
+}
+
+impl Default for RendererBackend {
+    fn default() -> Self {
+        if cfg!(all(feature = "vulkan", not(feature = "software"))) {
+            Self::Vulkan
+        } else {
+            Self::Software
+        }
+    }
+}
+
 /// Shared native application settings. Budgets exclude font metadata and trees.
 #[derive(Clone, Debug)]
 pub struct AppOptions {
@@ -18,6 +44,11 @@ pub struct AppOptions {
     pub app_id: String,
     /// Initial theme for each new window.
     pub theme: Theme,
+    /// Explicit renderer selection; software is the default when compiled in.
+    pub renderer: RendererBackend,
+    /// Per-window Vulkan device, recording and glyph-cache budgets.
+    #[cfg(feature = "vulkan")]
+    pub vulkan: crate::VulkanOptions,
     /// Reusable software coverage and clipping storage. Default: 2 MiB.
     pub mask_budget: usize,
     /// Initial transition policy for each window's subsequently created interactive
@@ -35,6 +66,9 @@ impl Default for AppOptions {
         Self {
             app_id: "org.aegle.app".into(),
             theme: Theme::default(),
+            renderer: RendererBackend::default(),
+            #[cfg(feature = "vulkan")]
+            vulkan: crate::VulkanOptions::default(),
             mask_budget: 2 * 1024 * 1024,
             #[cfg(feature = "motion")]
             transition: Some(Transition::default()),
@@ -51,7 +85,8 @@ pub struct WindowOptions {
     pub width: u32,
     /// Preferred height in logical pixels; the compositor may override it.
     pub height: u32,
-    /// Maximum live SHM mapping bytes for this window. Default: 16 MiB.
+    /// Maximum software presentation bytes for this window. Default: 16 MiB.
+    /// Vulkan uses `AppOptions::vulkan` instead.
     pub buffer_budget: usize,
 }
 
@@ -65,7 +100,7 @@ impl Default for WindowOptions {
     }
 }
 
-/// Main-thread Wayland application with shared fonts and software glyph cache.
+/// Main-thread native application with shared fonts and explicit rendering.
 ///
 /// Each window owns an independent retained tree. Callbacks run without a
 /// native-runtime or tree borrow, and may modify or close any window. A single
@@ -78,26 +113,42 @@ pub struct App {
 }
 
 pub(crate) struct Runtime {
-    pub backend: Wayland,
+    // Presenters and their window leases must be destroyed before the event loop.
     pub windows: Vec<Entry>,
+    pub backend: Platform,
     pub fonts: Rc<RefCell<TextSystem>>,
-    pub renderer: Renderer,
+    #[cfg(feature = "software")]
+    pub renderer: Option<Renderer>,
     pub options: AppOptions,
     #[cfg(feature = "motion")]
     pub clock: Instant,
 }
 
 pub(crate) struct Entry {
+    #[cfg(feature = "vulkan")]
+    pub gpu: Option<aegle_render_vulkan::WindowRenderer<crate::platform::WindowSurface>>,
     pub id: WindowId,
     pub ui: Rc<Ui>,
-    #[cfg(feature = "unix-accessibility")]
+    #[cfg(any(
+        all(feature = "unix-accessibility", target_os = "linux"),
+        all(feature = "windows-accessibility", target_os = "windows")
+    ))]
     pub title: String,
+    #[cfg(target_os = "linux")]
     pub seat: Option<WlSeat>,
     pub modifiers: Modifiers,
     pub ready: bool,
-    #[cfg(feature = "unix-accessibility")]
-    pub accessibility: aegle_access::UnixAdapter,
-    #[cfg(feature = "unix-accessibility")]
+    #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
+    pub access_scale: f64,
+    #[cfg(any(
+        all(feature = "unix-accessibility", target_os = "linux"),
+        all(feature = "windows-accessibility", target_os = "windows")
+    ))]
+    pub accessibility: crate::native_access::Adapter,
+    #[cfg(any(
+        all(feature = "unix-accessibility", target_os = "linux"),
+        all(feature = "windows-accessibility", target_os = "windows")
+    ))]
     pub initial_access: bool,
 }
 
@@ -113,7 +164,7 @@ pub struct Window {
 }
 
 impl App {
-    /// Connects to Wayland and discovers installed system fonts.
+    /// Connects to the native platform and discovers installed system fonts.
     #[cfg(feature = "system-fonts")]
     pub fn new() -> Result<Self> {
         Self::with_options(AppOptions::default())
@@ -142,11 +193,14 @@ impl App {
         if options.app_id.len() > 4000 || options.app_id.contains('\0') {
             return Err("application identifier exceeds 4000 bytes or contains NUL".into());
         }
+        crate::native_render::validate_backend(options.renderer)?;
         let runtime = Runtime {
-            backend: Wayland::connect()?,
+            backend: Platform::connect()?,
             windows: Vec::new(),
             fonts: Rc::new(RefCell::new(fonts)),
-            renderer: Renderer::new(options.mask_budget),
+            #[cfg(feature = "software")]
+            renderer: (options.renderer == RendererBackend::Software)
+                .then(|| Renderer::new(options.mask_budget)),
             options,
             #[cfg(feature = "motion")]
             clock: Instant::now(),
@@ -178,12 +232,10 @@ impl App {
             ui.set_reduced_motion(runtime.options.reduced_motion)?;
         }
         ui.resize(Size::new(options.width as f32, options.height as f32))?;
-        #[cfg(feature = "unix-accessibility")]
-        let wake = runtime.backend.wake_handle()?;
         let app_id = runtime.options.app_id.clone();
         let id = runtime
             .backend
-            .create_window(aegle_platform_wayland::WindowOptions {
+            .create_window(crate::platform::WindowOptions {
                 title,
                 app_id: &app_id,
                 size: PixelSize {
@@ -192,18 +244,53 @@ impl App {
                 },
                 buffer_budget: options.buffer_budget,
             })?;
+        #[cfg(feature = "vulkan")]
+        let gpu = match crate::native_render::create_gpu(&runtime, id) {
+            Ok(gpu) => gpu,
+            Err(error) => {
+                runtime.backend.remove_window(id)?;
+                return Err(error);
+            }
+        };
+        #[cfg(any(
+            all(feature = "unix-accessibility", target_os = "linux"),
+            all(feature = "windows-accessibility", target_os = "windows")
+        ))]
+        let accessibility = match crate::native_access::create(&mut runtime, id) {
+            Ok(adapter) => adapter,
+            Err(error) => {
+                #[cfg(feature = "vulkan")]
+                drop(gpu);
+                runtime.backend.remove_window(id)?;
+                return Err(error);
+            }
+        };
         let root = ui.root();
         runtime.windows.push(Entry {
+            #[cfg(feature = "vulkan")]
+            gpu,
             id,
             ui,
+            #[cfg(target_os = "linux")]
             seat: None,
             modifiers: Modifiers::default(),
             ready: false,
-            #[cfg(feature = "unix-accessibility")]
+            #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
+            access_scale: 1.0,
+            #[cfg(any(
+                all(feature = "unix-accessibility", target_os = "linux"),
+                all(feature = "windows-accessibility", target_os = "windows")
+            ))]
             title: title.into(),
-            #[cfg(feature = "unix-accessibility")]
-            accessibility: aegle_access::UnixAdapter::new(move || wake.wake()),
-            #[cfg(feature = "unix-accessibility")]
+            #[cfg(any(
+                all(feature = "unix-accessibility", target_os = "linux"),
+                all(feature = "windows-accessibility", target_os = "windows")
+            ))]
+            accessibility,
+            #[cfg(any(
+                all(feature = "unix-accessibility", target_os = "linux"),
+                all(feature = "windows-accessibility", target_os = "windows")
+            ))]
             initial_access: false,
         });
         Ok(Window {
@@ -213,8 +300,9 @@ impl App {
         })
     }
 
-    /// Whether this connection supports native text-input-v3 composition.
-    /// Focusing an editable field without it returns `ImeUnavailable` from run.
+    /// Whether this platform supports native composition (Wayland text-input-v3
+    /// or the Windows IMM compatibility path). An unavailable requested IME is
+    /// returned as a capability error from the event loop.
     pub fn ime_available(&self) -> bool {
         self.runtime.borrow().backend.ime_available()
     }
@@ -230,14 +318,7 @@ impl Window {
     pub fn close(&self) -> Result<()> {
         let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
         let mut runtime = runtime.borrow_mut();
-        let index = runtime
-            .windows
-            .iter()
-            .position(|entry| entry.id == self.id)
-            .ok_or(UiError::DeadHandle)?;
-        runtime.backend.remove_window(self.id)?;
-        runtime.windows[index].ui.close()?;
-        runtime.windows.remove(index);
+        runtime.close(self.id)?;
         Ok(())
     }
 
@@ -271,5 +352,21 @@ impl Deref for Window {
     type Target = Container;
     fn deref(&self) -> &Container {
         &self.root
+    }
+}
+
+impl Runtime {
+    pub(crate) fn close(&mut self, id: WindowId) -> Result<()> {
+        let index = self
+            .windows
+            .iter()
+            .position(|entry| entry.id == id)
+            .ok_or(UiError::DeadHandle)?;
+        self.windows[index].ui.close()?;
+        // Destroy the GPU surface and swapchain while the platform still owns
+        // its window, then remove the window and queued native events.
+        drop(self.windows.remove(index));
+        self.backend.remove_window(id)?;
+        Ok(())
     }
 }

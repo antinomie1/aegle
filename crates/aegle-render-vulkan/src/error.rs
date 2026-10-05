@@ -9,6 +9,9 @@ pub enum Error {
     Vulkan(ash::vk::Result),
     /// The chosen device lacks a required capability.
     Unsupported(&'static str),
+    /// The native surface changed; request another frame to recreate its swapchain.
+    #[cfg(feature = "window")]
+    SurfaceOutOfDate,
     /// Invalid or unsupported target extent.
     InvalidSize,
     /// An operation requires a completed frame or another established state.
@@ -54,6 +57,8 @@ impl fmt::Display for Error {
             Self::Unsupported(capability) => {
                 write!(f, "Vulkan capability unavailable: {capability}")
             }
+            #[cfg(feature = "window")]
+            Self::SurfaceOutOfDate => f.write_str("Vulkan surface changed; redraw required"),
             Self::InvalidSize => f.write_str("invalid Vulkan render target size"),
             Self::InvalidState(reason) => f.write_str(reason),
             Self::Coordinates => f.write_str("Vulkan geometry exceeds the coordinate range"),

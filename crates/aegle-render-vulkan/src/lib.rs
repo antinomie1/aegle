@@ -8,8 +8,9 @@
 //!
 //! Geometry supports at most eight simultaneous clips. Optional `text` adds
 //! bounded, on-demand mask/color glyph atlases without a shaping dependency.
-//! Without that feature, text commands return an error. Native swapchains and UI-host selection are not
-//! implemented here yet. Loading a Vulkan CPU driver is possible and is not proof
+//! Without that feature, text commands return an error. Optional `window` adds
+//! `WindowRenderer` for Wayland and Win32 surfaces with FIFO presentation.
+//! Loading a Vulkan CPU driver is possible and is not proof
 //! of hardware GPU acceleration; [`Renderer::device_name`] identifies the device.
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -22,6 +23,10 @@ mod geometry;
 mod memory;
 mod pipeline;
 mod renderer;
+#[cfg(feature = "window")]
+mod surface;
+#[cfg(feature = "window")]
+mod swapchain;
 mod target;
 #[cfg(feature = "text")]
 mod text;
@@ -29,8 +34,12 @@ mod text;
 mod text_pipeline;
 #[cfg(feature = "text")]
 mod upload;
+#[cfg(feature = "window")]
+mod window;
 
 #[cfg(feature = "text")]
 pub use atlas::{TextOptions, TextStats};
 pub use error::{Error, Result};
 pub use renderer::{Frame, Options, Renderer, Stats};
+#[cfg(feature = "window")]
+pub use window::WindowRenderer;

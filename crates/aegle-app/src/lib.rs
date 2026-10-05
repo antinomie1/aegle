@@ -2,11 +2,12 @@
 //!
 //! [`Ui`] works without a window or renderer. It owns the retained tree; control
 //! handles are weak references and dropping a handle does not remove a node.
-//! Native Linux applications enable `wayland` for `App` and software windows.
+//! Native applications enable `wayland` on Linux or `windows` on Windows, plus
+//! an explicit `software` or `vulkan` renderer feature for `App`.
 //! `system-fonts` adds system discovery; explicit fonts remain available without
 //! it. `accessibility` exports semantic trees, while `unix-accessibility` also
-//! connects them to AT-SPI. Other native platforms and GPU hosts are not yet
-//! implemented.
+//! connects them to AT-SPI; `windows-accessibility` connects Windows UI Automation.
+//! Both renderers consume the same retained scenes, input and editor state.
 
 #[cfg(feature = "accessibility")]
 mod access_scroll;
@@ -20,12 +21,36 @@ mod layout;
 mod motion;
 #[cfg(feature = "motion")]
 mod motion_handles;
-#[cfg(all(feature = "wayland", target_os = "linux"))]
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
 mod native;
-#[cfg(all(feature = "wayland", target_os = "linux"))]
+#[cfg(any(
+    all(feature = "unix-accessibility", target_os = "linux"),
+    all(feature = "windows-accessibility", target_os = "windows")
+))]
+mod native_access;
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
+#[cfg_attr(target_os = "windows", path = "native_input_windows.rs")]
 mod native_input;
-#[cfg(all(feature = "wayland", target_os = "linux"))]
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
 mod native_loop;
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
+mod native_render;
+#[cfg(all(feature = "wayland", target_os = "linux"))]
+use aegle_platform_wayland as platform;
+#[cfg(all(feature = "windows", target_os = "windows"))]
+use aegle_platform_win32 as platform;
 mod paint;
 mod scroll;
 mod scroll_handles;
@@ -41,12 +66,17 @@ mod widget_paint;
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 #[cfg(feature = "motion")]
 pub use aegle_motion::{Easing, Transition};
+#[cfg(feature = "vulkan")]
+pub use aegle_render_vulkan::Options as VulkanOptions;
 pub use aegle_text::{ImeEdit, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, VisualState};
 pub use aegle_types::{Color, Point, Size};
 pub use handles::{Button, Container, Label, Node, TextField};
-#[cfg(all(feature = "wayland", target_os = "linux"))]
-pub use native::{App, AppOptions, Window, WindowOptions};
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
+pub use native::{App, AppOptions, RendererBackend, Window, WindowOptions};
 pub use scroll_handles::ScrollView;
 pub use ui::{ImeRequest, ImeState, Result, Ui, UiError};
 pub use value_handles::{CheckBox, Progress, Slider, Switch};

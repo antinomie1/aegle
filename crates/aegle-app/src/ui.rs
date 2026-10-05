@@ -260,7 +260,10 @@ impl Ui {
         Ok(Some(ImeState { reset, request }))
     }
 
-    #[cfg(all(feature = "wayland", target_os = "linux"))]
+    #[cfg(any(
+        all(feature = "wayland", target_os = "linux"),
+        all(feature = "windows", target_os = "windows")
+    ))]
     pub(crate) fn close(&self) -> Result {
         let mut state = self
             .state

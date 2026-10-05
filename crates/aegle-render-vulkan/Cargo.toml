@@ -8,6 +8,7 @@ description = "Bounded Vulkan 1.1 rendering of retained Aegle scenes"
 
 [features]
 default = []
+window = ["dep:raw-window-handle"]
 text = ["aegle-scene/text", "dep:aegle-glyph", "dep:hashbrown"]
 
 [dependencies]
@@ -17,6 +18,8 @@ ash = { version = "0.38.0", default-features = false, features = ["loaded", "std
 bytemuck = { version = "1.25.0", features = ["derive"] }
 aegle-glyph = { workspace = true, optional = true, features = ["scene"] }
 hashbrown = { version = "0.17.1", default-features = false, optional = true }
+
+raw-window-handle = { version = "0.6.2", optional = true }
 
 [build-dependencies]
 naga = { version = "30.0.1", default-features = false, features = ["wgsl-in", "spv-out"] }
@@ -33,3 +36,6 @@ missing_docs = "warn"
 [[example]]
 name = "text_scene"
 required-features = ["text"]
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+aegle-platform-wayland = { workspace = true, features = ["gpu"] }

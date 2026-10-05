@@ -8,8 +8,12 @@
 mod mailbox;
 #[cfg(all(feature = "unix", unix, not(target_os = "macos")))]
 mod unix;
+#[cfg(all(feature = "windows", windows))]
+mod windows;
 
 pub use accesskit;
 pub use mailbox::{Event, Handlers, Mailbox};
 #[cfg(all(feature = "unix", unix, not(target_os = "macos")))]
 pub use unix::UnixAdapter;
+#[cfg(all(feature = "windows", windows))]
+pub use windows::WindowsAdapter;

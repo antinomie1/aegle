@@ -8,7 +8,7 @@ pub(crate) struct Target {
     raw: ash::Device,
     pub frames: [vk::Framebuffer; 2],
     pub linear: Image,
-    pub output: Image,
+    pub output: Option<Image>,
     pub width: u32,
     pub height: u32,
 }
@@ -29,14 +29,21 @@ impl Target {
             vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
             budget,
         )?;
-        let output = Image::new(
-            device,
-            width,
-            height,
-            vk::Format::R8G8B8A8_UNORM,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
-            budget - linear.allocation,
-        )?;
+        let window = false;
+        #[cfg(feature = "window")]
+        let window = window || device.surface.is_some();
+        let output = if window {
+            None
+        } else {
+            Some(Image::new(
+                device,
+                width,
+                height,
+                vk::Format::R8G8B8A8_UNORM,
+                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+                budget - linear.allocation,
+            )?)
+        };
         let mut this = Self {
             raw: device.raw.clone(),
             frames: [vk::Framebuffer::null(); 2],
@@ -45,7 +52,10 @@ impl Target {
             width,
             height,
         };
-        for (i, view) in [this.linear.view, this.output.view].into_iter().enumerate() {
+        for (i, view) in std::iter::once(this.linear.view)
+            .chain(this.output.as_ref().map(|image| image.view))
+            .enumerate()
+        {
             let attachments = [view];
             // SAFETY: Images match the render pass format/sample count and extent;
             // their views remain owned alongside these framebuffers.
@@ -64,7 +74,7 @@ impl Target {
         Ok(this)
     }
     pub fn bytes(&self) -> u64 {
-        self.linear.allocation + self.output.allocation
+        self.linear.allocation + self.output.as_ref().map_or(0, |image| image.allocation)
     }
     pub fn area(&self) -> vk::Rect2D {
         vk::Rect2D {

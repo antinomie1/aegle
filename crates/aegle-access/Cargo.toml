@@ -9,6 +9,7 @@ description = "Event-driven accessibility adapters over retained application sta
 [features]
 default = []
 unix = ["dep:accesskit_unix"]
+windows = ["dep:accesskit_windows", "dep:raw-window-handle"]
 
 [dependencies]
 accesskit.workspace = true
@@ -16,5 +17,10 @@ accesskit.workspace = true
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 accesskit_unix = { version = "0.22.1", optional = true, default-features = false, features = ["async-io"] }
 
-[lints]
-workspace = true
+[target.'cfg(windows)'.dependencies]
+accesskit_windows = { version = "0.34.0", optional = true }
+raw-window-handle = { version = "0.6.2", optional = true, features = ["std"] }
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"

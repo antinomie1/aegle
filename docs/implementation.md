@@ -12,15 +12,16 @@
 - aegle-text：复用 Parley/Fontique 的 Unicode shaping、字体选择、回退、换行与定位；Paragraph 保留文字和排版结果，宽度变化只重排，颜色覆盖无需重新 shaping。显式字体为默认，system-fonts、text-dictionary、text-a11y、scene 独立选用；缺字与无可用字体分别报告。
 - Editor：复用同一 TextSystem 的 Parley PlainEditor，提供单/多行、选择/命中、视觉移动、grapheme 删除、精确 UTF-8 替换、只读、组合输入模型及有界差量撤销/重做。预编辑只保留被替换片段，提交值不随预编辑改变；取消恢复原选区。文字、装饰和候选区域来自同一布局。apply_ime 在完整验证后应用删除/提交/预编辑事务，删除与提交合成一次撤销；surrounding 无分配地借出有界周边文字。编辑、宽度和样式改变目前仍会重新 shaping，不宣称增量编辑引擎。
 - aegle-controls：共享无分配 Range、Toggle、Slider 和无皮肤 Button 的键盘/指针/语义激活、capture 和取消状态；可选 text 提供复用 Editor 的 TextField。宿主拥有树、命中和焦点；controls 默认只依赖 types，不依赖窗口或 renderer。
-- aegle-access：平台回调经 Mailbox/Handlers 排队并唤醒 UI；可选 UnixAdapter 复用 AccessKit AT-SPI。示例从同一控件树按脏标记导出语义，系统 Focus/Click/SetTextSelection 回到同一焦点、按钮和 Editor。text-a11y 提供文字 run 与有校验的选择转换；不是完整跨平台无障碍。
+- aegle-access：平台回调经 Mailbox/Handlers 排队并唤醒 UI；可选 UnixAdapter/WindowsAdapter 复用 AccessKit AT-SPI/UIA。示例从同一控件树按脏标记导出语义，系统 Focus/Click/SetTextSelection 回到同一焦点、按钮和 Editor。text-a11y 提供文字 run 与有校验的选择转换；不是完整跨平台无障碍。
 - aegle-glyph：复用 Swash/Skrifa，按需生成灰度字形与 COLRv0/嵌入位图，LRU 同时约束图像字节和条目数；缓存不持有字体文件。PNG 位图使用有解码预算的 png crate；库不内嵌字体。
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
-- aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；原生 swapchain 及 App 选择尚未接入。
+- aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；可选 window 已提供原生 swapchain，App 可显式选择。
 
-- aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
+- aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
+- aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。当前没有 token 注册表、局部主题继承或系统偏好监听。
-- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
+- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland/Win32 软件或 Vulkan 应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Text/Button/TextField/TextArea/CheckBox/Switch/Slider/Progress 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
 
 图像缓存预算不包括字体映射、排版、缓存索引及上游栅格 scratch；具体边界见 [资源](resources.md)。合成/过滤使用线性预乘颜色，公共字形彩色图像为非预乘 sRGB RGBA8。
@@ -228,13 +229,27 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 相同示例场景的临时release成本探针：scene/font准备0.220 ms、renderer初始化14.317 ms、首帧提交及wait为1.911 ms；预热20帧后300帧的begin/draw/finish/wait平均0.166 ms、P95 0.218 ms，无逐帧读回。首次末帧读回另为4.287 ms。它是单次桌面GPU主机wall-time样本，不是GPU timestamp、窗口延迟或嵌入式性能保证。
 - 该探针计时前后显式设备分配均5,791,872 B（含1张262,144 B字形页），绘制/clip容量33,792 B；127个图集条目，CPU上传capacity40,960 B、128个region槽、CPU字形像素29,004 B。等待后staging为0，首次读回后设备分配7,327,872 B。空字形及被裁掉未入图集字形仍会查CPU缓存，raster_requests在300帧中由547增至6547；未发生图集上传，不将此计数误称为重新光栅化。所有计量均不含完整driver/font/shaping/allocator成本，不能当作PSS或资源目标已达标。
 
-## 暂停时的进度与缺口
+## Vulkan 窗口、App 与 Windows 接入
 
-按用户要求，本阶段完成提交后暂停整个任务，未启动后续里程碑。恢复时首先连接 Wayland surface/swapchain 和现有 App，使独立Vulkan几何/文字进入真实窗口；随后继续补齐下列缺口。当前 facade 仅交付 Linux Wayland 软件组合，整个项目尚未完成。
+本轮按用户限定并行完成 Vulkan WSI、App/Wayland 集成、Win32 平台，未开展 macOS。App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入、IME、主题、动画与语义不另建状态。默认保留软件组合；native,vulkan 可单独构建，不带 tiny-skia。Windows adapter 在隐藏 HWND 上安装，DPI 通过语义根变换与 IMM 光标矩形共同同步。
 
-- 平台：Vulkan原生呈现与App接入；Windows/macOS窗口、输入、无障碍和Metal；Wayland layer-shell及shell能力、剪贴板、触摸、fractional scale和系统偏好。
-- 组件/绘制：滚动条、惯性、列表虚拟化、任意新行为/自定义painter扩展、更多基础组件与布局属性、通用图像/路径及设计中的特效；密码编辑和后台UiProxy。
+- Linux workspace 全 features 的31个常规场景通过；all-targets 检查、严格 Rustdoc、格式/diff 检查通过。首轮同时链接多个大型 debug 示例耗尽可用内存，限制为2个构建任务后通过；这不是运行路径的内存样本。
+- 新增一项默认 ignored 的 Vulkan 窗口生命周期场景，分别在 Lavapipe 与 RX 6800 XT（RADV NAVI21）上通过。私有 Sway/Pixman 或 GLES2 compositor，不连接用户桌面；开启 Khronos validation 1.4.363 与同步检查，无验证错误。覆盖呈现、resize、弃帧/失败帧拒绝、zero extent、release/recreate、SHM占用为0及原生租约销毁。
+- App 既有双窗口 native 场景在上述软/硬 Vulkan ICD 通过：CJK、回调关闭、递归 dispatch 拒绝、旧句柄失效及最后窗口退出。Vulkan-only release scrolling 在 RX 硬件通过真实滚轮、Tab 焦点显露、滚动按钮与关闭，截图目视确认中文/日文/韩文和嵌套裁剪；没有验证层诊断。当前二进制4,028,032 B（native,vulkan,system-fonts,markup，不含系统库、驱动、adapter或motion），不是默认desktop体积。
+- 原生800×480硬件探针显示显式设备分配3,686,464 B，swapchain估计6,144,000 B（驱动返回4图）；Lavapipe显式3,072,064 B、相同WSI估计。此为简单几何探针，无整帧readback；WSI实际驱动内存、字体、UIA及进程PSS不包括其中，不代表嵌入式预算达标。
+- Windows x86_64-pc-windows-gnu：Rust 1.96.1 + 同版本 Debian rust-src、临时提取的 MinGW交叉构建，facade全features/all-targets检查与App/平台native测试可执行文件链接通过，Win32严格Rustdoc通过；源文件与工具链未安装进系统。Rust标准库通过 -Z build-std 验证当前工具链，未据此宣称MSRV1.88通过。真实Windows11/ARM64仍待验收。
+
+
+- Wine10 + 私有 Xvfb 兼容环境执行 Win32 native 综合场景通过：隐藏创建、软件像素、Unicode代理对、IMM上下文启停、resize、持续redraw期间消息公平性、两窗关闭/租约寿命及wake。App同一个双窗口场景分别以软件、Vulkan（Lavapipe经Wine Win32 WSI）运行通过；UIA adapter安装/销毁已实际执行，但没有系统客户端文本/动作查询验收。这是兼容层及软件ICD证据。该Xvfb不支持硬件RADV所需DRI3，硬件Windows/Wine呈现未验证；库本身没有新增X11后端。
+- 实现21777行、测试4153行，占16.02%（不含examples/build.rs）；最大源文件489行，测试都在crate的tests目录。新增小型Win32边界/native场景与一个Vulkan native场景，App沿用已有native场景切换平台/renderer。
+
+## 当前进度与剩余工作
+
+本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
+
+- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland layer-shell、剪贴板、触摸、fractional scale、系统偏好与客户端装饰。
+- 组件/绘制：滚动条、惯性、列表虚拟化、自定义 painter 扩展、更多基础组件与布局属性、通用图像/路径/特效；密码编辑和后台 UiProxy。
 - 标记语言：目前只有静态结构/字面量与Rust回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。
-- 主题/动画：基础主题、本地样式、纯函数皮肤和外观过渡已实现，完整token/局部继承、系统偏好、几何动画和完成回调仍缺。
-- 文字/无障碍：Unix adapter仍为部分支持，存在上游禁用进度状态和离屏过滤等限制；合成粗体/斜体、COLRv1/SVG字形明确不支持，原生双击计数等编辑能力尚待接入。
-- 验收：MSRV 1.88实际构建、Clippy、跨平台/跨compositor/GPU与嵌入式完整资源测量、真实输入法候选窗和屏幕阅读器验收尚未完成。现有桌面样本及设计文档均不能替代这些证据。
+- 主题/动画：完整token/局部继承、系统偏好、几何动画与完成回调。
+- 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。
+- 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU多窗口共享设备/图集尚未实现。现有桌面样本不能替代这些证据。

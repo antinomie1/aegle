@@ -34,12 +34,16 @@ impl Ui {
         // Semantic inspection must not consume a host's pending paint request.
         state.repaint |= repaint;
         state.prepare_accessibility()?;
-        Ok(state.export_accessibility(initial, title))
+        Ok(state.export_accessibility(initial, title, 1.0))
     }
-    #[cfg(all(feature = "wayland", target_os = "linux"))]
+    #[cfg(any(
+        all(feature = "wayland", target_os = "linux"),
+        all(feature = "windows", target_os = "windows")
+    ))]
     pub(crate) fn publish_accessibility(
         &self,
         title: &str,
+        scale: f64,
         publish: impl FnOnce(&mut dyn FnMut(bool) -> TreeUpdate),
     ) -> Result {
         let mut state = self
@@ -47,7 +51,7 @@ impl Ui {
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
         state.prepare_accessibility()?;
-        publish(&mut |initial| state.export_accessibility(initial, title));
+        publish(&mut |initial| state.export_accessibility(initial, title, scale));
         Ok(())
     }
     /// Applies supported assistive actions through shared focus/control/editing paths.
@@ -173,7 +177,7 @@ impl State {
             .ok_or(UiError::IdentityExhausted)?;
         Ok(())
     }
-    fn export_accessibility(&mut self, initial: bool, title: &str) -> TreeUpdate {
+    fn export_accessibility(&mut self, initial: bool, title: &str, scale: f64) -> TreeUpdate {
         let root = self.tree.get(self.root).unwrap().context.access_id;
         let focus = self
             .focus
@@ -194,7 +198,10 @@ impl State {
         }
         for index in 0..self.order.len() {
             let id = self.order[index];
-            if !initial && !self.tree.dirty(id).unwrap().intersects(Dirty::SEMANTICS) {
+            if !initial
+                && id != self.root
+                && !self.tree.dirty(id).unwrap().intersects(Dirty::SEMANTICS)
+            {
                 continue;
             }
             let enabled = self.usable(id);
@@ -258,6 +265,9 @@ impl State {
             match &mut element.content {
                 Content::Container => {
                     if id == self.root {
+                        // Native adapters request physical coordinates through
+                        // one root transform; descendant geometry stays logical.
+                        node.set_transform(Affine::scale(scale));
                         node.set_role(Role::Window);
                         node.set_label(title);
                     }

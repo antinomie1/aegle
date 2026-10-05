@@ -11,9 +11,11 @@ aegle-types.workspace = true
 smithay-client-toolkit = "0.21.1"
 xkbcommon = { version = "0.8.0", default-features = false }
 wayland-client = "0.31.15"
+raw-window-handle = { version = "0.6.2", optional = true }
 wayland-protocols = { version = "0.32.13", features = ["client", "unstable"] }
 
 [features]
+gpu = ["dep:raw-window-handle", "wayland-client/system", "wayland-client/dlopen"]
 example-accessibility = ["aegle-access/unix", "aegle-text/text-a11y"]
 
 [dev-dependencies]
@@ -26,5 +28,6 @@ aegle-text = { workspace = true, features = ["scene"] }
 aegle-scene = { workspace = true, features = ["text"] }
 aegle-render-software = { workspace = true, features = ["text"] }
 
-[lints]
-workspace = true
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"

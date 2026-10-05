@@ -7,6 +7,8 @@
 mod buffers;
 mod error;
 mod events;
+#[cfg(feature = "gpu")]
+mod gpu;
 mod ime;
 mod ime_types;
 mod input;
@@ -15,6 +17,8 @@ mod window;
 
 pub use error::{Error, PresentError};
 pub use events::{Event, PixelSize, WindowId, WindowInfo, WindowOptions};
+#[cfg(feature = "gpu")]
+pub use gpu::WindowSurface;
 pub use ime_types::{ImeCause, ImeEvent, ImeHints, ImePurpose, ImeRequest, ImeUpdate, Preedit};
 pub use smithay_client_toolkit::seat::{
     keyboard::{KeyEvent, Keysym, Modifiers},

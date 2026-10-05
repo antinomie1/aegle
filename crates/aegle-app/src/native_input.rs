@@ -158,3 +158,26 @@ fn key_id(value: Keysym) -> Key {
             .unwrap_or(Key::Unidentified),
     }
 }
+
+pub(crate) fn ime_request(
+    request: Option<crate::ImeRequest>,
+) -> Option<aegle_platform_wayland::ImeRequest> {
+    use aegle_platform_wayland::{ImeCause, ImeHints, ImeRequest};
+    request.map(|request| ImeRequest {
+        surrounding: request.surrounding,
+        cursor: request.selection.focus,
+        anchor: request.selection.anchor,
+        cursor_rect: request.cursor_rect,
+        hints: if request.multiline {
+            ImeHints::Multiline
+        } else {
+            ImeHints::empty()
+        },
+        cause: if request.input_method {
+            ImeCause::InputMethod
+        } else {
+            ImeCause::Other
+        },
+        ..Default::default()
+    })
+}

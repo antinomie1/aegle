@@ -1,8 +1,6 @@
 use crate::native::{App, Runtime};
+use crate::platform::Event;
 use crate::{Result, Ui, UiError};
-use aegle_platform_wayland::{Event, ImeCause, ImeHints, ImeRequest};
-use aegle_render_software::Surface;
-use aegle_scene::Affine;
 use std::{cell::Cell, rc::Rc, time::Duration};
 
 struct DispatchGuard<'a>(&'a Cell<bool>);
@@ -57,7 +55,10 @@ impl App {
             // queued event, preventing an old IME batch from editing a new field.
             self.runtime.borrow_mut().refresh()?;
         }
-        #[cfg(feature = "unix-accessibility")]
+        #[cfg(any(
+            all(feature = "unix-accessibility", target_os = "linux"),
+            all(feature = "windows-accessibility", target_os = "windows")
+        ))]
         loop {
             let pending = {
                 let mut runtime = self.runtime.borrow_mut();
@@ -121,9 +122,7 @@ impl Runtime {
             return Ok(());
         };
         if matches!(event, Event::Close { .. }) {
-            self.backend.remove_window(id)?;
-            self.windows[index].ui.close()?;
-            self.windows.remove(index);
+            self.close(id)?;
         } else {
             self.windows[index].event(event)?;
         }
@@ -143,73 +142,28 @@ impl Runtime {
                 if ime.reset && self.backend.ime_available() {
                     self.backend.configure_ime(entry.id, None)?;
                 }
-                let request = ime.request.map(|request| ImeRequest {
-                    surrounding: request.surrounding,
-                    cursor: request.selection.focus,
-                    anchor: request.selection.anchor,
-                    cursor_rect: request.cursor_rect,
-                    hints: if request.multiline {
-                        ImeHints::Multiline
-                    } else {
-                        ImeHints::empty()
-                    },
-                    cause: if request.input_method {
-                        ImeCause::InputMethod
-                    } else {
-                        ImeCause::Other
-                    },
-                    ..Default::default()
-                });
+                let request = crate::native_input::ime_request(ime.request);
                 // Missing IME is a capability error when requested, never an
                 // apparently successful keyboard-only editable control.
                 if request.is_some() || self.backend.ime_available() {
                     self.backend.configure_ime(entry.id, request)?;
                 }
             }
-            #[cfg(feature = "unix-accessibility")]
+            #[cfg(any(
+                all(feature = "unix-accessibility", target_os = "linux"),
+                all(feature = "windows-accessibility", target_os = "windows")
+            ))]
             if entry.initial_access || entry.ui.access_dirty() {
-                entry.ui.publish_accessibility(&entry.title, |build| {
-                    entry.accessibility.update_if_active(build);
-                })?;
+                #[cfg(target_os = "linux")]
+                let scale = 1.0;
+                #[cfg(target_os = "windows")]
+                let scale = entry.access_scale;
+                entry
+                    .ui
+                    .publish_accessibility(&entry.title, scale, |build| {
+                        entry.accessibility.update_if_active(build);
+                    })?;
                 entry.initial_access = false;
-            }
-        }
-        Ok(())
-    }
-
-    fn present(&mut self) -> Result<()> {
-        for entry in &mut self.windows {
-            if !std::mem::take(&mut entry.ready) {
-                continue;
-            }
-            let info = self.backend.window_info(entry.id)?;
-            let scale = Affine::scale(info.scale as f32, info.scale as f32)?;
-            let background = entry.ui.background();
-            let renderer = &mut self.renderer;
-            self.backend
-                .present(entry.id, |pixels, size| {
-                    let mut surface = Surface::new(pixels, size.width, size.height)?;
-                    let mut frame = renderer.begin_frame(&mut surface, background);
-                    entry.ui.visit_scenes(|scene, transform, clip| {
-                        let clip = clip.map(|rect| {
-                            let factor = info.scale as f32;
-                            aegle_types::Rect::new(
-                                rect.origin.x * factor,
-                                rect.origin.y * factor,
-                                rect.size.width * factor,
-                                rect.size.height * factor,
-                            )
-                        });
-                        frame.draw_clipped(scene, transform.then(scale)?, clip)?;
-                        Ok(())
-                    })
-                })
-                .map_err(|error| format!("present: {error}"))?;
-            // The backend waits for a frame callback and a free buffer. An
-            // occluded window therefore adds no animation timer or idle poll.
-            #[cfg(feature = "motion")]
-            if entry.ui.has_animations() {
-                self.backend.request_redraw(entry.id)?;
             }
         }
         Ok(())

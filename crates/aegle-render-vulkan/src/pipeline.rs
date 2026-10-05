@@ -6,6 +6,8 @@ use ash::vk;
 
 pub(crate) struct Pipeline {
     raw: ash::Device,
+    #[cfg(feature = "window")]
+    pub output_format: vk::Format,
     pub passes: [vk::RenderPass; 2],
     pub layouts: [vk::PipelineLayout; 2],
     pub pipelines: [vk::Pipeline; 2],
@@ -16,8 +18,18 @@ pub(crate) struct Pipeline {
 
 impl Pipeline {
     pub fn new(device: &Device) -> Result<Self> {
+        let format = vk::Format::R8G8B8A8_UNORM;
+        let window = false;
+        #[cfg(feature = "window")]
+        let (format, window) = if let Some(surface) = &device.surface {
+            (surface.format(device.physical)?.format, true)
+        } else {
+            (format, window)
+        };
         let mut this = Self {
             raw: device.raw.clone(),
+            #[cfg(feature = "window")]
+            output_format: format,
             passes: [vk::RenderPass::null(); 2],
             layouts: [vk::PipelineLayout::null(); 2],
             pipelines: [vk::Pipeline::null(); 2],
@@ -79,10 +91,22 @@ impl Pipeline {
         )?;
         this.passes[1] = render_pass(
             &this.raw,
-            vk::Format::R8G8B8A8_UNORM,
-            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-            vk::PipelineStageFlags::TRANSFER,
-            vk::AccessFlags::TRANSFER_READ,
+            format,
+            if window {
+                vk::ImageLayout::PRESENT_SRC_KHR
+            } else {
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL
+            },
+            if window {
+                vk::PipelineStageFlags::BOTTOM_OF_PIPE
+            } else {
+                vk::PipelineStageFlags::TRANSFER
+            },
+            if window {
+                vk::AccessFlags::empty()
+            } else {
+                vk::AccessFlags::TRANSFER_READ
+            },
         )?;
         this.pipelines[0] = graphics(
             &this.raw,

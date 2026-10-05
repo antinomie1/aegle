@@ -1,5 +1,8 @@
-//! Native application lifecycle, only on a dedicated compositor.
-#![cfg(all(feature = "wayland", target_os = "linux"))]
+//! Native application lifecycle, only in a dedicated test desktop.
+#![cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
 
 use aegle_app::{App, AppOptions, Result, TextSystem, UiError, WindowOptions};
 use aegle_text::{Blob, GenericFamily};
@@ -11,7 +14,7 @@ use std::{
 };
 
 #[test]
-#[ignore = "requires an isolated Wayland compositor; never run on the user's desktop"]
+#[ignore = "requires an isolated test desktop; never run on the user's desktop"]
 fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
     assert_eq!(
         std::env::var("AEGLE_TEST_COMPOSITOR").as_deref(),
@@ -25,7 +28,11 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
     fonts
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, [family].into_iter());
-    let app = Rc::new(App::with_fonts(fonts, AppOptions::default())?);
+    let mut settings = AppOptions::default();
+    if std::env::var_os("AEGLE_TEST_VULKAN").is_some() {
+        settings.renderer = aegle_app::RendererBackend::Vulkan;
+    }
+    let app = Rc::new(App::with_fonts(fonts, settings)?);
     let options = WindowOptions {
         width: 240,
         height: 160,

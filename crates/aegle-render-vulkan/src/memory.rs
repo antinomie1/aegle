@@ -324,7 +324,7 @@ impl Drop for Image {
     }
 }
 
-fn check_budget(required: u64, limit: u64) -> Result {
+pub(crate) fn check_budget(required: u64, limit: u64) -> Result {
     if required > limit {
         Err(Error::Budget { required, limit })
     } else {

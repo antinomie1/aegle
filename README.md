@@ -2,7 +2,7 @@
 
 A modular retained-mode GUI library in Rust 2024, focused on low memory use,
 event-driven updates, CJK and native input methods. Software rendering and an
-independent Vulkan renderer for offscreen geometry and optional text are available.
+Vulkan geometry/text rendering are available, including direct native window presentation.
 
 Implementation is in progress: compact shared types, retained trees, Taffy
 layout, retained Unicode paragraphs/editors, on-demand CJK glyphs, drawing records
@@ -16,8 +16,8 @@ behavior connects input and focus to the retained tree and editor.
 Optional paint transitions share the same state, with frame-driven sampling,
 smooth retargeting and explicit reduced-motion support.
 Optional Unix accessibility exposes controls, CJK
-text, selection, focus and button actions through AT-SPI. Native text replacement,
-other OS backends and native GPU presentation remain unimplemented.
+text, selection, focus and button actions through AT-SPI; AT-SPI text replacement remains unsupported.
+Windows adds Win32 windows, software/Vulkan presentation, IMM composition and optional UIA. TSF, macOS and full assistive-technology acceptance remain unfinished.
 See the [implementation status](docs/implementation.md) and [design](docs/README.md).
 
 Write `main.aegle` next to your package's Cargo.toml:
@@ -52,10 +52,10 @@ fn main() -> Result<()> {
 }
 ```
 
-The current `aegle` defaults are Linux Wayland, software rendering, system fonts
-and Unix accessibility, with markup compilation and paint transitions enabled. System fonts must cover the requested text. Native IME
+The current `aegle` defaults are native windows (Linux Wayland / Windows Win32), software rendering, system fonts
+and the target platform accessibility adapter, with markup compilation and paint transitions enabled. System fonts must cover the requested text. Wayland IME
 requires text-input-v3; focusing an editable field without it returns a capability
-error. App integration with Vulkan, Windows/macOS hosts and geometry animation remain in development.
+error. Windows currently uses IMM compatibility, not a TSF text store. macOS and geometry animation remain in development.
 
 ```sh
 cargo run -p aegle --example hello --release
@@ -80,20 +80,28 @@ state with no third-party dependencies), `aegle-layout` (Taffy over that tree),
 plain editing, composition and bounded delta undo), `aegle-glyph` (on-demand
 rasterization and a bounded image cache),
 `aegle-render-software` (borrowed framebuffers and linear-light compositing),
-`aegle-render-vulkan` (offscreen geometry/text, bounded allocations and explicit readback),
+`aegle-render-vulkan` (geometry/text, native swapchains, bounded allocations and explicit offscreen readback),
 `aegle-controls` (unskinned Button/Toggle/Slider behavior, shared numeric Range and optional TextField),
-`aegle-access` (UI-thread callback mailbox and optional Unix accessibility),
-`aegle-platform-wayland` (windows and native input, independent of rendering),
+`aegle-access` (UI-thread callback mailbox and optional Unix/Windows accessibility),
+`aegle-platform-wayland` and `aegle-platform-win32` (windows and native input, independent of rendering),
 `aegle-theme` (allocation-free palettes, state-based skins and local style values),
 `aegle-motion` (allocation-free elapsed-time tweens), `aegle-app` (retained
 imperative UI, with the native host behind features), and `aegle-markup` (bounded
 parsing and static component checking). `aegle-macros` generates compiled views.
 
-For a system-font software application without the Unix accessibility adapter:
+For a system-font software application without a native accessibility adapter:
 
 ```sh
-cargo run -p aegle --no-default-features --features wayland,system-fonts --example controls --release
+cargo run -p aegle --no-default-features --features native,software,system-fonts --example controls --release
 ```
+
+For a Vulkan-only application, with no software renderer in its runtime dependencies:
+
+```sh
+cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,markup --example scrolling --release
+```
+
+When both renderers are compiled, set `AppOptions.renderer` to `RendererBackend::Vulkan` explicitly; software remains the default. Driver/feature/budget failures return errors. A minimal Vulkan-only build defaults to Vulkan. Native Vulkan currently creates a device per window; large windows may require increasing `AppOptions.vulkan.memory_budget`.
 
 For an existing rendering/window host, use `aegle-app` without default features
 and construct `Ui::with_fonts` with an explicit shared font collection. The same
@@ -114,7 +122,7 @@ for embedded color font bitmaps. Portable test fonts and their OFL notices are i
 The independent Vulkan examples require a Vulkan 1.1 loader and a compatible
 driver. Optional `text` uses on-demand R8/RGBA8_SRGB atlas pages and shared glyph
 rasterization; the renderer does not depend on Parley. The examples write PPM
-using only the standard library and have no window or App integration. Drawing blends in
+using only the standard library. Drawing blends in
 an RGBA16F linear attachment, then a GPU pass encodes premultiplied sRGB RGBA8.
 Readback is explicit. See the [Vulkan contract](docs/vulkan.md) for limits and
 device verification; a CPU Vulkan driver is not hardware acceleration.

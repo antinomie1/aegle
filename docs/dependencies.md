@@ -6,11 +6,11 @@
 | --- | --- | --- |
 | 布局 | Taffy 0.14.0 | Flex/Block 默认，Grid 可选；低层树适配 |
 | 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由小型自有实现完成 |
-| Vulkan | ash 0.38.0+1.3.281 | 当前独立离屏几何及可选文字；loaded/std 动态加载，资源与同步由小型封装管理，不采用 wgpu/vulkano |
+| Vulkan | ash 0.38.0+1.3.281 | 当前离屏/原生窗口几何及可选文字；loaded/std 动态加载，资源与同步由小型封装管理，不采用 wgpu/vulkano |
 | GPU 数据布局 | bytemuck 1.25（当前锁定 1.25.2） | Pod/Zeroable 与安全字节转换；shader 布局按显式契约对应 |
 | Vulkan shader 编译 | Naga 30.0.1 | 仅构建期 wgsl-in/spv-out，生成 Vulkan 1.1 SPIR-V，不进入发布运行依赖 |
-| Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 当前软件路径用 Rust client backend；text-input-v3 由平台层补齐，Vulkan 原生句柄阶段再启用 system backend |
-| Windows | windows 0.62.2 | 只启用所需 Win32/COM/TSF/UIA 能力 |
+| Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 软件独立构建用 Rust client backend；gpu feature 启用 system/dlopen 获取 libwayland 原生句柄，保留同一连接 |
+| Windows | windows 0.62.2 | 按模块启用所需 Win32/GDI/IMM/UIA 能力，TSF 尚未实现 |
 | macOS | objc2 0.6.4、objc2-metal 0.3.2 | AppKit/Metal 系统绑定；不采用已弃用 metal crate 或 MoltenVK |
 | 文本 | Parley/Fontique 0.11.1 | 基础排版、字体回退及纯文本编辑 |
 | grapheme 分段 | icu_segmenter 2.3.0 | 直接复用 Parley 已锁定的包及 compiled_data，编辑删除不另带分段引擎 |
@@ -19,14 +19,14 @@
 | 共享字体资源 | linebender_resource_handle 0.1.1 | scene/text 仅借助该轻量句柄共享字体字节，不引入 shaping |
 | 字形缓存索引 | hashbrown 0.17.1、lru-slab 0.1.3 | 哈希索引和 LRU 槽位复用现成实现，命中不分配 |
 | 语义 | AccessKit 0.24.1 | 与 Parley 可选 text-a11y 使用同一 schema |
-| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 当前仅 Unix 通过可选 feature 接入；三者属于上述 AccessKit 兼容线 |
+| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 当前 Unix/Windows 通过可选 feature 接入；三者属于上述 AccessKit 兼容线 |
 | Unix 无障碍传输 | accesskit_atspi_common 0.19.1、atspi 0.29.0、zbus 5.19.0 | 复用 AccessKit 适配；采用 async-io，无 Tokio |
 | 路径 | lyon_tessellation 1.0.22 | 可选，不依赖完整通用图形框架 |
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
 | SVG | resvg/usvg 0.48.1 | 构建期优先；运行时可选，关闭 text/system-fonts 等默认 feature |
 | 标记编译宏 | syn 2、quote 1、proc-macro2 1、proc-macro-crate 3.5 | 仅编译期；Rust 语法/生成与 facade 重命名识别复用现成库 |
 
-设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何/文字依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。其他 OS adapters、GPU 原生呈现与其余待建模块仍未据此宣称可用；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
+设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何/文字依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。Windows 编译与运行证据、GPU 原生呈现验证另见实现状态，不能将其等同于全部实机验收；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
 `aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；PlainEditor 已有的选择、bidi、点命中和组合布局继续复用，不另带 Unicode 或编辑框架。`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它；该 feature 提供文本语义桥，系统接入另选 `aegle-access/unix`。
 
@@ -45,3 +45,5 @@ SVG 默认以路径图标/构建期资产为主；可选运行时 resvg 不处�
 Wayland 软件后端使用 SCTK 0.21.1/calloop 0.14，键盘使用同一版本的 xkbcommon 0.8 包；不引入 winit、Tokio、softbuffer 或 wgpu。SCTK 自带自动重复计时器不提供完整取消接口，因此平台持有自身 repeat token，在焦点/设备/窗口销毁和 backend drop 时移除。按键翻译仍复用 SCTK，重复状态额外持有一份 XKB keymap/state 用于按键可重复性与 modifier 更新；这是实际额外内存，不宣称零成本封装。后续上游若提供借用 keymap 与取消 timer 接口，可移除此重复状态。
 
 构建需 libxkbcommon 的开发链接与 pkg-config 信息，发布需对应 runtime；SDK 不打包进程序。当前机器仅安装 runtime，验证时在 `/tmp/aegle-xkb-dev` 创建了指向已有系统库的开发链接与 `.pc`，未修改系统或项目构建配置。当前软件路径未启用 wayland-client/system，因此不将 libwayland-client 误写成该示例的实际动态依赖；最终以构建的依赖树和二进制链接结果为准。
+
+原生 window 复用 raw-window-handle 0.6.2；不引入 winit/ash-window。Win32 平台仅启用 windows crate 所需 API；UIA 在 aegle-access/windows 中额外编译 accesskit_windows 0.34.0，与现有 schema/consumer 兼容。Windows 的 target-specific 依赖不会将 Unix D-Bus、Wayland 或 Fontconfig 链入 Windows 程序。

@@ -32,9 +32,9 @@ use crate::{
 /// rendered periodically: a host mutation must explicitly request a redraw.
 pub struct Wayland {
     event_loop: EventLoop<'static, State>,
-    state: State,
-    connection: Connection,
-    qh: QueueHandle<State>,
+    pub(crate) state: State,
+    pub(crate) connection: Connection,
+    pub(crate) qh: QueueHandle<State>,
     next_id: u64,
     source: RegistrationToken,
     wake: Option<(WakeHandle, RegistrationToken)>,
@@ -151,6 +151,7 @@ impl Wayland {
             dirty: true,
             redraw_queued: false,
             frame_pending: false,
+            frame_requested: false,
         });
         Ok(id)
     }
@@ -315,7 +316,10 @@ impl Wayland {
         buffer
             .attach_to(surface)
             .map_err(|e| PresentError::Platform(Error::backend(e)))?;
-        surface.frame(&self.qh, FrameCallbackData(surface.clone()));
+        if !window.frame_requested {
+            surface.frame(&self.qh, FrameCallbackData(surface.clone()));
+        }
+        window.frame_requested = false;
         window.window.commit();
         window.frame_pending = true;
         window.dirty = false;

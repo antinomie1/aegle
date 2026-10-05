@@ -1,6 +1,6 @@
-# Vulkan 离屏绘制后端
+# Vulkan 绘制与原生呈现
 
-状态：独立离屏几何与可选文字已实现，2026-10-05。已在 AMD RX 6800 XT 和 Lavapipe 上执行综合测试及 Khronos 验证层检查。当前 App 仍使用 Wayland 软件呈现，尚无 Vulkan 窗口或 GPU 加速的完整 GUI。
+状态：独立离屏几何与可选文字已实现，2026-10-05。已在 AMD RX 6800 XT 和 Lavapipe 上执行综合测试及 Khronos 验证层检查。可选 window 已连接 Wayland/Win32 swapchain，App 可显式选择 Vulkan；Windows 实机验收范围见实现状态。
 
 ## 范围与依赖
 
@@ -12,7 +12,7 @@
 
 绘制遵守记录顺序。解析覆盖率使用 shader 导数估计边缘，不承诺与软件覆盖率逐像素相同；内部实色、颜色混合和裁剪边界分别验证。
 
-本阶段不包含原生 surface/swapchain、显示呈现、通用图像资源或特效。后续接入真实平台时复用既有事件循环、IME 与无障碍，不建立另一套 UI。
+window feature 仅增加 raw-window-handle 0.6.2，复用现有平台循环、IME 与无障碍；通用图像资源与特效尚未实现。
 
 ## 可选文字与图集
 
@@ -73,3 +73,15 @@ cargo run -p aegle-render-vulkan --features text --example text_scene -- /tmp/ae
 geometry 示例只用标准库写 PPM，不增加 PNG 运行依赖。示例能生成图片不等于 native swapchain 接入，也不证明嵌入式帧耗时、空闲 CPU 或 PSS 达标。Lavapipe 的结果属于 Vulkan 软件驱动验证，硬件 GPU 必须单列设备与执行结果；正式证据汇总见[实现状态](implementation.md)。
 
 文字综合场景另验证CJK、四相位、几何/文字顺序、仿射/clip、透明COLRv0和PNG字形，与软件像素比较允许3级通道量化误差；覆盖小CPU缓存下的GPU命中、脏页取消恢复、整页淘汰、工作集/字号错误和释放重建。text_scene使用带OFL许可的测试子集展示三种CJK文字；库自身仍不内嵌字体。
+
+## 原生窗口生命周期与预算
+
+`unsafe WindowRenderer::new(owner, options)` 接受实现 raw-window-handle 的原生租约；调用方必须保证同一 window/display 在 renderer 销毁前一直有效，并遵守平台线程规则。Wayland/Win32 的 `WindowSurface` 保留原生对象，平台逻辑关闭不提前破坏 GPU 句柄。构造窗口 renderer 不创建新事件循环。
+
+`begin_frame(width, height, clear)` 在零尺寸时释放尺寸相关目标并返回 None；同尺寸复用，否则等待设备/呈现队列后释放旧 swapchain 并重建。Frame::extent 返回实际 extent。Frame::finish 才获取图像、等待 acquire fence、提交并 present；弃帧不获取图像。SurfaceOutOfDate 保持 dirty 等待重试，DeviceLost/SurfaceLost 返回错误，不隐式切换后端。当前 graphics/present 必须为同一 queue。
+
+呈现使用 FIFO、RGBA8/BGRA8_UNORM + SRGB_NONLINEAR，优先 PRE_MULTIPLIED composite alpha，否则选择 OPAQUE 并拒绝非不透明清屏色。线性 RGBA16F resolve 直接写 swapchain，不保留第二张 RGBA8 离屏目标、不经 CPU 读回或 SHM 转送。每窗口一个设备，一次 graphics submission 在途；render-finished semaphore 按 swapchain image 保存，重建等待 device idle，不能把 graphics fence 当作 presentation 完成证明。
+
+`Stats.swapchain_bytes` 为 extent×4×驱动返回的实际图像数估计，单列并计入 memory_budget；WSI 不暴露这些图像的实际 memory requirements，不声称此值包含驱动分配/压缩/对齐。device_bytes 继续报告显式分配；驱动内部资源和线程另计。App 的每窗口设备/图集当前独立，尚无跨窗口共享 GPU 缓存。默认16 MiB设备预算适合小窗口，较大窗口须通过 AppOptions.vulkan 显式调整；不隐藏超预算错误。
+
+原生综合场景位于 tests/native.rs，默认 ignored；需隔离 Wayland compositor，设置 AEGLE_TEST_COMPOSITOR=private。App 的同一个 native 场景通过 AEGLE_TEST_VULKAN=1 切换渲染器，覆盖两个 CJK 窗口、回调、关闭和句柄失效。具体设备证据见实现状态。
