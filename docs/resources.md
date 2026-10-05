@@ -1,6 +1,6 @@
 # 资源预算与性能策略
 
-状态：整体性能数值为待实测的设计目标；当前软件 mask、CPU 字形缓存、编辑历史及无障碍接入的已实现边界在下文单列。不能将缓存上限当作已达到的整机性能。对应 R04、R15、R16。资源优先级是：先满足交互延迟，再依次降低空闲 CPU/唤醒、常驻 RAM、发布体积和额外帧吞吐。
+状态：整体性能数值为待实测的设计目标；当前软件 mask、Vulkan 离屏分配、CPU 字形缓存、编辑历史及无障碍接入的已实现边界在下文单列。不能将缓存上限当作已达到的整机性能。对应 R04、R15、R16。资源优先级是：先满足交互延迟，再依次降低空闲 CPU/唤醒、常驻 RAM、发布体积和额外帧吞吐。
 
 ## 统一比较环境
 
@@ -43,6 +43,12 @@
 调用方拥有颜色缓冲，开销为宽×高×4。renderer 的默认 mask 预算为 2 MiB；含形状或裁剪的场景绘制需要宽×高×(1 + 最深 clip 层数) 字节，分别用于一个覆盖率缓冲及每层裁剪。无裁剪的纯文字记录不需要表面大小的 mask，可在零 mask 预算下绘制。预算检查先于新增 mask 分配，超限返回 `RenderError::MaskBudget`，不删掉 clip 继续画。多个节点记录串行复用这些缓冲，内存按最深记录计，不按全树节点数累加。
 
 mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲，`release_scratch()` 可显式释放可复用存储。绘制只清理及合成图元触及的范围，不为每个图元清空整个窗口的覆盖率数据。路径与作用域数组可复用；tiny-skia 自身仍有短期边/扫描线分配，另有约 8 KiB 共享转换表，因此 mask 预算不等于 renderer 总内存。具体示例开销见[实现状态](implementation.md)，不与完整 GUI PSS 混淆。
+
+### 当前 Vulkan 离屏边界
+
+默认 `memory_budget` 为 16 MiB，计入实际 VkDeviceMemory allocation：RGBA16F 线性 attachment、RGBA8 输出、裁剪上传缓冲及按需读回缓冲，包括驱动报告的对齐要求。两张图像的未对齐像素量合计为宽×高×12，显式读回另需宽×高×4；这只是估算，实际预算按 memory requirements 检查。`recording_budget` 默认 1 MiB，单独限制 CPU draw/clip Vec 的 capacity；`stats` 分别报告这两种口径。
+
+同尺寸帧复用图像和缓冲，最多一次在途提交；下次 begin_frame 或读回等待 fence，不另建等待帧资源。resize 等待并释放旧 attachment/读回缓冲，再申请新尺寸；失败会使旧图像失效。`release_images` 等待后释放图像、缓冲和 CPU 记录，保留 pipeline。renderer 没有自己的轮询或呈现循环。驱动 command/pipeline 等内部存储、loader、调用方 Scene 和输出 Vec 不计入上述预算；尚无 swapchain、字形图集或 GPU 应用资源指标，详见 [Vulkan 契约](vulkan.md)。
 
 ### 当前字体与 CPU 字形边界
 
@@ -101,7 +107,7 @@ Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping sou
 
 ## 低成本更新
 
-保存控件与局部绘制记录，以失效标记决定工作。首版只在像素改变时绘制，但一旦绘制就提交整个窗口；不先实现复杂的局部损伤合成系统。GPU 使用 FIFO 呈现、默认最多两帧在途，静止时不持续 present。
+保存控件与局部绘制记录，以失效标记决定工作。首版只在像素改变时绘制，但一旦绘制就提交整个窗口；不先实现复杂的局部损伤合成系统。原生 GPU 路径以 FIFO、最多两帧在途和静止时不持续 present 为目标；当前独立 Vulkan 离屏路径不负责呈现。
 
 主题颜色变化只重建相关绘制；字体/尺寸变化才重新测量与布局。动画共用单时钟，以平台帧回调驱动；没有活动动画时不保留动画定时器。隐藏窗口暂停装饰动画，不阻止必要平台协议处理。
 
@@ -109,7 +115,7 @@ Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping sou
 
 ## 发布清单
 
-默认不随包附送字体，允许系统字体；嵌入式须明确指定或打包有合法分发许可的字体。Linux 运行前提按实际组合列出：当前 Wayland 软件路径需要 libxkbcommon runtime，采用 Rust Wayland backend；未来 system backend 需要 libwayland-client，系统字体/Vulkan 组合另列 Fontconfig 与 Vulkan loader/driver。启用 Unix 无障碍还需要会话 D-Bus 与 AT-SPI 服务；zbus 使用 Rust 协议实现，不因此新增 libdbus 链接要求。系统提供的库与服务也必须写入对应发布清单。
+默认不随包附送字体，允许系统字体；嵌入式须明确指定或打包有合法分发许可的字体。Linux 运行前提按实际组合列出：当前 Wayland 软件路径需要 libxkbcommon runtime，采用 Rust Wayland backend；未来 system backend 需要 libwayland-client，系统字体另需 Fontconfig。独立 Vulkan renderer 通过 ash 动态加载 Vulkan loader/driver；Naga 仅在构建期使用，validation layer 仅用于显式验证。启用 Unix 无障碍还需要会话 D-Bus 与 AT-SPI 服务；zbus 使用 Rust 协议实现，不因此新增 libdbus 链接要求。系统提供的库与服务也必须写入对应发布清单。
 
 Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText/Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 

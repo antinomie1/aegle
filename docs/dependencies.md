@@ -6,7 +6,9 @@
 | --- | --- | --- |
 | 布局 | Taffy 0.14.0 | Flex/Block 默认，Grid 可选；低层树适配 |
 | 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由小型自有实现完成 |
-| Vulkan | ash 0.38.0+1.3.281 | 自行封装资源、同步与 unsafe；不采用 wgpu/vulkano |
+| Vulkan | ash 0.38.0+1.3.281 | 当前独立离屏几何；loaded/std 动态加载，资源与同步由小型封装管理，不采用 wgpu/vulkano |
+| GPU 数据布局 | bytemuck 1.25（当前锁定 1.25.2） | Pod/Zeroable 与安全字节转换；shader 布局按显式契约对应 |
+| Vulkan shader 编译 | Naga 30.0.1 | 仅构建期 wgsl-in/spv-out，生成 Vulkan 1.1 SPIR-V，不进入发布运行依赖 |
 | Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 当前软件路径用 Rust client backend；text-input-v3 由平台层补齐，Vulkan 原生句柄阶段再启用 system backend |
 | Windows | windows 0.62.2 | 只启用所需 Win32/COM/TSF/UIA 能力 |
 | macOS | objc2 0.6.4、objc2-metal 0.3.2 | AppKit/Metal 系统绑定；不采用已弃用 metal crate 或 MoltenVK |
@@ -24,7 +26,7 @@
 | SVG | resvg/usvg 0.48.1 | 构建期优先；运行时可选，关闭 text/system-fonts 等默认 feature |
 | 标记编译宏 | syn 2、quote 1、proc-macro2 1、proc-macro-crate 3.5 | 仅编译期；Rust 语法/生成与 facade 重命名识别复用现成库 |
 
-设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG 及 Wayland 平台依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。其他 OS adapters、GPU 与其余待建模块仍未据此宣称可用；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
+设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。其他 OS adapters、GPU 文字/原生呈现与其余待建模块仍未据此宣称可用；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
 `aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；PlainEditor 已有的选择、bidi、点命中和组合布局继续复用，不另带 Unicode 或编辑框架。`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段通过 text-dictionary 显式启用。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它；该 feature 提供文本语义桥，系统接入另选 `aegle-access/unix`。
 

@@ -1,6 +1,6 @@
 # 模块、依赖与构建组合
 
-状态：v0.1 模块设计。types、core、layout、scene、text、glyph、controls、access、theme、motion、app、markup、macros、便捷入口、软件 renderer 与 Wayland 平台已建立；实际覆盖范围见下文。其余模块及已建立模块的完整职责仍是设计目标，验证记录见[实现状态](implementation.md)。
+状态：v0.1 模块设计。types、core、layout、scene、text、glyph、controls、access、theme、motion、app、markup、macros、便捷入口、软件/Vulkan renderer 与 Wayland 平台已建立；实际覆盖范围见下文。其余模块及已建立模块的完整职责仍是设计目标，验证记录见[实现状态](implementation.md)。
 
 ## 拆分尺度
 
@@ -14,7 +14,7 @@
 | aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |
 | aegle-glyph | Swash 字形光栅化与有界 CPU 字形缓存 | 无 |
 | aegle-scene | 二维绘制命令、裁剪及可选字形记录 | types |
-| aegle-render-vulkan | Vulkan 实现、上传、图集与呈现 | types、scene |
+| aegle-render-vulkan | 当前为独立离屏几何、裁剪与显式读回；图集、原生呈现待实现 | types、scene |
 | aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene；glyph 按 text feature 接入 |
 | aegle-render-metal | Metal 实现、上传、图集与呈现 | types、scene |
 | aegle-platform-wayland | Wayland 窗口、事件、IME、输出与平台偏好 | types |
@@ -40,6 +40,8 @@
 
 `aegle-render-software` 借用调用方像素缓冲，不依赖 core、Taffy 或窗口；默认是纯几何构建，没有字体栈和 PNG 运行依赖。tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化，小型自有实现完成线性光 SourceOver。`text` 显式增加 aegle-glyph，其 PNG 解码器用于字体内嵌位图。软件后端不依赖 aegle-text，其他 shaping 宿主也可提供 scene 字形记录。
 
+`aegle-render-vulkan` 通过 ash 0.38 和 bytemuck 1.25 消费相同 Scene；没有 core、字体、窗口或软件 renderer 的正常依赖。当前持有一个可复用离屏目标，支持几何、最多八层裁剪及显式 RGBA8 读回；Naga 30 只在构建期生成 SPIR-V。GPU 文字、swapchain 和 App 后端选择尚未接入，详见 [Vulkan 契约](vulkan.md)。
+
 `aegle-text` 默认启用 Parley std，并复用其已有的 ICU 分段包处理 grapheme 删除；系统字体、词典、文字无障碍和 scene 桥接分别可选。段落与 Editor 共用 TextSystem 字体/shaping 上下文，Editor 包装 PlainEditor 并补充稳定提交值、可取消组合和有界 delta 历史；不另建编辑引擎或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由后续平台/应用层连接。
 
 `aegle-glyph` 独立接受共享字体句柄，复用 Swash、Skrifa、hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。
@@ -56,7 +58,7 @@
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 app 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 app 派生的滚动几何。
 
-`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **Linux Wayland + 软件绘制 + 系统字体 + Unix 无障碍 + 编译型静态标记 + 外观过渡**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Windows/macOS 原生宿主、GPU、动态标记与几何动画仍待实现。
+`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **Linux Wayland + 软件绘制 + 系统字体 + Unix 无障碍 + 编译型静态标记 + 外观过渡**，不是下表的目标 GPU 组合。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Windows/macOS 原生宿主、App 的 GPU 路径、动态标记与几何动画仍待实现。
 
 `aegle-markup` 是无第三方依赖的有界解析器和静态 schema；不依赖 app 或任何平台，可供外部工具独立检查。`aegle-macros` 复用它，并用 syn/quote/proc-macro-crate 处理 Rust 宏参数、代码生成与依赖别名，避免自建 Rust 语法处理。facade 的可选 `markup` 只增加编译期宏；生成代码直接创建相同保留控件，发布程序不带解析器、AST 或字符串控件注册表。运行时 loader 和第三方组件导入仍未实现。
 

@@ -1,0 +1,24 @@
+[package]
+name = "aegle-render-vulkan"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Bounded Vulkan 1.1 rendering of retained Aegle geometry"
+
+[dependencies]
+aegle-scene.workspace = true
+aegle-types = { workspace = true, features = ["color-math"] }
+ash = { version = "0.38.0", default-features = false, features = ["loaded", "std"] }
+bytemuck = { version = "1.25.0", features = ["derive"] }
+
+[build-dependencies]
+naga = { version = "30.0.1", default-features = false, features = ["wgsl-in", "spv-out"] }
+
+[dev-dependencies]
+aegle-scene = { workspace = true, features = ["text"] }
+aegle-render-software.workspace = true
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"

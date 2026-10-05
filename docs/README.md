@@ -11,7 +11,7 @@ Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示
 - [Rust API](rust-api.md)、[标记语言](markup.md)
 - [默认组件、主题与动画](components-theme-animation.md)
 - [文字与输入](text-input.md)、[系统无障碍](accessibility.md)
-- [平台与绘制](platform-rendering.md)、[依赖版本](dependencies.md)
+- [平台与绘制](platform-rendering.md)、[Vulkan 离屏几何](vulkan.md)、[依赖版本](dependencies.md)
 - [资源目标](resources.md)、[验收与交付边界](quality.md)
 
 [早期候选取舍](selection-candidates.md)与[平台事实来源](platform-facts.md)保留作依据；最终决定以以上专题为准。

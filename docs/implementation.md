@@ -15,6 +15,7 @@
 - aegle-access：平台回调经 Mailbox/Handlers 排队并唤醒 UI；可选 UnixAdapter 复用 AccessKit AT-SPI。示例从同一控件树按脏标记导出语义，系统 Focus/Click/SetTextSelection 回到同一焦点、按钮和 Editor。text-a11y 提供文字 run 与有校验的选择转换；不是完整跨平台无障碍。
 - aegle-glyph：复用 Swash/Skrifa，按需生成灰度字形与 COLRv0/嵌入位图，LRU 同时约束图像字节和条目数；缓存不持有字体文件。PNG 位图使用有解码预算的 png crate；库不内嵌字体。
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
+- aegle-render-vulkan：独立 Vulkan 1.1 离屏几何，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；文字、原生 swapchain 及 App 选择尚未接入。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
@@ -32,6 +33,7 @@ cargo run -p aegle --example controls --release
 cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
+cargo run -p aegle-render-vulkan --example geometry --release -- /tmp/aegle-vulkan.ppm
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
 cargo run -p aegle-layout --example retained --release
@@ -201,8 +203,21 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 此阶段没有滚动条、惯性/触摸、独立滚动容器键盘导航或列表虚拟化。所有离屏控件仍保留。系统无障碍离屏过滤、ScrollHint/ScrollToPoint 和 HiDPI 验收限制见[无障碍](accessibility.md#当前滚动语义)，其他平台/GPU仍未实现。
 
+## Vulkan 离屏几何验证
+
+新增独立 `aegle-render-vulkan`，消费已有 Scene，尚未接入 App。矩形/圆角/居中描边、仿射与八层裁剪由 GPU 光栅化，CPU 仅生成有界记录；没有上传软件栅格化的整帧。采用 ash 0.38、bytemuck 1.25 和构建期 Naga 30，不引入 wgpu。两遍 GPU 绘制保留线性混合与预乘 sRGB 输出语义，接口与预算见 [Vulkan](vulkan.md)。
+
+- workspace all-features 的30个常规集成场景、all-targets/all-features、独立无文字 Vulkan library 检查、严格 Rustdoc 和格式检查通过。新增一个默认 ignored 的综合 Vulkan 场景，覆盖混合/裁剪/仿射/作用域、预算、失败帧拒绝提交和恢复，以及 resize/释放/重建，没有 src 内测试。实现17500行、测试3611行，占17.10%（不含 examples/build.rs）；最大源文件483行。
+- 同一场景分别在 AMD Radeon RX 6800 XT（RADV NAVI21）和 llvmpipe（LLVM 22.1.8）上显式通过。Khronos validation layer 1.4.363 仅解压至临时目录；两次均确认 loader 实际插入该层并启用同步验证，没有 VUID、Validation Error/Warning 或 SYNC-HAZARD。Lavapipe 属于软件 ICD，单列记录，不当作硬件加速证据。
+- Lavapipe 上的临时像素探针验证0.2px细矩形、小数外部 clip、八层重复 clip、2730个避开抗锯齿边缘的旋转/反射/斜切采样，以及局部单位与设备缩放为 `1e±19` 的场景。探针发现并修复局部距离平方溢出与固定 AA 阈值失真：上传前将局部原点/长度等比归一化。记录预算320 B下的一条 clip + 一条 draw 也通过，空余容量可在另一个向量需要空间时回收；未增加另一套正式测试文件。
+- 硬件上运行800×480 release geometry 示例并检查生成图片。发布可执行文件512,872 B，包含示例 PPM 写出及 SPIR-V；不含 Vulkan loader、驱动或其依赖，也不包含文本/窗口/App。normal 依赖没有字体栈或运行时 shader 编译器，bytemuck 的 derive 过程宏同样只在编译期运行。Vulkan loader 通过动态加载打开，不能仅凭 ldd 没列出它就声称无系统依赖。
+- 临时 release 成本探针在 RX 6800 XT 上一次构造100个不透明圆角矩形，800×480；初始化15.115 ms、首帧1.330 ms，预热20帧后300帧共29.829 ms，平均0.099 ms、P95 0.102 ms。帧样本计量 begin/draw/finish/wait 的主机 wall time，包含提交及 fence 等待，没有逐帧读回；不是 GPU timestamp、窗口呈现或嵌入式帧时保证。
+- 该硬件探针计时前后显式设备分配均5,529,664 B，CPU记录capacity均16,384 B；最后一次读回耗时3.692 ms（含首次 staging 分配/copy/wait/map），分配随后为7,065,664 B。相同探针的 Lavapipe 单次样本为平均1.363 ms、P95 1.686 ms，读回前/后分配4,608,064/6,144,064 B。差异来自驱动的实际分配要求；这些数字不包括调用方像素Vec、驱动内部对象及映射，不是进程 RAM/PSS，也不能证明达到资源目标。
+
+本阶段没有字形图集、native surface/swapchain、GPU App、通用图像或路径绘制；没有改动现有 Wayland 输入、IME 与无障碍协议，因此未重复原生桌面验收。MSRV、Clippy、其他 OS/GPU/嵌入式设备及真实输入法/屏幕阅读器的完整验收仍缺。
+
 ## 下一阶段与缺口
 
-下一步继续补齐列表虚拟化/滚动条等基础能力、任意绘制/行为组件扩展和动画完成通知/几何，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
+下一步将共享按需字形缓存接入 GPU 图集，再连接 Wayland surface/swapchain 和现有 App；继续补齐列表虚拟化/滚动条、任意绘制/行为组件扩展、动画完成通知/几何与动态标记，以及其他平台/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
 
-当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或几何动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。
+当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU 文字/原生呈现、通用图像命令或几何动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。

@@ -1,14 +1,14 @@
 # Aegle
 
 A modular retained-mode GUI library in Rust 2024, focused on low memory use,
-event-driven updates, CJK and native input methods. Software rendering is
-available; independently selectable GPU backends are planned.
+event-driven updates, CJK and native input methods. Software rendering and an
+independent Vulkan renderer for offscreen geometry are available.
 
 Implementation is in progress: compact shared types, retained trees, Taffy
 layout, retained Unicode paragraphs/editors, on-demand CJK glyphs, drawing records
 and software rasterization work today. The independent Wayland backend adds
 native windows, bounded SHM presentation, keyboard/pointer input and text-input-v3.
-The application layer offers windows, rows, columns, labels, buttons and plain
+The application layer offers windows, rows, columns, scroll views, labels, buttons and plain
 text fields, checkboxes, switches, sliders and progress bars with light/dark/high-contrast themes. Compiled `.aegle` markup and
 simple imperative Rust create the same retained controls. Local colors, typography
 and small theme/state skin functions let component libraries reuse those controls. Shared control
@@ -17,7 +17,7 @@ Optional paint transitions share the same state, with frame-driven sampling,
 smooth retargeting and explicit reduced-motion support.
 Optional Unix accessibility exposes controls, CJK
 text, selection, focus and button actions through AT-SPI. Native text replacement,
-other OS backends and GPU rendering remain unimplemented.
+other OS backends, GPU text and native GPU presentation remain unimplemented.
 See the [implementation status](docs/implementation.md) and [design](docs/README.md).
 
 Write `main.aegle` next to your package's Cargo.toml:
@@ -55,7 +55,7 @@ fn main() -> Result<()> {
 The current `aegle` defaults are Linux Wayland, software rendering, system fonts
 and Unix accessibility, with markup compilation and paint transitions enabled. System fonts must cover the requested text. Native IME
 requires text-input-v3; focusing an editable field without it returns a capability
-error. GPU, Windows/macOS hosts and geometry animation remain in development.
+error. App integration with Vulkan, Windows/macOS hosts and geometry animation remain in development.
 
 ```sh
 cargo run -p aegle --example hello --release
@@ -64,6 +64,7 @@ cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
 cargo run -p aegle --example widgets --release
+cargo run -p aegle --example scrolling --release
 cargo test --workspace --all-features
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
@@ -79,6 +80,7 @@ state with no third-party dependencies), `aegle-layout` (Taffy over that tree),
 plain editing, composition and bounded delta undo), `aegle-glyph` (on-demand
 rasterization and a bounded image cache),
 `aegle-render-software` (borrowed framebuffers and linear-light compositing),
+`aegle-render-vulkan` (offscreen geometry, bounded allocations and explicit readback),
 `aegle-controls` (unskinned Button/Toggle/Slider behavior, shared numeric Range and optional TextField),
 `aegle-access` (UI-thread callback mailbox and optional Unix accessibility),
 `aegle-platform-wayland` (windows and native input, independent of rendering),
@@ -101,13 +103,24 @@ while removing a subtree or closing its window invalidates its handles.
 
 Text support is opt-in for scene/software rendering. Geometry-only builds have
 no font stack; application font bytes remain shared, with no bundled font atlas.
-The renderer examples are headless demonstrations.
+The software renderer examples are headless demonstrations.
 They write `target/aegle-software.png`, `target/aegle-text.png` and
 `target/aegle-editor.png`. The editor example verifies preedit, commit and undo
 while recording selection/caret decorations into the same scene. The PNG encoder
 is a development dependency; the optional glyph module also uses a PNG decoder
 for embedded color font bitmaps. Portable test fonts and their OFL notices are in
 `tests/assets/`; library builds embed no fonts.
+
+The independent Vulkan example requires a Vulkan 1.1 loader and a compatible
+driver. It renders retained geometry and writes a PPM using only the standard
+library; it has no window, text renderer or App integration. Geometry blends in
+an RGBA16F linear attachment, then a GPU pass encodes premultiplied sRGB RGBA8.
+Readback is explicit. See the [Vulkan contract](docs/vulkan.md) for limits and
+device verification; a CPU Vulkan driver is not hardware acceleration.
+
+```sh
+cargo run -p aegle-render-vulkan --example geometry --release -- /tmp/aegle-vulkan.ppm
+```
 
 The Wayland `editor` example combines a CJK text field and button in one retained
 Taffy tree, with routed actions, Tab focus and pointer capture. Keyboard editing
