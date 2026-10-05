@@ -13,6 +13,7 @@ Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示
 
 - [需求](requirements.md)、[决策记录](design-tree.md)、[术语](GLOSSARY.md)
 - [整体架构与生命周期](architecture.md)、[模块与构建组合](modules.md)
+- [Crate、示例与构建组合](crates-and-examples.md)：能力概览、示例命令、渲染后端选择与嵌入
 - [Rust API](rust-api.md)、[标记语言](markup.md)
 - [默认组件、主题与动画](components-theme-animation.md)
 - [文字与输入](text-input.md)、[系统无障碍](accessibility.md)
