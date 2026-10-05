@@ -8,6 +8,7 @@
 //! it. `accessibility` exports semantic trees, while `unix-accessibility` also
 //! connects them to AT-SPI; `windows-accessibility` connects Windows UI Automation.
 //! Both renderers consume the same retained scenes, input and editor state.
+//! [`scene`] re-exports the drawing commands used by [`Canvas`] painters and images.
 
 #[cfg(feature = "accessibility")]
 mod access_scroll;
@@ -17,6 +18,7 @@ mod callbacks;
 mod handles;
 mod input;
 mod layout;
+mod list;
 #[cfg(feature = "motion")]
 mod motion;
 #[cfg(feature = "motion")]
@@ -62,6 +64,7 @@ mod text_handles;
 mod theme;
 mod ui;
 mod value_handles;
+mod visual_handles;
 mod widget_paint;
 
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
@@ -69,10 +72,12 @@ pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 pub use aegle_motion::{Easing, Transition};
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::Options as VulkanOptions;
+pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, VisualState};
 pub use aegle_types::{Color, Point, Size};
 pub use handles::{Button, Container, Label, Node, TextField};
+pub use list::ListView;
 #[cfg(any(
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
@@ -83,3 +88,4 @@ pub use platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
 pub use scroll_handles::ScrollView;
 pub use ui::{ClipboardRequest, ImeRequest, ImeState, Result, Ui, UiError};
 pub use value_handles::{CheckBox, Progress, Slider, Switch};
+pub use visual_handles::{Canvas, ImageView};

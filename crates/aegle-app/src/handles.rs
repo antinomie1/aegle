@@ -54,21 +54,7 @@ impl Node {
             if id == state.root {
                 return Err(UiError::RootMutation.into());
             }
-            state.cancel_subtree(id)?;
-            state.tree.remove_with(id, |node, _| {
-                state.callbacks.remove(&node);
-                state.decorations.remove(&node);
-                #[cfg(feature = "motion")]
-                {
-                    state.motion.tracks.remove(&node);
-                    state.motion.active.remove(&node);
-                }
-            })?;
-            state
-                .pending
-                .retain(|(id, _)| state.tree.get(*id).is_some());
-            state.invalidate_structure();
-            Ok(())
+            state.remove_subtree(id)
         })
     }
     /// Moves this subtree to the end of another container in the same UI.
@@ -297,7 +283,7 @@ impl Container {
     ) -> Result<Node> {
         self.change(|state, parent| {
             let (content, style) = create(state)?;
-            let id = state.insert(parent, content, style)?;
+            let id = state.insert(parent, usize::MAX, content, style)?;
             Ok(Node {
                 state: self.state.clone(),
                 id,

@@ -135,6 +135,7 @@ impl Ui {
                 clipboard: None,
                 repaint: true,
                 callbacks: HashMap::new(),
+                lists: Vec::new(),
                 decorations: HashMap::new(),
                 #[cfg(feature = "motion")]
                 motion: Default::default(),
@@ -188,12 +189,22 @@ impl Ui {
         Ok(())
     }
 
-    /// Updates layout and only invalidated scene records. Returns whether pixels changed.
+    /// Updates virtual list rows, layout and only invalidated scene records.
+    /// Returns whether pixels changed.
     pub fn refresh(&self) -> Result<bool> {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .refresh()
+        let refresh = || {
+            self.state
+                .try_borrow_mut()
+                .map_err(|_| UiError::ReentrantAccess)?
+                .refresh()
+        };
+        self.realize_rows()?;
+        let mut repaint = refresh()?;
+        // New layout can expose rows of resized or first-laid-out lists.
+        if self.realize_rows()? {
+            repaint |= refresh()?;
+        }
+        Ok(repaint)
     }
 
     /// Visits visible records with their window-space translation and ancestor clip.
@@ -314,6 +325,7 @@ impl Ui {
         state.pending.clear();
         state.callbacks.clear();
         state.decorations.clear();
+        state.lists.clear();
         #[cfg(feature = "motion")]
         {
             state.motion.tracks.clear();

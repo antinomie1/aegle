@@ -24,6 +24,8 @@ pub(crate) enum Content {
     Toggle(Box<ToggleContent>),
     Slider(Box<aegle_controls::Slider>),
     Progress(aegle_controls::Range),
+    Image(aegle_scene::Image),
+    Canvas(Box<crate::visual_handles::Painter>),
 }
 
 pub(crate) struct ToggleContent {
@@ -126,6 +128,8 @@ pub(crate) struct State {
     pub clipboard: Option<crate::ClipboardRequest>,
     pub repaint: bool,
     pub callbacks: HashMap<NodeId, Handler>,
+    /// Virtual list viewports and their realized rows.
+    pub lists: Vec<(NodeId, crate::list::List)>,
     pub decorations: HashMap<NodeId, Decoration>,
     #[cfg(feature = "motion")]
     pub motion: crate::motion::Motion,
@@ -204,9 +208,11 @@ impl State {
         self.ime_dirty = true;
     }
 
+    /// Inserts before child `position`; positions past the end append.
     pub fn insert(
         &mut self,
         parent: NodeId,
+        position: usize,
         content: Content,
         mut style: aegle_layout::Style,
     ) -> Result<NodeId> {
@@ -236,7 +242,7 @@ impl State {
         let _ = &mut element;
         let id = self
             .tree
-            .insert(Some(parent), LayoutNode::with_style(style, element))?;
+            .insert_at(parent, position, LayoutNode::with_style(style, element))?;
         #[cfg(feature = "motion")]
         if self.tree.get(id).unwrap().context.content.interactive() {
             if let Some(timing) = self.motion.default {
@@ -251,6 +257,26 @@ impl State {
         }
         self.invalidate_structure();
         Ok(id)
+    }
+}
+
+impl State {
+    /// Removes a non-root subtree, cancelling focus, capture and callbacks.
+    pub fn remove_subtree(&mut self, id: NodeId) -> Result {
+        self.cancel_subtree(id)?;
+        self.tree.remove_with(id, |node, _| {
+            self.callbacks.remove(&node);
+            self.decorations.remove(&node);
+            self.lists.retain(|(list, _)| *list != node);
+            #[cfg(feature = "motion")]
+            {
+                self.motion.tracks.remove(&node);
+                self.motion.active.remove(&node);
+            }
+        })?;
+        self.pending.retain(|(id, _)| self.tree.get(*id).is_some());
+        self.invalidate_structure();
+        Ok(())
     }
 }
 

@@ -113,6 +113,20 @@ impl<T> Tree<T> {
         Ok(self.id_at(index))
     }
 
+    /// Inserts a child before position `index`; positions past the end append.
+    pub fn insert_at(
+        &mut self,
+        parent: NodeId,
+        index: usize,
+        value: T,
+    ) -> Result<NodeId, TreeError> {
+        let id = self.insert(Some(parent), value)?;
+        let children = &mut self.node_mut(parent)?.children;
+        let index = index.min(children.len() - 1);
+        children[index..].rotate_right(1);
+        Ok(id)
+    }
+
     /// Accesses a live node's value.
     pub fn get(&self, id: NodeId) -> Option<&T> {
         self.node(id).ok().map(|n| &n.value)

@@ -352,6 +352,8 @@ impl State {
                     node.set_role(Role::ProgressIndicator);
                     numeric(&mut node, range);
                 }
+                Content::Image(_) => node.set_role(Role::Image),
+                Content::Canvas(_) => node.set_role(Role::Canvas),
                 Content::Field(field) => {
                     node.set_clips_children();
                     if enabled {

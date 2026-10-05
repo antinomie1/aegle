@@ -85,7 +85,13 @@ impl State {
                                     s.height + 2.0 * padding,
                                 )
                             }),
-                        Content::Container | Content::Scroll(_) => Ok(aegle_types::Size::default()),
+                        Content::Image(image) => Ok(aegle_types::Size::new(
+                            image.width() as f32,
+                            image.height() as f32,
+                        )),
+                        Content::Container | Content::Scroll(_) | Content::Canvas(_) => {
+                            Ok(aegle_types::Size::default())
+                        }
                     };
                     match measured {
                         Ok(size) => Size {

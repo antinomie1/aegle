@@ -127,7 +127,7 @@ AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handl
 
 ## 当前滚动语义
 
-ScrollView 导出同名角色、`clips_children`、横纵 offset/min/max；子节点的局部 transform 减去直接父 ScrollView 偏移，嵌套后的窗口边界与绘制/命中共用同一结果。被裁出的节点保留逻辑身份，不因离屏设置 hidden；真正隐藏的树仍使用 hidden，恢复时重新导出保留偏移和有效范围。
+ImageView 导出 Image 角色，Canvas 导出 Canvas 角色，名称来自 `set_accessible_label`。ListView 作为 ScrollView 导出，只包含已建立的行，不报告总行数或行位置。ScrollView 导出同名角色、`clips_children`、横纵 offset/min/max；子节点的局部 transform 减去直接父 ScrollView 偏移，嵌套后的窗口边界与绘制/命中共用同一结果。被裁出的节点保留逻辑身份，不因离屏设置 hidden；真正隐藏的树仍使用 hidden，恢复时重新导出保留偏移和有效范围。
 
 共享动作入口支持 `SetScrollOffset`、四方向 `ScrollUnit::Item/Page`（一项为主题 control_height，一页为视口尺寸），以及无 Hint 的 `ScrollIntoView`。滚动动作先于可聚焦过滤，因此普通标签也可请求滚入；禁用祖先仍拒绝交互。`ScrollHint` 和 `ScrollToPoint` 暂不支持并明确返回 false，后者的目标坐标不能误作 offset。程序滚动和辅助滚动都不取消 IME 组合。
 

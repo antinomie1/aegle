@@ -58,3 +58,7 @@ required-features = ["native", "system-fonts", "markup", "motion"]
 [[example]]
 name = "scrolling"
 required-features = ["native", "system-fonts", "markup"]
+
+[[example]]
+name = "visuals"
+required-features = ["native", "system-fonts"]

@@ -53,6 +53,9 @@ button.on_click(move |_| {
 | CheckBox / Switch | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`、`clear_on_change` |
 | Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change`、`clear_on_change` |
 | ScrollView | `offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；解引用到 Container |
+| Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |
+| ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter` |
+| ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
 | Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果 |
 
 `bounds` 返回最近刷新后的窗口逻辑坐标。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。启用 motion 后用 `set_transition(Transition::default())` 安装外观过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期；详见[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或局部主题树。
@@ -65,7 +68,13 @@ button.on_click(move |_| {
 
 `ensure_visible` 先刷新布局，再逐层滚动祖先，使控件或编辑器 caret 可见，不改变焦点；隐藏节点无操作。Tab 焦点和 caret 更新也使用这条显露路径。`visible_bounds` 返回最近刷新几何与祖先滚动视口的交集；隐藏或完全裁剪时为 None，不额外裁剪到窗口边缘。移出视口不销毁控件。嵌套视口和编辑器通过 `Ui::scroll_by(position, delta)` 将未消费的双轴滚轮位移向外传递。
 
-滚动裁剪为直角矩形，不随外观圆角改变。自有宿主的 `Ui::visit_scenes` 回调接收 `(&Scene, Affine, Option<Rect>)`：分别为保留绘制记录、平移和窗口逻辑坐标裁剪；宿主必须应用裁剪。某轴溢出时 ScrollView 在该轴末端绘制覆盖式滚动条：不占布局空间，12dp 指针带内贴边 6dp 直角滑块（最短 24dp），两轴同时出现时纵轴让出角落；多行编辑器只绘制纵向滑块。滑块在子树之后绘制，外层视口优先命中。按下滑块拖动，按下滑块外的指针带先把滑块中心移到该处再拖动；拖动期间其他控件不接收该指针事件，取消、隐藏或删除结束拖动且保留最后偏移。滑块静止用 theme `border`，悬停或拖动用 `muted`，没有淡出计时器或动画。当前没有 ScrollView 独立键盘焦点、虚拟列表或滚动动画。可执行嵌套表单示例：`cargo run -p aegle --example scrolling`。
+滚动裁剪为直角矩形，不随外观圆角改变。自有宿主的 `Ui::visit_scenes` 回调接收 `(&Scene, Affine, Option<Rect>)`：分别为保留绘制记录、平移和窗口逻辑坐标裁剪；宿主必须应用裁剪。某轴溢出时 ScrollView 在该轴末端绘制覆盖式滚动条：不占布局空间，12dp 指针带内贴边 6dp 直角滑块（最短 24dp），两轴同时出现时纵轴让出角落；多行编辑器只绘制纵向滑块。滑块在子树之后绘制，外层视口优先命中。按下滑块拖动，按下滑块外的指针带先把滑块中心移到该处再拖动；拖动期间其他控件不接收该指针事件，取消、隐藏或删除结束拖动且保留最后偏移。滑块静止用 theme `border`，悬停或拖动用 `muted`，没有淡出计时器或动画。当前没有 ScrollView 独立键盘焦点或滚动动画。可执行嵌套表单示例：`cargo run -p aegle --example scrolling`。
+
+## 当前图像、画布与虚拟列表
+
+`aegle::scene` 重新导出绘制命令。`image(&Image)` 以像素尺寸为固有逻辑尺寸，交叉轴不拉伸，`set_size` 后按边界拉伸，不保持宽高比；导出 Image 角色。像素须由调用方解码，App 不内置 PNG/JPEG 解码器。`canvas(painter)` 的 painter 以局部坐标和当前尺寸录制 scene 命令，只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行；它在刷新期间持有 UI 借用，不能使用控件句柄，绘制不裁剪到边界，只是绘制扩展，不提供自定义输入行为；导出 Canvas 角色。
+
+`list_view(row_height, count, row)` 为等高虚拟列表：间隔节点高 `count × row_height`（不超过 16,777,216），只有与视口、祖先裁剪和窗口相交的行作为真实控件存在。`Ui::refresh` 在借用外先为新进入的行建立空列并调用 `row(&Container, index)`，再布局；离开的行连同焦点和局部状态删除，因此只能 Tab 到已存在的行。行按索引插入以保持焦点顺序，行内容溢出行高时不裁剪。`set_count` 删除超出的行，`reload` 在下次刷新重建全部已存在行。列表默认按 flex 收缩到父容器剩余空间，因此嵌套在 ScrollView 中时自身滚动。辅助技术只看到已建立的行，不报告总行数。
 
 ## 当前可用的组件皮肤
 

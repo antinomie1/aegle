@@ -248,7 +248,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale、系统偏好与客户端装饰。
-- 组件/绘制：惯性、列表虚拟化、自定义 painter 扩展、图像控件、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
+- 组件/绘制：惯性、可变高度列表、自定义控件输入行为、PNG 等解码辅助、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
 - 标记语言：目前只有静态结构/字面量与Rust回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。
 - 主题/动画：完整token/局部继承、系统偏好、几何动画与完成回调。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。
@@ -280,4 +280,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - scene：`Image`（非预乘 sRGB RGBA8，单边 ≤16384）与 `Path`/`PathBuilder`（move/line/quad/cubic/close、NonZero/EvenOdd）为带唯一 id 的 `Arc` 共享句柄；`image`/`fill_path`/`stroke_path` 在 builder 边界检查尺寸、顺序、有限值与坐标范围，空矩形、无线段路径和零宽描边不录入命令。
 - 软件：路径与描边由 tiny-skia 生成覆盖率，复用既有 mask/裁剪合成；图像在线性预乘空间双线性采样，钳制边缘纹素并按解析覆盖率处理矩形边缘，单位缩放且整像素对齐时直接复制纹素。
 - Vulkan（需 text）：图像为 RGBA8_SRGB 图集条目，路径由 zeno（swash 已依赖，不新增 crate）生成 R8 mask，二者复用字形 pipeline 与 shader；路径键含线性矩阵、四分之一像素相位与描边样式。超页尺寸条目使用同一预算下的专用页。没有 Lyon/stencil，没有 mipmap。
-- 验证：软件测试确认矩形路径与同尺寸矩形填充逐字节相同、1:1 图像纹素精确、放大 4 倍的边缘纹素不渐隐、描边中心与相邻行。Vulkan `tests/vector.rs` 与软件输出对照，平均通道差 Lavapipe 0.288/0.288/0.310、RADV（RX 6800 XT）0.291/0.291/0.312，大图专用页场景两者均为 0.000；整像素平移后图集条目仍为 3，旋转后为 5。最大单像素差来自两种曲线/描边近似，因此测试使用平均差而不逐像素比较。既有 render/text 套件在两种 ICD 上仍通过，native 呈现在私有 Sway 上通过；Windows 交叉检查通过。尚无图像控件、PNG 解码接入 App 或路径性能测量。
+- 验证：软件测试确认矩形路径与同尺寸矩形填充逐字节相同、1:1 图像纹素精确、放大 4 倍的边缘纹素不渐隐、描边中心与相邻行。Vulkan `tests/vector.rs` 与软件输出对照，平均通道差 Lavapipe 0.288/0.288/0.310、RADV（RX 6800 XT）0.291/0.291/0.312，大图专用页场景两者均为 0.000；整像素平移后图集条目仍为 3，旋转后为 5。最大单像素差来自两种曲线/描边近似，因此测试使用平均差而不逐像素比较。既有 render/text 套件在两种 ICD 上仍通过，native 呈现在私有 Sway 上通过；Windows 交叉检查通过。尚无路径光栅性能测量。
+
+## 图像控件、Canvas 与等高虚拟列表
+
+- App 新增 `ImageView`（共享 `Image`，固有尺寸为像素尺寸）、`Canvas`（painter 闭包录制局部 scene，仅在创建、尺寸变化或 `invalidate` 后重录）和 `ListView`；`aegle::scene` 重新导出绘制类型。核心 `Tree::insert_at` 让行按索引插入，Tab 顺序与行序一致；没有新增依赖。
+- ListView 复用 ScrollView 的滚动、滚动条、裁剪与语义；`Ui::refresh` 在借用外建立/删除与可见区域相交的行，若首轮布局暴露新行则再刷新一次。行回调可使用任何句柄，删除列表、嵌套列表和回调错误均有处理。
+- 验证：`tests/visual.rs` 覆盖首屏只建 5 行、向下滚动新增 5/6 行、回滚在原有行前重建第 0 行且 Tab→Enter 激活第 1 行、`set_count`/`reload`/删除、非法行高与范围；图像固有尺寸与替换、Canvas 只在 invalidate 后重录。release 临时测量（本机，10,000 行 28 px 文字行，800×480）：ListView 首次刷新 0.24 ms、每滚一行加刷新 14 µs、RSS 增长约 1 MB；同内容普通 ScrollView 构建加首次刷新 49 ms、每步 98 µs、RSS 增长约 40 MB。
+- `visuals` 示例在私有 Pixman Sway（软件）与 GLES Sway（RADV Vulkan）下截图一致，wtype 键盘激活 Rotate 后 Canvas 重绘；两种后端静止 3 秒 CPU 时钟增量为 0，PSS 分别约 9.6 MB 与 21.8 MB（后者含驱动映射）。无头 Sway 没有指针设备，原生滚轮滚动列表未实测，滚动路径由集成测试覆盖。

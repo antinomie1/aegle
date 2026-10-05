@@ -39,7 +39,7 @@ impl State {
                     appearance.border_color,
                 )?;
             }
-            match &element.content {
+            match &mut element.content {
                 Content::Label(label) => {
                     builder.push_transform(Affine::translation(padding, padding)?)?;
                     label.paint_with_color(&mut builder, appearance.foreground)?;
@@ -99,6 +99,10 @@ impl State {
                     false,
                     appearance,
                 )?,
+                Content::Image(image) => {
+                    builder.image(image, Rect::new(0.0, 0.0, size.width, size.height))?;
+                }
+                Content::Canvas(painter) => painter(&mut builder, size)?,
                 Content::Container | Content::Scroll(_) => {}
             }
             outline(
