@@ -73,6 +73,7 @@ pub(crate) struct State {
     pub(crate) clipboard: ClipboardState,
     pub(crate) windows: Vec<WindowState>,
     pub(crate) events: VecDeque<Event>,
+    pub(crate) preferences: crate::Preferences,
 }
 
 impl State {

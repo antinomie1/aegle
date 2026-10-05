@@ -42,6 +42,7 @@ static CLASS: OnceLock<Result<u16, String>> = OnceLock::new();
 pub struct Win32 {
     windows: Vec<Rc<Native>>,
     events: Queue,
+    preferences: Rc<Cell<crate::Preferences>>,
     next_id: u64,
     wake: Option<WakeHandle>,
     previous_dpi: DPI_AWARENESS_CONTEXT,
@@ -128,6 +129,7 @@ impl Win32 {
         Ok(Self {
             windows: Vec::new(),
             events: Rc::new(RefCell::new(VecDeque::new())),
+            preferences: Rc::new(Cell::new(crate::preferences::read())),
             next_id: 0,
             wake: None,
             previous_dpi,
@@ -176,6 +178,7 @@ impl Win32 {
             hwnd: Cell::new(HWND::default()),
             id,
             events: self.events.clone(),
+            preferences: self.preferences.clone(),
             info: Cell::new(WindowInfo {
                 size: options.size,
                 physical,
@@ -302,6 +305,11 @@ impl Win32 {
         request: Option<ImeRequest>,
     ) -> Result<(), Error> {
         crate::ime::configure(self.window(id)?, request)
+    }
+    /// Current system appearance preferences. Changes arrive as
+    /// [`Event::Preferences`] while a window exists to receive the broadcast.
+    pub fn preferences(&self) -> crate::Preferences {
+        self.preferences.get()
     }
     /// Pops one queued event. Drain these before waiting for more native input.
     pub fn next_event(&mut self) -> Option<Event> {

@@ -42,8 +42,15 @@ impl Default for RendererBackend {
 pub struct AppOptions {
     /// Desktop application identifier.
     pub app_id: String,
-    /// Initial theme for each new window.
+    /// Window theme while the system reports neither a dark nor a high-contrast
+    /// preference that the fields below accept.
     pub theme: Theme,
+    /// Theme while the system prefers a dark color scheme. Defaults to
+    /// [`Theme::dark`]; `None` ignores the color-scheme preference.
+    pub dark_theme: Option<Theme>,
+    /// Theme while the system requests high contrast; it takes precedence over
+    /// `dark_theme`. Defaults to [`Theme::high_contrast`]; `None` ignores it.
+    pub high_contrast_theme: Option<Theme>,
     /// Explicit renderer selection; software is the default when compiled in.
     pub renderer: RendererBackend,
     /// Per-window Vulkan device, recording and glyph-cache budgets.
@@ -55,10 +62,10 @@ pub struct AppOptions {
     /// controls. Defaults to 120 ms ease-out; `None` disables this policy.
     #[cfg(feature = "motion")]
     pub transition: Option<Transition>,
-    /// Explicit reduced-motion preference for new windows. Defaults to false;
-    /// operating-system preference discovery is not performed here.
+    /// Explicit reduced-motion setting for windows. `None`, the default,
+    /// follows the system preference and is false when none is reported.
     #[cfg(feature = "motion")]
-    pub reduced_motion: bool,
+    pub reduced_motion: Option<bool>,
 }
 
 impl Default for AppOptions {
@@ -66,6 +73,8 @@ impl Default for AppOptions {
         Self {
             app_id: "org.aegle.app".into(),
             theme: Theme::default(),
+            dark_theme: Some(Theme::dark()),
+            high_contrast_theme: Some(Theme::high_contrast()),
             renderer: RendererBackend::default(),
             #[cfg(feature = "vulkan")]
             vulkan: crate::VulkanOptions::default(),
@@ -73,7 +82,7 @@ impl Default for AppOptions {
             #[cfg(feature = "motion")]
             transition: Some(Transition::default()),
             #[cfg(feature = "motion")]
-            reduced_motion: false,
+            reduced_motion: None,
         }
     }
 }
@@ -126,6 +135,8 @@ pub(crate) struct Runtime {
     #[cfg(feature = "software")]
     pub renderer: Option<Renderer>,
     pub options: AppOptions,
+    /// Last system preferences applied to the windows.
+    pub preferences: crate::platform::Preferences,
     #[cfg(feature = "motion")]
     pub clock: Instant,
 }
@@ -195,13 +206,21 @@ impl App {
     /// Connects using an explicit font collection, without system discovery.
     /// Register application fonts and configure generic fallback families first.
     pub fn with_fonts(fonts: TextSystem, options: AppOptions) -> Result<Self> {
-        options.theme.validate()?;
+        for theme in [
+            Some(options.theme),
+            options.dark_theme,
+            options.high_contrast_theme,
+        ] {
+            theme.as_ref().map(Theme::validate).transpose()?;
+        }
         if options.app_id.len() > 4000 || options.app_id.contains('\0') {
             return Err("application identifier exceeds 4000 bytes or contains NUL".into());
         }
         crate::native_render::validate_backend(options.renderer)?;
+        let backend = Platform::connect()?;
         let runtime = Runtime {
-            backend: Platform::connect()?,
+            preferences: backend.preferences(),
+            backend,
             windows: Vec::new(),
             fonts: Rc::new(RefCell::new(fonts)),
             #[cfg(feature = "software")]
@@ -217,6 +236,12 @@ impl App {
         })
     }
 
+    /// System appearance preferences last applied to windows, for applications
+    /// that resolve their own palettes or skins. `None` means unreported.
+    pub fn preferences(&self) -> crate::Preferences {
+        self.runtime.borrow().preferences
+    }
+
     /// Creates a window with default size and a column root container.
     pub fn window(&self, title: &str) -> Result<Window> {
         self.window_with_options(title, WindowOptions::default())
@@ -225,17 +250,14 @@ impl App {
     /// Creates an independently owned tree on the application's shared connection.
     pub fn window_with_options(&self, title: &str, options: WindowOptions) -> Result<Window> {
         let mut runtime = self.runtime.borrow_mut();
-        let ui = Rc::new(Ui::with_fonts(
-            runtime.fonts.clone(),
-            runtime.options.theme,
-        )?);
+        let ui = Rc::new(Ui::with_fonts(runtime.fonts.clone(), runtime.theme())?);
         // New windows join the application clock before callers can start a
         // transition, including windows created long after the first dispatch.
         #[cfg(feature = "motion")]
         {
             ui.advance_animations(runtime.clock.elapsed())?;
             ui.set_default_transition(runtime.options.transition)?;
-            ui.set_reduced_motion(runtime.options.reduced_motion)?;
+            ui.set_reduced_motion(runtime.reduced_motion())?;
         }
         ui.resize(Size::new(options.width as f32, options.height as f32))?;
         let app_id = runtime.options.app_id.clone();
@@ -331,12 +353,15 @@ impl Window {
     }
 
     /// Applies a new theme to this window without replacing retained controls.
+    /// System preference changes replace a window's theme only while it still
+    /// equals the theme resolved before the change.
     pub fn set_theme(&self, theme: Theme) -> Result<()> {
         self.ui()?.set_theme(theme)
     }
 
     /// Sets this window's explicit reduced-motion preference. Enabling it snaps
-    /// active paint transitions to their targets without changing focus or text.
+    /// active transitions to their targets without changing focus or text.
+    /// System changes apply only while the window keeps the previous resolved value.
     #[cfg(feature = "motion")]
     pub fn set_reduced_motion(&self, reduced: bool) -> Result<()> {
         self.ui()?.set_reduced_motion(reduced)

@@ -1,6 +1,6 @@
 # 默认组件、主题与动画
 
-状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调已接入；任意行为组件扩展、缩放/旋转动画仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
+状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；任意行为组件扩展、缩放/旋转动画和文本缩放仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
 
 ## 当前行为接口
 
@@ -84,6 +84,8 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 默认跟随系统深浅色、对比度、文本缩放与减少动态效果；应用可显式选 Light/Dark/System。系统没有提供某项偏好时用默认值并允许应用配置。系统字体缩放与设备像素缩放各应用一次，不能重复放大。
 
+当前原生 App 从平台读取 `Preferences { dark, high_contrast, reduced_motion }`（各为 `Option<bool>`，None 表示系统未报告）。Linux 经会话总线读取 XDG desktop portal 的 `org.freedesktop.appearance`（color-scheme、contrast、reduced-motion）并监听 SettingChanged；Windows 读取 `AppsUseLightTheme`、`SPI_GETHIGHCONTRAST` 与 `SPI_GETCLIENTAREAANIMATION`，在 `WM_SETTINGCHANGE` 时重读。窗口主题按 high_contrast_theme → dark_theme → theme 解析，对应偏好为 true 且选项不为 None 时才采用；显式选择浅色或深色即把其他两项设为 None 或相同主题。`reduced_motion: None` 跟随系统，未报告时为 false。偏好变化只更新仍等于变化前解析值的窗口主题/减少动态效果，应用用 `Window::set_theme` 等显式设置的值保留。文本缩放尚未读取。无窗口 Ui 不读取系统偏好。
+
 ## 当前外观过渡
 
 可选 `motion` 已提供 `Node::set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))`，同时过渡背景、文字、边框、圆角、焦点环、选择和 caret 的外观值。`appearance()` 返回逻辑目标，`presented_appearance()` 返回最近采样值；失焦/禁用的焦点宽度目标为零，绘制使用相同呈现值。前景动画同步语义颜色，不重新成形文字，也不延迟焦点、文本、预编辑或命中状态。布局、字号、缩放/旋转和窗口清屏背景当前不做过渡。
@@ -96,7 +98,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 无窗口 Ui 默认不安装过渡。`set_default_transition` 只影响随后创建的交互控件；首次刷新直接建立呈现值，不做入场动画。原生 App 在启用 motion 时为交互控件默认安装120ms EaseOut，`AppOptions.transition=None` 可关闭自动安装。各 App 共用一个单调时钟，通过 Wayland frame callback 推进；没有活动动画时不请求动画帧，无轮询定时器。隐藏子树刷新时直接到目标；compositor 暂停窗口帧回调时不主动唤醒，恢复时采样当前时刻。
 
-`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观或位移过渡是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui/Window::set_reduced_motion(true)` 立即到目标并完成，保留最后一帧重绘；期间不启动新过渡。AppOptions 可设置初始偏好，尚未自动读取 OS 偏好。
+`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观或位移过渡是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui/Window::set_reduced_motion(true)` 立即到目标并完成，保留最后一帧重绘；期间不启动新过渡。原生 App 默认跟随系统减少动态效果偏好，`AppOptions.reduced_motion` 可显式覆盖。
 
 ## 后续动画契约
 

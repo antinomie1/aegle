@@ -83,6 +83,11 @@ pub use list::ListView;
     all(feature = "windows", target_os = "windows")
 ))]
 pub use native::{App, AppOptions, RendererBackend, Window, WindowOptions};
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
+pub use platform::Preferences;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 pub use platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
 pub use scroll_handles::ScrollView;

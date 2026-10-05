@@ -18,6 +18,8 @@ mod input;
 #[cfg(windows)]
 mod native;
 #[cfg(windows)]
+mod preferences;
+#[cfg(windows)]
 mod procedure;
 #[cfg(windows)]
 mod software;
@@ -25,7 +27,9 @@ mod software;
 mod window;
 
 pub use error::{Error, PresentError};
-pub use events::{Event, Modifiers, PixelSize, PointerKind, WindowId, WindowInfo, WindowOptions};
+pub use events::{
+    Event, Modifiers, PixelSize, PointerKind, Preferences, WindowId, WindowInfo, WindowOptions,
+};
 pub use ime_types::{ImeEvent, ImeRequest, ImeUpdate, Preedit, utf16_cursor};
 #[cfg(windows)]
 pub use window::{WakeHandle, Win32, WindowSurface};

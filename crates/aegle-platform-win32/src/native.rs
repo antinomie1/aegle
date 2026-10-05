@@ -1,5 +1,5 @@
 #![allow(unsafe_code)]
-use crate::{Event, ImeEvent, PixelSize, WindowId, WindowInfo, ime::Ime};
+use crate::{Event, ImeEvent, PixelSize, Preferences, WindowId, WindowInfo, ime::Ime};
 use std::{
     cell::{Cell, RefCell},
     collections::VecDeque,
@@ -19,6 +19,8 @@ pub(crate) struct Native {
     pub id: WindowId,
     pub info: Cell<WindowInfo>,
     pub events: Queue,
+    /// Last reported preferences, shared so a broadcast change emits once.
+    pub preferences: Rc<Cell<Preferences>>,
     pub registered: Cell<bool>,
     pub dirty: Cell<bool>,
     pub redraw_queued: Cell<bool>,

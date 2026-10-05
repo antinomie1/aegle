@@ -1,6 +1,6 @@
 use crate::native::{App, Runtime};
 use crate::platform::Event;
-use crate::{Result, Ui, UiError};
+use crate::{Result, Theme, Ui, UiError};
 use std::{cell::Cell, rc::Rc, time::Duration};
 
 struct DispatchGuard<'a>(&'a Cell<bool>);
@@ -109,10 +109,49 @@ impl App {
 }
 
 impl Runtime {
-    fn event(&mut self, event: Event) -> Result<()> {
-        if let Event::Error(error) = event {
-            return Err(error.into());
+    /// The window theme resolved from options and system preferences.
+    pub fn theme(&self) -> Theme {
+        let (options, preferences) = (&self.options, self.preferences);
+        let pick =
+            |wanted: Option<bool>, theme: Option<Theme>| theme.filter(|_| wanted == Some(true));
+        pick(preferences.high_contrast, options.high_contrast_theme)
+            .or(pick(preferences.dark, options.dark_theme))
+            .unwrap_or(options.theme)
+    }
+
+    #[cfg(feature = "motion")]
+    pub fn reduced_motion(&self) -> bool {
+        self.options
+            .reduced_motion
+            .or(self.preferences.reduced_motion)
+            .unwrap_or(false)
+    }
+
+    /// Re-resolves windows that still use the previously resolved values.
+    fn preferences(&mut self, preferences: crate::platform::Preferences) -> Result<()> {
+        let theme = self.theme();
+        #[cfg(feature = "motion")]
+        let reduced = self.reduced_motion();
+        self.preferences = preferences;
+        for entry in &self.windows {
+            let current = entry.ui.state.borrow().theme;
+            if current == theme {
+                entry.ui.set_theme(self.theme())?;
+            }
+            #[cfg(feature = "motion")]
+            if entry.ui.state.borrow().motion.reduced == reduced {
+                entry.ui.set_reduced_motion(self.reduced_motion())?;
+            }
         }
+        Ok(())
+    }
+
+    fn event(&mut self, event: Event) -> Result<()> {
+        let event = match event {
+            Event::Error(error) => return Err(error.into()),
+            Event::Preferences(preferences) => return self.preferences(preferences),
+            event => event,
+        };
         let Some(id) = crate::native_input::target(&event) else {
             return Ok(());
         };

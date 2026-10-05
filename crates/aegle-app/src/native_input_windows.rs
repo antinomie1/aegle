@@ -13,7 +13,7 @@ pub(crate) fn target(event: &Event) -> Option<WindowId> {
         | Event::Text { window, .. }
         | Event::Pointer { window, .. }
         | Event::Ime { window, .. } => Some(*window),
-        Event::Wake | Event::Error(_) => None,
+        Event::Wake | Event::Preferences(_) | Event::Error(_) => None,
     }
 }
 

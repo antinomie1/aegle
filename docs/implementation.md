@@ -17,10 +17,10 @@
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 - aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；可选 window 已提供原生 swapchain，App 可显式选择。
 
-- aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放、事件等待、键盘/指针输入、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无触摸、平台偏好、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
-- aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
-- aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转动画与系统偏好监听尚未实现。
-- aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；当前没有 token 注册表或系统偏好监听。
+- aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放、事件等待、键盘/指针输入、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。外观偏好经内置最小 D-Bus 客户端读取 desktop portal 并监听变化；尚无触摸、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
+- aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
+- aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转动画尚未实现；原生 App 跟随系统减少动态效果。
+- aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；原生 App 按系统深浅色/高对比选择主题；当前没有 token 注册表。
 - aegle-app 与 aegle：无窗口 Ui 和可选 Wayland/Win32 软件或 Vulkan 应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Text/Button/TextField/TextArea/CheckBox/Switch/Slider/Progress 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
 
@@ -247,10 +247,10 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
-- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale、系统偏好与客户端装饰。
+- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale 与客户端装饰；真实桌面 portal 与 Windows 设置变更的实机验收。
 - 组件/绘制：惯性、可变高度列表、自定义控件输入行为、PNG 等解码辅助、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
 - 标记语言：目前只有静态结构/字面量与Rust回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。
-- 主题/动画：token 级部分覆盖、系统偏好、缩放/旋转动画。
+- 主题/动画：token 级部分覆盖、系统文本缩放、缩放/旋转动画。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。
 - 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU多窗口共享设备/图集尚未实现。现有桌面样本不能替代这些证据。
 
@@ -297,4 +297,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 验证：`tests/appearance.rs` 覆盖局部主题对控件高度/配色、后建控件、嵌套、全局主题不越过局部主题、reparent 继承、清除恢复和非法主题；`tests/motion.rs` 覆盖无策略立即平移、补间中途 bounds 与悬停命中、完成一次、取消冻结、finish 与减少动态效果完成、删除不完成。all-features 与无 feature 的 app 测试、私有 Pixman Sway 上的 native 测试通过。
 - release 临时探针（1000 个按钮，800×480，CPU 频率呈双峰）：首次刷新 0.65–2.1 ms、全局主题切换加刷新 0.14–0.27 ms，与改动前 0.71–2.05 ms、0.16–0.30 ms 在同一噪声范围；局部主题切换 0.14–0.27 ms；整组平移一步 6–14 µs，与无变化滚动同量级。
 - `components` 示例（debug）在私有 Pixman Sway 上截图验证：Dark card 只把卡片子树切为深色，窗口其余部分保持浅色；Close 截到卡片 EaseIn 滑动中途，完成回调随后关闭窗口、进程退出。过渡结束后 2×3 秒 CPU tick 增量为 0。
+
+## 系统外观偏好
+
+- 两个平台 crate 新增相同形状的 `Preferences { dark, high_contrast, reduced_motion }` 与 `Event::Preferences`。Linux 不引入 D-Bus 库：`portal.rs` 以 EXTERNAL 认证连接会话总线，发送 Hello、SettingChanged 匹配规则和三个 `ReadOne`，连接时最多等待 100 ms，其后回复与信号由 calloop socket 源处理；只编码/解码所需的消息形状，单条超过 64 KiB 断开。Win32 读取注册表与 SPI，并在 `WM_SETTINGCHANGE` 时重读、去重后发出事件。
+- `AppOptions` 新增 `dark_theme`/`high_contrast_theme`（默认 `Theme::dark()`/`Theme::high_contrast()`，None 表示忽略该偏好），`reduced_motion` 改为 `Option<bool>`（None 跟随系统）。变化只更新仍等于原解析值的窗口；`App::preferences` 供自定义配色读取。
+- 验证（私有 dbus-daemon，严格校验消息，配合 scratchpad 中按原始协议实现的假 portal；未接触用户会话总线）：连接（含 Wayland 连接）1.3 ms 内取得 dark/high-contrast，`NotFound` 的 reduced-motion 保持 None，SettingChanged 产生事件；无 portal 服务 1.1 ms、无总线 0.7 ms 后偏好均为 None；portal 每次回复延迟 150 ms 时连接在 102 ms 返回，迟到回复依次以事件到达。`controls` 示例在私有 Pixman Sway 上以深色启动，信号后无重建地切到浅色（截图已检查），静止 3 秒 CPU tick 增量 0。Win32 路径在 Wine10 + 私有 Xvfb 的独立测试前缀中由临时探针执行：初始读取得到 dark None（键不存在）、high_contrast/reduced_motion Some(false)；写入 `AppsUseLightTheme` 并广播 `WM_SETTINGCHANGE` 后依次得到深色、浅色、未知事件，重复相同广播不重复发出，探针最后删除该值。Wine 未对 `SPI_SETCLIENTAREAANIMATION` 产生变化，真实 Windows 设置变更仍待验收。
+- Wayland + 系统字体 + markup + motion、无 Unix adapter 的 release `controls` 由 4,220,096 B 增至 4,248,768 B（+28,672 B）。没有新增第三方依赖；win32 只多启用 windows crate 的 Registry 与 Accessibility 绑定。没有新增自动化测试：协议、主题解析与窗口更新只在上述手工环境中验证。
 

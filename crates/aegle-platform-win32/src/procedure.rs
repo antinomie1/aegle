@@ -56,6 +56,13 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
     let hwnd = native.hwnd.get();
     match msg {
         WM_CLOSE => native.emit(Event::Close { window: native.id }),
+        // Color scheme, high contrast and animation changes are broadcast here.
+        WM_SETTINGCHANGE => {
+            let current = crate::preferences::read();
+            if native.preferences.replace(current) != current {
+                native.emit(Event::Preferences(current));
+            }
+        }
         WM_ERASEBKGND => return Ok(Some(LRESULT(1))),
         WM_PAINT => {
             // SAFETY: acknowledging our window's invalid region; drawing happens

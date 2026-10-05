@@ -18,7 +18,7 @@
 | aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene；glyph 按 text feature 接入 |
 | aegle-render-metal | Metal 实现、上传、图集与呈现 | types、scene |
 | aegle-platform-wayland | Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板、输出与平台偏好 | types |
-| aegle-platform-win32 | Win32 窗口、IMM 兼容输入、DPI、GDI 软件与 GPU 句柄；TSF/平台偏好待实现 | types |
+| aegle-platform-win32 | Win32 窗口、IMM 兼容输入、DPI、GDI 软件与 GPU 句柄、外观偏好；TSF 待实现 | types |
 | aegle-platform-appkit | AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
 | aegle-theme | 无分配的 Theme、视觉状态、Appearance/Style 和纯函数 Skin；局部 token 继承与命名空间扩展是后续目标 | types |
@@ -52,7 +52,7 @@
 
 `aegle-access` 的 Mailbox/Handlers 将原生线程上的请求交给宿主自己的 UI 线程，不引入另一棵应用树。UnixAdapter 复用 AccessKit 的系统协议与语义缓存，收到初次请求时完整导出，其后按脏标记更新。text-a11y 文本桥补充 run 身份/范围校验；平台、控件和文字依赖仍可分开选择。
 
-`aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点；局部主题由子树节点共享一份 `Rc<Theme>`。当前没有主题注册表或系统偏好监听；可选外观/位移过渡由 app 连接独立 motion 模块。
+`aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点；局部主题由子树节点共享一份 `Rc<Theme>`。当前没有主题注册表；系统偏好由平台 crate 报告，原生 App 据此选择主题；可选外观/位移过渡由 app 连接独立 motion 模块。
 
 `aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、ScrollView、标签、按钮、复选框、开关、滑块、进度条、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` / `windows` 按目标增加原生 App；`software` / `vulkan` 分别增加 renderer。各窗口独立拥有 Ui，共享平台和字体；软件 renderer 共用，当前 Vulkan 设备/图集按窗口独立。当前基础皮肤和纯函数皮肤由 app 应用到现有控件；尚未抽出独立 widgets crate，出现更多真实行为/绘制消费者时再形成该模块。
 

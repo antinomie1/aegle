@@ -78,7 +78,7 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 `configure_ime` 使用带可选周边文字的 ImeRequest；长选区不能完整容纳时可保留组合输入而不报告 surrounding。显式禁用立即结束会话并清除该窗口已排队的 IME Update，避免焦点切换后的串写；其余序号、批次和编辑事务见[文字](text-input.md)。
 
-输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。layer-shell 表面复用同一窗口表与帧门控：两侧相对边同时锚定时该轴拉伸到输出，configure 为 0 的轴保留当前尺寸，层表面始终报告 active。剪贴板按 seat 以 data device 设置/读取，管道读写不阻塞事件循环。触摸、客户端窗口装饰、平台偏好及完整系统无障碍仍待接入；gpu feature 的原生租约与 present_external 复用当前窗口与帧门控。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。
+输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。layer-shell 表面复用同一窗口表与帧门控：两侧相对边同时锚定时该轴拉伸到输出，configure 为 0 的轴保留当前尺寸，层表面始终报告 active。剪贴板按 seat 以 data device 设置/读取，管道读写不阻塞事件循环。外观偏好由会话总线上的 desktop portal 提供：连接时以最多 100 ms 的有界等待读取，之后的回复与 SettingChanged 通过同一事件循环的 socket 源转成 `Event::Preferences`；没有总线或 portal 时偏好保持未知，不影响 Wayland 连接。触摸、客户端窗口装饰、文本缩放及完整系统无障碍仍待接入；gpu feature 的原生租约与 present_external 复用当前窗口与帧门控。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。
 
 `wake_handle()` 按需创建一个共享的 calloop ping source，克隆句柄可从后台线程请求 `Event::Wake`；宿主先将工作入自己的队列，再发信号，不引入轮询。该连接点已用于可选 Unix 无障碍回调。示例启用 `example-accessibility` 后，由独立 aegle-access adapter 导出同一控件树；Wayland 库的正常依赖仍不包含它。
 

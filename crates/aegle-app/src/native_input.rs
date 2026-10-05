@@ -15,7 +15,7 @@ pub(crate) fn target(event: &Event) -> Option<WindowId> {
         | Event::Pointer { window, .. }
         | Event::Ime { window, .. }
         | Event::Clipboard { window, .. } => Some(*window),
-        Event::Wake | Event::Error(_) => None,
+        Event::Wake | Event::Preferences(_) | Event::Error(_) => None,
     }
 }
 

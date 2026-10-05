@@ -89,8 +89,29 @@ impl Wayland {
             clipboard,
             windows: Vec::new(),
             events: VecDeque::new(),
+            preferences: Default::default(),
         };
         state.init_input(&connection, &qh);
+        if let Some((stream, mut portal)) = crate::portal::connect(&mut state.preferences) {
+            let source = Generic::new(stream, Interest::READ, Mode::Level);
+            event_loop
+                .handle()
+                .insert_source(source, move |_, stream, state: &mut State| {
+                    let old = state.preferences;
+                    let open = portal.read(stream, &mut state.preferences);
+                    if state.preferences != old {
+                        state
+                            .events
+                            .push_back(Event::Preferences(state.preferences));
+                    }
+                    Ok(if open {
+                        PostAction::Continue
+                    } else {
+                        PostAction::Remove
+                    })
+                })
+                .map_err(|error| Error::backend(error.error))?;
+        }
         let source = WaylandSource::new(connection.clone(), queue)
             .insert(event_loop.handle())
             .map_err(Error::backend)?;
@@ -103,6 +124,13 @@ impl Wayland {
             source,
             wake: None,
         })
+    }
+
+    /// Desktop portal appearance preferences known so far. Values read within a
+    /// short startup bound are present after [`Self::connect`]; later replies and
+    /// changes arrive as [`Event::Preferences`]. Unknown without a session bus.
+    pub fn preferences(&self) -> crate::Preferences {
+        self.state.preferences
     }
 
     /// Lazily creates one wake source for background work or accessibility.

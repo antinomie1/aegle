@@ -110,6 +110,17 @@ pub enum PointerKind {
     },
 }
 
+/// Desktop appearance preferences; `None` where the system reports nothing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Preferences {
+    /// Whether the user prefers a dark color scheme.
+    pub dark: Option<bool>,
+    /// Whether high-contrast presentation is requested.
+    pub high_contrast: Option<bool>,
+    /// Whether non-essential motion should be reduced.
+    pub reduced_motion: Option<bool>,
+}
+
 /// Native events in dispatch order; text and physical keys are distinct.
 #[derive(Debug)]
 pub enum Event {
@@ -177,6 +188,8 @@ pub enum Event {
         /// Transaction.
         event: ImeEvent,
     },
+    /// System appearance preferences changed; not tied to a window.
+    Preferences(Preferences),
     /// A native callback failed; no panic crosses the FFI boundary.
     Error(Error),
 }
