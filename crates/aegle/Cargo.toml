@@ -8,8 +8,10 @@ description = "A small retained GUI with imperative controls and composable back
 
 [features]
 default = ["desktop"]
-# The Unix AT-SPI adapter (zbus and an async runtime) is opt-in: `unix-accessibility`.
-desktop = ["native", "software", "system-fonts", "windows-accessibility", "markup", "motion"]
+# System accessibility adapters are opt-in: `unix-accessibility` (AT-SPI over
+# zbus) and `windows-accessibility` (UI Automation); `accessibility` alone
+# exports the semantic tree without a platform adapter.
+desktop = ["native", "software", "system-fonts", "markup", "motion"]
 native = ["wayland", "windows"]
 motion = ["aegle-app/motion", "aegle-loader?/motion"]
 markup = ["dep:aegle-macros", "dep:aegle-loader"]

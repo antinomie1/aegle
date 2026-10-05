@@ -52,9 +52,10 @@ fn main() -> Result<()> {
 }
 ```
 
-The current `aegle` defaults are native windows (Linux Wayland / Windows Win32), software rendering, system fonts
-and UI Automation on Windows, with markup (including the dynamic markup engine) and transitions enabled. The Unix
-AT-SPI adapter is opt-in: add `--features unix-accessibility`; it needs session D-Bus and adds the zbus stack. System fonts must cover the requested text. Wayland IME
+The current `aegle` defaults are native windows (Linux Wayland / Windows Win32), software rendering and system fonts,
+with markup (including the dynamic markup engine) and transitions enabled. System accessibility adapters are opt-in:
+`--features unix-accessibility` (AT-SPI; needs session D-Bus and adds the zbus stack) or
+`--features windows-accessibility` (UI Automation). System fonts must cover the requested text. Wayland IME
 requires text-input-v3; focusing an editable field without it returns a capability
 error. Windows currently uses IMM compatibility, not a TSF text store. macOS remains in development.
 
@@ -90,7 +91,7 @@ rasterization and a bounded image cache),
 imperative UI, with the native host behind features), and `aegle-markup` (bounded
 parsing and static component checking). `aegle-macros` generates compiled views.
 
-For a system-font software application without markup, transitions or Windows UI Automation:
+For a system-font software application without markup or transitions:
 
 ```sh
 cargo run -p aegle --no-default-features --features native,software,system-fonts --example controls --release

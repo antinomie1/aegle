@@ -315,8 +315,9 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 验证：`aegle-markup/tests/program.rs` 覆盖导入、组件、作用域、类型及 17 类诊断；`aegle-loader/tests/engine.rs` 在无窗口 Ui 上经语义树与语义 Click 覆盖绑定、事件、if 切换、组件本地状态与响应式参数、for 追加/重排/删除的身份保留、重复 key、类型错误赋值、溢出停止、构建失败与成功的 reload 及 state 保留；facade 的 `markup.rs` 覆盖动态 `ui!` 的 id/state 字段、导入与丢弃 View 后绑定仍更新。实现 28,524 行、测试 5,019 行，占 14.96%（不含 examples/build.rs）。
 - `dynamic` 示例在私有 Pixman Sway 上用键盘验证：Clear 清空列表并经 `enabled: len(tasks) > 0` 禁用自身、摘要随之更新，Add 追加任务行，运行时加载面板中的 Switch 切换 if 块；修改 `panel.aegle` 后 Reload 重建面板且保留 `on` 状态；写入未知名称后 Reload 打印 `panel.aegle:6:51: unknown name` 并保留旧面板，应用继续运行。release 静止 3 秒 CPU tick 增量 0，PSS 约 7.6 MB。首个 Tab 落在第二个控件：虚拟键盘出现时窗口获得键盘焦点，既有 `window_focus` 已把焦点交给第一个控件。
 
-## 默认关闭 Unix AT-SPI 适配
+## 默认关闭系统无障碍适配
 
 - 按用户决定，facade 默认 `desktop` 不再包含 `unix-accessibility`；Windows 仍默认启用 UIA，`Ui::accessibility` 语义树导出不受影响。Linux 需要系统无障碍时显式启用该 feature。仅在适配器存在时编译的发布函数相应改为按适配器 feature 编译，消除新默认组合下的未使用警告。
 - Linux 默认组合运行时链接的第三方 crate 由 141 个降为 86 个（不再包含 zbus/atspi/async-io 等）；release `hello` 由 7,581,768 B 降为 4,224,192 B，`controls` 由 7,610,440 B 降为 4,256,960 B。私有 Pixman Sway 上默认 release `controls` 正常显示，PSS 约 9.6 MB、1 个线程。默认、显式启用 `unix-accessibility`、all-features 与 Windows 目标的检查和测试通过。
+- 随后按用户决定同样关闭 `windows-accessibility` 默认启用；默认 desktop 不再含 `accessibility` 语义导出，需要时显式选择 `accessibility`、`unix-accessibility` 或 `windows-accessibility`。Windows 默认组合运行时第三方 crate 由 71 个降为 66 个，交叉编译 release `hello.exe` 由 3,864,064 B 降为 3,247,616 B，`controls.exe` 由 3,889,664 B 降为 3,273,216 B；Linux 默认组合降为 84 个 crate，release 文件大小不变（未用的导出代码此前已被链接器去除）。默认、单独 `accessibility`、两个适配器 feature 与 Windows 目标的检查和测试通过。
 
