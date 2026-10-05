@@ -37,8 +37,8 @@ impl Ui {
         Ok(state.export_accessibility(initial, title, 1.0))
     }
     #[cfg(any(
-        all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows")
+        all(feature = "unix-accessibility", target_os = "linux"),
+        all(feature = "windows-accessibility", target_os = "windows")
     ))]
     pub(crate) fn publish_accessibility(
         &self,

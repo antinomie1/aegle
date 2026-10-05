@@ -1,7 +1,8 @@
 //! Convenient entry to Aegle's retained application layer.
 //!
 //! The default desktop host selects Wayland on Linux or Win32 on Windows with
-//! software rendering, system fonts and native accessibility. Enable `vulkan`
+//! software rendering and system fonts, plus UI Automation on Windows. The Unix
+//! AT-SPI adapter is opt-in through `unix-accessibility`. Enable `vulkan`
 //! and select `RendererBackend::Vulkan` for GPU presentation. Lower-level crates
 //! remain independent; no macOS host is currently implemented.
 
