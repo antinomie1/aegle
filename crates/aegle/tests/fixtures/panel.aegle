@@ -1,0 +1,12 @@
+Column {
+    id: panel
+    padding: 3dp
+    width: 240dp
+    Row {
+        gap: 4dp
+        Text { id: status; text: "等待" }
+        Button { id: clear; text: "Clear"; width: 80dp }
+    }
+    TextField { id: editor; text: "你好"; label: "Editor" }
+    TextArea { id: multiline; text: "one\ntwo"; height: 70dp; min_height: 0dp }
+}

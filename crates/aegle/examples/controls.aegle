@@ -1,0 +1,17 @@
+Window {
+    title: "Aegle — retained controls"
+    padding: 16dp
+    Text { text: "Aegle / retained controls" }
+    Text { text: "One tree. Shared layout, input and CJK editing." }
+    TextArea {
+        id: editor
+        text: "Hello, 世界\n你好 / 日本語 / 한글"
+        label: "Text editor"
+        grow: 1
+    }
+    Row {
+        Button { id: clear; text: "Clear text" }
+        Button { id: dark; text: "Dark theme" }
+        Button { id: close; text: "Close" }
+    }
+}

@@ -8,13 +8,36 @@ Implementation is in progress: compact shared types, retained trees, Taffy
 layout, retained Unicode paragraphs/editors, on-demand CJK glyphs, drawing records
 and software rasterization work today. The independent Wayland backend adds
 native windows, bounded SHM presentation, keyboard/pointer input and text-input-v3.
-The application layer offers imperative windows, rows, columns, labels, buttons
-and plain text fields with light/dark/high-contrast themes. Shared control
+The application layer offers windows, rows, columns, labels, buttons and plain
+text fields with light/dark/high-contrast themes. Compiled `.aegle` markup and
+simple imperative Rust create the same retained controls. Shared control
 behavior connects input and focus to the retained tree and editor.
 Optional Unix accessibility exposes controls, CJK
 text, selection, focus and button actions through AT-SPI. Native text replacement,
 other OS backends and GPU rendering remain unimplemented.
 See the [implementation status](docs/implementation.md) and [design](docs/README.md).
+
+Write `main.aegle` next to your package's Cargo.toml:
+
+```text
+Window {
+    title: "Hello"
+    Text { text: "你好，世界" }
+}
+```
+
+```rust
+fn main() -> aegle::Result<()> {
+    aegle::App::run_ui(aegle::ui!("main.aegle"))
+}
+```
+
+Markup compiles to direct constructors and setters. Named `id` fields return
+typed weak handles for ordinary Rust callbacks; the executable carries no markup
+parser or runtime registry. Static literals are supported; bindings, event blocks,
+component imports and runtime loading remain in development.
+
+The imperative equivalent is also small:
 
 ```rust
 use aegle::prelude::*;
@@ -27,13 +50,15 @@ fn main() -> Result<()> {
 ```
 
 The current `aegle` defaults are Linux Wayland, software rendering, system fonts
-and Unix accessibility. System fonts must cover the requested text. Native IME
+and Unix accessibility, with markup compilation enabled. System fonts must cover the requested text. Native IME
 requires text-input-v3; focusing an editable field without it returns a capability
-error. GPU, Windows/macOS hosts, animation and markup remain in development.
+error. GPU, Windows/macOS hosts and animation remain in development.
 
 ```sh
 cargo run -p aegle --example hello --release
 cargo run -p aegle --example controls --release
+cargo run -p aegle --example hello_markup --release
+cargo run -p aegle --example markup_controls --release
 cargo test --workspace --all-features
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
@@ -52,8 +77,9 @@ rasterization and a bounded image cache),
 `aegle-controls` (unskinned Button and optional TextField behavior),
 `aegle-access` (UI-thread callback mailbox and optional Unix accessibility),
 `aegle-platform-wayland` (windows and native input, independent of rendering),
-`aegle-theme` (allocation-free typed palettes/metrics), and `aegle-app` (retained
-imperative UI, with the native host behind features).
+`aegle-theme` (allocation-free typed palettes/metrics), `aegle-app` (retained
+imperative UI, with the native host behind features), and `aegle-markup` (bounded
+parsing and static component checking). `aegle-macros` generates compiled views.
 
 For a system-font software application without the Unix accessibility adapter:
 

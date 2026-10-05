@@ -5,6 +5,11 @@
 //! is implied by the default feature name. Lower-level crates remain independent.
 
 pub use aegle_app::*;
+extern crate self as aegle;
+
+/// Compile a `.aegle` file to ordinary retained control construction.
+#[cfg(feature = "markup")]
+pub use aegle_macros::ui;
 
 /// Common imperative application and control types.
 pub mod prelude {

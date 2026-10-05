@@ -167,6 +167,25 @@ impl Node {
             }
         })
     }
+    /// Sets the logical width, preserving height and its theme default.
+    /// `None` restores automatic width.
+    pub fn set_width(&self, width: Option<f32>) -> Result {
+        if let Some(width) = width {
+            valid(width)?;
+        }
+        self.layout(0, |s| {
+            s.size.width = width.map_or(Dimension::auto(), Dimension::length)
+        })
+    }
+    /// Sets the logical height; `None` selects automatic rather than themed height.
+    pub fn set_height(&self, height: Option<f32>) -> Result {
+        if let Some(height) = height {
+            valid(height)?;
+        }
+        self.layout(1, |s| {
+            s.size.height = height.map_or(Dimension::auto(), Dimension::length)
+        })
+    }
     /// Sets nonnegative minimum logical dimensions.
     pub fn set_min_size(&self, size: Size) -> Result {
         valid(size.width)?;
@@ -176,6 +195,20 @@ impl Node {
                 width: LengthPercentageAuto::length(size.width),
                 height: LengthPercentageAuto::length(size.height),
             }
+        })
+    }
+    /// Sets minimum logical width without changing the minimum height.
+    pub fn set_min_width(&self, width: f32) -> Result {
+        valid(width)?;
+        self.layout(0, |s| {
+            s.min_size.width = LengthPercentageAuto::length(width)
+        })
+    }
+    /// Sets minimum logical height, overriding the corresponding theme default.
+    pub fn set_min_height(&self, height: f32) -> Result {
+        valid(height)?;
+        self.layout(8, |s| {
+            s.min_size.height = LengthPercentageAuto::length(height)
         })
     }
     /// Sets a finite nonnegative flex grow factor; zero keeps intrinsic sizing.

@@ -64,6 +64,8 @@ name = "aegle"
 version = "0.1.0"
 dependencies = [
  "aegle-app",
+ "aegle-macros",
+ "aegle-text",
 ]
 
 [[package]]
@@ -123,6 +125,21 @@ dependencies = [
  "aegle-types",
  "taffy",
 ]
+
+[[package]]
+name = "aegle-macros"
+version = "0.1.0"
+dependencies = [
+ "aegle-markup",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "aegle-markup"
+version = "0.1.0"
 
 [[package]]
 name = "aegle-platform-wayland"

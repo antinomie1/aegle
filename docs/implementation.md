@@ -19,6 +19,7 @@
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
 - aegle-theme：无分配的有类型配色/尺寸，浅色、深色与显式高对比主题；当前没有 token 注册表、局部主题继承或系统偏好监听。
 - aegle-app 与 aegle：无窗口 Ui 和可选 Wayland 软件应用宿主，命令式 row/column/text/button/text_field/text_area、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
+- aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/Text/Button/TextField/TextArea 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。运行时表达式、组件导入与 loader 尚未实现。
 
 图像缓存预算不包括字体映射、排版、缓存索引及上游栅格 scratch；具体边界见 [资源](resources.md)。合成/过滤使用线性预乘颜色，公共字形彩色图像为非预乘 sRGB RGBA8。
 
@@ -27,6 +28,8 @@
 ```sh
 cargo run -p aegle --example hello --release
 cargo run -p aegle --example controls --release
+cargo run -p aegle --example hello_markup --release
+cargo run -p aegle --example markup_controls --release
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
@@ -34,7 +37,7 @@ cargo run -p aegle-render-software --features text --example editor_scene --rele
 cargo run -p aegle-platform-wayland --example editor --release
 ```
 
-hello 是 7 行 Rust 加 1 行文档注释的完整应用，controls 演示跨控件回调、CJK 编辑、主题和关闭窗口；两者使用系统字体。layout 与三个 renderer 示例没有窗口。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
+hello 是 7 行 Rust 加 1 行文档注释的完整应用；hello_markup 为 3 行 Rust、4 行标记加 1 行文档注释。controls 与 markup_controls 用相同界面演示跨控件回调、CJK 编辑、主题和关闭窗口，均使用系统字体。layout 与三个 renderer 示例没有窗口。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
 
 文字示例将 Paragraph 保留在同一棵树的节点中，以 Taffy 测量回调换行，并按最终布局宽度录制字形。真实显示拉丁文字、中文、日文、韩文及裁剪，输出 `target/aegle-text.png`；不是可交互控件或 GUI Hello world。测试字体共约 21 KiB，仅供测试/示例，附 OFL 原始声明和重建脚本。
 
@@ -128,8 +131,20 @@ Ui 的逻辑树同时用于布局、命中、焦点、编辑与语义；保留�
 
 私有800×480 Sway/Pixman上的单次 controls 进程快照：无 adapter 时 RSS/PSS 为28,892/11,536 KiB、1线程；启用并激活 AT-SPI 时为31,976/14,593 KiB、4线程。前者启动后约1秒采样，后者初次树查询后约200 ms采样，未计 compositor/测试服务。无 adapter 样本随后3秒 CPU tick 增量为0（CLK_TCK=100），不等于30秒稳态、完整峰值或嵌入式验收。默认 hello 也已在隔离 compositor 启动并保持事件等待。
 
+## 编译型静态标记验证
+
+`ui!` 在编译期读取 manifest 相对路径，生成直接创建/设置现有控件的 Rust，返回带 `root` 与各 `id` 字段的有类型 View。片段可用于无窗口 Ui，Window 根用于 App。生成代码在创建失败时清理新子树或关闭新窗口，保留原有父节点；它不是运行时重载。静态语法和当前属性范围见[标记语言](markup.md)。
+
+- workspace all-features 的 24 个常规集成场景通过；新增 3 个小场景分别覆盖 UTF-8/转义/解析预算、schema 类型与错误边界、真实 Ui 的类型化句柄/回调/布局覆盖和销毁。没有 src 内测试。原生 ignored 场景本次未重复运行，既有协议验证记录仍见上文。
+- all-features/all-targets 检查、无默认 feature 的 app/facade 检查、仅 markup 的无窗口集成测试、严格 Rustdoc 与格式/diff 检查通过。
+- 外部临时消费者验证 facade 重命名（含 Rust 关键字别名）、父表达式单次求值、大小写 ID、builder 与直接构造形式。只修改 `.aegle` 文件会触发消费者重编译并改变实际控件文字；未知属性产生文件/行列诊断，不发生宏 panic。
+- 外部最小宿主注入构造器与 setter 失败，验证清理整个新子树、保留旧父节点/兄弟节点、Window 失败时关闭窗口，以及清理错误传播；未向正式库增加测试钩子。
+- 私有 Sway/Pixman 上运行 release markup_controls，验证 CJK 显示、Tab/Shift+Tab、清空按钮、键盘编辑、深色主题和关闭回调，浅色/深色截图已目视检查。它复用既有输入、IME、绘制与语义实现；本轮未重复真实 IME/AT-SPI 协议探针，不声称新增协议支持。
+- 同一工具链/profile、Wayland + 系统字体 + markup、关闭 Unix adapter 的发布文件：hello 与 hello_markup 均为 3,925,184 B，controls 与 markup_controls 均为 3,962,048 B。此样本标记入口没有增加最终文件大小，不代表所有界面均有相同大小，也不是 RAM/CPU 测量。解析器、AST 与 syn/quote 等仅在编译主机运行。
+- 实现 12463 行、测试 2441 行，占 16.38%（不含 examples）；最大源文件 483 行。独立复核未发现需修复的问题。MSRV/Clippy/其他 OS/真实输入法候选窗与屏幕阅读器的未验收范围保持不变。
+
 ## 下一阶段与缺口
 
-下一步在已经可用的应用入口上接入编译型标记界面和可复用组件扩展，补齐动画与基础控件；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
+下一步在现有标记和命令式入口上补齐可复用组件扩展、动画与基础控件，再推进动态标记能力；继续完成其他平台、Vulkan/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
 
-当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令、动画或 DSL。基础主题已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、通用组件插入/自定义皮肤、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。
+当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU renderer、通用图像命令或动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。跨节点祖先裁剪、通用组件插入/自定义皮肤、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。

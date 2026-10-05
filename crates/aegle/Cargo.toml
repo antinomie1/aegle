@@ -8,7 +8,8 @@ description = "A small retained GUI with imperative controls and composable back
 
 [features]
 default = ["desktop"]
-desktop = ["wayland", "system-fonts", "unix-accessibility"]
+desktop = ["wayland", "system-fonts", "unix-accessibility", "markup"]
+markup = ["dep:aegle-macros"]
 wayland = ["aegle-app/wayland"]
 system-fonts = ["aegle-app/system-fonts"]
 accessibility = ["aegle-app/accessibility"]
@@ -16,6 +17,10 @@ unix-accessibility = ["aegle-app/unix-accessibility"]
 
 [dependencies]
 aegle-app.workspace = true
+aegle-macros = { workspace = true, optional = true }
+
+[dev-dependencies]
+aegle-text.workspace = true
 
 [[example]]
 name = "hello"
@@ -24,6 +29,14 @@ required-features = ["wayland", "system-fonts"]
 [[example]]
 name = "controls"
 required-features = ["wayland", "system-fonts"]
+
+[[example]]
+name = "hello_markup"
+required-features = ["wayland", "system-fonts", "markup"]
+
+[[example]]
+name = "markup_controls"
+required-features = ["wayland", "system-fonts", "markup"]
 
 [lints]
 workspace = true

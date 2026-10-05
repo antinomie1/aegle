@@ -1,6 +1,6 @@
 # Aegle 标记语言
 
-状态：v0.1 语言契约。采用 `.aegle` 扩展名；QML 风格的结构，不依赖 Qt/QML，也不强制 JavaScript。编译路径和可选运行时路径具有相同界面语义。
+状态：v0.1。编译型静态结构、类型检查和具名弱句柄已实现；状态表达式、事件块、组件导入与运行时加载仍是下文明确列出的目标。采用 `.aegle` 扩展名；QML 风格的结构，不依赖 Qt/QML，也不强制 JavaScript。
 
 ## 最小程序
 
@@ -23,7 +23,53 @@ fn main() -> aegle::Result<()> {
 
 两份手写源码合计 7 行，初始化包含在 App::run_ui 中。宏是构建期能力，生成直接创建/设置控件的 Rust 代码；编译产物不携带标记解析器。宏为读取文件生成编译器可追踪的依赖标记，修改标记文件必须触发重编译。
 
-## 结构、值和状态
+对应可执行示例为 `cargo run -p aegle --example hello_markup`；加上示例的文档注释，两份文件共 8 行。当前 App 需要 Linux Wayland 与系统字体；`markup` 本身不启用原生平台，片段可挂到无窗口 Ui。
+
+## 当前编译接口
+
+`ui!("path.aegle")` 返回构造闭包：Window 根接收 `&App`，其他根接收 `&Container`，返回 `Result<View>`。`ui!(&parent, "path.aegle")` 立即构造并且只求值一次 parent。路径相对使用宏的包的 `CARGO_MANIFEST_DIR`，允许显式 `../`，不接受绝对路径；没有隐式查找目录。文件必须随使用者的源包一起发布。
+
+```text
+Column {
+    Text { id: status; text: "等待" }
+    Button { id: done; text: "完成" }
+}
+```
+
+```rust
+let view = aegle::ui!(&window, "panel.aegle")?;
+view.done.on_click(move |_| view.status.set_text("已完成"))?;
+```
+
+生成的局部 View 有 `root` 字段和每个 `id` 对应的有类型公开字段；没有运行时字符串查询表。ID 在一个文件中唯一，使用 ASCII Rust 标识符，不能是 Rust 关键字、`_` 或保留名 `root`。丢弃 View 不删除控件；它与命令式 API 使用相同弱句柄、回调、布局、主题、IME 和语义树。
+
+构造期间先建立子树再设置属性；任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。当前不是运行时原子重载 API。
+
+支持 Window、Column、Row、Text、Button、TextField、TextArea。只有前三种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
+
+| 属性 | 值与适用范围 |
+| --- | --- |
+| `id` | 唯一标识符，生成有类型句柄 |
+| `title` | Window 字符串，最多 4000 UTF-8 字节且无 NUL |
+| `text` | Text/Button/TextField/TextArea 字符串；单行编辑器拒绝硬换行 |
+| `width`、`height` | 控件为非负 `dp` 或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
+| `min_width`、`min_height`、`padding` | 非负 `dp` |
+| `gap` | 容器的非负 `dp` |
+| `grow` | 有限非负数值 |
+| `visible`、`enabled` | bool，作用于控件子树 |
+| `label` | 无障碍名称字符串 |
+| `read_only` | TextField/TextArea 的 bool |
+| `theme` | Window 的 `light`、`dark`、`high_contrast` |
+
+Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
+
+声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`；当前不支持百分比、颜色或时长字面量。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。
+
+独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits` 和内建 schema 的 `check`。默认解析上限为 1 MiB、64 层、10,000 节点；显式解析深度最多 256，schema 检查最多 256 层/10,000 节点。`ui!` 使用默认上限。运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
+
+## 后续目标：结构、值和状态
+
+以下状态、表达式、事件块、条件、列表、组件及 loader 均尚未实现；现在通过具名句柄绑定普通 Rust 回调。
 
 ```text
 Window {
@@ -48,7 +94,7 @@ Window {
 
 属性表达式可读取 state、输入属性、已命名节点的公开属性和宿主导出的只读数据；编译/加载时建立依赖。`text: str(count)` 在 count 改变时更新，不每帧求值。绑定环被拒绝；赋值和动画优先级见[架构](architecture.md)。
 
-## 事件与宿主
+## 后续目标：事件与宿主
 
 事件块允许赋值、局部 let、if/else 和调用已声明的宿主动作。内建纯函数只含数值、字符串格式化与 clamp 等有限集合；不允许任意函数定义、递归、while、文件访问或网络访问。
 
@@ -56,7 +102,7 @@ Window {
 
 每个事件块最多执行 10,000 个简单操作，每轮更新传播上限为 64 轮；超限报告错误并停止本轮，保留此前合法赋值。编译型与运行时执行型均遵守这些语义，限制可由宿主显式下调，不默认放开。
 
-## 条件、列表和组件
+## 后续目标：条件、列表和组件
 
 ```text
 if online {
@@ -85,7 +131,7 @@ component Counter(start: int = 0) {
 
 组件间通信采用输入属性和事件；没有隐式全局状态。样式通过主题 token 与本地属性，不实现 CSS 选择器/级联语言。动画通过类型化属性的 transition，例如 `transition opacity: 120ms ease_out`；详见[主题动画](components-theme-animation.md)。
 
-## 编译、加载与重载
+## 后续目标：加载与重载
 
 编译工具和 loader 共用解析、源位置和类型检查规则；前者生成 Rust，后者创建相同组件并保留必要表达式程序。运行时 AST 在创建后释放，不永久保留整份解析树；表达式采用小型树/指令表解释，不引入 JIT、GC 或动态代码加载。
 

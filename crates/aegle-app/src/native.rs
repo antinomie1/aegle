@@ -101,6 +101,16 @@ impl App {
         Self::with_options(AppOptions::default())
     }
 
+    /// Builds a retained interface and runs it with the default application settings.
+    /// A compiled markup builder can return typed weak handles; the application
+    /// owns its windows independently of that return value.
+    #[cfg(feature = "system-fonts")]
+    pub fn run_ui<T>(build: impl FnOnce(&Self) -> Result<T>) -> Result<()> {
+        let app = Self::new()?;
+        build(&app)?;
+        app.run()
+    }
+
     /// Connects with explicit settings and system font discovery.
     #[cfg(feature = "system-fonts")]
     pub fn with_options(options: AppOptions) -> Result<Self> {
