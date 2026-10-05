@@ -109,6 +109,9 @@ impl Container {
             Ok(())
         })?;
         rows.set_grow(1.0)?;
+        // The table draws the border; its rows sit flush inside it.
+        rows.set_border_width(0.0)?;
+        rows.set_padding(0.0)?;
         Ok(Table { table, rows })
     }
 }

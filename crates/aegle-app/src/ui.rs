@@ -360,6 +360,17 @@ impl Ui {
     }
 }
 
+/// Scroll views keep content clear of their default border.
+pub(crate) fn scroll_padding(theme: &Theme) -> Edges<LengthPercentage> {
+    let p = LengthPercentage::length(theme.padding / 2.0);
+    Edges {
+        left: p,
+        right: p,
+        top: p,
+        bottom: p,
+    }
+}
+
 pub(crate) fn container_style(theme: &Theme, root: bool) -> Style {
     let gap = LengthPercentage::length(theme.gap);
     let padding = LengthPercentage::length(if root { theme.padding } else { 0.0 });

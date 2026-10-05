@@ -237,10 +237,11 @@ ScrollView { height: 200dp
 }
 ```
 
+- 默认透明背景、1 dp 主题边框（圆角随主题 radius），内边距为主题 padding 的一半；可用 `set_border_width(0.0)`、`set_padding` 覆盖。ListView 继承同样外观，Table 内的行列表不另加边框。
 - 内部按列排列；限制高度/宽度或 flex 分配后，超出部分可滚动，两轴均支持。
 - 方法：`offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；子控件用 `ensure_visible` 滚动到可见，`visible_bounds` 读取可见区域。
 - 滚轮、Tab 焦点和 caret 移动都会滚动；嵌套视口会把未消费的滚动传给外层。
-- 溢出时在边缘绘制覆盖式滚动条：不占布局，12 dp 指针带内 6 dp 直角滑块，可拖动或点击定位。
+- 溢出时在边缘绘制覆盖式滚动条：不占布局，12 dp 指针带内是 8 dp 宽的完整浅色轨道，较深的直角滑块在轨道中移动，长度表示可见比例；可拖动滑块或点击轨道定位。
 - 无障碍角色 ScrollView，带滚动偏移与范围。
 
 ## ListView

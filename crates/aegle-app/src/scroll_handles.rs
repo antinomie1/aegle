@@ -3,7 +3,11 @@ use std::ops::Deref;
 use aegle_layout::Overflow;
 use aegle_types::{Point, Rect, Size};
 
-use crate::{Container, Node, Result, UiError, state::Content, ui::container_style};
+use crate::{
+    Container, Node, Result, UiError,
+    state::Content,
+    ui::{container_style, scroll_padding},
+};
 
 /// A retained column with a clipped, independently scrollable viewport.
 /// Constrain its size or flex allocation to create overflow. It has no scrollbar
@@ -24,6 +28,7 @@ impl Container {
     pub fn scroll_view(&self) -> Result<ScrollView> {
         self.add(|_, theme| {
             let mut style = container_style(theme, false);
+            style.padding = scroll_padding(theme);
             style.overflow.x = Overflow::Scroll;
             style.overflow.y = Overflow::Scroll;
             style.flex_shrink = 0.0;

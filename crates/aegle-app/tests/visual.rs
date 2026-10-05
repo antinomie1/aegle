@@ -38,6 +38,7 @@ fn virtual_rows_follow_the_viewport_in_order() -> Result {
     assert!(ui.root().list_view(0.0, 1, |_, _| Ok(())).is_err());
     assert!(ui.root().list_view(1.0, 20_000_000, |_, _| Ok(())).is_err());
     list.set_height(Some(100.0))?;
+    list.set_padding(0.0)?;
     ui.resize(Size::new(200.0, 300.0))?;
     assert!(ui.refresh()?);
     assert_eq!(*built.borrow(), [0, 1, 2, 3, 4]);

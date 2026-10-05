@@ -7,6 +7,8 @@ use core::fmt;
 pub enum ControlKind {
     /// A layout container, transparent by default.
     Container,
+    /// A scrollable container, transparent with a theme border by default.
+    ScrollView,
     /// Noninteractive text, transparent by default.
     Label,
     /// An action button.
@@ -92,9 +94,12 @@ impl Appearance {
             ControlKind::CheckBox | ControlKind::Switch | ControlKind::RadioButton
         );
         let framed = toggle || matches!(state.kind, ControlKind::Button | ControlKind::TextField);
+        let bordered = framed || state.kind == ControlKind::ScrollView;
         let interactive = framed || state.kind == ControlKind::Slider;
         let background = match state.kind {
-            ControlKind::Container | ControlKind::Label => Color::TRANSPARENT,
+            ControlKind::Container | ControlKind::ScrollView | ControlKind::Label => {
+                Color::TRANSPARENT
+            }
             ControlKind::Button
             | ControlKind::CheckBox
             | ControlKind::Switch
@@ -124,12 +129,12 @@ impl Appearance {
             } else {
                 theme.muted
             },
-            border_color: if framed {
+            border_color: if bordered {
                 theme.border
             } else {
                 Color::TRANSPARENT
             },
-            border_width: if framed { 1.0 } else { 0.0 },
+            border_width: if bordered { 1.0 } else { 0.0 },
             radius: if matches!(state.kind, ControlKind::Container | ControlKind::Label) {
                 0.0
             } else {

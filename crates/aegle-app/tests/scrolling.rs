@@ -197,7 +197,7 @@ fn overlay_scrollbar_drags_above_children_without_activating_them() -> Result {
         last = scene.commands().len();
         Ok(())
     })?;
-    assert_eq!(last, 1, "thumb is not the topmost record");
+    assert_eq!(last, 2, "track and thumb are not the topmost record");
     let pointer = |kind, y| {
         ui.pointer(
             PointerId(1),

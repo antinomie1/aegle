@@ -125,6 +125,11 @@ impl State {
                         bottom: p,
                     };
                 }
+                if matches!(node.context.content, Content::Scroll(_))
+                    && node.context.local_layout & 2 == 0
+                {
+                    style.padding = crate::ui::scroll_padding(theme);
+                }
             }
             Content::Button(..) | Content::Toggle(_) | Content::Slider(_)
                 if node.context.local_layout & 1 == 0 =>

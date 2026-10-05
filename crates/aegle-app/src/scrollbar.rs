@@ -1,7 +1,7 @@
 //! Overlay scrollbars shared by scroll views and multiline editors.
 //!
-//! Bars take no layout space: a thin square thumb is drawn over the viewport's
-//! trailing edge only while that axis overflows. Pressing the thumb drags it;
+//! Bars take no layout space: while an axis overflows, a light track spans the
+//! viewport's trailing edge and a darker square thumb moves along it. Pressing the thumb drags it;
 //! pressing elsewhere on the strip centers the thumb there and keeps dragging.
 //! No timer, fade or hover animation is involved.
 
@@ -17,8 +17,8 @@ use crate::{
 
 /// Pointer strip width along a scrollable edge, in logical pixels.
 const STRIP: f32 = 12.0;
-/// Visible thumb thickness at the outer edge of the strip.
-const THICKNESS: f32 = 6.0;
+/// Visible track and thumb thickness at the outer edge of the strip.
+const THICKNESS: f32 = 8.0;
 const MARGIN: f32 = 2.0;
 const MIN_THUMB: f32 = 24.0;
 
@@ -58,15 +58,24 @@ impl Bar {
     }
 
     pub fn thumb_rect(&self) -> Rect {
+        self.span(self.thumb, self.length)
+    }
+
+    /// The whole range the thumb moves along.
+    fn track_rect(&self) -> Rect {
+        self.span(0.0, self.track())
+    }
+
+    fn span(&self, offset: f32, length: f32) -> Rect {
         let s = self.strip;
         if self.vertical {
             let width = THICKNESS.min(s.size.width);
             let x = (s.origin.x + s.size.width - MARGIN - width).max(s.origin.x);
-            Rect::new(x, s.origin.y + self.thumb, width, self.length)
+            Rect::new(x, s.origin.y + offset, width, length)
         } else {
             let height = THICKNESS.min(s.size.height);
             let y = (s.origin.y + s.size.height - MARGIN - height).max(s.origin.y);
-            Rect::new(s.origin.x + self.thumb, y, self.length, height)
+            Rect::new(s.origin.x + offset, y, length, height)
         }
     }
 }
@@ -86,7 +95,8 @@ impl State {
         let vertical = limit.y > 0.0;
         let horizontal = horizontal_allowed && limit.x > 0.0;
         let bar = |vertical: bool, track: f32, cross: f32, viewport: f32, offset: f32, max: f32| {
-            let track = track.max(0.0);
+            // Both ends stay clear of the viewport's border.
+            let track = (track - 2.0 * MARGIN).max(0.0);
             let width = STRIP.min(cross.max(0.0));
             let length = (track * viewport / (viewport + max))
                 .max(MIN_THUMB)
@@ -95,9 +105,9 @@ impl State {
             Bar {
                 vertical,
                 strip: if vertical {
-                    Rect::new(start, 0.0, width, track)
+                    Rect::new(start, MARGIN, width, track)
                 } else {
-                    Rect::new(0.0, start, track, width)
+                    Rect::new(MARGIN, start, track, width)
                 },
                 thumb: (offset / max).clamp(0.0, 1.0) * (track - length),
                 length,
@@ -235,8 +245,9 @@ impl State {
         Ok(())
     }
 
-    /// Thumb color: border at rest, muted while hovered or dragged.
-    pub fn scrollbar_color(&self, id: NodeId) -> Color {
+    /// Track (theme pressed fill) and thumb colors: the thumb is border at rest,
+    /// muted while hovered or dragged.
+    pub fn scrollbar_color(&self, id: NodeId) -> [Color; 2] {
         let active = self.drag.is_some_and(|drag| drag.node == id)
             || (self.hover == Some(id)
                 && matches!(
@@ -244,20 +255,25 @@ impl State {
                     Content::Scroll(_)
                 ));
         let theme = self.theme_of(id);
-        if active { theme.muted } else { theme.border }
+        [
+            theme.pressed,
+            if active { theme.muted } else { theme.border },
+        ]
     }
 }
 
 pub(crate) fn paint(
     builder: &mut SceneBuilder,
     bars: [Option<Bar>; 2],
-    color: Color,
+    [track, thumb]: [Color; 2],
     radius: f32,
 ) -> Result {
+    let radius = radius.min(THICKNESS * 0.5);
     for bar in bars.into_iter().flatten() {
-        let rect = bar.thumb_rect();
-        if !rect.is_empty() {
-            builder.fill(RoundedRect::new(rect, radius.min(THICKNESS * 0.5))?, color)?;
+        for (rect, color) in [(bar.track_rect(), track), (bar.thumb_rect(), thumb)] {
+            if !rect.is_empty() {
+                builder.fill(RoundedRect::new(rect, radius)?, color)?;
+            }
         }
     }
     Ok(())
