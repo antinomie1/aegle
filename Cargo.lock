@@ -142,6 +142,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aegle-gpu"
+version = "0.1.0"
+dependencies = [
+ "aegle-scene",
+ "aegle-types",
+ "bytemuck",
+ "zeno",
+]
+
+[[package]]
 name = "aegle-layout"
 version = "0.1.0"
 dependencies = [
@@ -230,6 +240,7 @@ name = "aegle-render-vulkan"
 version = "0.1.0"
 dependencies = [
  "aegle-glyph",
+ "aegle-gpu",
  "aegle-platform-wayland",
  "aegle-render-software",
  "aegle-scene",
@@ -240,7 +251,6 @@ dependencies = [
  "hashbrown 0.17.1",
  "naga",
  "raw-window-handle",
- "zeno",
 ]
 
 [[package]]
@@ -248,6 +258,7 @@ name = "aegle-render-wgpu"
 version = "0.1.0"
 dependencies = [
  "aegle-glyph",
+ "aegle-gpu",
  "aegle-render-software",
  "aegle-scene",
  "aegle-text",
@@ -257,7 +268,6 @@ dependencies = [
  "pollster",
  "raw-window-handle",
  "wgpu",
- "zeno",
 ]
 
 [[package]]

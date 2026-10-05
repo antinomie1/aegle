@@ -93,6 +93,17 @@ impl From<ash::vk::Result> for Error {
         Self::Vulkan(value)
     }
 }
+impl From<aegle_gpu::Error> for Error {
+    fn from(value: aegle_gpu::Error) -> Self {
+        match value {
+            aegle_gpu::Error::Coordinates => Self::Coordinates,
+            aegle_gpu::Error::ClipDepth => Self::ClipDepth,
+            aegle_gpu::Error::Budget { required, limit } => Self::Budget { required, limit },
+            aegle_gpu::Error::Allocation => Self::Allocation,
+            aegle_gpu::Error::Scene(error) => Self::Scene(error),
+        }
+    }
+}
 impl From<aegle_scene::SceneError> for Error {
     fn from(value: aegle_scene::SceneError) -> Self {
         Self::Scene(value)

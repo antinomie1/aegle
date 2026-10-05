@@ -22,7 +22,6 @@ mod atlas_pages;
 mod commands;
 mod device;
 mod error;
-mod geometry;
 mod memory;
 mod pipeline;
 mod renderer;

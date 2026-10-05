@@ -7,7 +7,7 @@ struct Primitive {
     row0: vec4<f32>,
     row1: vec4<f32>,
     rect: vec4<f32>, // shape rect or atlas origin and glyph size, excluding gutter
-    params: vec4<f32>, // radius or mask contrast, stroke width (-1 for fill), viewport size
+    params: vec4<f32>, // radius or mask contrast, stroke width (-1 for fill), viewport size (negative height flips Y)
     color: vec4<f32>, // linear premultiplied paint, or repeated color-glyph opacity
     header: vec4<u32>, // clip head, geometry/mask/color-glyph/image kind, reserved
 }
@@ -41,8 +41,10 @@ fn vs_main(
         vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0),
     );
     let point = mix(primitive.bounds.xy, primitive.bounds.zw, corners[index]);
-    // Device pixels grow downward; WebGPU clip space grows upward.
-    let ndc = point / primitive.params.zw * vec2(2.0, -2.0) + vec2(-1.0, 1.0);
+    // A positive viewport height keeps Vulkan's downward clip space. A negative
+    // one selects WebGPU's upward clip space, which flips device Y.
+    var ndc = point / abs(primitive.params.zw) * 2.0 - 1.0;
+    ndc.y = ndc.y * sign(primitive.params.w);
     return Vertex(vec4(ndc, 0.0, 1.0), instance);
 }
 

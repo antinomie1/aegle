@@ -26,9 +26,9 @@
 
 窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的设备与验证错误当作致命错误并 panic（已在其源码确认）；本后端没有安装自己的处理器，设备丢失尚未转为可恢复错误。
 
-## 与 Vulkan 后端的重复
+## 与 Vulkan 后端共享的部分
 
-记录构建（`records.rs`）与 WGSL 是 Vulkan 版的简化副本，不是共享代码：wgpu 的裁剪空间 Y 轴向上，着色器顶点阶段需要翻转，所以不能直接复用同一文件。两者共享的纯 CPU 逻辑（图元与裁剪几何、边界计算）以后应提取为独立 crate，等第二个后端稳定后再做，避免在没有验证面时重构已验证的 Vulkan 路径。
+图元与裁剪记录、场景遍历、边界与裁剪几何、货架装箱、图像放置、路径 mask 的量化与光栅化，以及两个 WGSL 着色器，都在 `aegle-gpu`，两个后端共用，没有第二份副本。顶点阶段的 Y 轴方向由视口高度的符号选择：Vulkan 传正高度，wgpu 传负高度，所以同一份 WGSL 既在构建期编译为 SPIR-V，又在运行时交给 wgpu。两个后端各自保留的是与 API 相关的部分：资源与同步、图集页的上传与淘汰策略、呈现。
 
 ## 验证
 

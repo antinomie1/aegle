@@ -1,12 +1,12 @@
 //! Glyph runs and the shared atlas upload with page recycling.
 use aegle_glyph::{Glyph, Placement, RasterOptions, RasterTransform, mask_contrast};
+use aegle_gpu::{State, Textured, bounds};
 use aegle_scene::{GlyphRun, Rect, RoundedRect};
 use aegle_types::color_math::linear_rgba;
 
 use crate::{
     Error, Renderer, Result,
     atlas::{AtlasGlyph, Fetch, ResourceKey, Slot},
-    records::{Kind, Primitive, State, bounds},
 };
 
 impl Renderer {
@@ -15,7 +15,7 @@ impl Renderer {
         if alpha == 0 || state.bounds[0] >= state.bounds[2] || state.bounds[1] >= state.bounds[3] {
             return Ok(());
         }
-        let viewport = self.size.map(|v| v as f32);
+        let viewport = self.viewport;
         let raster = RasterTransform::new(state.transform, run.size())?;
         let contrast = mask_contrast([r, g, b, alpha]);
         for glyph in run.glyphs() {
@@ -38,10 +38,7 @@ impl Renderer {
                 // the analytic geometry AA fringe must not pin invisible glyphs.
                 let area = bounds(shape, transform, if raster.hint() { 0.0 } else { 0.5 }, 0.0)?;
                 geometry = Some((transform, area));
-                Ok(area[0].floor() < state.bounds[2]
-                    && area[2].ceil() > state.bounds[0]
-                    && area[1].floor() < state.bounds[3]
-                    && area[3].ceil() > state.bounds[1])
+                Ok(aegle_gpu::visible(area, state.bounds))
             };
             let mut fetched =
                 self.atlas
@@ -58,25 +55,25 @@ impl Renderer {
                 continue;
             };
             let (transform, area) = geometry.unwrap();
-            let [a, b, c, d, e, f] = transform.inverse()?.coefficients();
             let mask = image.slot == Slot::Mask;
             self.rec.record(
-                Primitive {
-                    bounds: area,
-                    row0: [a, c, e, 0.0],
-                    row1: [b, d, f, 0.0],
+                Textured {
+                    area,
+                    inverse: transform.inverse()?,
                     rect: image.rect,
-                    params: [contrast, 0.0, viewport[0], viewport[1]],
+                    contrast,
+                    viewport,
                     color: if mask {
                         linear_rgba(run.color().to_rgba())
                     } else {
                         [f32::from(alpha) / 255.0; 4]
                     },
-                    header: [state.clip, if mask { 1 } else { 2 }, 0, 0],
-                },
+                    kind: if mask { 1 } else { 2 },
+                    page: image.slot.page(),
+                }
+                .primitive(state.clip),
                 state.bounds,
-                Kind::Atlas(image.slot),
-            );
+            )?;
             self.flush_full()?;
         }
         Ok(())

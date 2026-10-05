@@ -11,15 +11,16 @@ use naga::{
 fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo supplies OUT_DIR"));
     let text = env::var_os("CARGO_FEATURE_TEXT").is_some();
-    for name in ["geometry", "resolve"] {
-        let path = format!("shaders/{name}.wgsl");
-        println!("cargo:rerun-if-changed={path}");
-        let source = fs::read_to_string(&path).expect("read shader source");
-        let module = naga::front::wgsl::parse_str(&source)
-            .unwrap_or_else(|error| panic!("{path}: {}", error.emit_to_string(&source)));
+    for (name, source) in [
+        ("geometry", aegle_gpu::GEOMETRY_WGSL),
+        ("resolve", aegle_gpu::RESOLVE_WGSL),
+    ] {
+        let path = format!("aegle-gpu {name}.wgsl");
+        let module = naga::front::wgsl::parse_str(source)
+            .unwrap_or_else(|error| panic!("{path}: {}", error.emit_to_string(source)));
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
-            .unwrap_or_else(|error| panic!("{path}: {}", error.emit_to_string(&source)));
+            .unwrap_or_else(|error| panic!("{path}: {}", error.emit_to_string(source)));
         let mut options = Options {
             lang_version: (1, 3),        // Vulkan 1.1
             flags: WriterFlags::empty(), // Shaders use Vulkan's positive-height viewport.

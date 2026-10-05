@@ -1,12 +1,9 @@
 //! Public frame handle and the scene walker that fills draw records.
-use aegle_scene::{Affine, Command, MAX_SCOPE_DEPTH, RoundedRect, Scene};
+use aegle_gpu::{Step, Walker};
+use aegle_scene::{Affine, Scene};
 use aegle_types::Rect;
 
-use crate::{
-    Error, Renderer, Result,
-    records::{NO_CLIP, State},
-    renderer::MAX_PRIMITIVES,
-};
+use crate::{Error, Renderer, Result, renderer::MAX_PRIMITIVES};
 
 pub(crate) enum Presentation {
     Offscreen,
@@ -76,70 +73,41 @@ impl Renderer {
     }
 
     fn walk(&mut self, scene: &Scene, transform: Affine, clip: Option<Rect>) -> Result {
-        if scene.max_clip_depth() + usize::from(clip.is_some()) > 8 {
-            return Err(Error::ClipDepth);
-        }
-        let [width, height] = self.size;
-        let viewport = [width as f32, height as f32];
-        let mut state = State {
+        let mut walker = Walker::new(
+            scene,
             transform,
-            clip: NO_CLIP,
-            bounds: [0.0, 0.0, viewport[0], viewport[1]],
-        };
-        if let Some(rect) = clip {
-            let shape = RoundedRect::new(rect, 0.0)?;
-            self.rec.push_clip(&mut state, shape, Affine::IDENTITY)?;
-        }
-        // Scene scopes have a validated maximum; no per-draw heap scratch.
-        let mut saved = [state; MAX_SCOPE_DEPTH];
-        let mut depth = 0;
-        for command in scene.commands() {
-            match *command {
-                Command::PushTransform(local) => {
-                    saved[depth] = state;
-                    depth += 1;
-                    state.transform = local.then(state.transform)?;
-                }
-                Command::PushClip(shape) => {
-                    saved[depth] = state;
-                    depth += 1;
-                    let transform = state.transform;
-                    self.rec.push_clip(&mut state, shape, transform)?;
-                }
-                Command::Pop => {
-                    depth -= 1;
-                    state = saved[depth];
-                }
-                Command::Fill { shape, color } => {
-                    self.rec.shape(state, shape, color, -1.0, viewport)?;
-                }
-                Command::Stroke {
-                    shape,
-                    color,
-                    width,
-                } => self.rec.shape(state, shape, color, width, viewport)?,
+            clip,
+            self.size,
+            self.viewport,
+            &mut self.rec,
+        )?;
+        loop {
+            match walker.step(&mut self.rec)? {
+                Step::Done => return Ok(()),
+                Step::Recorded => {}
                 #[cfg(feature = "text")]
-                Command::Glyphs(index) => {
-                    self.glyphs(&scene.glyph_runs()[index], state)?;
+                Step::Command(command, state) => {
+                    use aegle_scene::Command;
+                    match command {
+                        Command::Glyphs(index) => self.glyphs(&scene.glyph_runs()[index], state)?,
+                        Command::Image { image, rect } => {
+                            self.image(&scene.images()[image], rect, state)?;
+                        }
+                        Command::FillPath { path, color } => {
+                            self.path(&scene.paths()[path], color, None, state)?;
+                        }
+                        Command::StrokePath {
+                            path,
+                            color,
+                            stroke,
+                        } => self.path(&scene.paths()[path], color, Some(stroke), state)?,
+                        _ => return Err(Error::UnsupportedCommand),
+                    }
                 }
-                #[cfg(feature = "text")]
-                Command::Image { image, rect } => {
-                    self.image(&scene.images()[image], rect, state)?;
-                }
-                #[cfg(feature = "text")]
-                Command::FillPath { path, color } => {
-                    self.path(&scene.paths()[path], color, None, state)?;
-                }
-                #[cfg(feature = "text")]
-                Command::StrokePath {
-                    path,
-                    color,
-                    stroke,
-                } => self.path(&scene.paths()[path], color, Some(stroke), state)?,
-                _ => return Err(Error::UnsupportedCommand),
+                #[cfg(not(feature = "text"))]
+                Step::Command(..) => return Err(Error::UnsupportedCommand),
             }
             self.flush_full()?;
         }
-        Ok(())
     }
 }

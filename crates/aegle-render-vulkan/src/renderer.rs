@@ -1,12 +1,8 @@
 use crate::{
-    Error, Result,
-    commands::Commands,
-    device::Device,
-    geometry::{Clip, Primitive, Recording},
-    memory::Buffer,
-    pipeline::Pipeline,
+    Error, Result, commands::Commands, device::Device, memory::Buffer, pipeline::Pipeline,
     target::Target,
 };
+use aegle_gpu::{Clip, Primitive, Recording, Step, Walker, viewport};
 use aegle_scene::{Affine, Color, Rect, Scene};
 use ash::vk;
 
@@ -118,7 +114,7 @@ impl Renderer {
             pipeline,
             commands,
             device,
-            recording: Recording::default(),
+            recording: Recording::with_limit(options.recording_budget),
             options,
             name,
             busy: false,
@@ -248,7 +244,7 @@ impl Renderer {
         self.target = None;
         self.buffers = [None, None];
         self.readback = None;
-        self.recording = Recording::default();
+        self.recording = Recording::with_limit(self.options.recording_budget);
         #[cfg(feature = "text")]
         self.text.atlas.clear();
         self.image_ready = false;
@@ -416,35 +412,43 @@ impl Frame<'_> {
             return Err(Error::FrameFailed);
         }
         let target = self.renderer.target.as_ref().unwrap();
+        let extent = [target.width, target.height];
         #[cfg(feature = "text")]
         let text_budget = self.renderer.options.memory_budget
             - self.renderer.base_bytes()
             - self.renderer.swapchain_bytes();
-        let result = self.renderer.recording.append(
-            scene,
-            transform,
-            clip,
-            target.width,
-            target.height,
-            self.renderer.options.recording_budget,
-            #[cfg(feature = "text")]
-            |recording, command, state| {
-                let limits = crate::text::Limits {
-                    width: target.width,
-                    height: target.height,
-                    device: text_budget,
-                    recording: self.renderer.options.recording_budget,
-                };
-                self.renderer.text.record(
-                    &self.renderer.device,
-                    recording,
-                    scene,
-                    command,
-                    state,
-                    limits,
-                )
-            },
-        );
+        let renderer = &mut *self.renderer;
+        let view = viewport(extent[0], extent[1], false);
+        let result = (|| -> Result {
+            let mut walker = Walker::new(
+                scene,
+                transform,
+                clip,
+                extent,
+                view,
+                &mut renderer.recording,
+            )?;
+            loop {
+                match walker.step(&mut renderer.recording)? {
+                    Step::Done => return Ok(()),
+                    Step::Recorded => {}
+                    #[cfg(feature = "text")]
+                    Step::Command(command, state) => renderer.text.record(
+                        &renderer.device,
+                        &mut renderer.recording,
+                        scene,
+                        command,
+                        state,
+                        crate::text::Limits {
+                            viewport: view,
+                            device: text_budget,
+                        },
+                    )?,
+                    #[cfg(not(feature = "text"))]
+                    Step::Command(..) => return Err(Error::UnsupportedCommand),
+                }
+            }
+        })();
         self.failed |= result.is_err();
         result
     }

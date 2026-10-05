@@ -37,6 +37,8 @@ pub enum Error {
     TooLarge,
     /// A transformed scene failed its shared geometry invariant.
     Scene(aegle_scene::SceneError),
+    /// Host memory allocation failed.
+    Allocation,
     /// Copying pixels back to the CPU failed.
     Readback(wgpu::BufferAsyncError),
     /// An earlier draw failed; this frame cannot be submitted.
@@ -68,6 +70,7 @@ impl fmt::Display for Error {
             Self::TooLarge => f.write_str("wgpu glyph, image or path mask exceeds texture limits"),
             Self::Scene(e) => write!(f, "wgpu scene: {e}"),
             Self::Readback(e) => write!(f, "wgpu readback: {e}"),
+            Self::Allocation => f.write_str("wgpu host allocation failed"),
             Self::FrameFailed => f.write_str("cannot submit a failed wgpu frame"),
         }
     }
@@ -81,6 +84,18 @@ impl From<wgpu::RequestAdapterError> for Error {
 impl From<wgpu::RequestDeviceError> for Error {
     fn from(value: wgpu::RequestDeviceError) -> Self {
         Self::Device(value)
+    }
+}
+impl From<aegle_gpu::Error> for Error {
+    fn from(value: aegle_gpu::Error) -> Self {
+        match value {
+            aegle_gpu::Error::Coordinates => Self::Coordinates,
+            aegle_gpu::Error::ClipDepth => Self::ClipDepth,
+            // The recording is unbounded here: batches flush at a fixed size.
+            aegle_gpu::Error::Budget { .. } => unreachable!("wgpu recordings have no byte limit"),
+            aegle_gpu::Error::Allocation => Self::Allocation,
+            aegle_gpu::Error::Scene(error) => Self::Scene(error),
+        }
     }
 }
 impl From<aegle_scene::SceneError> for Error {

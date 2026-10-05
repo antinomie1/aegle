@@ -1,3 +1,4 @@
+use aegle_gpu::{Primitive, Recording};
 use aegle_scene::Color;
 use aegle_types::color_math::linear_rgba;
 use wgpu::{
@@ -9,7 +10,6 @@ use wgpu::{
 use crate::{
     Error, Result,
     gpu::{Gpu, LINEAR},
-    records::{Kind, Recording},
 };
 
 /// Primitives per submission; a larger frame is split into several, bounding CPU
@@ -41,6 +41,26 @@ impl Default for Options {
     }
 }
 
+/// Which pipeline and texture draws a run of primitives.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Geometry,
+    #[cfg(feature = "text")]
+    Atlas(crate::atlas::Slot),
+}
+
+impl Kind {
+    fn of(primitive: &Primitive) -> Self {
+        match primitive.header[1] {
+            0 => Self::Geometry,
+            #[cfg(feature = "text")]
+            _ => Self::Atlas(crate::atlas::Slot::from_page(primitive.header[2])),
+            #[cfg(not(feature = "text"))]
+            _ => unreachable!("atlas draws require the text feature"),
+        }
+    }
+}
+
 struct Target {
     size: [u32; 2],
     linear: TextureView,
@@ -67,9 +87,13 @@ pub struct Renderer {
     target: Option<Target>,
     buffers: Buffers,
     pub(crate) rec: Recording,
+    /// Adjacent primitives sharing a pipeline and texture: kind and instance range.
+    batches: Vec<(Kind, u32, u32)>,
     #[cfg(feature = "text")]
     pub(crate) atlas: crate::atlas::Atlas,
     pub(crate) size: [u32; 2],
+    /// Shader viewport parameters; the negative height selects WebGPU clip space.
+    pub(crate) viewport: [f32; 2],
     clear: [f64; 4],
     /// True once a pass has cleared the linear image this frame.
     loaded: bool,
@@ -91,9 +115,11 @@ impl Renderer {
             target: None,
             buffers: Buffers::default(),
             rec: Recording::default(),
+            batches: Vec::new(),
             #[cfg(feature = "text")]
             atlas: crate::atlas::Atlas::new(options.atlas_size),
             size: [0; 2],
+            viewport: [0.0; 2],
             clear: [0.0; 4],
             loaded: false,
         }
@@ -147,6 +173,7 @@ impl Renderer {
         #[cfg(feature = "text")]
         self.atlas.begin_frame();
         self.size = [width, height];
+        self.viewport = aegle_gpu::viewport(width, height, true);
         self.clear = linear_rgba(clear.to_rgba()).map(f64::from);
         self.loaded = false;
         self.rec.clear();
@@ -255,10 +282,18 @@ impl Renderer {
     /// image into it. Queue ordering keeps later buffer and atlas writes after
     /// this submission, so a split frame never sees its own later data.
     pub(crate) fn flush(&mut self, output: Option<&Texture>) -> Result {
-        if self.rec.batches.is_empty() && output.is_none() {
+        if self.rec.primitives.is_empty() && output.is_none() {
             return Ok(());
         }
-        if !self.rec.batches.is_empty() {
+        self.batches.clear();
+        for (index, primitive) in self.rec.primitives.iter().enumerate() {
+            let (kind, index) = (Kind::of(primitive), index as u32);
+            match self.batches.last_mut() {
+                Some((last, _, end)) if *last == kind => *end = index + 1,
+                _ => self.batches.push((kind, index, index + 1)),
+            }
+        }
+        if !self.rec.primitives.is_empty() {
             self.upload();
         }
         if let Some(texture) = output {
@@ -289,9 +324,9 @@ impl Renderer {
             if let Some(group) = &self.buffers.group {
                 pass.set_bind_group(0, group, &[]);
             }
-            for batch in &self.rec.batches {
-                self.bind(&mut pass, batch.kind);
-                pass.draw(0..6, batch.start..batch.end);
+            for &(kind, start, end) in &self.batches {
+                self.bind(&mut pass, kind);
+                pass.draw(0..6, start..end);
             }
         }
         if let Some(texture) = output {
@@ -315,7 +350,7 @@ impl Renderer {
         }
         self.gpu.queue.submit([encoder.finish()]);
         self.loaded = true;
-        self.rec.clear_primitives();
+        self.rec.primitives.clear();
         Ok(())
     }
 

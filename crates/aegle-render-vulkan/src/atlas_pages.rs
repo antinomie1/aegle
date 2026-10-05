@@ -2,6 +2,7 @@
 use std::{collections::hash_map::RandomState, hash::BuildHasher};
 
 use aegle_glyph::{Content, Glyph, GlyphKey, OwnedGlyphKey, Placement};
+use aegle_gpu::Shelf;
 use ash::vk;
 use hashbrown::HashTable;
 
@@ -10,12 +11,7 @@ use crate::{
     upload::Uploads,
 };
 
-/// Identity of a non-glyph entry: a scene resource id and its raster settings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct ResourceKey {
-    pub id: usize,
-    pub params: [u32; 7],
-}
+pub(crate) use aegle_gpu::ResourceKey;
 
 pub(crate) enum EntryKey {
     Glyph(OwnedGlyphKey),
@@ -34,29 +30,6 @@ struct Entry {
     key: EntryKey,
     hash: u64,
     glyph: AtlasGlyph,
-}
-
-#[derive(Clone, Copy, Default)]
-struct Shelf {
-    x: u32,
-    y: u32,
-    height: u32,
-}
-impl Shelf {
-    fn place(mut self, width: u32, height: u32, extent: [u32; 2]) -> Option<(Self, [u32; 2])> {
-        if self.x + width > extent[0] {
-            self.x = 0;
-            self.y += self.height;
-            self.height = 0;
-        }
-        if width > extent[0] || self.y + height > extent[1] {
-            return None;
-        }
-        let position = [self.x + 1, self.y + 1];
-        self.x += width;
-        self.height = self.height.max(height);
-        Some((self, position))
-    }
 }
 
 pub(crate) struct Page {
@@ -286,6 +259,8 @@ impl Storage {
         let index = self.page(glyph.content, extent, options, device, pipeline, budget)?;
         let page = self.pages[index].as_ref().unwrap();
         let (shelf, xy) = page.shelf.place(extent[0], extent[1], page.extent).unwrap();
+        // The glyph sits inside its one-pixel transparent border.
+        let xy = [xy[0] + 1, xy[1] + 1];
         uploads.append(
             index as u32,
             xy,

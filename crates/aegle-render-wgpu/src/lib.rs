@@ -18,7 +18,6 @@ mod atlas;
 mod error;
 mod frame;
 mod gpu;
-mod records;
 mod renderer;
 #[cfg(feature = "text")]
 mod text;

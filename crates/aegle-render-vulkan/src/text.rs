@@ -1,13 +1,10 @@
 use aegle_glyph::{Content, RasterOptions, RasterTransform};
+use aegle_gpu::{Recording, State, Textured, bounds};
 use aegle_scene::{Command, GlyphRun, Rect, RoundedRect, Scene};
 use aegle_types::color_math::linear_rgba;
 
 use crate::{
-    Error, Result, TextOptions,
-    atlas::Atlas,
-    device::Device,
-    geometry::{Primitive, Recording, State, bounds},
-    pipeline::Pipeline,
+    Error, Result, TextOptions, atlas::Atlas, device::Device, pipeline::Pipeline,
     text_pipeline::TextPipeline,
 };
 
@@ -16,16 +13,14 @@ pub(crate) struct Text {
     pub atlas: Atlas,
     pub pipeline: TextPipeline,
     /// Reused path-mask rasterizer storage.
-    pub scratch: zeno::Scratch,
+    pub scratch: aegle_gpu::Scratch,
 }
 
-/// Frame extent and remaining budgets shared by atlas-backed draws.
+/// Shader viewport parameters and remaining device budget for atlas-backed draws.
 #[derive(Clone, Copy)]
 pub(crate) struct Limits {
-    pub width: u32,
-    pub height: u32,
+    pub viewport: [f32; 2],
     pub device: u64,
-    pub recording: usize,
 }
 
 impl Text {
@@ -39,7 +34,7 @@ impl Text {
         Ok(Self {
             atlas: Atlas::new(options)?,
             pipeline: TextPipeline::new(device, pipeline, options.max_pages)?,
-            scratch: zeno::Scratch::new(),
+            scratch: aegle_gpu::Scratch::new(),
         })
     }
 
@@ -119,38 +114,34 @@ impl Text {
                     )?;
                     // Bitmap filtering already contributes its half-pixel support;
                     // the analytic geometry AA fringe must not pin invisible glyphs.
-                    let bounds =
+                    let area =
                         bounds(shape, transform, if raster.hint() { 0.0 } else { 0.5 }, 0.0)?;
-                    let visible = bounds[0].floor() < state.bounds[2]
-                        && bounds[2].ceil() > state.bounds[0]
-                        && bounds[1].floor() < state.bounds[3]
-                        && bounds[3].ceil() > state.bounds[1];
-                    geometry = Some((transform, bounds));
-                    Ok(visible)
+                    geometry = Some((transform, area));
+                    Ok(aegle_gpu::visible(area, state.bounds))
                 },
             )?
             else {
                 continue;
             };
-            let (transform, bounds) = geometry.unwrap();
-            let [a, b, c, d, e, f] = transform.inverse()?.coefficients();
+            let (transform, area) = geometry.unwrap();
             let mask = image.content == Content::Mask;
             recording.record(
-                Primitive {
-                    bounds,
-                    row0: [a, c, e, 0.0],
-                    row1: [b, d, f, 0.0],
+                Textured {
+                    area,
+                    inverse: transform.inverse()?,
                     rect: image.rect,
-                    params: [contrast, 0.0, limits.width as f32, limits.height as f32],
+                    contrast,
+                    viewport: limits.viewport,
                     color: if mask {
                         linear_rgba(run.color().to_rgba())
                     } else {
                         [f32::from(alpha) / 255.0; 4]
                     },
-                    header: [state.clip, if mask { 1 } else { 2 }, image.page, 0],
-                },
+                    kind: if mask { 1 } else { 2 },
+                    page: image.page,
+                }
+                .primitive(state.clip),
                 state.bounds,
-                limits.recording,
             )?;
         }
         Ok(())

@@ -30,6 +30,13 @@ pub(crate) struct Gpu {
     resolve: Option<(TextureFormat, RenderPipeline)>,
 }
 
+fn wgsl<'a>(label: &'a str, source: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
+    wgpu::ShaderModuleDescriptor {
+        label: Some(label),
+        source: wgpu::ShaderSource::Wgsl(source.into()),
+    }
+}
+
 fn layout_entry(binding: u32, visibility: ShaderStages, ty: BindingType) -> BindGroupLayoutEntry {
     BindGroupLayoutEntry {
         binding,
@@ -82,7 +89,7 @@ impl Gpu {
             label: Some("aegle records"),
             entries: &[storage(0), storage(1)],
         });
-        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+        let shader = device.create_shader_module(wgsl("geometry", aegle_gpu::GEOMETRY_WGSL));
         let geometry = pipeline(
             &device,
             &shader,
@@ -140,7 +147,7 @@ impl Gpu {
                 },
             )],
         });
-        let resolve_shader = device.create_shader_module(wgpu::include_wgsl!("resolve.wgsl"));
+        let resolve_shader = device.create_shader_module(wgsl("resolve", aegle_gpu::RESOLVE_WGSL));
         Self {
             device,
             queue,

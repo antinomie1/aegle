@@ -1,7 +1,8 @@
 //! One reusable command buffer and fence, with no background work or polling.
 #![allow(unsafe_code)]
 
-use crate::{Result, device::Device, geometry::Recording, pipeline::Pipeline, target::Target};
+use crate::{Result, device::Device, pipeline::Pipeline, target::Target};
+use aegle_gpu::Recording;
 use ash::vk;
 
 pub(crate) struct Commands {
@@ -117,7 +118,7 @@ impl Commands {
                     continue;
                 }
                 // Adjacent records sharing a pipeline and atlas page form one draw.
-                let key = |primitive: &crate::geometry::Primitive| {
+                let key = |primitive: &aegle_gpu::Primitive| {
                     (primitive.header[1] != 0, primitive.header[2])
                 };
                 let primitives = &recording.primitives;

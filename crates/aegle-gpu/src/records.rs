@@ -1,51 +1,134 @@
+//! Storage rows and the geometry rules that fill them.
 use std::mem::size_of;
 
-use aegle_scene::{Affine, Command, RoundedRect, Scene};
+use aegle_scene::{Affine, RoundedRect};
 use aegle_types::{Color, Point, Rect, color_math::linear_rgba};
 use bytemuck::{Pod, Zeroable};
 
 use crate::{Error, Result};
 
-const NO_CLIP: u32 = u32::MAX;
+/// Clip index meaning "no clip scope".
+pub const NO_CLIP: u32 = u32::MAX;
 const MAX_COORDINATE: f32 = 1_048_576.0;
 
-/// Matches the 112-byte storage record in geometry.wgsl. `bounds` is already
-/// limited to the integer scissor of its clip scope, so no per-draw scissor exists.
+/// Matches `Primitive` in the shared WGSL. `bounds` is already limited to the
+/// integer scissor of its clip scope, so no per-draw scissor exists.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub(crate) struct Primitive {
+pub struct Primitive {
+    /// Device-space quad.
     pub bounds: [f32; 4],
+    /// First row of the device-to-local affine.
     pub row0: [f32; 4],
+    /// Second row of the device-to-local affine.
     pub row1: [f32; 4],
+    /// Shape rect, or atlas origin and glyph size excluding the gutter.
     pub rect: [f32; 4],
+    /// Radius or mask contrast, stroke width (-1 fills) and viewport size.
     pub params: [f32; 4],
+    /// Linear premultiplied paint, or repeated color-glyph opacity.
     pub color: [f32; 4],
+    /// Clip head, kind (0 geometry, 1 mask, 2 color glyph, 3 image), atlas page.
     pub header: [u32; 4],
 }
 
 /// One immutable clip, shared by all following draws in its scope.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub(crate) struct Clip {
+pub struct Clip {
+    /// First row of the device-to-local affine.
     pub row0: [f32; 4],
+    /// Second row of the device-to-local affine.
     pub row1: [f32; 4],
+    /// Local rect.
     pub rect: [f32; 4],
+    /// Radius bits and parent clip index.
     pub extra: [u32; 4],
 }
 
 const _: () = assert!(size_of::<Primitive>() == 112 && size_of::<Clip>() == 64);
 
-#[derive(Default)]
-pub(crate) struct Recording {
-    pub primitives: Vec<Primitive>,
-    pub clips: Vec<Clip>,
+/// Per-scope drawing state while walking a scene.
+#[derive(Clone, Copy)]
+pub struct State {
+    /// Local-to-device transform.
+    pub transform: Affine,
+    /// Index of the innermost clip, or [`NO_CLIP`].
+    pub clip: u32,
+    /// Device bounds admitted by all enclosing clips.
+    pub bounds: [f32; 4],
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct State {
-    pub transform: Affine,
-    pub clip: u32,
-    pub bounds: [f32; 4],
+/// Clip and primitive rows for one frame, bounded by a byte limit.
+pub struct Recording {
+    /// Draw rows in painter's order.
+    pub primitives: Vec<Primitive>,
+    /// Clip rows; later primitives refer to them by index.
+    pub clips: Vec<Clip>,
+    /// Maximum capacity bytes of both vectors together; `usize::MAX` is unbounded.
+    pub limit: usize,
+}
+
+impl Default for Recording {
+    fn default() -> Self {
+        Self::with_limit(usize::MAX)
+    }
+}
+
+/// An atlas-backed draw: glyph, image or path mask.
+pub struct Textured {
+    /// Device-space quad.
+    pub area: [f32; 4],
+    /// Device-to-texel affine.
+    pub inverse: Affine,
+    /// Entry origin and size in its page, excluding any border.
+    pub rect: [f32; 4],
+    /// Mask contrast for glyphs, otherwise zero.
+    pub contrast: f32,
+    /// Viewport parameters from [`viewport`].
+    pub viewport: [f32; 2],
+    /// Linear premultiplied paint, or repeated color-glyph opacity.
+    pub color: [f32; 4],
+    /// 1 mask, 2 color glyph, 3 image.
+    pub kind: u32,
+    /// Backend page selector, ignored by the shader.
+    pub page: u32,
+}
+
+impl Textured {
+    /// Builds the storage row for `clip`.
+    pub fn primitive(&self, clip: u32) -> Primitive {
+        let [a, b, c, d, e, f] = self.inverse.coefficients();
+        Primitive {
+            bounds: self.area,
+            row0: [a, c, e, 0.0],
+            row1: [b, d, f, 0.0],
+            rect: self.rect,
+            params: [self.contrast, 0.0, self.viewport[0], self.viewport[1]],
+            color: self.color,
+            header: [clip, self.kind, self.page, 0],
+        }
+    }
+}
+
+/// Viewport parameters for the shader. `flip_y` selects WebGPU's upward clip space.
+pub fn viewport(width: u32, height: u32, flip_y: bool) -> [f32; 2] {
+    [
+        width as f32,
+        if flip_y {
+            -(height as f32)
+        } else {
+            height as f32
+        },
+    ]
+}
+
+/// Whether device `area` reaches the integer clip `bounds` (fringe included).
+pub fn visible(area: [f32; 4], bounds: [f32; 4]) -> bool {
+    area[0].floor() < bounds[2]
+        && area[2].ceil() > bounds[0]
+        && area[1].floor() < bounds[3]
+        && area[3].ceil() > bounds[1]
 }
 
 struct LocalShape {
@@ -57,102 +140,43 @@ struct LocalShape {
 }
 
 impl Recording {
+    /// An empty recording that refuses to grow past `limit` bytes.
+    pub fn with_limit(limit: usize) -> Self {
+        Self {
+            primitives: Vec::new(),
+            clips: Vec::new(),
+            limit,
+        }
+    }
+
+    /// Starts a frame; keeps allocations for reuse.
     pub fn clear(&mut self) {
         self.primitives.clear();
         self.clips.clear();
     }
 
-    pub fn append(
-        &mut self,
-        scene: &Scene,
-        transform: Affine,
-        clip: Option<Rect>,
-        width: u32,
-        height: u32,
-        byte_limit: usize,
-        #[cfg(feature = "text")] mut atlas: impl FnMut(&mut Self, Command, State) -> Result,
-    ) -> Result<()> {
-        if scene.max_clip_depth() + usize::from(clip.is_some()) > 8 {
-            return Err(Error::ClipDepth);
-        }
-        if scene.is_empty() {
-            if let Some(rect) = clip {
-                bounds(RoundedRect::new(rect, 0.0)?, Affine::IDENTITY, 0.0, 0.0)?;
-            }
-            return Ok(());
-        }
-        let mut state = State {
-            transform,
-            clip: NO_CLIP,
-            bounds: [0.0, 0.0, width as f32, height as f32],
-        };
-        if let Some(rect) = clip {
-            let shape = RoundedRect::new(rect, 0.0)?;
-            self.push_clip(&mut state, shape, Affine::IDENTITY, byte_limit)?;
-        }
-        // Scene scopes have a validated maximum of 64. No per-append heap scratch.
-        let mut saved = [state; aegle_scene::MAX_SCOPE_DEPTH];
-        let mut depth = 0;
-        for command in scene.commands() {
-            match *command {
-                Command::PushTransform(local) => {
-                    saved[depth] = state;
-                    depth += 1;
-                    state.transform = local.then(state.transform)?;
-                }
-                Command::PushClip(shape) => {
-                    saved[depth] = state;
-                    depth += 1;
-                    let transform = state.transform;
-                    self.push_clip(&mut state, shape, transform, byte_limit)?;
-                }
-                Command::Pop => {
-                    depth -= 1;
-                    state = saved[depth];
-                }
-                Command::Fill { shape, color } => {
-                    self.draw(state, shape, color, -1.0, width, height, byte_limit)?;
-                }
-                Command::Stroke {
-                    shape,
-                    color,
-                    width: stroke,
-                } => {
-                    self.draw(state, shape, color, stroke, width, height, byte_limit)?;
-                }
-                #[cfg(feature = "text")]
-                command @ (Command::Glyphs(_)
-                | Command::Image { .. }
-                | Command::FillPath { .. }
-                | Command::StrokePath { .. }) => atlas(self, command, state)?,
-                _ => return Err(Error::UnsupportedCommand),
-            }
-        }
-        Ok(())
-    }
-
-    fn push_clip(
+    /// Opens a clip scope for `shape` under `transform`.
+    pub fn push_clip(
         &mut self,
         state: &mut State,
         shape: RoundedRect,
         transform: Affine,
-        limit: usize,
     ) -> Result<()> {
         let [a, b, c, d, _, _] = transform.coefficients();
         let axis_aligned = (b == 0.0 && c == 0.0) || (a == 0.0 && d == 0.0);
         // Axis-aligned box coverage cannot reach pixels outside floor/ceil of
         // its edges. Keep a fringe only for the general affine AA approximation.
-        let mut bounds = bounds(shape, transform, 0.0, if axis_aligned { 0.0 } else { 1.0 })?;
+        let mut area = bounds(shape, transform, 0.0, if axis_aligned { 0.0 } else { 1.0 })?;
         if !shape.is_empty() {
-            bounds = [
-                bounds[0].floor(),
-                bounds[1].floor(),
-                bounds[2].ceil(),
-                bounds[3].ceil(),
+            area = [
+                area[0].floor(),
+                area[1].floor(),
+                area[2].ceil(),
+                area[3].ceil(),
             ];
         }
         let local = local_shape(shape, transform, -1.0)?;
-        reserve(&mut self.clips, &mut self.primitives, limit)?;
+        reserve(&mut self.clips, &mut self.primitives, self.limit)?;
         let index = u32::try_from(self.clips.len()).map_err(|_| Error::Coordinates)?;
         if index == NO_CLIP {
             return Err(Error::Coordinates);
@@ -164,52 +188,51 @@ impl Recording {
             extra: [local.radius.to_bits(), state.clip, 0, 0],
         });
         state.clip = index;
-        state.bounds = intersection(state.bounds, bounds);
+        state.bounds = intersection(state.bounds, area);
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn draw(
+    /// Records a filled (`stroke < 0`) or centered-stroke rounded rectangle.
+    /// Returns whether a row was added; transparent or clipped-out shapes add none.
+    pub fn shape(
         &mut self,
         state: State,
         shape: RoundedRect,
         color: Color,
         stroke: f32,
-        width: u32,
-        height: u32,
-        limit: usize,
-    ) -> Result<()> {
-        let bounds = bounds(shape, state.transform, stroke.max(0.0) * 0.5, 1.0)?;
+        viewport: [f32; 2],
+    ) -> Result<bool> {
+        let area = bounds(shape, state.transform, stroke.max(0.0) * 0.5, 1.0)?;
         let local = local_shape(shape, state.transform, stroke)?;
         if color.to_rgba()[3] == 0 {
-            return Ok(());
+            return Ok(false);
         }
         self.record(
             Primitive {
-                bounds,
+                bounds: area,
                 row0: local.row0,
                 row1: local.row1,
                 rect: local.rect,
-                params: [local.radius, local.stroke, width as f32, height as f32],
+                params: [local.radius, local.stroke, viewport[0], viewport[1]],
                 color: linear_rgba(color.to_rgba()),
                 header: [state.clip, 0, 0, 0],
             },
             state.bounds,
-            limit,
         )
     }
 
     /// Limits the quad to its integer clip-scope bounds, which covers exactly
-    /// the pixel centers a scissor of the same rectangle would admit.
-    pub fn record(&mut self, mut primitive: Primitive, clip: [f32; 4], limit: usize) -> Result {
+    /// the pixel centers a scissor of the same rectangle would admit. Returns
+    /// whether the row was added.
+    pub fn record(&mut self, mut primitive: Primitive, clip: [f32; 4]) -> Result<bool> {
         let clipped = intersection(primitive.bounds, clip);
         if clipped[0] >= clipped[2] || clipped[1] >= clipped[3] {
-            return Ok(());
+            return Ok(false);
         }
         primitive.bounds = clipped;
-        reserve(&mut self.primitives, &mut self.clips, limit)?;
+        reserve(&mut self.primitives, &mut self.clips, self.limit)?;
         self.primitives.push(primitive);
-        Ok(())
+        Ok(true)
     }
 }
 
@@ -255,12 +278,9 @@ fn local_shape(shape: RoundedRect, transform: Affine, stroke: f32) -> Result<Loc
     })
 }
 
-pub(crate) fn bounds(
-    shape: RoundedRect,
-    transform: Affine,
-    outset: f32,
-    fringe: f32,
-) -> Result<[f32; 4]> {
+/// Device-space bounds of `shape` under `transform`, widened by `outset` in local
+/// units and `fringe` in device pixels.
+pub fn bounds(shape: RoundedRect, transform: Affine, outset: f32, fringe: f32) -> Result<[f32; 4]> {
     let [x, y, w, h] = rect_values(shape.rect());
     let corners = [
         Point::new(x - outset, y - outset),
@@ -277,29 +297,29 @@ pub(crate) fn bounds(
     }) {
         return Err(Error::Coordinates);
     }
-    let mut bounds = [
+    let mut area = [
         f32::INFINITY,
         f32::INFINITY,
         f32::NEG_INFINITY,
         f32::NEG_INFINITY,
     ];
     for point in corners {
-        bounds[0] = bounds[0].min(point.x);
-        bounds[1] = bounds[1].min(point.y);
-        bounds[2] = bounds[2].max(point.x);
-        bounds[3] = bounds[3].max(point.y);
+        area[0] = area[0].min(point.x);
+        area[1] = area[1].min(point.y);
+        area[2] = area[2].max(point.x);
+        area[3] = area[3].max(point.y);
     }
     if shape.is_empty() {
-        bounds[2] = bounds[0];
-        bounds[3] = bounds[1];
+        area[2] = area[0];
+        area[3] = area[1];
     } else {
         // Cover the AA fringe even under reflection, rotation and shear.
-        bounds[0] -= fringe;
-        bounds[1] -= fringe;
-        bounds[2] += fringe;
-        bounds[3] += fringe;
+        area[0] -= fringe;
+        area[1] -= fringe;
+        area[2] += fringe;
+        area[3] += fringe;
     }
-    Ok(bounds)
+    Ok(area)
 }
 
 fn intersection(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {

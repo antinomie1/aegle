@@ -260,6 +260,13 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 私有 Sway（GLES2 compositor）上以 RADV 运行 `native,wgpu,system-fonts,markup` 的 release `visuals` 示例，截图目视确认渐变图像、填充加描边的星形、按钮、一万行虚拟列表及滚动条均正确显示；没有操作 Rotate 按钮，也没有开启 validation。
 - 实现 2,138 行 Rust 加 WGSL，测试 277 行，占该 crate Rust 源码的 11.5%；最大源文件 488 行。`cargo fmt --check`、workspace all-targets 检查与严格 Rustdoc 通过，本机无 Clippy。仍未做：Windows/macOS 实机、设备丢失恢复、与 Vulkan 后端共享记录构建，没有帧时间或内存测量。
 
+## 抽出 aegle-gpu：两个 GPU 后端共用记录与着色器
+
+- 新增 `aegle-gpu`（依赖 scene、types、bytemuck；`vector` feature 增加 zeno）：`Primitive`/`Clip` 存储行、`Recording`（字节上限）、逐命令的 `Walker`、货架装箱 `Shelf`、图像放置、路径 mask 键与光栅化，以及 `GEOMETRY_WGSL`/`RESOLVE_WGSL`。`aegle-render-vulkan` 删除 `geometry.rs`、`vector.rs` 的放置逻辑与 `shaders/`，build.rs 改为从 aegle-gpu 取 WGSL 编译 SPIR-V；`aegle-render-wgpu` 删除自己的 `records.rs`、路径光栅化和两份 WGSL。两者都不再依赖 zeno。
+- 着色器改为由视口高度符号选择 Y 方向（Vulkan 为正，wgpu 为负），因此 wgpu 不再有 WGSL 副本。wgpu 的批次改为在提交时按图元的 kind/page 字段扫描生成，与 Vulkan 的做法一致。
+- 验证：重构前后的 Vulkan 三个 ignored 场景（几何/失败帧恢复、CJK 与图集恢复、图像与路径）在 RADV 与 llvmpipe 上都通过；wgpu 两个 ignored 场景在两个适配器上通过；私有 Sway 上带 Khronos validation 与同步检查的 Vulkan `scrolling` 通过且无验证错误，wgpu 的 `scrolling` 与 `visuals` 通过，截图目视确认没有上下翻转。新增 `aegle-gpu/tests/records.rs`：遍历记录、裁剪边界、透明填充不入行、字节上限、九层裁剪拒绝、视口符号、货架换行。workspace all-targets 检查通过。
+- 不改变公开 API：两个后端的 `Error` 增加从 `aegle_gpu::Error` 的转换，wgpu 增加 `Allocation`。没有测量帧时间或体积变化。
+
 ## 当前进度与剩余工作
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。

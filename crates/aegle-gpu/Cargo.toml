@@ -1,0 +1,22 @@
+[package]
+name = "aegle-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Backend-independent GPU draw records, shared shaders and atlas helpers"
+
+[features]
+default = []
+# Image placement and CPU path-mask rasterization for atlas-backed renderers.
+vector = ["dep:zeno"]
+
+[dependencies]
+aegle-scene.workspace = true
+aegle-types = { workspace = true, features = ["color-math"] }
+bytemuck = { version = "1.25.0", features = ["derive"] }
+# Already used by aegle-glyph through swash.
+zeno = { version = "0.3.3", default-features = false, features = ["eval", "std"], optional = true }
+
+[lints]
+workspace = true

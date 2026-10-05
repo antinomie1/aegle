@@ -15,18 +15,12 @@ use wgpu::{
 };
 
 use crate::{Error, Result, gpu::Gpu};
+pub(crate) use aegle_gpu::{ResourceKey, Shelf};
 
 /// Resident entries per page, bounding table memory independent of page area.
 const MAX_ENTRIES: usize = 4096;
 /// Conversion scratch kept between uploads; larger images free it afterwards.
 const SCRATCH_RETAIN: usize = 1 << 20;
-
-/// Identity of an image or path mask: a scene resource id and raster settings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct ResourceKey {
-    pub id: usize,
-    pub params: [u32; 7],
-}
 
 enum EntryKey {
     Glyph(OwnedGlyphKey),
@@ -42,6 +36,25 @@ pub(crate) enum Slot {
     Own(u32),
 }
 
+impl Slot {
+    /// Selector stored in a primitive's page field, read back when batching.
+    pub fn page(self) -> u32 {
+        match self {
+            Self::Mask => 0,
+            Self::Color => 1,
+            Self::Own(index) => 2 + index,
+        }
+    }
+
+    pub fn from_page(page: u32) -> Self {
+        match page {
+            0 => Self::Mask,
+            1 => Self::Color,
+            _ => Self::Own(page - 2),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct AtlasGlyph {
     pub placement: Placement,
@@ -54,32 +67,6 @@ struct Entry {
     key: EntryKey,
     hash: u64,
     glyph: AtlasGlyph,
-}
-
-#[derive(Clone, Copy, Default)]
-struct Shelf {
-    x: u32,
-    y: u32,
-    height: u32,
-}
-impl Shelf {
-    /// Advances past a `width × height` block, wrapping to a new row.
-    fn place(&mut self, width: u32, height: u32, side: u32) -> Option<[u32; 2]> {
-        let mut next = *self;
-        if next.x + width > side {
-            next.x = 0;
-            next.y += next.height;
-            next.height = 0;
-        }
-        if next.y + height > side {
-            return None;
-        }
-        let at = [next.x, next.y];
-        next.x += width;
-        next.height = next.height.max(height);
-        *self = next;
-        Some(at)
-    }
 }
 
 struct PageGpu {
@@ -165,7 +152,7 @@ pub(crate) struct Atlas {
     cache: GlyphCache,
     store: Store,
     /// Reused path-mask rasterizer storage.
-    pub scratch: zeno::Scratch,
+    pub scratch: aegle_gpu::Scratch,
 }
 
 impl Atlas {
@@ -182,7 +169,7 @@ impl Atlas {
                 scratch: Vec::new(),
                 frame: 0,
             },
-            scratch: zeno::Scratch::new(),
+            scratch: aegle_gpu::Scratch::new(),
         }
     }
 
@@ -349,9 +336,10 @@ impl Store {
             if page.entries.len() >= MAX_ENTRIES {
                 return Ok(Err(Full(mask)));
             }
-            let Some(at) = page.shelf.place(extent[0], extent[1], side) else {
+            let Some((shelf, at)) = page.shelf.place(extent[0], extent[1], [side, side]) else {
                 return Ok(Err(Full(mask)));
             };
+            page.shelf = shelf;
             let page_gpu = page
                 .gpu
                 .get_or_insert_with(|| PageGpu::new(gpu, [side, side], mask));
