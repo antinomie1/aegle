@@ -46,19 +46,23 @@ mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲
 
 ### 当前 Vulkan 离屏边界
 
-默认 `memory_budget` 为 16 MiB，计入实际 VkDeviceMemory allocation：RGBA16F 线性 attachment、RGBA8 输出、裁剪上传缓冲及按需读回缓冲，包括驱动报告的对齐要求。两张图像的未对齐像素量合计为宽×高×12，显式读回另需宽×高×4；这只是估算，实际预算按 memory requirements 检查。`recording_budget` 默认 1 MiB，单独限制 CPU draw/clip Vec 的 capacity；`stats` 分别报告这两种口径。
+默认 `memory_budget` 为 16 MiB，计入实际 VkDeviceMemory allocation：RGBA16F 线性 attachment、RGBA8 输出、裁剪上传缓冲、可选字形图集/上传及按需读回缓冲，包括驱动报告的对齐要求。两张图像的未对齐像素量合计为宽×高×12，显式读回另需宽×高×4；这只是估算，实际预算按 memory requirements 检查。`recording_budget` 默认 1 MiB，单独限制 CPU draw/clip Vec 的 capacity；`stats` 分别报告这两种口径。
 
-同尺寸帧复用图像和缓冲，最多一次在途提交；下次 begin_frame 或读回等待 fence，不另建等待帧资源。resize 等待并释放旧 attachment/读回缓冲，再申请新尺寸；失败会使旧图像失效。`release_images` 等待后释放图像、缓冲和 CPU 记录，保留 pipeline。renderer 没有自己的轮询或呈现循环。驱动 command/pipeline 等内部存储、loader、调用方 Scene 和输出 Vec 不计入上述预算；尚无 swapchain、字形图集或 GPU 应用资源指标，详见 [Vulkan 契约](vulkan.md)。
+同尺寸帧复用图像和缓冲，最多一次在途提交；下次 begin_frame 或读回等待 fence，不另建等待帧资源。resize 等待并释放旧 attachment/读回缓冲，再申请新尺寸；失败会使旧图像失效，图集仍保留。`release_images` 等待后释放图像、缓冲、CPU 记录及字形缓存，保留 pipeline。renderer 没有自己的轮询或呈现循环。驱动 command/pipeline 等内部存储、loader、调用方 Scene 和输出 Vec 不计入上述预算；尚无 swapchain 或 GPU 应用资源指标，详见 [Vulkan 契约](vulkan.md)。
+
+可选文字默认按需分配512²页，mask一字节/像素、color四字节/像素，最多8页/4096条目；实际图像及staging仍计入同一16 MiB设备预算。CPU上传Vec默认上限1 MiB，最多4096个上传region；表空槽、变化轴和CPU GlyphCache的独立预算另计。当前帧页面固定，其他页按LRU整页淘汰；GPU命中不依赖CPU图像仍然驻留。上传buffer在fence完成时释放，无逐帧新字形就不再分配它。text_stats报告各项口径，不代表完整文字系统RAM。
 
 ### 当前字体与 CPU 字形边界
 
 `GlyphCache` 默认限制保留图像及本次入库图像合计 2 MiB、最多 4096 个条目，空白字形也计入条目数。LRU 在分配新图像前淘汰；命中不分配。返回图像借用缓存，调用方不能长期持有图像阻止预算内回收。键包含字体资源 ID/face、glyph、字号、变化轴、hinting、相位及必要的彩色前景参数；灰度缓存忽略前景色。
 
+`GlyphKey` 将这份身份作为无分配借用接口公开，统一验证光栅参数并规范化负零相位。CPU 缓存及图集消费者使用完整字段/变化轴相等比较，不能只把哈希值当身份；`mask()` 清除前景色，但命中时仍须确认条目确为灰度。`OwnedGlyphKey` 只复制变化轴，不持有字体字节；字体与 glyph 解析仍在真正光栅化的资源边界进行，已有图集命中无需再次查询 CPU 缓存。
+
 源位图解码缓冲与 PNG 解码器内部各自使用 2 MiB 默认 allowance；COLRv0 临时层 mask 同样受 bitmap 上限约束。这些成本独立于字形图像预算，不能把两个上限之和宣传为总峰值。哈希/LRU 元数据、变化轴数组、轮廓点、扫描及 hinting 存储另计。`stats()` 提供图像字节、条目及表容量，不声称完整 RAM 统计。Swash 上下文最多缓存 4 个字体代理，内部每种轮廓格式最多 8 个 hint 实例，但没有公开字节计量。
 
 `GlyphCache::release_scratch()` 释放光栅化临时存储并保留完成图像；`clear()` 同时释放图像和索引。renderer 的 `release_scratch()` 也释放 glyph scratch，清空图像须显式调用 `glyph_cache_mut().clear()`。字形缓存不持有字体文件；活动段落和 scene 共享字体句柄。scene 的存储统计含 run/位置/变化轴数组，不重复计入共享字体字节。
 
-`TextSystem::trim()` 重建 shaping 临时上下文并清除只被字体 source cache 持有的映射；注册字体、metadata 和活动段落保持有效。Parley shaping 缓存有 16 条上限，未暴露完整字节预算。当前未实现非活动段落 LRU、GPU 图集或全应用资源调度，应用仍需管理活动文本和记录的数量。
+`TextSystem::trim()` 重建 shaping 临时上下文并清除只被字体 source cache 持有的映射；注册字体、metadata 和活动段落保持有效。Parley shaping 缓存有 16 条上限，未暴露完整字节预算。当前未实现非活动段落 LRU 或全应用资源调度，应用仍需管理活动文本和记录的数量。
 
 ### 当前编辑历史与组合状态
 

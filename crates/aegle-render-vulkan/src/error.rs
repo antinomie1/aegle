@@ -19,6 +19,18 @@ pub enum Error {
     ClipDepth,
     /// The scene contains a command not implemented by this renderer.
     UnsupportedCommand,
+    /// Glyph data, raster settings or raster-cache resources failed validation.
+    #[cfg(feature = "text")]
+    Glyph(aegle_glyph::GlyphError),
+    /// The current frame's glyph working set cannot fit the configured atlas.
+    #[cfg(feature = "text")]
+    AtlasFull,
+    /// A glyph and its transparent border exceed the configured atlas page size.
+    #[cfg(feature = "text")]
+    GlyphTooLarge,
+    /// The configured text resource limits cannot be used by this renderer.
+    #[cfg(feature = "text")]
+    InvalidTextOptions,
     /// A transformed scene failed its shared geometry invariant.
     Scene(aegle_scene::SceneError),
     /// An explicit allocation budget was exceeded.
@@ -47,6 +59,14 @@ impl fmt::Display for Error {
             Self::Coordinates => f.write_str("Vulkan geometry exceeds the coordinate range"),
             Self::ClipDepth => f.write_str("Vulkan clip depth exceeds eight layers"),
             Self::UnsupportedCommand => f.write_str("unsupported Vulkan scene command"),
+            #[cfg(feature = "text")]
+            Self::Glyph(e) => write!(f, "Vulkan glyph: {e}"),
+            #[cfg(feature = "text")]
+            Self::AtlasFull => f.write_str("Vulkan glyph working set exceeds atlas capacity"),
+            #[cfg(feature = "text")]
+            Self::GlyphTooLarge => f.write_str("Vulkan glyph exceeds atlas page dimensions"),
+            #[cfg(feature = "text")]
+            Self::InvalidTextOptions => f.write_str("invalid Vulkan text resource limits"),
             Self::Scene(e) => write!(f, "Vulkan scene: {e}"),
             Self::Budget { required, limit } => write!(
                 f,
@@ -71,6 +91,13 @@ impl From<ash::vk::Result> for Error {
 impl From<aegle_scene::SceneError> for Error {
     fn from(value: aegle_scene::SceneError) -> Self {
         Self::Scene(value)
+    }
+}
+
+#[cfg(feature = "text")]
+impl From<aegle_glyph::GlyphError> for Error {
+    fn from(value: aegle_glyph::GlyphError) -> Self {
+        Self::Glyph(value)
     }
 }
 

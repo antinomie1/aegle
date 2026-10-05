@@ -47,10 +47,10 @@ pub(crate) struct Recording {
 }
 
 #[derive(Clone, Copy)]
-struct State {
-    transform: Affine,
-    clip: u32,
-    bounds: [f32; 4],
+pub(crate) struct State {
+    pub transform: Affine,
+    pub clip: u32,
+    pub bounds: [f32; 4],
 }
 
 struct LocalShape {
@@ -75,13 +75,18 @@ impl Recording {
         width: u32,
         height: u32,
         byte_limit: usize,
+        #[cfg(feature = "text")] mut text: impl FnMut(
+            &mut Self,
+            &aegle_scene::GlyphRun,
+            State,
+        ) -> Result,
     ) -> Result<()> {
         if scene.max_clip_depth() + usize::from(clip.is_some()) > 8 {
             return Err(Error::ClipDepth);
         }
         if scene.is_empty() {
             if let Some(rect) = clip {
-                bounds(RoundedRect::new(rect, 0.0)?, Affine::IDENTITY, 0.0)?;
+                bounds(RoundedRect::new(rect, 0.0)?, Affine::IDENTITY, 0.0, 0.0)?;
             }
             return Ok(());
         }
@@ -124,6 +129,8 @@ impl Recording {
                 } => {
                     self.draw(state, shape, color, stroke, width, height, byte_limit)?;
                 }
+                #[cfg(feature = "text")]
+                Command::Glyphs(index) => text(self, &scene.glyph_runs()[index], state)?,
                 _ => return Err(Error::UnsupportedCommand),
             }
         }
@@ -137,7 +144,19 @@ impl Recording {
         transform: Affine,
         limit: usize,
     ) -> Result<()> {
-        let bounds = bounds(shape, transform, 0.0)?;
+        let [a, b, c, d, _, _] = transform.coefficients();
+        let axis_aligned = (b == 0.0 && c == 0.0) || (a == 0.0 && d == 0.0);
+        // Axis-aligned box coverage cannot reach pixels outside floor/ceil of
+        // its edges. Keep a fringe only for the general affine AA approximation.
+        let mut bounds = bounds(shape, transform, 0.0, if axis_aligned { 0.0 } else { 1.0 })?;
+        if !shape.is_empty() {
+            bounds = [
+                bounds[0].floor(),
+                bounds[1].floor(),
+                bounds[2].ceil(),
+                bounds[3].ceil(),
+            ];
+        }
         let local = local_shape(shape, transform, -1.0)?;
         reserve(&mut self.clips, &mut self.draws, limit)?;
         let index = u32::try_from(self.clips.len()).map_err(|_| Error::Coordinates)?;
@@ -166,19 +185,13 @@ impl Recording {
         height: u32,
         limit: usize,
     ) -> Result<()> {
-        let bounds = bounds(shape, state.transform, stroke.max(0.0) * 0.5)?;
+        let bounds = bounds(shape, state.transform, stroke.max(0.0) * 0.5, 1.0)?;
         let local = local_shape(shape, state.transform, stroke)?;
-        let clipped = intersection(bounds, state.bounds);
-        if clipped[0] >= clipped[2] || clipped[1] >= clipped[3] || color.to_rgba()[3] == 0 {
+        if color.to_rgba()[3] == 0 {
             return Ok(());
         }
-        let left = clipped[0].floor().max(0.0) as i32;
-        let top = clipped[1].floor().max(0.0) as i32;
-        let right = clipped[2].ceil().min(width as f32) as i32;
-        let bottom = clipped[3].ceil().min(height as f32) as i32;
-        reserve(&mut self.draws, &mut self.clips, limit)?;
-        self.draws.push(Draw {
-            primitive: Primitive {
+        self.record(
+            Primitive {
                 bounds,
                 row0: local.row0,
                 row1: local.row1,
@@ -187,6 +200,32 @@ impl Recording {
                 color: linear_rgba(color.to_rgba()),
                 header: [state.clip, 0, 0, 0],
             },
+            state.bounds,
+            width,
+            height,
+            limit,
+        )
+    }
+
+    pub fn record(
+        &mut self,
+        primitive: Primitive,
+        clip: [f32; 4],
+        width: u32,
+        height: u32,
+        limit: usize,
+    ) -> Result {
+        let clipped = intersection(primitive.bounds, clip);
+        if clipped[0] >= clipped[2] || clipped[1] >= clipped[3] {
+            return Ok(());
+        }
+        let left = clipped[0].floor().max(0.0) as i32;
+        let top = clipped[1].floor().max(0.0) as i32;
+        let right = clipped[2].ceil().min(width as f32) as i32;
+        let bottom = clipped[3].ceil().min(height as f32) as i32;
+        reserve(&mut self.draws, &mut self.clips, limit)?;
+        self.draws.push(Draw {
+            primitive,
             scissor: vk::Rect2D {
                 offset: vk::Offset2D { x: left, y: top },
                 extent: vk::Extent2D {
@@ -241,7 +280,12 @@ fn local_shape(shape: RoundedRect, transform: Affine, stroke: f32) -> Result<Loc
     })
 }
 
-fn bounds(shape: RoundedRect, transform: Affine, outset: f32) -> Result<[f32; 4]> {
+pub(crate) fn bounds(
+    shape: RoundedRect,
+    transform: Affine,
+    outset: f32,
+    fringe: f32,
+) -> Result<[f32; 4]> {
     let [x, y, w, h] = rect_values(shape.rect());
     let corners = [
         Point::new(x - outset, y - outset),
@@ -275,10 +319,10 @@ fn bounds(shape: RoundedRect, transform: Affine, outset: f32) -> Result<[f32; 4]
         bounds[3] = bounds[1];
     } else {
         // Cover the AA fringe even under reflection, rotation and shear.
-        bounds[0] -= 1.0;
-        bounds[1] -= 1.0;
-        bounds[2] += 1.0;
-        bounds[3] += 1.0;
+        bounds[0] -= fringe;
+        bounds[1] -= fringe;
+        bounds[2] += fringe;
+        bounds[3] += fringe;
     }
     Ok(bounds)
 }

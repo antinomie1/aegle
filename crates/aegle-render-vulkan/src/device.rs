@@ -145,6 +145,13 @@ fn compatible(
     {
         return Err(Error::Unsupported("sampled color attachments are required"));
     }
+    #[cfg(feature = "text")]
+    if limits.max_bound_descriptor_sets < 2
+        || limits.max_per_stage_descriptor_samplers < 1
+        || limits.max_descriptor_set_samplers < 1
+    {
+        return Err(Error::Unsupported("glyph texture sampling is required"));
+    }
     for (format, required, message) in [
         (
             vk::Format::R16G16B16A16_SFLOAT,
@@ -152,6 +159,22 @@ fn compatible(
                 | vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND
                 | vk::FormatFeatureFlags::SAMPLED_IMAGE,
             "RGBA16F color blending and sampling are required",
+        ),
+        #[cfg(feature = "text")]
+        (
+            vk::Format::R8_UNORM,
+            vk::FormatFeatureFlags::SAMPLED_IMAGE
+                | vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR
+                | vk::FormatFeatureFlags::TRANSFER_DST,
+            "R8 filtered glyph textures are required",
+        ),
+        #[cfg(feature = "text")]
+        (
+            vk::Format::R8G8B8A8_SRGB,
+            vk::FormatFeatureFlags::SAMPLED_IMAGE
+                | vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR
+                | vk::FormatFeatureFlags::TRANSFER_DST,
+            "sRGB filtered glyph textures are required",
         ),
         (
             vk::Format::R8G8B8A8_UNORM,

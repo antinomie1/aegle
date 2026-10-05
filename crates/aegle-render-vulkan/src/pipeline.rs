@@ -91,6 +91,7 @@ impl Pipeline {
             true,
             include_bytes!(concat!(env!("OUT_DIR"), "/geometry.vert.spv")),
             include_bytes!(concat!(env!("OUT_DIR"), "/geometry.frag.spv")),
+            c"fs_main",
         )?;
         this.pipelines[1] = graphics(
             &this.raw,
@@ -99,8 +100,14 @@ impl Pipeline {
             false,
             include_bytes!(concat!(env!("OUT_DIR"), "/resolve.vert.spv")),
             include_bytes!(concat!(env!("OUT_DIR"), "/resolve.frag.spv")),
+            c"fs_main",
         )?;
         Ok(this)
+    }
+
+    #[cfg(feature = "text")]
+    pub fn clip_layout(&self) -> vk::DescriptorSetLayout {
+        self.set_layouts[0]
     }
 
     pub fn update(&self, clip: vk::Buffer, bytes: u64, image: vk::ImageView) {
@@ -226,13 +233,14 @@ impl Drop for Shader<'_> {
     }
 }
 
-fn graphics(
+pub(crate) fn graphics(
     raw: &ash::Device,
     pass: vk::RenderPass,
     layout: vk::PipelineLayout,
     blend: bool,
     vertex: &[u8],
     fragment: &[u8],
+    fragment_entry: &std::ffi::CStr,
 ) -> Result<vk::Pipeline> {
     let vertex = Shader::new(raw, vertex)?;
     let fragment = Shader::new(raw, fragment)?;
@@ -244,7 +252,7 @@ fn graphics(
         vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(fragment.1)
-            .name(c"fs_main"),
+            .name(fragment_entry),
     ];
     let vertex_input = vk::PipelineVertexInputStateCreateInfo::default();
     let assembly = vk::PipelineInputAssemblyStateCreateInfo::default()

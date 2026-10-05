@@ -1,4 +1,4 @@
-//! Compiles the two Vulkan shader stages at build time; no compiler ships at runtime.
+//! Compiles Vulkan shader entries at build time; no compiler ships at runtime.
 
 use std::{env, fs, path::PathBuf};
 
@@ -10,6 +10,7 @@ use naga::{
 
 fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo supplies OUT_DIR"));
+    let text = env::var_os("CARGO_FEATURE_TEXT").is_some();
     for name in ["geometry", "resolve"] {
         let path = format!("shaders/{name}.wgsl");
         println!("cargo:rerun-if-changed={path}");
@@ -40,7 +41,11 @@ fn main() {
         for (suffix, shader_stage, entry_point) in [
             ("vert", ShaderStage::Vertex, "vs_main"),
             ("frag", ShaderStage::Fragment, "fs_main"),
+            ("text.frag", ShaderStage::Fragment, "fs_text"),
         ] {
+            if entry_point == "fs_text" && (name != "geometry" || !text) {
+                continue;
+            }
             let words = spv::write_vec(
                 &module,
                 &info,

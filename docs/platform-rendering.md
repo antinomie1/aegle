@@ -62,7 +62,9 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 `aegle-render-vulkan` 已独立实现相同 Scene 的实色/圆角/居中边框、仿射变换与裁剪；外部设备矩形与内部裁剪合计最多八层，draw 之间不泄漏作用域。RGBA16F attachment 在线性空间混合，再由 GPU 编码为预乘 sRGB RGBA8；解析抗锯齿与软件覆盖率不要求边缘位精确。
 
-`begin_frame → draw/draw_clipped → finish` 完成提交，`wait` 或下一帧等待 fence 后复用资源；只有显式 `read_pixels` 才分配并使用读回缓冲。shader 由构建期 Naga 生成 Vulkan 1.1 SPIR-V。当前没有 GPU 字形、swapchain 或 App 集成，文字命令返回不支持错误；原生 App 继续使用软件后端。资源及失败恢复契约见 [Vulkan](vulkan.md)，设备执行证据见[实现状态](implementation.md)。
+可选 `text` 已将共享 aegle-glyph 缓存接到按需 R8 灰度/RGBA8_SRGB 彩色图集；缓存身份、四相位基线及仿射光栅策略与软件共用。彩色图集在线性预乘空间过滤，灰度图集复用不同前景色；默认纯几何构建不带字体，遇到文字命令返回不支持错误。
+
+`begin_frame → draw/draw_clipped → finish` 完成提交，`wait` 或下一帧等待 fence 后复用资源；只有显式 `read_pixels` 才分配并使用读回缓冲。shader 由构建期 Naga 生成 Vulkan 1.1 SPIR-V。几何与文字测试/示例已在 RX 6800 XT 和 Lavapipe 上执行验证层检查；仍无 swapchain 或 App 集成，原生 App 继续使用软件后端。资源及失败恢复契约见 [Vulkan](vulkan.md)，设备执行证据见[实现状态](implementation.md)。
 
 ## 当前 Wayland 接口
 

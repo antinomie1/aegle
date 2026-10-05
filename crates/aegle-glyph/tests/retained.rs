@@ -1,7 +1,8 @@
 //! Cache lifetime, CJK output and public budget boundaries.
 
 use aegle_glyph::{
-    Blob, CacheLimits, CacheStats, Content, FontData, GlyphCache, GlyphError, RasterOptions,
+    Blob, CacheLimits, CacheStats, Content, FontData, GlyphCache, GlyphError, GlyphKey,
+    RasterOptions,
 };
 
 #[test]
@@ -22,6 +23,60 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
         size: 24.0,
         ..Default::default()
     };
+    let key = GlyphKey::new(&font, ids[0], options).unwrap();
+    let owned = key.to_owned();
+    assert_eq!(owned.as_key(), key);
+    use std::hash::BuildHasher;
+    let hash = std::collections::hash_map::RandomState::new();
+    assert_eq!(hash.hash_one(key), hash.hash_one(&owned));
+    let recolored = GlyphKey::new(
+        &font,
+        ids[0],
+        RasterOptions {
+            offset: [-0.0, 0.0],
+            foreground: [255, 0, 0, 255],
+            ..options
+        },
+    )
+    .unwrap();
+    assert_ne!(key, recolored);
+    assert_eq!(key.mask(), recolored.mask());
+    let varied = GlyphKey::new(
+        &font,
+        ids[0],
+        RasterOptions {
+            normalized_coords: &[100],
+            ..options
+        },
+    )
+    .unwrap();
+    assert_ne!(key, varied);
+    assert_eq!(varied, varied.to_owned().as_key());
+    #[cfg(feature = "scene")]
+    {
+        use aegle_glyph::{Placement, RasterTransform};
+        use aegle_scene::{Affine, Point};
+        let raster = RasterTransform::new(Affine::scale(2.0, 2.0).unwrap(), 12.0).unwrap();
+        assert_eq!(raster.size(), options.size);
+        assert!(raster.hint());
+        let origin = raster.origin(Point::new(1.12, -0.14)).unwrap();
+        assert_eq!(origin.offset(), [0.25, 0.75]);
+        assert_eq!(
+            origin
+                .image_transform(Placement {
+                    left: -1,
+                    top: 3,
+                    width: 5,
+                    height: 6,
+                })
+                .unwrap(),
+            Affine::translation(1.0, -4.0).unwrap()
+        );
+        assert!(matches!(
+            raster.origin(Point::new(1_048_576.0, 0.0)),
+            Err(GlyphError::Coordinates)
+        ));
+    }
     let image = cache.rasterize(&font, ids[0], options).unwrap();
     assert_eq!(image.content, Content::Mask);
     assert!(image.data.iter().any(|v| *v != 0));

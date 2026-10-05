@@ -5,22 +5,13 @@ use hashbrown::HashTable;
 use lru_slab::LruSlab;
 
 use crate::raster::Rasterizer;
-use crate::{CacheLimits, CacheStats, Content, FontData, Glyph, GlyphError, Image, RasterOptions};
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct Key {
-    blob: u64,
-    index: u32,
-    glyph: u16,
-    size: u32,
-    offset: [u32; 2],
-    hint: bool,
-    foreground: [u8; 4],
-}
+use crate::{
+    CacheLimits, CacheStats, Content, FontData, Glyph, GlyphError, GlyphKey, Image, OwnedGlyphKey,
+    RasterOptions,
+};
 
 struct Entry {
-    key: Key,
-    coords: Box<[i16]>,
+    key: OwnedGlyphKey,
     hash: u64,
     image: Image,
 }
@@ -89,54 +80,24 @@ impl GlyphCache {
         glyph_id: u16,
         options: RasterOptions<'_>,
     ) -> Result<Glyph<'_>, GlyphError> {
-        if !options.size.is_finite()
-            || options.size <= 0.0
-            || options.size > 16_384.0
-            || options
-                .offset
-                .iter()
-                .any(|v| !v.is_finite() || !(0.0..1.0).contains(v))
-            || options.normalized_coords.len() > 64
-            || options
-                .normalized_coords
-                .iter()
-                .any(|c| !(-16_384..=16_384).contains(c))
-        {
-            return Err(GlyphError::InvalidOptions);
-        }
-        let key = Key {
-            blob: font.data.id(),
-            index: font.index,
-            glyph: glyph_id,
-            size: options.size.to_bits(),
-            offset: options
-                .offset
-                .map(|v| if v == 0.0 { 0 } else { v.to_bits() }),
-            hint: options.hint,
-            foreground: options.foreground,
-        };
-        let mask_key = Key {
-            foreground: [0; 4],
-            ..key
-        };
-        let mask_hash = self.hash.hash_one((mask_key, options.normalized_coords));
+        let key = GlyphKey::new(font, glyph_id, options)?;
+        let mask_key = key.mask();
+        let mask_hash = self.hash.hash_one(mask_key);
         let mask_slot = self
             .storage
             .index
             .find(mask_hash, |slot| {
                 let entry = self.storage.entries.peek(*slot);
-                entry.key == mask_key
-                    && entry.coords.as_ref() == options.normalized_coords
-                    && entry.image.content == Content::Mask
+                entry.key.as_key() == mask_key && entry.image.content == Content::Mask
             })
             .copied();
         let slot = if let Some(slot) = mask_slot {
             slot
         } else {
-            let hash = self.hash.hash_one((key, options.normalized_coords));
+            let hash = self.hash.hash_one(key);
             if let Some(&slot) = self.storage.index.find(hash, |slot| {
                 let entry = self.storage.entries.peek(*slot);
-                entry.key == key && entry.coords.as_ref() == options.normalized_coords
+                entry.key.as_key() == key
             }) {
                 return Ok(self.storage.entries.get_mut(slot).image.as_glyph());
             }
@@ -152,8 +113,7 @@ impl GlyphCache {
             };
             self.storage.bytes += image.data.len();
             let slot = self.storage.entries.insert(Entry {
-                key,
-                coords: options.normalized_coords.into(),
+                key: key.to_owned(),
                 hash,
                 image,
             });

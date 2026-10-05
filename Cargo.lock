@@ -110,6 +110,7 @@ version = "0.1.0"
 name = "aegle-glyph"
 version = "0.1.0"
 dependencies = [
+ "aegle-scene",
  "hashbrown 0.17.1",
  "linebender_resource_handle",
  "lru-slab",
@@ -186,11 +187,14 @@ dependencies = [
 name = "aegle-render-vulkan"
 version = "0.1.0"
 dependencies = [
+ "aegle-glyph",
  "aegle-render-software",
  "aegle-scene",
+ "aegle-text",
  "aegle-types",
  "ash",
  "bytemuck",
+ "hashbrown 0.17.1",
  "naga",
 ]
 

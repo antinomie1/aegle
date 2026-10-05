@@ -6,10 +6,10 @@ struct Primitive {
     bounds: vec4<f32>,
     row0: vec4<f32>,
     row1: vec4<f32>,
-    rect: vec4<f32>,
+    rect: vec4<f32>, // shape rect or atlas origin and glyph size, excluding gutter
     params: vec4<f32>, // radius, stroke width (-1 for fill), viewport width/height
-    color: vec4<f32>, // premultiplied linear-light RGBA
-    header: vec4<u32>, // clip head, reserved
+    color: vec4<f32>, // linear premultiplied paint, or repeated color-glyph opacity
+    header: vec4<u32>, // clip head, geometry/mask/color kind, CPU atlas page, reserved
 }
 
 struct Clip {
@@ -21,6 +21,8 @@ struct Clip {
 
 var<immediate> primitive: Primitive;
 @group(0) @binding(0) var<storage, read> clips: array<Clip>;
+@group(1) @binding(0) var glyph_page: texture_2d<f32>;
+@group(1) @binding(1) var glyph_sampler: sampler;
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
@@ -55,6 +57,21 @@ fn coverage(point: vec2<f32>, rect: vec4<f32>, radius: f32) -> f32 {
     return min(box_alpha, clamp(0.5 - distance / max(fwidth(distance), 0.000001), 0.0, 1.0));
 }
 
+fn clip_coverage(position: vec2<f32>) -> f32 {
+    var alpha = 1.0;
+    var head = primitive.header.x;
+    for (var depth = 0u; depth < 8u; depth += 1u) {
+        if head == 0xffffffffu {
+            break;
+        }
+        let clip = clips[head];
+        let local = local_point(position, clip.row0, clip.row1);
+        alpha *= coverage(local, clip.rect, bitcast<f32>(clip.extra.x));
+        head = clip.extra.y;
+    }
+    return alpha;
+}
+
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let point = local_point(position.xy, primitive.row0, primitive.row1);
@@ -74,16 +91,20 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
             alpha = max(alpha - coverage(point, inner, max(radius - half_width, 0.0)), 0.0);
         }
     }
-    var head = primitive.header.x;
-    for (var depth = 0u; depth < 8u; depth += 1u) {
-        if head == 0xffffffffu {
-            break;
-        }
-        let clip = clips[head];
-        let local = local_point(position.xy, clip.row0, clip.row1);
-        alpha *= coverage(local, clip.rect, bitcast<f32>(clip.extra.x));
-        head = clip.extra.y;
-    }
     // No coverage-dependent branch precedes derivatives in the clip chain.
-    return primitive.color * alpha;
+    return primitive.color * (alpha * clip_coverage(position.xy));
+}
+
+@fragment
+fn fs_text(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    let local = local_point(position.xy, primitive.row0, primitive.row1);
+    // A rotated device bounding box includes points far outside the glyph quad.
+    // Clamp to transparent gutter texel centers, never a neighboring allocation.
+    let bounded = clamp(local, vec2(-0.5), primitive.rect.zw + 0.5);
+    let uv = (primitive.rect.xy + bounded) / vec2<f32>(textureDimensions(glyph_page));
+    let texel = textureSampleLevel(glyph_page, glyph_sampler, uv, 0.0);
+    // R8 coverage modulates the complete premultiplied paint. Color atlas texels
+    // decode/filter as linear premultiplied RGBA and receive only run opacity.
+    let sampled = select(texel, vec4(texel.r), primitive.header.y == 1u);
+    return sampled * primitive.color * clip_coverage(position.xy);
 }

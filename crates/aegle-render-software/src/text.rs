@@ -1,4 +1,4 @@
-use aegle_glyph::{Content, Glyph, RasterOptions};
+use aegle_glyph::{Content, Glyph, RasterOptions, RasterTransform};
 use aegle_scene::{Affine, GlyphRun};
 use aegle_types::{Color, Point};
 
@@ -13,35 +13,15 @@ impl Frame<'_, '_, '_> {
         if state.bounds.is_empty() || run.color().to_rgba()[3] == 0 {
             return Ok(());
         }
-        let [a, b, c, d, _, _] = state.transform.coefficients();
-        let scale = a.hypot(b).max(c.hypot(d));
-        let aligned = b == 0.0 && c == 0.0 && a == d && a > 0.0;
+        let raster =
+            RasterTransform::new(state.transform, run.size()).map_err(RenderError::Glyph)?;
+        let aligned = raster.hint();
         let solid = Solid::new(run.color());
         let [r, g, blue, opacity] = run.color().to_rgba();
         for glyph in run.glyphs() {
-            let origin = state.transform.map_point(glyph.position);
-            if !origin.x.is_finite()
-                || !origin.y.is_finite()
-                || origin.x.abs() > 1_048_576.0
-                || origin.y.abs() > 1_048_576.0
-            {
-                return Err(RenderError::Coordinates);
-            }
-            // Four horizontal/vertical phases bound cache churn while translating
-            // text. Glyph advances remain unrounded; only the raster origin snaps.
-            let origin = if aligned {
-                Point::new(
-                    (origin.x * 4.0).round() * 0.25,
-                    (origin.y * 4.0).round() * 0.25,
-                )
-            } else {
-                origin
-            };
-            let offset = if aligned {
-                [origin.x - origin.x.floor(), origin.y - origin.y.floor()]
-            } else {
-                [0.0; 2]
-            };
+            let origin = raster
+                .origin(glyph.position)
+                .map_err(|_| RenderError::Coordinates)?;
             let image = self
                 .renderer
                 .glyphs
@@ -49,8 +29,8 @@ impl Frame<'_, '_, '_> {
                     run.font(),
                     glyph.id,
                     RasterOptions {
-                        size: run.size() * scale,
-                        offset,
+                        size: raster.size(),
+                        offset: origin.offset(),
                         normalized_coords: run.normalized_coords(),
                         hint: aligned,
                         foreground: [r, g, blue, 255],
@@ -60,24 +40,9 @@ impl Frame<'_, '_, '_> {
             if image.data.is_empty() {
                 continue;
             }
-            let transform = if aligned {
-                Affine::translation(
-                    origin.x.floor() + image.placement.left as f32,
-                    origin.y.floor() - image.placement.top as f32,
-                )
-            } else {
-                let left = image.placement.left as f32;
-                let top = -(image.placement.top as f32);
-                Affine::new([
-                    a / scale,
-                    b / scale,
-                    c / scale,
-                    d / scale,
-                    origin.x + (a * left + c * top) / scale,
-                    origin.y + (b * left + d * top) / scale,
-                ])
-            }
-            .map_err(|_| RenderError::Coordinates)?;
+            let transform = origin
+                .image_transform(image.placement)
+                .map_err(|_| RenderError::Coordinates)?;
             let bounds =
                 device_bounds(image, transform, self.surface, !aligned)?.intersect(state.bounds);
             let inverse = transform.inverse().map_err(|_| RenderError::Coordinates)?;

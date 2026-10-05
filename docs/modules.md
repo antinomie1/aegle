@@ -12,9 +12,9 @@
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；不依赖应用 | types、core |
 | aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |
-| aegle-glyph | Swash 字形光栅化与有界 CPU 字形缓存 | 无 |
+| aegle-glyph | Swash 字形光栅化、有界 CPU 缓存及共用字形身份/变换策略 | scene 按 feature 接入 |
 | aegle-scene | 二维绘制命令、裁剪及可选字形记录 | types |
-| aegle-render-vulkan | 当前为独立离屏几何、裁剪与显式读回；图集、原生呈现待实现 | types、scene |
+| aegle-render-vulkan | 离屏几何、可选字形图集、裁剪与显式读回；原生呈现待实现 | types、scene；glyph 按 text feature 接入 |
 | aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene；glyph 按 text feature 接入 |
 | aegle-render-metal | Metal 实现、上传、图集与呈现 | types、scene |
 | aegle-platform-wayland | Wayland 窗口、事件、IME、输出与平台偏好 | types |
@@ -40,11 +40,13 @@
 
 `aegle-render-software` 借用调用方像素缓冲，不依赖 core、Taffy 或窗口；默认是纯几何构建，没有字体栈和 PNG 运行依赖。tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化，小型自有实现完成线性光 SourceOver。`text` 显式增加 aegle-glyph，其 PNG 解码器用于字体内嵌位图。软件后端不依赖 aegle-text，其他 shaping 宿主也可提供 scene 字形记录。
 
-`aegle-render-vulkan` 通过 ash 0.38 和 bytemuck 1.25 消费相同 Scene；没有 core、字体、窗口或软件 renderer 的正常依赖。当前持有一个可复用离屏目标，支持几何、最多八层裁剪及显式 RGBA8 读回；Naga 30 只在构建期生成 SPIR-V。GPU 文字、swapchain 和 App 后端选择尚未接入，详见 [Vulkan 契约](vulkan.md)。
+`aegle-render-vulkan` 通过 ash 0.38 和 bytemuck 1.25 消费相同 Scene，支持几何、最多八层裁剪及显式 RGBA8 读回。默认纯几何不带字体；可选 `text` 用 glyph、scene/text 和 hashbrown 管理按需 R8/RGBA8_SRGB 图集，复用下述字形身份与光栅策略，不依赖 Parley。没有 core、窗口或软件 renderer 的正常依赖；Naga 30 仅在构建期生成 SPIR-V。swapchain 和 App 后端选择尚未接入，详见 [Vulkan 契约](vulkan.md)。
 
 `aegle-text` 默认启用 Parley std，并复用其已有的 ICU 分段包处理 grapheme 删除；系统字体、词典、文字无障碍和 scene 桥接分别可选。段落与 Editor 共用 TextSystem 字体/shaping 上下文，Editor 包装 PlainEditor 并补充稳定提交值、可取消组合和有界 delta 历史；不另建编辑引擎或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由后续平台/应用层连接。
 
 `aegle-glyph` 独立接受共享字体句柄，复用 Swash、Skrifa、hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。
+
+该模块公开共用的借用/拥有字形缓存身份；可选 `scene` feature 依赖 `aegle-scene/text`，提供 renderer 共用的字体缩放、四相位基线和 bitmap 仿射策略。默认字形缓存仍不依赖 scene。
 
 `aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。尚未实现 layer-shell 或 GPU surface 接口。
 

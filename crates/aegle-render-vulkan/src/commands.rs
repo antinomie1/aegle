@@ -60,6 +60,7 @@ impl Commands {
         pipeline: &Pipeline,
         recording: &Recording,
         clear: [f32; 4],
+        #[cfg(feature = "text")] text: &crate::text_pipeline::TextPipeline,
     ) {
         let viewport = [vk::Viewport {
             x: 0.0,
@@ -104,11 +105,48 @@ impl Commands {
                     &[],
                 );
                 if pass == 0 {
+                    #[cfg(feature = "text")]
+                    let mut current = (false, u32::MAX);
                     for draw in &recording.draws {
+                        #[cfg(feature = "text")]
+                        let mut layout = pipeline.layouts[pass];
+                        #[cfg(not(feature = "text"))]
+                        let layout = pipeline.layouts[pass];
+                        #[cfg(feature = "text")]
+                        {
+                            let is_text = draw.primitive.header[1] != 0;
+                            if current.0 != is_text {
+                                self.raw.cmd_bind_pipeline(
+                                    self.buffer,
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    if is_text {
+                                        text.pipeline
+                                    } else {
+                                        pipeline.pipelines[0]
+                                    },
+                                );
+                                current = (is_text, u32::MAX);
+                            }
+                            if is_text {
+                                layout = text.layout;
+                                let page = draw.primitive.header[2];
+                                if current.1 != page {
+                                    self.raw.cmd_bind_descriptor_sets(
+                                        self.buffer,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        layout,
+                                        0,
+                                        &[pipeline.sets[0], text.set(page)],
+                                        &[],
+                                    );
+                                    current.1 = page;
+                                }
+                            }
+                        }
                         self.raw.cmd_set_scissor(self.buffer, 0, &[draw.scissor]);
                         self.raw.cmd_push_constants(
                             self.buffer,
-                            pipeline.layouts[pass],
+                            layout,
                             vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                             0,
                             bytemuck::bytes_of(&draw.primitive),

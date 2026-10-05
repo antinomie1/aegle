@@ -4,21 +4,32 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Bounded Vulkan 1.1 rendering of retained Aegle geometry"
+description = "Bounded Vulkan 1.1 rendering of retained Aegle scenes"
+
+[features]
+default = []
+text = ["aegle-scene/text", "dep:aegle-glyph", "dep:hashbrown"]
 
 [dependencies]
 aegle-scene.workspace = true
 aegle-types = { workspace = true, features = ["color-math"] }
 ash = { version = "0.38.0", default-features = false, features = ["loaded", "std"] }
 bytemuck = { version = "1.25.0", features = ["derive"] }
+aegle-glyph = { workspace = true, optional = true, features = ["scene"] }
+hashbrown = { version = "0.17.1", default-features = false, optional = true }
 
 [build-dependencies]
 naga = { version = "30.0.1", default-features = false, features = ["wgsl-in", "spv-out"] }
 
 [dev-dependencies]
 aegle-scene = { workspace = true, features = ["text"] }
-aegle-render-software.workspace = true
+aegle-render-software = { workspace = true, features = ["text"] }
+aegle-text = { workspace = true, features = ["scene"] }
 
 [lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
+
+[[example]]
+name = "text_scene"
+required-features = ["text"]

@@ -2,7 +2,7 @@
 
 A modular retained-mode GUI library in Rust 2024, focused on low memory use,
 event-driven updates, CJK and native input methods. Software rendering and an
-independent Vulkan renderer for offscreen geometry are available.
+independent Vulkan renderer for offscreen geometry and optional text are available.
 
 Implementation is in progress: compact shared types, retained trees, Taffy
 layout, retained Unicode paragraphs/editors, on-demand CJK glyphs, drawing records
@@ -17,7 +17,7 @@ Optional paint transitions share the same state, with frame-driven sampling,
 smooth retargeting and explicit reduced-motion support.
 Optional Unix accessibility exposes controls, CJK
 text, selection, focus and button actions through AT-SPI. Native text replacement,
-other OS backends, GPU text and native GPU presentation remain unimplemented.
+other OS backends and native GPU presentation remain unimplemented.
 See the [implementation status](docs/implementation.md) and [design](docs/README.md).
 
 Write `main.aegle` next to your package's Cargo.toml:
@@ -80,7 +80,7 @@ state with no third-party dependencies), `aegle-layout` (Taffy over that tree),
 plain editing, composition and bounded delta undo), `aegle-glyph` (on-demand
 rasterization and a bounded image cache),
 `aegle-render-software` (borrowed framebuffers and linear-light compositing),
-`aegle-render-vulkan` (offscreen geometry, bounded allocations and explicit readback),
+`aegle-render-vulkan` (offscreen geometry/text, bounded allocations and explicit readback),
 `aegle-controls` (unskinned Button/Toggle/Slider behavior, shared numeric Range and optional TextField),
 `aegle-access` (UI-thread callback mailbox and optional Unix accessibility),
 `aegle-platform-wayland` (windows and native input, independent of rendering),
@@ -101,7 +101,7 @@ controls expose scene visits, normalized input, bounded IME state and optional
 semantic updates. Control handles are weak: dropping a handle keeps its control,
 while removing a subtree or closing its window invalidates its handles.
 
-Text support is opt-in for scene/software rendering. Geometry-only builds have
+Text support is opt-in for scene, software and Vulkan rendering. Geometry-only builds have
 no font stack; application font bytes remain shared, with no bundled font atlas.
 The software renderer examples are headless demonstrations.
 They write `target/aegle-software.png`, `target/aegle-text.png` and
@@ -111,15 +111,17 @@ is a development dependency; the optional glyph module also uses a PNG decoder
 for embedded color font bitmaps. Portable test fonts and their OFL notices are in
 `tests/assets/`; library builds embed no fonts.
 
-The independent Vulkan example requires a Vulkan 1.1 loader and a compatible
-driver. It renders retained geometry and writes a PPM using only the standard
-library; it has no window, text renderer or App integration. Geometry blends in
+The independent Vulkan examples require a Vulkan 1.1 loader and a compatible
+driver. Optional `text` uses on-demand R8/RGBA8_SRGB atlas pages and shared glyph
+rasterization; the renderer does not depend on Parley. The examples write PPM
+using only the standard library and have no window or App integration. Drawing blends in
 an RGBA16F linear attachment, then a GPU pass encodes premultiplied sRGB RGBA8.
 Readback is explicit. See the [Vulkan contract](docs/vulkan.md) for limits and
 device verification; a CPU Vulkan driver is not hardware acceleration.
 
 ```sh
 cargo run -p aegle-render-vulkan --example geometry --release -- /tmp/aegle-vulkan.ppm
+cargo run -p aegle-render-vulkan --features text --example text_scene --release -- /tmp/aegle-vulkan-text.ppm
 ```
 
 The Wayland `editor` example combines a CJK text field and button in one retained

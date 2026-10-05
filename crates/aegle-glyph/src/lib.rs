@@ -17,11 +17,17 @@
 
 mod bitmap;
 mod cache;
+mod key;
 mod raster;
+#[cfg(feature = "scene")]
+mod transform;
 
 pub use cache::GlyphCache;
+pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};
 pub use swash::zeno::Placement;
+#[cfg(feature = "scene")]
+pub use transform::{GlyphOrigin, RasterTransform};
 
 /// Pixel data interpretation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,6 +121,8 @@ pub enum GlyphError {
     InvalidFont,
     /// Raster size, offsets, or variation coordinates are invalid.
     InvalidOptions,
+    /// A glyph origin or image transform exceeds the finite device-coordinate range.
+    Coordinates,
     /// Glyph pixels exceed the image limit, or no cache entry is permitted.
     ImageBudget,
     /// Source bitmap or its decoder exceeds the separate bitmap allowance.
@@ -128,6 +136,7 @@ impl core::fmt::Display for GlyphError {
         f.write_str(match self {
             Self::InvalidFont => "invalid font or glyph data",
             Self::InvalidOptions => "invalid glyph raster options",
+            Self::Coordinates => "glyph transform exceeds the device-coordinate range",
             Self::ImageBudget => "glyph image cache budget exceeded",
             Self::BitmapBudget => "source bitmap budget exceeded",
             Self::UnsupportedGlyph => "unsupported glyph representation",

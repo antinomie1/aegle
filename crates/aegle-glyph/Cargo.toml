@@ -6,7 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+default = []
+scene = ["dep:aegle-scene"]
+
 [dependencies]
+aegle-scene = { workspace = true, features = ["text"], optional = true }
 linebender_resource_handle.workspace = true
 swash.workspace = true
 skrifa = { version = "0.44.0", default-features = false, features = ["std"] }

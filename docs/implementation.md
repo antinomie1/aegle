@@ -15,7 +15,7 @@
 - aegle-access：平台回调经 Mailbox/Handlers 排队并唤醒 UI；可选 UnixAdapter 复用 AccessKit AT-SPI。示例从同一控件树按脏标记导出语义，系统 Focus/Click/SetTextSelection 回到同一焦点、按钮和 Editor。text-a11y 提供文字 run 与有校验的选择转换；不是完整跨平台无障碍。
 - aegle-glyph：复用 Swash/Skrifa，按需生成灰度字形与 COLRv0/嵌入位图，LRU 同时约束图像字节和条目数；缓存不持有字体文件。PNG 位图使用有解码预算的 png crate；库不内嵌字体。
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
-- aegle-render-vulkan：独立 Vulkan 1.1 离屏几何，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；文字、原生 swapchain 及 App 选择尚未接入。
+- aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；原生 swapchain 及 App 选择尚未接入。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口、整数缩放、事件等待、键盘/指针输入、光标与 text-input-v3；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。尚无 layer-shell、触摸、剪贴板、平台偏好、客户端装饰或 GPU 原生句柄。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观过渡、生命周期、语义颜色和 Wayland 帧驱动。几何动画、完成回调与系统偏好监听尚未实现。
@@ -34,6 +34,7 @@ cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
 cargo run -p aegle-render-vulkan --example geometry --release -- /tmp/aegle-vulkan.ppm
+cargo run -p aegle-render-vulkan --features text --example text_scene --release -- /tmp/aegle-vulkan-text.ppm
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
 cargo run -p aegle-layout --example retained --release
@@ -216,8 +217,24 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 本阶段没有字形图集、native surface/swapchain、GPU App、通用图像或路径绘制；没有改动现有 Wayland 输入、IME 与无障碍协议，因此未重复原生桌面验收。MSRV、Clippy、其他 OS/GPU/嵌入式设备及真实输入法/屏幕阅读器的完整验收仍缺。
 
-## 下一阶段与缺口
+## Vulkan 按需文字与共享光栅策略验证
 
-下一步将共享按需字形缓存接入 GPU 图集，再连接 Wayland surface/swapchain 和现有 App；继续补齐列表虚拟化/滚动条、任意绘制/行为组件扩展、动画完成通知/几何与动态标记，以及其他平台/Metal 和无障碍缺口。当前 facade 仅交付 Linux Wayland 软件组合，不能视为整个项目完成。
+新增可选 `aegle-render-vulkan/text`，与几何按相同记录顺序绘制，同用变换和八层裁剪。R8灰度与RGBA8_SRGB彩色页按需分配；每字形透明边、页LRU、当前帧固定、取消脏页回滚和独立上传上限保证不会用尚未上传或已被覆盖的条目。GPU缓存使用完整GlyphKey；软件和GPU共用RasterTransform，减少两个后端之间的字号/相位/仿射差异。没有新增第三方包；复用已有glyph/hashbrown依赖，默认几何构建无字体栈，text的normal依赖无Parley/Naga。
 
-当前尚无系统剪贴板、密码编辑、其他平台无障碍 adapter、GPU 文字/原生呈现、通用图像命令或几何动画。标记语言当前只有静态结构/字面量与 Rust 回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。基础主题、局部样式和纯函数皮肤已实现，完整 token/局部继承与系统偏好仍缺。Unix adapter 当前为部分支持，text-a11y 已连接文字导出与选择；合成粗体/斜体、COLRv1、SVG 字形显式报错。任意新行为/自定义 painter 插入、更多布局属性、原生双击计数与后台 UiProxy 仍待接入。设计文档是目标，不能当作实现证据。
+- 全workspace all-features仍为30个常规场景；all-targets/all-features、Vulkan无默认feature、glyph/software有/无feature场景、严格Rustdoc和格式检查通过。新增一个224行ignored文字综合场景，仅扩展既有glyph场景验证共享key/变换。实现18886行、测试3890行，占17.08%（不含examples/build.rs），最大源文件489行。
+- RX 6800 XT与Lavapipe分别通过几何和文字综合场景，并开启Khronos层和同步验证，无Vulkan验证错误/警告。文字场景验证CJK/quarterphase、透明颜色、COLRv0/PNG字形、过滤/反射/旋转/clip、几何文字穿插顺序，以及CPU缓存仅一个条目时的GPU命中、取消帧、整页淘汰、预算/超大字形错误、resize和释放重建；与软件逐通道对照容差3。debug下未启用中日词典的既有ICU诊断仍会出现，不代表字形或Vulkan失败。
+- 独立复核的临时小探针发现完全裁掉的字形仍因解析几何AA外扩而占用图集，单条目配置错误返回AtlasFull。修复后轴向clip使用真实像素覆盖边界，字形只保留自身过滤支持范围；同一探针及正式文字场景都验证一条目可绘制唯一可见字形。页数上限同时为目标/clip/upload/readback预留五个Vk内存分配；上传缓冲在fence完成即释放，避免只等下一帧。
+- 800×480 release text_scene已在RX硬件运行并检查图片，包含CJK三语、裁剪、四相位和仿射文字；库不内嵌字体，示例使用有OFL许可的测试子集。当前App仍软件呈现，本阶段未改窗口/IME/无障碍协议，未重复真人输入法、原生桌面或屏幕阅读器验收。
+- 相同示例场景的临时release成本探针：scene/font准备0.220 ms、renderer初始化14.317 ms、首帧提交及wait为1.911 ms；预热20帧后300帧的begin/draw/finish/wait平均0.166 ms、P95 0.218 ms，无逐帧读回。首次末帧读回另为4.287 ms。它是单次桌面GPU主机wall-time样本，不是GPU timestamp、窗口延迟或嵌入式性能保证。
+- 该探针计时前后显式设备分配均5,791,872 B（含1张262,144 B字形页），绘制/clip容量33,792 B；127个图集条目，CPU上传capacity40,960 B、128个region槽、CPU字形像素29,004 B。等待后staging为0，首次读回后设备分配7,327,872 B。空字形及被裁掉未入图集字形仍会查CPU缓存，raster_requests在300帧中由547增至6547；未发生图集上传，不将此计数误称为重新光栅化。所有计量均不含完整driver/font/shaping/allocator成本，不能当作PSS或资源目标已达标。
+
+## 暂停时的进度与缺口
+
+按用户要求，本阶段完成提交后暂停整个任务，未启动后续里程碑。恢复时首先连接 Wayland surface/swapchain 和现有 App，使独立Vulkan几何/文字进入真实窗口；随后继续补齐下列缺口。当前 facade 仅交付 Linux Wayland 软件组合，整个项目尚未完成。
+
+- 平台：Vulkan原生呈现与App接入；Windows/macOS窗口、输入、无障碍和Metal；Wayland layer-shell及shell能力、剪贴板、触摸、fractional scale和系统偏好。
+- 组件/绘制：滚动条、惯性、列表虚拟化、任意新行为/自定义painter扩展、更多基础组件与布局属性、通用图像/路径及设计中的特效；密码编辑和后台UiProxy。
+- 标记语言：目前只有静态结构/字面量与Rust回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。
+- 主题/动画：基础主题、本地样式、纯函数皮肤和外观过渡已实现，完整token/局部继承、系统偏好、几何动画和完成回调仍缺。
+- 文字/无障碍：Unix adapter仍为部分支持，存在上游禁用进度状态和离屏过滤等限制；合成粗体/斜体、COLRv1/SVG字形明确不支持，原生双击计数等编辑能力尚待接入。
+- 验收：MSRV 1.88实际构建、Clippy、跨平台/跨compositor/GPU与嵌入式完整资源测量、真实输入法候选窗和屏幕阅读器验收尚未完成。现有桌面样本及设计文档均不能替代这些证据。

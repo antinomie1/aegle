@@ -218,14 +218,6 @@ impl Image {
         {
             return Err(Error::InvalidSize);
         }
-        if !matches!(
-            format,
-            vk::Format::R8G8B8A8_UNORM | vk::Format::R16G16B16A16_SFLOAT
-        ) {
-            return Err(Error::Unsupported(
-                "image wrapper supports renderer color formats only",
-            ));
-        }
         if usage.is_empty() {
             return Err(Error::InvalidState("image usage must be nonempty"));
         }

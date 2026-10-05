@@ -8,7 +8,7 @@ license.workspace = true
 
 [features]
 default = []
-text = ["aegle-scene/text", "dep:aegle-glyph"]
+text = ["aegle-scene/text", "dep:aegle-glyph", "aegle-glyph/scene"]
 
 [dependencies]
 aegle-types = { workspace = true, features = ["color-math"] }
