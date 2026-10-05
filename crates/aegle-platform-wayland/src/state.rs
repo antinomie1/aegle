@@ -57,6 +57,8 @@ pub(crate) struct WindowState {
     pub(crate) frame_pending: bool,
     // An external acquisition may fail before its pending surface state commits.
     pub(crate) frame_requested: bool,
+    /// Shape applied whenever a pointer enters the window.
+    pub(crate) cursor: aegle_types::Cursor,
 }
 
 pub(crate) struct State {

@@ -279,6 +279,18 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 新增 `aegle-widgets`（依赖 types、scene、theme）：`toggle`（复选/混合/开关/单选；标签由调用方的闭包绘制，因此不依赖 aegle-text）、`range`（滑块与进度）、`slider_track`、`check_mark`、`chevron`；`scrollbar::Bar`（布局、命中位置、抓取点、拖动比例）与 `paint`；`reveal_delta`、`intersection`、`clamp_anchor`。`aegle-app` 删除 `widget_paint.rs`，`scrollbar.rs` 只剩手势、命中与颜色；`Mark` 移到 widgets。`aegle-app` 由 7,221 行降到 6,839 行，widgets 为 492 行。
 - 验证：重构前后 `aegle --example gallery` 重新生成的 17 张控件截图与已提交的文件逐字节相同，说明绘制没有变化；`aegle-app --all-features` 全部测试通过（滚动、数值控件、组合控件、外观、动画）；新增 `aegle-widgets/tests/widgets.rs`（166 行）：各控件绘制的命令、标签闭包只在有标签时调用、滚动条随偏移变化、抓取/拖动比例与越界夹紧、双轴留角、编辑器无横向条、揭示与裁剪辅助。没有测量体积或性能。
 
+## 鼠标指针形状
+
+- `aegle-types` 新增 `Cursor`（默认、文本、手形、十字、移动、抓取、抓取中、不可用、横向/纵向调整）。`aegle-app` 新增 `Ui::cursor()`、`Node::set_cursor/cursor`：捕获指针的控件优先，其次鼠标下最上层可见控件（含标签、图像、画布）的显式形状，可用的文本字段为 I-beam（只读也是，禁用不是），然后是最近祖先的显式形状，否则箭头；滚动条条带、滚动条拖动和被弹出层遮住的区域为箭头。
+- 平台：`Wayland::set_cursor` 保存每个窗口的形状，立即应用到窗口内所有指针，并在每次 Enter 与跨输出缩放时重新应用，取代原先每次都重置为默认；`Win32::set_cursor` 与 `WM_SETCURSOR`（仅客户区）使用系统共享光标，Windows 没有抓手形状，抓取用手形、抓取中用四向箭头。`Runtime::refresh` 在每次刷新后同步，布局或可见性变化导致鼠标下控件改变时也会更新，不只在指针事件之后。
+- 验证：`aegle-app/tests/pointer.rs`（无指针、标签/按钮、可用/只读/禁用字段、显式形状及其继承与优先级、按下后捕获、多行字段的滚动条条带、隐藏与删除鼠标下控件、指针离开）。私有 Sway 上以 `WAYLAND_DEBUG` 观察真实协议：`wp_cursor_shape_device_v1.set_shape` 在 Enter 后依次随标签→文本区→按钮→文本区→标签得到 default→text→default→text→default（枚举 1 与 9），使用虚拟指针，没有连接用户桌面。Win32 只通过 x86_64-pc-windows-gnu 交叉编译检查，没有在 Windows 或 Wine 上运行，因此 `WM_SETCURSOR` 与各 `IDC_*` 的实际显示未验证。没有验证不支持 cursor-shape 的合成器上的主题光标回退。
+
+## 滚动条不再遮挡内容与边框
+
+- 问题：`scrolling` 示例中嵌套区域的内边距（8 dp）小于滚动条占用的宽度，滚动条盖住控件右缘；滚动视图的边框与背景一起先画，滚到边缘的文本框白底会盖住它。
+- 修改：溢出的视口在对应的尾边为滚动条留出 `FOOTPRINT`（轨道 8 dp、边距 2 dp、间隙 4 dp，共 14 dp）：`refresh` 在布局后检查每个视口的溢出，需要时把右/下内边距提高到该值再布局一次，溢出消失就还原；只有一次额外布局，因为变窄只会保留而不会消除溢出。子内容的裁剪区在溢出轴上同样缩进，所以横向滚动或纵向滚动中的内容也不会滑到滚动条下面。滚动视图的边框改画在覆盖记录里，即所有子内容之后、滚动条之前。
+- 验证：`aegle-app/tests/scrolling.rs` 新增场景（内容右缘随溢出在 186 与 196 之间切换、边框是覆盖记录的第一条命令、横纵溢出时可见区被限制在滚动条之前），并更新了因底部留白从 8 dp 变为 14 dp 而改变的最大偏移（60 到 66）。`aegle-app --all-features` 与 workspace 测试通过。私有 Sway 里的软件渲染截图放大对比：改前文本框盖住嵌套区域的上、下、右边框，改后边框完整，滚动条与控件之间有间隙；重新生成的 `scroll-view.png` 与 `variable-list.png` 也随之更新，其余 15 张不变。没有在 GPU 后端重新截图；没有提交。
+
 ## 当前进度与剩余工作
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。

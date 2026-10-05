@@ -160,6 +160,8 @@ pub(crate) struct Entry {
     pub wgpu: Option<aegle_render_wgpu::WindowRenderer<crate::platform::WindowSurface>>,
     pub id: WindowId,
     pub ui: Rc<Ui>,
+    /// Last cursor shape sent to the platform.
+    pub cursor: crate::Cursor,
     #[cfg(any(
         all(feature = "unix-accessibility", target_os = "linux"),
         all(feature = "windows-accessibility", target_os = "windows")
@@ -327,6 +329,7 @@ impl App {
             wgpu,
             id,
             ui,
+            cursor: crate::Cursor::Default,
             #[cfg(target_os = "linux")]
             seat: None,
             modifiers: Modifiers::default(),

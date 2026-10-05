@@ -139,9 +139,12 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `remove()` / `reparent(&container)` | 删除子树 / 移到另一容器末尾 |
 | `set_visible(b)` / `set_enabled(b)` | 作用于整棵子树；隐藏不占布局 |
 | `focus()` / `ensure_visible()` | 聚焦 / 滚动祖先使其可见 |
+| `set_cursor(Option<Cursor>)` / `cursor()` | 设置/读取该控件及其后代上的鼠标指针形状，`None` 恢复默认 |
 | `set_accessible_label(s)` | 无障碍名称 |
 | `keep_alive(value)` | 让任意值与控件同生命周期 |
 | `popup()` | 创建锚定于该控件的弹出层 `Popup`（`show` / `hide` / `is_shown`） |
+
+**鼠标指针形状**：原生窗口会自动跟随。可用形状见 `Cursor`（`Default`、`Text`、`Pointer`、`Crosshair`、`Move`、`Grab`、`Grabbing`、`NotAllowed`、`ResizeHorizontal`、`ResizeVertical`）。规则按优先级：按下后捕获指针的控件（拖选文字时指针移出字段仍是 I-beam）；鼠标下最上层可见控件上的显式 `set_cursor`；可用的文本字段（含只读，因为文字可选）显示 I-beam，禁用的字段不显示；最近祖先的显式形状；箭头。滚动条条带与拖动滚动条始终是箭头；已显示的弹出层遮住其下方的控件。按钮默认不变手形，这是桌面惯例，需要时对按钮或链接式标签 `set_cursor(Some(Cursor::Pointer))`。Windows 没有抓手光标，`Grab` 用手形、`Grabbing` 用四向箭头。
 
 句柄是弱引用：丢弃句柄不会删除控件；删除控件或关闭窗口后，其句柄的调用返回 `UiError::DeadHandle`。句柄可以克隆后移入回调。
 
@@ -299,6 +302,7 @@ if ui.refresh()? {
 | 输入与同步 | 说明 |
 | --- | --- |
 | `pointer(id, kind, point, modifiers)`、`pointer_leave()` | 指针移动/按下/释放/离开 |
+| `cursor()` | 指针当前位置应显示的 `Cursor`；在 `pointer` 与 `refresh` 之后读取，布局变化也会改变它 |
 | `key(KeyInput { key, text, modifiers, pressed, repeat })` | 键盘；`text` 为已翻译文字 |
 | `scroll(point, dy)` / `scroll_by(point, delta)` | 滚轮，按嵌套视口路由 |
 | `window_focus(b)` | 窗口获得/失去键盘焦点 |

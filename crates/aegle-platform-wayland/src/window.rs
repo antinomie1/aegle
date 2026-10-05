@@ -29,6 +29,7 @@ use crate::{
     input::InputState,
     state::{Shell, WindowState},
 };
+use aegle_types::Cursor;
 
 /// One Wayland connection and blocking event loop, shared by all its windows.
 ///
@@ -219,6 +220,7 @@ impl Wayland {
             redraw_queued: false,
             frame_pending: false,
             frame_requested: false,
+            cursor: Cursor::Default,
         });
         Ok(id)
     }
@@ -300,6 +302,17 @@ impl Wayland {
     pub fn request_redraw(&mut self, id: WindowId) -> Result<(), Error> {
         self.window_mut(id)?.dirty = true;
         self.state.queue_redraws();
+        Ok(())
+    }
+
+    /// Sets the shape shown over a window. It applies immediately to every pointer
+    /// inside the window and again whenever a pointer enters it, so the host only
+    /// needs to call this when the desired shape changes.
+    pub fn set_cursor(&mut self, id: WindowId, cursor: Cursor) -> Result<(), Error> {
+        let window = self.window_mut(id)?;
+        if std::mem::replace(&mut window.cursor, cursor) != cursor {
+            self.state.apply_cursor(&self.connection, id);
+        }
         Ok(())
     }
 

@@ -25,13 +25,38 @@ pub(crate) struct Native {
     pub dirty: Cell<bool>,
     pub redraw_queued: Cell<bool>,
     pub tracking: Cell<bool>,
+    /// Shape shown over the client area, applied by WM_SETCURSOR.
+    pub cursor: Cell<aegle_types::Cursor>,
     pub pressed: Cell<bool>,
     pub high_surrogate: Cell<Option<u16>>,
     pub ime: Ime,
     pub pixels: RefCell<Vec<u8>>,
     pub budget: usize,
 }
+/// The shared system cursor closest to `cursor`; shared cursors are never destroyed.
+fn system_cursor(cursor: aegle_types::Cursor) -> HCURSOR {
+    use aegle_types::Cursor;
+    let name = match cursor {
+        Cursor::Default => IDC_ARROW,
+        Cursor::Text => IDC_IBEAM,
+        // Windows has no grab cursors: the hand and the four arrows are closest.
+        Cursor::Pointer | Cursor::Grab => IDC_HAND,
+        Cursor::Crosshair => IDC_CROSS,
+        Cursor::Move | Cursor::Grabbing => IDC_SIZEALL,
+        Cursor::NotAllowed => IDC_NO,
+        Cursor::ResizeHorizontal => IDC_SIZEWE,
+        Cursor::ResizeVertical => IDC_SIZENS,
+    };
+    // SAFETY: loading a predefined cursor with no module handle has no preconditions.
+    unsafe { LoadCursorW(None, name) }.unwrap_or_default()
+}
+
 impl Native {
+    /// Shows this window's cursor on the calling thread's pointer.
+    pub fn show_cursor(&self) {
+        // SAFETY: SetCursor only changes the calling thread's current cursor.
+        unsafe { SetCursor(Some(system_cursor(self.cursor.get()))) };
+    }
     pub fn emit(&self, event: Event) {
         if self.registered.get() {
             self.events.borrow_mut().push_back(event);

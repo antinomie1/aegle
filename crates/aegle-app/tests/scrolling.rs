@@ -142,7 +142,7 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
             .find(|(_, n)| n.role() == Role::ScrollView)
             .unwrap();
         assert!(node.clips_children());
-        assert_eq!(node.scroll_y_max(), Some(60.0));
+        assert_eq!(node.scroll_y_max(), Some(66.0));
         assert!(ui.access_action(ActionRequest {
             action: Action::SetScrollOffset,
             target_tree: TreeId::ROOT,
@@ -197,7 +197,10 @@ fn overlay_scrollbar_drags_above_children_without_activating_them() -> Result {
         last = scene.commands().len();
         Ok(())
     })?;
-    assert_eq!(last, 2, "track and thumb are not the topmost record");
+    assert_eq!(
+        last, 3,
+        "border, track and thumb are not the topmost record"
+    );
     let pointer = |kind, y| {
         ui.pointer(
             PointerId(1),
@@ -220,5 +223,59 @@ fn overlay_scrollbar_drags_above_children_without_activating_them() -> Result {
     pointer(PointerKind::Up, 20.0)?;
     ui.dispatch_callbacks()?;
     assert_eq!(clicks.get(), 1, "bar without overflow kept input");
+    Ok(())
+}
+
+#[test]
+fn overflowing_viewports_reserve_the_bar_and_draw_their_border_last() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.root().set_padding(0.0)?;
+    let view = ui.root().scroll_view()?;
+    view.set_size(Some(200.0), Some(100.0))?;
+    view.set_padding(4.0)?;
+    let buttons = [view.button("")?, view.button("")?, view.button("")?];
+    for button in &buttons {
+        button.set_height(Some(60.0))?;
+    }
+    ui.resize(Size::new(240.0, 240.0))?;
+    ui.refresh()?;
+    let right = |node: &aegle_app::Node| -> Result<f32> {
+        let bounds = node.bounds()?;
+        Ok(bounds.origin.x + bounds.size.width)
+    };
+    // The bar needs 14 pixels (track, margin and clearance); padding 4 would leave
+    // it covering the buttons' right edge.
+    assert_eq!(right(&buttons[0])?, 186.0, "content stops short of the bar");
+
+    // The border is the first record of the viewport's overlay, drawn after every
+    // child, so content scrolled under the edge cannot cover it.
+    let mut last = None;
+    ui.visit_scenes(|scene, _, _| {
+        last = scene.commands().first().copied();
+        Ok(())
+    })?;
+    assert!(matches!(
+        last,
+        Some(aegle_app::scene::Command::Stroke { .. })
+    ));
+
+    // Without overflow no bar exists, so the padding is all that is reserved.
+    view.set_height(Some(400.0))?;
+    ui.refresh()?;
+    assert_eq!(right(&buttons[0])?, 196.0);
+    // The overflow returning reserves it again.
+    view.set_height(Some(100.0))?;
+    ui.refresh()?;
+    assert_eq!(right(&buttons[0])?, 186.0);
+
+    // Content that scrolls sideways or up must not slide under a bar either: it
+    // is clipped where each overflowing axis's bar begins.
+    buttons[0].set_width(Some(400.0))?;
+    ui.refresh()?;
+    view.scroll_to(Point::new(100.0, 30.0))?;
+    ui.refresh()?;
+    let seen = buttons[0].visible_bounds()?.unwrap();
+    assert!(seen.origin.x + seen.size.width <= 186.0, "right bar");
+    assert!(seen.origin.y + seen.size.height <= 86.0, "bottom bar");
     Ok(())
 }

@@ -4,7 +4,7 @@
 mod repeat;
 use repeat::Repeat;
 
-use aegle_types::Point;
+use aegle_types::{Cursor, Point};
 use smithay_client_toolkit::{
     delegate_dispatch2,
     seat::{
@@ -23,6 +23,21 @@ use wayland_client::{
 };
 
 use crate::{Error, Event, ImeEvent, State, WindowId};
+
+fn icon(cursor: Cursor) -> CursorIcon {
+    match cursor {
+        Cursor::Default => CursorIcon::Default,
+        Cursor::Text => CursorIcon::Text,
+        Cursor::Pointer => CursorIcon::Pointer,
+        Cursor::Crosshair => CursorIcon::Crosshair,
+        Cursor::Move => CursorIcon::Move,
+        Cursor::Grab => CursorIcon::Grab,
+        Cursor::Grabbing => CursorIcon::Grabbing,
+        Cursor::NotAllowed => CursorIcon::NotAllowed,
+        Cursor::ResizeHorizontal => CursorIcon::EwResize,
+        Cursor::ResizeVertical => CursorIcon::NsResize,
+    }
+}
 
 struct SeatInput {
     seat: WlSeat,
@@ -63,10 +78,25 @@ impl State {
 
     /// Theme cursors need a newly scaled bitmap when crossing output boundaries.
     pub(crate) fn update_input_cursor_scale(&mut self, conn: &Connection, surface: &WlSurface) {
+        if let Some(window) = self.window_id(surface) {
+            self.apply_cursor(conn, window);
+        }
+    }
+
+    /// Shows the window's cursor on every pointer currently inside it.
+    pub(crate) fn apply_cursor(&mut self, conn: &Connection, window: WindowId) {
+        let Some(shape) = self
+            .windows
+            .iter()
+            .find(|w| w.id == window)
+            .map(|w| w.cursor)
+        else {
+            return;
+        };
         for input in &self.input.seats {
             if let Some(pointer) = &input.pointer {
-                if input.pointer_focus.is_some() && pointer.surface() == surface {
-                    if let Err(error) = pointer.set_cursor(conn, CursorIcon::Default) {
+                if input.pointer_focus.is_some_and(|(id, _)| id == window) {
+                    if let Err(error) = pointer.set_cursor(conn, icon(shape)) {
                         self.events.push_back(Event::Error(Error::backend(error)));
                     }
                 }
@@ -467,11 +497,17 @@ impl PointerHandler for State {
                 _ => Some((window, position)),
             };
             if matches!(event.kind, PointerEventKind::Enter { .. }) {
+                // Entering needs a fresh cursor for the serial; keep the window's.
+                let shape = self
+                    .windows
+                    .iter()
+                    .find(|w| w.id == window)
+                    .map_or(Cursor::Default, |w| w.cursor);
                 if let Err(error) = input
                     .pointer
                     .as_ref()
                     .expect("registered pointer")
-                    .set_cursor(conn, CursorIcon::Default)
+                    .set_cursor(conn, icon(shape))
                 {
                     self.events.push_back(Event::Error(Error::backend(error)));
                 }

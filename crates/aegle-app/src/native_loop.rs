@@ -181,6 +181,14 @@ impl Runtime {
             if entry.ui.refresh()? {
                 self.backend.request_redraw(entry.id)?;
             }
+            // Layout, visibility and focus can change the control under a
+            // stationary pointer, so this runs after every refresh, not only
+            // after pointer events.
+            let cursor = entry.ui.cursor()?;
+            if cursor != entry.cursor {
+                self.backend.set_cursor(entry.id, cursor)?;
+                entry.cursor = cursor;
+            }
             if let Some(ime) = entry.ui.take_ime_state(4000)? {
                 if ime.reset && self.backend.ime_available() {
                     self.backend.configure_ime(entry.id, None)?;

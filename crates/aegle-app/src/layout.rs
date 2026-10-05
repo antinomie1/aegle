@@ -3,10 +3,45 @@ use crate::{
     state::{Content, Mark, Semantic, State},
 };
 use aegle_core::Dirty;
-use aegle_layout::{AvailableSpace, Size};
+use aegle_layout::{AvailableSpace, LengthPercentage, Size};
 use aegle_text::Alignment;
+use aegle_widgets::scrollbar::FOOTPRINT;
 
 impl State {
+    /// Reserves each overflowing viewport's scrollbar footprint beyond its padding,
+    /// so no control sits under a bar, and releases it when the overflow ends.
+    /// Returns whether any viewport changed. Only the leading padding the user set
+    /// is remembered: the trailing edge is derived from it.
+    fn update_gutters(&mut self) -> Result<bool> {
+        let mut changed = false;
+        for index in 0..self.order.len() {
+            let id = self.order[index];
+            if !matches!(
+                self.tree.get(id).unwrap().context.content,
+                Content::Scroll(_)
+            ) {
+                continue;
+            }
+            let limit = self.scroll_limit(id);
+            let mut style = self.tree.get(id).unwrap().style().clone();
+            let (left, top) = (style.padding.left, style.padding.top);
+            let reserve =
+                |base: LengthPercentage, needed: bool| match (needed, base.into_raw().value()) {
+                    (true, value) => LengthPercentage::length(value.max(FOOTPRINT)),
+                    _ => base,
+                };
+            let right = reserve(left, limit.y > 0.0);
+            let bottom = reserve(top, limit.x > 0.0);
+            if style.padding.right != right || style.padding.bottom != bottom {
+                style.padding.right = right;
+                style.padding.bottom = bottom;
+                aegle_layout::set_style(&mut self.tree, id, style)?;
+                changed = true;
+            }
+        }
+        Ok(changed)
+    }
+
     pub fn refresh(&mut self) -> Result<bool> {
         #[cfg(feature = "motion")]
         self.start_offsets();
@@ -27,96 +62,105 @@ impl State {
             }
         }
         if self.tree.dirty(self.root)?.intersects(Dirty::LAYOUT) {
-            let theme = &self.theme;
-            let fonts = &self.fonts;
-            let mut error = None;
-            aegle_layout::compute(
-                &mut self.tree,
-                self.root,
-                Size {
-                    width: AvailableSpace::Definite(self.size.width),
-                    height: AvailableSpace::Definite(self.size.height),
-                },
-                |_, element, known, available| {
-                    let padding = element.inset(theme);
-                    let gap = element.theme_or(theme).gap;
-                    let width = known.width.or(match available.width {
-                        AvailableSpace::Definite(w) => Some(w),
-                        AvailableSpace::MinContent => Some(0.0),
-                        AvailableSpace::MaxContent => None,
-                    });
-                    let measured = match &mut element.content {
-                        Content::Label(text) => text
-                            .reflow(
-                                width.map(|w| (w - 2.0 * padding).max(0.0)),
-                                Alignment::Start,
-                            )
-                            .map(|s| {
-                                aegle_types::Size::new(
-                                    s.width + 2.0 * padding,
-                                    s.height + 2.0 * padding,
+            // A viewport that overflows reserves its scrollbar's footprint, which can
+            // change wrapping, so lay out once more. Narrowing never removes an
+            // overflow, so one extra pass is stable.
+            for pass in 0..2 {
+                let theme = &self.theme;
+                let fonts = &self.fonts;
+                let mut error = None;
+                aegle_layout::compute(
+                    &mut self.tree,
+                    self.root,
+                    Size {
+                        width: AvailableSpace::Definite(self.size.width),
+                        height: AvailableSpace::Definite(self.size.height),
+                    },
+                    |_, element, known, available| {
+                        let padding = element.inset(theme);
+                        let gap = element.theme_or(theme).gap;
+                        let width = known.width.or(match available.width {
+                            AvailableSpace::Definite(w) => Some(w),
+                            AvailableSpace::MinContent => Some(0.0),
+                            AvailableSpace::MaxContent => None,
+                        });
+                        let measured = match &mut element.content {
+                            Content::Label(text) => text
+                                .reflow(
+                                    width.map(|w| (w - 2.0 * padding).max(0.0)),
+                                    Alignment::Start,
                                 )
-                            }),
-                        Content::Button(_, text) => Ok(aegle_types::Size::new(
-                            text.size().width
-                                + 2.0 * padding
-                                + if element.semantic == Semantic::Dropdown {
-                                    gap + aegle_widgets::CHEVRON
+                                .map(|s| {
+                                    aegle_types::Size::new(
+                                        s.width + 2.0 * padding,
+                                        s.height + 2.0 * padding,
+                                    )
+                                }),
+                            Content::Button(_, text) => Ok(aegle_types::Size::new(
+                                text.size().width
+                                    + 2.0 * padding
+                                    + if element.semantic == Semantic::Dropdown {
+                                        gap + aegle_widgets::CHEVRON
+                                    } else {
+                                        0.0
+                                    },
+                                text.size().height + 2.0 * padding,
+                            )),
+                            Content::Toggle(toggle) => Ok(aegle_types::Size::new(
+                                if toggle.mark == Mark::Switch {
+                                    36.0
                                 } else {
+                                    18.0
+                                } + if toggle.text.text().is_empty() {
                                     0.0
-                                },
-                            text.size().height + 2.0 * padding,
-                        )),
-                        Content::Toggle(toggle) => Ok(aegle_types::Size::new(
-                            if toggle.mark == Mark::Switch {
-                                36.0
-                            } else {
-                                18.0
-                            } + if toggle.text.text().is_empty() {
-                                0.0
-                            } else {
-                                gap + toggle.text.size().width
-                            } + 2.0 * padding,
-                            toggle.text.size().height.max(20.0) + 2.0 * padding,
-                        )),
-                        Content::Slider(_) | Content::Progress(_) => {
-                            Ok(aegle_types::Size::new(160.0, 20.0 + 2.0 * padding))
-                        }
-                        Content::Field(field) => fonts
-                            .borrow_mut()
-                            .edit(field.editor_mut())
-                            .reflow(
-                                width.map(|w| (w - 2.0 * padding).max(0.0)),
-                                Alignment::Start,
-                            )
-                            .map(|s| {
-                                aegle_types::Size::new(
-                                    s.width + 2.0 * padding,
-                                    s.height + 2.0 * padding,
+                                } else {
+                                    gap + toggle.text.size().width
+                                } + 2.0 * padding,
+                                toggle.text.size().height.max(20.0) + 2.0 * padding,
+                            )),
+                            Content::Slider(_) | Content::Progress(_) => {
+                                Ok(aegle_types::Size::new(160.0, 20.0 + 2.0 * padding))
+                            }
+                            Content::Field(field) => fonts
+                                .borrow_mut()
+                                .edit(field.editor_mut())
+                                .reflow(
+                                    width.map(|w| (w - 2.0 * padding).max(0.0)),
+                                    Alignment::Start,
                                 )
-                            }),
-                        Content::Image(image) => Ok(aegle_types::Size::new(
-                            image.width() as f32,
-                            image.height() as f32,
-                        )),
-                        Content::Container | Content::Scroll(_) | Content::Canvas(_) => {
-                            Ok(aegle_types::Size::default())
+                                .map(|s| {
+                                    aegle_types::Size::new(
+                                        s.width + 2.0 * padding,
+                                        s.height + 2.0 * padding,
+                                    )
+                                }),
+                            Content::Image(image) => Ok(aegle_types::Size::new(
+                                image.width() as f32,
+                                image.height() as f32,
+                            )),
+                            Content::Container | Content::Scroll(_) | Content::Canvas(_) => {
+                                Ok(aegle_types::Size::default())
+                            }
+                        };
+                        match measured {
+                            Ok(size) => Size {
+                                width: known.width.unwrap_or(size.width),
+                                height: known.height.unwrap_or(size.height),
+                            },
+                            Err(cause) => {
+                                error = Some(cause);
+                                Size::ZERO
+                            }
                         }
-                    };
-                    match measured {
-                        Ok(size) => Size {
-                            width: known.width.unwrap_or(size.width),
-                            height: known.height.unwrap_or(size.height),
-                        },
-                        Err(cause) => {
-                            error = Some(cause);
-                            Size::ZERO
-                        }
-                    }
-                },
-            )?;
-            if let Some(error) = error {
-                return Err(error.into());
+                    },
+                )?;
+                if let Some(error) = error {
+                    return Err(error.into());
+                }
+                if pass == 0 && self.update_gutters()? {
+                    continue;
+                }
+                break;
             }
             for index in 0..self.order.len() {
                 let id = self.order[index];

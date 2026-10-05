@@ -190,6 +190,7 @@ impl Win32 {
             dirty: Cell::new(true),
             redraw_queued: Cell::new(false),
             tracking: Cell::new(false),
+            cursor: Cell::new(aegle_types::Cursor::Default),
             pressed: Cell::new(false),
             high_surrogate: Cell::new(None),
             ime: Ime::new()?,
@@ -284,6 +285,16 @@ impl Win32 {
     /// Returns retained software Vec capacity, excluding GDI/compositor storage.
     pub fn buffer_bytes(&self, id: WindowId) -> Result<usize, Error> {
         Ok(self.window(id)?.pixels.borrow().capacity())
+    }
+    /// Sets the shape shown over a window's client area. It takes effect at once
+    /// while the mouse is over the window, and on every later WM_SETCURSOR.
+    pub fn set_cursor(&mut self, id: WindowId, cursor: aegle_types::Cursor) -> Result<(), Error> {
+        let native = self.window(id)?;
+        native.cursor.set(cursor);
+        if native.tracking.get() {
+            native.show_cursor();
+        }
+        Ok(())
     }
     /// Marks retained content dirty; requests coalesce and minimized windows wait.
     pub fn request_redraw(&mut self, id: WindowId) -> Result<(), Error> {

@@ -33,7 +33,9 @@ impl State {
             if !range && appearance.background.to_rgba()[3] != 0 {
                 builder.fill(shape, appearance.background)?;
             }
-            if !range && !matches!(element.content, Content::Toggle(_)) {
+            // A viewport draws its border after its children, so content scrolled
+            // under the edge cannot cover it.
+            if !range && !matches!(element.content, Content::Toggle(_) | Content::Scroll(_)) {
                 outline(
                     &mut builder,
                     size,
@@ -143,6 +145,15 @@ impl State {
         if let Content::Scroll(overlay) = &mut element.content {
             let mut builder = std::mem::take(&mut **overlay).into_builder();
             builder.clear();
+            if element.effective_visible {
+                outline(
+                    &mut builder,
+                    size,
+                    appearance.radius,
+                    appearance.border_width,
+                    appearance.border_color,
+                )?;
+            }
             aegle_widgets::scrollbar::paint(&mut builder, bars, bar_color, theme.radius)?;
             **overlay = builder.finish()?;
         }

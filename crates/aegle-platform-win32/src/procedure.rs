@@ -64,6 +64,12 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
             }
         }
         WM_ERASEBKGND => return Ok(Some(LRESULT(1))),
+        // Only the client area uses the host's cursor; borders and the title bar
+        // keep the system's resize and arrow shapes.
+        WM_SETCURSOR if (l.0 as u32 & 0xffff) == HTCLIENT => {
+            native.show_cursor();
+            return Ok(Some(LRESULT(1)));
+        }
         WM_PAINT => {
             // SAFETY: acknowledging our window's invalid region; drawing happens
             // only after the host handles the queued retained-state redraw.

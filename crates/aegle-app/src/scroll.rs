@@ -1,6 +1,6 @@
 use aegle_core::{Dirty, NodeId};
 use aegle_types::Point;
-use aegle_widgets::{clamp_anchor, intersection, reveal_delta};
+use aegle_widgets::{clamp_anchor, intersection, reveal_delta, scrollbar::FOOTPRINT};
 
 use crate::{
     Result,
@@ -57,15 +57,21 @@ impl State {
         }
         for index in 0..self.order.len() {
             let id = self.order[index];
-            let parent = self.tree.parent(id)?.map(|id| {
-                let parent = &self.tree.get(id).unwrap().context;
+            let parent = self.tree.parent(id)?.map(|pid| {
+                let parent = &self.tree.get(pid).unwrap().context;
                 let scrolling = matches!(parent.content, Content::Scroll(_));
                 let clip = if scrolling {
-                    Some(
-                        parent
-                            .clip
-                            .map_or(parent.bounds, |clip| intersection(clip, parent.bounds)),
-                    )
+                    // Content stops where an overflowing axis's bar begins, so it
+                    // never scrolls underneath it.
+                    let mut view = parent.bounds;
+                    let limit = self.scroll_limit(pid);
+                    if limit.y > 0.0 {
+                        view.size.width = (view.size.width - FOOTPRINT).max(0.0);
+                    }
+                    if limit.x > 0.0 {
+                        view.size.height = (view.size.height - FOOTPRINT).max(0.0);
+                    }
+                    Some(parent.clip.map_or(view, |clip| intersection(clip, view)))
                 } else {
                     parent.clip
                 };

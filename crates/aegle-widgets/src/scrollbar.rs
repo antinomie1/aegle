@@ -12,6 +12,12 @@ pub const STRIP: f32 = 12.0;
 /// Visible track and thumb thickness at the outer edge of the strip.
 pub const THICKNESS: f32 = 8.0;
 const MARGIN: f32 = 2.0;
+/// Gap kept between content and a bar, so controls never touch the track.
+const CLEARANCE: f32 = 4.0;
+/// Space a viewport must leave beyond its content on the bar's side: the track
+/// thickness, its margin from the edge and a clearance. With at least this much
+/// trailing padding no control sits under or against a bar.
+pub const FOOTPRINT: f32 = THICKNESS + MARGIN + CLEARANCE;
 const MIN_THUMB: f32 = 24.0;
 
 /// One overflowing axis in the viewport's local coordinates.

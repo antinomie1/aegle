@@ -9,6 +9,7 @@ pub(crate) struct Decoration {
     pub skin: Option<Skin>,
     pub style: Style,
     pub font_size: Option<f32>,
+    pub cursor: Option<aegle_types::Cursor>,
 }
 
 impl State {
@@ -83,7 +84,10 @@ impl State {
 
     pub fn trim_decoration(&mut self, id: NodeId) {
         if self.decorations.get(&id).is_some_and(|d| {
-            d.skin.is_none() && d.style == Style::default() && d.font_size.is_none()
+            d.skin.is_none()
+                && d.style == Style::default()
+                && d.font_size.is_none()
+                && d.cursor.is_none()
         }) {
             self.decorations.remove(&id);
         }
