@@ -19,7 +19,7 @@ pub struct Renderer {
     pub(crate) glyphs: aegle_glyph::GlyphCache,
     dimensions: (u32, u32),
     stack: Vec<State>,
-    path: PathBuilder,
+    pub(crate) path: PathBuilder,
 }
 
 impl Default for Renderer {
@@ -100,10 +100,15 @@ impl Renderer {
     ) -> Result<(), RenderError> {
         let depth = scene.max_clip_depth() + usize::from(external_clip);
         let needs_masks = depth > 0
-            || scene
-                .commands()
-                .iter()
-                .any(|command| matches!(command, Command::Fill { .. } | Command::Stroke { .. }));
+            || scene.commands().iter().any(|command| {
+                matches!(
+                    command,
+                    Command::Fill { .. }
+                        | Command::Stroke { .. }
+                        | Command::FillPath { .. }
+                        | Command::StrokePath { .. }
+                )
+            });
         let count = if needs_masks { depth + 1 } else { 0 };
         let pixels = surface.data.len() / 4;
         let required = pixels.checked_mul(count).unwrap_or(usize::MAX);
@@ -215,6 +220,17 @@ impl Frame<'_, '_, '_> {
                     color,
                     width,
                 } => self.paint(shape, color, Some(width), state)?,
+                Command::Image { image, rect } => {
+                    self.paint_image(&scene.images()[image], rect, state)?
+                }
+                Command::FillPath { path, color } => {
+                    self.paint_path(&scene.paths()[path], color, None, state)?
+                }
+                Command::StrokePath {
+                    path,
+                    color,
+                    stroke,
+                } => self.paint_path(&scene.paths()[path], color, Some(stroke), state)?,
                 #[cfg(feature = "text")]
                 Command::Glyphs(index) => self.paint_text(&scene.glyph_runs()[index], state)?,
                 _ => return Err(RenderError::UnsupportedCommand),
@@ -250,7 +266,7 @@ impl Frame<'_, '_, '_> {
         state.bounds = state.bounds.intersect(Bounds::path(&path, self.surface));
         let (earlier, next) = self.renderer.masks.split_at_mut(state.clips);
         let mask = &mut next[0];
-        rasterize(mask, &path, state.bounds);
+        rasterize(mask, &path, state.bounds, FillRule::EvenOdd);
         if previous > 0 {
             let parent = earlier[previous].data();
             let data = mask.data_mut();
@@ -274,10 +290,16 @@ impl Frame<'_, '_, '_> {
             return Ok(());
         }
         let path = self.geometry(shape, width, state.transform)?;
+        self.fill_device(path, FillRule::EvenOdd, color, state);
+        Ok(())
+    }
+
+    /// Fills a device-space path, then recycles its storage for the next draw.
+    pub(crate) fn fill_device(&mut self, path: Path, rule: FillRule, color: Color, state: State) {
         let bounds = state.bounds.intersect(Bounds::path(&path, self.surface));
         let (coverage, clips) = self.renderer.masks.split_at_mut(1);
         let mask = &mut coverage[0];
-        rasterize(mask, &path, bounds);
+        rasterize(mask, &path, bounds, rule);
         let clip = state.clips.checked_sub(1).map(|index| clips[index].data());
         let paint = Solid::new(color);
         for row in bounds.rows(self.surface.width as usize) {
@@ -290,7 +312,6 @@ impl Frame<'_, '_, '_> {
             }
         }
         self.renderer.path = path.clear();
-        Ok(())
     }
 }
 
@@ -323,7 +344,7 @@ impl Bounds {
             ..Self::EMPTY
         }
     }
-    fn path(path: &Path, surface: &Surface<'_>) -> Self {
+    pub(crate) fn path(path: &Path, surface: &Surface<'_>) -> Self {
         let b = path.bounds();
         Self {
             left: b.left().floor().clamp(0.0, surface.width as f32) as usize,
@@ -353,7 +374,7 @@ impl Bounds {
     }
 }
 
-fn rasterize(mask: &mut Mask, path: &Path, bounds: Bounds) {
+fn rasterize(mask: &mut Mask, path: &Path, bounds: Bounds, rule: FillRule) {
     if bounds.is_empty() {
         return;
     }
@@ -362,7 +383,7 @@ fn rasterize(mask: &mut Mask, path: &Path, bounds: Bounds) {
     for row in bounds.rows(mask.width() as usize) {
         mask.data_mut()[row].fill(0);
     }
-    mask.fill_path(path, FillRule::EvenOdd, true, Transform::identity());
+    mask.fill_path(path, rule, true, Transform::identity());
 }
 
 pub(crate) fn coverage_product(a: u8, b: u8) -> u8 {

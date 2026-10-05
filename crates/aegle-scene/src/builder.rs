@@ -1,6 +1,8 @@
 use alloc::vec::Vec;
 
-use crate::{Affine, Color, Command, MAX_SCOPE_DEPTH, RoundedRect, SceneError};
+use crate::{
+    Affine, Color, Command, Image, MAX_SCOPE_DEPTH, Path, Rect, RoundedRect, SceneError, Stroke,
+};
 
 /// Immutable validated drawing commands with no renderer or tree ownership.
 #[derive(Debug, Default)]
@@ -8,6 +10,8 @@ pub struct Scene {
     commands: Vec<Command>,
     #[cfg(feature = "text")]
     glyph_runs: Vec<crate::GlyphRun>,
+    images: Vec<Image>,
+    paths: Vec<Path>,
     max_depth: usize,
     max_clip_depth: usize,
 }
@@ -38,11 +42,15 @@ impl Scene {
         self.max_clip_depth
     }
 
-    /// Reserved command and glyph-run storage, including glyph/variation arrays.
+    /// Reserved command, resource-handle and glyph-run storage, including
+    /// glyph/variation arrays.
     ///
-    /// Excludes the inline scene header, allocator overhead and shared font bytes.
+    /// Excludes the inline scene header, allocator overhead, shared font bytes and
+    /// shared image/path storage.
     pub fn allocated_bytes(&self) -> usize {
-        let bytes = self.commands.capacity() * core::mem::size_of::<Command>();
+        let bytes = self.commands.capacity() * core::mem::size_of::<Command>()
+            + self.images.capacity() * core::mem::size_of::<Image>()
+            + self.paths.capacity() * core::mem::size_of::<Path>();
         #[cfg(feature = "text")]
         let bytes = bytes
             + self.glyph_runs.capacity() * core::mem::size_of::<crate::GlyphRun>()
@@ -52,6 +60,16 @@ impl Scene {
                 .map(crate::GlyphRun::allocated_bytes)
                 .sum::<usize>();
         bytes
+    }
+
+    /// Shared images addressed by [`Command::Image`].
+    pub fn images(&self) -> &[Image] {
+        &self.images
+    }
+
+    /// Shared outlines addressed by [`Command::FillPath`] and [`Command::StrokePath`].
+    pub fn paths(&self) -> &[Path] {
+        &self.paths
     }
 
     /// Positioned glyph resources addressed by [`Command::Glyphs`].
@@ -110,6 +128,8 @@ impl SceneBuilder {
         self.scene.commands.clear();
         #[cfg(feature = "text")]
         self.scene.glyph_runs.clear();
+        self.scene.images.clear();
+        self.scene.paths.clear();
         self.scene.max_depth = 0;
         self.scene.max_clip_depth = 0;
         self.transform = Affine::IDENTITY;
@@ -124,6 +144,66 @@ impl SceneBuilder {
             self.scene.commands.push(Command::Fill { shape, color });
         }
         Ok(self)
+    }
+
+    /// Records `image` stretched over `rect`. Empty rectangles produce no command.
+    pub fn image(&mut self, image: &Image, rect: Rect) -> Result<&mut Self, SceneError> {
+        let shape = RoundedRect::new(rect, 0.0)?;
+        if !shape.is_empty() {
+            self.transform.validate_shape(shape, 0.0)?;
+            let image_index = self.scene.images.len();
+            self.scene.images.push(image.clone());
+            self.scene.commands.push(Command::Image {
+                image: image_index,
+                rect,
+            });
+        }
+        Ok(self)
+    }
+
+    /// Fills `path` with its fill rule. Paths without segments produce no command.
+    pub fn fill_path(&mut self, path: &Path, color: Color) -> Result<&mut Self, SceneError> {
+        if !path.is_empty() {
+            self.transform
+                .validate_shape(RoundedRect::new(path.bounds(), 0.0)?, 0.0)?;
+            let index = self.push_path(path);
+            self.scene
+                .commands
+                .push(Command::FillPath { path: index, color });
+        }
+        Ok(self)
+    }
+
+    /// Strokes `path`. Paths without segments and zero widths produce no command.
+    pub fn stroke_path(
+        &mut self,
+        path: &Path,
+        color: Color,
+        stroke: Stroke,
+    ) -> Result<&mut Self, SceneError> {
+        if !stroke.width.is_finite() {
+            return Err(SceneError::NonFinite);
+        }
+        if stroke.width < 0.0 {
+            return Err(SceneError::NegativeExtent);
+        }
+        if !path.is_empty() && stroke.width > 0.0 {
+            // Miter joins reach at most twice the width (limit 4) from the outline.
+            let shape = RoundedRect::new(path.bounds(), 0.0)?;
+            self.transform.validate_shape(shape, stroke.width * 2.0)?;
+            let index = self.push_path(path);
+            self.scene.commands.push(Command::StrokePath {
+                path: index,
+                color,
+                stroke,
+            });
+        }
+        Ok(self)
+    }
+
+    fn push_path(&mut self, path: &Path) -> usize {
+        self.scene.paths.push(path.clone());
+        self.scene.paths.len() - 1
     }
 
     /// Records positioned glyphs, retaining a shared font handle, never bitmaps.

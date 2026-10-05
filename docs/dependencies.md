@@ -21,7 +21,7 @@
 | 语义 | AccessKit 0.24.1 | 与 Parley 可选 text-a11y 使用同一 schema |
 | 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 当前 Unix/Windows 通过可选 feature 接入；三者属于上述 AccessKit 兼容线 |
 | Unix 无障碍传输 | accesskit_atspi_common 0.19.1、atspi 0.29.0、zbus 5.19.0 | 复用 AccessKit 适配；采用 async-io，无 Tokio |
-| 路径 | lyon_tessellation 1.0.22 | 可选，不依赖完整通用图形框架 |
+| 路径 | 软件复用 tiny-skia，Vulkan 复用 zeno 0.3.3（swash 已依赖） | CPU 覆盖率光栅，不引入 Lyon 或三角细分 |
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
 | SVG | resvg/usvg 0.48.1 | 构建期优先；运行时可选，关闭 text/system-fonts 等默认 feature |
 | 标记编译宏 | syn 2、quote 1、proc-macro2 1、proc-macro-crate 3.5 | 仅编译期；Rust 语法/生成与 facade 重命名识别复用现成库 |

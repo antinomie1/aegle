@@ -2,8 +2,10 @@
 //!
 //! Framebuffers are borrowed. One coverage mask and one mask per active clip
 //! are reused across frames; their total size is limited by the caller. Tiny-skia
-//! supplies antialiased geometry, with PNG support disabled in normal builds.
-//! Its transient path/scanline allocations are separate from the mask budget.
+//! supplies antialiased geometry and arbitrary path/stroke coverage, with PNG
+//! support disabled in normal builds. Images are sampled bilinearly in linear
+//! premultiplied space. Tiny-skia's transient path/scanline allocations are
+//! separate from the mask budget.
 
 mod blend;
 mod path;
@@ -11,6 +13,7 @@ mod raster;
 mod surface;
 #[cfg(feature = "text")]
 mod text;
+mod vector;
 
 pub use raster::{Frame, Renderer};
 pub use surface::Surface;

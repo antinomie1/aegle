@@ -67,3 +67,68 @@ fn validated_scopes_and_reused_recording() {
     );
     assert_eq!(unclosed.finish().unwrap_err(), SceneError::UnclosedScope);
 }
+
+#[test]
+fn shared_images_and_validated_paths() {
+    use aegle_scene::{FillRule, Image, PathBuilder, Stroke};
+    assert_eq!(
+        Image::new(0, 1, vec![]).unwrap_err(),
+        SceneError::InvalidImage
+    );
+    assert_eq!(
+        Image::new(1, 1, vec![0; 3]).unwrap_err(),
+        SceneError::InvalidImage
+    );
+    let image = Image::new(1, 1, vec![0; 4]).unwrap();
+    assert_eq!(image.clone().id(), image.id());
+    let mut open = PathBuilder::new();
+    open.line_to(Point::new(1.0, 1.0));
+    assert_eq!(
+        open.finish(FillRule::NonZero).unwrap_err(),
+        SceneError::InvalidPath
+    );
+    let mut closed = PathBuilder::new();
+    closed
+        .move_to(Point::new(0.0, 0.0))
+        .close()
+        .line_to(Point::new(1.0, 0.0));
+    assert_eq!(
+        closed.finish(FillRule::NonZero).unwrap_err(),
+        SceneError::InvalidPath
+    );
+    let mut curve = PathBuilder::new();
+    curve
+        .move_to(Point::new(2.0, 1.0))
+        .quad_to(Point::new(8.0, -3.0), Point::new(4.0, 6.0));
+    let curve = curve.finish(FillRule::EvenOdd).unwrap();
+    assert_eq!(curve.bounds(), Rect::new(2.0, -3.0, 6.0, 9.0));
+    let mut point = PathBuilder::new();
+    point.move_to(Point::new(1.0, 1.0));
+    let point = point.finish(FillRule::NonZero).unwrap();
+    assert!(point.is_empty());
+
+    let mut builder = SceneBuilder::new();
+    builder
+        .image(&image, Rect::new(0.0, 0.0, 0.0, 4.0))
+        .unwrap()
+        .fill_path(&point, Color::BLACK)
+        .unwrap()
+        .stroke_path(&curve, Color::BLACK, Stroke::new(0.0))
+        .unwrap();
+    assert_eq!(
+        builder
+            .stroke_path(&curve, Color::BLACK, Stroke::new(-1.0))
+            .unwrap_err(),
+        SceneError::NegativeExtent
+    );
+    builder
+        .image(&image, Rect::new(0.0, 0.0, 4.0, 4.0))
+        .unwrap()
+        .fill_path(&curve, Color::BLACK)
+        .unwrap()
+        .stroke_path(&curve, Color::WHITE, Stroke::new(2.0))
+        .unwrap();
+    let scene = builder.finish().unwrap();
+    assert_eq!(scene.len(), 3);
+    assert_eq!((scene.images().len(), scene.paths().len()), (1, 2));
+}

@@ -1,5 +1,5 @@
 use aegle_glyph::{Content, RasterOptions, RasterTransform};
-use aegle_scene::{GlyphRun, Rect, RoundedRect};
+use aegle_scene::{Command, GlyphRun, Rect, RoundedRect, Scene};
 use aegle_types::color_math::linear_rgba;
 
 use crate::{
@@ -15,6 +15,17 @@ pub(crate) struct Text {
     // Descriptor views are released before the descriptor pool and sampler.
     pub atlas: Atlas,
     pub pipeline: TextPipeline,
+    /// Reused path-mask rasterizer storage.
+    pub scratch: zeno::Scratch,
+}
+
+/// Frame extent and remaining budgets shared by atlas-backed draws.
+#[derive(Clone, Copy)]
+pub(crate) struct Limits {
+    pub width: u32,
+    pub height: u32,
+    pub device: u64,
+    pub recording: usize,
 }
 
 impl Text {
@@ -28,20 +39,55 @@ impl Text {
         Ok(Self {
             atlas: Atlas::new(options)?,
             pipeline: TextPipeline::new(device, pipeline, options.max_pages)?,
+            scratch: zeno::Scratch::new(),
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// Records one glyph, image or path command through the atlas.
     pub fn record(
+        &mut self,
+        device: &Device,
+        recording: &mut Recording,
+        scene: &Scene,
+        command: Command,
+        state: State,
+        limits: Limits,
+    ) -> Result {
+        match command {
+            Command::Glyphs(index) => {
+                self.glyphs(device, recording, &scene.glyph_runs()[index], state, limits)
+            }
+            Command::Image { image, rect } => self.image(
+                device,
+                recording,
+                &scene.images()[image],
+                rect,
+                state,
+                limits,
+            ),
+            Command::FillPath { path, color } => {
+                let path = &scene.paths()[path];
+                self.path(device, recording, path, color, None, state, limits)
+            }
+            Command::StrokePath {
+                path,
+                color,
+                stroke,
+            } => {
+                let path = &scene.paths()[path];
+                self.path(device, recording, path, color, Some(stroke), state, limits)
+            }
+            _ => unreachable!("geometry commands are recorded without the atlas"),
+        }
+    }
+
+    fn glyphs(
         &mut self,
         device: &Device,
         recording: &mut Recording,
         run: &GlyphRun,
         state: State,
-        width: u32,
-        height: u32,
-        device_budget: u64,
-        recording_budget: usize,
+        limits: Limits,
     ) -> Result {
         let [r, g, b, alpha] = run.color().to_rgba();
         if alpha == 0 || state.bounds[0] >= state.bounds[2] || state.bounds[1] >= state.bounds[3] {
@@ -64,7 +110,7 @@ impl Text {
                 },
                 device,
                 &self.pipeline,
-                device_budget,
+                limits.device,
                 |placement| {
                     let transform = origin.image_transform(placement)?;
                     let shape = RoundedRect::new(
@@ -95,7 +141,7 @@ impl Text {
                     row0: [a, c, e, 0.0],
                     row1: [b, d, f, 0.0],
                     rect: image.rect,
-                    params: [contrast, 0.0, width as f32, height as f32],
+                    params: [contrast, 0.0, limits.width as f32, limits.height as f32],
                     color: if mask {
                         linear_rgba(run.color().to_rgba())
                     } else {
@@ -104,7 +150,7 @@ impl Text {
                     header: [state.clip, if mask { 1 } else { 2 }, image.page, 0],
                 },
                 state.bounds,
-                recording_budget,
+                limits.recording,
             )?;
         }
         Ok(())

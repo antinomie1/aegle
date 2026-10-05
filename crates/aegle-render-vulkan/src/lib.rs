@@ -7,8 +7,9 @@
 //! place in a linear floating-point attachment before a final GPU encoding pass.
 //!
 //! Geometry supports at most eight simultaneous clips. Optional `text` adds
-//! bounded, on-demand mask/color glyph atlases without a shaping dependency.
-//! Without that feature, text commands return an error. Optional `window` adds
+//! bounded, on-demand mask/color glyph atlases without a shaping dependency;
+//! the same atlases hold images and CPU-rasterized path coverage masks.
+//! Without that feature, text, image and path commands return an error. Optional `window` adds
 //! `WindowRenderer` for Wayland and Win32 surfaces with FIFO presentation.
 //! Loading a Vulkan CPU driver is possible and is not proof
 //! of hardware GPU acceleration; [`Renderer::device_name`] identifies the device.
@@ -16,6 +17,8 @@
 
 #[cfg(feature = "text")]
 mod atlas;
+#[cfg(feature = "text")]
+mod atlas_pages;
 mod commands;
 mod device;
 mod error;
@@ -34,6 +37,8 @@ mod text;
 mod text_pipeline;
 #[cfg(feature = "text")]
 mod upload;
+#[cfg(feature = "text")]
+mod vector;
 #[cfg(feature = "window")]
 mod window;
 

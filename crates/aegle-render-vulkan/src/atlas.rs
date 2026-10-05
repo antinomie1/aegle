@@ -1,15 +1,18 @@
-//! Bounded glyph pages. Renderer fences previous GPU use before each frame.
-use std::{collections::hash_map::RandomState, hash::BuildHasher};
-
+//! Bounded glyph, image and path-mask pages. Renderer fences previous GPU use
+//! before each frame.
 use aegle_glyph::{
-    CacheLimits, CacheStats, Content, FontData, Glyph, GlyphCache, GlyphKey, OwnedGlyphKey,
-    Placement, RasterOptions,
+    CacheLimits, CacheStats, Content, FontData, Glyph, GlyphCache, GlyphKey, Placement,
+    RasterOptions,
 };
 use ash::vk;
-use hashbrown::HashTable;
 
+pub(crate) use crate::atlas_pages::{AtlasGlyph, ResourceKey};
 use crate::{
-    Error, Result, device::Device, memory::Image, text_pipeline::TextPipeline, upload::Uploads,
+    Error, Result,
+    atlas_pages::{EntryKey, Storage},
+    device::Device,
+    text_pipeline::TextPipeline,
+    upload::Uploads,
 };
 
 /// Independent bounds for the optional GPU glyph cache and its CPU source cache.
@@ -63,283 +66,6 @@ pub struct TextStats {
     pub glyph_cache: CacheStats,
     /// Calls to the CPU raster cache since creation or clear, including CPU hits.
     pub raster_requests: u64,
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct AtlasGlyph {
-    pub placement: Placement,
-    pub page: u32,
-    pub rect: [f32; 4],
-    pub content: Content,
-}
-
-struct Entry {
-    key: OwnedGlyphKey,
-    hash: u64,
-    glyph: AtlasGlyph,
-}
-
-#[derive(Clone, Copy, Default)]
-struct Shelf {
-    x: u32,
-    y: u32,
-    height: u32,
-}
-impl Shelf {
-    fn place(mut self, width: u32, height: u32, side: u32) -> Option<(Self, [u32; 2])> {
-        if self.x + width > side {
-            self.x = 0;
-            self.y += self.height;
-            self.height = 0;
-        }
-        if self.y + height > side {
-            return None;
-        }
-        let position = [self.x + 1, self.y + 1];
-        self.x += width;
-        self.height = self.height.max(height);
-        Some((self, position))
-    }
-}
-
-struct Page {
-    image: Image,
-    content: Content,
-    shelf: Shelf,
-    used: u64,
-    entries: u32,
-    pinned: bool,
-    initialized: bool,
-    reset: bool,
-    dirty: bool,
-}
-
-struct Storage {
-    pages: Vec<Option<Page>>,
-    entries: HashTable<Entry>,
-    hash: RandomState,
-    clock: u64,
-}
-impl Storage {
-    fn new() -> Self {
-        Self {
-            pages: Vec::new(),
-            entries: HashTable::new(),
-            hash: RandomState::new(),
-            clock: 0,
-        }
-    }
-
-    fn bytes(&self) -> u64 {
-        self.pages
-            .iter()
-            .flatten()
-            .map(|p| p.image.allocation)
-            .sum()
-    }
-
-    fn touch(&mut self, index: u32) {
-        self.clock = self.clock.wrapping_add(1);
-        let page = self.pages[index as usize].as_mut().unwrap();
-        page.used = self.clock;
-        page.pinned = true;
-    }
-
-    fn lookup(&self, key: GlyphKey<'_>) -> Option<AtlasGlyph> {
-        let mask = key.mask();
-        self.entries
-            .find(self.hash.hash_one(mask), |entry| {
-                entry.glyph.content == Content::Mask && entry.key.as_key() == mask
-            })
-            .or_else(|| {
-                self.entries
-                    .find(self.hash.hash_one(key), |entry| entry.key.as_key() == key)
-            })
-            .map(|entry| entry.glyph)
-    }
-
-    fn oldest(&self, with_entries: bool) -> Option<usize> {
-        self.pages
-            .iter()
-            .enumerate()
-            .filter_map(|(index, page)| {
-                page.as_ref()
-                    .filter(|page| !page.pinned && (!with_entries || page.entries != 0))
-                    .map(|page| (index, self.clock.wrapping_sub(page.used)))
-            })
-            .max_by_key(|(_, age)| *age)
-            .map(|(index, _)| index)
-    }
-
-    fn reset(&mut self, index: usize) {
-        self.entries
-            .retain(|entry| entry.glyph.page as usize != index);
-        let page = self.pages[index].as_mut().unwrap();
-        page.shelf = Shelf::default();
-        page.entries = 0;
-        page.reset = true;
-        page.dirty = false;
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn page(
-        &mut self,
-        content: Content,
-        extent: [u32; 2],
-        options: TextOptions,
-        device: &Device,
-        pipeline: &TextPipeline,
-        budget: u64,
-    ) -> Result<usize> {
-        for (index, page) in self.pages.iter().enumerate() {
-            if page.as_ref().is_some_and(|p| {
-                p.content == content
-                    && p.shelf
-                        .place(extent[0], extent[1], options.page_size)
-                        .is_some()
-            }) {
-                return Ok(index);
-            }
-        }
-        loop {
-            let vacant = self.pages.iter().position(Option::is_none).or_else(|| {
-                (self.pages.len() < options.max_pages as usize).then_some(self.pages.len())
-            });
-            let mut allocation_error = None;
-            if let Some(index) = vacant {
-                if index == self.pages.len() {
-                    self.pages
-                        .try_reserve_exact(1)
-                        .map_err(|_| Error::Allocation)?;
-                }
-                let format = match content {
-                    Content::Mask => vk::Format::R8_UNORM,
-                    Content::Color => vk::Format::R8G8B8A8_SRGB,
-                };
-                match Image::new(
-                    device,
-                    options.page_size,
-                    options.page_size,
-                    format,
-                    vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
-                    budget - self.bytes(),
-                ) {
-                    Ok(image) => {
-                        pipeline.update(index as u32, image.view);
-                        let page = Some(Page {
-                            image,
-                            content,
-                            shelf: Shelf::default(),
-                            used: 0,
-                            entries: 0,
-                            pinned: false,
-                            initialized: false,
-                            reset: true,
-                            dirty: false,
-                        });
-                        if index == self.pages.len() {
-                            self.pages.push(page);
-                        } else {
-                            self.pages[index] = page;
-                        }
-                        return Ok(index);
-                    }
-                    Err(error @ Error::Budget { .. }) => allocation_error = Some(error),
-                    Err(error) => return Err(error),
-                }
-            }
-            let index = self
-                .oldest(false)
-                .ok_or_else(|| allocation_error.unwrap_or(Error::AtlasFull))?;
-            self.reset(index);
-            if self.pages[index].as_ref().unwrap().content == content {
-                return Ok(index);
-            }
-            self.pages[index] = None;
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn insert(
-        &mut self,
-        key: GlyphKey<'_>,
-        glyph: Glyph<'_>,
-        uploads: &mut Uploads,
-        options: TextOptions,
-        device: &Device,
-        pipeline: &TextPipeline,
-        budget: u64,
-    ) -> Result<AtlasGlyph> {
-        let width = glyph
-            .placement
-            .width
-            .checked_add(2)
-            .ok_or(Error::GlyphTooLarge)?;
-        let height = glyph
-            .placement
-            .height
-            .checked_add(2)
-            .ok_or(Error::GlyphTooLarge)?;
-        if width > options.page_size || height > options.page_size {
-            return Err(Error::GlyphTooLarge);
-        }
-        while self.entries.len() >= options.max_entries as usize {
-            let index = self.oldest(true).ok_or(Error::AtlasFull)?;
-            self.reset(index);
-        }
-        self.entries
-            .try_reserve(1, |entry| entry.hash)
-            .map_err(|_| Error::Allocation)?;
-        let index = self.page(
-            glyph.content,
-            [width, height],
-            options,
-            device,
-            pipeline,
-            budget,
-        )?;
-        let page = self.pages[index].as_ref().unwrap();
-        let (shelf, xy) = page.shelf.place(width, height, options.page_size).unwrap();
-        uploads.append(
-            index as u32,
-            xy,
-            glyph,
-            options.upload_bytes,
-            options.max_entries,
-        )?;
-        let atlas = AtlasGlyph {
-            placement: glyph.placement,
-            page: index as u32,
-            rect: [
-                xy[0] as f32,
-                xy[1] as f32,
-                glyph.placement.width as f32,
-                glyph.placement.height as f32,
-            ],
-            content: glyph.content,
-        };
-        let key = if glyph.content == Content::Mask {
-            key.mask()
-        } else {
-            key
-        };
-        let hash = self.hash.hash_one(key);
-        self.entries.insert_unique(
-            hash,
-            Entry {
-                key: key.to_owned(),
-                hash,
-                glyph: atlas,
-            },
-            |entry| entry.hash,
-        );
-        let page = self.pages[index].as_mut().unwrap();
-        page.shelf = shelf;
-        page.entries += 1;
-        page.dirty = true;
-        self.touch(index as u32);
-        Ok(atlas)
-    }
 }
 
 pub(crate) struct Atlas {
@@ -408,10 +134,17 @@ impl Atlas {
         if glyph.placement.width == 0 || glyph.placement.height == 0 || !visible(glyph.placement)? {
             return Ok(None);
         }
+        let key = if glyph.content == Content::Mask {
+            key.mask()
+        } else {
+            key
+        };
+        let hash = self.storage.hash(key);
         let budget = budget - self.uploads.device_bytes();
         self.storage
             .insert(
-                key,
+                EntryKey::Glyph(key.to_owned()),
+                hash,
                 glyph,
                 &mut self.uploads,
                 self.options,
@@ -420,6 +153,36 @@ impl Atlas {
                 budget,
             )
             .map(Some)
+    }
+
+    /// Returns a cached non-glyph entry and pins its page for this frame.
+    pub fn resource(&mut self, key: ResourceKey) -> Option<AtlasGlyph> {
+        let entry = self.storage.lookup_resource(key)?;
+        self.storage.touch(entry.page);
+        Some(entry)
+    }
+
+    /// Uploads image or path-mask pixels missing from [`Self::resource`].
+    pub fn insert_resource(
+        &mut self,
+        key: ResourceKey,
+        glyph: Glyph<'_>,
+        device: &Device,
+        pipeline: &TextPipeline,
+        budget: u64,
+    ) -> Result<AtlasGlyph> {
+        let hash = self.storage.hash(key);
+        let budget = budget - self.uploads.device_bytes();
+        self.storage.insert(
+            EntryKey::Resource(key),
+            hash,
+            glyph,
+            &mut self.uploads,
+            self.options,
+            device,
+            pipeline,
+            budget,
+        )
     }
 
     pub fn prepare_upload(&mut self, device: &Device, budget: u64) -> Result {
@@ -466,13 +229,13 @@ impl Atlas {
     pub fn stats(&self) -> TextStats {
         TextStats {
             atlas_pages: self.storage.pages.iter().flatten().count() as u32,
-            atlas_entries: self.storage.entries.len(),
+            atlas_entries: self.storage.entries(),
             atlas_bytes: self.storage.bytes(),
             staging_bytes: self.uploads.device_bytes(),
             upload_bytes: self.uploads.bytes.capacity(),
             upload_regions: self.uploads.regions.len(),
             upload_region_capacity: self.uploads.regions.capacity(),
-            entry_capacity: self.storage.entries.capacity(),
+            entry_capacity: self.storage.entry_capacity(),
             page_capacity: self.storage.pages.capacity(),
             glyph_cache: self.cache.stats(),
             raster_requests: self.raster_requests,

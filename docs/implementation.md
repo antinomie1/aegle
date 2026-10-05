@@ -8,7 +8,7 @@
 - aegle-types：no_std 几何与紧凑 RGBA 颜色，无第三方依赖。
 - aegle-core：代数 ID、可复用槽位、保留树、索引子节点、结构变更与三通道失效，另有路由快照、默认动作控制及策略化焦点遍历；无第三方依赖。叶节点不分配子节点数组，删除不递归。
 - aegle-layout：Taffy 0.14.0 直接适配同一棵保留树，无第二份拓扑；共享默认样式、测量缓存、Flex/Block、可选 Grid。它不依赖字体、窗口或 renderer。
-- aegle-scene：no_std + alloc 的局部绘制记录；实色矩形、圆角、居中边框、仿射变换、嵌套裁剪。可选 text 保存定位字形、变体坐标与共享字体句柄，不依赖排版器或栅格器。
+- aegle-scene：no_std + alloc 的局部绘制记录；实色矩形、圆角、居中边框、共享 RGBA 图像、填充/描边路径、仿射变换、嵌套裁剪。可选 text 保存定位字形、变体坐标与共享字体句柄，不依赖排版器或栅格器。
 - aegle-text：复用 Parley/Fontique 的 Unicode shaping、字体选择、回退、换行与定位；Paragraph 保留文字和排版结果，宽度变化只重排，颜色覆盖无需重新 shaping。显式字体为默认，system-fonts、text-dictionary、text-a11y、scene 独立选用；缺字与无可用字体分别报告。
 - Editor：复用同一 TextSystem 的 Parley PlainEditor，提供单/多行、选择/命中、视觉移动、grapheme 删除、精确 UTF-8 替换、只读、组合输入模型及有界差量撤销/重做。预编辑只保留被替换片段，提交值不随预编辑改变；取消恢复原选区。文字、装饰和候选区域来自同一布局。密码模式只排版等量 `•`，明文另存且不记录历史、拒绝 IME 组合。apply_ime 在完整验证后应用删除/提交/预编辑事务，删除与提交合成一次撤销；surrounding 无分配地借出有界周边文字。编辑、宽度和样式改变目前仍会重新 shaping，不宣称增量编辑引擎。
 - aegle-controls：共享无分配 Range、Toggle、Slider 和无皮肤 Button 的键盘/指针/语义激活、capture 和取消状态；可选 text 提供复用 Editor 的 TextField。宿主拥有树、命中和焦点；controls 默认只依赖 types，不依赖窗口或 renderer。
@@ -248,7 +248,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale、系统偏好与客户端装饰。
-- 组件/绘制：惯性、列表虚拟化、自定义 painter 扩展、更多基础组件与布局属性、通用图像/路径/特效；后台 UiProxy。
+- 组件/绘制：惯性、列表虚拟化、自定义 painter 扩展、图像控件、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
 - 标记语言：目前只有静态结构/字面量与Rust回调，state/绑定/事件块/条件/列表/组件导入/运行时加载仍缺。
 - 主题/动画：完整token/局部继承、系统偏好、几何动画与完成回调。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。
@@ -274,3 +274,10 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - layer-shell：`WindowOptions::layer` 在同一窗口表中创建 wlr layer 表面，复用输入、IME、SHM/Vulkan 呈现和帧门控；compositor 缺少协议时创建报错。不另设 shell crate。
 - 验证：workspace 全 features 测试通过；ui 场景覆盖剪切/粘贴（换行剥离、独立撤销）、密码输入拒绝复制与 IME 且语义树不含明文。私有 Pixman Sway 上 Wayland native 场景验证 TOP|LEFT|RIGHT 锚定面板拉伸到输出宽度、高度 96，ime 场景以真实键盘 serial 设置 180,000 B CJK 选区并经非阻塞管道读回一致。wtype 驱动的应用级探针在软件与 Vulkan（Lavapipe）下完成跨编辑器复制/粘贴、密码框拒绝复制后粘贴仍为原值，截图确认 layer 面板与遮盖显示。Wine10 + 私有 Xvfb 执行 Win32 native 场景的 UTF-16 代理对剪贴板往返；Wine 下所有者窗口的剪贴板消息会先于已置位的 wake 被派发，wake 在下一次 dispatch 送达，测试按此接受。真实 Windows 与 GNOME 等无 layer-shell 的 compositor 未验收。
 - 既有 Wayland native 场景在平铺 Sway 下会因窗口被放大超过 2 MiB SHM 预算失败（未改动的 HEAD 同样复现）；私有 Sway 以浮动规则运行，未改测试预算。
+
+## 图像与矢量路径
+
+- scene：`Image`（非预乘 sRGB RGBA8，单边 ≤16384）与 `Path`/`PathBuilder`（move/line/quad/cubic/close、NonZero/EvenOdd）为带唯一 id 的 `Arc` 共享句柄；`image`/`fill_path`/`stroke_path` 在 builder 边界检查尺寸、顺序、有限值与坐标范围，空矩形、无线段路径和零宽描边不录入命令。
+- 软件：路径与描边由 tiny-skia 生成覆盖率，复用既有 mask/裁剪合成；图像在线性预乘空间双线性采样，钳制边缘纹素并按解析覆盖率处理矩形边缘，单位缩放且整像素对齐时直接复制纹素。
+- Vulkan（需 text）：图像为 RGBA8_SRGB 图集条目，路径由 zeno（swash 已依赖，不新增 crate）生成 R8 mask，二者复用字形 pipeline 与 shader；路径键含线性矩阵、四分之一像素相位与描边样式。超页尺寸条目使用同一预算下的专用页。没有 Lyon/stencil，没有 mipmap。
+- 验证：软件测试确认矩形路径与同尺寸矩形填充逐字节相同、1:1 图像纹素精确、放大 4 倍的边缘纹素不渐隐、描边中心与相邻行。Vulkan `tests/vector.rs` 与软件输出对照，平均通道差 Lavapipe 0.288/0.288/0.310、RADV（RX 6800 XT）0.291/0.291/0.312，大图专用页场景两者均为 0.000；整像素平移后图集条目仍为 3，旋转后为 5。最大单像素差来自两种曲线/描边近似，因此测试使用平均差而不逐像素比较。既有 render/text 套件在两种 ICD 上仍通过，native 呈现在私有 Sway 上通过；Windows 交叉检查通过。尚无图像控件、PNG 解码接入 App 或路径性能测量。

@@ -9,7 +9,7 @@ struct Primitive {
     rect: vec4<f32>, // shape rect or atlas origin and glyph size, excluding gutter
     params: vec4<f32>, // radius or mask contrast, stroke width (-1 for fill), viewport size
     color: vec4<f32>, // linear premultiplied paint, or repeated color-glyph opacity
-    header: vec4<u32>, // clip head, geometry/mask/color kind, CPU atlas page, reserved
+    header: vec4<u32>, // clip head, geometry/mask/color/image kind, CPU atlas page, reserved
 }
 
 struct Clip {
@@ -114,13 +114,18 @@ fn fs_text(input: Vertex) -> @location(0) vec4<f32> {
     let local = local_point(position.xy, primitive.row0, primitive.row1);
     // A rotated device bounding box includes points far outside the glyph quad.
     // Clamp to transparent gutter texel centers, never a neighboring allocation.
-    let bounded = clamp(local, vec2(-0.5), primitive.rect.zw + 0.5);
+    // Images (kind 3) clamp to their edge texels and take analytic edge
+    // coverage instead, so scaled images keep sharp boundaries.
+    let image = primitive.header.y == 3u;
+    let edge = select(1.0, coverage(local, vec4(vec2(0.0), primitive.rect.zw), 0.0), image);
+    let inset = select(vec2(-0.5), vec2(0.5), image);
+    let bounded = clamp(local, inset, primitive.rect.zw - inset);
     let uv = (primitive.rect.xy + bounded) / vec2<f32>(textureDimensions(glyph_page));
     let texel = textureSampleLevel(glyph_page, glyph_sampler, uv, 0.0);
     // R8 coverage, after the shared contrast curve, modulates the complete
     // premultiplied paint. Color atlas texels decode/filter as linear
     // premultiplied RGBA and receive only run opacity.
-    let coverage = texel.r + texel.r * (1.0 - texel.r) * primitive.params.x;
-    let sampled = select(texel, vec4(coverage), primitive.header.y == 1u);
-    return sampled * primitive.color * clip_coverage(position.xy, primitive.header.x);
+    let mask = texel.r + texel.r * (1.0 - texel.r) * primitive.params.x;
+    let sampled = select(texel, vec4(mask), primitive.header.y == 1u);
+    return sampled * primitive.color * (edge * clip_coverage(position.xy, primitive.header.x));
 }

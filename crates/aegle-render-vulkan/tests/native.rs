@@ -1,5 +1,5 @@
-#![cfg(all(target_os = "linux", feature = "window"))]
 //! Requires an explicitly isolated compositor; never opens the user's desktop.
+#![cfg(all(target_os = "linux", feature = "window"))]
 use aegle_platform_wayland::{Event, Wayland, WindowOptions};
 use aegle_render_vulkan::{Error, Options, WindowRenderer};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};

@@ -70,11 +70,7 @@ impl Recording {
         width: u32,
         height: u32,
         byte_limit: usize,
-        #[cfg(feature = "text")] mut text: impl FnMut(
-            &mut Self,
-            &aegle_scene::GlyphRun,
-            State,
-        ) -> Result,
+        #[cfg(feature = "text")] mut atlas: impl FnMut(&mut Self, Command, State) -> Result,
     ) -> Result<()> {
         if scene.max_clip_depth() + usize::from(clip.is_some()) > 8 {
             return Err(Error::ClipDepth);
@@ -125,7 +121,10 @@ impl Recording {
                     self.draw(state, shape, color, stroke, width, height, byte_limit)?;
                 }
                 #[cfg(feature = "text")]
-                Command::Glyphs(index) => text(self, &scene.glyph_runs()[index], state)?,
+                command @ (Command::Glyphs(_)
+                | Command::Image { .. }
+                | Command::FillPath { .. }
+                | Command::StrokePath { .. }) => atlas(self, command, state)?,
                 _ => return Err(Error::UnsupportedCommand),
             }
         }

@@ -428,16 +428,20 @@ impl Frame<'_> {
             target.height,
             self.renderer.options.recording_budget,
             #[cfg(feature = "text")]
-            |recording, run, state| {
+            |recording, command, state| {
+                let limits = crate::text::Limits {
+                    width: target.width,
+                    height: target.height,
+                    device: text_budget,
+                    recording: self.renderer.options.recording_budget,
+                };
                 self.renderer.text.record(
                     &self.renderer.device,
                     recording,
-                    run,
+                    scene,
+                    command,
                     state,
-                    target.width,
-                    target.height,
-                    text_budget,
-                    self.renderer.options.recording_budget,
+                    limits,
                 )
             },
         );

@@ -1,11 +1,12 @@
 use aegle_glyph::{Content, Glyph, RasterOptions, RasterTransform};
-use aegle_scene::{Affine, GlyphRun};
+use aegle_scene::GlyphRun;
 use aegle_types::{Color, Point};
 
 use crate::{
-    Frame, RenderError, Surface,
+    Frame, RenderError,
     blend::{Solid, encoded_rgba, linear_rgba},
-    raster::{Bounds, State, coverage_product},
+    raster::{State, coverage_product},
+    vector::device_bounds,
 };
 
 impl Frame<'_, '_, '_> {
@@ -49,8 +50,9 @@ impl Frame<'_, '_, '_> {
             let transform = origin
                 .image_transform(image.placement)
                 .map_err(|_| RenderError::Coordinates)?;
-            let bounds =
-                device_bounds(image, transform, self.surface, !aligned)?.intersect(state.bounds);
+            let (width, height) = (image.placement.width, image.placement.height);
+            let bounds = device_bounds(width, height, transform, self.surface, !aligned)?
+                .intersect(state.bounds);
             let inverse = transform.inverse().map_err(|_| RenderError::Coordinates)?;
             let clip = (state.clips > 0).then(|| self.renderer.masks[state.clips].data());
             let width = self.surface.width as usize;
@@ -84,45 +86,6 @@ impl Frame<'_, '_, '_> {
         }
         Ok(())
     }
-}
-
-fn device_bounds(
-    image: Glyph<'_>,
-    transform: Affine,
-    surface: &Surface<'_>,
-    filtered: bool,
-) -> Result<Bounds, RenderError> {
-    let w = image.placement.width as f32;
-    let h = image.placement.height as f32;
-    let outset = if filtered { 0.5 } else { 0.0 };
-    let corners = [
-        Point::new(-outset, -outset),
-        Point::new(w + outset, -outset),
-        Point::new(-outset, h + outset),
-        Point::new(w + outset, h + outset),
-    ]
-    .map(|point| transform.map_point(point));
-    if corners.iter().any(|p| {
-        !p.x.is_finite() || !p.y.is_finite() || p.x.abs() > 1_048_576.0 || p.y.abs() > 1_048_576.0
-    }) {
-        return Err(RenderError::Coordinates);
-    }
-    let x0 = corners.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
-    let y0 = corners.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
-    let x1 = corners
-        .iter()
-        .map(|p| p.x)
-        .fold(f32::NEG_INFINITY, f32::max);
-    let y1 = corners
-        .iter()
-        .map(|p| p.y)
-        .fold(f32::NEG_INFINITY, f32::max);
-    Ok(Bounds {
-        left: x0.floor().clamp(0.0, surface.width as f32) as usize,
-        top: y0.floor().clamp(0.0, surface.height as f32) as usize,
-        right: x1.ceil().clamp(0.0, surface.width as f32) as usize,
-        bottom: y1.ceil().clamp(0.0, surface.height as f32) as usize,
-    })
 }
 
 fn fetch(image: Glyph<'_>, x: i32, y: i32) -> [u8; 4] {

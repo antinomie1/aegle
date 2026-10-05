@@ -13,7 +13,7 @@
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；不依赖应用 | types、core |
 | aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |
 | aegle-glyph | Swash 字形光栅化、有界 CPU 缓存及共用字形身份/变换策略 | scene 按 feature 接入 |
-| aegle-scene | 二维绘制命令、裁剪及可选字形记录 | types |
+| aegle-scene | 二维绘制命令、裁剪、共享图像/路径资源及可选字形记录 | types |
 | aegle-render-vulkan | 几何、可选字形图集、裁剪、离屏读回与可选原生 swapchain | types、scene；glyph 按 text feature 接入 |
 | aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene；glyph 按 text feature 接入 |
 | aegle-render-metal | Metal 实现、上传、图集与呈现 | types、scene |
@@ -25,7 +25,6 @@
 | aegle-motion | 时间、补间、过渡及可选弹簧；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
 | aegle-widgets | 默认中性极简皮肤和常用组件 | controls、theme、scene；motion 按 feature 接入 |
-| aegle-path | Lyon 路径细分，可交给其他绘制宿主 | types、scene |
 | aegle-assets | 有界 PNG 解码与可选运行时 SVG 光栅化 | types |
 | aegle-markup | 有界静态结构解析、跨度、内建控件 schema 与类型化构造计划 | 无 |
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；组件元数据仍为目标 | markup |
@@ -35,7 +34,7 @@
 
 表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`，映射 Parley 的可选 AccessKit 支持；基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
 
-当前 `aegle-scene` 使用 no_std + alloc，默认只依赖 types；`text` 仅增加轻量的 `linebender_resource_handle`，通过共享 `FontData` 及独立 run 旁表保存字形记录，不引入 Parley 或 Swash。纯几何命令不携带完整字体/run 数据。
+当前 `aegle-scene` 使用 no_std + alloc，默认只依赖 types；`text` 仅增加轻量的 `linebender_resource_handle`，通过共享 `FontData` 及独立 run 旁表保存字形记录，不引入 Parley 或 Swash。纯几何命令不携带完整字体/run 数据。图像与路径以 `Arc` 共享句柄保存在 scene 旁表，路径光栅化留在各 renderer 内部，不另设路径 crate。
 
 `aegle-render-software` 借用调用方像素缓冲，不依赖 core、Taffy 或窗口；默认是纯几何构建，没有字体栈和 PNG 运行依赖。tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化，小型自有实现完成线性光 SourceOver。`text` 显式增加 aegle-glyph，其 PNG 解码器用于字体内嵌位图。软件后端不依赖 aegle-text，其他 shaping 宿主也可提供 scene 字形记录。
 

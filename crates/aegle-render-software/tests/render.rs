@@ -163,3 +163,53 @@ fn transparent_linear_compositing_and_rotated_records() -> Result<(), Box<dyn st
     assert_eq!(surface.data()[3], (alpha * 255.0).round() as u8);
     Ok(())
 }
+
+#[test]
+fn paths_match_rect_coverage_and_images_copy_texels() -> Result<(), Box<dyn std::error::Error>> {
+    use aegle_scene::{FillRule, Image, PathBuilder, Point, Stroke};
+    let mut square = PathBuilder::new();
+    square
+        .move_to(Point::new(1.5, 1.0))
+        .line_to(Point::new(9.0, 1.0))
+        .line_to(Point::new(9.0, 6.25))
+        .line_to(Point::new(1.5, 6.25))
+        .close();
+    let square = square.finish(FillRule::NonZero)?;
+    let color = Color::rgba(30, 140, 200, 200);
+    let render = |scene: &aegle_scene::Scene| -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let mut pixels = vec![0; 16 * 16 * 4];
+        Renderer::default()
+            .begin_frame(&mut Surface::new(&mut pixels, 16, 16)?, Color::WHITE)
+            .draw(scene, Affine::IDENTITY)?;
+        Ok(pixels)
+    };
+    let mut builder = SceneBuilder::new();
+    builder.fill_path(&square, color)?;
+    let path = render(&builder.finish()?)?;
+    let mut builder = SceneBuilder::new();
+    builder.fill(shape(1.5, 1.0, 7.5, 5.25, 0.0), color)?;
+    assert_eq!(path, render(&builder.finish()?)?);
+
+    let image = Image::new(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 128])?;
+    let mut line = PathBuilder::new();
+    line.move_to(Point::new(0.0, 12.5))
+        .line_to(Point::new(16.0, 12.5));
+    let mut builder = SceneBuilder::new();
+    builder
+        .image(&image, Rect::new(3.0, 8.0, 2.0, 1.0))?
+        .image(&image, Rect::new(8.0, 8.0, 8.0, 2.0))?
+        .stroke_path(
+            &line.finish(FillRule::NonZero)?,
+            Color::BLACK,
+            Stroke::new(1.0),
+        )?;
+    let pixels = render(&builder.finish()?)?;
+    let at = |x: usize, y: usize| &pixels[(y * 16 + x) * 4..][..4];
+    assert_eq!(at(3, 8), [255, 0, 0, 255]);
+    assert_eq!(at(4, 8), [187, 187, 255, 255]);
+    assert_eq!(at(8, 9), [255, 0, 0, 255]);
+    assert_eq!(at(15, 9), [187, 187, 255, 255]); // Scaled edges clamp, not fade.
+    assert_eq!(at(6, 12), [0, 0, 0, 255]);
+    assert_eq!(at(6, 11), [255; 4]);
+    Ok(())
+}

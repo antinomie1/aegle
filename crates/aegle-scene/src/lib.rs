@@ -15,12 +15,14 @@ extern crate alloc;
 
 mod builder;
 mod geometry;
+mod resource;
 #[cfg(feature = "text")]
 mod text;
 
 pub use aegle_types::{Color, Point, Rect};
 pub use builder::{Scene, SceneBuilder};
 pub use geometry::{Affine, RoundedRect};
+pub use resource::{FillRule, Image, LineCap, LineJoin, Path, PathBuilder, Stroke, Verb};
 #[cfg(feature = "text")]
 pub use text::{Blob, FontData, Glyph, GlyphRun};
 
@@ -56,6 +58,29 @@ pub enum Command {
     PushClip(RoundedRect),
     /// Restore the state preceding the most recent transform or clip push.
     Pop,
+    /// Draw [`Scene::images`]`[image]` stretched over `rect`, bilinearly filtered.
+    Image {
+        /// Index into [`Scene::images`].
+        image: usize,
+        /// Destination in the current local coordinate system.
+        rect: Rect,
+    },
+    /// Fill [`Scene::paths`]`[path]` using its fill rule.
+    FillPath {
+        /// Index into [`Scene::paths`].
+        path: usize,
+        /// Unpremultiplied sRGB fill color.
+        color: Color,
+    },
+    /// Stroke [`Scene::paths`]`[path]`, centered on its outline.
+    StrokePath {
+        /// Index into [`Scene::paths`].
+        path: usize,
+        /// Unpremultiplied sRGB stroke color.
+        color: Color,
+        /// Positive local width, caps and joins.
+        stroke: Stroke,
+    },
     /// Draw a positioned glyph run from [`Scene::glyph_runs`].
     #[cfg(feature = "text")]
     Glyphs(usize),
@@ -80,6 +105,10 @@ pub enum SceneError {
     UnclosedScope,
     /// A glyph run has a nonpositive font size or out-of-range variation value.
     InvalidText,
+    /// Image extents are zero or too large, or pixels do not match them.
+    InvalidImage,
+    /// A path segment or close does not follow a `move_to`.
+    InvalidPath,
 }
 
 impl core::fmt::Display for SceneError {
@@ -93,6 +122,8 @@ impl core::fmt::Display for SceneError {
             Self::UnexpectedPop => "drawing scope pop has no matching push",
             Self::UnclosedScope => "drawing scene has unclosed scopes",
             Self::InvalidText => "invalid glyph run size or variation coordinate",
+            Self::InvalidImage => "image extents or pixel length are invalid",
+            Self::InvalidPath => "path segment does not follow a move",
         })
     }
 }
