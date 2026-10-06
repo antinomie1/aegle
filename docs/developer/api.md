@@ -94,9 +94,9 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 | `window.close()` | 关闭窗口并使其所有控件句柄失效 |
 | `window.set_theme(theme)` / `window.set_reduced_motion(b)` | 窗口级主题与减少动态效果 |
 
-`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Vulkan`/`Wgpu`，编译了软件绘制时默认软件）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
+`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Vulkan`/`Wgpu`，编译了软件绘制时默认软件）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
 
-`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限），Linux 另有 `layer: Option<LayerOptions>`，用 wlr layer-shell 创建面板/背景/覆盖层：
+`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限），Linux 另有 `layer: Option<LayerOptions>`，用 wlr layer-shell 创建面板/背景/覆盖层：
 
 ```rust
 use aegle::{Anchor, KeyboardInteractivity, Layer, LayerOptions};

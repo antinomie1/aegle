@@ -4,12 +4,14 @@ use tiny_skia::{FillRule, IntSize, Mask, Path, PathBuilder, Transform};
 
 use crate::{RenderError, Surface, blend::Solid, path};
 
-/// Reusable CPU rendering state with an explicit coverage/clip mask budget.
+/// Reusable CPU rendering state with an optional coverage/clip mask budget.
 ///
-/// The default budget is 2 MiB. Shape/clip draws reserve one byte per surface pixel
-/// for coverage, plus one byte per pixel per nested clip. Text without clips
-/// needs no surface-sized mask. Masks are retained for the
-/// largest clip depth at the current surface size. Path/stack storage and the
+/// Shape/clip draws reserve one byte per surface pixel for coverage, plus one
+/// byte per pixel per nested clip; clips nest at most eight deep, as on the GPU
+/// backends, so masks never exceed nine bytes per pixel. Text without clips
+/// needs no surface-sized mask. The default budget is unlimited, since the
+/// surface size is the window's; a byte limit caps masks on small devices.
+/// Masks are retained for the largest clip depth at the current surface size. Path/stack storage and the
 /// rasterizer's temporary scanline buffers are not included in this budget.
 /// Devices without a GPU can use this crate without any platform library.
 pub struct Renderer {
@@ -24,7 +26,7 @@ pub struct Renderer {
 
 impl Default for Renderer {
     fn default() -> Self {
-        Self::new(2 * 1024 * 1024)
+        Self::new(usize::MAX)
     }
 }
 
@@ -99,6 +101,9 @@ impl Renderer {
         external_clip: bool,
     ) -> Result<(), RenderError> {
         let depth = scene.max_clip_depth() + usize::from(external_clip);
+        if depth > 8 {
+            return Err(RenderError::ClipDepth);
+        }
         let needs_masks = depth > 0
             || scene.commands().iter().any(|command| {
                 matches!(

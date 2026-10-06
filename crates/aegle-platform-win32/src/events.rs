@@ -38,7 +38,8 @@ pub struct WindowOptions<'a> {
     pub app_id: &'a str,
     /// Preferred client size in logical pixels at 96 DPI.
     pub size: PixelSize,
-    /// Maximum retained software pixel bytes. Default: 16 MiB.
+    /// Maximum retained software pixel bytes: one window-sized framebuffer.
+    /// Default: unlimited.
     pub buffer_budget: usize,
 }
 impl Default for WindowOptions<'_> {
@@ -50,7 +51,7 @@ impl Default for WindowOptions<'_> {
                 width: 800,
                 height: 480,
             },
-            buffer_budget: 16 * 1024 * 1024,
+            buffer_budget: usize::MAX,
         }
     }
 }

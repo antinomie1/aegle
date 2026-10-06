@@ -477,6 +477,12 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 验证：私有 headless Sway（Pixman，2560×1440 输出、1.5 倍缩放）上用 Lavapipe 运行 release `showcase vulkan` 并全屏（1706×960 逻辑、2560×1440 物理）：改动前退出并报 `Vulkan allocation requires 24883200 bytes, limit 15414288`，改动后持续运行，截图确认 CJK 文字与控件正常。Vulkan 窗口生命周期 ignored 场景在 Lavapipe 上通过；RADV 需要 GLES2 compositor，这次 Pixman 环境下报 `SURFACE_LOST`，没有在 RADV 上重新运行。
 - 词典：facade 新增 `text-dictionary`（经 `aegle-ui` 转发到 `aegle-text`，即 Parley complex-scripts）并加入默认 `desktop`。中日文字按词移动与双击选词使用词典边界；`aegle/tests/markup.rs` 在 debug 下关闭该 feature 时输出 5 条 `No segmentation model for complex script` 诊断，开启后为 0。代价：Wayland + 软件 + 系统字体 + markup + motion 的 release `hello` 由 4,547,776 B 增至 8,336,576 B，`controls` 由 4,646,088 B 增至 8,438,984 B（各约 +3.7 MiB 词典数据）；不需要时可用 `default-features = false` 关闭。没有测量运行时内存变化。
 
+## 软件呈现不再以字节预算拒绝大窗口
+
+- 问题：软件 renderer 的 mask 默认 2 MiB，而 mask 为每层 1 字节/物理像素，按钮与编辑框自带一层裁剪，普通界面需要两层；1.5 倍缩放下 `showcase` 的默认窗口（960×720 逻辑、1440×1080 物理）就报 `masks require 3110400 bytes; limit is 2097152`。Wayland/Win32 的 SHM/GDI `buffer_budget` 默认 16 MiB，2560×1440 窗口的两块缓冲（约 29.5 MB）同样会被拒绝。两者都只随窗口尺寸变化。
+- 修改：`Renderer::default()`、`AppOptions::mask_budget`、App 与两个平台的 `WindowOptions::buffer_budget` 默认改为不限（`usize::MAX`），选项保留供小设备设上限。软件 renderer 的场景加外部裁剪最多 8 层，与 GPU 后端一致，超过返回新增的 `RenderError::ClipDepth`，因此 mask 最多 9 字节/像素。
+- 验证：`aegle-render-software/tests/render.rs` 检查默认 renderer 画 8 层裁剪占 9 层 mask，再加一层非整像素外部裁剪返回 `ClipDepth`。私有 headless Sway（Pixman，2560×1440 输出、1.5 倍缩放）上 release `showcase`（软件）：改动前默认尺寸即退出；改动后在 1373×639 逻辑（2060×958 物理）与全屏 2560×1440 物理下都持续运行，全屏截图正常，RSS 53,564 KiB。Win32 默认值只改常量，没有在 Windows 上运行。
+
 ## 剩余工作
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。

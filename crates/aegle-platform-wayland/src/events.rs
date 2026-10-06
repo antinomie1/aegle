@@ -26,7 +26,8 @@ pub struct WindowOptions<'a> {
     pub app_id: &'a str,
     /// Preferred logical size; the compositor may override it.
     pub size: PixelSize,
-    /// Maximum live SHM mapping bytes for this window. Default: 16 MiB.
+    /// Maximum live SHM mapping bytes for this window, which holds at most two
+    /// window-sized buffers. Default: unlimited.
     pub buffer_budget: usize,
     /// Creates a wlr layer surface instead of a toplevel. Default: `None`.
     pub layer: Option<LayerOptions>,
@@ -57,7 +58,7 @@ impl Default for WindowOptions<'_> {
                 width: 800,
                 height: 480,
             },
-            buffer_budget: 16 * 1024 * 1024,
+            buffer_budget: usize::MAX,
             layer: None,
         }
     }

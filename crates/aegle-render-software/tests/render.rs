@@ -81,6 +81,27 @@ fn nested_clips_transform_borders_and_mask_reuse() -> Result<(), Box<dyn std::er
         })
     );
     assert_eq!(limited.allocated_mask_bytes(), 0);
+    // Eight scene clips fit the default budget; an external ninth does not.
+    let mut deep = SceneBuilder::new();
+    for _ in 0..8 {
+        deep.push_clip(shape(0.0, 0.0, 30.0, 30.0, 0.0))?;
+    }
+    deep.fill(shape(0.0, 0.0, 32.0, 32.0, 0.0), Color::BLACK)?;
+    for _ in 0..8 {
+        deep.pop()?;
+    }
+    let deep = deep.finish()?;
+    let mut unlimited = Renderer::default();
+    unlimited
+        .begin_frame(&mut surface, Color::WHITE)
+        .draw(&deep, Affine::IDENTITY)?;
+    assert_eq!(unlimited.allocated_mask_bytes(), 9 * 32 * 32);
+    assert_eq!(
+        unlimited
+            .begin_frame(&mut surface, Color::WHITE)
+            .draw_clipped(&deep, Affine::IDENTITY, Some(Rect::new(0.5, 0.0, 8.0, 8.0))),
+        Err(RenderError::ClipDepth)
+    );
     renderer.release_scratch();
     assert_eq!(renderer.allocated_mask_bytes(), 0);
     Ok(())

@@ -66,7 +66,8 @@ pub struct AppOptions {
     /// Per-window wgpu glyph atlas size and transparency.
     #[cfg(feature = "wgpu")]
     pub wgpu: crate::WgpuOptions,
-    /// Reusable software coverage and clipping storage. Default: 2 MiB.
+    /// Bytes of reusable software coverage and clipping masks, at most nine
+    /// bytes per window pixel. Default: unlimited; set a limit on small devices.
     pub mask_budget: usize,
     /// Initial transition policy for each window's subsequently created interactive
     /// controls. Defaults to 120 ms ease-out; `None` disables this policy.
@@ -93,7 +94,7 @@ impl Default for AppOptions {
             vulkan: crate::VulkanOptions::default(),
             #[cfg(feature = "wgpu")]
             wgpu: crate::WgpuOptions::default(),
-            mask_budget: 2 * 1024 * 1024,
+            mask_budget: usize::MAX,
             #[cfg(feature = "motion")]
             transition: Some(Transition::default()),
             #[cfg(feature = "motion")]
@@ -110,7 +111,8 @@ pub struct WindowOptions {
     pub width: u32,
     /// Preferred height in logical pixels; the compositor may override it.
     pub height: u32,
-    /// Maximum software presentation bytes for this window. Default: 16 MiB.
+    /// Maximum software presentation bytes for this window: two window-sized
+    /// buffers at most. Default: unlimited; set a limit on small devices.
     /// GPU renderers use `AppOptions::vulkan` or `AppOptions::wgpu` instead.
     pub buffer_budget: usize,
     /// Wayland layer-shell placement instead of a toplevel, for panels,
@@ -124,7 +126,7 @@ impl Default for WindowOptions {
         Self {
             width: 800,
             height: 480,
-            buffer_budget: 16 * 1024 * 1024,
+            buffer_budget: usize::MAX,
             #[cfg(target_os = "linux")]
             layer: None,
         }

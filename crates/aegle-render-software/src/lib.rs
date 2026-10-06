@@ -34,6 +34,8 @@ pub enum RenderError {
     },
     /// Memory for a mask could not be reserved.
     Allocation,
+    /// Scene and external clips nest more than eight deep.
+    ClipDepth,
     /// Transformed geometry exceeds the rasterizer's representable range.
     Coordinates,
     /// The scene requests a capability not enabled in this renderer build.
@@ -51,6 +53,7 @@ impl std::fmt::Display for RenderError {
                 write!(f, "masks require {required} bytes; limit is {limit}")
             }
             Self::Allocation => f.write_str("could not allocate rendering mask"),
+            Self::ClipDepth => f.write_str("clip depth exceeds eight layers"),
             Self::Coordinates => f.write_str("geometry exceeds software rasterizer range"),
             Self::UnsupportedCommand => {
                 f.write_str("scene capability is not enabled in this renderer")
