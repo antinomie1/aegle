@@ -45,19 +45,24 @@ impl Entry {
                 pressed,
                 repeat,
                 modifiers,
+                time,
                 ..
             } => {
                 self.modifiers = normalize(modifiers);
                 let mut command_modifiers = self.modifiers;
                 // AltGr arrives as Ctrl+Alt; it must not invoke Ctrl+A/Z/Y.
                 command_modifiers.control &= !command_modifiers.alt;
-                self.ui.key(KeyInput {
-                    key: key_id(key),
-                    text: "",
-                    modifiers: command_modifiers,
-                    pressed,
-                    repeat,
-                })?;
+                let time = self.clock.at(time);
+                self.ui.key_at(
+                    KeyInput {
+                        key: key_id(key),
+                        text: "",
+                        modifiers: command_modifiers,
+                        pressed,
+                        repeat,
+                    },
+                    time,
+                )?;
             }
             Event::Text { text, .. } => {
                 // WM_CHAR already reflects native keyboard translation, including
@@ -75,9 +80,11 @@ impl Entry {
                 position,
                 kind,
                 modifiers,
+                time,
                 ..
             } => {
                 self.modifiers = normalize(modifiers);
+                let time = self.clock.at(time);
                 let kind = match kind {
                     crate::platform::PointerKind::Move => PointerKind::Move,
                     crate::platform::PointerKind::Down { clicks } => PointerKind::Down { clicks },
@@ -88,7 +95,7 @@ impl Entry {
                     }
                 };
                 self.ui
-                    .pointer(PointerId(0), kind, position, self.modifiers)?;
+                    .pointer_at(PointerId(0), kind, position, self.modifiers, time)?;
             }
             Event::Ime { event, .. } => match event {
                 ImeEvent::Update(update) => self.ui.ime(ImeEdit {

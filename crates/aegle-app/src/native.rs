@@ -185,6 +185,8 @@ pub(crate) struct Entry {
     #[cfg(all(target_os = "linux", feature = "motion"))]
     pub flick: Vec<(u32, aegle_ui::Point)>,
     pub modifiers: Modifiers,
+    /// Maps this window's platform input timestamps onto `Instant`.
+    pub clock: crate::event_clock::EventClock,
     pub ready: bool,
     #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
     pub access_scale: f64,
@@ -355,6 +357,7 @@ impl App {
             #[cfg(all(target_os = "linux", feature = "motion"))]
             flick: Vec::new(),
             modifiers: Modifiers::default(),
+            clock: Default::default(),
             ready: false,
             #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
             access_scale: 1.0,
@@ -416,6 +419,20 @@ impl Window {
     #[cfg(feature = "motion")]
     pub fn set_reduced_motion(&self, reduced: bool) -> Result<()> {
         self.ui()?.set_reduced_motion(reduced)
+    }
+
+    /// Installs this window's key handler, which sees every key before the
+    /// focused control; see [`Ui::on_key`].
+    pub fn on_key(
+        &self,
+        handler: impl FnMut(aegle_ui::KeyEvent<'_>) -> Result<bool> + 'static,
+    ) -> Result<()> {
+        self.ui()?.on_key(handler)
+    }
+
+    /// Removes this window's key handler.
+    pub fn clear_on_key(&self) -> Result<()> {
+        self.ui()?.clear_on_key()
     }
 
     fn ui(&self) -> Result<Rc<Ui>> {

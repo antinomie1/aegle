@@ -39,8 +39,13 @@ impl Ui {
             state.set_focus(None)
         }
     }
-    /// Delivers normalized keyboard input; Tab/Shift+Tab traverse logical controls.
+    /// Delivers normalized keyboard input at the current time: first to the
+    /// window key handler ([`Ui::on_key`]), then to the focused control;
+    /// Tab/Shift+Tab traverse logical controls. See [`Ui::key_at`].
     pub fn key(&self, key: KeyInput<'_>) -> Result {
+        self.key_at(key, std::time::Instant::now())
+    }
+    pub(crate) fn dispatch_key(&self, key: KeyInput<'_>) -> Result {
         let mut state = self
             .state
             .try_borrow_mut()
@@ -72,8 +77,18 @@ impl Ui {
         }
         Ok(())
     }
-    /// Delivers a primary pointer transition in logical window coordinates.
+    /// Delivers a primary pointer transition in logical window coordinates at
+    /// the current time. See [`Ui::pointer_at`].
     pub fn pointer(
+        &self,
+        id: PointerId,
+        kind: PointerKind,
+        position: Point,
+        modifiers: Modifiers,
+    ) -> Result {
+        self.pointer_at(id, kind, position, modifiers, std::time::Instant::now())
+    }
+    pub(crate) fn dispatch_pointer(
         &self,
         id: PointerId,
         kind: PointerKind,
@@ -233,6 +248,7 @@ impl State {
                 fonts: &mut fonts.borrow_mut(),
                 size,
                 padding,
+                time: self.input_time,
                 deferred: &mut deferred,
             },
             input,
@@ -463,6 +479,7 @@ impl State {
                         fonts: &mut fonts.borrow_mut(),
                         size,
                         padding,
+                        time: self.input_time,
                         deferred: &mut Vec::new(),
                     },
                     id,

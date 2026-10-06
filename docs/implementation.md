@@ -441,3 +441,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 测量：Taffy grid 使 `aegle-layout` 的 release `retained` 示例从 475,992 B 增至 725,856 B（+249,864 B）。临时 release 探针（CJK 测试字体，1000 行 `for`，7 次中位数），修改前/后：首次构建加刷新 3.83/3.59 ms，追加一行 1.04/0.80 ms，整体反序 5.61/5.80 ms。
 - 私有 headless Sway（GLES2 compositor）上运行默认软件绘制加 `grid` 的 release `layout` 与 `showcase`，截图确认换行标签、auto 外边距居中、16:9 宽高比、跨两列的叠放卡片与角标、跨两行卡片、`for` 卡片入格及 wtype 新增的卡片、右下角绝对定位按钮；`showcase` 深色主题下表格主体、表头与下拉列表背景正确，"Theme" 标签与下拉框垂直居中。
 - 未完成或未验证：没有暴露 Taffy 的 `direction`（RTL），因为文本对齐、滚动条位置等其余 RTL 行为尚未实现；没有命名网格线/区域、`repeat()` 与 `calc`；baseline 对齐只经过编译与 Taffy 自身语义，没有文字控件的专门测试；本轮没有做 Windows 交叉检查；`cargo clippy` 在此环境不可用。
+
+## 逐帧回调、输入时间与窗口级按键
+
+- `aegle-ui/src/events.rs`：`Node::on_frame(FnMut(Node, Instant))` / `clear_on_frame`，按注册顺序存放，控件删除时移除；`Ui::run_frame(now)` 在借用之外逐个取出回调调用，回调可替换或清除自己，出错的回调被移除并返回错误；`Ui::wants_frames()` 供宿主决定是否继续请求帧，注册时置 repaint 以启动空闲窗口的帧循环。`Ui::on_key` / `clear_on_key` 与 `Window::on_key`：处理器在焦点控件与 Tab 遍历之前、借用之外运行，返回 true 消费按键，可在调用中替换自己，出错时被移除；`KeyEvent` 带 `time: Instant` 与 `editing`。`Ui::key` / `pointer` 改为以当前时间调用新的 `key_at` / `pointer_at`，`InputCx::time` 把时间交给自定义控件。
+- `aegle-app`：原生循环在窗口的下一帧到期（收到 Redraw）且有逐帧回调时，于运行时借用之外调用 `run_frame`，再处理回调与刷新；呈现后只要 `has_animations()` 或 `wants_frames()` 为真就请求下一帧。`event_clock.rs` 把 Wayland 键盘/指针时间戳与 Win32 新增的 `Event::Key/Pointer::time`（`GetMessageTime`）映射到 `Instant`。
+- 验证：新增 `aegle-ui/tests/events.rs`（顺序、借用外修改控件、替换、删除控件、出错移除）与 `aegle-widgets/tests/events.rs`（处理器先于焦点控件、消费空格后复选框不切换、未消费的 Tab 仍遍历、editing 标志、自我替换、出错移除后按键恢复到控件）；`cargo test --workspace --all-features` 通过。私有 headless Sway（GLES2 compositor，60 Hz 输出）上临时探针用 `on_frame` 计数，1 秒内 66 次回调，随后清除并退出。
+- Windows 交叉检查恢复：沿用此前提取的 MinGW 与 rust-src，`-p aegle --no-default-features --features windows,...` 可用（此前失败是因为对 workspace 外的包传 `aegle-app/...` feature）。`windows,software,system-fonts,markup,motion,windows-accessibility,vulkan,wgpu,grid` 的 `--all-targets` 与最小 `windows,software,system-fonts` 组合均通过 `cargo check`；没有链接或运行。
+- 未验证：Win32 时间映射与真实按键时序没有实机测量；没有测量按键时间相对真实按下时刻的误差。

@@ -90,6 +90,12 @@ ScrollView 仅平移既有控件几何，Editor 继续拥有自己的文字滚�
 
 候选矩形依次应用编辑器内部偏移、控件窗口位置和祖先偏移，再夹到控件、祖先可见矩形及窗口范围。手动将活动编辑器滚出视口时保持组合会话，候选锚点收缩到最近边界的零面积矩形；不因此发送 IME reset。重新编辑会揭示 caret。此几何策略已有无窗口组合场景验证，真实输入法对离屏零面积候选锚点的呈现仍需真人验收。
 
+## 窗口级按键与输入时间
+
+`Ui::on_key`（原生 `Window::on_key`）在焦点控件和 Tab 遍历之前收到每个按键事件，返回 true 即消费，编辑器不再收到。它只看到普通按键：Wayland 上输入法组合期间的按键由 compositor 交给输入法，Win32 上 `VK_PROCESSKEY` 与组合中的按键在平台层已被过滤，所以快捷键处理器不会截走组合输入；`KeyEvent::editing` 告诉处理器焦点在编辑器中，处理器应把普通字符留给文字输入。Win32 的 WM_CHAR 文字作为 `Key::Unidentified` 加文字的事件同样先经过处理器。
+
+按键和指针事件的平台时间（Wayland 毫秒时间戳、Win32 `GetMessageTime`）按窗口映射到 `Instant`：以相邻事件的差值推进，任何晚于投递时刻的结果把锚点移回投递时刻，因此映射收敛到观察到的最小投递延迟，不会超前于时钟，32 位回绕按有符号差值处理。
+
 ## 当前 Windows 输入边界
 
 Win32 普通文本由 WM_CHAR/WM_UNICHAR 产生，UTF-16 surrogate pair 合并为 Unicode scalar；按键与文字分开送入同一 Ui/Editor，保留 AltGr/dead-key 的系统翻译。IMM 从自有 HIMC 读取组合/结果，UTF-16 cursor 检查边界后转成 UTF-8 偏移，候选窗使用 Ui 光标矩形按 DPI 向外取整；由 Editor 绘制预编辑，系统仍绘制候选窗。自行消费 WM_IME_COMPOSITION/WM_IME_CHAR，避免默认过程再次产生已提交文本。切换编辑器/关闭禁用旧会话、取消组合并清理已排队结果。

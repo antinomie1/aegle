@@ -16,6 +16,11 @@ use aegle_platform_win32 as platform;
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
 ))]
+mod event_clock;
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
 mod native;
 #[cfg(any(
     all(feature = "unix-accessibility", target_os = "linux"),

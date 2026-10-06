@@ -20,6 +20,12 @@ pub(crate) fn modifiers() -> Modifiers {
     }
 }
 
+/// The time of the message being processed, in milliseconds since boot.
+fn message_time() -> u32 {
+    // SAFETY: GetMessageTime reads this UI thread's current message state.
+    unsafe { GetMessageTime() as u32 }
+}
+
 pub(crate) fn key(native: &Native, msg: u32, w: WPARAM, l: LPARAM) {
     // IMM owns VK_PROCESSKEY and composition keystrokes. Forwarding these to
     // the Editor would move/delete text while the input method edits preedit.
@@ -32,6 +38,7 @@ pub(crate) fn key(native: &Native, msg: u32, w: WPARAM, l: LPARAM) {
         pressed: matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN),
         repeat: l.0 & (1 << 30) != 0,
         modifiers: modifiers(),
+        time: message_time(),
     });
 }
 
@@ -161,6 +168,7 @@ pub(crate) fn pointer(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result
         position: Point::new(point.x as f32 / scale, point.y as f32 / scale),
         kind,
         modifiers: modifiers(),
+        time: message_time(),
     });
     Ok(())
 }

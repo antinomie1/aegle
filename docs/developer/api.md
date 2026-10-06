@@ -288,6 +288,29 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 - 程序 setter（`set_checked`、`set_value`、`set_text` 等）不触发回调，可安全地相互同步；`activate()`、`toggle()`、`increment()`/`decrement()` 模拟用户操作并触发回调。
 - 每个控件每种事件只有一个处理器，再次设置会替换。
 
+### 逐帧回调与窗口级按键
+
+```rust
+// 播放头：每帧读音频时钟并移动一个小控件；只改 offset，不重新布局或重画时间轴。
+playhead.on_frame(move |node, now| {
+    let x = audio.position_seconds() * pixels_per_second - scroll;
+    node.set_offset(Point::new(x, 0.0))
+})?;
+playhead.clear_on_frame()?;                      // 停止播放时清除，窗口回到空闲
+
+window.on_key(move |key| {
+    if key.pressed && !key.editing && key.key == Key::Character(' ') {
+        transport.toggle(key.time);              // key.time：平台报告的按键时刻（Instant）
+        return Ok(true);                         // 消费此键，焦点控件不再收到
+    }
+    Ok(false)
+})?;
+```
+
+- `Node::on_frame(FnMut(Node, Instant) -> Result)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部清除后不再唤醒。控件删除时其回调随之移除；回调出错时被移除并返回错误。
+- `Window::on_key` / `Ui::on_key` 在焦点控件和 Tab 遍历之前收到每个按键，返回 `true` 表示已处理。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。处理器出错时被移除。
+- 按键与指针事件带有平台时间：Wayland 的毫秒时间戳与 Win32 的 `GetMessageTime` 被映射到 `Instant`（锚定到最小投递延迟，处理 32 位回绕）。窗口按键处理器从 `KeyEvent::time` 读取，自定义控件从 `InputCx::time` 读取；嵌入宿主用 `key_at`、`pointer_at` 传入。
+
 ### 后台线程
 
 UI 句柄只能留在 UI 线程。`let proxy = app.proxy(move |message: Job| { label.set_text(&message.text)?; Ok(()) })?;` 返回可克隆、可发送的 `UiProxy<Job>`；任意线程 `proxy.send(job)`（队列上限 1024，满或应用退出时把消息退回）并唤醒事件循环，handler 在 UI 线程于所有借用之外按序运行，可以自由使用其中捕获的控件句柄。
@@ -378,7 +401,9 @@ if ui.refresh()? {
 | --- | --- |
 | `pointer(id, kind, point, modifiers)`、`pointer_leave()` | 指针移动/按下/释放/离开 |
 | `cursor()` | 指针当前位置应显示的 `Cursor`；在 `pointer` 与 `refresh` 之后读取，布局变化也会改变它 |
-| `key(KeyInput { key, text, modifiers, pressed, repeat })` | 键盘；`text` 为已翻译文字 |
+| `key(KeyInput { key, text, modifiers, pressed, repeat })`、`key_at(input, Instant)` | 键盘；`text` 为已翻译文字，先交给 `on_key` 处理器 |
+| `pointer_at(id, kind, point, modifiers, Instant)` | 带平台时间的指针事件 |
+| `wants_frames()`、`run_frame(Instant)` | 有逐帧回调时每帧调用一次，再 `refresh` |
 | `scroll(point, dy)` / `scroll_by(point, delta)` | 滚轮，按嵌套视口路由 |
 | `window_focus(b)` | 窗口获得/失去键盘焦点 |
 | `ime(ImeEdit { .. })`、`ime_left()`、`take_ime_state(max)` | 输入法事务与需要同步给平台的状态 |

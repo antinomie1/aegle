@@ -148,6 +148,10 @@ impl Ui {
                 pending: VecDeque::new(),
                 dispatching: false,
                 callback_version: 0,
+                frames: Vec::new(),
+                key_handler: None,
+                key_version: 0,
+                input_time: std::time::Instant::now(),
                 #[cfg(feature = "accessibility")]
                 next_access_id: 2,
             })),

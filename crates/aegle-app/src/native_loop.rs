@@ -92,8 +92,32 @@ impl App {
             self.callbacks(callbacks)?;
             self.runtime.borrow_mut().refresh()?;
         }
+        self.frames(callbacks)?;
         self.runtime.borrow_mut().present()?;
         Ok(!self.runtime.borrow().windows.is_empty())
+    }
+
+    /// Runs frame callbacks of windows whose next frame is due, outside the
+    /// runtime borrow so they may use the App, then applies their changes.
+    fn frames(&self, scratch: &mut Vec<Rc<Ui>>) -> Result<()> {
+        scratch.clear();
+        scratch.extend(
+            self.runtime
+                .borrow()
+                .windows
+                .iter()
+                .filter(|entry| entry.ready && entry.ui.wants_frames())
+                .map(|entry| entry.ui.clone()),
+        );
+        if scratch.is_empty() {
+            return Ok(());
+        }
+        let now = std::time::Instant::now();
+        for ui in scratch.drain(..) {
+            ui.run_frame(now)?;
+        }
+        self.callbacks(scratch)?;
+        self.runtime.borrow_mut().refresh()
     }
 
     fn callbacks(&self, scratch: &mut Vec<Rc<Ui>>) -> Result<()> {

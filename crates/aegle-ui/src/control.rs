@@ -67,6 +67,8 @@ pub struct InputCx<'a> {
     pub size: Size,
     /// The control's content padding.
     pub padding: f32,
+    /// When the platform reported this input; see [`crate::Ui::key_at`].
+    pub time: std::time::Instant,
     /// Work to run after this call, see [`Deferred`].
     pub deferred: &'a mut Vec<Deferred>,
 }

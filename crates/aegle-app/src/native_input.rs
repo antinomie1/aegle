@@ -77,13 +77,17 @@ impl Entry {
                 ..
             } if self.seat.as_ref() == Some(&seat) => {
                 self.modifiers = normalize(modifiers);
-                self.ui.key(KeyInput {
-                    key: key_id(key.keysym),
-                    text: key.utf8.as_deref().unwrap_or(""),
-                    modifiers: self.modifiers,
-                    pressed,
-                    repeat,
-                })?;
+                let time = self.clock.at(key.time);
+                self.ui.key_at(
+                    KeyInput {
+                        key: key_id(key.keysym),
+                        text: key.utf8.as_deref().unwrap_or(""),
+                        modifiers: self.modifiers,
+                        pressed,
+                        repeat,
+                    },
+                    time,
+                )?;
             }
             Event::Modifiers {
                 seat, modifiers, ..
@@ -101,6 +105,12 @@ impl Entry {
                     return Ok(());
                 }
                 let id = PointerId(u64::from(seat.id().protocol_id()));
+                let time = match kind {
+                    PointerEventKind::Motion { time }
+                    | PointerEventKind::Press { time, .. }
+                    | PointerEventKind::Release { time, .. } => self.clock.at(time),
+                    _ => std::time::Instant::now(),
+                };
                 let kind = match kind {
                     PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                         PointerKind::Move
@@ -132,7 +142,8 @@ impl Entry {
                     }
                     _ => return Ok(()),
                 };
-                self.ui.pointer(id, kind, position, self.modifiers)?;
+                self.ui
+                    .pointer_at(id, kind, position, self.modifiers, time)?;
             }
             Event::Touch {
                 seat,

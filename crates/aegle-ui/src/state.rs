@@ -152,6 +152,14 @@ pub struct State {
     pub pending: VecDeque<(NodeId, u64)>,
     pub dispatching: bool,
     pub callback_version: u64,
+    /// Per-frame callbacks in registration order, see [`crate::Node::on_frame`].
+    pub frames: Vec<crate::events::FrameHandler>,
+    /// The window key handler, see [`crate::Ui::on_key`].
+    pub key_handler: Option<crate::events::KeyHandler>,
+    /// Replacement count of the key handler, so one installed during a call survives.
+    pub key_version: u64,
+    /// When the input being dispatched was reported.
+    pub input_time: std::time::Instant,
     #[cfg(feature = "accessibility")]
     pub next_access_id: u64,
 }
@@ -308,6 +316,7 @@ impl State {
         self.tree.remove_with(id, |node, _| {
             removed.push(node);
             self.callbacks.remove(&node);
+            self.frames.retain(|h| h.id != node);
             self.decorations.remove(&node);
             self.overrides.remove(&node);
             self.kept.remove(&node);

@@ -151,6 +151,8 @@ pub enum Event {
         repeat: bool,
         /// State at this event.
         modifiers: Modifiers,
+        /// Message time in milliseconds since boot (`GetMessageTime`), wrapping.
+        time: u32,
     },
     /// Committed keyboard text (including dead-key composition), excluding IMM results.
     Text {
@@ -169,6 +171,8 @@ pub enum Event {
         kind: PointerKind,
         /// State at this event.
         modifiers: Modifiers,
+        /// Message time in milliseconds since boot (`GetMessageTime`), wrapping.
+        time: u32,
     },
     /// Native IMM compatibility composition update or focus transition.
     Ime {

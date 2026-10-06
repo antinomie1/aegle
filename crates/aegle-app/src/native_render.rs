@@ -181,7 +181,10 @@ impl Runtime {
             }
             // Native frame pacing blocks occluded windows without an idle poll.
             #[cfg(feature = "motion")]
-            if entry.ui.has_animations() {
+            let animating = entry.ui.has_animations();
+            #[cfg(not(feature = "motion"))]
+            let animating = false;
+            if animating || entry.ui.wants_frames() {
                 self.backend.request_redraw(entry.id)?;
             }
         }
