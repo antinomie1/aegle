@@ -21,6 +21,7 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "shrink" => Shrink,
         "basis" => Basis,
         "direction" => Direction,
+        "layout_direction" => LayoutDirection,
         "wrap" => Wrap,
         "align" => Align,
         "justify" => Justify,
@@ -96,6 +97,7 @@ pub(crate) fn choices(name: PropertyName) -> &'static [&'static str] {
     ];
     match name {
         Direction => &["row", "column", "row_reverse", "column_reverse"],
+        LayoutDirection => &["ltr", "rtl"],
         Wrap => &["no_wrap", "wrap", "wrap_reverse"],
         Align | AlignSelf | JustifySelf | JustifyItems => ALIGN,
         Justify | AlignContent => JUSTIFY,
@@ -325,8 +327,10 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate => {
             "true or false".into()
         }
-        Direction | Wrap | Align | Justify | AlignContent | AlignSelf | JustifySelf
-        | JustifyItems | Flow | Easing | Theme | Orientation => choices(name).join(", "),
+        Direction | LayoutDirection | Wrap | Align | Justify | AlignContent | AlignSelf
+        | JustifySelf | JustifyItems | Flow | Easing | Theme | Orientation => {
+            choices(name).join(", ")
+        }
     };
     Err(format!("{name:?} requires {expected}"))
 }

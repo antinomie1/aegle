@@ -37,6 +37,7 @@ impl State {
             element.scroll,
             self.scroll_limit(id),
             horizontal_allowed,
+            element.rtl,
         )
     }
 

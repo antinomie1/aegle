@@ -66,6 +66,7 @@ impl State {
                         padding,
                         time: self.input_time,
                         deferred: &mut Vec::new(),
+                        rtl: element.rtl,
                     },
                     id,
                     input,

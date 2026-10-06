@@ -10,8 +10,9 @@ use aegle_layout::{AvailableSpace, LengthPercentage, Size};
 impl State {
     /// Reserves each overflowing viewport's scrollbar footprint beyond its padding,
     /// so no control sits under a bar, and releases it when the overflow ends.
-    /// Returns whether any viewport changed. Only the leading padding the user set
-    /// is remembered: the trailing edge is derived from it.
+    /// Returns whether any viewport changed. Only the padding the user set on the
+    /// side away from the bars is remembered (left and top, or right and top
+    /// right to left): the bar side is derived from it.
     fn update_gutters(&mut self) -> Result<bool> {
         let mut changed = false;
         for index in 0..self.order.len() {
@@ -20,18 +21,24 @@ impl State {
                 continue;
             }
             let limit = self.scroll_limit(id);
+            let rtl = self.rtl(id);
             let mut style = self.tree.get(id).unwrap().style().clone();
-            let (left, top) = (style.padding.left, style.padding.top);
+            let padding = &mut style.padding;
+            let (start, bar) = if rtl {
+                (padding.right, &mut padding.left)
+            } else {
+                (padding.left, &mut padding.right)
+            };
             let reserve =
                 |base: LengthPercentage, needed: bool| match (needed, base.into_raw().value()) {
                     (true, value) => LengthPercentage::length(value.max(FOOTPRINT)),
                     _ => base,
                 };
-            let right = reserve(left, limit.y > 0.0);
-            let bottom = reserve(top, limit.x > 0.0);
-            if style.padding.right != right || style.padding.bottom != bottom {
-                style.padding.right = right;
-                style.padding.bottom = bottom;
+            let side = reserve(start, limit.y > 0.0);
+            let bottom = reserve(padding.top, limit.x > 0.0);
+            if *bar != side || padding.bottom != bottom {
+                *bar = side;
+                padding.bottom = bottom;
                 aegle_layout::set_style(&mut self.tree, id, style)?;
                 changed = true;
             }
@@ -86,6 +93,7 @@ impl State {
                             padding,
                             gap,
                             width,
+                            rtl: element.rtl,
                         });
                         match measured {
                             Ok(size) => Size {
@@ -113,8 +121,15 @@ impl State {
                 // Ensure retained text geometry uses final layout constraints, even
                 // when Taffy's measurement callback last evaluated an intrinsic pass.
                 let width = node.bounds().size.width;
-                let padding = node.context.inset(&self.theme);
-                node.context.control.finalize(&self.fonts, width, padding)?;
+                let element = &mut node.context;
+                let cx = MeasureCx {
+                    fonts: &self.fonts,
+                    padding: element.inset(&self.theme),
+                    gap: element.theme_or(&self.theme).gap,
+                    width: Some(width),
+                    rtl: element.rtl,
+                };
+                element.control.finalize(&cx)?;
                 self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             }
             self.geometry_dirty = true;

@@ -61,6 +61,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `gap` | 容器的非负 `dp`/百分比，或 `[行间距, 列间距]` |
 | `grow`、`shrink` | 有限非负数值 |
 | `direction` | Window/Column/Row/ScrollView 的 `row`、`column`、`row_reverse`、`column_reverse` |
+| `layout_direction` | 任意控件的 `ltr`、`rtl`，子树继承；镜像行、对齐、文本、滚动条与方向性控件 |
 | `wrap` | 同上容器的 `no_wrap`、`wrap`、`wrap_reverse` |
 | `align`、`align_self` | 容器子项 / 本控件的交叉轴对齐：`start`、`end`、`center`、`stretch`、`baseline` |
 | `justify`、`align_content` | 容器的主轴剩余空间 / 行间剩余空间：`start`、`end`、`center`、`stretch`、`space_between`、`space_around`、`space_evenly` |

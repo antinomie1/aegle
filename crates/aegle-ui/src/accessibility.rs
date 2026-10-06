@@ -216,9 +216,8 @@ impl State {
                 .tree
                 .parent(id)
                 .unwrap()
-                .and_then(|parent| self.tree.get(parent))
-                .filter(|parent| parent.context.control.viewport())
-                .map_or(Point::default(), |parent| parent.context.scroll);
+                .filter(|&parent| self.tree.get(parent).unwrap().context.control.viewport())
+                .map_or(Point::default(), |parent| self.scroll_shift(parent));
             let scroll_limit = node_data
                 .context
                 .control
@@ -262,7 +261,7 @@ impl State {
                     .collect::<Vec<_>>(),
             );
             let element = &mut self.tree.get_mut(id).unwrap().context;
-            let (padding, scroll) = (element.inset(&self.theme), element.scroll);
+            let text_origin = element.text_origin(&self.theme);
             if !element.effective_visible {
                 node.set_hidden();
             }
@@ -325,7 +324,7 @@ impl State {
                             self.next_access_id += 1;
                             id
                         },
-                        Point::new(padding - scroll.x, padding - scroll.y),
+                        text_origin,
                     )
                     .expect("prepared text and geometry satisfy the accessibility boundary");
                 // Painting overrides the retained shaping brush on palette

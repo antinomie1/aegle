@@ -1,11 +1,11 @@
 //! A single-line numeric editor with steppers, arrow keys and wheel steps.
 
-use std::{any::Any, cell::RefCell};
+use std::any::Any;
 
 use aegle_controls::{Action, Input, Key, Outcome, PointerKind, Range};
 use aegle_core::Dirty;
 use aegle_layout::Style;
-use aegle_scene::{PathBuilder, Point as ScenePoint, Rect, RoundedRect};
+use aegle_scene::{Affine, PathBuilder, Point as ScenePoint, Rect, RoundedRect};
 use aegle_text::{Selection, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
@@ -22,7 +22,7 @@ handle!(
     "A numeric text field: typing, steppers, Up/Down/PageUp/PageDown and the wheel (while focused) change one clamped value."
 );
 
-/// Width of the stepper strip at the field's right edge.
+/// Width of the stepper strip at the field's end edge (left right to left).
 const STRIP: f32 = 20.0;
 /// Wheel distance in logical pixels for one step.
 const WHEEL_STEP: f32 = 16.0;
@@ -36,9 +36,15 @@ pub struct NumberFieldControl {
     wheel: f32,
     /// Last painted editor scroll, to map pointer positions back to the field.
     scroll: Point,
+    /// Laid out right to left, with the steppers on the left.
+    rtl: bool,
 }
 
 impl NumberFieldControl {
+    /// Where the text area starts: after a leading stepper strip right to left.
+    fn lead(&self) -> f32 {
+        if self.rtl { STRIP } else { 0.0 }
+    }
     fn format(&self) -> String {
         format!("{:.*}", usize::from(self.decimals), self.range.value())
     }
@@ -190,16 +196,22 @@ impl Control for NumberFieldControl {
         self.field.set_enabled(fonts, enabled)
     }
     fn content_offset(&self, size: Size, padding: f32, scroll: Point) -> Point {
-        self.field.content_offset(size, padding, scroll)
+        let offset = self.field.content_offset(size, padding, scroll);
+        Point::new(offset.x - self.lead(), offset.y)
     }
     fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
         let step = self.step();
         match input {
             Input::Pointer(pointer) if matches!(pointer.kind, PointerKind::Down { .. }) => {
                 // Undo the field's content offset to find the stepper strip.
-                let x = pointer.position.x - self.scroll.x + cx.padding;
+                let x = pointer.position.x - self.scroll.x + cx.padding + self.lead();
                 let y = pointer.position.y - self.scroll.y + cx.padding;
-                if x >= cx.size.width - STRIP {
+                let on_strip = if self.rtl {
+                    x < STRIP
+                } else {
+                    x >= cx.size.width - STRIP
+                };
+                if on_strip {
                     let up = y < cx.size.height * 0.5;
                     let value = self.range.value() + if up { step } else { -step };
                     return Ok(Outcome {
@@ -266,12 +278,19 @@ impl Control for NumberFieldControl {
             padding: cx.padding,
             gap: cx.gap,
             width: cx.width.map(|w| (w - STRIP).max(0.0)),
+            rtl: cx.rtl,
         })?;
         Ok(Size::new(size.width + STRIP, size.height))
     }
-    fn finalize(&mut self, fonts: &RefCell<TextSystem>, width: f32, padding: f32) -> Result {
-        self.field
-            .finalize(fonts, (width - STRIP).max(0.0), padding)
+    fn finalize(&mut self, cx: &MeasureCx<'_>) -> Result {
+        self.rtl = cx.rtl;
+        self.field.finalize(&MeasureCx {
+            fonts: cx.fonts,
+            padding: cx.padding,
+            gap: cx.gap,
+            width: cx.width.map(|w| (w - STRIP).max(0.0)),
+            rtl: cx.rtl,
+        })
     }
     fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
         self.field.retheme(theme, local, root, style);
@@ -280,17 +299,27 @@ impl Control for NumberFieldControl {
         self.scroll = cx.scroll;
         let (width, height) = (cx.size.width, cx.size.height);
         let shape = cx.shape;
-        let strip = Rect::new(width - STRIP, 0.0, STRIP, height);
+        let lead = self.lead();
+        let strip = Rect::new(
+            if self.rtl { 0.0 } else { width - STRIP },
+            0.0,
+            STRIP,
+            height,
+        );
+        // A one-pixel line on the strip's inner edge.
+        let divider = if self.rtl { STRIP - 1.0 } else { width - STRIP };
         cx.builder.push_clip(RoundedRect::new(
-            Rect::new(0.0, 0.0, width - STRIP, height),
+            Rect::new(lead, 0.0, width - STRIP, height),
             0.0,
         )?)?;
+        cx.builder.push_transform(Affine::translation(lead, 0.0)?)?;
         self.field.paint(cx)?;
+        cx.builder.pop()?;
         cx.builder.pop()?;
         cx.builder.push_clip(shape)?;
         let color = cx.appearance.foreground;
         cx.builder.fill(
-            RoundedRect::new(Rect::new(strip.origin.x, 0.0, 1.0, height), 0.0)?,
+            RoundedRect::new(Rect::new(divider, 0.0, 1.0, height), 0.0)?,
             cx.appearance.border_color,
         )?;
         // Up and down chevrons centered in each half of the strip.
@@ -353,6 +382,7 @@ pub(crate) fn create(container: &Container, min: f64, max: f64, value: f64) -> R
             focused: false,
             wheel: 0.0,
             scroll: Point::default(),
+            rtl: false,
         };
         control.show(&mut state.fonts.borrow_mut())?;
         Ok((Box::new(control) as Box<dyn Control>, style))

@@ -173,9 +173,10 @@ impl Tabs {
     }
 }
 
-/// Left/Right on a focused tab focus and select its neighbor, wrapping.
+/// Left/Right on a focused tab focus and select its neighbor, wrapping; the
+/// next tab is to the left right to left.
 pub(crate) fn tab_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
-    let forward = match key.key {
+    let right = match key.key {
         Key::Right => true,
         Key::Left => false,
         _ => return Ok(false),
@@ -183,6 +184,7 @@ pub(crate) fn tab_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
     let Some(id) = state.focus.current(&state.tree) else {
         return Ok(false);
     };
+    let forward = right != state.rtl(id);
     let tab = |state: &mut State, node| {
         state
             .control_as::<ButtonControl>(node)

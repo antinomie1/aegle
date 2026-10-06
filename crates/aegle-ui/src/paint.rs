@@ -28,7 +28,7 @@ impl State {
         let decoration = self.decorations.get(&id);
         let element = &mut self.tree.get_mut(id).unwrap().context;
         let padding = element.inset(&theme);
-        let size = element.bounds.size;
+        let (size, rtl) = (element.bounds.size, element.rtl);
         let mut builder = std::mem::take(&mut element.scene).into_builder();
         builder.clear();
         let frame = element.control.frame();
@@ -65,6 +65,7 @@ impl State {
                 bar_color,
                 time,
                 reduced_motion,
+                rtl,
                 next_frame: false,
             };
             element.control.paint(&mut cx)?;
@@ -98,6 +99,7 @@ impl State {
                     bar_color,
                     time,
                     reduced_motion,
+                    rtl,
                     next_frame: false,
                 })?;
             }

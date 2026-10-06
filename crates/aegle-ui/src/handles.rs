@@ -80,7 +80,8 @@ impl Node {
             state.invalidate_structure();
             let element = &state.tree.get(id).unwrap().context;
             let local = element.theme.clone().filter(|_| element.local_theme);
-            state.propagate_theme(id, local)
+            state.propagate_theme(id, local)?;
+            state.propagate_direction(id)
         })
     }
     /// Shows or hides the entire subtree. Hidden controls take no layout space.

@@ -68,11 +68,15 @@ impl State {
                     ScrollUnit::Item => element.theme_or(&self.theme).control_height,
                     ScrollUnit::Page => extent,
                 };
-                let sign = if matches!(action, Action::ScrollUp | Action::ScrollLeft) {
+                let mut sign = if matches!(action, Action::ScrollUp | Action::ScrollLeft) {
                     -1.0
                 } else {
                     1.0
                 };
+                // Offsets grow leftward right to left; the actions are visual.
+                if horizontal && element.rtl {
+                    sign = -sign;
+                }
                 let mut position = element.scroll;
                 let (value, max) = if horizontal {
                     (&mut position.x, limit.x)

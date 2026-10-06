@@ -122,6 +122,8 @@ pub enum PropertyName {
     Basis,
     /// Flex container main axis.
     Direction,
+    /// Inline direction of the subtree: `ltr` or `rtl`; inherited when unset.
+    LayoutDirection,
     /// Flex line wrapping.
     Wrap,
     /// Cross-axis alignment of children.

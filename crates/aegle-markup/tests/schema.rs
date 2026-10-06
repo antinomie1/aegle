@@ -166,6 +166,7 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
         "Grid { Text { text: \"a\"; grid_row: [1, 0] } }",
         "Grid { Text { text: \"a\"; grid_row: 1.5 } }",
         "Grid { direction: row }",
+        "Column { layout_direction: up }",
         "Column { aspect_ratio: 0 }",
         "Column { width: -5% }",
         "Column { margin: [1dp, x + 1] }",

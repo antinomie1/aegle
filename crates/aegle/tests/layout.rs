@@ -9,9 +9,9 @@ use aegle::{
 };
 use std::{cell::RefCell, rc::Rc};
 
-const IDS: [&str; 12] = [
+const IDS: [&str; 14] = [
     "bar", "lead", "trail", "flow", "one", "two", "three", "span", "corner", "stack", "badge",
-    "overlay",
+    "mirrored", "first", "overlay",
 ];
 
 fn ui() -> Result<Ui> {
@@ -39,6 +39,7 @@ fn compiled_and_loaded_layouts_match() -> Result {
         (&view.span, rect(58.0, 78.0, 334.0, 12.0)),
         (&view.corner, rect(382.0, 90.0, 10.0, 12.0)),
         (&view.badge, rect(196.0, 119.0, 8.0, 8.0)),
+        (&view.first, rect(372.0, 144.0, 20.0, 10.0)),
         (&view.overlay, rect(384.0, 284.0, 16.0, 16.0)),
     ];
     for (node, bounds) in expected {
@@ -64,6 +65,8 @@ fn compiled_and_loaded_layouts_match() -> Result {
         &view.corner,
         &view.stack,
         &view.badge,
+        &*view.mirrored,
+        &view.first,
         &view.overlay,
     ];
     assert_eq!(runtime.root().node().bounds()?, view.root.bounds()?);

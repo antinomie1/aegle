@@ -12,6 +12,8 @@ mod values;
 #[cfg(feature = "grid")]
 pub use grid::{Flow, Placement, Track};
 pub use node::LayoutNode;
+/// Inline direction of a node, read by flex, grid, block and leaf layout.
+pub use taffy::Direction as LayoutDirection;
 pub use taffy::geometry::{Rect as Edges, Size};
 pub use taffy::{
     AlignItems, AvailableSpace, Dimension, Display, FlexDirection, LengthPercentage,

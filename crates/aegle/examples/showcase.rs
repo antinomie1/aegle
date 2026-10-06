@@ -210,7 +210,9 @@ fn views(pane: &Container) -> Result {
 }
 
 fn main() -> Result<()> {
-    // `showcase vulkan` or `showcase wgpu` selects a GPU backend built in.
+    // `showcase vulkan` or `showcase wgpu` selects a GPU backend built in, and
+    // a trailing `rtl` lays the window out right to left.
+    let rtl = std::env::args().any(|arg| arg == "rtl");
     let renderer = match std::env::args().nth(1).as_deref() {
         #[cfg(feature = "vulkan")]
         Some("vulkan") => RendererBackend::Vulkan,
@@ -230,11 +232,20 @@ fn main() -> Result<()> {
     let window = app.window_with_options("Aegle — all controls", options)?;
     window.set_padding(16.0)?;
     window.set_gap(12.0)?;
+    if rtl {
+        window.set_layout_direction(Some(LayoutDirection::Rtl))?;
+    }
     let panes = window.splitter(Orientation::Horizontal)?;
     panes.set_ratio(0.48)?;
     let (left, right) = (panes.first(), panes.second());
-    left.set_padding(Insets::new(0.0, 12.0, 0.0, 0.0))?;
-    right.set_padding(Insets::new(0.0, 0.0, 0.0, 12.0))?;
+    // Insets are physical: each pane keeps its gap on the splitter's side.
+    let (inner, outer) = (
+        Insets::new(0.0, 12.0, 0.0, 0.0),
+        Insets::new(0.0, 0.0, 0.0, 12.0),
+    );
+    let (first, second) = if rtl { (outer, inner) } else { (inner, outer) };
+    left.set_padding(first)?;
+    right.set_padding(second)?;
     for pane in [left, right] {
         pane.set_gap(10.0)?;
     }

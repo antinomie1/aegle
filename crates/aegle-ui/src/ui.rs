@@ -342,11 +342,9 @@ impl Ui {
             let surrounding = field.editor().surrounding(max_bytes);
             let selection = surrounding.map(|s| s.selection).unwrap_or_default();
             let mut cursor_rect = field.editor().ime_rect();
-            let padding = element
-                .padding
-                .unwrap_or(element.theme_or(&state.theme).padding);
-            cursor_rect.origin.x += element.bounds.origin.x + padding - element.scroll.x;
-            cursor_rect.origin.y += element.bounds.origin.y + padding - element.scroll.y;
+            let origin = element.text_origin(&state.theme);
+            cursor_rect.origin.x += element.bounds.origin.x + origin.x;
+            cursor_rect.origin.y += element.bounds.origin.y + origin.y;
             // Keep a manually scrolled-out composition alive. Its candidate
             // anchor collapses at the nearest visible edge until it re-enters.
             if let Some(xf) = element.xf {

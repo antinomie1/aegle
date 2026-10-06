@@ -148,6 +148,10 @@ pub(crate) fn show_popup(state: &mut State, id: NodeId) -> Result {
     let mut style = state.tree.get(id).unwrap().style().clone();
     style.min_size.width = LengthPercentageAuto::length(width);
     aegle_layout::set_style(&mut state.tree, id, style)?;
+    // It lives under the root but reads in its anchor's direction.
+    let direction = state.tree.get(anchor).unwrap().style().direction;
+    state.tree.get_mut(id).unwrap().context.direction = Some(direction);
+    state.propagate_direction(id)?;
     state.set_visible(id, true)?;
     let restore = state.focus.current(&state.tree);
     let e = entry(state, id);
@@ -198,9 +202,16 @@ pub(crate) fn place_popups(state: &mut State) -> bool {
         None => return false,
     };
     for (popup, anchor) in shown {
+        let rtl = state.rtl(anchor);
         let anchor = state.tree.get(anchor).unwrap().context.bounds;
         let size = state.tree.get(popup).unwrap().bounds().size;
-        let x = anchor.origin.x.min(state.size.width - size.width).max(0.0);
+        // Aligned with the anchor's start edge: its right edge right to left.
+        let start = if rtl {
+            anchor.origin.x + anchor.size.width - size.width
+        } else {
+            anchor.origin.x
+        };
+        let x = start.min(state.size.width - size.width).max(0.0);
         let below = anchor.origin.y + anchor.size.height;
         let above = anchor.origin.y - size.height;
         let y = if below + size.height <= state.size.height || above < 0.0 {

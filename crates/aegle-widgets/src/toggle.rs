@@ -208,7 +208,8 @@ impl Control for ToggleControl {
                 mark: self.mark,
                 checked: self.control.is_checked(),
                 mixed: self.mixed,
-                label_height: (!self.text.text().is_empty()).then(|| self.text.size().height),
+                label: (!self.text.text().is_empty()).then(|| self.text.size()),
+                rtl: cx.rtl,
             },
             *cx.appearance,
             |builder, color| self.text.paint_with_color(builder, color),
@@ -282,15 +283,18 @@ pub(crate) fn select_radio(state: &mut State, id: NodeId) -> Result {
 }
 
 /// Arrow keys on a focused radio button focus and choose the previous or next
-/// enabled radio sibling, wrapping. Returns whether the key was used.
+/// enabled radio sibling, wrapping; Left moves forward right to left. Returns
+/// whether the key was used.
 pub(crate) fn radio_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
-    let forward = match key.key {
-        Key::Down | Key::Right => true,
-        Key::Up | Key::Left => false,
-        _ => return Ok(false),
-    };
     let Some(id) = state.focus.current(&state.tree) else {
         return Ok(false);
+    };
+    let forward = match key.key {
+        Key::Down => true,
+        Key::Up => false,
+        Key::Right => !state.rtl(id),
+        Key::Left => state.rtl(id),
+        _ => return Ok(false),
     };
     let radio = |state: &mut State, node| {
         state

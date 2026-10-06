@@ -1,7 +1,8 @@
 //! Overlay scrollbar geometry and painting.
 //!
 //! Bars take no layout space: while an axis overflows, a light track spans the
-//! viewport's trailing edge and a darker square thumb moves along it. Pressing the
+//! viewport's bottom or end edge (right, or left right to left) and a darker
+//! square thumb moves along it. Pressing the
 //! thumb drags it; pressing elsewhere on the strip centers the thumb there and
 //! keeps dragging. No timer, fade or hover animation is involved.
 use aegle_scene::{Color, Rect, RoundedRect, SceneBuilder, SceneError};
@@ -31,18 +32,24 @@ pub struct Bar {
     pub thumb: f32,
     /// Thumb length along the strip.
     pub length: f32,
+    /// Laid out right to left: a vertical bar is on the left edge, and a
+    /// horizontal thumb starts at the right end.
+    pub rtl: bool,
 }
 
 impl Bar {
     /// The vertical then horizontal bar of a viewport of `size` scrolled to
     /// `offset`, where `limit` is the maximum scroll on each axis. A bar exists for
     /// an axis whose limit is positive; `horizontal_allowed` is false for
-    /// multiline editors, which only scroll vertically.
+    /// multiline editors, which only scroll vertically. Offsets are measured from
+    /// the start edge, so right to left a zero horizontal offset puts the thumb
+    /// at the right end.
     pub fn layout(
         size: Size,
         offset: Point,
         limit: Point,
         horizontal_allowed: bool,
+        rtl: bool,
     ) -> [Option<Self>; 2] {
         let vertical = limit.y > 0.0;
         let horizontal = horizontal_allowed && limit.x > 0.0;
@@ -53,16 +60,28 @@ impl Bar {
             let length = (track * viewport / (viewport + max))
                 .max(MIN_THUMB)
                 .min(track);
-            let start = cross - width;
+            let fraction = (offset / max).clamp(0.0, 1.0);
             Self {
                 vertical,
                 strip: if vertical {
-                    Rect::new(start, MARGIN, width, track)
+                    Rect::new(if rtl { 0.0 } else { cross - width }, MARGIN, width, track)
                 } else {
-                    Rect::new(MARGIN, start, track, width)
+                    // Right to left the vertical bar's corner is on the left.
+                    let start = MARGIN
+                        + if rtl {
+                            size.width - 2.0 * MARGIN - track
+                        } else {
+                            0.0
+                        };
+                    Rect::new(start, cross - width, track, width)
                 },
-                thumb: (offset / max).clamp(0.0, 1.0) * (track - length),
+                thumb: if rtl && !vertical {
+                    1.0 - fraction
+                } else {
+                    fraction
+                } * (track - length),
                 length,
+                rtl,
             }
         };
         let corner = |other: bool| if other { STRIP } else { 0.0 };
@@ -132,18 +151,29 @@ impl Bar {
         }
     }
 
-    /// Scroll fraction (0 to 1) for a pointer at `along` holding the thumb at
-    /// `grab`, or `None` when the thumb fills its track.
+    /// Scroll fraction (0 at the start edge to 1) for a pointer at `along`
+    /// holding the thumb at `grab`, or `None` when the thumb fills its track.
     pub fn fraction(&self, along: f32, grab: f32) -> Option<f32> {
         let travel = self.travel();
-        (travel > 0.0).then(|| ((along - grab) / travel).clamp(0.0, 1.0))
+        (travel > 0.0).then(|| {
+            let fraction = ((along - grab) / travel).clamp(0.0, 1.0);
+            if self.rtl && !self.vertical {
+                1.0 - fraction
+            } else {
+                fraction
+            }
+        })
     }
 
     fn span(&self, offset: f32, length: f32) -> Rect {
         let s = self.strip;
         if self.vertical {
             let width = THICKNESS.min(s.size.width);
-            let x = (s.origin.x + s.size.width - MARGIN - width).max(s.origin.x);
+            let x = if self.rtl {
+                s.origin.x + MARGIN.min(s.size.width - width)
+            } else {
+                (s.origin.x + s.size.width - MARGIN - width).max(s.origin.x)
+            };
             Rect::new(x, s.origin.y + offset, width, length)
         } else {
             let height = THICKNESS.min(s.size.height);

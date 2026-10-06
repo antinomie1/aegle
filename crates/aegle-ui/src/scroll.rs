@@ -75,7 +75,11 @@ impl State {
                         Point::default()
                     };
                     if limit.y > 0.0 {
-                        view.size.width = (view.size.width - FOOTPRINT).max(0.0);
+                        let width = (view.size.width - FOOTPRINT).max(0.0);
+                        if parent.rtl {
+                            view.origin.x += view.size.width - width;
+                        }
+                        view.size.width = width;
                     }
                     if limit.x > 0.0 {
                         view.size.height = (view.size.height - FOOTPRINT).max(0.0);
@@ -90,7 +94,7 @@ impl State {
                     parent.effective_visible,
                     clip,
                     if scrolling {
-                        parent.scroll
+                        self.scroll_shift(pid)
                     } else {
                         Point::default()
                     },
@@ -182,10 +186,17 @@ impl State {
             }
             let element = &self.tree.get(id).unwrap().context;
             if element.control.viewport() || element.control.editor().is_some() {
+                // A right-to-left view's offset grows leftward.
+                let sign = if element.rtl && element.control.viewport() {
+                    -1.0
+                } else {
+                    1.0
+                };
                 let old = element.scroll;
-                changed |= self.scroll_to(id, Point::new(old.x + delta.x, old.y + delta.y))?;
+                let target = Point::new(old.x + sign * delta.x, old.y + delta.y);
+                changed |= self.scroll_to(id, target)?;
                 let new = self.tree.get(id).unwrap().context.scroll;
-                delta.x -= new.x - old.x;
+                delta.x -= sign * (new.x - old.x);
                 delta.y -= new.y - old.y;
                 if delta.x == 0.0 && delta.y == 0.0 {
                     break;
@@ -205,10 +216,10 @@ impl State {
         }
         let mut rect = element.bounds;
         let mut caret = if let Some(field) = element.control.editor() {
-            let padding = element.inset(&self.theme);
+            let origin = element.text_origin(&self.theme);
             let mut caret = field.editor().ime_rect();
-            caret.origin.x += element.bounds.origin.x + padding - element.scroll.x;
-            caret.origin.y += element.bounds.origin.y + padding - element.scroll.y;
+            caret.origin.x += element.bounds.origin.x + origin.x;
+            caret.origin.y += element.bounds.origin.y + origin.y;
             Some(clamp_anchor(caret, element.bounds))
         } else {
             None
@@ -230,17 +241,19 @@ impl State {
                         rect.size.height = caret.size.height;
                     }
                 }
+                let sign = if element.rtl { -1.0 } else { 1.0 };
                 let old = element.scroll;
                 self.scroll_to(
                     id,
                     Point::new(
                         old.x
-                            + reveal_delta(
-                                rect.origin.x,
-                                rect.size.width,
-                                viewport.origin.x,
-                                viewport.size.width,
-                            ),
+                            + sign
+                                * reveal_delta(
+                                    rect.origin.x,
+                                    rect.size.width,
+                                    viewport.origin.x,
+                                    viewport.size.width,
+                                ),
                         old.y
                             + reveal_delta(
                                 rect.origin.y,
@@ -251,11 +264,11 @@ impl State {
                     ),
                 )?;
                 let new = self.tree.get(id).unwrap().context.scroll;
-                rect.origin.x -= new.x - old.x;
+                rect.origin.x -= sign * (new.x - old.x);
                 rect.origin.y -= new.y - old.y;
                 rect = clamp_anchor(rect, viewport);
                 if let Some(caret) = &mut caret {
-                    caret.origin.x -= new.x - old.x;
+                    caret.origin.x -= sign * (new.x - old.x);
                     caret.origin.y -= new.y - old.y;
                     *caret = clamp_anchor(*caret, viewport);
                 }

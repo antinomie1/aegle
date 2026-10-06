@@ -21,14 +21,15 @@ fn appearance() -> aegle_theme::Appearance {
 
 #[test]
 fn toggles_paint_markers_and_call_the_label_only_when_present() -> Result<(), SceneError> {
-    let spec = |mark, mixed, label_height| ToggleSpec {
+    let spec = |mark, mixed, label: Option<f32>| ToggleSpec {
         size: Size::new(120.0, 24.0),
         padding: 3.0,
         gap: 8.0,
         mark,
         checked: true,
         mixed,
-        label_height,
+        label: label.map(|height| Size::new(40.0, height)),
+        rtl: false,
     };
     let commands = |spec: &ToggleSpec| -> Result<(usize, bool), SceneError> {
         let mut builder = SceneBuilder::new();

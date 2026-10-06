@@ -34,8 +34,11 @@ pub struct ToggleSpec {
     pub checked: bool,
     /// A check box shown as partially checked.
     pub mixed: bool,
-    /// Height of the label, or `None` when there is no label to paint.
-    pub label_height: Option<f32>,
+    /// Size of the label, or `None` when there is no label to paint.
+    pub label: Option<Size>,
+    /// Laid out right to left: the marker sits at the right edge with the label
+    /// to its left, and a switch's thumb moves leftward when on.
+    pub rtl: bool,
 }
 
 /// Paints a toggle. `label` receives the builder, already translated to the
@@ -53,7 +56,8 @@ pub fn toggle<E: From<SceneError>>(
         mark,
         checked,
         mixed,
-        label_height,
+        label: label_size,
+        rtl,
     } = *spec;
     builder.push_clip(RoundedRect::new(
         Rect::new(0.0, 0.0, size.width, size.height),
@@ -68,6 +72,7 @@ pub fn toggle<E: From<SceneError>>(
         .min(1.0);
     let (width, height) = (width * scale, height * scale);
     let y = (size.height - height) * 0.5;
+    let x = if rtl { size.width - x - width } else { x };
     let marker = Rect::new(x, y, width, height);
     // Radio buttons are round, so their shape differs from check boxes.
     let frame = match mark {
@@ -97,7 +102,7 @@ pub fn toggle<E: From<SceneError>>(
     } else if switch {
         let inset = (appearance.border_width + 2.0 * scale).min(height * 0.5);
         let diameter = (height - 2.0 * inset).max(0.0);
-        let thumb_x = if checked {
+        let thumb_x = if checked != rtl {
             x + width - inset - diameter
         } else {
             x + inset
@@ -115,10 +120,15 @@ pub fn toggle<E: From<SceneError>>(
     } else if checked {
         check_mark(builder, x, y, width, appearance.indicator)?;
     }
-    if let Some(height) = label_height {
+    if let Some(text) = label_size {
+        let left = if rtl {
+            x - gap - text.width
+        } else {
+            x + width + gap
+        };
         builder.push_transform(Affine::translation(
-            x + width + gap,
-            (size.height - height) * 0.5,
+            left,
+            (size.height - text.height) * 0.5,
         )?)?;
         label(builder, appearance.foreground)?;
         builder.pop()?;

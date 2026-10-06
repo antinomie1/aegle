@@ -99,6 +99,10 @@ pub(crate) fn apply(
             "row_reverse" => aegle_ui::Direction::RowReverse,
             _ => aegle_ui::Direction::ColumnReverse,
         }),
+        LayoutDirection => node.set_layout_direction(Some(match identifier(value) {
+            "ltr" => aegle_ui::LayoutDirection::Ltr,
+            _ => aegle_ui::LayoutDirection::Rtl,
+        })),
         Wrap => container().set_wrap(match identifier(value) {
             "no_wrap" => aegle_ui::Wrap::NoWrap,
             "wrap" => aegle_ui::Wrap::Wrap,

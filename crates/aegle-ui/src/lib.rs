@@ -18,6 +18,7 @@ pub mod bar;
 mod callbacks;
 pub mod control;
 mod cursor;
+mod direction;
 mod effects;
 mod events;
 #[cfg(feature = "motion")]
@@ -49,7 +50,7 @@ mod ui;
 #[cfg(feature = "accessibility")]
 pub use aegle_access::accesskit;
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
-pub use aegle_layout::{Align, Direction, Insets, Justify, Length, Wrap};
+pub use aegle_layout::{Align, Direction, Insets, Justify, LayoutDirection, Length, Wrap};
 #[cfg(feature = "grid")]
 pub use aegle_layout::{Flow, Placement, Track};
 #[cfg(feature = "motion")]

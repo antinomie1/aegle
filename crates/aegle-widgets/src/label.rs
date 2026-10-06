@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 use aegle_layout::Style;
 use aegle_scene::Affine;
-use aegle_text::{Alignment, Paragraph, TextSystem};
+use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
@@ -59,18 +59,14 @@ impl Control for LabelControl {
         Some(&mut self.0)
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        let size = self.0.reflow(
-            cx.width.map(|w| (w - 2.0 * cx.padding).max(0.0)),
-            Alignment::Start,
-        )?;
+        let size = self.0.reflow(cx.content_width(), cx.alignment())?;
         Ok(Size::new(
             size.width + 2.0 * cx.padding,
             size.height + 2.0 * cx.padding,
         ))
     }
-    fn finalize(&mut self, _: &RefCell<TextSystem>, width: f32, padding: f32) -> Result {
-        self.0
-            .reflow(Some((width - 2.0 * padding).max(0.0)), Alignment::Start)?;
+    fn finalize(&mut self, cx: &MeasureCx<'_>) -> Result {
+        self.0.reflow(cx.content_width(), cx.alignment())?;
         Ok(())
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {

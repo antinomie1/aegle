@@ -439,7 +439,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 验证：`cargo test --workspace --all-features` 通过；默认 feature（无 grid）的 workspace `check --all-targets` 通过。新增测试：`aegle-ui/tests/layout.rs`（对齐、SpaceBetween、百分比、auto 外边距居中、basis 与 grow 分配、max 截断、换行、宽高比、绝对定位、反向、contents 分组及隐藏、主题切换保留本地布局、非法输入；grid：显式/自动轨道、跨列、自动放置、justify/align self、contents 子项入格、stack 叠放与 reparent 入格）；`aegle-widgets` 表格在中间列中收缩（修改前失败）；`aegle/tests/layout.rs` 同一布局文件经 `ui!` 与运行时加载得到完全相同的边界，`for` 生成的子控件各占网格一格；markup schema 的接受与拒绝用例。所有源文件不超过 500 行，测试约占实现加测试行数的 16.6%。
 - 测量：Taffy grid 使 `aegle-layout` 的 release `retained` 示例从 475,992 B 增至 725,856 B（+249,864 B）。临时 release 探针（CJK 测试字体，1000 行 `for`，7 次中位数），修改前/后：首次构建加刷新 3.83/3.59 ms，追加一行 1.04/0.80 ms，整体反序 5.61/5.80 ms。
 - 私有 headless Sway（GLES2 compositor）上运行默认软件绘制加 `grid` 的 release `layout` 与 `showcase`，截图确认换行标签、auto 外边距居中、16:9 宽高比、跨两列的叠放卡片与角标、跨两行卡片、`for` 卡片入格及 wtype 新增的卡片、右下角绝对定位按钮；`showcase` 深色主题下表格主体、表头与下拉列表背景正确，"Theme" 标签与下拉框垂直居中。
-- 未完成或未验证：没有暴露 Taffy 的 `direction`（RTL），因为文本对齐、滚动条位置等其余 RTL 行为尚未实现；没有命名网格线/区域、`repeat()` 与 `calc`；baseline 对齐只经过编译与 Taffy 自身语义，没有文字控件的专门测试；本轮没有做 Windows 交叉检查；`cargo clippy` 在此环境不可用。
+- 未完成或未验证：RTL 当时未暴露，后见“从右到左布局”；没有命名网格线/区域、`repeat()` 与 `calc`；baseline 对齐只经过编译与 Taffy 自身语义，没有文字控件的专门测试；本轮没有做 Windows 交叉检查；`cargo clippy` 在此环境不可用。
 
 ## 逐帧回调、输入时间与窗口级按键
 
@@ -488,3 +488,14 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - UI：`Node::set_shadow(Option<Shadow>)` 与 `set_background_gradient(Option<Gradient>)` 存在稀疏的 Decoration 中，阴影在背景之前录制，渐变按节点尺寸比例换算后替代背景色。`showcase` 增加渐变卡片，并可用 `showcase vulkan|wgpu` 选择 GPU 后端。
 - 验证：`aegle-scene/tests/recording.rs`（非法色标、零长度线、非正半径、负 blur、零 blur 变填充）；`aegle-render-software/tests/effects.rs`（两端外延与线性光中点值、阴影中心满强度、边缘约半、三倍标准差外不绘制、裁剪生效）；`aegle-render-{vulkan,wgpu}/tests/effects.rs`（旋转、圆角裁剪、半透明与硬色标下与软件结果比较）：Vulkan 在 RADV 与 Lavapipe 上开启 Khronos validation 与同步检查通过，平均通道差 0.136/0.128，无验证消息；wgpu 在 RADV 与 llvmpipe（Vulkan 后端）上通过。`aegle-ui/tests/effects.rs`（录制顺序、尺寸换算、清除）。私有 headless Sway 上 release `showcase` 分别以软件、Vulkan、wgpu 截图，渐变卡片区域相对软件的平均通道差为 0.15/0.18，最大差在文字边缘。
 - 未实现：组透明度与区域模糊（需要离屏层和临时纹理预算）；阴影/渐变的过渡与标记属性。wgpu 的 GL 后端未编译，未验证。
+
+## 从右到左布局
+
+- `aegle-layout` 导出 `LayoutDirection`（Taffy `Direction`）。复核发现 Taffy 0.14 的 flex、grid、block 与叶子布局都按 CSS 语义使用 `Style::direction`，因此适配器不做映射；Taffy 不继承方向，`aegle-ui` 把解析后的方向写入每个节点的样式。
+- `Node::set_layout_direction(Option<LayoutDirection>)`/`layout_direction`：`None` 继承父节点，根为左到右；插入与 reparent 时子树重新解析，只有方向改变的节点重新布局。行的首个子项在右侧，`Start` 对齐指右侧，网格列向左排；内边距、外边距、inset 与绝对位置保持物理方向。
+- 文本：段落与编辑器对齐由 `Start` 改为按布局方向的 `Left`/`Right`（`MeasureCx::alignment`）；混排文本的顺序仍由 Parley 按内容检测的基础方向决定。编辑器文字原点统一为 `Element::text_origin`，供绘制、IME 光标、滚入与语义共用。
+- 滚动：偏移从起始边计量，右到左的视口中内容向左溢出，`scroll_shift` 在绘制、命中、语义父偏移中把横向偏移取反；滚轮、滚入与 ScrollLeft/Right 动作按视觉方向。竖直滚动条和槽位移到左侧（切换方向时交换视口的左右内边距，槽位一侧由另一侧推出），横向滑块从右端开始，`Bar::fraction` 返回逻辑比例。
+- 控件：`InputCx`/`MeasureCx`/`PaintCx` 携带 `rtl`，`InputCx::logical` 交换左右方向键。Slider/Progress 横向镜像（竖直不变），开关、复选框、单选标记与文字互换位置，NumberField 步进条在左，Dropdown 箭头与选项勾在左，Tabs 与单选组的方向键、Splitter 的拖动比例与方向键镜像；弹出层继承锚点方向并右对齐；表格的列头与行是 flex 行，随之镜像。`Control::finalize` 改为接收带最终宽度的 `MeasureCx`。
+- 标记：`layout_direction: ltr|rtl`，`ui!` 与加载器都调用 `set_layout_direction`；facade 预导出 `LayoutDirection`。`showcase ... rtl` 以右到左运行。
+- 验证：`aegle-widgets/tests/rtl.rs`（行镜像、左侧槽位等于 `FOOTPRINT`、向左滚动 50 后偏移 50 且内容右移、滑块右端为最小值与方向键反转、切回后左内边距与宽度恢复）；`aegle-ui/tests/geometry.rs`（右到左竖直条在 x=0、横向滑块起于右端、比例为逻辑值）；`aegle/tests/layout.rs` 的 `.aegle` 夹具经 `ui!` 与加载器得到相同的镜像位置；schema 拒绝非法方向。私有 headless Sway 上 release `showcase` 以软件后端右到左截图，分隔条、标签页、文字、开关、滑块、进度条、步进条、下拉箭头与滚动条均镜像；Vulkan 左到右截图不变。
+- 未实现：没有按段落内容自动选择布局方向；Windows 原生输入法候选窗位置未在右到左下验证。Windows 目标交叉检查通过。

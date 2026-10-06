@@ -34,5 +34,11 @@ Column {
         Column { id: back }
         Column { id: badge; width: 8dp; height: 8dp; align_self: center; justify_self: center }
     }
+    Row {
+        id: mirrored
+        layout_direction: rtl
+        height: 10dp
+        Column { id: first; width: 20dp }
+    }
     Column { id: overlay; inset: [auto, 0dp, 0dp, auto]; width: 16dp; height: 16dp; aspect_ratio: 1 }
 }

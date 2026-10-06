@@ -71,6 +71,27 @@ pub struct InputCx<'a> {
     pub time: std::time::Instant,
     /// Work to run after this call, see [`Deferred`].
     pub deferred: &'a mut Vec<Deferred>,
+    /// The control is laid out right to left, see [`InputCx::logical`].
+    pub rtl: bool,
+}
+
+impl InputCx<'_> {
+    /// `input` with Left and Right arrow keys exchanged right to left, for
+    /// controls whose arrow keys move toward a logical start or end (sliders,
+    /// tabs, splitters) rather than a visual side (text carets).
+    pub fn logical<'i>(&self, input: Input<'i>) -> Input<'i> {
+        match input {
+            Input::Key(mut key) if self.rtl => {
+                key.key = match key.key {
+                    aegle_controls::Key::Left => aegle_controls::Key::Right,
+                    aegle_controls::Key::Right => aegle_controls::Key::Left,
+                    other => other,
+                };
+                Input::Key(key)
+            }
+            input => input,
+        }
+    }
 }
 
 /// Intrinsic size measurement context.
@@ -81,8 +102,27 @@ pub struct MeasureCx<'a> {
     pub padding: f32,
     /// The theme gap between a control's own parts.
     pub gap: f32,
-    /// The width the layout offers, if it is definite.
+    /// The width the layout offers, if it is definite; always the final width
+    /// in [`Control::finalize`].
     pub width: Option<f32>,
+    /// The control is laid out right to left: its text aligns right.
+    pub rtl: bool,
+}
+
+impl MeasureCx<'_> {
+    /// Paragraph alignment for the layout direction: the left edge, or the right
+    /// one right to left, whatever direction the text itself runs in.
+    pub fn alignment(&self) -> aegle_text::Alignment {
+        if self.rtl {
+            aegle_text::Alignment::Right
+        } else {
+            aegle_text::Alignment::Left
+        }
+    }
+    /// The width offered to content inside the padding.
+    pub fn content_width(&self) -> Option<f32> {
+        self.width.map(|w| (w - 2.0 * self.padding).max(0.0))
+    }
 }
 
 /// Drawing context; the scene is in the control's local coordinates.
@@ -111,6 +151,8 @@ pub struct PaintCx<'a> {
     pub time: std::time::Instant,
     /// Whether the window prefers reduced motion; continuous decoration should stop.
     pub reduced_motion: bool,
+    /// The control is laid out right to left: directional parts are mirrored.
+    pub rtl: bool,
     /// Set by [`PaintCx::request_frame`].
     pub(crate) next_frame: bool,
 }
@@ -234,8 +276,9 @@ pub trait Control: Any {
     fn measure(&mut self, _cx: &MeasureCx<'_>) -> Result<Size> {
         Ok(Size::default())
     }
-    /// Re-lays out retained text for the final width after layout.
-    fn finalize(&mut self, _fonts: &RefCell<TextSystem>, _width: f32, _padding: f32) -> Result {
+    /// Re-lays out retained text for the final width after layout, given as
+    /// `cx.width`.
+    fn finalize(&mut self, _cx: &MeasureCx<'_>) -> Result {
         Ok(())
     }
     /// Adjusts the layout style that follows the theme when it changes, leaving

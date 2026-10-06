@@ -1,13 +1,11 @@
 //! Single-line and multiline plain text editors.
 
-use std::{any::Any, cell::RefCell};
+use std::any::Any;
 
 use aegle_controls::{Input, Outcome};
 use aegle_layout::{Dimension, LengthPercentageAuto, Style};
 use aegle_scene::Affine;
-use aegle_text::{
-    Alignment, EditorDriver, EditorOptions, EditorPaint, Selection, TextError, TextSystem,
-};
+use aegle_text::{EditorDriver, EditorOptions, EditorPaint, Selection, TextError, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
@@ -134,20 +132,21 @@ impl Control for FieldControl {
         Point::new(scroll.x - padding, scroll.y - padding)
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        let size = cx.fonts.borrow_mut().edit(self.0.editor_mut()).reflow(
-            cx.width.map(|w| (w - 2.0 * cx.padding).max(0.0)),
-            Alignment::Start,
-        )?;
+        let size = cx
+            .fonts
+            .borrow_mut()
+            .edit(self.0.editor_mut())
+            .reflow(cx.content_width(), cx.alignment())?;
         Ok(Size::new(
             size.width + 2.0 * cx.padding,
             size.height + 2.0 * cx.padding,
         ))
     }
-    fn finalize(&mut self, fonts: &RefCell<TextSystem>, width: f32, padding: f32) -> Result {
-        fonts
+    fn finalize(&mut self, cx: &MeasureCx<'_>) -> Result {
+        cx.fonts
             .borrow_mut()
             .edit(self.0.editor_mut())
-            .reflow(Some((width - 2.0 * padding).max(0.0)), Alignment::Start)?;
+            .reflow(cx.content_width(), cx.alignment())?;
         Ok(())
     }
     fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut Style) {

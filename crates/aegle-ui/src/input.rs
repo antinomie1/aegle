@@ -269,6 +269,7 @@ impl State {
                 padding,
                 time: self.input_time,
                 deferred: &mut deferred,
+                rtl: element.rtl,
             },
             input,
         )?;

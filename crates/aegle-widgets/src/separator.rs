@@ -218,6 +218,8 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
     let this = splitter.clone();
     grip.on_input(move |grip, event| {
         let along = |p: aegle_types::Point| if vertical { p.y } else { p.x };
+        // Right to left the first pane is on the right of a horizontal split.
+        let mirror = !vertical && grip.layout_direction()? == aegle_ui::LayoutDirection::Rtl;
         let target = match event {
             CanvasEvent::Move {
                 position,
@@ -231,11 +233,16 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
                     area.size.width
                 } - GRIP;
                 let offset = along(at.origin) - along(area.origin) + along(position) - GRIP * 0.5;
-                (extent > 0.0).then(|| offset / extent)
+                (extent > 0.0).then(|| {
+                    let fraction = offset / extent;
+                    if mirror { 1.0 - fraction } else { fraction }
+                })
             }
             CanvasEvent::Key {
                 key, pressed: true, ..
             } => match key {
+                Key::Left if mirror => Some(this.ratio() + KEY_STEP),
+                Key::Right if mirror => Some(this.ratio() - KEY_STEP),
                 Key::Left | Key::Up => Some(this.ratio() - KEY_STEP),
                 Key::Right | Key::Down => Some(this.ratio() + KEY_STEP),
                 Key::Home => Some(0.0),

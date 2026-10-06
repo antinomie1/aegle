@@ -150,6 +150,10 @@ pub(super) fn setter(
             let direction = enumerated("Direction");
             quote! { #handle.set_direction(#direction) }
         }
+        LayoutDirection => {
+            let direction = enumerated("LayoutDirection");
+            quote! { #handle.set_layout_direction(::core::option::Option::Some(#direction)) }
+        }
         Wrap => {
             let wrap = enumerated("Wrap");
             quote! { #handle.set_wrap(#wrap) }

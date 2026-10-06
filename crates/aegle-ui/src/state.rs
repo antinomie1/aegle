@@ -47,6 +47,11 @@ pub struct Element {
     pub theme: Option<Rc<Theme>>,
     /// Whether `theme` was set on this node rather than inherited.
     pub local_theme: bool,
+    /// Layout direction set on this node; `None` inherits the parent's. The
+    /// resolved direction is the layout style's `direction`.
+    pub direction: Option<aegle_layout::LayoutDirection>,
+    /// The resolved direction is right to left.
+    pub rtl: bool,
     #[cfg(feature = "accessibility")]
     pub access_id: aegle_access::accesskit::NodeId,
 }
@@ -59,6 +64,13 @@ impl Element {
     pub fn inset(&self, ui: &Theme) -> f32 {
         self.padding
             .unwrap_or_else(|| self.control.default_padding(self.theme_or(ui)))
+    }
+    /// Where an editor's scrolled text starts in its local coordinates.
+    pub fn text_origin(&self, ui: &Theme) -> Point {
+        let shift = self
+            .control
+            .content_offset(self.bounds.size, self.inset(ui), self.scroll);
+        Point::new(-shift.x, -shift.y)
     }
     pub fn new(control: Box<dyn Control>) -> Self {
         let overlay = control.viewport().then(Box::default);
@@ -82,6 +94,8 @@ impl Element {
             xf: None,
             theme: None,
             local_theme: false,
+            direction: None,
+            rtl: false,
             #[cfg(feature = "accessibility")]
             access_id: aegle_access::accesskit::NodeId(0),
         }
@@ -293,8 +307,10 @@ impl State {
         }
         #[cfg(feature = "grid")]
         crate::grid_handles::stack_child(self, parent, &mut style);
+        style.direction = self.tree.get(parent).unwrap().style().direction;
         let mut element = Element::new(control);
         element.theme = self.tree.get(parent).unwrap().context.theme.clone();
+        element.rtl = self.tree.get(parent).unwrap().context.rtl;
         #[cfg(feature = "accessibility")]
         {
             element.access_id = aegle_access::accesskit::NodeId(self.next_access_id);

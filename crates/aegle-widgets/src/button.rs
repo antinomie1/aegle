@@ -150,8 +150,11 @@ impl Control for ButtonControl {
     fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
         let (size, padding) = (cx.size, cx.padding);
         cx.builder.push_clip(cx.shape)?;
-        // Dropdowns and their choices read as lists: text starts at the padding.
-        let x = if self.listed() {
+        // Dropdowns and their choices read as lists: text starts at the padding,
+        // on the right right to left, with marks at the other end.
+        let x = if self.listed() && cx.rtl {
+            size.width - padding - self.text.size().width
+        } else if self.listed() {
             padding
         } else {
             (size.width - self.text.size().width) / 2.0
@@ -164,7 +167,11 @@ impl Control for ButtonControl {
             .paint_with_color(cx.builder, cx.appearance.foreground)?;
         cx.builder.pop()?;
         if matches!(self.variant, Variant::Dropdown { .. }) {
-            let x = size.width - padding - CHEVRON * 0.5;
+            let x = if cx.rtl {
+                padding + CHEVRON * 0.5
+            } else {
+                size.width - padding - CHEVRON * 0.5
+            };
             chevron(cx.builder, x, size.height * 0.5, cx.appearance.foreground)?;
         }
         if matches!(self.variant, Variant::Tab { selected: true }) {
@@ -181,7 +188,12 @@ impl Control for ButtonControl {
         if matches!(self.variant, Variant::Option { chosen: true }) {
             // The current choice is marked by shape, not only color.
             let mark = 12.0_f32.min(size.height);
-            let (x, y) = (size.width - padding - mark, (size.height - mark) * 0.5);
+            let x = if cx.rtl {
+                padding
+            } else {
+                size.width - padding - mark
+            };
+            let y = (size.height - mark) * 0.5;
             check_mark(cx.builder, x, y, mark, cx.appearance.indicator)?;
         }
         cx.builder.pop()?;

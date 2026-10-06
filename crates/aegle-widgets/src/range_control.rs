@@ -19,7 +19,7 @@ use crate::paint::{range, slider_track};
 /// The axis a slider or progress bar runs along.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Orientation {
-    /// Left to right.
+    /// Left to right, or right to left in a right-to-left layout.
     #[default]
     Horizontal,
     /// Bottom to top.
@@ -83,8 +83,8 @@ impl Glide {
     }
 }
 
-/// Paints a horizontal range layout, rotated for a vertical control so its
-/// track runs from bottom to top.
+/// Paints a horizontal range layout, mirrored right to left, or rotated for a
+/// vertical control so its track runs from bottom to top.
 fn paint(
     builder: &mut SceneBuilder,
     size: Size,
@@ -92,8 +92,14 @@ fn paint(
     filled: [f64; 2],
     slider: bool,
     appearance: Appearance,
-    vertical: bool,
+    [vertical, rtl]: [bool; 2],
 ) -> std::result::Result<(), SceneError> {
+    if !vertical && rtl {
+        builder.push_transform(Affine::new([-1.0, 0.0, 0.0, 1.0, size.width, 0.0])?)?;
+        range(builder, size, padding, filled, slider, appearance)?;
+        builder.pop()?;
+        return Ok(());
+    }
     if !vertical {
         return range(builder, size, padding, filled, slider, appearance);
     }
@@ -253,11 +259,16 @@ impl Control for SliderControl {
     }
     fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
         let (start, extent) = self.track(cx.size, cx.padding);
-        let input = match input {
+        let input = match cx.logical(input) {
             // The behavior measures along x from the track start.
             Input::Pointer(mut pointer) if self.vertical => {
                 let p = pointer.position;
                 pointer.position = Point::new(cx.size.height - p.y - start, p.x);
+                Input::Pointer(pointer)
+            }
+            // Right to left the track starts at the right end.
+            Input::Pointer(mut pointer) if cx.rtl => {
+                pointer.position.x = extent - pointer.position.x;
                 Input::Pointer(pointer)
             }
             Input::Focus(focused) => {
@@ -266,7 +277,8 @@ impl Control for SliderControl {
                 input
             }
             Input::Wheel { delta, .. } => {
-                self.wheel += delta.x - delta.y;
+                let across = if cx.rtl { -delta.x } else { delta.x };
+                self.wheel += across - delta.y;
                 let mut outcome = Outcome {
                     handled: true,
                     ..Outcome::default()
@@ -318,7 +330,7 @@ impl Control for SliderControl {
             [0.0, shown],
             true,
             *cx.appearance,
-            self.vertical,
+            [self.vertical, cx.rtl],
         )?;
         Ok(())
     }
@@ -412,7 +424,7 @@ impl Control for ProgressControl {
             filled,
             false,
             *cx.appearance,
-            self.vertical,
+            [self.vertical, cx.rtl],
         )?;
         Ok(())
     }
