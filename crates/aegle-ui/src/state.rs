@@ -164,6 +164,8 @@ pub struct State {
     pub decorations: HashMap<NodeId, Decoration>,
     /// Token overrides re-applied to the parent's theme whenever it changes.
     pub overrides: HashMap<NodeId, aegle_theme::ThemeOverride>,
+    /// Custom token overrides and token bindings.
+    pub tokens: crate::Tokens,
     /// Fingers currently in contact.
     pub fingers: Vec<crate::touch::Finger>,
     /// Application values living exactly as long as their control.
@@ -348,6 +350,7 @@ impl State {
             self.descriptions.remove(&node);
             self.decorations.remove(&node);
             self.overrides.remove(&node);
+            self.tokens.forget(node);
             self.kept.remove(&node);
             #[cfg(feature = "motion")]
             self.motion.forget(node);

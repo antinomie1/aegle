@@ -84,6 +84,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `focus_color`、`focus_width` | Button/TextField/TextArea/CheckBox/Switch/Slider 的焦点颜色与非负 `dp` 宽度 |
 | `selection_color`、`caret_color` | TextField/TextArea 的选择与 caret/预编辑颜色 |
 | `font_size` | Text/Button/TextField/TextArea/CheckBox/Switch 的正 `dp` |
+| `token("包.名称")` | 上述颜色属性及 `border_width`、`radius`、`focus_width`、`font_size` 也可绑定已登记的 token（如 `token("theme.accent")`）；构建时按名查找，此后随主题和 token 覆盖更新 |
 | `checked` | CheckBox/Switch/RadioButton 的 bool，默认 false；同一父容器中的 RadioButton 互斥 |
 | `mixed` | CheckBox 的 bool，部分选中状态 |
 | `min`、`max`、`value` | Slider/Progress/NumberField 的有限数，默认0/1/0；min须小于max，value按共享Range契约clamp |

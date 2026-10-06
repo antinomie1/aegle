@@ -1,5 +1,5 @@
 //! Constant property values: lists of literals and bare identifiers, and the
-//! layout functions `repeat`, `minmax`, `fit_content` and `calc`.
+//! functions `repeat`, `minmax`, `fit_content`, `calc` and `token`.
 
 use crate::{Expr, ExprKind, Value};
 
@@ -31,7 +31,7 @@ pub(crate) fn constant(expr: &Expr) -> Option<Value> {
             Some(Value::Call(name.clone(), parts))
         }
         ExprKind::Call(name, arguments)
-            if matches!(name.as_str(), "repeat" | "minmax" | "fit_content") =>
+            if matches!(name.as_str(), "repeat" | "minmax" | "fit_content" | "token") =>
         {
             let arguments = arguments.iter().map(item).collect::<Option<_>>()?;
             Some(Value::Call(name.clone(), arguments))

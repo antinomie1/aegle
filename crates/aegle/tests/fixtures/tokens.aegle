@@ -1,0 +1,9 @@
+Column {
+    id: lane
+    Button {
+        id: play; text: "Play"
+        background: token("studio.lane")
+        radius: token("theme.radius")
+        font_size: token("studio.type")
+    }
+}

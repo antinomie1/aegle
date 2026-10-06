@@ -82,15 +82,15 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `Ui::set_theme` 和 `Window::set_theme` 更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析。
 
-`Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。`Node::set_theme_override(Some(ThemeOverride))` 则只替换指定字段，其余沿父级解析主题；它随父级或 `Ui::set_theme` 的变化重新解析，嵌套覆盖逐层叠加，`set_theme` 的快照会替换它。没有 token 注册表。以下是进一步扩展时的目标契约。
+`Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。`Node::set_theme_override(Some(ThemeOverride))` 则只替换指定字段，其余沿父级解析主题；它随父级或 `Ui::set_theme` 的变化重新解析，嵌套覆盖逐层叠加，`set_theme` 的快照会替换它。
 
-主题使用类型化 token：Color、Length、Font、Radius、Duration 等。Rust 常量提供类型检查，标记使用具名 token。名称只在主题/注册阶段解析为紧凑索引，不给每个控件复制一份字符串样式字典。
+主题使用类型化 token：当前类型为 Color、Length（有限非负逻辑像素，圆角也用它）与 Duration；Font 尚未提供。`aegle-theme` 定义 `Token<T>`（只含 u16 索引）、`TokenKind`/`TokenValue` 与 `TokenType`（Color、f32、Duration），14 个 Theme 字段即内置 token `Theme::ACCENT` 等，名为 `theme.<字段>`，占索引 0–13。`aegle-ui::register_token(name, default)` 在每线程一份、所有 Ui 共享的注册表中登记 `包.名称` 形式的组件 token（点分 ASCII 字母、数字、`_`、`-`，`theme.` 保留），默认值是纯函数 `fn(&Theme) -> T`，随主题变化；同名同类型再次登记返回原句柄，类型不同返回 `UiError::Token`。`token::<T>(name)` 按名查找。名称只在登记/查找时解析为索引，节点和绑定只存索引。
 
-全局主题是共享不可变快照，局部主题只保存稀疏覆盖。查找顺序为最近局部覆盖到全局默认；作用范围沿逻辑控件树继承。组件自己的 token 使用包命名空间，重复定义且类型不同为错误。
+全局主题是共享不可变快照，局部主题只保存稀疏覆盖。查找顺序为最近局部覆盖到全局默认；作用范围沿逻辑控件树继承。`Ui::set_token` 设全局覆盖，`Node::set_token` 设子树覆盖，`None` 移除；自定义 token 依次取最近祖先的覆盖、Ui 覆盖、按节点解析主题求默认值，局部主题快照不遮蔽自定义 token。内置 token 的覆盖就是主题本身：`Ui::set_token` 替换 Ui 主题的该字段（不能为 None），`Node::set_token` 写入该节点的 `ThemeOverride`。`Node::bind_color(ColorSlot, Token<Color>)`、`bind_length(LengthSlot, Token<f32>)` 让 Style 的 11 个颜色、边框宽度、圆角、焦点宽度或文字控件字号跟随 token：绑定时立即写入，`Ui::set_theme`、局部主题/覆盖、reparent 与 token 改变后重新解析同一子树内的绑定。控件拒绝新值（例如字号为零）时 `set_token` 撤销改变并返回错误；主题变化与 reparent 时则返回错误，该属性保留上一个值。绑定和子树覆盖随节点删除。
 
 组件状态样式采用固定状态集合及明确优先顺序：disabled、pressed、selected/checked、hover、normal；focus 环作为独立覆盖，不被 hover 隐藏。复合组件需要不同优先级时在自己的有类型样式函数中显式定义，不引入 CSS specificity。
 
-控件默认值 → 主题/状态值 → 本地常量或绑定，构成逻辑目标。动画覆盖呈现值；直接 setter 替换该属性的绑定。颜色变化只刷新绘制，字体/尺寸变化才使布局失效，语义无关的 token 变化不广播语义值更新。
+控件默认值 → 主题/状态值 → 本地常量或绑定，构成逻辑目标。动画覆盖呈现值；直接 setter 替换该属性的绑定：`set_background` 等单项 setter 结束该项绑定，`set_style` 结束全部 Style 绑定，`set_font_size`/`clear_font_size` 结束字号绑定，`unbind_token` 结束绑定并清除该属性。颜色变化只刷新绘制，字体/尺寸变化才使布局失效，语义无关的 token 变化不广播语义值更新。
 
 默认跟随系统深浅色、对比度、文本缩放与减少动态效果；应用可显式选 Light/Dark/System。系统没有提供某项偏好时用默认值并允许应用配置。系统字体缩放与设备像素缩放各应用一次，不能重复放大。
 

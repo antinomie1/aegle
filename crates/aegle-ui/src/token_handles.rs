@@ -1,0 +1,107 @@
+use crate::{
+    Color, Node, Result, Ui, UiError,
+    tokens::{ColorSlot, LengthSlot, StyleSlot, check},
+};
+use aegle_theme::{Token, TokenType};
+
+impl Ui {
+    /// Overrides a token for the whole UI, or with `None` returns a custom
+    /// token to its default. A built-in token replaces that field of the UI
+    /// theme, as [`Self::set_theme`] would, and cannot be cleared. Bound
+    /// properties follow; if one rejects the new value, the change is undone
+    /// and its error returned.
+    pub fn set_token<T: TokenType>(&self, token: Token<T>, value: Option<T>) -> Result {
+        if check(token)? {
+            let value = value.ok_or(UiError::InvalidValue)?.into_value();
+            let theme = self.theme().with_token(token.index(), value).unwrap();
+            return self.set_theme(theme);
+        }
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        state.set_custom_token(None, token.index(), value.map(T::into_value))
+    }
+
+    /// A token's value for the UI: its override, or its default for the UI
+    /// theme, ignoring subtree overrides.
+    pub fn token_value<T: TokenType>(&self, token: Token<T>) -> Result<T> {
+        check(token)?;
+        let state = self
+            .state
+            .try_borrow()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        let value = match state.theme.token(token.index()) {
+            Some(value) => value,
+            None => state.token_value(state.root, token.index())?,
+        };
+        Ok(T::from_value(value).unwrap())
+    }
+}
+
+impl Node {
+    /// Overrides a token for this subtree, or with `None` removes the
+    /// override. The nearest override wins over the UI's; local themes do not
+    /// hide custom tokens. A built-in token is a sparse
+    /// [`Self::set_theme_override`] entry, which replaces a local theme
+    /// snapshot. Bound properties follow, as for [`Ui::set_token`].
+    pub fn set_token<T: TokenType>(&self, token: Token<T>, value: Option<T>) -> Result {
+        let value = value.map(T::into_value);
+        if check(token)? {
+            let mut tokens = self.change(|state, id| Ok(state.overrides.get(&id).copied()))?;
+            let set = tokens
+                .get_or_insert_default()
+                .set_token(token.index(), value);
+            debug_assert!(set, "built-in tokens have the kind of their field");
+            return self.set_theme_override(tokens.filter(|t| *t != Default::default()));
+        }
+        self.change(|state, id| state.set_custom_token(Some(id), token.index(), value))
+    }
+
+    /// A token's value here: built-ins from the resolved theme, custom tokens
+    /// from the nearest override or their default for the resolved theme.
+    pub fn token_value<T: TokenType>(&self, token: Token<T>) -> Result<T> {
+        check(token)?;
+        self.change(|state, id| Ok(T::from_value(state.token_value(id, token.index())?).unwrap()))
+    }
+
+    /// Makes a color property follow a token through theme, override and
+    /// parent changes, applying it now. A direct setter for the property,
+    /// [`Self::set_style`] or [`Self::unbind_token`] ends the binding.
+    /// Fails like the property's setter if this control has no such property.
+    pub fn bind_color(&self, slot: ColorSlot, token: Token<Color>) -> Result {
+        check(token)?;
+        self.change(|state, id| state.bind_token(id, slot.into(), token.index()))
+    }
+
+    /// [`Self::bind_color`] for a length: a style width or radius, or the
+    /// font size of a text-bearing control, which must stay positive.
+    pub fn bind_length(&self, slot: LengthSlot, token: Token<f32>) -> Result {
+        check(token)?;
+        self.change(|state, id| state.bind_token(id, slot.into(), token.index()))
+    }
+
+    /// Ends a binding and clears the property, returning it to the skin or
+    /// theme. Nothing happens if the property is not bound.
+    pub fn unbind_token(&self, slot: impl Into<StyleSlot>) -> Result {
+        let slot = slot.into();
+        self.change(|state, id| {
+            if !state.tokens.is_bound(id, slot) {
+                return Ok(());
+            }
+            state.tokens.unbind(id, |s| s == slot);
+            let mut style = state
+                .decorations
+                .get(&id)
+                .map_or(Default::default(), |d| d.style);
+            match slot {
+                StyleSlot::Color(slot) => *slot.field(&mut style) = None,
+                StyleSlot::Length(slot) => match slot.field(&mut style) {
+                    Some(field) => *field = None,
+                    None => return state.set_font_size(id, None),
+                },
+            }
+            state.set_style(id, style)
+        })
+    }
+}

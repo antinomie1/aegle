@@ -39,6 +39,9 @@ pub enum UiError {
     ReentrantAccess,
     /// A monotonically increasing identity counter exhausted its range.
     IdentityExhausted,
+    /// A token name is unregistered or registered with another type, or a
+    /// handle names no registered token of its type.
+    Token,
 }
 impl fmt::Display for UiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -50,6 +53,7 @@ impl fmt::Display for UiError {
             Self::RootMutation => "UI root cannot be removed or reparented",
             Self::ReentrantAccess => "UI state is already borrowed by a visitor",
             Self::IdentityExhausted => "UI identity counter exhausted",
+            Self::Token => "token is unregistered or has another type",
         })
     }
 }
@@ -141,6 +145,7 @@ impl Ui {
                 hooks: Vec::new(),
                 decorations: HashMap::new(),
                 overrides: HashMap::new(),
+                tokens: Default::default(),
                 fingers: Vec::new(),
                 kept: HashMap::new(),
                 #[cfg(feature = "motion")]

@@ -1,11 +1,15 @@
-use crate::{Appearance, Color, Node, Point, Result, Skin, Style, UiError, VisualState};
+use crate::{
+    Appearance, Color, Node, Point, Result, Skin, Style, UiError, VisualState,
+    tokens::{ColorSlot, LengthSlot, StyleSlot},
+};
 use aegle_core::Dirty;
 
 macro_rules! setters {
-    ($(#[$doc:meta] $name:ident($value:ident: $ty:ty) => $field:ident;)*) => {
+    ($(#[$doc:meta] $name:ident($value:ident: $ty:ty) => $field:ident, $slot:expr;)*) => {
         $(#[$doc]
+        /// Ends a token binding of the property.
         pub fn $name(&self, $value: $ty) -> Result {
-            self.update_style(|style| style.$field = Some($value))
+            self.update_style($slot.into(), |style| style.$field = Some($value))
         })*
     };
 }
@@ -13,10 +17,16 @@ macro_rules! setters {
 impl Node {
     /// Replaces local paint overrides, preserving the skin and typography.
     /// `Style::default()` removes all paint overrides. Values do not inherit.
+    /// Token bindings of style properties end; a font size binding remains.
     /// Hover/focus overrides require an interactive control, pressed requires a
     /// button/toggle/slider, and selection/caret require an editor; otherwise returns WrongKind.
     pub fn set_style(&self, style: Style) -> Result {
-        self.change(|state, id| state.set_style(id, style))
+        self.change(|state, id| {
+            state.set_style(id, style)?;
+            let font = StyleSlot::Length(LengthSlot::FontSize);
+            state.tokens.unbind(id, |slot| slot != font);
+            Ok(())
+        })
     }
     /// Reads local paint overrides; unresolved `None` values come from the skin.
     pub fn style(&self) -> Result<Style> {
@@ -27,14 +37,16 @@ impl Node {
                 .map_or(Style::default(), |d| d.style))
         })
     }
-    fn update_style(&self, update: impl FnOnce(&mut Style)) -> Result {
+    fn update_style(&self, slot: StyleSlot, update: impl FnOnce(&mut Style)) -> Result {
         self.change(|state, id| {
             let mut style = state
                 .decorations
                 .get(&id)
                 .map_or(Style::default(), |d| d.style);
             update(&mut style);
-            state.set_style(id, style)
+            state.set_style(id, style)?;
+            state.tokens.unbind(id, |s| s == slot);
+            Ok(())
         })
     }
     /// Installs a pure theme/state skin without changing control behavior.
@@ -70,13 +82,15 @@ impl Node {
         self.change(|state, id| Ok(state.visual_state(id)))
     }
     /// Sets a positive finite local text size, retaining text, selection and preedit.
-    /// Available on labels, buttons, toggles and editors; it does not inherit to children.
+    /// Available on labels, buttons, toggles and editors; it does not inherit to
+    /// children. Ends a font size token binding.
     pub fn set_font_size(&self, size: f32) -> Result {
-        self.change(|state, id| state.set_font_size(id, Some(size)))
+        self.change(|state, id| state.set_font_size_unbound(id, Some(size)))
     }
-    /// Returns this text-bearing control to the current theme's font size.
+    /// Returns this text-bearing control to the current theme's font size,
+    /// ending a font size token binding.
     pub fn clear_font_size(&self) -> Result {
-        self.change(|state, id| state.set_font_size(id, None))
+        self.change(|state, id| state.set_font_size_unbound(id, None))
     }
     /// Translates this subtree by a finite logical offset after layout, without
     /// changing layout or scroll extents. Bounds, hit testing, clipping, the IME
@@ -110,32 +124,32 @@ impl Node {
     }
     setters! {
         /// Sets the base background, taking precedence over the skin.
-        set_background(color: Color) => background;
+        set_background(color: Color) => background, ColorSlot::Background;
         /// Sets the text foreground without reshaping or changing layout.
-        set_foreground(color: Color) => foreground;
+        set_foreground(color: Color) => foreground, ColorSlot::Foreground;
         /// Sets the background while enabled, hovered and not pressed.
-        set_hover_background(color: Color) => hover_background;
+        set_hover_background(color: Color) => hover_background, ColorSlot::HoverBackground;
         /// Sets the background while enabled and pressed.
-        set_pressed_background(color: Color) => pressed_background;
+        set_pressed_background(color: Color) => pressed_background, ColorSlot::PressedBackground;
         /// Sets the background while effectively disabled.
-        set_disabled_background(color: Color) => disabled_background;
+        set_disabled_background(color: Color) => disabled_background, ColorSlot::DisabledBackground;
         /// Sets the text foreground while effectively disabled.
-        set_disabled_foreground(color: Color) => disabled_foreground;
+        set_disabled_foreground(color: Color) => disabled_foreground, ColorSlot::DisabledForeground;
         /// Sets the independent resting border color.
-        set_border_color(color: Color) => border_color;
+        set_border_color(color: Color) => border_color, ColorSlot::BorderColor;
         /// Sets a nonnegative logical border width; zero removes the border.
-        set_border_width(width: f32) => border_width;
+        set_border_width(width: f32) => border_width, LengthSlot::BorderWidth;
         /// Sets a nonnegative logical corner radius.
-        set_radius(radius: f32) => radius;
+        set_radius(radius: f32) => radius, LengthSlot::Radius;
         /// Sets the independent focus outline color.
-        set_focus_color(color: Color) => focus_color;
+        set_focus_color(color: Color) => focus_color, ColorSlot::FocusColor;
         /// Sets nonnegative focus width; its target is zero when disabled or unfocused.
-        set_focus_width(width: f32) => focus_width;
+        set_focus_width(width: f32) => focus_width, LengthSlot::FocusWidth;
         /// Sets an editor's selection fill, paired with its text foreground.
-        set_selection_color(color: Color) => selection;
+        set_selection_color(color: Color) => selection, ColorSlot::Selection;
         /// Sets an editor's caret and preedit indicator color.
-        set_caret_color(color: Color) => caret;
+        set_caret_color(color: Color) => caret, ColorSlot::Caret;
         /// Sets checkbox/switch marks or slider/progress indicator colors.
-        set_indicator_color(color: Color) => indicator;
+        set_indicator_color(color: Color) => indicator, ColorSlot::Indicator;
     }
 }

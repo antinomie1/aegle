@@ -267,6 +267,14 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
     if let Some(result) = crate::motion::geometry(node, name, value) {
         return result;
     }
+    if let Literal::Call(function, arguments) = value
+        && function == "token"
+    {
+        let [Literal::String(token)] = &arguments[..] else {
+            unreachable!("checked token")
+        };
+        return bind_token(node, name, token);
+    }
     match (name, value) {
         (Grow, Literal::Number(n)) => node.set_grow(*n),
         (BorderWidth, Literal::Length(n)) => node.set_border_width(*n),
@@ -397,5 +405,31 @@ pub(crate) fn listen(handle: &Handle, event: EventKind, steps: Rc<[Step]>, env: 
             field.on_submit(move |field| run(&steps, &env, &Handle::TextField(field)))
         }
         _ => unreachable!("checked event kinds"),
+    }
+}
+
+/// Binds a checked style property to a token looked up by name.
+fn bind_token(node: &Node, name: PropertyName, token: &str) -> Result {
+    use PropertyName::*;
+    use aegle_ui::{ColorSlot as C, LengthSlot as L};
+    let color = |slot| node.bind_color(slot, aegle_ui::token(token)?);
+    let length = |slot| node.bind_length(slot, aegle_ui::token(token)?);
+    match name {
+        Background => color(C::Background),
+        Foreground => color(C::Foreground),
+        BorderColor => color(C::BorderColor),
+        FocusColor => color(C::FocusColor),
+        SelectionColor => color(C::Selection),
+        CaretColor => color(C::Caret),
+        HoverBackground => color(C::HoverBackground),
+        PressedBackground => color(C::PressedBackground),
+        DisabledBackground => color(C::DisabledBackground),
+        DisabledForeground => color(C::DisabledForeground),
+        IndicatorColor => color(C::Indicator),
+        BorderWidth => length(L::BorderWidth),
+        Radius => length(L::Radius),
+        FocusWidth => length(L::FocusWidth),
+        FontSize => length(L::FontSize),
+        _ => unreachable!("checked token property"),
     }
 }

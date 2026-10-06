@@ -187,6 +187,18 @@ fn timing(value: &Literal) -> bool {
 
 /// A finite length, percentage, `calc` sum or, where allowed, `auto`. A sum's
 /// sign depends on the parent's size, so it is never rejected as negative.
+/// A registered token name: dot-separated ASCII letters, digits, `_` and `-`
+/// in two segments or more, as `aegle-ui` requires.
+fn token_name(name: &str) -> bool {
+    name.contains('.')
+        && name.split('.').all(|segment| {
+            !segment.is_empty()
+                && segment
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        })
+}
+
 fn length(value: &Literal, nonnegative: bool, auto: bool) -> bool {
     match value {
         Literal::Length(n) | Literal::Percent(n) => n.is_finite() && (!nonnegative || *n >= 0.0),
@@ -258,6 +270,14 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             Literal::Color(_),
         ) => true,
         (
+            Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
+            | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
+            | IndicatorColor | BorderWidth | Radius | FocusWidth | FontSize,
+            Literal::Call(function, arguments),
+        ) if function == "token" => {
+            matches!(&arguments[..], [Literal::String(token)] if token_name(token))
+        }
+        (
             Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate,
             Literal::Bool(_),
         ) => true,
@@ -292,9 +312,12 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         }
         Areas => "row strings of equally many cell names, each name a rectangle".into(),
         GridArea => "an area name string".into(),
-        Padding | BorderWidth | Radius | FocusWidth => "a nonnegative dp length".into(),
+        BorderWidth | Radius | FocusWidth => {
+            "a nonnegative dp length or token(\"package.name\")".into()
+        }
+        Padding => "a nonnegative dp length".into(),
         AspectRatio => "a finite positive number".into(),
-        FontSize => "a positive dp length".into(),
+        FontSize => "a positive dp length or token(\"package.name\")".into(),
         Transition => "nonnegative whole milliseconds with the ms suffix".into(),
         PaintTransition | OffsetTransition | ScaleTransition | RotationTransition => format!(
             "milliseconds, or [milliseconds, easing] with easing one of {}",
@@ -305,7 +328,7 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         Rotation => "finite degrees".into(),
         Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
         | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
-        | IndicatorColor => "a #RRGGBB or #RRGGBBAA color".into(),
+        | IndicatorColor => "a #RRGGBB or #RRGGBBAA color or token(\"package.name\")".into(),
         Grow | Shrink | Step => "a finite nonnegative number".into(),
         Min | Max | Value => "a finite number".into(),
         Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate => {

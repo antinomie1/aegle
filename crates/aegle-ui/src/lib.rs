@@ -43,6 +43,8 @@ mod style;
 mod style_handles;
 mod text;
 mod theme;
+mod token_handles;
+mod tokens;
 mod touch;
 mod transform;
 mod ui;
@@ -57,7 +59,10 @@ pub use aegle_layout::{Flow, GridLine, GridLines, Placement, Repeat, TemplateIte
 pub use aegle_motion::{Easing, Transition};
 pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, Selection, TextSystem};
-pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, VisualState};
+pub use aegle_theme::{
+    Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, Token, TokenKind, TokenType,
+    TokenValue, VisualState,
+};
 pub use aegle_types::{Color, Cursor, Point, Preferences, Size, TouchPhase};
 pub use control::{Control, Plain};
 pub use effects::Shadow;
@@ -68,6 +73,7 @@ pub use handles::{Container, Node, valid};
 #[cfg(feature = "motion")]
 pub use motion::TransitionProperty;
 pub use state::{Element, Hooks, State, focus_policy, text_style};
+pub use tokens::{ColorSlot, LengthSlot, StyleSlot, Tokens, register_token, token};
 
 pub use transform::Transform;
 pub use ui::{

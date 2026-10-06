@@ -20,7 +20,7 @@
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放、事件等待、键盘/指针输入、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。外观偏好经内置最小 D-Bus 客户端读取 desktop portal 并监听变化；尚无触摸、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
 - aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转经 `Node::set_transform` 动画（见末节）；原生 App 跟随系统减少动态效果。
-- aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；原生 App 按系统深浅色/高对比选择主题；当前没有 token 注册表。
+- aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；原生 App 按系统深浅色/高对比选择主题；类型化 token 注册表、全局与子树覆盖及 Style 属性绑定见末节。
 - aegle-ui、aegle-widgets、aegle-app 与 aegle：无窗口引擎（aegle-ui）、全部默认控件（aegle-widgets，经 `Widgets` trait 创建）、可选 Wayland/Win32 软件/Vulkan/wgpu 应用宿主（aegle-app）；命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/radio/slider/progress/list_view/table/popup/dropdown、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Grid/Stack/Tabs/Tab/Splitter/Text/Button/TextField/TextArea/CheckBox/Switch/RadioButton/Slider/Progress/NumberField/Separator 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。markup 另有 state/表达式/事件/块/组件的类型检查与多文件 `use` 导入；动态文档由宏生成已检查程序的构造代码。
 - aegle-loader：动态标记执行引擎（state 单元与效果、单向绑定、事件块、按值 key 的 for、if 分支重建、响应式组件参数）、运行时 `Program::load` 与原子 `reload`；绑定随控件经 `Node::keep_alive` 释放。宿主动作、`let`、record、slot、组件事件与可配置限额见末节。
@@ -297,7 +297,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。
 - 组件/绘制：自定义控件输入行为；组透明度与区域模糊（需要离屏层）；阴影与渐变的标记写法。
-- 主题/动画：token 注册表（只有按字段的部分覆盖）。
+- 主题/动画：Font 类型的 token；token 值的过渡。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收。
 - 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU 多窗口只共享实例/设备/管线，图集仍按窗口独立。现有桌面样本不能替代这些证据。
 
@@ -508,3 +508,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 标记：标记值新增常量函数 `Value::Call`。`calc(...)` 在检查时折叠为百分比加 `dp` 的线性组合；`columns`/`rows` 接受字符串线名、`repeat(...)`、`minmax(dp, fr)`、`fit_content(dp)`；新增 Grid 的 `areas` 与子项的 `grid_area`；`grid_column`/`grid_row` 接受线名或区域名字符串及 `[起点, 跨度或结束线名]`。`ui!` 与加载器生成相同的 setter 调用；schema 在 `schema/grid.rs` 中按与 `aegle-layout` 相同的规则检查，因此通过检查的文档在运行时不会因这些规则失败。
 - 验证：`aegle/tests/layout.rs` 的 `.aegle` 夹具经 `ui!` 与加载器得到相同且符合手算的结果：`calc(100% - 84dp)` 在 384 宽下为 300，区域 `head`/`nav`、命名线 `content`、repeat 内的线名 `half` 与负线号，以及 `repeat(auto_fill, 40dp)` 在 130 宽下排三列后换行；schema 接受与拒绝用例覆盖两个自动 repeat、自动 repeat 与 `fr` 混用、零次、只有线名、嵌套 repeat、参差与非矩形区域、空区域名、长度相乘与非 Grid 上的 `areas`。`aegle-widgets/tests/baseline.rs` 使用 CJK 测试字体，在一行中让 32px 标签、60 高的按钮、文本框、数字框与复选框的首基线重合（误差 0.01），并确认它们的顶边不同；关闭布局基线回调时该测试失败（基线相差约 15）。
 - 未实现：`calc` 只有线性组合，没有 `min()`/`max()`/`clamp()`，网格轨道不接受 `calc`；没有子网格（subgrid）与 `masonry`；基线只取首行，`last baseline` 对齐未暴露。
+
+## 主题 token 注册表
+
+- `aegle-theme`（仍为 no_std、无分配）：`Token<T>`（u16 索引）、`TokenKind`/`TokenValue`/`TokenDefault`、`TokenType`（`Color`、`f32` 长度、`Duration`）；14 个 Theme 字段是内置 token（`Theme::ACCENT` 等，`theme.<字段>`），`Theme::token`/`with_token` 与 `ThemeOverride::set_token` 按索引读写。
+- `aegle-ui`（`tokens.rs`、`token_handles.rs`）：每线程一份注册表，`register_token`/`token` 校验 `包.名称` 形式与类型，`UiError::Token` 报告未登记或类型不符。每个 Ui 的 `Tokens` 用稀疏表保存全局覆盖、子树覆盖与绑定。`Ui::set_token`/`token_value`、`Node::set_token`/`token_value`/`bind_color`/`bind_length`/`unbind_token`；绑定写入同一份 Style/字号装饰，`set_theme`、局部主题与覆盖、reparent、token 改变后在受影响子树内重新解析；直接 setter 结束对应绑定。`set_token` 在控件拒绝新值时回滚。facade 预导出 `Token`、`ColorSlot`、`LengthSlot`、`register_token`。
+- 标记：颜色属性与 `border_width`、`radius`、`focus_width`、`font_size` 接受 `token("包.名称")`（含 `theme.radius` 等内置名），schema 检查名称形式；`ui!` 与加载器在构建时按名查找并调用 `bind_color`/`bind_length`，名称未登记或类型不符时构建返回 `UiError::Token`。
+- 验证：`aegle/tests/tokens.rs` 用同一 `.aegle` 夹具经 `ui!` 与加载器，检查默认值随 `set_theme` 变化、子树覆盖优先于 Ui 覆盖、内置 `theme.radius` 的子树覆盖、字号为零时回滚、直接 setter 结束绑定；Rust API 部分检查 reparent 后按新子树解析、`unbind_token` 清除、Caret 绑定在非编辑器上被拒绝、`ThemeOverride` 改变后默认值跟随；schema 接受与拒绝用例。
+- 未实现：Font 类型 token；token 值没有独立的过渡；绑定只覆盖 Style 与字号，不覆盖布局属性（padding、gap 等仍用主题或本地 setter）。

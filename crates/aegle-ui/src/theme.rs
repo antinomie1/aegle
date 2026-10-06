@@ -34,7 +34,7 @@ impl Ui {
                 state.propagate_theme(id, None)?;
             }
         }
-        Ok(())
+        state.refresh_tokens(None)
     }
 }
 
@@ -118,7 +118,8 @@ impl State {
                 self.retheme(n, &old, &new)?;
             }
         }
-        Ok(())
+        // Reparenting changes inherited custom tokens even with the same theme.
+        self.refresh_tokens(Some(id))
     }
 
     /// Applies a node's resolved theme change to its text, default layout and

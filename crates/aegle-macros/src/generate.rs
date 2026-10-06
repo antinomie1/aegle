@@ -276,6 +276,9 @@ fn setter(
     if let Some(call) = crate::motion::geometry(property, handle, facade) {
         return Some(call);
     }
+    if let Some(call) = token(property, handle, facade) {
+        return Some(call);
+    }
     let name = match property.name {
         Title | Text | Checked | Min | Max | Value | Transition | Easing | PaintTransition
         | OffsetTransition | ScaleTransition | RotationTransition => return None,
@@ -354,4 +357,42 @@ fn setter(
     };
     let method = Ident::new(name, Span::call_site());
     Some(quote! { #handle.#method(#argument)?; })
+}
+
+/// Binds a style property to `token("name")`, looked up when built.
+fn token(property: &CheckedProperty, handle: &Ident, facade: &TokenStream) -> Option<TokenStream> {
+    use PropertyName::*;
+    let Literal::Call(function, arguments) = &property.value else {
+        return None;
+    };
+    let [Literal::String(token)] = &arguments[..] else {
+        return None;
+    };
+    if function != "token" {
+        return None;
+    }
+    let (color, slot) = match property.name {
+        Background => (true, "Background"),
+        Foreground => (true, "Foreground"),
+        BorderColor => (true, "BorderColor"),
+        FocusColor => (true, "FocusColor"),
+        SelectionColor => (true, "Selection"),
+        CaretColor => (true, "Caret"),
+        HoverBackground => (true, "HoverBackground"),
+        PressedBackground => (true, "PressedBackground"),
+        DisabledBackground => (true, "DisabledBackground"),
+        DisabledForeground => (true, "DisabledForeground"),
+        IndicatorColor => (true, "Indicator"),
+        BorderWidth => (false, "BorderWidth"),
+        Radius => (false, "Radius"),
+        FocusWidth => (false, "FocusWidth"),
+        FontSize => (false, "FontSize"),
+        _ => unreachable!("checked token property"),
+    };
+    let slot = Ident::new(slot, Span::call_site());
+    Some(if color {
+        quote! { #handle.bind_color(#facade::ColorSlot::#slot, #facade::token::<#facade::Color>(#token)?)?; }
+    } else {
+        quote! { #handle.bind_length(#facade::LengthSlot::#slot, #facade::token::<f32>(#token)?)?; }
+    })
 }

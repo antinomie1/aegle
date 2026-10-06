@@ -155,6 +155,8 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
             Text { text: "a"; grid_area: "x"; grid_column: ["a", "b"]; grid_row: [2, "y"] }
         }
         Stack { Column { inset: [0dp, auto]; padding: 2dp } }
+        Button { text: "t"; background: token("app.fill"); radius: token("theme.radius")
+            font_size: token("app.type-2") }
     }"#;
     let document = check(parse(source).unwrap()).unwrap();
     assert_eq!(document.root.children[1].kind, Kind::Grid);
@@ -185,6 +187,9 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
         "Column { width: -5% }",
         "Column { margin: [1dp, x + 1] }",
         "Window { margin: 1dp }",
+        "Column { background: token(\"plain\") }",
+        "Column { background: token(\"a.\", \"b.c\") }",
+        "Column { padding: token(\"a.b\") }",
     ] {
         assert!(parse(body).and_then(check).is_err(), "accepted {body}");
     }
