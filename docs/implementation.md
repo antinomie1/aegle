@@ -22,7 +22,7 @@
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转经 `Node::set_transform` 动画（见末节）；原生 App 跟随系统减少动态效果。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；原生 App 按系统深浅色/高对比选择主题；当前没有 token 注册表。
 - aegle-ui、aegle-widgets、aegle-app 与 aegle：无窗口引擎（aegle-ui）、全部默认控件（aegle-widgets，经 `Widgets` trait 创建）、可选 Wayland/Win32 软件/Vulkan/wgpu 应用宿主（aegle-app）；命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/radio/slider/progress/list_view/table/popup/dropdown、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
-- aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Text/Button/TextField/TextArea/CheckBox/Switch/Slider/Progress 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。markup 另有 state/表达式/事件/块/组件的类型检查与多文件 `use` 导入；动态文档由宏生成已检查程序的构造代码。
+- aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Grid/Stack/Tabs/Tab/Splitter/Text/Button/TextField/TextArea/CheckBox/Switch/RadioButton/Slider/Progress/NumberField/Separator 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。markup 另有 state/表达式/事件/块/组件的类型检查与多文件 `use` 导入；动态文档由宏生成已检查程序的构造代码。
 - aegle-loader：动态标记执行引擎（state 单元与效果、单向绑定、事件块、按值 key 的 for、if 分支重建、响应式组件参数）、运行时 `Program::load` 与原子 `reload`；绑定随控件经 `Node::keep_alive` 释放。宿主动作、`let`、record、slot、组件事件与可配置限额见末节。
 
 图像缓存预算不包括字体映射、排版、缓存索引及上游栅格 scratch；具体边界见 [资源](resources.md)。合成/过滤使用线性预乘颜色，公共字形彩色图像为非预乘 sRGB RGBA8。
@@ -464,3 +464,13 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - `aegle-app`：`App::wgpu()`、`App::vulkan()` 返回窗口共用的设备句柄，并重导出 `SharedGpu`、`SharedDevice`、`RawDevice`、`wgpu`、`ash`；新增 `gpu_texture` 示例（wgpu 渲染通道每帧在 `on_frame` 中绘制旋转三角形到应用纹理，Canvas 显示）。
 - 验证：`aegle-render-wgpu/tests/texture.rs`（2×2 纹理拉伸后角落纯色、中心混合，非法用途拒绝，注销后帧失败）在 RADV 与 Lavapipe 上通过；`aegle-render-vulkan/tests/texture.rs`（ash 创建并清除的 sRGB 图像读回颜色、17 个纹理超出预留、注销后帧失败）在 Lavapipe 与 RADV 上开启 Khronos validation 1.4.363 与同步检查通过，无验证消息；Vulkan 其余离屏测试同样在验证层下通过（验证层为提取到 scratchpad 的 Debian 包）。私有 headless Sway 上运行 release `gpu_texture`，截图确认三角形逐帧旋转、文字计数增长（约 64 帧/秒）。
 - 未验证：Vulkan 后端没有端到端示例（只有离屏测试）；Metal/D3D12 上的应用纹理未运行。
+
+## 更多基础组件、范围控件变体与提示
+
+- 引擎（`aegle-ui`）：`PaintCx` 增加 `time`、`reduced_motion` 与 `request_frame()`，绘制中请求的节点在下一帧标记重绘，`wants_frames` 随之为真；`Hooks::hover`（悬停目标变化）与 `Hooks::wake`（`State::wake` 到期），悬停逻辑移入 `hover.rs`；`Node::set_accessible_description`；`Container::set_clip(bool)` 让普通容器把子树的绘制、命中和指针形状裁剪到自身边界（复用视口的 clip 传播）。原生循环的等待超时受最近的 `next_wake` 限制，在逐帧回调之前处理到期唤醒。
+- 控件（`aegle-widgets`）：Slider/Progress 的 `Orientation::Vertical`、不确定进度（1.6 s 往复）与 `motion` 下 120 ms 的数值滑动（遵守减少动态效果）；聚焦 Slider 消费滚轮。新增 `NumberField`、`Separator`、`Tabs`（`Variant::Tab` 按钮、Left/Right 切换）、`Splitter`（Canvas 把手、拖动与按键、窗格裁剪）以及任意控件的 `NodeTooltip::set_tooltip`（500 ms 延时、窗口内放置、Escape/按下/离开隐藏、写入无障碍描述）。新增 SpinButton、Tab/TabList/TabPanel、带方向的分隔语义。
+- 标记：上述组件与 `orientation`、`indeterminate`、`tooltip`、`decimals`、`ratio` 属性在 schema、`ui!` 代码生成与运行时加载器中一致实现；`Tabs` 只收 `Tab`、`Tab` 需字面量 title、`Splitter` 恰好两个内建子节点；tooltip/indeterminate 可绑定；NumberField 与 Tabs 有 `on changed`（`self.value`、`self.selected`）。
+- 呈现：节点裁剪矩形在三个后端共用的 `scenes` 中对齐到整设备像素；软件后端对整像素外部裁剪只收窄光栅范围，不再占用整面 mask。此前 960×720 窗口中被裁剪的三层裁剪记录需要 2,764,800 B，超过默认 2 MiB 预算而无法呈现；1920×1080 窗口中任一 ScrollView 内的形状也需两层整面 mask（约 4 MB）。现在这两种情况都不再增加 mask。
+- 验证：`aegle-widgets/tests/components.rs`（竖直滑块指针与键盘、聚焦滚轮、不确定进度的帧请求与停止、`motion` 下滑动结束后停止请求帧、NumberField 步进/提交/clamp/非法文本恢复/步进区点击/回调次数、分隔线方向与厚度；Tabs 单击、Left/Right、`select` 不回调、越界拒绝；Splitter 拖动、End、越界拒绝、比例为零时首窗格内容被裁出；Tooltip 延时唤醒插入标签、Escape 移除、无障碍描述）；`aegle/tests/components.rs`（同一 `.aegle` 经 `ui!` 与加载器得到相同边界与属性，加载器中 NumberField/Tabs 的 `on changed` 更新 state）；schema 接受与拒绝用例；软件渲染测试改为验证整像素裁剪不占 mask、分数裁剪仍需一层。`cargo test --workspace --all-features` 通过，默认 feature 的 workspace `check --all-targets` 通过，Windows 交叉 `cargo check`（与上一节相同组合）通过。
+- 私有 headless Sway（GLES2 compositor）上运行 release `showcase`（软件后端）：截图确认分割窗格、标签页下划线与键盘切换到表格页、NumberField 步进区、竖直滑块、分隔线、不确定进度扫动；两窗口平铺时左窗格内容在把手处被裁剪，修改前该布局因 mask 预算报错退出。
+- 未验证：headless Sway 没有指针设备，Tooltip 与 Splitter 拖动只经单元测试，未在原生窗口中实测；新增语义角色未经 AT-SPI 查询；Vulkan/wgpu 后端未截图验证裁剪对齐。`aegle-widgets` 测试行数占比约 32%（修改前为 38%），仍高于 20% 的目标。

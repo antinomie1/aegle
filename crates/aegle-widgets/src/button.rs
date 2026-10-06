@@ -50,6 +50,8 @@ pub(crate) enum Variant {
     Dropdown { expanded: bool },
     /// A choice; `chosen` is whether it is the dropdown's selection.
     Option { chosen: bool },
+    /// A tab in a tab list; `selected` is whether its page is shown.
+    Tab { selected: bool },
 }
 
 /// The control inside a [`Button`] node.
@@ -73,7 +75,10 @@ impl ButtonControl {
     }
 
     fn listed(&self) -> bool {
-        !matches!(self.variant, Variant::Plain)
+        matches!(
+            self.variant,
+            Variant::Dropdown { .. } | Variant::Option { .. }
+        )
     }
 }
 
@@ -162,6 +167,17 @@ impl Control for ButtonControl {
             let x = size.width - padding - CHEVRON * 0.5;
             chevron(cx.builder, x, size.height * 0.5, cx.appearance.foreground)?;
         }
+        if matches!(self.variant, Variant::Tab { selected: true }) {
+            // The selected tab is marked by an underline, not only by color.
+            let line =
+                aegle_scene::Rect::new(padding * 0.5, size.height - 2.0, size.width - padding, 2.0);
+            if !line.is_empty() {
+                cx.builder.fill(
+                    aegle_scene::RoundedRect::new(line, 0.0)?,
+                    cx.appearance.indicator,
+                )?;
+            }
+        }
         if matches!(self.variant, Variant::Option { chosen: true }) {
             // The current choice is marked by shape, not only color.
             let mark = 12.0_f32.min(size.height);
@@ -178,10 +194,12 @@ impl Control for ButtonControl {
             Variant::Plain => Role::Button,
             Variant::Dropdown { .. } => Role::ComboBox,
             Variant::Option { .. } => Role::ListBoxOption,
+            Variant::Tab { .. } => Role::Tab,
         });
         match self.variant {
             Variant::Dropdown { expanded } => cx.node.set_expanded(expanded),
             Variant::Option { chosen } => cx.node.set_selected(chosen),
+            Variant::Tab { selected } => cx.node.set_selected(selected),
             Variant::Plain => {}
         }
         if !cx.labelled {

@@ -135,12 +135,13 @@ pub fn slider_track(size: Size, padding: f32) -> (f32, f32) {
     (start, (size.width - 2.0 * start).max(0.0))
 }
 
-/// Paints a slider (with thumb) or progress bar filled to `fraction`.
+/// Paints a horizontal slider (with its thumb at `filled[1]`) or progress bar
+/// whose indicator covers the `filled` span of fractions, `0.0..=1.0`.
 pub fn range(
     builder: &mut SceneBuilder,
     size: Size,
     padding: f32,
-    fraction: f64,
+    filled: [f64; 2],
     slider: bool,
     appearance: Appearance,
 ) -> Result<(), SceneError> {
@@ -159,10 +160,10 @@ pub fn range(
     // A thinner resting track keeps progress legible without relying on color.
     let track = Rect::new(start, y + height * 0.25, length, height * 0.5);
     fill(builder, track, appearance.radius, appearance.background)?;
-    let filled = length * fraction as f32;
+    let [from, to] = filled.map(|f| length * f.clamp(0.0, 1.0) as f32);
     fill(
         builder,
-        Rect::new(start, y, filled, height),
+        Rect::new(start + from, y, (to - from).max(0.0), height),
         appearance.radius,
         appearance.indicator,
     )?;
@@ -170,7 +171,7 @@ pub fn range(
     if slider {
         let diameter = 16.0_f32.min(size.width).min(size.height);
         let thumb = Rect::new(
-            start + filled - diameter * 0.5,
+            start + to - diameter * 0.5,
             (size.height - diameter) * 0.5,
             diameter,
             diameter,

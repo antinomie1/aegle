@@ -71,8 +71,18 @@ pub enum Kind {
     RadioButton,
     /// An interactive horizontal numeric range.
     Slider,
-    /// A noninteractive horizontal numeric progress indicator.
+    /// A noninteractive numeric progress indicator.
     Progress,
+    /// A one-pixel divider.
+    Separator,
+    /// A numeric text field with steppers.
+    NumberField,
+    /// A tab list whose children are `Tab` pages.
+    Tabs,
+    /// One page of a `Tabs`, titled by `title`.
+    Tab,
+    /// Two panes, its two children, divided by a draggable handle.
+    Splitter,
 }
 
 /// Properties shared with the imperative retained-control API.
@@ -140,6 +150,16 @@ pub enum PropertyName {
     GridColumn,
     /// Grid row placement: a line, or `[line or auto, span]`.
     GridRow,
+    /// Slider, progress or splitter axis.
+    Orientation,
+    /// Progress of unknown length.
+    Indeterminate,
+    /// A hint shown after the pointer rests, also the accessible description.
+    Tooltip,
+    /// Digits shown after a number field's decimal point.
+    Decimals,
+    /// A splitter's first-pane share.
+    Ratio,
     /// Visibility of the subtree.
     Visible,
     /// Whether the subtree accepts interaction.
@@ -235,6 +255,11 @@ pub(crate) fn kind(name: &str) -> Option<Kind> {
         "ScrollView" => Kind::ScrollView,
         "Grid" => Kind::Grid,
         "Stack" => Kind::Stack,
+        "Separator" => Kind::Separator,
+        "NumberField" => Kind::NumberField,
+        "Tabs" => Kind::Tabs,
+        "Tab" => Kind::Tab,
+        "Splitter" => Kind::Splitter,
         "Text" => Kind::Text,
         "Button" => Kind::Button,
         "TextField" => Kind::TextField,
@@ -253,8 +278,31 @@ impl Kind {
     pub fn is_container(self) -> bool {
         matches!(
             self,
-            Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView | Kind::Grid | Kind::Stack
+            Kind::Window
+                | Kind::Column
+                | Kind::Row
+                | Kind::ScrollView
+                | Kind::Grid
+                | Kind::Stack
+                | Kind::Tabs
+                | Kind::Tab
+                | Kind::Splitter
         )
+    }
+}
+
+/// Children rules beyond containment: `Tabs` holds only `Tab` pages, a `Tab`
+/// lives only in `Tabs`, and a `Splitter` holds exactly two controls. `None`
+/// stands for a block, slot or component instance.
+pub(crate) fn structure(parent: Kind, children: &[Option<Kind>]) -> Result<(), &'static str> {
+    let tabs = children.iter().filter(|&&c| c == Some(Kind::Tab)).count();
+    match parent {
+        Kind::Tabs if tabs != children.len() => Err("Tabs accepts only Tab children"),
+        Kind::Splitter if children.len() != 2 || children.contains(&None) => {
+            Err("Splitter requires exactly two controls as children")
+        }
+        _ if parent != Kind::Tabs && tabs > 0 => Err("Tab is only allowed inside Tabs"),
+        _ => Ok(()),
     }
 }
 
@@ -305,6 +353,15 @@ fn check_node(
     if !kind.is_container() && !node.children.is_empty() {
         return Err(error(format!("{} does not accept children", node.name)));
     }
+    let kinds: Vec<_> = node
+        .children
+        .iter()
+        .map(|item| match item {
+            Item::Node(child) => crate::schema::kind(&child.name),
+            _ => None,
+        })
+        .collect();
+    structure(kind, &kinds).map_err(|message| error(message.into()))?;
     let mut result = CheckedNode {
         kind,
         id: None,
@@ -359,6 +416,9 @@ fn check_node(
             property.span,
             "easing requires a transition duration on the same component",
         ));
+    }
+    if kind == Kind::Tab && !seen.contains(&PropertyName::Title) {
+        return Err(error("Tab requires a title".into()));
     }
     for child in node.children {
         let Item::Node(child) = child else {

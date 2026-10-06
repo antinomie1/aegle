@@ -26,6 +26,8 @@ pub struct Element {
     pub overlay: Option<Box<Scene>>,
     pub bounds: Rect,
     pub clip: Option<Rect>,
+    /// Clips its children's painting and hit testing to its bounds.
+    pub clips: bool,
     pub scroll: Point,
     pub visible: bool,
     pub effective_visible: bool,
@@ -66,6 +68,7 @@ impl Element {
             overlay,
             bounds: Rect::default(),
             clip: None,
+            clips: false,
             scroll: Point::default(),
             visible: true,
             effective_visible: true,
@@ -106,6 +109,10 @@ pub struct Hooks {
     pub measure: Option<fn(&mut State) -> Result<bool>>,
     /// Before refresh, outside any engine borrow: builds or drops virtual content.
     pub realize: Option<fn(&crate::Ui) -> Result<bool>>,
+    /// The hovered control changed (to `None` when the pointer left).
+    pub hover: Option<fn(&mut State, Option<NodeId>) -> Result>,
+    /// [`State::wake`] passed: delayed work such as showing a tooltip.
+    pub wake: Option<fn(&mut State, std::time::Instant) -> Result>,
 }
 
 /// The engine state behind a [`crate::Ui`], also the authoring surface for control
@@ -160,6 +167,14 @@ pub struct State {
     pub key_version: u64,
     /// When the input being dispatched was reported.
     pub input_time: std::time::Instant,
+    /// The time of the frame being produced, see [`crate::Ui::run_frame`].
+    pub frame_time: std::time::Instant,
+    /// Controls that asked to repaint on the next frame.
+    pub animated: std::collections::HashSet<NodeId>,
+    /// When a control library wants its [`Hooks::wake`] called; see [`crate::Ui::next_wake`].
+    pub wake: Option<std::time::Instant>,
+    /// Accessible descriptions, see [`crate::Node::set_accessible_description`].
+    pub descriptions: HashMap<NodeId, String>,
     #[cfg(feature = "accessibility")]
     pub next_access_id: u64,
 }
@@ -317,6 +332,8 @@ impl State {
             removed.push(node);
             self.callbacks.remove(&node);
             self.frames.retain(|h| h.id != node);
+            self.animated.remove(&node);
+            self.descriptions.remove(&node);
             self.decorations.remove(&node);
             self.overrides.remove(&node);
             self.kept.remove(&node);

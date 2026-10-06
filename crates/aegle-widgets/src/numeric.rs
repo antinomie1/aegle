@@ -1,28 +1,19 @@
-//! Sliders and determinate progress bars.
+//! Slider and progress handles; their controls are in `range_control`.
 
-use std::any::Any;
-
-use aegle_controls::{Input, Outcome, Range, RangeError};
+use aegle_controls::{Input, Range, RangeError};
 use aegle_core::Dirty;
-use aegle_layout::{Dimension, Style};
-use aegle_text::TextSystem;
-use aegle_theme::{ControlKind, Theme};
-use aegle_types::{Point, Size};
-use aegle_ui::{
-    Container, Control, Node, Result, UiError,
-    control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx, StyleScope},
-    handle,
-};
+use aegle_layout::Style;
+use aegle_ui::{Container, Control, Node, Result, UiError, handle};
 
-use crate::paint::{range, slider_track};
+use crate::range_control::{Orientation, ProgressControl, SliderControl, sized};
 
 handle!(
     Slider,
-    "A horizontal numeric slider with pointer, keyboard and semantic adjustment."
+    "A numeric slider with pointer, keyboard, wheel (while focused) and semantic adjustment."
 );
 handle!(
     Progress,
-    "A determinate horizontal progress indicator; it is not focusable."
+    "A determinate or indeterminate progress indicator; it is not focusable."
 );
 
 macro_rules! ranges {
@@ -78,9 +69,9 @@ fn read_range<T>(node: &Node, read: impl FnOnce(&Range) -> T) -> Result<T> {
     node.change(|state, id| {
         let control = &mut state.tree.get_mut(id).unwrap().context.control;
         let range = if let Some(slider) = control.as_any_mut().downcast_mut::<SliderControl>() {
-            slider.0.range()
+            slider.behavior.range()
         } else if let Some(progress) = control.as_any_mut().downcast_mut::<ProgressControl>() {
-            &progress.0
+            &progress.range
         } else {
             return Err(UiError::WrongKind.into());
         };
@@ -88,222 +79,104 @@ fn read_range<T>(node: &Node, read: impl FnOnce(&Range) -> T) -> Result<T> {
     })
 }
 
+/// Applies a programmatic range change; a changed value eases into place.
 fn update_range(
     node: &Node,
     update: impl FnOnce(&mut Range) -> std::result::Result<bool, RangeError>,
 ) -> Result {
     node.change(|state, id| {
         let control = &mut state.tree.get_mut(id).unwrap().context.control;
-        let range = if let Some(slider) = control.as_any_mut().downcast_mut::<SliderControl>() {
-            slider.0.range_mut()
+        let changed = if let Some(slider) = control.as_any_mut().downcast_mut::<SliderControl>() {
+            let changed = update(slider.behavior.range_mut())?;
+            let fraction = slider.behavior.range().fraction();
+            slider.glide.retarget(fraction, false);
+            changed
         } else if let Some(progress) = control.as_any_mut().downcast_mut::<ProgressControl>() {
-            &mut progress.0
+            let changed = update(&mut progress.range)?;
+            progress.glide.retarget(progress.range.fraction(), false);
+            changed
         } else {
             return Err(UiError::WrongKind.into());
         };
-        if update(range)? {
+        if changed {
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
         }
         Ok(())
     })
 }
 
-/// The control inside a [`Slider`] node.
-pub struct SliderControl(Box<aegle_controls::Slider>);
-
-/// The control inside a [`Progress`] node.
-pub struct ProgressControl(Range);
-
-fn control_style(height: f32) -> Style {
-    Style {
-        size: aegle_layout::Size {
-            width: Dimension::auto(),
-            height: Dimension::length(height),
-        },
-        flex_shrink: 0.0,
-        ..Default::default()
-    }
-}
-
-#[cfg(feature = "accessibility")]
-fn numeric(node: &mut aegle_ui::accesskit::Node, range: &Range) {
-    node.set_numeric_value(range.value());
-    node.set_min_numeric_value(range.min());
-    node.set_max_numeric_value(range.max());
-}
-
-impl Control for SliderControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-    fn kind(&self) -> ControlKind {
-        ControlKind::Slider
-    }
-    fn interactive(&self) -> bool {
-        true
-    }
-    fn drags(&self) -> bool {
-        true
-    }
-    fn self_clipping(&self) -> bool {
-        true
-    }
-    fn style_scope(&self) -> StyleScope {
-        StyleScope {
-            button_like: true,
-            indicator: true,
-            ..Default::default()
-        }
-    }
-    fn frame(&self) -> Frame {
-        Frame {
-            background: false,
-            border: false,
-        }
-    }
-    fn visual(&self) -> ControlVisual {
-        ControlVisual {
-            pressed: self.0.is_pressed(),
-            hovered: Some(self.0.is_hovered()),
-            ..Default::default()
-        }
-    }
-    fn set_enabled(&mut self, _: &mut TextSystem, enabled: bool) -> Outcome {
-        self.0.set_enabled(enabled)
-    }
-    fn content_offset(&self, size: Size, padding: f32, _: Point) -> Point {
-        Point::new(-slider_track(size, padding).0, 0.0)
-    }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
-        let (_, extent) = slider_track(cx.size, cx.padding);
-        Ok(self.0.handle(input, extent)?)
-    }
-    fn hover(
-        &mut self,
-        _: &mut InputCx<'_>,
-        pointer: aegle_ui::PointerId,
-        _: Input<'_>,
-    ) -> Result<Outcome> {
-        Ok(self.0.update_hover(pointer, true))
-    }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        Ok(Size::new(160.0, 20.0 + 2.0 * cx.padding))
-    }
-    fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut Style) {
-        if local & 1 == 0 {
-            style.size.height = Dimension::length(theme.control_height);
-        }
-    }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
-        range(
-            cx.builder,
-            cx.size,
-            cx.padding,
-            self.0.range().fraction(),
-            true,
-            *cx.appearance,
-        )?;
-        Ok(())
-    }
-    #[cfg(feature = "accessibility")]
-    fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::{Action, Orientation, Role};
-        cx.node.set_role(Role::Slider);
-        cx.node.set_orientation(Orientation::Horizontal);
-        let range = self.0.range();
-        numeric(cx.node, range);
-        cx.node.set_numeric_value_step(if range.step() == 0.0 {
-            (range.max() - range.min()) / 100.0
+/// Switches orientation and the themed cross-axis size that goes with it.
+fn orient(node: &Node, orientation: Orientation) -> Result {
+    node.change(|state, id| {
+        let vertical = orientation == Orientation::Vertical;
+        let theme = *state.theme_of(id);
+        let element = &mut state.tree.get_mut(id).unwrap().context;
+        let local = element.local_layout;
+        let control = element.control.as_any_mut();
+        let extent = if let Some(slider) = control.downcast_mut::<SliderControl>() {
+            slider.vertical = vertical;
+            theme.control_height
+        } else if let Some(progress) = control.downcast_mut::<ProgressControl>() {
+            progress.vertical = vertical;
+            theme.control_height / 2.0
         } else {
-            range.step()
-        });
-        if cx.enabled {
-            cx.node.add_action(Action::Focus);
-            cx.node.add_action(Action::SetValue);
-            cx.node.add_action(Action::Increment);
-            cx.node.add_action(Action::Decrement);
+            return Err(UiError::WrongKind.into());
+        };
+        let mut style = state.tree.get(id).unwrap().style().clone();
+        if local & 1 == 0 {
+            sized(&mut style, extent, vertical);
         }
+        aegle_layout::set_style(&mut state.tree, id, style)?;
+        Ok(())
+    })
+}
+
+impl Progress {
+    /// Lays the bar out from bottom to top or left to right.
+    pub fn set_orientation(&self, orientation: Orientation) -> Result {
+        orient(&self.0, orientation)
     }
-    #[cfg(feature = "accessibility")]
-    fn action_input(
-        &self,
-        action: aegle_ui::accesskit::Action,
-        data: Option<&aegle_ui::accesskit::ActionData>,
-    ) -> Option<Input<'static>> {
-        use aegle_ui::accesskit::{Action, ActionData};
-        match (action, data) {
-            (Action::Increment, _) => Some(Input::Increment),
-            (Action::Decrement, _) => Some(Input::Decrement),
-            (Action::SetValue, Some(ActionData::NumericValue(value))) if value.is_finite() => {
-                Some(Input::SetValue(*value))
-            }
-            _ => None,
-        }
+    /// Shows ongoing work of unknown length: a sweeping segment (a still one
+    /// with reduced motion) and no numeric value for assistive technology.
+    pub fn set_indeterminate(&self, indeterminate: bool) -> Result {
+        self.change(|state, id| {
+            let progress = state.control_as::<ProgressControl>(id).unwrap();
+            progress.indeterminate = indeterminate;
+            progress.sweep = None;
+            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+            Ok(())
+        })
+    }
+    /// Whether the bar shows indeterminate progress.
+    pub fn is_indeterminate(&self) -> Result<bool> {
+        self.change(|state, id| {
+            Ok(state
+                .control_as::<ProgressControl>(id)
+                .unwrap()
+                .indeterminate)
+        })
     }
 }
 
-impl Control for ProgressControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-    fn kind(&self) -> ControlKind {
-        ControlKind::Progress
-    }
-    fn self_clipping(&self) -> bool {
-        true
-    }
-    fn style_scope(&self) -> StyleScope {
-        StyleScope {
-            indicator: true,
-            ..Default::default()
-        }
-    }
-    fn frame(&self) -> Frame {
-        Frame {
-            background: false,
-            border: false,
-        }
-    }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        Ok(Size::new(160.0, 20.0 + 2.0 * cx.padding))
-    }
-    fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut Style) {
-        if local & 1 == 0 {
-            style.size.height = Dimension::length(theme.control_height / 2.0);
-        }
-    }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
-        range(
-            cx.builder,
-            cx.size,
-            cx.padding,
-            self.0.fraction(),
-            false,
-            *cx.appearance,
-        )?;
-        Ok(())
-    }
-    #[cfg(feature = "accessibility")]
-    fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        cx.node
-            .set_role(aegle_ui::accesskit::Role::ProgressIndicator);
-        numeric(cx.node, &self.0);
+impl Slider {
+    /// Lays the slider out from bottom to top or left to right; Up/Right and
+    /// wheel up increase it either way.
+    pub fn set_orientation(&self, orientation: Orientation) -> Result {
+        orient(&self.0, orientation)
     }
 }
 
 pub(crate) fn slider(container: &Container, min: f64, max: f64, value: f64) -> Result<Slider> {
     let range = Range::new(min, max, value, 0.0)?;
     crate::add(container, |_, theme| {
+        let mut style = Style {
+            flex_shrink: 0.0,
+            ..Default::default()
+        };
+        sized(&mut style, theme.control_height, false);
         Ok((
-            Box::new(SliderControl(Box::new(aegle_controls::Slider::new(range))))
-                as Box<dyn Control>,
-            control_style(theme.control_height),
+            Box::new(SliderControl::new(range)) as Box<dyn Control>,
+            style,
         ))
     })
     .map(Slider)
@@ -312,9 +185,14 @@ pub(crate) fn slider(container: &Container, min: f64, max: f64, value: f64) -> R
 pub(crate) fn progress(container: &Container, min: f64, max: f64, value: f64) -> Result<Progress> {
     let range = Range::new(min, max, value, 0.0)?;
     crate::add(container, |_, theme| {
+        let mut style = Style {
+            flex_shrink: 0.0,
+            ..Default::default()
+        };
+        sized(&mut style, theme.control_height / 2.0, false);
         Ok((
-            Box::new(ProgressControl(range)) as Box<dyn Control>,
-            control_style(theme.control_height / 2.0),
+            Box::new(ProgressControl::new(range)) as Box<dyn Control>,
+            style,
         ))
     })
     .map(Progress)

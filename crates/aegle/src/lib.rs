@@ -38,7 +38,8 @@ pub mod prelude {
     #[cfg(feature = "grid")]
     pub use aegle_ui::{Flow, Placement, Track};
     pub use aegle_widgets::{
-        Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, NodePopup, Popup, Progress,
-        Radio, ScrollView, Slider, Switch, Table, TableColumn, TextField, Widgets,
+        Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, NodePopup, NodeTooltip,
+        NumberField, Orientation, Popup, Progress, Radio, ScrollView, Separator, Slider, Splitter,
+        Switch, Table, TableColumn, Tabs, TextField, Widgets,
     };
 }

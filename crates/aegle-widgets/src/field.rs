@@ -85,7 +85,7 @@ impl TextField {
 }
 
 /// The control inside a [`TextField`] node.
-pub struct FieldControl(Box<aegle_controls::TextField>);
+pub struct FieldControl(pub(crate) Box<aegle_controls::TextField>);
 
 impl Control for FieldControl {
     fn as_any(&self) -> &dyn Any {
@@ -185,35 +185,42 @@ impl Control for FieldControl {
     }
 }
 
+/// A field control and its default layout style under `theme`.
+pub(crate) fn control(
+    state: &mut aegle_ui::State,
+    theme: &Theme,
+    text: &str,
+    multiline: bool,
+) -> Result<(FieldControl, Style)> {
+    let editor = state.fonts.borrow_mut().editor(
+        text,
+        &text_style(theme),
+        EditorOptions {
+            multiline,
+            ..Default::default()
+        },
+    )?;
+    Ok((
+        FieldControl(Box::new(aegle_controls::TextField::new(editor))),
+        Style {
+            size: aegle_layout::Size {
+                width: Dimension::auto(),
+                height: Dimension::length(theme.control_height * if multiline { 4.0 } else { 1.0 }),
+            },
+            min_size: aegle_layout::Size {
+                width: LengthPercentageAuto::length(0.0),
+                height: LengthPercentageAuto::length(theme.control_height),
+            },
+            flex_shrink: 0.0,
+            ..Default::default()
+        },
+    ))
+}
+
 pub(crate) fn create(container: &Container, text: &str, multiline: bool) -> Result<TextField> {
     crate::add(container, |state, theme| {
-        let editor = state.fonts.borrow_mut().editor(
-            text,
-            &text_style(theme),
-            EditorOptions {
-                multiline,
-                ..Default::default()
-            },
-        )?;
-        Ok((
-            Box::new(FieldControl(Box::new(aegle_controls::TextField::new(
-                editor,
-            )))) as Box<dyn Control>,
-            Style {
-                size: aegle_layout::Size {
-                    width: Dimension::auto(),
-                    height: Dimension::length(
-                        theme.control_height * if multiline { 4.0 } else { 1.0 },
-                    ),
-                },
-                min_size: aegle_layout::Size {
-                    width: LengthPercentageAuto::length(0.0),
-                    height: LengthPercentageAuto::length(theme.control_height),
-                },
-                flex_shrink: 0.0,
-                ..Default::default()
-            },
-        ))
+        let (control, style) = control(state, theme, text, multiline)?;
+        Ok((Box::new(control) as Box<dyn Control>, style))
     })
     .map(TextField)
 }

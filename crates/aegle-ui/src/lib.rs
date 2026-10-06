@@ -24,6 +24,7 @@ mod fling;
 #[cfg(feature = "grid")]
 mod grid_handles;
 mod handles;
+mod hover;
 mod input;
 mod layout;
 mod layout_handles;

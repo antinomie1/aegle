@@ -119,6 +119,18 @@ impl Node {
     pub fn focus(&self) -> Result {
         self.change(|state, id| state.set_focus(Some(id)))
     }
+    /// Supplementary text for assistive technology, such as a tooltip's;
+    /// `None` removes it.
+    pub fn set_accessible_description(&self, description: Option<&str>) -> Result {
+        self.change(|state, id| {
+            match description {
+                Some(text) => state.descriptions.insert(id, text.to_owned()),
+                None => state.descriptions.remove(&id),
+            };
+            state.tree.mark_dirty(id, Dirty::SEMANTICS)?;
+            Ok(())
+        })
+    }
     /// Explicit semantic name, including a text field's accessible label.
     pub fn set_accessible_label(&self, label: &str) -> Result {
         self.change(|state, id| {
@@ -190,6 +202,19 @@ impl Container {
         let group = self.add(|_, _| Ok((Box::new(Plain), Style::default())))?;
         group.change(|state, id| Ok(aegle_layout::set_contents(&mut state.tree, id, true)?))?;
         Ok(Container(group))
+    }
+    /// Clips the children's painting, hit testing and pointer shapes to this
+    /// container's bounds; layout is unchanged, so they may still overflow it.
+    pub fn set_clip(&self, clip: bool) -> Result {
+        self.change(|state, id| {
+            let element = &mut state.tree.get_mut(id).unwrap().context;
+            if element.clips != clip {
+                element.clips = clip;
+                state.geometry_dirty = true;
+                state.repaint = true;
+            }
+            Ok(())
+        })
     }
 }
 

@@ -41,10 +41,22 @@ impl App {
             .windows
             .iter()
             .any(|entry| entry.ui.has_pending_callbacks());
+        // Delayed control work (tooltips) bounds the wait without any frames.
+        let wake = self
+            .runtime
+            .borrow()
+            .windows
+            .iter()
+            .filter_map(|entry| entry.ui.next_wake())
+            .min();
+        let until_wake = wake.map(|wake| wake.saturating_duration_since(std::time::Instant::now()));
         self.runtime.borrow_mut().backend.dispatch(if pending {
             Some(Duration::ZERO)
         } else {
-            timeout
+            match (timeout, until_wake) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            }
         })?;
         loop {
             let event = self.runtime.borrow_mut().backend.next_event();
@@ -92,9 +104,31 @@ impl App {
             self.callbacks(callbacks)?;
             self.runtime.borrow_mut().refresh()?;
         }
+        self.wake(callbacks)?;
         self.frames(callbacks)?;
         self.runtime.borrow_mut().present()?;
         Ok(!self.runtime.borrow().windows.is_empty())
+    }
+
+    /// Runs delayed control work that is due, then applies its changes.
+    fn wake(&self, scratch: &mut Vec<Rc<Ui>>) -> Result<()> {
+        let now = std::time::Instant::now();
+        scratch.clear();
+        scratch.extend(
+            self.runtime
+                .borrow()
+                .windows
+                .iter()
+                .filter(|entry| entry.ui.next_wake().is_some_and(|wake| wake <= now))
+                .map(|entry| entry.ui.clone()),
+        );
+        if scratch.is_empty() {
+            return Ok(());
+        }
+        for ui in scratch.drain(..) {
+            ui.wake(now)?;
+        }
+        self.runtime.borrow_mut().refresh()
     }
 
     /// Runs frame callbacks of windows whose next frame is due, outside the

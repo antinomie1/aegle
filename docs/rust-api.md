@@ -79,7 +79,7 @@ button.on_click(move |_| {
 
 ## 当前图像、画布与虚拟列表
 
-`aegle::scene` 重新导出绘制命令。`image(&Image)` 以像素尺寸为固有逻辑尺寸，交叉轴不拉伸，`set_size` 后按边界拉伸，不保持宽高比；导出 Image 角色。像素须由调用方解码，App 不内置 PNG/JPEG 解码器。`canvas(painter)` 的 painter 以局部坐标和当前尺寸录制 scene 命令，只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行；它在刷新期间持有 UI 借用，不能使用控件句柄，绘制不裁剪到边界，只是绘制扩展，不提供自定义输入行为；导出 Canvas 角色。
+`aegle::scene` 重新导出绘制命令。`image(&Image)` 以像素尺寸为固有逻辑尺寸，交叉轴不拉伸，`set_size` 后按边界拉伸，不保持宽高比；导出 Image 角色。像素须由调用方解码，App 不内置 PNG/JPEG 解码器。`canvas(painter)` 的 painter 以局部坐标和当前尺寸录制 scene 命令，只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行；它在刷新期间持有 UI 借用，不能使用控件句柄，绘制不裁剪到边界；`on_input(|canvas, event| ...)` 使其可聚焦并在借用之外按序接收 `CanvasEvent`（按下/移动/释放/离开/取消/滚轮/按键/焦点），作为自定义输入行为；导出 Canvas 角色。需要逐帧动画的自定义控件在 `paint` 中调用 `PaintCx::request_frame`，以 `cx.time` 计算进度；需要悬停或延时的扩展安装 `Hooks::hover` / `Hooks::wake` 并设置 `State::wake`。
 
 `list_view(row_height, count, row)` 为等高虚拟列表：间隔节点高 `count × row_height`（不超过 16,777,216），只有与视口、祖先裁剪和窗口相交的行作为真实控件存在。`Ui::refresh` 在借用外先为新进入的行建立空列并调用 `row(&Container, index)`，再布局；离开的行连同焦点和局部状态删除，因此只能 Tab 到已存在的行。行按索引插入以保持焦点顺序，行内容溢出行高时不裁剪。`set_count` 删除超出的行，`reload` 在下次刷新重建全部已存在行。列表默认按 flex 收缩到父容器剩余空间，因此嵌套在 ScrollView 中时自身滚动。辅助技术只看到已建立的行，不报告总行数。
 

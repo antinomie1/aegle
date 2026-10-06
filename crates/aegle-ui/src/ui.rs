@@ -152,6 +152,10 @@ impl Ui {
                 key_handler: None,
                 key_version: 0,
                 input_time: std::time::Instant::now(),
+                frame_time: std::time::Instant::now(),
+                animated: Default::default(),
+                wake: None,
+                descriptions: Default::default(),
                 #[cfg(feature = "accessibility")]
                 next_access_id: 2,
             })),

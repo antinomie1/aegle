@@ -17,6 +17,8 @@ pub(crate) enum Role {
     TableRow,
     TableCell,
     TableHeader,
+    TabList,
+    TabPanel,
 }
 
 /// A plain container with a semantic role.
@@ -65,6 +67,8 @@ impl Control for Group {
             Role::TableRow => cx.node.set_role(Access::Row),
             Role::TableCell => cx.node.set_role(Access::Cell),
             Role::TableHeader => cx.node.set_role(Access::ColumnHeader),
+            Role::TabList => cx.node.set_role(Access::TabList),
+            Role::TabPanel => cx.node.set_role(Access::TabPanel),
         }
     }
 }

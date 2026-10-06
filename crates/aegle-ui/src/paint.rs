@@ -19,6 +19,12 @@ impl State {
         let bars = self.scrollbars(id);
         let bar_color = self.scrollbar_color(id);
         let theme = *self.theme_of(id);
+        let time = self.frame_time;
+        #[cfg(feature = "motion")]
+        let reduced_motion = self.motion.reduced;
+        #[cfg(not(feature = "motion"))]
+        let reduced_motion = false;
+        let mut next_frame = false;
         let element = &mut self.tree.get_mut(id).unwrap().context;
         let padding = element.inset(&theme);
         let size = element.bounds.size;
@@ -42,7 +48,7 @@ impl State {
                     appearance.border_color,
                 )?;
             }
-            element.control.paint(&mut PaintCx {
+            let mut cx = PaintCx {
                 builder: &mut builder,
                 size,
                 padding,
@@ -53,7 +59,12 @@ impl State {
                 shape,
                 bars,
                 bar_color,
-            })?;
+                time,
+                reduced_motion,
+                next_frame: false,
+            };
+            element.control.paint(&mut cx)?;
+            next_frame = cx.next_frame;
             outline(
                 &mut builder,
                 size,
@@ -81,9 +92,17 @@ impl State {
                     )?,
                     bars,
                     bar_color,
+                    time,
+                    reduced_motion,
+                    next_frame: false,
                 })?;
             }
             **overlay = builder.finish()?;
+        }
+        if next_frame {
+            self.animated.insert(id);
+        } else {
+            self.animated.remove(&id);
         }
         Ok(())
     }

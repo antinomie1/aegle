@@ -107,6 +107,20 @@ pub struct PaintCx<'a> {
     pub bars: [Option<Bar>; 2],
     /// Track and thumb colors.
     pub bar_color: [Color; 2],
+    /// The current frame's time, see [`crate::Ui::run_frame`].
+    pub time: std::time::Instant,
+    /// Whether the window prefers reduced motion; continuous decoration should stop.
+    pub reduced_motion: bool,
+    /// Set by [`PaintCx::request_frame`].
+    pub(crate) next_frame: bool,
+}
+
+impl PaintCx<'_> {
+    /// Repaints this control on the next frame, for animated content such as an
+    /// indeterminate progress bar. Ask again on every paint that still moves.
+    pub fn request_frame(&mut self) {
+        self.next_frame = true;
+    }
 }
 
 /// Semantic export context for controls without an editor or viewport.

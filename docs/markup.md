@@ -45,12 +45,12 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 
 构造期间先建立子树再设置属性；任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。编译型 View 不提供重载；运行时加载的 View 用 `reload` 原子替换。
 
-支持 Window、Column、Row、ScrollView、Grid、Stack、Text、Button、TextField、TextArea、CheckBox、Switch、RadioButton、Slider、Progress。只有前六种可以包含子节点；Window 只可为文件根。Grid 与 Stack 需要 facade 的 `grid` feature：编译型标记未启用时生成代码报找不到方法，运行时加载返回错误。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
+支持 Window、Column、Row、ScrollView、Grid、Stack、Tabs、Tab、Splitter、Text、Button、TextField、TextArea、CheckBox、Switch、RadioButton、Slider、Progress、NumberField、Separator。只有前九种可以包含子节点；Window 只可为文件根。Tabs 只接受 Tab 子节点，Tab 只能在 Tabs 中且必须有字面量 `title`；Splitter 必须恰好有两个内建控件子节点（不能是块、slot 或组件实例），依次放入两个窗格；编译型 View 中 Tab 的句柄类型为 Container。Grid 与 Stack 需要 facade 的 `grid` feature：编译型标记未启用时生成代码报找不到方法，运行时加载返回错误。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
 
 | 属性 | 值与适用范围 |
 | --- | --- |
 | `id` | 唯一标识符，生成有类型句柄 |
-| `title` | Window 字符串，最多 4000 UTF-8 字节且无 NUL |
+| `title` | Window 或 Tab 的字符串，最多 4000 UTF-8 字节且无 NUL |
 | `text` | Text/Button/TextField/TextArea/CheckBox/Switch 字符串；单行编辑器拒绝硬换行 |
 | `width`、`height` | 控件为非负 `dp`、百分比或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
 | `min_width`、`min_height`、`max_width`、`max_height`、`basis` | 非负 `dp`、百分比或 `auto`（最大尺寸的 `auto` 为不限） |
@@ -81,8 +81,13 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `font_size` | Text/Button/TextField/TextArea/CheckBox/Switch 的正 `dp` |
 | `checked` | CheckBox/Switch/RadioButton 的 bool，默认 false；同一父容器中的 RadioButton 互斥 |
 | `mixed` | CheckBox 的 bool，部分选中状态 |
-| `min`、`max`、`value` | Slider/Progress 的有限数，默认0/1/0；min须小于max，value按共享Range契约clamp |
-| `step` | Slider 的有限非负数，默认0连续，正值启用步进 |
+| `min`、`max`、`value` | Slider/Progress/NumberField 的有限数，默认0/1/0；min须小于max，value按共享Range契约clamp |
+| `step` | Slider/NumberField 的有限非负数，默认0连续，正值启用步进 |
+| `orientation` | Slider/Progress/Splitter 的 `horizontal`、`vertical`；Splitter 仅在构造时使用 |
+| `indeterminate` | Progress 的 bool，不确定进度动画 |
+| `decimals` | NumberField 显示的小数位，0 到 9 的整数 |
+| `ratio` | Splitter 首窗格占比，0 到 1 的数或 0% 到 100% |
+| `tooltip` | 除 Window 外任意控件的提示字符串，同时作为无障碍描述 |
 | `indicator_color` | CheckBox/Switch/Slider/Progress 的标志或完成部分颜色 |
 | `transition` | 全节点外观过渡，非负整数毫秒，如 `120ms`；零表示立即到目标 |
 | `easing` | 同节点须有 transition；linear/ease_in/ease_out/ease_in_out，默认 ease_out |
@@ -112,9 +117,9 @@ Window {
 }
 ```
 
-`state name: type = value` 只能写在文档根节点或组件体顶层；类型为 bool、int（i64）、float（有限 f32）、string、`list<int>`、`list<string>`。初始值可读参数和此前声明的 state，每个实例求值一次。表达式包含字面量、名称（内层 for 项 → state → 参数）、事件块中的 `self.checked`/`self.text`/`self.value`、`!`、一元 `-`、`|| && == != < <= > >= + - * / %`、列表字面量，以及 `str`、`len`、`int`、`float`。除整数字面量可按上下文转为 float 外没有隐式转换；`+` 也连接字符串和同类列表，比较只用于数值和字符串。未知名称、类型不符、不适用属性等在编译或加载时报告文件、行、Unicode 列和源码片段。
+`state name: type = value` 只能写在文档根节点或组件体顶层；类型为 bool、int（i64）、float（有限 f32）、string、`list<int>`、`list<string>`。初始值可读参数和此前声明的 state，每个实例求值一次。表达式包含字面量、名称（内层 for 项 → state → 参数）、事件块中的 `self.checked`/`self.text`/`self.value`/`self.selected`、`!`、一元 `-`、`|| && == != < <= > >= + - * / %`、列表字面量，以及 `str`、`len`、`int`、`float`。除整数字面量可按上下文转为 float 外没有隐式转换；`+` 也连接字符串和同类列表，比较只用于数值和字符串。未知名称、类型不符、不适用属性等在编译或加载时报告文件、行、Unicode 列和源码片段。
 
-属性值写表达式即为单向绑定，可绑定 text/label（string）、visible/enabled/checked/read_only（bool）与 value（float），其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。Button 支持 `on clicked`，CheckBox/Switch/Slider 支持 `on changed`，单行 TextField 支持 `on submitted`；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受源码大小约束。标记事件块占用控件的回调槽，Rust 再设置同一回调会替换它。
+属性值写表达式即为单向绑定，可绑定 text/label/tooltip（string）、visible/enabled/checked/read_only/indeterminate（bool）与 value（float），其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。Button 支持 `on clicked`，CheckBox/Switch/Slider/NumberField/Tabs 支持 `on changed`（Tabs 中 `self.selected` 为 int 页序号），单行 TextField 支持 `on submitted`；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受源码大小约束。标记事件块占用控件的回调槽，Rust 再设置同一回调会替换它。
 
 `if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点放在一个透明的 contents 分组中，直接参与父容器的布局：在 Row/Column 中与兄弟共享对齐、换行、gap 和 grow，在 Grid 中各自占一格，在 Stack 中叠放。release 测量（本机 CJK 测试字体，7 次中位数）：1000 行 `for` 首次构建加刷新 3.6 ms，追加一行 0.8 ms，整体反序 5.8 ms；大数据仍应使用 ListView。
 

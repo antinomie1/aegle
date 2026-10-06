@@ -31,9 +31,9 @@ fn inputs(window: &Window, column: &Container, status: &Label) -> Result {
 
     let buttons = column.row()?;
     let shown = status.clone();
-    buttons
-        .button("Button")?
-        .on_click(move |_| shown.set_text("Button clicked"))?;
+    let button = buttons.button("Button")?;
+    button.set_tooltip(Some("Shows a message below"))?;
+    button.on_click(move |_| shown.set_text("Button clicked"))?;
     buttons.button("Disabled")?.set_enabled(false)?;
     let menu = buttons.button("Popup")?;
     let popup = menu.popup()?;
@@ -62,10 +62,35 @@ fn inputs(window: &Window, column: &Container, status: &Label) -> Result {
             .on_change(move |_| shown.set_text(&format!("Size: {text}")))?;
     }
 
+    column.separator()?;
     let slider = column.slider(0.0, 100.0, 60.0)?;
     slider.set_accessible_label("Progress")?;
     let progress = column.progress(0.0, 100.0, 60.0)?;
-    slider.on_change(move |slider| progress.set_value(slider.value()?))?;
+    let numbers = column.row()?;
+    numbers.set_align_items(Some(Align::Center))?;
+    let amount = numbers.number_field(0.0, 100.0, 60.0)?;
+    amount.set_accessible_label("Amount")?;
+    amount.set_width(96.0)?;
+    amount.set_tooltip(Some("Type a value or use the steppers"))?;
+    numbers.separator()?;
+    let busy = numbers.progress(0.0, 1.0, 0.0)?;
+    busy.set_indeterminate(true)?;
+    busy.set_grow(1.0)?;
+    let level = numbers.slider(0.0, 10.0, 4.0)?;
+    level.set_orientation(Orientation::Vertical)?;
+    level.set_height(88.0)?;
+    level.set_accessible_label("Level")?;
+    // The slider and the number field drive the same progress value.
+    let (bar, field) = (progress.clone(), amount.clone());
+    slider.on_change(move |slider| {
+        bar.set_value(slider.value()?)?;
+        field.set_value(slider.value()?)
+    })?;
+    amount.on_change(move |amount| {
+        progress.set_value(amount.value()?)?;
+        slider.set_value(amount.value()?)
+    })?;
+    column.separator()?;
 
     let themes = column.row()?;
     themes.set_align_items(Some(Align::Center))?;
@@ -83,8 +108,16 @@ fn inputs(window: &Window, column: &Container, status: &Label) -> Result {
     Ok(())
 }
 
-/// Image, canvas and the scrolling family: scroll view, virtual lists and a table.
-fn views(column: &Container) -> Result {
+/// Image, canvas and the scrolling family on one tab, a table on another.
+fn views(pane: &Container) -> Result {
+    let tabs = pane.tabs()?;
+    tabs.set_grow(1.0)?;
+    tabs.set_min_height(0.0)?;
+    let column = tabs.add("Views")?;
+    let data = tabs.add("Table")?;
+    for page in [&column, &data] {
+        page.set_gap(10.0)?;
+    }
     let media = column.row()?;
     let pixels = (0..48 * 48)
         .flat_map(|i| [(i % 48 * 5) as u8, (i / 48 * 5) as u8, 160, 255])
@@ -142,7 +175,7 @@ fn views(column: &Container) -> Result {
             width: None,
         },
     ];
-    let table = column.table(&columns, 26.0, 1_000, |cell, row, column| {
+    let table = data.table(&columns, 26.0, 1_000, |cell, row, column| {
         let text = match column {
             0 => format!("file-{row}.txt"),
             1 => format!("{} KB", row * 3 + 1),
@@ -166,18 +199,16 @@ fn main() -> Result<()> {
     let window = app.window_with_options("Aegle — all controls", options)?;
     window.set_padding(16.0)?;
     window.set_gap(12.0)?;
-    let panes = window.row()?;
-    panes.set_gap(24.0)?;
-    panes.set_grow(1.0)?;
-    panes.set_min_height(0.0)?;
-    let (left, right) = (panes.column()?, panes.column()?);
-    for pane in [&left, &right] {
+    let panes = window.splitter(Orientation::Horizontal)?;
+    panes.set_ratio(0.48)?;
+    let (left, right) = (panes.first(), panes.second());
+    left.set_padding(Insets::new(0.0, 12.0, 0.0, 0.0))?;
+    right.set_padding(Insets::new(0.0, 0.0, 0.0, 12.0))?;
+    for pane in [left, right] {
         pane.set_gap(10.0)?;
-        pane.set_grow(1.0)?;
-        pane.set_min_height(0.0)?;
     }
     let status = window.text("Interact with any control.")?;
-    inputs(&window, &left, &status)?;
-    views(&right)?;
+    inputs(&window, left, &status)?;
+    views(right)?;
     app.run()
 }

@@ -5,7 +5,8 @@ use std::rc::Rc;
 use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
 use aegle_ui::{Color, Container, Node, Result};
 use aegle_widgets::{
-    Button, CheckBox, Label, Progress, Radio, ScrollView, Slider, Switch, TextField, Widgets,
+    Button, CheckBox, Label, NodeTooltip, NumberField, Orientation, Progress, Radio, ScrollView,
+    Separator, Slider, Splitter, Switch, Tabs, TextField, Widgets,
 };
 
 use crate::{Data, eval::Env, eval::handle as run};
@@ -39,6 +40,14 @@ pub enum Handle {
     Slider(Slider),
     /// Progress.
     Progress(Progress),
+    /// Separator.
+    Separator(Separator),
+    /// NumberField.
+    NumberField(NumberField),
+    /// Tabs; each Tab page is a [`Handle::Container`].
+    Tabs(Tabs),
+    /// Splitter.
+    Splitter(Splitter),
 }
 
 /// Converts a [`Handle`] to the typed handle of its control, as generated views do.
@@ -71,7 +80,11 @@ from_handle!(
     Switch(Switch),
     Radio(Radio),
     Slider(Slider),
-    Progress(Progress)
+    Progress(Progress),
+    Separator(Separator),
+    NumberField(NumberField),
+    Tabs(Tabs),
+    Splitter(Splitter)
 );
 #[cfg(any(
     all(feature = "wayland", target_os = "linux"),
@@ -98,6 +111,10 @@ impl Handle {
             Self::Radio(handle) => handle,
             Self::Slider(handle) => handle,
             Self::Progress(handle) => handle,
+            Self::Separator(handle) => handle,
+            Self::NumberField(handle) => handle,
+            Self::Tabs(handle) => handle,
+            Self::Splitter(handle) => handle,
         }
     }
 
@@ -110,6 +127,8 @@ impl Handle {
             Self::Window(window) => window,
             Self::Container(handle) => handle,
             Self::ScrollView(handle) => handle,
+            Self::Tabs(handle) => handle,
+            Self::Splitter(handle) => handle,
             _ => unreachable!("checked: only containers have children"),
         }
     }
@@ -125,6 +144,8 @@ impl Handle {
             (Self::Switch(handle), _) => Data::String(handle.text()?.into()),
             (Self::TextField(handle), _) => Data::String(handle.text()?.into()),
             (Self::Slider(handle), _) => Data::Float(handle.value()? as f32),
+            (Self::NumberField(handle), _) => Data::Float(handle.value()? as f32),
+            (Self::Tabs(handle), _) => Data::Int(handle.selected()? as i64),
             _ => unreachable!("checked self fields"),
         })
     }
@@ -137,6 +158,7 @@ pub(crate) fn consumed(kind: Kind, name: PropertyName) -> bool {
         name,
         Title | Text | Checked | Min | Max | Value | Transition | Easing
     ) || (kind == Kind::Window && matches!(name, Width | Height))
+        || (kind == Kind::Splitter && name == Orientation)
 }
 
 fn literal<'a>(element: &'a Element, name: PropertyName) -> Option<&'a Literal> {
@@ -149,9 +171,18 @@ fn literal<'a>(element: &'a Element, name: PropertyName) -> Option<&'a Literal> 
         })
 }
 
+fn orientation(element: &Element) -> Orientation {
+    match literal(element, PropertyName::Orientation) {
+        Some(Literal::Identifier(value)) if value == "vertical" => Orientation::Vertical,
+        _ => Orientation::Horizontal,
+    }
+}
+
 /// Creates a non-window control with its literal constructor arguments.
 pub(crate) fn create(kind: Kind, element: &Element, parent: &Container) -> Result<Handle> {
-    let text = match literal(element, PropertyName::Text) {
+    let text = match literal(element, PropertyName::Text)
+        .or_else(|| literal(element, PropertyName::Title))
+    {
         Some(Literal::String(text)) => text.as_str(),
         _ => "",
     };
@@ -189,6 +220,11 @@ pub(crate) fn create(kind: Kind, element: &Element, parent: &Container) -> Resul
         Kind::RadioButton => Handle::Radio(parent.radio(text, checked)?),
         Kind::Slider => Handle::Slider(parent.slider(range.0, range.1, range.2)?),
         Kind::Progress => Handle::Progress(parent.progress(range.0, range.1, range.2)?),
+        Kind::NumberField => Handle::NumberField(parent.number_field(range.0, range.1, range.2)?),
+        Kind::Separator => Handle::Separator(parent.separator()?),
+        Kind::Tabs => Handle::Tabs(parent.tabs()?),
+        Kind::Tab => Handle::Container(Tabs(parent.clone()).add(text)?),
+        Kind::Splitter => Handle::Splitter(parent.splitter(orientation(element))?),
         Kind::Window => unreachable!("windows are opened from the App"),
     })
 }
@@ -204,7 +240,9 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         Color::rgba(r, g, b, a)
     };
     let container = match handle {
-        Handle::Container(_) | Handle::ScrollView(_) => Some(handle.container()),
+        Handle::Container(_) | Handle::ScrollView(_) | Handle::Tabs(_) | Handle::Splitter(_) => {
+            Some(handle.container())
+        }
         #[cfg(any(
             all(feature = "wayland", target_os = "linux"),
             all(feature = "windows", target_os = "windows")
@@ -224,6 +262,7 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         (Visible, Literal::Bool(v)) => node.set_visible(*v),
         (Enabled, Literal::Bool(v)) => node.set_enabled(*v),
         (Label, Literal::String(text)) => node.set_accessible_label(text),
+        (Tooltip, Literal::String(text)) => node.set_tooltip(Some(text)),
         (Background, value) => node.set_background(color(value)),
         (Foreground, value) => node.set_foreground(color(value)),
         (BorderColor, value) => node.set_border_color(color(value)),
@@ -253,7 +292,36 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         (Value, Literal::Number(n)) => match handle {
             Handle::Slider(handle) => handle.set_value(f64::from(*n)),
             Handle::Progress(handle) => handle.set_value(f64::from(*n)),
+            Handle::NumberField(handle) => handle.set_value(f64::from(*n)),
             _ => unreachable!("checked range property"),
+        },
+        (Orientation, Literal::Identifier(value)) => {
+            let orientation = if value == "vertical" {
+                aegle_widgets::Orientation::Vertical
+            } else {
+                aegle_widgets::Orientation::Horizontal
+            };
+            match handle {
+                Handle::Slider(handle) => handle.set_orientation(orientation),
+                Handle::Progress(handle) => handle.set_orientation(orientation),
+                _ => unreachable!("checked orientation property"),
+            }
+        }
+        (Indeterminate, Literal::Bool(v)) => match handle {
+            Handle::Progress(handle) => handle.set_indeterminate(*v),
+            _ => unreachable!("checked indeterminate property"),
+        },
+        (Decimals, Literal::Number(n)) => match handle {
+            Handle::NumberField(handle) => handle.set_decimals(*n as u8),
+            _ => unreachable!("checked decimals property"),
+        },
+        (Ratio, Literal::Number(n) | Literal::Percent(n)) => match handle {
+            Handle::Splitter(handle) => handle.set_ratio(if matches!(value, Literal::Percent(_)) {
+                n / 100.0
+            } else {
+                *n
+            }),
+            _ => unreachable!("checked ratio property"),
         },
         (Mixed, Literal::Bool(v)) => match handle {
             Handle::CheckBox(handle) => handle.set_mixed(*v),
@@ -261,6 +329,7 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         },
         (Step, Literal::Number(n)) => match handle {
             Handle::Slider(handle) => handle.set_step(f64::from(*n)),
+            Handle::NumberField(handle) => handle.set_step(f64::from(*n)),
             _ => unreachable!("checked step property"),
         },
         (ReadOnly | Password, Literal::Bool(v)) => match handle {
@@ -303,6 +372,12 @@ pub(crate) fn listen(handle: &Handle, event: EventKind, steps: Rc<[Step]>, env: 
         }
         (EventKind::Changed, Handle::Slider(control)) => {
             control.on_change(move |control| run(&steps, &env, &Handle::Slider(control)))
+        }
+        (EventKind::Changed, Handle::NumberField(control)) => {
+            control.on_change(move |control| run(&steps, &env, &Handle::NumberField(control)))
+        }
+        (EventKind::Changed, Handle::Tabs(control)) => {
+            control.on_change(move |control| run(&steps, &env, &Handle::Tabs(control)))
         }
         (EventKind::Submitted, Handle::TextField(field)) => {
             field.on_submit(move |field| run(&steps, &env, &Handle::TextField(field)))

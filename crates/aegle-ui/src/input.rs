@@ -398,10 +398,11 @@ impl State {
             );
             self.dispatch(id, input)?;
             self.dirty_visual_state(id)?;
+            self.hovered(None)?;
         }
         Ok(())
     }
-    fn pointer_input(
+    pub(crate) fn pointer_input(
         &self,
         target: NodeId,
         id: PointerId,
@@ -449,64 +450,5 @@ impl State {
                 && element.clip.is_none_or(|clip| clip.contains(position))
                 && element.control.interactive()
         })
-    }
-
-    /// Geometry may move under a stationary pointer. Refresh hover without
-    /// generating slider drag updates, text selections or application callbacks.
-    pub fn rehit_pointer(&mut self) -> Result {
-        if self.drag.is_some() {
-            return Ok(());
-        }
-        if let Some((id, position)) = self.pointer {
-            let hit = self.hit(position);
-            self.update_hover(hit, id, position)?;
-            self.sync_hover(id, position)?;
-        }
-        Ok(())
-    }
-
-    fn update_hover(&mut self, hit: Option<NodeId>, id: PointerId, position: Point) -> Result {
-        if self.hover == hit {
-            return Ok(());
-        }
-        if let Some(old) = self.hover.take() {
-            let input =
-                self.pointer_input(old, id, PointerKind::Leave, position, Modifiers::default());
-            let outcome = self.control(old, input)?;
-            self.effects(old, outcome)?;
-            self.dirty_visual_state(old)?;
-        }
-        self.hover = hit;
-        if let Some(hit) = hit {
-            self.dirty_visual_state(hit)?;
-        }
-        Ok(())
-    }
-
-    fn sync_hover(&mut self, id: PointerId, position: Point) -> Result {
-        if let Some(hit) = self.hover {
-            let owns_pointer = self.capture.is_none_or(|capture| capture == (id, hit));
-            if owns_pointer {
-                let input =
-                    self.pointer_input(hit, id, PointerKind::Move, position, Modifiers::default());
-                let fonts = self.fonts.clone();
-                let theme = self.theme;
-                let element = &mut self.tree.get_mut(hit).unwrap().context;
-                let (size, padding) = (element.bounds.size, element.inset(&theme));
-                let outcome = element.control.hover(
-                    &mut InputCx {
-                        fonts: &mut fonts.borrow_mut(),
-                        size,
-                        padding,
-                        time: self.input_time,
-                        deferred: &mut Vec::new(),
-                    },
-                    id,
-                    input,
-                )?;
-                self.effects(hit, outcome)?;
-            }
-        }
-        Ok(())
     }
 }

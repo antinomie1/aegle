@@ -101,6 +101,8 @@ pub struct CanvasControl {
     pressed: Option<PointerId>,
     /// Input waiting for the next callback dispatch.
     events: Vec<CanvasEvent>,
+    /// A splitter grip's orientation (vertical) and first-pane share, for semantics.
+    pub(crate) splitter: Option<(bool, f32)>,
 }
 
 /// A focus outline for interactive canvases, which have no frame of their own.
@@ -293,7 +295,21 @@ impl Control for CanvasControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        cx.node.set_role(aegle_ui::accesskit::Role::Canvas);
+        use aegle_ui::accesskit::{Orientation, Role};
+        let Some((vertical, ratio)) = self.splitter else {
+            cx.node.set_role(Role::Canvas);
+            return;
+        };
+        // A focusable separator: the orientation is the divider line's.
+        cx.node.set_role(Role::Splitter);
+        cx.node.set_orientation(if vertical {
+            Orientation::Horizontal
+        } else {
+            Orientation::Vertical
+        });
+        cx.node.set_numeric_value(f64::from(ratio) * 100.0);
+        cx.node.set_min_numeric_value(0.0);
+        cx.node.set_max_numeric_value(100.0);
     }
 }
 
@@ -308,6 +324,7 @@ pub(crate) fn canvas(
                 interactive: false,
                 pressed: None,
                 events: Vec::new(),
+                splitter: None,
             }) as Box<dyn Control>,
             Style {
                 flex_shrink: 0.0,

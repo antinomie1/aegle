@@ -319,6 +319,15 @@ impl Checker {
                 format!("{} does not accept children", node.name),
             ));
         }
+        let kinds: Vec<_> = node
+            .children
+            .iter()
+            .map(|item| match item {
+                Item::Node(child) if !self.names.contains_key(&child.name) => builtin(&child.name),
+                _ => None,
+            })
+            .collect();
+        crate::schema::structure(kind, &kinds).map_err(|m| Error::new(node.span, m))?;
         let mut element = Element {
             kind: ElementKind::Builtin(kind),
             id: None,
@@ -397,12 +406,21 @@ impl Checker {
                 "easing requires a transition duration on the same component",
             ));
         }
+        if kind == Kind::Tab && !has(PropertyName::Title) {
+            return Err(Error::new(node.span, "Tab requires a title"));
+        }
         for event in node.events {
             let event_kind = match (kind, event.name.as_str()) {
                 (Kind::Button, "clicked") => EventKind::Clicked,
-                (Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider, "changed") => {
-                    EventKind::Changed
-                }
+                (
+                    Kind::CheckBox
+                    | Kind::Switch
+                    | Kind::RadioButton
+                    | Kind::Slider
+                    | Kind::NumberField
+                    | Kind::Tabs,
+                    "changed",
+                ) => EventKind::Changed,
                 (Kind::TextField, "submitted") => EventKind::Submitted,
                 _ => {
                     return Err(Error::new(
@@ -433,8 +451,8 @@ impl Checker {
 fn bindable(name: PropertyName) -> Option<Type> {
     use PropertyName::*;
     match name {
-        Text | Label => Some(Type::String),
-        Visible | Enabled | Checked | Mixed | ReadOnly => Some(Type::Bool),
+        Text | Label | Tooltip => Some(Type::String),
+        Visible | Enabled | Checked | Mixed | ReadOnly | Indeterminate => Some(Type::Bool),
         Value => Some(Type::Float),
         _ => None,
     }

@@ -160,7 +160,8 @@ impl Frame<'_, '_, '_> {
     /// It intersects every scene clip and applies to shapes and text, only for
     /// this draw. `None` is identical to [`Self::draw`]. Zero extent excludes all
     /// pixels. Invalid, negative or out-of-range clip geometry returns Coordinates,
-    /// including for empty scenes. An external clip adds one mask layer to the
+    /// including for empty scenes. A clip whose edges lie on whole device pixels
+    /// only narrows the raster bounds; any other clip adds one mask layer to the
     /// draw's budget, plus the ordinary coverage mask when none was yet needed.
     pub fn draw_clipped(
         &mut self,
@@ -168,6 +169,20 @@ impl Frame<'_, '_, '_> {
         transform: Affine,
         clip: Option<Rect>,
     ) -> Result<(), RenderError> {
+        // A clip on whole device pixels only narrows the raster bounds and
+        // needs no surface-sized mask.
+        if let Some(bounds) = clip.and_then(|rect| Bounds::aligned(rect, self.surface)) {
+            if scene.is_empty() {
+                return Ok(());
+            }
+            self.renderer.prepare(scene, self.surface, false)?;
+            let state = State {
+                transform,
+                clips: 0,
+                bounds,
+            };
+            return self.commands(scene, state);
+        }
         let clip = clip
             .map(|rect| {
                 let shape = RoundedRect::new(rect, 0.0).map_err(|_| RenderError::Coordinates)?;
@@ -201,6 +216,10 @@ impl Frame<'_, '_, '_> {
                 state.bounds = Bounds::EMPTY;
             }
         }
+        self.commands(scene, state)
+    }
+
+    fn commands(&mut self, scene: &Scene, mut state: State) -> Result<(), RenderError> {
         for command in scene.commands() {
             match *command {
                 Command::PushTransform(local) => {
@@ -343,6 +362,34 @@ impl Bounds {
             bottom: height as usize,
             ..Self::EMPTY
         }
+    }
+    /// The pixels of a valid in-range rectangle whose edges are whole device
+    /// pixels; `None` for any other rectangle.
+    fn aligned(rect: Rect, surface: &Surface<'_>) -> Option<Self> {
+        let edges = [
+            rect.origin.x,
+            rect.origin.y,
+            rect.origin.x + rect.size.width,
+            rect.origin.y + rect.size.height,
+        ];
+        let whole = edges
+            .iter()
+            .all(|e| e.fract() == 0.0 && e.abs() <= 1_048_576.0);
+        if !whole || rect.size.width < 0.0 || rect.size.height < 0.0 {
+            return None;
+        }
+        let clamp = |value: f32, limit: u32| value.clamp(0.0, limit as f32) as usize;
+        let bounds = Self {
+            left: clamp(edges[0], surface.width),
+            top: clamp(edges[1], surface.height),
+            right: clamp(edges[2], surface.width),
+            bottom: clamp(edges[3], surface.height),
+        };
+        Some(if bounds.is_empty() {
+            Self::EMPTY
+        } else {
+            bounds
+        })
     }
     pub(crate) fn path(path: &Path, surface: &Surface<'_>) -> Self {
         let b = path.bounds();

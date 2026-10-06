@@ -65,11 +65,15 @@ impl State {
             let parent = self.tree.parent(id)?.map(|pid| {
                 let parent = &self.tree.get(pid).unwrap().context;
                 let scrolling = parent.control.viewport();
-                let clip = if scrolling {
+                let clip = if scrolling || parent.clips {
                     // Content stops where an overflowing axis's bar begins, so it
                     // never scrolls underneath it.
                     let mut view = parent.bounds;
-                    let limit = self.scroll_limit(pid);
+                    let limit = if scrolling {
+                        self.scroll_limit(pid)
+                    } else {
+                        Point::default()
+                    };
                     if limit.y > 0.0 {
                         view.size.width = (view.size.width - FOOTPRINT).max(0.0);
                     }

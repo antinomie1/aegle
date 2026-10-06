@@ -37,7 +37,17 @@ fn nested_clips_transform_borders_and_mask_reuse() -> Result<(), Box<dyn std::er
         assert_eq!(pixel(0, 30), [255, 0, 0, 255]);
         assert_eq!(renderer.allocated_mask_bytes(), 3 * 32 * 32);
     }
+    // A whole-pixel clip narrows the raster bounds without another mask.
     let clip = Some(Rect::new(12.0, 10.0, 14.0, 6.0));
+    let shifted = Affine::translation(2.0, 0.0)?;
+    renderer
+        .begin_frame(&mut surface, Color::WHITE)
+        .draw_clipped(&scene, shifted, clip)?;
+    for (x, y, expected) in [(12, 12, 187), (10, 12, 255), (24, 12, 255), (12, 8, 255)] {
+        assert_eq!(surface.data()[(y * 32 + x) * 4], expected);
+    }
+    assert_eq!(renderer.allocated_mask_bytes(), 3 * 32 * 32);
+    let clip = Some(Rect::new(12.5, 10.0, 14.0, 6.0));
     assert_eq!(
         renderer
             .begin_frame(&mut surface, Color::WHITE)
@@ -50,8 +60,8 @@ fn nested_clips_transform_borders_and_mask_reuse() -> Result<(), Box<dyn std::er
     let mut clipped = Renderer::new(4 * 32 * 32);
     clipped
         .begin_frame(&mut surface, Color::WHITE)
-        .draw_clipped(&scene, Affine::translation(2.0, 0.0)?, clip)?;
-    for (x, y, expected) in [(12, 12, 187), (10, 12, 255), (24, 12, 255), (12, 8, 255)] {
+        .draw_clipped(&scene, shifted, clip)?;
+    for (x, y, expected) in [(14, 12, 187), (11, 12, 255), (24, 12, 255), (14, 8, 255)] {
         assert_eq!(surface.data()[(y * 32 + x) * 4], expected);
     }
     assert_eq!(clipped.allocated_mask_bytes(), 4 * 32 * 32);

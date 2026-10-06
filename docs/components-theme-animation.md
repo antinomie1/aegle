@@ -14,7 +14,7 @@
 
 `Container::check_box(text, checked)` / `switch(text, checked)` 创建带可选可见标签的二态控件；标签同时作为默认无障碍名称，`set_accessible_label` 可覆盖。Toggle 复用 Button 的按压、捕获、Space 释放/Enter 首次按下与语义激活规则；复选标记和开关位置都表达当前状态，不只用颜色区分。当前没有三态、分组单选或专属触摸处理。
 
-`slider(min, max, value)` / `progress(min, max, value)` 共用独立 `aegle-controls::Range`；边界与数值为 f64，要求有限、min < max 且跨度有限，有限越界值按公开契约 clamp。`set_range` 原子替换边界，失败保留旧状态。Progress 只显示确定进度，不接受焦点或用户调整，没有不确定进度的循环动画。
+`slider(min, max, value)` / `progress(min, max, value)` 共用独立 `aegle-controls::Range`；边界与数值为 f64，要求有限、min < max 且跨度有限，有限越界值按公开契约 clamp。`set_range` 原子替换边界，失败保留旧状态。Progress 不接受焦点或用户调整；`set_indeterminate(true)` 显示 1.6 秒往复扫过的不确定进度，期间经 `PaintCx::request_frame` 逐帧重绘，关闭后停止请求帧。两者都有 `set_orientation(Orientation::Vertical)`：竖直时自下而上增长，指针位置按竖轴换算。
 
 Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零表示连续。步长以 min 为网格起点，max 为额外可达端点；取最近值，等距时取较大值。步长低于浮点可表示精度时不声称精确网格。单步在额外最大端点向下移动至最后格点，例如0..10/step3为10→9→6。方向键/语义调整使用一个步长，连续时为跨度的1%；PageUp/Down为十步或10%，Home/End到端点。数值增量低于一个浮点间隔时按下一可表示数推进。
 
@@ -22,9 +22,19 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `on_change(|control| ...)` 与按钮回调共用版本化队列，在树借用外执行。用户/语义操作真正改变值才排队；`set_checked` / `set_value` / `set_range` / `set_step` 是模型更新，不回调，方便多个控件同步且不会形成循环。处理器读取执行时的最新值，通知不保存每次中间值；替换处理器或销毁节点会丢弃旧通知。显式 `toggle`、`increment`、`decrement` 走用户行为并检查有效可见/启用状态。
 
-默认标志为18dp复选框或36×20dp开关；滑块手柄16dp，轨道2dp、完成部分4dp，以粗细差异辅助表达数值。小尺寸时缩小标志并裁剪至自身范围，布局宽度优先容纳可见标签；当前不做标签自动换行。字号/主题切换复用同一段落，值变化不重排文字。外观可用 Skin/Style 和 `indicator_color` 修改；四种控件的值、checked 与手柄位置即时更新，配色/焦点轮廓沿用现有外观过渡，尚无数值或开关位移动画。
+默认标志为18dp复选框或36×20dp开关；滑块手柄16dp，轨道2dp、完成部分4dp，以粗细差异辅助表达数值。小尺寸时缩小标志并裁剪至自身范围，布局宽度优先容纳可见标签；当前不做标签自动换行。字号/主题切换复用同一段落，值变化不重排文字。外观可用 Skin/Style 和 `indicator_color` 修改；checked 与开关位置即时更新，配色/焦点轮廓沿用现有外观过渡。启用 `motion` 时，Slider/Progress 的程序化数值变化以 120 ms ease-out 滑向新值（用户拖动直接跟手），减少动态效果偏好下立即到位；开关位仍无位移动画。聚焦的 Slider 消费滚轮，每 16 逻辑像素移动一步，未聚焦时滚轮照常滚动外层视图。
 
 `widgets` 示例用 `.aegle` 构造四种控件和 CJK 编辑器，通过简短 Rust 回调实现互相同步、启禁编辑、进度更新、主题切换与窗口关闭。
+
+## 当前分隔、数值输入、标签页、分割与提示
+
+- `separator()`：1 逻辑像素的主题边框色分隔线，在 Row 中为竖线、在其他容器中为横线，沿交叉轴拉伸；不可聚焦，语义为带方向的 separator。
+- `number_field(min, max, value)`：复用单行编辑器的数值输入，右侧 20dp 宽的上下步进区；`set_step`、`set_decimals(0..=9)`、`set_range`、`set_value`，上/下键与 PageUp/PageDown 按步长或十步调整，聚焦时滚轮调整。Enter 或失焦时解析文本，越界 clamp，不能解析时恢复上次值；值真正改变才调用 `on_change`。语义为 SpinButton 并报告数值与范围。
+- `tabs()` 与 `Tabs::add(title)`：每页为一列，只显示选中页；标签为按钮变体（`Variant::Tab`），选中项画下划线，可单击、Enter/Space 激活，聚焦标签时 Left/Right 循环移动并选中。`select` 不回调，用户切换才调用 `on_change`。语义为 TabList/Tab（selected）/TabPanel。
+- `splitter(Orientation)`：两个窗格加 6dp 可拖动把手；`first()`/`second()` 返回窗格，`set_ratio(0..=1)` 设置首窗格占比。把手可聚焦，方向键每次 2%，Home/End 到端点；拖动时按把手中心换算比例。
+- `NodeTooltip::set_tooltip(Some(text))`：任意控件可设提示；指针在该控件（或没有自己提示的子孙）上停留 `TOOLTIP_DELAY`（500 ms）后，在指针右下方以反色标签显示，空间不足时翻到上方并保持在窗口内。按下、Escape、移开或删除控件时隐藏；文字同时作为无障碍描述。延时由 `State::wake` 驱动，原生循环按最近的唤醒时间限定等待，不轮询。
+
+这些组件都通过公开的 `Hooks`（press/place/removed/key 以及新增的 hover、wake）与 `PaintCx::request_frame` 实现，没有私有引擎入口；第三方控件可用同样方式获得悬停、延时与逐帧绘制。
 
 ## 当前局部样式与组件复用
 
@@ -38,11 +48,11 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 局部视觉数据按 NodeId 放在 Ui 的稀疏表中，无样式节点不保存一份完整 Style。纯配色/边框变化只失效绘制，前景色同时失效语义；自定义皮肤可随交互状态改变前景，相关状态变化会同时刷新语义。字号改变才重排文字及布局，保持编辑器、组合输入、选择和控件身份。
 
-普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用，并用局部深色主题和滑出后关闭演示继承与完成回调；它不是完整 MD3 套件。`Canvas` 提供只读绘制扩展，`ListView` 提供等高虚拟列表，`ImageView` 显示共享图像；自定义输入行为、组件标记导入和系统主题观察尚未实现。
+普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用，并用局部深色主题和滑出后关闭演示继承与完成回调；它不是完整 MD3 套件。`Canvas` 提供绘制扩展，`on_input` 后接收指针、滚轮、按键与焦点事件作为自定义输入行为；`ListView` 提供等高虚拟列表，`ImageView` 显示共享图像。
 
 ## 默认组件范围
 
-默认皮肤采用跨平台一致的中性极简外观。首版包含 Box/Row/Column、Text、Button、CheckBox（含部分选中）、RadioButton、Switch、Slider、Progress、TextField、TextArea、ScrollView、等高与按内容变高的虚拟 ListView、基础 Table、Dropdown，以及窗口内 Popup；Menu/Tooltip 可由 Popup 组合，尚无专用控件。Grid、图像格式、路径图标和高级特效按 feature 提供。
+默认皮肤采用跨平台一致的中性极简外观。首版包含 Box/Row/Column、Text、Button、CheckBox（含部分选中）、RadioButton、Switch、Slider 与 Progress（含竖直与不确定进度）、NumberField、Separator、Tabs、Splitter、Tooltip、TextField、TextArea、ScrollView、等高与按内容变高的虚拟 ListView、基础 Table、Dropdown，以及窗口内 Popup；Menu 可由 Popup 组合，尚无专用控件。Grid、图像格式、路径图标和高级特效按 feature 提供。
 
 默认 Popup/Menu/Tooltip 在当前窗口的 overlay 层内显示，不承诺越过宿主窗口边缘；需要独立原生 popup 的 shell/应用通过平台扩展显式创建，走相同焦点及语义契约。当前 Popup 与 Dropdown 列表即在此层：显示于锚点下方（空间不足时上方），Escape 或按下外部关闭并归还焦点。首版的表格只有固定行高、表头与虚拟行，没有排序或列宽拖动；没有富文档编辑器或完整 MD3 套件，第三方可用公开接口实现。
 

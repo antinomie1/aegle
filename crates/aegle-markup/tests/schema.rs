@@ -31,7 +31,10 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
             RadioButton { text: "一"; checked: true; pressed_background: #123456 }
             Switch { text: "启用"; pressed_background: #123456; focus_width: 2dp }
             Slider { value: 200; max: 20; min: -10; step: 0.25; hover_background: #112233 }
-            Progress { max: 10; min: 2; indicator_color: #123456 }
+            Progress { max: 10; min: 2; indicator_color: #123456; indeterminate: true }
+            Separator { tooltip: "divider" }
+            NumberField { min: 0; max: 9; step: 0.5; decimals: 2 }
+            Tabs { Tab { title: "一"; Splitter { orientation: vertical; ratio: 30%; Text {}; Column {} } } }
         }
     }"#;
     let document = check(parse(source).unwrap()).unwrap();
@@ -58,6 +61,16 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "Slider { step: -1 }",
         "Progress { step: 1 }",
         "CheckBox { checked: 1 }",
+        "Tabs { Column {} }",
+        "Column { Tab { title: \"x\" } }",
+        "Tabs { Tab {} }",
+        "Splitter { Text {} }",
+        "NumberField { decimals: 10 }",
+        "NumberField { min: 2; max: 1 }",
+        "Splitter { ratio: 2; Text {}; Text {} }",
+        "Slider { orientation: diagonal }",
+        "Slider { indeterminate: true }",
+        "tooltip: \"window\"",
         "Switch { Text {} }",
         "Switch { mixed: true }",
         "Slider { font_size: 12dp }",

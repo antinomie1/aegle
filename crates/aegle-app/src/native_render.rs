@@ -81,13 +81,16 @@ fn scenes(
 ) -> Result<()> {
     let scale = Affine::scale(factor, factor)?;
     ui.visit_scenes(|scene, transform, clip| {
+        // Node clips snap to whole device pixels, like a scissor rectangle; the
+        // software renderer then clips without a surface-sized mask.
         let clip = clip.map(|rect| {
-            Rect::new(
-                rect.origin.x * factor,
-                rect.origin.y * factor,
-                rect.size.width * factor,
-                rect.size.height * factor,
-            )
+            let (left, top) = (
+                (rect.origin.x * factor).round(),
+                (rect.origin.y * factor).round(),
+            );
+            let right = ((rect.origin.x + rect.size.width) * factor).round();
+            let bottom = ((rect.origin.y + rect.size.height) * factor).round();
+            Rect::new(left, top, right - left, bottom - top)
         });
         draw(scene, transform.then(scale)?, clip)
     })

@@ -74,23 +74,27 @@ impl Node {
 }
 
 impl Ui {
-    /// Whether any frame callback is registered; a host keeps requesting frames while true.
+    /// Whether a frame callback is registered or a control is animating; a
+    /// host keeps requesting frames, calling [`Self::run_frame`], while true.
     pub fn wants_frames(&self) -> bool {
-        self.state
-            .borrow()
-            .frames
-            .iter()
-            .any(|h| h.callback.is_some())
+        let state = self.state.borrow();
+        !state.animated.is_empty() || state.frames.iter().any(|h| h.callback.is_some())
     }
-    /// Runs the frame callbacks registered before this call, in registration
+    /// Starts a frame at `now`: animating controls repaint at this time, then
+    /// the frame callbacks registered before this call run in registration
     /// order, outside the UI borrow. Hosts call it once per frame before
     /// refreshing. A failing callback is removed and its error returned.
     pub fn run_frame(&self, now: Instant) -> Result {
         let queued: Vec<(NodeId, u64)> = {
-            let state = self
+            let mut state = self
                 .state
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| UiError::ReentrantAccess)?;
+            state.frame_time = now;
+            let animated: Vec<NodeId> = state.animated.iter().copied().collect();
+            for id in animated {
+                state.tree.mark_dirty(id, aegle_core::Dirty::PAINT)?;
+            }
             state.frames.iter().map(|h| (h.id, h.version)).collect()
         };
         for (id, version) in queued {
@@ -124,6 +128,28 @@ impl Ui {
                 (None, _) => {}
             }
             result?;
+        }
+        Ok(())
+    }
+    /// When delayed control-library work (a tooltip) is due; a host waits at
+    /// most until then and calls [`Self::wake`].
+    pub fn next_wake(&self) -> Option<Instant> {
+        self.state.borrow().wake
+    }
+    /// Runs delayed control-library work that is due at `now`.
+    pub fn wake(&self, now: Instant) -> Result {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        if state.wake.is_none_or(|wake| wake > now) {
+            return Ok(());
+        }
+        state.wake = None;
+        for hook in state.hooks.clone() {
+            if let Some(wake) = hook.wake {
+                wake(&mut state, now)?;
+            }
         }
         Ok(())
     }

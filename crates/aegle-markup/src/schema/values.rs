@@ -64,6 +64,11 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "value" => Value,
         "step" => Step,
         "indicator_color" => IndicatorColor,
+        "orientation" => Orientation,
+        "indeterminate" => Indeterminate,
+        "tooltip" => Tooltip,
+        "decimals" => Decimals,
+        "ratio" => Ratio,
         _ => return None,
     })
 }
@@ -89,6 +94,7 @@ pub(crate) fn choices(name: PropertyName) -> &'static [&'static str] {
         Flow => &["row", "column", "row_dense", "column_dense"],
         Easing => &["linear", "ease_in", "ease_out", "ease_in_out"],
         Theme => &["light", "dark", "high_contrast"],
+        Orientation => &["horizontal", "vertical"],
         _ => &[],
     }
 }
@@ -101,7 +107,8 @@ pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
         Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
     );
     match name {
-        Title | Theme => kind == Kind::Window,
+        Title => matches!(kind, Kind::Window | Kind::Tab),
+        Theme => kind == Kind::Window,
         Text | FontSize => matches!(
             kind,
             Kind::Text
@@ -132,8 +139,13 @@ pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
         ),
         Checked => matches!(kind, Kind::CheckBox | Kind::Switch | Kind::RadioButton),
         Mixed => kind == Kind::CheckBox,
-        Min | Max | Value => matches!(kind, Kind::Slider | Kind::Progress),
-        Step => kind == Kind::Slider,
+        Min | Max | Value => matches!(kind, Kind::Slider | Kind::Progress | Kind::NumberField),
+        Step => matches!(kind, Kind::Slider | Kind::NumberField),
+        Orientation => matches!(kind, Kind::Slider | Kind::Progress | Kind::Splitter),
+        Indeterminate => kind == Kind::Progress,
+        Decimals => kind == Kind::NumberField,
+        Ratio => kind == Kind::Splitter,
+        Tooltip => kind != Kind::Window,
         IndicatorColor => matches!(
             kind,
             Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider | Kind::Progress
@@ -207,7 +219,10 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         (Text, Literal::String(text)) if kind == Kind::TextField => !text.contains([
             '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
         ]),
-        (Text | Label, Literal::String(_)) => true,
+        (Text | Label | Tooltip, Literal::String(_)) => true,
+        (Decimals, Literal::Number(n)) => n.fract() == 0.0 && (0.0..=9.0).contains(n),
+        (Ratio, Literal::Number(n)) => (0.0..=1.0).contains(n),
+        (Ratio, Literal::Percent(n)) => (0.0..=100.0).contains(n),
         (Width | Height, Literal::Length(n)) if kind == Kind::Window => {
             n.is_finite() && *n > 0.0 && n.fract() == 0.0 && f64::from(*n) <= f64::from(u32::MAX)
         }
@@ -235,7 +250,10 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             | IndicatorColor,
             Literal::Color(_),
         ) => true,
-        (Visible | Enabled | ReadOnly | Password | Checked | Mixed, Literal::Bool(_)) => true,
+        (
+            Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate,
+            Literal::Bool(_),
+        ) => true,
         (_, Literal::Identifier(value)) => choices(name).contains(&value.as_str()),
         _ => false,
     };
@@ -245,7 +263,9 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
     let expected = match name {
         Title => "a string of at most 4000 bytes without NUL".into(),
         Text if kind == Kind::TextField => "a string without hard line separators".into(),
-        Text | Label => "a string".into(),
+        Text | Label | Tooltip => "a string".into(),
+        Decimals => "a whole number from 0 to 9".into(),
+        Ratio => "a number from 0 to 1 or a percentage".into(),
         Width | Height if kind == Kind::Window => "a positive whole dp length fitting u32".into(),
         Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis => {
             "a nonnegative dp length, a percentage or auto".into()
@@ -268,9 +288,11 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         | IndicatorColor => "a #RRGGBB or #RRGGBBAA color".into(),
         Grow | Shrink | Step => "a finite nonnegative number".into(),
         Min | Max | Value => "a finite number".into(),
-        Visible | Enabled | ReadOnly | Password | Checked | Mixed => "true or false".into(),
+        Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate => {
+            "true or false".into()
+        }
         Direction | Wrap | Align | Justify | AlignContent | AlignSelf | JustifySelf
-        | JustifyItems | Flow | Easing | Theme => choices(name).join(", "),
+        | JustifyItems | Flow | Easing | Theme | Orientation => choices(name).join(", "),
     };
     Err(format!("{name:?} requires {expected}"))
 }
@@ -281,7 +303,7 @@ pub(crate) fn validate_range<'a>(
     properties: impl Iterator<Item = (PropertyName, &'a Literal)>,
     span: Span,
 ) -> Result<(), Error> {
-    if !matches!(kind, Kind::Slider | Kind::Progress) {
+    if !matches!(kind, Kind::Slider | Kind::Progress | Kind::NumberField) {
         return Ok(());
     }
     let mut bounds = [0.0, 1.0];

@@ -18,12 +18,17 @@ mod field;
 mod group;
 mod label;
 mod list;
+mod number_field;
 mod numeric;
 mod paint;
 mod popup;
+mod range_control;
 mod scroll_view;
+mod separator;
 mod table;
+mod tabs;
 mod toggle;
+mod tooltip;
 mod visual;
 
 use aegle_layout::Style;
@@ -39,12 +44,17 @@ pub use field::{FieldControl, TextField};
 pub use group::Group;
 pub use label::{Label, LabelControl};
 pub use list::ListView;
-pub use numeric::{Progress, ProgressControl, Slider, SliderControl};
+pub use number_field::{NumberField, NumberFieldControl};
+pub use numeric::{Progress, Slider};
 pub use paint::{CHEVRON, Mark, ToggleSpec, check_mark, chevron, range, slider_track, toggle};
 pub use popup::{NodePopup, Popup};
+pub use range_control::{Orientation, ProgressControl, SliderControl};
 pub use scroll_view::{ScrollControl, ScrollView};
+pub use separator::{Separator, SeparatorControl, Splitter};
 pub use table::{Table, TableColumn};
+pub use tabs::{Tabs, TabsControl};
 pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
+pub use tooltip::{NodeTooltip, TOOLTIP_DELAY};
 pub use visual::{ImageControl, ImageView};
 
 /// The engine hooks the controls need: popups (overlay placement, dismissal and
@@ -52,22 +62,43 @@ pub use visual::{ImageControl, ImageView};
 /// realization and measurement). Every constructor installs them on first use.
 pub static HOOKS: Hooks = Hooks {
     key: Some(keys),
-    press: Some(popup::dismiss_popups),
+    press: Some(press),
     overlay_at: Some(popup::popup_at),
-    place: Some(popup::place_popups),
+    place: Some(place),
     removed: Some(removed),
-    removed_after: Some(popup::prune_popups),
+    removed_after: Some(pruned),
     measure: Some(list::measure_rows),
     realize: Some(list::realize_rows),
+    hover: Some(tooltip::hovered),
+    wake: Some(tooltip::wake),
 };
 
 fn keys(state: &mut State, key: &aegle_ui::KeyInput<'_>) -> Result<bool> {
-    Ok(popup::popup_key(state, key)? || toggle::radio_key(state, key)?)
+    Ok(tooltip::tooltip_key(state, key)?
+        || popup::popup_key(state, key)?
+        || toggle::radio_key(state, key)?
+        || tabs::tab_key(state, key)?)
+}
+
+fn press(state: &mut State, position: aegle_types::Point) -> Result {
+    tooltip::hide(state)?;
+    popup::dismiss_popups(state, position)
+}
+
+fn place(state: &mut State) -> bool {
+    // Both run: each moves its own overlays.
+    popup::place_popups(state) | tooltip::place(state)
 }
 
 fn removed(state: &mut State, node: aegle_core::NodeId) {
     popup::removed(state, node);
     list::removed(state, node);
+    tooltip::removed(state, node);
+}
+
+fn pruned(state: &mut State) -> Result {
+    popup::prune_popups(state)?;
+    tooltip::prune(state)
 }
 
 /// Appends a node after installing [`HOOKS`].
@@ -151,6 +182,16 @@ pub trait Widgets {
     /// Appends a dropdown with at least one choice and a valid selected index.
     /// The choice list opens below it; Up/Down and Enter or a click choose.
     fn dropdown(&self, items: &[&str], selected: usize) -> Result<Dropdown>;
+    /// Appends a numeric field with finite increasing bounds; the value clamps.
+    /// Typing commits on Enter or blur; steppers, arrows and the wheel step it.
+    fn number_field(&self, min: f64, max: f64, value: f64) -> Result<NumberField>;
+    /// Appends a one-pixel divider: vertical in a row, horizontal otherwise.
+    fn separator(&self) -> Result<Separator>;
+    /// Appends a tab list with one shown page per tab; see [`Tabs::add`].
+    fn tabs(&self) -> Result<Tabs>;
+    /// Appends two panes divided by a draggable, keyboard-adjustable handle:
+    /// side by side when horizontal, stacked when vertical. It grows to fill.
+    fn splitter(&self, orientation: Orientation) -> Result<Splitter>;
 }
 
 impl Widgets for Container {
@@ -220,5 +261,17 @@ impl Widgets for Container {
     }
     fn dropdown(&self, items: &[&str], selected: usize) -> Result<Dropdown> {
         dropdown::dropdown(self, items, selected)
+    }
+    fn number_field(&self, min: f64, max: f64, value: f64) -> Result<NumberField> {
+        number_field::create(self, min, max, value)
+    }
+    fn separator(&self) -> Result<Separator> {
+        separator::separator(self)
+    }
+    fn tabs(&self) -> Result<Tabs> {
+        tabs::tabs(self)
+    }
+    fn splitter(&self, orientation: Orientation) -> Result<Splitter> {
+        separator::splitter(self, orientation)
     }
 }

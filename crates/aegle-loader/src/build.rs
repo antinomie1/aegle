@@ -144,9 +144,27 @@ pub(crate) fn populate(
     handle: &Handle,
     env: &Env,
     block: &mut Block,
-    ids: Option<&mut [Option<Handle>]>,
+    mut ids: Option<&mut [Option<Handle>]>,
 ) -> Result {
-    if !element.children.is_empty() {
+    if let Handle::Splitter(splitter) = handle {
+        // Its two checked children fill the two panes.
+        for (child, pane) in element
+            .children
+            .iter()
+            .zip([splitter.first(), splitter.second()])
+        {
+            let parent = Parent { container: pane };
+            let child = std::slice::from_ref(child);
+            children(
+                child,
+                &parent,
+                env,
+                block,
+                &mut Vec::new(),
+                ids.as_deref_mut(),
+            )?;
+        }
+    } else if !element.children.is_empty() {
         let parent = Parent::of(handle);
         children(&element.children, &parent, env, block, &mut Vec::new(), ids)?;
     }

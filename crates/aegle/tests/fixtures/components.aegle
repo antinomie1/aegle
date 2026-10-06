@@ -1,0 +1,24 @@
+Column {
+    width: 400dp
+    height: 300dp
+    Tabs {
+        id: tabs
+        grow: 1
+        Tab {
+            id: edit
+            title: "Edit"
+            Splitter {
+                id: split
+                ratio: 25%
+                grow: 1
+                Slider { id: slider; orientation: vertical; min: 0; max: 10; value: 5; tooltip: "Level" }
+                Column {
+                    Progress { id: progress; indeterminate: true; orientation: horizontal }
+                    Separator { id: line }
+                    NumberField { id: number; min: 0; max: 5; value: 2; step: 0.5; decimals: 1 }
+                }
+            }
+        }
+        Tab { id: other; title: "Other"; Text { text: "second" } }
+    }
+}

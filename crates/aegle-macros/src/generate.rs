@@ -16,7 +16,7 @@ pub(super) fn builder(document: &CheckedDocument, facade: &TokenStream) -> Token
     } else {
         quote! { #facade::Container }
     };
-    let create_root = constructor(root, &parent, facade);
+    let create_root = constructor(root, &quote! { #parent }, facade);
     let cleanup = if root.kind == Kind::Window {
         quote! { #root_handle.close()?; }
     } else {
@@ -39,7 +39,7 @@ pub(super) fn builder(document: &CheckedDocument, facade: &TokenStream) -> Token
             #(#fields)*
         }
         move |#parent: &#parent_type| -> #facade::Result<#view> {
-            use #facade::Widgets as _;
+            use #facade::{NodeTooltip as _, Widgets as _};
             let #root_handle = #create_root?;
             let __aegle_result = (|| -> #facade::Result<#view> {
                 #(#creations)*
@@ -91,11 +91,18 @@ impl Output {
         if let Some(transition) = transition(node, handle, facade) {
             self.transitions.push(transition);
         }
-        for child in &node.children {
+        // A splitter's two children fill its panes.
+        let panes = [quote! { #handle.first() }, quote! { #handle.second() }];
+        for (index, child) in node.children.iter().enumerate() {
             self.count += 1;
             let child_handle =
                 format_ident!("__aegle_node_{}", self.count, span = Span::mixed_site());
-            let constructor = constructor(child, handle, facade);
+            let parent = if node.kind == Kind::Splitter {
+                panes[index].clone()
+            } else {
+                quote! { #handle }
+            };
+            let constructor = constructor(child, &parent, facade);
             self.creations
                 .push(quote! { let #child_handle = #constructor?; });
             self.visit(child, &child_handle, facade);
@@ -106,7 +113,11 @@ impl Output {
 pub(super) fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
     let name = match kind {
         Kind::Window => "Window",
-        Kind::Row | Kind::Column | Kind::Grid | Kind::Stack => "Container",
+        Kind::Row | Kind::Column | Kind::Grid | Kind::Stack | Kind::Tab => "Container",
+        Kind::Separator => "Separator",
+        Kind::NumberField => "NumberField",
+        Kind::Tabs => "Tabs",
+        Kind::Splitter => "Splitter",
         Kind::ScrollView => "ScrollView",
         Kind::Text => "Label",
         Kind::Button => "Button",
@@ -121,7 +132,7 @@ pub(super) fn handle_type(kind: Kind, facade: &TokenStream) -> TokenStream {
     quote! { #facade::#name }
 }
 
-fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> TokenStream {
+fn constructor(node: &CheckedNode, parent: &TokenStream, facade: &TokenStream) -> TokenStream {
     let text = node.properties.iter().find_map(|property| {
         if matches!(property.name, PropertyName::Title | PropertyName::Text) {
             let Literal::String(value) = &property.value else {
@@ -175,7 +186,7 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
             _ => quote! { #parent.radio(#text, #checked) },
         };
     }
-    if matches!(node.kind, Kind::Slider | Kind::Progress) {
+    if matches!(node.kind, Kind::Slider | Kind::Progress | Kind::NumberField) {
         let mut range = [0.0_f64, 1.0, 0.0];
         for property in &node.properties {
             let index = match property.name {
@@ -190,10 +201,10 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
             range[index] = f64::from(value);
         }
         let [min, max, value] = range;
-        return if node.kind == Kind::Slider {
-            quote! { #parent.slider(#min, #max, #value) }
-        } else {
-            quote! { #parent.progress(#min, #max, #value) }
+        return match node.kind {
+            Kind::Slider => quote! { #parent.slider(#min, #max, #value) },
+            Kind::Progress => quote! { #parent.progress(#min, #max, #value) },
+            _ => quote! { #parent.number_field(#min, #max, #value) },
         };
     }
     match node.kind {
@@ -206,7 +217,16 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
         Kind::Button => quote! { #parent.button(#text) },
         Kind::TextField => quote! { #parent.text_field(#text) },
         Kind::TextArea => quote! { #parent.text_area(#text) },
+        Kind::Separator => quote! { #parent.separator() },
+        Kind::Tabs => quote! { #parent.tabs() },
+        Kind::Tab => quote! { #parent.add(#text) },
+        Kind::Splitter => {
+            let orientation = orientation(node).unwrap_or("Horizontal");
+            let orientation = Ident::new(orientation, Span::call_site());
+            quote! { #parent.splitter(#facade::Orientation::#orientation) }
+        }
         Kind::Window
+        | Kind::NumberField
         | Kind::CheckBox
         | Kind::Switch
         | Kind::RadioButton
@@ -217,6 +237,27 @@ fn constructor(node: &CheckedNode, parent: &Ident, facade: &TokenStream) -> Toke
     }
 }
 
+/// The Rust variant of an orientation identifier.
+fn variant(value: &str) -> &'static str {
+    if value == "vertical" {
+        "Vertical"
+    } else {
+        "Horizontal"
+    }
+}
+
+/// A node's literal orientation variant.
+fn orientation(node: &CheckedNode) -> Option<&'static str> {
+    node.properties
+        .iter()
+        .find_map(|property| match &property.value {
+            Literal::Identifier(value) if property.name == PropertyName::Orientation => {
+                Some(variant(value))
+            }
+            _ => None,
+        })
+}
+
 fn setter(
     kind: Kind,
     property: &CheckedProperty,
@@ -224,7 +265,9 @@ fn setter(
     facade: &TokenStream,
 ) -> Option<TokenStream> {
     use PropertyName::*;
-    if kind == Kind::Window && matches!(property.name, Width | Height) {
+    if kind == Kind::Window && matches!(property.name, Width | Height)
+        || kind == Kind::Splitter && property.name == Orientation
+    {
         return None;
     }
     if let Some(call) = crate::layout::setter(property, handle, facade) {
@@ -256,21 +299,38 @@ fn setter(
         Step => "set_step",
         Mixed => "set_mixed",
         IndicatorColor => "set_indicator_color",
+        Indeterminate => "set_indeterminate",
+        Decimals => "set_decimals",
+        Ratio => "set_ratio",
+        Orientation => "set_orientation",
+        Tooltip => "set_tooltip",
         _ => unreachable!("layout properties are generated by crate::layout"),
     };
     let argument = match &property.value {
+        Literal::String(value) if property.name == Tooltip => quote! { Some(#value) },
         Literal::String(value) => quote! { #value },
         Literal::Bool(value) => quote! { #value },
         Literal::Color([red, green, blue, alpha]) => {
             quote! { #facade::Color::rgba(#red, #green, #blue, #alpha) }
         }
-        Literal::Number(value) | Literal::Length(value) => {
-            if property.name == Step {
+        Literal::Number(value) | Literal::Length(value) => match property.name {
+            Step => {
                 let value = f64::from(*value);
                 quote! { #value }
-            } else {
+            }
+            Decimals => {
+                let value = *value as u8;
                 quote! { #value }
             }
+            _ => quote! { #value },
+        },
+        Literal::Percent(value) if property.name == Ratio => {
+            let value = value / 100.0;
+            quote! { #value }
+        }
+        Literal::Identifier(value) if property.name == Orientation => {
+            let name = Ident::new(variant(value), Span::call_site());
+            quote! { #facade::Orientation::#name }
         }
         Literal::Identifier(value) if property.name == Theme => {
             let name = Ident::new(value, Span::call_site());

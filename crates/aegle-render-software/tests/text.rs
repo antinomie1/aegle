@@ -91,13 +91,21 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw(&scene, Affine::IDENTITY)?;
     assert_eq!(text_only.allocated_mask_bytes(), 0);
+    // Whole-pixel clips need no mask; fractional ones need two.
+    text_only
+        .begin_frame(&mut surface, Color::TRANSPARENT)
+        .draw_clipped(
+            &scene,
+            Affine::IDENTITY,
+            Some(Rect::new(0.0, 0.0, 64.0, 48.0)),
+        )?;
     assert!(matches!(
         text_only
             .begin_frame(&mut surface, Color::TRANSPARENT)
             .draw_clipped(
                 &scene,
                 Affine::IDENTITY,
-                Some(Rect::new(0.0, 0.0, 64.0, 48.0)),
+                Some(Rect::new(0.0, 0.0, 63.5, 48.0)),
             ),
         Err(aegle_render_software::RenderError::MaskBudget {
             required: 6144,

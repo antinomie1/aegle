@@ -272,6 +272,9 @@ impl State {
             if !element.label.is_empty() {
                 node.set_label(element.label.as_str());
             }
+            if let Some(description) = self.descriptions.get(&id) {
+                node.set_description(description.as_str());
+            }
             if id == self.root {
                 // Native adapters request physical coordinates through one root
                 // transform; descendant geometry stays logical.
