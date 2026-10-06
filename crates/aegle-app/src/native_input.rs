@@ -121,8 +121,7 @@ impl Entry {
                     PointerEventKind::Release { button: 0x110, .. } => PointerKind::Up,
                     PointerEventKind::Leave { .. } => return self.ui.pointer_leave(),
                     PointerEventKind::Axis {
-                        #[cfg(feature = "motion")]
-                        time,
+                        time: axis_time,
                         horizontal,
                         vertical,
                         ..
@@ -131,14 +130,15 @@ impl Entry {
                             Point::new(horizontal.absolute as f32, vertical.absolute as f32);
                         #[cfg(feature = "motion")]
                         if horizontal.stop || vertical.stop {
-                            return self.release_flick(time, position);
+                            return self.release_flick(axis_time, position);
                         } else {
                             if self.flick.len() == 8 {
                                 self.flick.remove(0);
                             }
-                            self.flick.push((time, delta));
+                            self.flick.push((axis_time, delta));
                         }
-                        return self.ui.scroll_by(position, delta);
+                        let time = self.clock.at(axis_time);
+                        return self.ui.wheel(position, delta, self.modifiers, time);
                     }
                     _ => return Ok(()),
                 };

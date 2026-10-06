@@ -137,6 +137,11 @@ pub trait Control: Any {
     fn drags(&self) -> bool {
         false
     }
+    /// Receives wheel input as [`Input::Wheel`] before enclosing scroll
+    /// views; a handled outcome consumes the scroll.
+    fn takes_wheel(&self) -> bool {
+        false
+    }
     /// A clipped, scrollable viewport for its children. It also receives an
     /// overlay record drawn after them, see [`Control::paint_overlay`].
     fn viewport(&self) -> bool {

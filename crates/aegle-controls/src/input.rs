@@ -110,6 +110,16 @@ pub enum Input<'a> {
     Key(KeyInput<'a>),
     /// Logical control focus changed.
     Focus(bool),
+    /// A wheel or touchpad scroll over a control that takes wheel input,
+    /// before any enclosing scroll view.
+    Wheel {
+        /// Scroll distance in logical pixels; positive moves content up/left.
+        delta: Point,
+        /// Position in the control's local logical coordinates.
+        position: Point,
+        /// Current keyboard modifiers.
+        modifiers: Modifiers,
+    },
     /// Cancel a press, capture or composition without activation.
     Cancel,
     /// Semantic activation from an application or assistive technology.

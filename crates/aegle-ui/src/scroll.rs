@@ -140,7 +140,12 @@ impl State {
         Ok(())
     }
 
-    pub fn scroll_by_at(&mut self, position: Point, mut delta: Point) -> Result<bool> {
+    pub fn scroll_by_at(
+        &mut self,
+        position: Point,
+        mut delta: Point,
+        wheel: Option<aegle_controls::Modifiers>,
+    ) -> Result<bool> {
         let repaint = self.refresh()?;
         self.repaint |= repaint;
         let mut target = self.order.iter().rev().copied().find(|&id| {
@@ -152,6 +157,25 @@ impl State {
         });
         let mut changed = false;
         while let Some(id) = target {
+            let element = &self.tree.get(id).unwrap().context;
+            if let Some(modifiers) = wheel
+                && element.control.takes_wheel()
+                && self.usable(id)
+            {
+                let local = self.untransform(id, position);
+                let origin = self.tree.get(id).unwrap().context.bounds.origin;
+                let input = aegle_controls::Input::Wheel {
+                    delta,
+                    position: Point::new(local.x - origin.x, local.y - origin.y),
+                    modifiers,
+                };
+                let outcome = self.control(id, input)?;
+                self.effects(id, outcome)?;
+                if outcome.handled {
+                    changed |= outcome.repaint;
+                    break;
+                }
+            }
             let element = &self.tree.get(id).unwrap().context;
             if element.control.viewport() || element.control.editor().is_some() {
                 let old = element.scroll;

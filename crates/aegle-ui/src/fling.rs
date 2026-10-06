@@ -33,7 +33,7 @@ impl State {
         let travel = TAU * (1.0 - decay);
         let delta = Point::new(fling.velocity.x * travel, fling.velocity.y * travel);
         fling.velocity = Point::new(fling.velocity.x * decay, fling.velocity.y * decay);
-        let moved = self.scroll_by_at(fling.position, delta)?;
+        let moved = self.scroll_by_at(fling.position, delta, None)?;
         if moved && fling.velocity.x.hypot(fling.velocity.y) >= STOP {
             fling.last = Some(now);
             self.motion.fling = Some(fling);

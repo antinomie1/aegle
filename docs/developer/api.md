@@ -282,6 +282,7 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 | `TextField`（单行） | `on_submit(FnMut(TextField) -> Result)`，Enter 触发 | `clear_on_submit()` |
 | `CheckBox` / `Switch` / `Radio` / `Slider` / `Dropdown` | `on_change(FnMut(Self) -> Result)` | `clear_on_change()` |
 | 任意控件（`motion`） | `on_transition_end(FnMut(Node) -> Result)` | `clear_on_transition_end()` |
+| `Canvas` | `on_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) | `clear_on_input()` |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
 - 回调返回错误时，该处理器被移除，`App::run` 返回此错误并结束。
@@ -404,7 +405,7 @@ if ui.refresh()? {
 | `key(KeyInput { key, text, modifiers, pressed, repeat })`、`key_at(input, Instant)` | 键盘；`text` 为已翻译文字，先交给 `on_key` 处理器 |
 | `pointer_at(id, kind, point, modifiers, Instant)` | 带平台时间的指针事件 |
 | `wants_frames()`、`run_frame(Instant)` | 有逐帧回调时每帧调用一次，再 `refresh` |
-| `scroll(point, dy)` / `scroll_by(point, delta)` | 滚轮，按嵌套视口路由 |
+| `scroll(point, dy)` / `scroll_by(point, delta)`、`wheel(point, delta, modifiers, Instant)` | 滚轮：先给其下取用滚轮的控件（交互 Canvas），再按嵌套视口路由 |
 | `window_focus(b)` | 窗口获得/失去键盘焦点 |
 | `ime(ImeEdit { .. })`、`ime_left()`、`take_ime_state(max)` | 输入法事务与需要同步给平台的状态 |
 | `take_clipboard()` / `paste(text)` | 编辑器发出的复制/粘贴请求 |

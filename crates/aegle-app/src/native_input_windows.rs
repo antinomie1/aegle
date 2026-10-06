@@ -91,7 +91,7 @@ impl Entry {
                     crate::platform::PointerKind::Up => PointerKind::Up,
                     crate::platform::PointerKind::Leave => return self.ui.pointer_leave(),
                     crate::platform::PointerKind::Scroll { delta } => {
-                        return self.ui.scroll_by(position, delta);
+                        return self.ui.wheel(position, delta, self.modifiers, time);
                     }
                 };
                 self.ui

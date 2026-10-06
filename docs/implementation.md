@@ -449,3 +449,9 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 验证：新增 `aegle-ui/tests/events.rs`（顺序、借用外修改控件、替换、删除控件、出错移除）与 `aegle-widgets/tests/events.rs`（处理器先于焦点控件、消费空格后复选框不切换、未消费的 Tab 仍遍历、editing 标志、自我替换、出错移除后按键恢复到控件）；`cargo test --workspace --all-features` 通过。私有 headless Sway（GLES2 compositor，60 Hz 输出）上临时探针用 `on_frame` 计数，1 秒内 66 次回调，随后清除并退出。
 - Windows 交叉检查恢复：沿用此前提取的 MinGW 与 rust-src，`-p aegle --no-default-features --features windows,...` 可用（此前失败是因为对 workspace 外的包传 `aegle-app/...` feature）。`windows,software,system-fonts,markup,motion,windows-accessibility,vulkan,wgpu,grid` 的 `--all-targets` 与最小 `windows,software,system-fonts` 组合均通过 `cargo check`；没有链接或运行。
 - 未验证：Win32 时间映射与真实按键时序没有实机测量；没有测量按键时间相对真实按下时刻的误差。
+
+## 交互 Canvas 与滚轮路由
+
+- `Canvas` 移到 `aegle-widgets/src/canvas.rs`。`on_input(FnMut(Canvas, CanvasEvent))` 使其可聚焦、带焦点框（专用皮肤）、按下时取得焦点并捕获指针、消费其上的滚轮并在聚焦时接收按键；事件在控件内排队，每批第一个事件以 `Action::Change` 调度一次回调，回调在借用之外按序取出。`CanvasEvent` 为 Press/Move（含 pressed）/Release/Leave/Cancel/Wheel/Key/Focus，坐标为局部逻辑坐标并带 `Instant`。`clear_on_input` 恢复为纯绘制并移出焦点。
+- 引擎：`aegle-controls::Input::Wheel { delta, position, modifiers }`；`Control::takes_wheel()`；`Ui::wheel(point, delta, modifiers, Instant)` 从命中控件向上，先把滚轮交给取用滚轮的控件，处理即停止，否则照常滚动视口；`scroll_by` 以无修饰键调用它，惯性滚动跳过这类控件。原生宿主把 Wayland axis 与 Win32 滚轮连同修饰键和平台时间交给 `Ui::wheel`。
+- 验证：`aegle-widgets/tests/canvas.rs`（未启用输入时滚轮滚动外层视图；启用后悬停移动、带时间的按下、焦点、捕获下窗外移动与释放、Ctrl+滚轮被消费且视图不动、按键；清除后失焦且滚轮恢复滚动视图）；`cargo test --workspace --all-features` 通过。

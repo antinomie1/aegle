@@ -368,7 +368,29 @@ canvas.invalidate()?;   // 数据变化后重新绘制
 
 - painter 用局部坐标和当前尺寸录制 scene 命令（矩形、圆角、边框、路径、图像、变换、裁剪），只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行，不按帧调用。
 - painter 运行时持有 UI 借用，不能使用控件句柄；默认尺寸为零，需设置尺寸或 grow；绘制不裁剪到边界。
-- Canvas 只是绘制扩展，不接收输入；无障碍角色 Canvas。
+- 默认只绘制、不接收输入；无障碍角色 Canvas。
+
+**交互**：`on_input` 让 Canvas 成为可聚焦的交互控件，适合时间轴、谱面、曲线编辑器等需要自绘又要处理输入的场景：
+
+```rust
+canvas.on_input(move |canvas, event| {
+    match event {
+        CanvasEvent::Press { position, modifiers, .. } => editor.begin(position, modifiers),
+        CanvasEvent::Move { position, pressed: true, .. } => editor.drag(position),
+        CanvasEvent::Release { .. } | CanvasEvent::Cancel => editor.end(),
+        CanvasEvent::Wheel { delta, modifiers, position, .. } if modifiers.control => editor.zoom(position, delta.y),
+        CanvasEvent::Wheel { delta, .. } => editor.scroll(delta),
+        CanvasEvent::Key { key: Key::Delete, pressed: true, .. } => editor.delete_selection(),
+        _ => {}
+    }
+    canvas.invalidate()
+})?;
+```
+
+- 事件坐标是 Canvas 的局部逻辑坐标，带平台时间 `time`。按下时获得焦点并捕获指针，之后的 `Move { pressed: true }` 与 `Release` 即使在 Canvas 外也会送达；未按下时的移动是 `Move { pressed: false }`，离开是 `Leave`；捕获丢失为 `Cancel`。
+- 鼠标滚轮与触控板滚动先交给其下的交互 Canvas 并被消费，外层 ScrollView 不滚动；惯性滚动只作用于滚动视图。
+- 获得焦点时有焦点框并加入 Tab 顺序，聚焦时收到全部按键（Tab 仍用于切换焦点）；`Focus(bool)` 报告焦点变化。
+- 同一批输入的事件按顺序在该批之后、所有借用之外交给回调，回调里可以修改任意控件；`clear_on_input` 恢复为纯绘制。
 
 ## 已知限制
 

@@ -12,6 +12,7 @@
 //! Virtual lists, popups and radio groups plug into the engine with [`HOOKS`].
 
 mod button;
+mod canvas;
 mod dropdown;
 mod field;
 mod group;
@@ -32,6 +33,7 @@ use aegle_types::Size;
 use aegle_ui::{Container, Control, Hooks, Node, Result, State};
 
 pub use button::{Button, ButtonControl};
+pub use canvas::{Canvas, CanvasControl, CanvasEvent, Painter};
 pub use dropdown::Dropdown;
 pub use field::{FieldControl, TextField};
 pub use group::Group;
@@ -43,7 +45,7 @@ pub use popup::{NodePopup, Popup};
 pub use scroll_view::{ScrollControl, ScrollView};
 pub use table::{Table, TableColumn};
 pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
-pub use visual::{Canvas, CanvasControl, ImageControl, ImageView, Painter};
+pub use visual::{ImageControl, ImageView};
 
 /// The engine hooks the controls need: popups (overlay placement, dismissal and
 /// Escape/arrow keys), radio groups (arrow keys), and virtual lists (row
@@ -186,7 +188,7 @@ impl Widgets for Container {
         &self,
         painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
     ) -> Result<Canvas> {
-        visual::canvas(self, painter)
+        canvas::canvas(self, painter)
     }
     fn scroll_view(&self) -> Result<ScrollView> {
         scroll_view::create(self)

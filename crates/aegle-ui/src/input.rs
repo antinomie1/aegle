@@ -149,7 +149,25 @@ impl Ui {
     }
     /// Scrolls the nearest available viewport or editor under a window point.
     /// Coordinates and both displacement axes must be finite logical pixels.
+    /// See [`Self::wheel`] for wheel input with modifiers and a time.
     pub fn scroll_by(&self, position: Point, delta: Point) -> Result {
+        self.wheel(
+            position,
+            delta,
+            Modifiers::default(),
+            std::time::Instant::now(),
+        )
+    }
+    /// Delivers wheel input reported at `time`: a control under the point that
+    /// takes wheel input (an interactive canvas) receives it first and may
+    /// consume it; otherwise the nearest viewport or editor scrolls.
+    pub fn wheel(
+        &self,
+        position: Point,
+        delta: Point,
+        modifiers: Modifiers,
+        time: std::time::Instant,
+    ) -> Result {
         if ![position.x, position.y, delta.x, delta.y]
             .into_iter()
             .all(f32::is_finite)
@@ -164,7 +182,8 @@ impl Ui {
         {
             state.motion.fling = None;
         }
-        state.scroll_by_at(position, delta)?;
+        state.input_time = time;
+        state.scroll_by_at(position, delta, Some(modifiers))?;
         Ok(())
     }
     /// Applies one validated native IME transaction to the focused editable field.
