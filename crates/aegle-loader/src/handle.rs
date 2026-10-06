@@ -2,11 +2,11 @@
 
 use std::rc::Rc;
 
-use aegle_app::{
+use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
+use aegle_ui::{
     Button, CheckBox, Color, Container, Label, Node, Progress, Radio, Result, ScrollView, Slider,
     Switch, TextField,
 };
-use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
 
 use crate::{Data, eval::Env, eval::handle as run};
 
@@ -265,9 +265,9 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
                 unreachable!("checked: themes apply to windows")
             };
             window.set_theme(match theme.as_str() {
-                "dark" => aegle_app::Theme::dark(),
-                "high_contrast" => aegle_app::Theme::high_contrast(),
-                _ => aegle_app::Theme::light(),
+                "dark" => aegle_ui::Theme::dark(),
+                "high_contrast" => aegle_ui::Theme::high_contrast(),
+                _ => aegle_ui::Theme::light(),
             })
         }
         _ => unreachable!("checked property {name:?}"),

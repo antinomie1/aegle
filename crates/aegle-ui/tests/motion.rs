@@ -1,7 +1,7 @@
 //! Paint transitions share lifecycle, semantics and retained editing state.
 #![cfg(feature = "motion")]
-use aegle_app::{Color, Easing, ImeEdit, Result, Size, TextSystem, Theme, Transition, Ui};
 use aegle_text::{Blob, GenericFamily, Selection, TextError};
+use aegle_ui::{Color, Easing, ImeEdit, Result, Size, TextSystem, Theme, Transition, Ui};
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 #[test]
@@ -142,7 +142,7 @@ fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
 
 #[test]
 fn offsets_move_hit_testing_and_complete_once() -> Result {
-    use aegle_app::{Modifiers, Point, PointerId, PointerKind};
+    use aegle_ui::{Modifiers, Point, PointerId, PointerKind};
     use std::cell::Cell;
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
@@ -205,7 +205,7 @@ fn offsets_move_hit_testing_and_complete_once() -> Result {
 
 #[test]
 fn scale_and_rotation_move_scenes_and_hit_testing() -> Result {
-    use aegle_app::{Modifiers, Point, PointerId, PointerKind, Transform};
+    use aegle_ui::{Modifiers, Point, PointerId, PointerKind, Transform};
     use std::cell::Cell;
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
@@ -280,7 +280,7 @@ fn scale_and_rotation_move_scenes_and_hit_testing() -> Result {
 
 #[test]
 fn flings_decay_then_stop_at_edges_input_or_reduced_motion() -> Result {
-    use aegle_app::Point;
+    use aegle_ui::Point;
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
     let view = ui.root().scroll_view()?;

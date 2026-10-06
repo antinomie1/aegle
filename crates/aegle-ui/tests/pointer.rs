@@ -1,8 +1,8 @@
 //! The cursor follows the control under the pointer, or the one that captured it.
-use aegle_app::{
+use aegle_text::{Blob, GenericFamily};
+use aegle_ui::{
     Cursor, Modifiers, Node, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui,
 };
-use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 fn center(node: &Node) -> Result<Point> {

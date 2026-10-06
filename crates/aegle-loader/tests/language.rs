@@ -1,6 +1,6 @@
 //! Records, keys, slots, component events, locals and host actions in running views.
-use aegle_app::Result;
 use aegle_loader::{Data, Limits, Program, markup::Type};
+use aegle_ui::Result;
 use std::{cell::RefCell, rc::Rc};
 
 mod common;

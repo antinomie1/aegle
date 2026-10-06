@@ -5,8 +5,8 @@ use std::{
     rc::Rc,
 };
 
-use aegle_app::{Container, Result};
 use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Kind, PropertyName, Value};
+use aegle_ui::{Container, Result};
 
 use crate::{
     Data, RuntimeError,
@@ -213,7 +213,7 @@ fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Resu
 
 #[cfg(feature = "motion")]
 fn transition(element: &Element, handle: &Handle) -> Result {
-    use aegle_app::{Easing, Transition};
+    use aegle_ui::{Easing, Transition};
     let literal = |name| {
         element
             .properties

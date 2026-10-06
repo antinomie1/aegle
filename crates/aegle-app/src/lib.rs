@@ -1,31 +1,17 @@
-//! Retained imperative controls sharing layout, input, painting and semantics.
-//!
-//! [`Ui`] works without a window or renderer. It owns the retained tree; control
-//! handles are weak references and dropping a handle does not remove a node.
-//! Native applications enable `wayland` on Linux or `windows` on Windows, plus
-//! an explicit `software`, `vulkan` or `wgpu` renderer feature for `App`.
-//! `system-fonts` adds system discovery; explicit fonts remain available without
-//! it. `accessibility` exports semantic trees, while `unix-accessibility` also
-//! connects them to AT-SPI; `windows-accessibility` connects Windows UI Automation.
-//! Both renderers consume the same retained scenes, input and editor state.
-//! [`scene`] re-exports the drawing commands used by [`Canvas`] painters and images.
+//! Native application host: [`App`] owns the platform connection, windows, event
+//! loop, renderers and system preferences, and gives each window an
+//! `aegle-ui` [`Ui`](aegle_ui::Ui). On Linux enable `wayland`, on Windows
+//! `windows`, plus an explicit `software`, `vulkan` or `wgpu` renderer feature.
+//! Windows share fonts, the platform connection and (for GPU renderers) one
+//! device; each keeps its own control tree. [`App::proxy`] posts messages from
+//! other threads to the UI thread. `unix-accessibility` and
+//! `windows-accessibility` connect the semantic tree to the system.
 
-#[cfg(feature = "accessibility")]
-mod access_scroll;
-#[cfg(feature = "accessibility")]
-mod accessibility;
-mod callbacks;
-mod cursor;
-#[cfg(feature = "motion")]
-mod fling;
-mod handles;
-mod input;
-mod layout;
-mod list;
-#[cfg(feature = "motion")]
-mod motion;
-#[cfg(feature = "motion")]
-mod motion_handles;
+#[cfg(all(feature = "wayland", target_os = "linux"))]
+use aegle_platform_wayland as platform;
+#[cfg(all(feature = "windows", target_os = "windows"))]
+use aegle_platform_win32 as platform;
+
 #[cfg(any(
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
@@ -57,40 +43,11 @@ mod native_proxy;
     all(feature = "windows", target_os = "windows")
 ))]
 mod native_render;
-#[cfg(all(feature = "wayland", target_os = "linux"))]
-use aegle_platform_wayland as platform;
-#[cfg(all(feature = "windows", target_os = "windows"))]
-use aegle_platform_win32 as platform;
-mod paint;
-mod popup;
-mod scroll;
-mod scroll_handles;
-mod scrollbar;
-mod state;
-mod style;
-mod style_handles;
-mod table;
-mod text_handles;
-mod theme;
-mod touch;
-mod transform;
-mod ui;
-mod value_handles;
-mod visual_handles;
 
-pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
-#[cfg(feature = "motion")]
-pub use aegle_motion::{Easing, Transition};
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::Options as VulkanOptions;
 #[cfg(feature = "wgpu")]
 pub use aegle_render_wgpu::Options as WgpuOptions;
-pub use aegle_scene as scene;
-pub use aegle_text::{ImeEdit, Selection, TextSystem};
-pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, VisualState};
-pub use aegle_types::{Color, Cursor, Point, Size};
-pub use handles::{Button, Container, Label, Node, TextField};
-pub use list::ListView;
 #[cfg(any(
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
@@ -108,11 +65,3 @@ pub use native_proxy::UiProxy;
 pub use platform::Preferences;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 pub use platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
-pub use popup::{Dropdown, Popup};
-pub use scroll_handles::ScrollView;
-pub use table::{Table, TableColumn};
-pub use touch::TouchPhase;
-pub use transform::Transform;
-pub use ui::{ClipboardRequest, ImeRequest, ImeState, Result, Ui, UiError};
-pub use value_handles::{CheckBox, Progress, Radio, Slider, Switch};
-pub use visual_handles::{Canvas, ImageView};

@@ -101,6 +101,7 @@ pub fn decode_with_limit(bytes: &[u8], max_bytes: usize) -> Result<Image, Error>
 }
 
 /// Checks extents and the RGBA byte budget before any pixel allocation.
+#[cfg(any(feature = "jpeg", feature = "webp", feature = "gif", feature = "svg"))]
 pub(crate) fn budget(width: u32, height: u32, max_bytes: usize) -> Result<usize, Error> {
     let extent = 1..=Image::MAX_EXTENT;
     if !extent.contains(&width) || !extent.contains(&height) {

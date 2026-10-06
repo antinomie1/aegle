@@ -1,9 +1,9 @@
 //! Dynamic markup keeps bindings, blocks, keyed rows and components current.
 
 use aegle_access::accesskit::NodeId;
-use aegle_app::{Result, Size, TextSystem, Theme, Ui};
 use aegle_loader::{Data, FromHandle, Program};
 use aegle_text::{Blob, GenericFamily};
+use aegle_ui::{Result, Size, TextSystem, Theme, Ui};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 mod common;
@@ -70,10 +70,10 @@ fn bindings_blocks_rows_and_components_follow_state() -> Result {
     )?;
     assert!(view.set("count", Data::Float(1.0)).is_err());
     view.set("count", Data::Int(i64::MAX))?;
-    let add = aegle_app::Button::from_handle(view.handle("add").unwrap()).unwrap();
+    let add = aegle_ui::Button::from_handle(view.handle("add").unwrap()).unwrap();
     add.activate()?;
     assert!(ui.dispatch_callbacks().is_err()); // Overflow stops the handler.
-    let status = aegle_app::Label::from_handle(view.id(0)).unwrap();
+    let status = aegle_ui::Label::from_handle(view.id(0)).unwrap();
     assert_eq!(status.text()?, format!("count {}", i64::MAX));
 
     // A reload keeps compatible states and replaces the controls atomically.

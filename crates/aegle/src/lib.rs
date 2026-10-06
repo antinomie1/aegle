@@ -10,6 +10,7 @@ pub use aegle_app::*;
 /// Bounded image decoding into scene images (PNG always; JPEG, WebP, GIF and SVG by
 /// feature) and, with `effects`, gradient and shadow images.
 pub use aegle_image as image;
+pub use aegle_ui::*;
 extern crate self as aegle;
 
 /// Compile a `.aegle` file to ordinary retained control construction.
@@ -27,11 +28,11 @@ pub mod prelude {
         all(feature = "windows", target_os = "windows")
     ))]
     pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
-    pub use aegle_app::{
+    pub use aegle_ui::{
         Appearance, Button, Canvas, CheckBox, Color, Container, ControlKind, Cursor, Dropdown,
         ImageView, Label, ListView, Node, Point, Popup, Progress, Radio, Result, ScrollView, Skin,
         Slider, Style, Switch, Table, TableColumn, TextField, Theme, Ui, VisualState,
     };
     #[cfg(feature = "motion")]
-    pub use aegle_app::{Easing, Transition};
+    pub use aegle_ui::{Easing, Transition};
 }

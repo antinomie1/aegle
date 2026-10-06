@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 
-use aegle_app::Result;
 use aegle_markup::{Child, Expr, ExprKind, Ref, Span, Step, Type, Value};
+use aegle_ui::Result;
 
 use crate::{
     Data, RuntimeError, Shared,

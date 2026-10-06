@@ -1,9 +1,9 @@
 //! Shared value behavior connects pointer/keyboard input, callbacks and semantics.
-use aegle_app::{
+use aegle_text::{Blob, GenericFamily, Selection, TextError};
+use aegle_ui::{
     ImeEdit, Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem,
     Theme, Ui,
 };
-use aegle_text::{Blob, GenericFamily, Selection, TextError};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -37,7 +37,7 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
     assert!(progress.set_font_size(20.0).is_err());
     assert!(
         progress
-            .set_hover_background(aegle_app::Color::BLACK)
+            .set_hover_background(aegle_ui::Color::BLACK)
             .is_err()
     );
     let changes = Rc::new(Cell::new(0));

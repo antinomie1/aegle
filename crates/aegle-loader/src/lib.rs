@@ -1,7 +1,7 @@
 //! Runtime engine for dynamic Aegle markup.
 //!
 //! A [`Program`] is a checked multi-file markup program from `aegle-markup`.
-//! Building it creates ordinary retained controls through `aegle-app` and wires
+//! Building it creates ordinary retained controls through `aegle-ui` and wires
 //! typed states, property bindings, `on` event blocks, `if`/`for` blocks and
 //! component instances. A state change re-evaluates only the bindings that read
 //! it, then updates their controls; nothing is evaluated per frame. Bindings
@@ -25,8 +25,8 @@ mod view;
 
 use std::{fmt, fs::File, io::Read, path::Path, rc::Rc};
 
-use aegle_app::{Container, Result};
 use aegle_markup::Span;
+use aegle_ui::{Container, Result};
 
 pub use actions::{Limits, register_shared as action};
 pub use aegle_markup as markup;

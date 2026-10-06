@@ -1,7 +1,10 @@
 use crate::native::Entry;
-use crate::{ImeEdit, Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size};
 use aegle_platform_wayland::{Event, ImeEvent, Keysym, PointerEventKind, TouchPhase, WindowId};
 use aegle_text::Selection;
+use aegle_ui::{
+    ClipboardRequest, ImeEdit, ImeRequest, Key, KeyInput, Modifiers, Point, PointerId, PointerKind,
+    Result, Size,
+};
 use wayland_client::Proxy;
 
 pub(crate) fn target(event: &Event) -> Option<WindowId> {
@@ -144,10 +147,10 @@ impl Entry {
                     (1 << 40) | (u64::from(seat.id().protocol_id()) << 16) | (id as u16 as u64),
                 );
                 let phase = match phase {
-                    TouchPhase::Down => crate::TouchPhase::Down,
-                    TouchPhase::Move => crate::TouchPhase::Move,
-                    TouchPhase::Up => crate::TouchPhase::Up,
-                    TouchPhase::Cancel => crate::TouchPhase::Cancel,
+                    TouchPhase::Down => aegle_ui::TouchPhase::Down,
+                    TouchPhase::Move => aegle_ui::TouchPhase::Move,
+                    TouchPhase::Up => aegle_ui::TouchPhase::Up,
+                    TouchPhase::Cancel => aegle_ui::TouchPhase::Cancel,
                 };
                 self.ui.touch(pointer, phase, position, time)?;
             }
@@ -189,14 +192,14 @@ impl Entry {
 pub(crate) fn clipboard(
     backend: &mut crate::platform::Wayland,
     entry: &Entry,
-    request: crate::ClipboardRequest,
+    request: ClipboardRequest,
 ) -> Result<()> {
     let Some(seat) = &entry.seat else {
         return Ok(());
     };
     match request {
-        crate::ClipboardRequest::Write(text) => backend.set_clipboard(seat, &text)?,
-        crate::ClipboardRequest::Read => backend.request_clipboard(entry.id, seat)?,
+        ClipboardRequest::Write(text) => backend.set_clipboard(seat, &text)?,
+        ClipboardRequest::Read => backend.request_clipboard(entry.id, seat)?,
     }
     Ok(())
 }
@@ -233,7 +236,7 @@ fn key_id(value: Keysym) -> Key {
 }
 
 pub(crate) fn ime_request(
-    request: Option<crate::ImeRequest>,
+    request: Option<ImeRequest>,
 ) -> Option<aegle_platform_wayland::ImeRequest> {
     use aegle_platform_wayland::{ImeCause, ImeHints, ImeRequest};
     request.map(|request| ImeRequest {

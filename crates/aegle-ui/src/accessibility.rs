@@ -36,11 +36,10 @@ impl Ui {
         state.prepare_accessibility()?;
         Ok(state.export_accessibility(initial, title, 1.0))
     }
-    #[cfg(any(
-        all(feature = "unix-accessibility", target_os = "linux"),
-        all(feature = "windows-accessibility", target_os = "windows")
-    ))]
-    pub(crate) fn publish_accessibility(
+    /// Lets a native adapter pull tree updates: `publish` receives a function that
+    /// exports the initial tree (`true`) or only the changed semantics (`false`),
+    /// with the root scaled by `scale` for adapters that request physical pixels.
+    pub fn publish_accessibility(
         &self,
         title: &str,
         scale: f64,

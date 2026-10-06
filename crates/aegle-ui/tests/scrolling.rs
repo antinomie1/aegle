@@ -1,9 +1,9 @@
 //! Nested scroll boundaries share paint clips, capture, focus and composition.
-use aegle_app::{
+use aegle_text::{Blob, GenericFamily, Selection, TextError};
+use aegle_ui::{
     Appearance, ImeEdit, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme,
     Ui,
 };
-use aegle_text::{Blob, GenericFamily, Selection, TextError};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -239,7 +239,7 @@ fn overflowing_viewports_reserve_the_bar_and_draw_their_border_last() -> Result 
     }
     ui.resize(Size::new(240.0, 240.0))?;
     ui.refresh()?;
-    let right = |node: &aegle_app::Node| -> Result<f32> {
+    let right = |node: &aegle_ui::Node| -> Result<f32> {
         let bounds = node.bounds()?;
         Ok(bounds.origin.x + bounds.size.width)
     };
@@ -256,7 +256,7 @@ fn overflowing_viewports_reserve_the_bar_and_draw_their_border_last() -> Result 
     })?;
     assert!(matches!(
         last,
-        Some(aegle_app::scene::Command::Stroke { .. })
+        Some(aegle_ui::scene::Command::Stroke { .. })
     ));
 
     // Without overflow no bar exists, so the padding is all that is reserved.

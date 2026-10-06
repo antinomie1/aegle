@@ -1,8 +1,8 @@
 //! Shared helpers: drive a headless UI through its accessibility tree.
 #![allow(dead_code)]
 use aegle_access::accesskit::{Action, ActionRequest, NodeId, TreeId};
-use aegle_app::{Result, Size, TextSystem, Theme, Ui};
 use aegle_text::{Blob, GenericFamily};
+use aegle_ui::{Result, Size, TextSystem, Theme, Ui};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 /// A 300 × 400 UI with the CJK test font as its only font.

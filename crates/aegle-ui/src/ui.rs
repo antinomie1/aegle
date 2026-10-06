@@ -161,6 +161,11 @@ impl Ui {
         })
     }
 
+    /// The theme of the UI itself, which nodes without a local theme use.
+    pub fn theme(&self) -> Theme {
+        self.state.borrow().theme
+    }
+
     /// Window clear color from the root's resolved theme.
     pub fn background(&self) -> Color {
         let state = self.state.borrow();
@@ -334,11 +339,10 @@ impl Ui {
         Ok(Some(ImeState { reset, request }))
     }
 
-    #[cfg(any(
-        all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows")
-    ))]
-    pub(crate) fn close(&self) -> Result {
+    /// Destroys the whole tree, cancelling focus, capture, callbacks and
+    /// animations; every handle becomes dead. A host calls this when its window
+    /// closes.
+    pub fn close(&self) -> Result {
         let mut state = self
             .state
             .try_borrow_mut()

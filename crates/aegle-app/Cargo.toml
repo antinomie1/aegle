@@ -4,13 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Retained imperative UI composition and optional native application host"
+description = "Native application host: windows, event loop, renderers, system preferences and background proxies"
 
 [features]
 default = []
-motion = ["dep:aegle-motion"]
-system-fonts = ["aegle-text/system-fonts"]
-accessibility = ["dep:aegle-access", "aegle-text/text-a11y"]
+motion = ["aegle-ui/motion"]
+system-fonts = ["aegle-ui/system-fonts"]
+accessibility = ["aegle-ui/accessibility"]
 wayland = ["dep:aegle-platform-wayland", "dep:wayland-client"]
 windows = ["dep:aegle-platform-win32"]
 software = ["dep:aegle-render-software"]
@@ -20,15 +20,10 @@ windows-accessibility = ["windows", "accessibility", "aegle-access/windows"]
 unix-accessibility = ["wayland", "accessibility", "aegle-access/unix"]
 
 [dependencies]
+aegle-ui.workspace = true
 aegle-types.workspace = true
-aegle-core.workspace = true
-aegle-layout.workspace = true
-aegle-theme.workspace = true
-aegle-widgets.workspace = true
-aegle-motion = { workspace = true, optional = true }
-aegle-scene = { workspace = true, features = ["text"] }
-aegle-text = { workspace = true, features = ["scene"] }
-aegle-controls = { workspace = true, features = ["text"] }
+aegle-scene.workspace = true
+aegle-text.workspace = true
 aegle-access = { workspace = true, optional = true }
 aegle-render-software = { workspace = true, features = ["text"], optional = true }
 aegle-render-vulkan = { workspace = true, features = ["text", "window"], optional = true }
@@ -40,6 +35,9 @@ wayland-client = { version = "0.31.15", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 aegle-platform-win32 = { path = "../aegle-platform-win32", optional = true }
+
+[dev-dependencies]
+aegle-text = { workspace = true, features = ["scene"] }
 
 [lints.rust]
 unsafe_code = "warn"

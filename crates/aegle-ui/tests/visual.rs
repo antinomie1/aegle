@@ -1,5 +1,5 @@
 //! Virtual list realization, image controls and canvas painters.
-use aegle_app::{
+use aegle_ui::{
     Key, KeyInput, Modifiers, Point, Result, Size, TextSystem, Theme, Ui,
     scene::{Color, Command, Image, Rect, RoundedRect},
 };

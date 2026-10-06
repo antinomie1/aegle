@@ -1,9 +1,9 @@
 //! Radio groups, mixed check boxes, popups, dropdowns, tables and content-sized rows.
-use aegle_app::{
+use aegle_text::{Blob, GenericFamily};
+use aegle_ui::{
     Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size, TableColumn, TextSystem,
     Theme, Ui,
 };
-use aegle_text::{Blob, GenericFamily};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,

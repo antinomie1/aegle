@@ -2,8 +2,8 @@
 
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
-use aegle_app::{Container, Result};
 use aegle_markup::{ElementKind, Kind, Span, Type};
+use aegle_ui::{Container, Result};
 
 use crate::{
     Data, Program, RuntimeError,

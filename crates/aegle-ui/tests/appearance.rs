@@ -1,9 +1,9 @@
 //! Local styling shares retained text, composition, semantics and control behavior.
-use aegle_app::{
+use aegle_text::{Blob, GenericFamily, Selection, TextError};
+use aegle_ui::{
     Appearance, Color, ImeEdit, Modifiers, Point, PointerId, PointerKind, Result, Size, Skin,
     Style, TextSystem, Theme, Ui,
 };
-use aegle_text::{Blob, GenericFamily, Selection, TextError};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[test]
@@ -171,7 +171,7 @@ fn local_themes_inherit_nest_and_follow_reparenting() -> Result {
 
 #[test]
 fn token_overrides_follow_the_parent_theme() -> Result {
-    use aegle_app::ThemeOverride;
+    use aegle_ui::ThemeOverride;
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     let panel = ui.root().column()?;
     let inner = panel.column()?;

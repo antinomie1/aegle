@@ -1,9 +1,9 @@
 //! One retained lifecycle scenario across input, callbacks, IME, themes and destruction.
-use aegle_app::{
+use aegle_text::{Blob, GenericFamily, Selection};
+use aegle_ui::{
     ClipboardRequest, ImeEdit, Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui,
     UiError,
 };
-use aegle_text::{Blob, GenericFamily, Selection};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,

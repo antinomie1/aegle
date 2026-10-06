@@ -1,13 +1,13 @@
-#[cfg(feature = "motion")]
-use crate::Transition;
 #[cfg(target_os = "windows")]
 use crate::platform::Win32 as Platform;
 use crate::platform::{PixelSize, WindowId};
 #[cfg(target_os = "linux")]
 use crate::platform::{Wayland as Platform, WlSeat};
-use crate::{Container, Modifiers, Result, Size, TextSystem, Theme, Ui, UiError};
 #[cfg(feature = "software")]
 use aegle_render_software::Renderer;
+#[cfg(feature = "motion")]
+use aegle_ui::Transition;
+use aegle_ui::{Container, Modifiers, Result, Size, TextSystem, Theme, Ui, UiError};
 #[cfg(feature = "motion")]
 use std::time::Instant;
 use std::{
@@ -173,7 +173,7 @@ pub(crate) struct Entry {
     pub id: WindowId,
     pub ui: Rc<Ui>,
     /// Last cursor shape sent to the platform.
-    pub cursor: crate::Cursor,
+    pub cursor: aegle_ui::Cursor,
     #[cfg(any(
         all(feature = "unix-accessibility", target_os = "linux"),
         all(feature = "windows-accessibility", target_os = "windows")
@@ -183,7 +183,7 @@ pub(crate) struct Entry {
     pub seat: Option<WlSeat>,
     /// Recent finger-scroll samples (compositor milliseconds, displacement).
     #[cfg(all(target_os = "linux", feature = "motion"))]
-    pub flick: Vec<(u32, crate::Point)>,
+    pub flick: Vec<(u32, aegle_ui::Point)>,
     pub modifiers: Modifiers,
     pub ready: bool,
     #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
@@ -349,7 +349,7 @@ impl App {
             wgpu,
             id,
             ui,
-            cursor: crate::Cursor::Default,
+            cursor: aegle_ui::Cursor::Default,
             #[cfg(target_os = "linux")]
             seat: None,
             #[cfg(all(target_os = "linux", feature = "motion"))]

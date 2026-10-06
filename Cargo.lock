@@ -84,6 +84,7 @@ dependencies = [
  "aegle-macros",
  "aegle-render-software",
  "aegle-text",
+ "aegle-ui",
  "png",
 ]
 
@@ -102,10 +103,6 @@ name = "aegle-app"
 version = "0.1.0"
 dependencies = [
  "aegle-access",
- "aegle-controls",
- "aegle-core",
- "aegle-layout",
- "aegle-motion",
  "aegle-platform-wayland",
  "aegle-platform-win32",
  "aegle-render-software",
@@ -113,9 +110,8 @@ dependencies = [
  "aegle-render-wgpu",
  "aegle-scene",
  "aegle-text",
- "aegle-theme",
  "aegle-types",
- "aegle-widgets",
+ "aegle-ui",
  "wayland-client",
 ]
 
@@ -187,6 +183,7 @@ dependencies = [
  "aegle-app",
  "aegle-markup",
  "aegle-text",
+ "aegle-ui",
 ]
 
 [[package]]
@@ -318,6 +315,22 @@ dependencies = [
 [[package]]
 name = "aegle-types"
 version = "0.1.0"
+
+[[package]]
+name = "aegle-ui"
+version = "0.1.0"
+dependencies = [
+ "aegle-access",
+ "aegle-controls",
+ "aegle-core",
+ "aegle-layout",
+ "aegle-motion",
+ "aegle-scene",
+ "aegle-text",
+ "aegle-theme",
+ "aegle-types",
+ "aegle-widgets",
+]
 
 [[package]]
 name = "aegle-widgets"

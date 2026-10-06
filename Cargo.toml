@@ -24,6 +24,7 @@ aegle-access = { path = "crates/aegle-access" }
 aegle-theme = { path = "crates/aegle-theme" }
 aegle-widgets = { path = "crates/aegle-widgets" }
 aegle-app = { path = "crates/aegle-app" }
+aegle-ui = { path = "crates/aegle-ui" }
 aegle-platform-wayland = { path = "crates/aegle-platform-wayland" }
 aegle-platform-win32 = { path = "crates/aegle-platform-win32" }
 aegle-markup = { path = "crates/aegle-markup" }

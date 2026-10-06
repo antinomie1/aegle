@@ -2,8 +2,8 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use aegle_app::Result;
 use aegle_markup::{Span, Type};
+use aegle_ui::Result;
 
 use crate::{Data, RuntimeError};
 

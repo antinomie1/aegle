@@ -1,6 +1,6 @@
 use crate::native::{App, Runtime};
 use crate::platform::Event;
-use crate::{Result, Theme, Ui, UiError};
+use aegle_ui::{Result, Theme, Ui, UiError};
 use std::{cell::Cell, rc::Rc, time::Duration};
 
 struct DispatchGuard<'a>(&'a Cell<bool>);
@@ -144,12 +144,12 @@ impl Runtime {
         let reduced = self.reduced_motion();
         self.preferences = preferences;
         for entry in &self.windows {
-            let current = entry.ui.state.borrow().theme;
+            let current = entry.ui.theme();
             if current == theme {
                 entry.ui.set_theme(self.theme())?;
             }
             #[cfg(feature = "motion")]
-            if entry.ui.state.borrow().motion.reduced == reduced {
+            if entry.ui.reduced_motion() == reduced {
                 entry.ui.set_reduced_motion(self.reduced_motion())?;
             }
         }

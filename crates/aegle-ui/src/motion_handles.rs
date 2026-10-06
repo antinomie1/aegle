@@ -162,6 +162,10 @@ impl Ui {
             || !state.motion.turning.is_empty()
             || state.motion.fling.is_some()
     }
+    /// Whether reduced motion is currently in effect.
+    pub fn reduced_motion(&self) -> bool {
+        self.state.borrow().motion.reduced
+    }
     /// Explicit reduced-motion preference. When true all transitions snap to
     /// their targets, completing, and no new animations start. Changing this
     /// flag does not affect editor/focus state.

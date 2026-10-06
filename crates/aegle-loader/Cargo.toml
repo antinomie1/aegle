@@ -7,17 +7,18 @@ rust-version.workspace = true
 license.workspace = true
 
 [features]
-motion = ["aegle-app/motion"]
-wayland = ["aegle-app/wayland"]
-windows = ["aegle-app/windows"]
+motion = ["aegle-ui/motion"]
+wayland = ["dep:aegle-app", "aegle-app/wayland"]
+windows = ["dep:aegle-app", "aegle-app/windows"]
 
 [dependencies]
-aegle-app.workspace = true
+aegle-ui.workspace = true
+aegle-app = { workspace = true, optional = true }
 aegle-markup.workspace = true
 
 [dev-dependencies]
 aegle-access.workspace = true
-aegle-app = { workspace = true, features = ["accessibility"] }
+aegle-ui = { workspace = true, features = ["accessibility"] }
 aegle-text.workspace = true
 
 [lints]

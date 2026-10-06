@@ -5,7 +5,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use aegle_app::Result;
+use aegle_ui::Result;
 
 use crate::Data;
 

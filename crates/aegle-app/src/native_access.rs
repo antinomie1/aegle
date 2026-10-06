@@ -1,7 +1,8 @@
 //! Platform adapter construction, keeping native handles owned through teardown.
 #![allow(unsafe_code)]
 
-use crate::{Result, native::Runtime, platform::WindowId};
+use crate::{native::Runtime, platform::WindowId};
+use aegle_ui::Result;
 
 #[cfg(target_os = "linux")]
 pub(crate) type Adapter = aegle_access::UnixAdapter;

@@ -1,10 +1,10 @@
 //! Native rendering policy; retained scenes and clipping are shared by backends.
 #![allow(unsafe_code)]
 
-use crate::Result;
 use crate::native::{RendererBackend, Runtime};
+use aegle_ui::Result;
 #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
-use {crate::Ui, aegle_scene::Affine, aegle_types::Rect};
+use {aegle_scene::Affine, aegle_types::Rect, aegle_ui::Ui};
 
 pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
     match renderer {

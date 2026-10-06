@@ -4,8 +4,9 @@
     all(feature = "windows", target_os = "windows")
 ))]
 
-use aegle_app::{App, AppOptions, Result, TextSystem, UiError, WindowOptions};
+use aegle_app::{App, AppOptions, WindowOptions};
 use aegle_text::{Blob, GenericFamily};
+use aegle_ui::{Result, TextSystem, UiError};
 use std::{
     cell::Cell,
     rc::Rc,
