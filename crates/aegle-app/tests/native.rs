@@ -7,6 +7,7 @@
 use aegle_app::{App, AppOptions, WindowOptions};
 use aegle_text::{Blob, GenericFamily};
 use aegle_ui::{Result, TextSystem, UiError};
+use aegle_widgets::Widgets;
 use std::{
     cell::Cell,
     rc::Rc,

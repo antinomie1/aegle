@@ -10,7 +10,7 @@ mod composite;
 
 use aegle::{
     Container, Modifiers, Point, PointerId, PointerKind, Result, Selection, Size, TextSystem,
-    Theme, Transition, Ui,
+    Theme, Transition, Ui, Widgets,
     scene::{Affine, Color, FillRule, Image, PathBuilder, Rect, Stroke},
 };
 use aegle_render_software::{Renderer, Surface};

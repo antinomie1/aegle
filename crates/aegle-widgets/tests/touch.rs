@@ -1,5 +1,6 @@
 //! Fingers: taps activate, drags on controls drag, drags on content pan and fling.
 use aegle_ui::{Point, PointerId, Result, Size, TextSystem, Theme, TouchPhase, Ui};
+use aegle_widgets::*;
 use std::{cell::Cell, cell::RefCell, rc::Rc};
 
 #[test]

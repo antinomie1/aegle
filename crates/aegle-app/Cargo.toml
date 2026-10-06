@@ -37,6 +37,7 @@ wayland-client = { version = "0.31.15", optional = true }
 aegle-platform-win32 = { path = "../aegle-platform-win32", optional = true }
 
 [dev-dependencies]
+aegle-widgets.workspace = true
 aegle-text = { workspace = true, features = ["scene"] }
 
 [lints.rust]

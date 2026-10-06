@@ -1,11 +1,15 @@
-use crate::state::{Content, Mark, State};
-use crate::{Appearance, ControlKind, Result, Skin, Style, UiError, VisualState};
+// The engine state's fields and methods are the authoring surface for control
+// libraries; the contract is described in `control` and on `State`.
+#![allow(missing_docs)]
+
+use crate::state::State;
+use crate::{Appearance, Result, Skin, Style, UiError, VisualState};
 use aegle_core::{Dirty, NodeId};
 use aegle_text::TextStyle;
 
 /// Stored only for nodes with an explicit visual or typography override.
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Decoration {
+pub struct Decoration {
     pub skin: Option<Skin>,
     pub style: Style,
     pub font_size: Option<f32>,
@@ -14,41 +18,16 @@ pub(crate) struct Decoration {
 
 impl State {
     pub fn visual_state(&self, id: NodeId) -> VisualState {
-        let content = &self.tree.get(id).unwrap().context.content;
-        let (kind, pressed, read_only) = match content {
-            Content::Container | Content::Image(_) | Content::Canvas(_) => {
-                (ControlKind::Container, false, false)
-            }
-            Content::Scroll(_) => (ControlKind::ScrollView, false, false),
-            Content::Label(_) => (ControlKind::Label, false, false),
-            Content::Button(button, _) => (ControlKind::Button, button.is_pressed(), false),
-            Content::Field(field) => (ControlKind::TextField, false, field.editor().is_read_only()),
-            Content::Toggle(toggle) => (
-                match toggle.mark {
-                    Mark::Check => ControlKind::CheckBox,
-                    Mark::Switch => ControlKind::Switch,
-                    Mark::Radio => ControlKind::RadioButton,
-                },
-                toggle.control.is_pressed(),
-                false,
-            ),
-            Content::Slider(slider) => (ControlKind::Slider, slider.is_pressed(), false),
-            Content::Progress(_) => (ControlKind::Progress, false, false),
-        };
+        let control = &self.tree.get(id).unwrap().context.control;
+        let visual = control.visual();
         VisualState {
-            kind,
+            kind: control.kind(),
             enabled: self.usable(id),
-            hovered: match content {
-                Content::Button(button, _) => button.is_hovered(),
-                Content::Toggle(toggle) => toggle.control.is_hovered(),
-                Content::Slider(slider) => slider.is_hovered(),
-                _ => self.hover == Some(id),
-            },
-            pressed,
+            hovered: visual.hovered.unwrap_or(self.hover == Some(id)),
+            pressed: visual.pressed,
             focused: self.focus.current(&self.tree) == Some(id),
-            read_only,
-            checked: matches!(content, Content::Toggle(toggle)
-                if toggle.control.is_checked() && !toggle.mixed),
+            read_only: visual.read_only,
+            checked: visual.checked,
         }
     }
 
@@ -95,18 +74,10 @@ impl State {
 
     pub fn set_style(&mut self, id: NodeId, style: Style) -> Result {
         style.validate()?;
-        let content = &self.tree.get(id).unwrap().context.content;
-        let button = matches!(
-            content,
-            Content::Button(..) | Content::Toggle(_) | Content::Slider(_)
-        );
-        let field = matches!(content, Content::Field(_));
+        let scope = self.tree.get(id).unwrap().context.control.style_scope();
+        let (button, field) = (scope.button_like, scope.editor);
         if ((style.selection.is_some() || style.caret.is_some()) && !field)
-            || (style.indicator.is_some()
-                && !matches!(
-                    content,
-                    Content::Toggle(_) | Content::Slider(_) | Content::Progress(_)
-                ))
+            || (style.indicator.is_some() && !scope.indicator)
             || (style.pressed_background.is_some() && !button)
             || ((style.hover_background.is_some()
                 || style.focus_color.is_some()
@@ -139,8 +110,8 @@ impl State {
         if size.is_some_and(|v| !v.is_finite() || v <= 0.0) {
             return Err(UiError::InvalidValue.into());
         }
-        let content = &self.tree.get(id).unwrap().context.content;
-        if content.paragraph().is_none() && !matches!(content, Content::Field(_)) {
+        let control = &self.tree.get(id).unwrap().context.control;
+        if control.paragraph().is_none() && control.editor().is_none() {
             return Err(UiError::WrongKind.into());
         }
         let old = self.decorations.get(&id).and_then(|d| d.font_size);
@@ -152,10 +123,10 @@ impl State {
             size: size.unwrap_or(theme.font_size),
             ..crate::state::text_style(theme)
         };
-        let content = &mut self.tree.get_mut(id).unwrap().context.content;
-        if let Some(text) = content.paragraph_mut() {
+        let control = &mut self.tree.get_mut(id).unwrap().context.control;
+        if let Some(text) = control.paragraph_mut() {
             self.fonts.borrow_mut().restyle(text, &style)?;
-        } else if let Content::Field(field) = content {
+        } else if let Some(field) = control.editor_mut() {
             self.fonts
                 .borrow_mut()
                 .edit(field.editor_mut())

@@ -11,6 +11,7 @@ pub use aegle_app::*;
 /// feature) and, with `effects`, gradient and shadow images.
 pub use aegle_image as image;
 pub use aegle_ui::*;
+pub use aegle_widgets::*;
 extern crate self as aegle;
 
 /// Compile a `.aegle` file to ordinary retained control construction.
@@ -29,10 +30,13 @@ pub mod prelude {
     ))]
     pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
     pub use aegle_ui::{
-        Appearance, Button, Canvas, CheckBox, Color, Container, ControlKind, Cursor, Dropdown,
-        ImageView, Label, ListView, Node, Point, Popup, Progress, Radio, Result, ScrollView, Skin,
-        Slider, Style, Switch, Table, TableColumn, TextField, Theme, Ui, VisualState,
+        Appearance, Color, Container, ControlKind, Cursor, Node, Point, Result, Skin, Style, Theme,
+        Ui, VisualState,
     };
     #[cfg(feature = "motion")]
     pub use aegle_ui::{Easing, Transition};
+    pub use aegle_widgets::{
+        Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, NodePopup, Popup, Progress,
+        Radio, ScrollView, Slider, Switch, Table, TableColumn, TextField, Widgets,
+    };
 }

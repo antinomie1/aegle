@@ -1,86 +1,29 @@
+// The engine state's fields and methods are the authoring surface for control
+// libraries; the contract is described in `control` and on `State`.
+#![allow(missing_docs)]
+
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
 
-use aegle_controls::{Button, PointerId, TextField};
+use aegle_controls::PointerId;
 use aegle_core::{Focus, NodeId, Route, Tree};
 use aegle_layout::LayoutNode;
 use aegle_scene::Scene;
-use aegle_text::{Paragraph, TextStyle, TextSystem};
+use aegle_text::{TextStyle, TextSystem};
 use aegle_theme::Theme;
 use aegle_types::{Point, Rect, Size};
 
-use crate::{Result, callbacks::Handler, style::Decoration};
+use crate::{Result, callbacks::Handler, control::Control, style::Decoration};
 
-pub(crate) enum Content {
-    Container,
-    /// A viewport and its overlay record, drawn after the viewport's subtree.
-    Scroll(Box<Scene>),
-    Label(Box<Paragraph>),
-    Button(Button, Box<Paragraph>),
-    Field(Box<TextField>),
-    Toggle(Box<ToggleContent>),
-    Slider(Box<aegle_controls::Slider>),
-    Progress(aegle_controls::Range),
-    Image(aegle_scene::Image),
-    Canvas(Box<crate::visual_handles::Painter>),
-}
-
-pub(crate) struct ToggleContent {
-    pub control: aegle_controls::Toggle,
-    pub text: Paragraph,
-    pub mark: Mark,
-    /// A check box shown as partially checked until the user changes it.
-    pub mixed: bool,
-}
-
-pub(crate) use aegle_widgets::Mark;
-
-/// Semantic and painting role of composite controls built from plain nodes.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum Semantic {
-    #[default]
-    None,
-    /// A button that opens a list of choices.
-    Dropdown,
-    /// A choice inside a dropdown list.
-    Option,
-    Table,
-    TableRow,
-    TableCell,
-    TableHeader,
-    /// An overlay shown above the window content.
-    Popup,
-}
-
-impl Content {
-    pub fn interactive(&self) -> bool {
-        matches!(
-            self,
-            Self::Button(..) | Self::Field(_) | Self::Toggle(_) | Self::Slider(_)
-        )
-    }
-    pub fn paragraph(&self) -> Option<&Paragraph> {
-        match self {
-            Self::Label(text) | Self::Button(_, text) => Some(text),
-            Self::Toggle(toggle) => Some(&toggle.text),
-            _ => None,
-        }
-    }
-    pub fn paragraph_mut(&mut self) -> Option<&mut Paragraph> {
-        match self {
-            Self::Label(text) | Self::Button(_, text) => Some(text),
-            Self::Toggle(toggle) => Some(&mut toggle.text),
-            _ => None,
-        }
-    }
-}
-
-pub(crate) struct Element {
-    pub content: Content,
+/// A node's engine-side data. Controls keep their own state in `control`.
+pub struct Element {
+    pub control: Box<dyn Control>,
     pub scene: Scene,
+    /// What a viewport draws over its children, when the control is one.
+    pub overlay: Option<Box<Scene>>,
     pub bounds: Rect,
     pub clip: Option<Rect>,
     pub scroll: Point,
@@ -98,7 +41,6 @@ pub(crate) struct Element {
     pub spin: crate::Transform,
     /// Layout space to presented space for this node, set only inside a spun subtree.
     pub xf: Option<aegle_scene::Affine>,
-    pub semantic: Semantic,
     /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
     pub theme: Option<Rc<Theme>>,
     /// Whether `theme` was set on this node rather than inherited.
@@ -111,19 +53,17 @@ impl Element {
     pub fn theme_or<'a>(&'a self, ui: &'a Theme) -> &'a Theme {
         self.theme.as_deref().unwrap_or(ui)
     }
-    /// Content padding: the local value, else zero for labels or the theme's.
+    /// Content padding: the local value, else the control's default.
     pub fn inset(&self, ui: &Theme) -> f32 {
         self.padding
-            .unwrap_or(if matches!(self.content, Content::Label(_)) {
-                0.0
-            } else {
-                self.theme_or(ui).padding
-            })
+            .unwrap_or_else(|| self.control.default_padding(self.theme_or(ui)))
     }
-    pub fn new(content: Content) -> Self {
+    pub fn new(control: Box<dyn Control>) -> Self {
+        let overlay = control.viewport().then(Box::default);
         Self {
-            content,
+            control,
             scene: Scene::default(),
+            overlay,
             bounds: Rect::default(),
             clip: None,
             scroll: Point::default(),
@@ -137,7 +77,6 @@ impl Element {
             offset: Point::default(),
             spin: crate::Transform::default(),
             xf: None,
-            semantic: Semantic::None,
             theme: None,
             local_theme: false,
             #[cfg(feature = "accessibility")]
@@ -146,7 +85,33 @@ impl Element {
     }
 }
 
-pub(crate) struct State {
+/// Tree-wide behavior a control library adds to the engine, as plain function
+/// pointers so a hook can run while the engine is borrowed and call back into it.
+/// Install with [`State::install`]; every field is optional.
+#[derive(Default)]
+pub struct Hooks {
+    /// A key press before focus traversal; returns whether it was used.
+    pub key: Option<fn(&mut State, &aegle_controls::KeyInput<'_>) -> Result<bool>>,
+    /// A primary press at a window point, before it is routed.
+    pub press: Option<fn(&mut State, Point) -> Result>,
+    /// The overlay node covering a window point, which blocks hits below it.
+    pub overlay_at: Option<fn(&State, Point) -> Option<NodeId>>,
+    /// After geometry: moves overlays; returns whether anything moved.
+    pub place: Option<fn(&mut State) -> bool>,
+    /// A node is being removed (called for it and each descendant).
+    pub removed: Option<fn(&mut State, NodeId)>,
+    /// A subtree was removed.
+    pub removed_after: Option<fn(&mut State) -> Result>,
+    /// After layout: measures realized content; returns whether anything moved.
+    pub measure: Option<fn(&mut State) -> Result<bool>>,
+    /// Before refresh, outside any engine borrow: builds or drops virtual content.
+    pub realize: Option<fn(&crate::Ui) -> Result<bool>>,
+}
+
+/// The engine state behind a [`crate::Ui`], also the authoring surface for control
+/// libraries: fields and methods are public so a control can use the tree, focus,
+/// themes and invalidation directly. Prefer the typed handles in application code.
+pub struct State {
     pub tree: Tree<LayoutNode<Element>>,
     pub root: NodeId,
     pub order: Vec<NodeId>,
@@ -171,12 +136,10 @@ pub(crate) struct State {
     pub clipboard: Option<crate::ClipboardRequest>,
     pub repaint: bool,
     pub callbacks: HashMap<NodeId, Handler>,
-    /// Virtual list viewports and their realized rows.
-    pub lists: Vec<(NodeId, crate::list::List)>,
-    /// Shown or hidden popups with their anchors, in showing order.
-    pub popups: Vec<crate::popup::PopupEntry>,
-    /// Dropdown anchors and their choices.
-    pub dropdowns: HashMap<NodeId, crate::popup::DropdownData>,
+    /// Per-library data keyed by type, see [`State::ext`].
+    pub ext: HashMap<std::any::TypeId, Box<dyn std::any::Any>>,
+    /// Installed control-library hooks, see [`Hooks`].
+    pub hooks: Vec<&'static Hooks>,
     pub decorations: HashMap<NodeId, Decoration>,
     /// Token overrides re-applied to the parent's theme whenever it changes.
     pub overrides: HashMap<NodeId, aegle_theme::ThemeOverride>,
@@ -194,7 +157,7 @@ pub(crate) struct State {
 }
 
 /// Default paragraph style for a theme.
-pub(crate) fn text_style(theme: &Theme) -> TextStyle<'static> {
+pub fn text_style(theme: &Theme) -> TextStyle<'static> {
     TextStyle {
         size: theme.font_size,
         color: theme.foreground,
@@ -223,10 +186,7 @@ impl State {
                 stack.push((child, 0));
             } else {
                 let (id, _) = stack.pop().unwrap();
-                if matches!(
-                    self.tree.get(id).unwrap().context.content,
-                    Content::Scroll(_)
-                ) {
+                if self.tree.get(id).unwrap().context.control.viewport() {
                     self.overlays.push((self.order.len(), id));
                 }
             }
@@ -299,23 +259,16 @@ impl State {
         &mut self,
         parent: NodeId,
         position: usize,
-        content: Content,
+        control: Box<dyn Control>,
         mut style: aegle_layout::Style,
     ) -> Result<NodeId> {
-        // These controls clip their own contents and manage any text scrolling
-        // internally. Their intrinsic overflow must not enlarge an ancestor view.
-        if matches!(
-            content,
-            Content::Button(..)
-                | Content::Field(_)
-                | Content::Toggle(_)
-                | Content::Slider(_)
-                | Content::Progress(_)
-        ) {
+        // Self-clipping controls manage any text scrolling internally; their
+        // intrinsic overflow must not enlarge an ancestor view.
+        if control.self_clipping() {
             style.overflow.x = aegle_layout::Overflow::Hidden;
             style.overflow.y = aegle_layout::Overflow::Hidden;
         }
-        let mut element = Element::new(content);
+        let mut element = Element::new(control);
         element.theme = self.tree.get(parent).unwrap().context.theme.clone();
         #[cfg(feature = "accessibility")]
         {
@@ -329,7 +282,7 @@ impl State {
             .tree
             .insert_at(parent, position, LayoutNode::with_style(style, element))?;
         #[cfg(feature = "motion")]
-        if self.tree.get(id).unwrap().context.content.interactive() {
+        if self.tree.get(id).unwrap().context.control.interactive() {
             if let Some(timing) = self.motion.default {
                 self.motion.tracks.insert(
                     id,
@@ -349,13 +302,13 @@ impl State {
     /// Removes a non-root subtree, cancelling focus, capture and callbacks.
     pub fn remove_subtree(&mut self, id: NodeId) -> Result {
         self.cancel_subtree(id)?;
+        let mut removed = Vec::new();
         self.tree.remove_with(id, |node, _| {
+            removed.push(node);
             self.callbacks.remove(&node);
             self.decorations.remove(&node);
             self.overrides.remove(&node);
             self.kept.remove(&node);
-            self.dropdowns.remove(&node);
-            self.lists.retain(|(list, _)| *list != node);
             #[cfg(feature = "motion")]
             {
                 self.motion.tracks.remove(&node);
@@ -367,17 +320,67 @@ impl State {
         })?;
         self.pending.retain(|(id, _)| self.tree.get(*id).is_some());
         self.invalidate_structure();
-        // Popups live under the root, apart from their anchors.
-        self.prune_popups()
+        for hook in self.hooks.clone() {
+            if let Some(removed_node) = hook.removed {
+                removed.iter().for_each(|&node| removed_node(self, node));
+            }
+        }
+        // Library overlays may live apart from the removed node's subtree.
+        for hook in self.hooks.clone() {
+            if let Some(after) = hook.removed_after {
+                after(self)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Installs a control library's hooks once; later calls with the same set do nothing.
+    pub fn install(&mut self, hooks: &'static Hooks) {
+        if !self.hooks.iter().any(|h| std::ptr::eq(*h, hooks)) {
+            self.hooks.push(hooks);
+        }
+    }
+
+    /// The library data of type `T`, created with `Default` on first use.
+    pub fn ext<T: std::any::Any + Default>(&mut self) -> &mut T {
+        self.ext
+            .entry(std::any::TypeId::of::<T>())
+            .or_insert_with(|| Box::new(T::default()))
+            .downcast_mut()
+            .expect("keyed by type")
+    }
+
+    /// The library data of type `T`, if any was created.
+    pub fn ext_ref<T: std::any::Any>(&self) -> Option<&T> {
+        self.ext
+            .get(&std::any::TypeId::of::<T>())
+            .and_then(|data| data.downcast_ref())
+    }
+
+    /// The overlay node covering a window point, from the installed hooks.
+    pub fn overlay_at(&self, position: Point) -> Option<NodeId> {
+        self.hooks
+            .iter()
+            .find_map(|hook| hook.overlay_at.and_then(|at| at(self, position)))
+    }
+
+    /// The control of a live node as `C`, or `None` for another kind.
+    pub fn control_as<C: Control>(&mut self, id: NodeId) -> Option<&mut C> {
+        self.tree
+            .get_mut(id)?
+            .context
+            .control
+            .as_any_mut()
+            .downcast_mut()
     }
 }
 
-pub(crate) fn focus_policy(_: NodeId, node: &LayoutNode<Element>) -> aegle_core::FocusPolicy {
+pub fn focus_policy(_: NodeId, node: &LayoutNode<Element>) -> aegle_core::FocusPolicy {
     use aegle_core::FocusPolicy;
     if !node.context.visible || !node.context.enabled {
         return FocusPolicy::Prune;
     }
-    if node.context.content.interactive() {
+    if node.context.control.interactive() {
         FocusPolicy::Focusable
     } else {
         FocusPolicy::Skip

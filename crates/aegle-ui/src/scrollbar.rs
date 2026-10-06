@@ -1,18 +1,15 @@
 //! Scrollbar gestures: hit testing, thumb dragging and colors. Geometry and
-//! painting are the stateless parts in `aegle_widgets::scrollbar`.
+//! painting are in [`crate::bar`].
+use crate::bar::Bar;
 use aegle_controls::{PointerId, PointerKind};
 use aegle_core::{Dirty, NodeId};
 use aegle_scene::Color;
 use aegle_types::Point;
-use aegle_widgets::Bar;
 
-use crate::{
-    Result,
-    state::{Content, State},
-};
+use crate::{Result, state::State};
 
 #[derive(Clone, Copy)]
-pub(crate) struct Drag {
+pub struct Drag {
     pub pointer: PointerId,
     pub node: NodeId,
     pub vertical: bool,
@@ -24,10 +21,16 @@ impl State {
     /// multiline editor. Uses the last refreshed bounds, offset and limits.
     pub fn scrollbars(&self, id: NodeId) -> [Option<Bar>; 2] {
         let element = &self.tree.get(id).unwrap().context;
-        let horizontal_allowed = match &element.content {
-            Content::Scroll(_) => true,
-            Content::Field(field) if field.editor().is_multiline() => false,
-            _ => return [None, None],
+        let horizontal_allowed = if element.control.viewport() {
+            true
+        } else if element
+            .control
+            .editor()
+            .is_some_and(|f| f.editor().is_multiline())
+        {
+            false
+        } else {
+            return [None, None];
         };
         Bar::layout(
             element.bounds.size,
@@ -82,10 +85,13 @@ impl State {
             return Ok(false);
         };
         let editor = hit.filter(|&id| {
-            matches!(
-                &self.tree.get(id).unwrap().context.content,
-                Content::Field(_)
-            )
+            self.tree
+                .get(id)
+                .unwrap()
+                .context
+                .control
+                .editor()
+                .is_some()
         });
         let Some((node, bar)) = self.scrollbar_at(position, editor) else {
             return Ok(false);
@@ -142,11 +148,7 @@ impl State {
     /// muted while hovered or dragged.
     pub fn scrollbar_color(&self, id: NodeId) -> [Color; 2] {
         let active = self.drag.is_some_and(|drag| drag.node == id)
-            || (self.hover == Some(id)
-                && matches!(
-                    self.tree.get(id).unwrap().context.content,
-                    Content::Scroll(_)
-                ));
+            || (self.hover == Some(id) && self.tree.get(id).unwrap().context.control.viewport());
         let theme = self.theme_of(id);
         [
             theme.pressed,

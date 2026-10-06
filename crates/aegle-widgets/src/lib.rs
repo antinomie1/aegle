@@ -1,14 +1,222 @@
-//! Stateless default-skin painters and scroll geometry for retained controls.
+//! The default control library: every control `aegle` ships, built on the
+//! `aegle-ui` engine through its [`Control`] trait and hooks.
 //!
-//! Everything here is a pure function from a control's size, state and
-//! [`aegle_theme::Appearance`] to scene commands or geometry, so a host that
-//! builds its own tree on `aegle-controls` can reuse the default look without
-//! `aegle-app`. Behavior that needs the retained tree (focus, hit testing,
-//! popups, virtual lists) stays in the application layer.
-mod paint;
-mod scroll;
-pub mod scrollbar;
+//! Content controls: [`Label`], [`Button`], [`TextField`] (single line and
+//! multiline), [`CheckBox`], [`Switch`], [`Radio`], [`Slider`], [`Progress`],
+//! [`ImageView`], [`Canvas`]. Containers and composites: [`ScrollView`],
+//! [`ListView`] (virtual, equal or content-sized rows), [`Table`], [`Popup`] and
+//! [`Dropdown`]. Create them through the [`Widgets`] trait on `Container`, or
+//! [`NodePopup::popup`]. Each control owns its behavior (through `aegle-controls`),
+//! default skin (the pure painters in this crate), layout defaults and semantics;
+//! the engine owns the tree, input routing, focus, scrolling, motion and themes.
+//! Virtual lists, popups and radio groups plug into the engine with [`HOOKS`].
 
+mod button;
+mod dropdown;
+mod field;
+mod group;
+mod label;
+mod list;
+mod numeric;
+mod paint;
+mod popup;
+mod scroll_view;
+mod table;
+mod toggle;
+mod visual;
+
+use aegle_layout::Style;
+use aegle_scene::{Image, SceneBuilder};
+use aegle_theme::Theme;
+use aegle_types::Size;
+use aegle_ui::{Container, Control, Hooks, Node, Result, State};
+
+pub use button::{Button, ButtonControl};
+pub use dropdown::Dropdown;
+pub use field::{FieldControl, TextField};
+pub use group::Group;
+pub use label::{Label, LabelControl};
+pub use list::ListView;
+pub use numeric::{Progress, ProgressControl, Slider, SliderControl};
 pub use paint::{CHEVRON, Mark, ToggleSpec, check_mark, chevron, range, slider_track, toggle};
-pub use scroll::{clamp_anchor, intersection, reveal_delta};
-pub use scrollbar::Bar;
+pub use popup::{NodePopup, Popup};
+pub use scroll_view::{ScrollControl, ScrollView};
+pub use table::{Table, TableColumn};
+pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
+pub use visual::{Canvas, CanvasControl, ImageControl, ImageView, Painter};
+
+/// The engine hooks the controls need: popups (overlay placement, dismissal and
+/// Escape/arrow keys), radio groups (arrow keys), and virtual lists (row
+/// realization and measurement). Every constructor installs them on first use.
+pub static HOOKS: Hooks = Hooks {
+    key: Some(keys),
+    press: Some(popup::dismiss_popups),
+    overlay_at: Some(popup::popup_at),
+    place: Some(popup::place_popups),
+    removed: Some(removed),
+    removed_after: Some(popup::prune_popups),
+    measure: Some(list::measure_rows),
+    realize: Some(list::realize_rows),
+};
+
+fn keys(state: &mut State, key: &aegle_ui::KeyInput<'_>) -> Result<bool> {
+    Ok(popup::popup_key(state, key)? || toggle::radio_key(state, key)?)
+}
+
+fn removed(state: &mut State, node: aegle_core::NodeId) {
+    popup::removed(state, node);
+    list::removed(state, node);
+}
+
+/// Appends a node after installing [`HOOKS`].
+pub(crate) fn add(
+    container: &Container,
+    create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, Style)>,
+) -> Result<Node> {
+    container.add(|state, theme| {
+        state.install(&HOOKS);
+        create(state, theme)
+    })
+}
+
+/// Creates the default controls inside a container.
+pub trait Widgets {
+    /// Appends a paragraph. Text wraps to available layout width.
+    fn text(&self, text: &str) -> Result<Label>;
+    /// Appends a neutral button with its visible text as the default accessible name.
+    fn button(&self, text: &str) -> Result<Button>;
+    /// Appends a single-line editor. Enter produces a submit action.
+    fn text_field(&self, text: &str) -> Result<TextField>;
+    /// Appends a wrapping multiline editor with a default four-line viewport.
+    fn text_area(&self, text: &str) -> Result<TextField>;
+    /// Appends a binary checkbox; the text is also its default accessible name.
+    fn check_box(&self, text: &str, checked: bool) -> Result<CheckBox>;
+    /// Appends a binary switch with a visible label.
+    fn switch(&self, text: &str, checked: bool) -> Result<Switch>;
+    /// Appends a radio button. Radio buttons sharing a parent form one group:
+    /// checking one, by the user or [`Radio::set_checked`], unchecks the others.
+    /// A newly created checked radio button unchecks its existing siblings.
+    fn radio(&self, text: &str, checked: bool) -> Result<Radio>;
+    /// Appends a continuous horizontal slider. Bounds must have a finite positive
+    /// span; finite initial values clamp to them. Use set_step for discrete steps.
+    fn slider(&self, min: f64, max: f64, value: f64) -> Result<Slider>;
+    /// Appends a determinate progress bar with finite increasing bounds.
+    fn progress(&self, min: f64, max: f64, value: f64) -> Result<Progress>;
+    /// Appends an image whose intrinsic logical size is its pixel size. It keeps
+    /// that size on the cross axis instead of stretching; `set_size` overrides it.
+    fn image(&self, image: &Image) -> Result<ImageView>;
+    /// Appends a canvas drawn by `painter` with zero intrinsic size; give it a
+    /// size or flex grow. The painter runs during refresh while the UI is
+    /// borrowed, so it must not use UI handles. Drawing is not clipped to the bounds.
+    fn canvas(
+        &self,
+        painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
+    ) -> Result<Canvas>;
+    /// Appends a scrollable column. Children retain their state outside the viewport.
+    /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
+    fn scroll_view(&self) -> Result<ScrollView>;
+    /// Appends a virtual list of `count` rows of `row_height` logical pixels.
+    /// `row` fills an empty row column for an index. It runs during
+    /// [`aegle_ui::Ui::refresh`] outside the UI borrow, so it may use any handle.
+    /// `count × row_height` must not exceed 16,777,216.
+    fn list_view(
+        &self,
+        row_height: f32,
+        count: usize,
+        row: impl FnMut(&Container, usize) -> Result + 'static,
+    ) -> Result<ListView>;
+    /// Appends a virtual list whose rows size to their content. Rows not yet
+    /// shown count as `estimate` high; shown rows are measured after layout and
+    /// later rows move accordingly. Scrolling back may shift content while
+    /// estimates are replaced. `count × estimate` must not exceed 16,777,216.
+    fn variable_list_view(
+        &self,
+        estimate: f32,
+        count: usize,
+        row: impl FnMut(&Container, usize) -> Result + 'static,
+    ) -> Result<ListView>;
+    /// Appends a table of `rows` rows of `row_height`, with at least one column.
+    /// `fill(cell, row, column)` fills an empty cell column when its row becomes
+    /// visible; it runs outside the UI borrow, like [`Widgets::list_view`] rows.
+    /// Give the table a height or flex space.
+    fn table(
+        &self,
+        columns: &[TableColumn],
+        row_height: f32,
+        rows: usize,
+        fill: impl FnMut(&Container, usize, usize) -> Result + 'static,
+    ) -> Result<Table>;
+    /// Appends a dropdown with at least one choice and a valid selected index.
+    /// The choice list opens below it; Up/Down and Enter or a click choose.
+    fn dropdown(&self, items: &[&str], selected: usize) -> Result<Dropdown>;
+}
+
+impl Widgets for Container {
+    fn text(&self, text: &str) -> Result<Label> {
+        label::create(self, text)
+    }
+    fn button(&self, text: &str) -> Result<Button> {
+        button::create(self, text)
+    }
+    fn text_field(&self, text: &str) -> Result<TextField> {
+        field::create(self, text, false)
+    }
+    fn text_area(&self, text: &str) -> Result<TextField> {
+        field::create(self, text, true)
+    }
+    fn check_box(&self, text: &str, checked: bool) -> Result<CheckBox> {
+        toggle::check_box(self, text, checked)
+    }
+    fn switch(&self, text: &str, checked: bool) -> Result<Switch> {
+        toggle::switch(self, text, checked)
+    }
+    fn radio(&self, text: &str, checked: bool) -> Result<Radio> {
+        toggle::radio(self, text, checked)
+    }
+    fn slider(&self, min: f64, max: f64, value: f64) -> Result<Slider> {
+        numeric::slider(self, min, max, value)
+    }
+    fn progress(&self, min: f64, max: f64, value: f64) -> Result<Progress> {
+        numeric::progress(self, min, max, value)
+    }
+    fn image(&self, image: &Image) -> Result<ImageView> {
+        visual::image(self, image)
+    }
+    fn canvas(
+        &self,
+        painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
+    ) -> Result<Canvas> {
+        visual::canvas(self, painter)
+    }
+    fn scroll_view(&self) -> Result<ScrollView> {
+        scroll_view::create(self)
+    }
+    fn list_view(
+        &self,
+        row_height: f32,
+        count: usize,
+        row: impl FnMut(&Container, usize) -> Result + 'static,
+    ) -> Result<ListView> {
+        list::virtual_list(self, row_height, count, false, Box::new(row))
+    }
+    fn variable_list_view(
+        &self,
+        estimate: f32,
+        count: usize,
+        row: impl FnMut(&Container, usize) -> Result + 'static,
+    ) -> Result<ListView> {
+        list::virtual_list(self, estimate, count, true, Box::new(row))
+    }
+    fn table(
+        &self,
+        columns: &[TableColumn],
+        row_height: f32,
+        rows: usize,
+        fill: impl FnMut(&Container, usize, usize) -> Result + 'static,
+    ) -> Result<Table> {
+        table::table(self, columns, row_height, rows, fill)
+    }
+    fn dropdown(&self, items: &[&str], selected: usize) -> Result<Dropdown> {
+        dropdown::dropdown(self, items, selected)
+    }
+}

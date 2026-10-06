@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
-use aegle_ui::{
-    Button, CheckBox, Color, Container, Label, Node, Progress, Radio, Result, ScrollView, Slider,
-    Switch, TextField,
+use aegle_ui::{Color, Container, Node, Result};
+use aegle_widgets::{
+    Button, CheckBox, Label, Progress, Radio, ScrollView, Slider, Switch, TextField, Widgets,
 };
 
 use crate::{Data, eval::Env, eval::handle as run};

@@ -4,6 +4,7 @@ use aegle_ui::{
     Appearance, Color, ImeEdit, Modifiers, Point, PointerId, PointerKind, Result, Size, Skin,
     Style, TextSystem, Theme, Ui,
 };
+use aegle_widgets::*;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[test]

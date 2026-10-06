@@ -1,33 +1,12 @@
-use crate::{Button, Node, Result, TextField, Ui, UiError, state::State};
+use crate::{Node, Result, Ui, UiError, state::State};
 use aegle_core::NodeId;
 use std::rc::Rc;
 
-pub(crate) struct Handler {
+pub struct Handler {
     pub version: u64,
     pub callback: Option<Box<dyn FnMut(Node) -> Result>>,
 }
 
-impl Button {
-    /// Replaces the click handler. Invocation occurs after the input batch,
-    /// outside every UI/tree borrow, so handles may safely create or remove controls.
-    pub fn on_click(&self, mut callback: impl FnMut(Button) -> Result + 'static) -> Result {
-        self.0.on_action(move |node| callback(Button(node)))
-    }
-    /// Removes the click handler and invalidates any already queued invocation.
-    pub fn clear_on_click(&self) -> Result {
-        self.0.clear_on_action()
-    }
-}
-impl TextField {
-    /// Replaces the single-line Enter handler, dispatched outside the tree borrow.
-    pub fn on_submit(&self, mut callback: impl FnMut(TextField) -> Result + 'static) -> Result {
-        self.0.on_action(move |node| callback(TextField(node)))
-    }
-    /// Removes the submit handler and any queued invocation.
-    pub fn clear_on_submit(&self) -> Result {
-        self.0.clear_on_action()
-    }
-}
 impl Node {
     /// Keeps `value` until this control is removed or its window closes, tying
     /// application state such as markup bindings to the control's lifetime.
@@ -39,7 +18,10 @@ impl Node {
             Ok(())
         })
     }
-    pub(crate) fn on_action(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
+    /// Replaces this control's action handler (click, change, submit...). It runs
+    /// after the input batch, outside every UI borrow, so it may create or remove
+    /// controls. Typed handles wrap it with their own callback types.
+    pub fn on_action(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
         self.change(|state, id| {
             state.callback_version = state
                 .callback_version
@@ -55,7 +37,8 @@ impl Node {
             Ok(())
         })
     }
-    pub(crate) fn clear_on_action(&self) -> Result {
+    /// Removes the action handler and invalidates any already queued invocation.
+    pub fn clear_on_action(&self) -> Result {
         self.change(|state, id| {
             state.callbacks.remove(&id);
             Ok(())

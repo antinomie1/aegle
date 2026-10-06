@@ -7,7 +7,7 @@ const TAU: f32 = 0.325;
 const STOP: f32 = 10.0;
 
 /// Momentum left by a finished touchpad or touch scroll.
-pub(crate) struct Fling {
+pub struct Fling {
     position: Point,
     velocity: Point,
     /// Set by the first refresh after the request, so it starts at host time.

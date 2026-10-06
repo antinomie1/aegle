@@ -4,6 +4,7 @@ use aegle_ui::{
     ImeEdit, Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem,
     Theme, Ui,
 };
+use aegle_widgets::*;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,

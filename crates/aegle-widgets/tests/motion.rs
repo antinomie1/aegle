@@ -2,6 +2,7 @@
 #![cfg(feature = "motion")]
 use aegle_text::{Blob, GenericFamily, Selection, TextError};
 use aegle_ui::{Color, Easing, ImeEdit, Result, Size, TextSystem, Theme, Transition, Ui};
+use aegle_widgets::*;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 #[test]

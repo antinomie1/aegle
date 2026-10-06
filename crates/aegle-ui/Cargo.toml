@@ -17,7 +17,6 @@ aegle-types.workspace = true
 aegle-core.workspace = true
 aegle-layout.workspace = true
 aegle-theme.workspace = true
-aegle-widgets.workspace = true
 aegle-motion = { workspace = true, optional = true }
 aegle-scene = { workspace = true, features = ["text"] }
 aegle-text = { workspace = true, features = ["scene"] }

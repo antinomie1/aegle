@@ -3,6 +3,7 @@ use aegle_ui::{
     Key, KeyInput, Modifiers, Point, Result, Size, TextSystem, Theme, Ui,
     scene::{Color, Command, Image, Rect, RoundedRect},
 };
+use aegle_widgets::*;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,

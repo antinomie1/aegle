@@ -1,6 +1,11 @@
+// The engine state's fields and methods are the authoring surface for control
+// libraries; the contract is described in `control` and on `State`.
+#![allow(missing_docs)]
+
 use crate::{
     ClipboardRequest, Result, Ui, UiError,
-    state::{Content, Mark, State, focus_policy},
+    control::InputCx,
+    state::{State, focus_policy},
 };
 use aegle_controls::{
     Action, Capture, Clipboard, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,
@@ -40,8 +45,15 @@ impl Ui {
             .state
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
-        if key.pressed && (state.popup_key(&key)? || state.radio_key(&key)?) {
-            return Ok(());
+        if key.pressed {
+            for hook in state.hooks.clone() {
+                if hook
+                    .key
+                    .is_some_and(|used| used(&mut state, &key).unwrap_or(false))
+                {
+                    return Ok(());
+                }
+            }
         }
         if key.key == Key::Tab
             && key.pressed
@@ -81,7 +93,11 @@ impl Ui {
             {
                 state.motion.fling = None;
             }
-            state.dismiss_popups(position)?;
+            for hook in state.hooks.clone() {
+                if let Some(press) = hook.press {
+                    press(&mut state, position)?;
+                }
+            }
         }
         state.pointer =
             (!matches!(kind, PointerKind::Leave | PointerKind::Cancel)).then_some((id, position));
@@ -204,34 +220,25 @@ impl State {
         }
         result
     }
+    /// Delivers one input event to a node's control and returns its outcome,
+    /// after running the work the control deferred.
     pub fn control(&mut self, target: NodeId, input: Input<'_>) -> Result<Outcome> {
+        let fonts = self.fonts.clone();
+        let theme = self.theme;
         let element = &mut self.tree.get_mut(target).unwrap().context;
-        let (_, extent) =
-            aegle_widgets::slider_track(element.bounds.size, element.inset(&self.theme));
-        let mut radio = false;
-        let outcome = match &mut element.content {
-            Content::Button(button, _) => button.handle(input),
-            Content::Toggle(toggle) => {
-                let was = toggle.control.is_checked();
-                let mut outcome = toggle.control.handle(input);
-                if outcome.action == Some(Action::Change) {
-                    if toggle.mark == Mark::Radio {
-                        // Choosing the chosen radio button changes nothing.
-                        toggle.control.set_checked(true);
-                        radio = !was;
-                        outcome.action = radio.then_some(Action::Change);
-                    } else if std::mem::take(&mut toggle.mixed) {
-                        toggle.control.set_checked(true);
-                    }
-                }
-                outcome
-            }
-            Content::Slider(slider) => slider.handle(input, extent)?,
-            Content::Field(field) => field.handle(&mut self.fonts.borrow_mut(), input)?,
-            _ => Outcome::default(),
-        };
-        if radio {
-            self.select_radio(target)?;
+        let (size, padding) = (element.bounds.size, element.inset(&theme));
+        let mut deferred = Vec::new();
+        let outcome = element.control.handle(
+            &mut InputCx {
+                fonts: &mut fonts.borrow_mut(),
+                size,
+                padding,
+                deferred: &mut deferred,
+            },
+            input,
+        )?;
+        for work in deferred {
+            work(self, target)?;
         }
         Ok(outcome)
     }
@@ -255,7 +262,7 @@ impl State {
         match outcome.clipboard {
             Some(Clipboard::Paste) => self.clipboard = Some(ClipboardRequest::Read),
             Some(request) => {
-                let Content::Field(field) = &self.tree.get(target).unwrap().context.content else {
+                let Some(field) = self.tree.get(target).unwrap().context.control.editor() else {
                     unreachable!("only editors request clipboard writes")
                 };
                 let text = field.editor().selected_text().to_owned();
@@ -374,17 +381,13 @@ impl State {
             position.x - element.bounds.origin.x,
             position.y - element.bounds.origin.y,
         );
-        if matches!(element.content, Content::Field(_)) {
-            let padding = element
-                .padding
-                .unwrap_or(element.theme_or(&self.theme).padding);
-            local.x += element.scroll.x - padding;
-            local.y += element.scroll.y - padding;
-        }
-        if matches!(element.content, Content::Slider(_)) {
-            local.x -=
-                aegle_widgets::slider_track(element.bounds.size, element.inset(&self.theme)).0;
-        }
+        let shift = element.control.content_offset(
+            element.bounds.size,
+            element.inset(&self.theme),
+            element.scroll,
+        );
+        local.x += shift.x;
+        local.y += shift.y;
         Input::Pointer(PointerInput {
             id,
             kind,
@@ -395,8 +398,8 @@ impl State {
         })
     }
     pub(crate) fn hit(&self, position: Point) -> Option<NodeId> {
-        // A shown popup covers everything below it, including its padding.
-        let popup = self.popup_at(position);
+        // A shown overlay covers everything below it, including its padding.
+        let popup = self.overlay_at(position);
         if popup.is_none() {
             if let Some((id, _)) = self.scrollbar_at(position, None) {
                 return Some(id);
@@ -409,7 +412,7 @@ impl State {
                 && self.usable(id)
                 && element.bounds.contains(self.untransform(id, position))
                 && element.clip.is_none_or(|clip| clip.contains(position))
-                && element.content.interactive()
+                && element.control.interactive()
         })
     }
 
@@ -451,11 +454,20 @@ impl State {
             if owns_pointer {
                 let input =
                     self.pointer_input(hit, id, PointerKind::Move, position, Modifiers::default());
-                let outcome = match &mut self.tree.get_mut(hit).unwrap().context.content {
-                    Content::Slider(slider) => slider.update_hover(id, true),
-                    Content::Button(..) | Content::Toggle(_) => self.control(hit, input)?,
-                    _ => Outcome::default(),
-                };
+                let fonts = self.fonts.clone();
+                let theme = self.theme;
+                let element = &mut self.tree.get_mut(hit).unwrap().context;
+                let (size, padding) = (element.bounds.size, element.inset(&theme));
+                let outcome = element.control.hover(
+                    &mut InputCx {
+                        fonts: &mut fonts.borrow_mut(),
+                        size,
+                        padding,
+                        deferred: &mut Vec::new(),
+                    },
+                    id,
+                    input,
+                )?;
                 self.effects(hit, outcome)?;
             }
         }

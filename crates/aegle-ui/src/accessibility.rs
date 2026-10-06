@@ -1,6 +1,7 @@
 use crate::{
     Result, Ui, UiError,
-    state::{Content, Mark, Semantic, State, focus_policy},
+    control::SemanticsCx,
+    state::{State, focus_policy},
 };
 use aegle_access::accesskit::{
     Action, ActionData, ActionRequest, Affine, Node, NodeId, Rect, Role, Tree, TreeId, TreeUpdate,
@@ -89,42 +90,19 @@ impl Ui {
         }
         match (request.action, request.data) {
             (Action::Focus, _) => state.set_focus(Some(target))?,
-            (Action::Click, _)
-                if matches!(
-                    state.tree.get(target).unwrap().context.content,
-                    Content::Button(..) | Content::Toggle(_)
-                ) =>
-            {
-                state.dispatch(target, Input::Activate)?
-            }
-            (Action::Increment | Action::Decrement, _)
-                if matches!(
-                    state.tree.get(target).unwrap().context.content,
-                    Content::Slider(_)
-                ) =>
-            {
-                state.dispatch(
-                    target,
-                    if request.action == Action::Increment {
-                        Input::Increment
-                    } else {
-                        Input::Decrement
-                    },
-                )?;
-            }
-            (Action::SetValue, Some(ActionData::NumericValue(value)))
-                if value.is_finite()
-                    && matches!(
-                        state.tree.get(target).unwrap().context.content,
-                        Content::Slider(_)
-                    ) =>
-            {
-                state.dispatch(target, Input::SetValue(value))?;
+            (action, data) if state.access_input(target, action, data.as_ref()).is_some() => {
+                let input = state.access_input(target, action, data.as_ref()).unwrap();
+                state.dispatch(target, input)?;
             }
             (Action::SetTextSelection, Some(ActionData::SetTextSelection(selection))) => {
                 let fonts = std::rc::Rc::clone(&state.fonts);
-                if let Content::Field(field) =
-                    &mut state.tree.get_mut(target).unwrap().context.content
+                if let Some(field) = state
+                    .tree
+                    .get_mut(target)
+                    .unwrap()
+                    .context
+                    .control
+                    .editor_mut()
                 {
                     match fonts
                         .borrow_mut()
@@ -152,13 +130,27 @@ impl Ui {
 }
 
 impl State {
+    /// The input a control wants for a semantic action it supports.
+    fn access_input(
+        &self,
+        id: aegle_core::NodeId,
+        action: Action,
+        data: Option<&ActionData>,
+    ) -> Option<Input<'static>> {
+        self.tree
+            .get(id)?
+            .context
+            .control
+            .action_input(action, data)
+    }
+
     fn prepare_accessibility(&self) -> Result {
         // These are precisely the fallible text bridge boundaries. Font-backed
         // geometry and finite origins make the subsequent exporter infallible.
         let mut remaining_ids = self.tree.len() as u64;
         for &id in &self.order {
             let element = &self.tree.get(id).unwrap().context;
-            if let Content::Field(field) = &element.content {
+            if let Some(field) = element.control.editor() {
                 if field.editor().diagnostics().unshaped_bytes != 0 {
                     return Err(TextError::MissingFont.into());
                 }
@@ -225,9 +217,12 @@ impl State {
                 .parent(id)
                 .unwrap()
                 .and_then(|parent| self.tree.get(parent))
-                .filter(|parent| matches!(parent.context.content, Content::Scroll(_)))
+                .filter(|parent| parent.context.control.viewport())
                 .map_or(Point::default(), |parent| parent.context.scroll);
-            let scroll_limit = matches!(node_data.context.content, Content::Scroll(_))
+            let scroll_limit = node_data
+                .context
+                .control
+                .viewport()
                 .then(|| self.scroll_limit(id));
             let mut node = Node::new(Role::GenericContainer);
             node.set_foreground_color(foreground);
@@ -266,20 +261,6 @@ impl State {
                     .map(|child| self.tree.get(child).unwrap().context.access_id)
                     .collect::<Vec<_>>(),
             );
-            // Composite controls refine the role their plain content would export.
-            let semantic = self.tree.get(id).unwrap().context.semantic;
-            let role = match semantic {
-                Semantic::Dropdown => Some(Role::ComboBox),
-                Semantic::Option => Some(Role::ListBoxOption),
-                Semantic::Popup if self.popup_lists(id) => Some(Role::ListBox),
-                Semantic::Table => Some(Role::Table),
-                Semantic::TableRow => Some(Role::Row),
-                Semantic::TableCell => Some(Role::Cell),
-                Semantic::TableHeader => Some(Role::ColumnHeader),
-                _ => None,
-            };
-            let expanded = (semantic == Semantic::Dropdown).then(|| self.dropdown_expanded(id));
-            let selected = self.option_selected(id);
             let element = &mut self.tree.get_mut(id).unwrap().context;
             let (padding, scroll) = (element.inset(&self.theme), element.scroll);
             if !element.effective_visible {
@@ -291,149 +272,77 @@ impl State {
             if !element.label.is_empty() {
                 node.set_label(element.label.as_str());
             }
-            match &mut element.content {
-                Content::Container => {
-                    if id == self.root {
-                        // Native adapters request physical coordinates through
-                        // one root transform; descendant geometry stays logical.
-                        node.set_transform(Affine::scale(scale));
-                        node.set_role(Role::Window);
-                        node.set_label(title);
-                    }
-                }
-                Content::Scroll(_) => {
-                    node.set_role(Role::ScrollView);
-                    node.set_clips_children();
-                    // Hidden layout is zeroed by Taffy while retained offsets are
-                    // preserved. Publish their ranges again after visible layout.
-                    if element.effective_visible {
-                        let limit = scroll_limit.unwrap();
-                        node.set_scroll_x(element.scroll.x.into());
-                        node.set_scroll_x_min(0.0);
-                        node.set_scroll_x_max(limit.x.into());
-                        node.set_scroll_y(element.scroll.y.into());
-                        node.set_scroll_y_min(0.0);
-                        node.set_scroll_y_max(limit.y.into());
-                        if enabled {
-                            node.add_action(Action::SetScrollOffset);
-                            if limit.x > 0.0 {
-                                node.add_action(Action::ScrollLeft);
-                                node.add_action(Action::ScrollRight);
-                            }
-                            if limit.y > 0.0 {
-                                node.add_action(Action::ScrollUp);
-                                node.add_action(Action::ScrollDown);
-                            }
+            if id == self.root {
+                // Native adapters request physical coordinates through one root
+                // transform; descendant geometry stays logical.
+                node.set_transform(Affine::scale(scale));
+                node.set_role(Role::Window);
+                node.set_label(title);
+            }
+            if element.control.viewport() {
+                node.set_role(Role::ScrollView);
+                node.set_clips_children();
+                // Hidden layout is zeroed by Taffy while retained offsets are
+                // preserved. Publish their ranges again after visible layout.
+                if element.effective_visible {
+                    let limit = scroll_limit.unwrap();
+                    node.set_scroll_x(element.scroll.x.into());
+                    node.set_scroll_x_min(0.0);
+                    node.set_scroll_x_max(limit.x.into());
+                    node.set_scroll_y(element.scroll.y.into());
+                    node.set_scroll_y_min(0.0);
+                    node.set_scroll_y_max(limit.y.into());
+                    if enabled {
+                        node.add_action(Action::SetScrollOffset);
+                        if limit.x > 0.0 {
+                            node.add_action(Action::ScrollLeft);
+                            node.add_action(Action::ScrollRight);
+                        }
+                        if limit.y > 0.0 {
+                            node.add_action(Action::ScrollUp);
+                            node.add_action(Action::ScrollDown);
                         }
                     }
                 }
-                Content::Label(label) => {
-                    node.set_role(Role::Label);
-                    node.set_value(label.text());
-                }
-                Content::Button(_, label) => {
-                    node.set_role(Role::Button);
-                    if element.label.is_empty() {
-                        node.set_label(label.text());
-                    }
-                    if enabled {
-                        node.add_action(Action::Focus);
-                        node.add_action(Action::Click);
-                    }
-                }
-                Content::Toggle(toggle) => {
-                    node.set_role(match toggle.mark {
-                        Mark::Check => Role::CheckBox,
-                        Mark::Switch => Role::Switch,
-                        Mark::Radio => Role::RadioButton,
-                    });
-                    use aegle_access::accesskit::Toggled;
-                    node.set_toggled(if toggle.mixed {
-                        Toggled::Mixed
-                    } else if toggle.control.is_checked() {
-                        Toggled::True
-                    } else {
-                        Toggled::False
-                    });
-                    if element.label.is_empty() {
-                        node.set_label(toggle.text.text());
-                    }
-                    if enabled {
-                        node.add_action(Action::Focus);
-                        node.add_action(Action::Click);
-                    }
-                }
-                Content::Slider(slider) => {
-                    node.set_role(Role::Slider);
-                    node.set_orientation(aegle_access::accesskit::Orientation::Horizontal);
-                    numeric(&mut node, slider.range());
-                    let range = slider.range();
-                    node.set_numeric_value_step(if range.step() == 0.0 {
-                        (range.max() - range.min()) / 100.0
-                    } else {
-                        range.step()
-                    });
-                    if enabled {
-                        node.add_action(Action::Focus);
-                        node.add_action(Action::SetValue);
-                        node.add_action(Action::Increment);
-                        node.add_action(Action::Decrement);
-                    }
-                }
-                Content::Progress(range) => {
-                    node.set_role(Role::ProgressIndicator);
-                    numeric(&mut node, range);
-                }
-                Content::Image(_) => node.set_role(Role::Image),
-                Content::Canvas(_) => node.set_role(Role::Canvas),
-                Content::Field(field) => {
-                    node.set_clips_children();
-                    if enabled {
-                        node.add_action(Action::Focus);
-                    }
-                    let start = update.nodes.len();
-                    self.fonts
-                        .borrow_mut()
-                        .edit(field.editor_mut())
-                        .accessibility(
-                            &mut update,
-                            &mut node,
-                            || {
-                                let id = NodeId(self.next_access_id);
-                                self.next_access_id += 1;
-                                id
-                            },
-                            Point::new(padding - scroll.x, padding - scroll.y),
-                        )
-                        .expect("prepared text and geometry satisfy the accessibility boundary");
-                    // Painting overrides the retained shaping brush on palette
-                    // changes; semantic text must report that same visible color.
-                    for (_, run) in &mut update.nodes[start..] {
-                        run.set_foreground_color(foreground);
-                    }
-                    if !enabled {
-                        node.remove_action(Action::SetTextSelection);
-                    }
-                }
             }
-            if let Some(role) = role {
-                node.set_role(role);
-            }
-            if let Some(expanded) = expanded {
-                node.set_expanded(expanded);
-            }
-            if let Some(selected) = selected {
-                node.set_selected(selected);
+            if let Some(field) = element.control.editor_mut() {
+                node.set_clips_children();
+                if enabled {
+                    node.add_action(Action::Focus);
+                }
+                let start = update.nodes.len();
+                self.fonts
+                    .borrow_mut()
+                    .edit(field.editor_mut())
+                    .accessibility(
+                        &mut update,
+                        &mut node,
+                        || {
+                            let id = NodeId(self.next_access_id);
+                            self.next_access_id += 1;
+                            id
+                        },
+                        Point::new(padding - scroll.x, padding - scroll.y),
+                    )
+                    .expect("prepared text and geometry satisfy the accessibility boundary");
+                // Painting overrides the retained shaping brush on palette
+                // changes; semantic text must report that same visible color.
+                for (_, run) in &mut update.nodes[start..] {
+                    run.set_foreground_color(foreground);
+                }
+                if !enabled {
+                    node.remove_action(Action::SetTextSelection);
+                }
+            } else {
+                element.control.semantics(&mut SemanticsCx {
+                    node: &mut node,
+                    enabled,
+                    labelled: !element.label.is_empty(),
+                });
             }
             update.nodes.push((element.access_id, node));
             self.tree.clear_dirty(id, Dirty::SEMANTICS).unwrap();
         }
         update
     }
-}
-
-fn numeric(node: &mut Node, range: &aegle_controls::Range) {
-    node.set_numeric_value(range.value());
-    node.set_min_numeric_value(range.min());
-    node.set_max_numeric_value(range.max());
 }

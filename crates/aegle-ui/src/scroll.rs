@@ -1,21 +1,25 @@
+// The engine state's fields and methods are the authoring surface for control
+// libraries; the contract is described in `control` and on `State`.
+#![allow(missing_docs)]
+
+use crate::{
+    bar::FOOTPRINT,
+    scroll_geometry::{clamp_anchor, intersection, reveal_delta},
+};
 use aegle_core::{Dirty, NodeId};
 use aegle_scene::Affine;
 use aegle_types::{Point, Rect};
-use aegle_widgets::{clamp_anchor, intersection, reveal_delta, scrollbar::FOOTPRINT};
 
-use crate::{
-    Result,
-    state::{Content, State},
-};
+use crate::{Node, Result, state::State};
 
 impl State {
     pub fn scroll_limit(&self, id: NodeId) -> Point {
         let node = self.tree.get(id).unwrap();
-        match &node.context.content {
-            Content::Scroll(_) => {
-                Point::new(node.layout().scroll_width(), node.layout().scroll_height())
-            }
-            Content::Field(field) => {
+        if node.context.control.viewport() {
+            return Point::new(node.layout().scroll_width(), node.layout().scroll_height());
+        }
+        match node.context.control.editor() {
+            Some(field) => {
                 let padding = node.context.inset(&self.theme) * 2.0;
                 let viewport = node.context.bounds.size;
                 let text = field.editor().size();
@@ -26,7 +30,7 @@ impl State {
                     (text.height - (viewport.height - padding).max(0.0)).max(0.0),
                 )
             }
-            _ => Point::default(),
+            None => Point::default(),
         }
     }
 
@@ -42,7 +46,7 @@ impl State {
         }
         element.scroll = offset;
         // Scrolling a view moves retained child records; only its bars repaint.
-        if matches!(element.content, Content::Scroll(_)) {
+        if element.control.viewport() {
             self.geometry_dirty = true;
         }
         self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
@@ -60,7 +64,7 @@ impl State {
             let id = self.order[index];
             let parent = self.tree.parent(id)?.map(|pid| {
                 let parent = &self.tree.get(pid).unwrap().context;
-                let scrolling = matches!(parent.content, Content::Scroll(_));
+                let scrolling = parent.control.viewport();
                 let clip = if scrolling {
                     // Content stops where an overflowing axis's bar begins, so it
                     // never scrolls underneath it.
@@ -107,7 +111,7 @@ impl State {
             let element = &mut node.context;
             let xf = spin_affine(element.spin, bounds, parent_xf);
             let old_offset = element.scroll;
-            if visible && matches!(element.content, Content::Scroll(_)) {
+            if visible && element.control.viewport() {
                 element.scroll.x = element.scroll.x.min(limit.x);
                 element.scroll.y = element.scroll.y.min(limit.y);
             }
@@ -149,7 +153,7 @@ impl State {
         let mut changed = false;
         while let Some(id) = target {
             let element = &self.tree.get(id).unwrap().context;
-            if matches!(element.content, Content::Scroll(_) | Content::Field(_)) {
+            if element.control.viewport() || element.control.editor().is_some() {
                 let old = element.scroll;
                 changed |= self.scroll_to(id, Point::new(old.x + delta.x, old.y + delta.y))?;
                 let new = self.tree.get(id).unwrap().context.scroll;
@@ -172,7 +176,7 @@ impl State {
             return Ok(());
         }
         let mut rect = element.bounds;
-        let mut caret = if let Content::Field(field) = &element.content {
+        let mut caret = if let Some(field) = element.control.editor() {
             let padding = element.inset(&self.theme);
             let mut caret = field.editor().ime_rect();
             caret.origin.x += element.bounds.origin.x + padding - element.scroll.x;
@@ -184,7 +188,7 @@ impl State {
         let mut parent = self.tree.parent(id)?;
         while let Some(id) = parent {
             let element = &self.tree.get(id).unwrap().context;
-            if matches!(element.content, Content::Scroll(_)) {
+            if element.control.viewport() {
                 let viewport = element.bounds;
                 // Reveal a complete control when it fits. Oversized editors use
                 // their caret on the constrained axis instead of hiding it again.
@@ -268,4 +272,32 @@ fn spin_affine(spin: crate::Transform, bounds: Rect, parent: Option<Affine>) -> 
     // Validated finite and nonzero scale make this invertible.
     let own = Affine::new([a, b, -b, a, cx - a * cx + b * cy, cy - b * cx - a * cy]).ok()?;
     Some(parent.map_or(own, |parent| own.then(parent).unwrap_or(own)))
+}
+
+impl Node {
+    /// Scrolls ancestor viewports just enough to reveal this control, without changing
+    /// focus. Oversized editors reveal their caret on the constrained axis. Layout
+    /// is refreshed first. Hidden nodes no-op.
+    pub fn ensure_visible(&self) -> Result {
+        self.change(|state, id| {
+            let repaint = state.refresh()?;
+            state.repaint |= repaint;
+            state.reveal(id)
+        })
+    }
+
+    /// Last refreshed bounds intersected with ancestor scroll viewports.
+    /// Returns `None` when hidden or wholly clipped; does not clip to window edges.
+    pub fn visible_bounds(&self) -> Result<Option<Rect>> {
+        self.change(|state, id| {
+            let element = &state.tree.get(id).unwrap().context;
+            Ok(if !element.effective_visible || element.bounds.is_empty() {
+                None
+            } else {
+                element.clip.map_or(Some(element.bounds), |clip| {
+                    clip.intersection(element.bounds)
+                })
+            })
+        })
+    }
 }

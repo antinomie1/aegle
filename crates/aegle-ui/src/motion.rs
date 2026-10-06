@@ -1,3 +1,7 @@
+// The engine state's fields and methods are the authoring surface for control
+// libraries; the contract is described in `control` and on `State`.
+#![allow(missing_docs)]
+
 use crate::{
     Appearance, Point, Result, Transform, Transition, UiError, callbacks::Handler, state::State,
 };
@@ -6,7 +10,7 @@ use aegle_motion::{Interpolate, InvalidValue, Tween};
 use std::{collections::HashMap, time::Duration};
 
 #[derive(Default)]
-pub(crate) struct Motion {
+pub struct Motion {
     pub now: Duration,
     pub reduced: bool,
     pub default: Option<Transition>,
@@ -22,30 +26,30 @@ pub(crate) struct Motion {
     pub ends: HashMap<NodeId, Handler>,
 }
 
-pub(crate) struct Track {
+pub struct Track {
     pub timing: Transition,
     pub presented: Option<Appearance>,
 }
 
-pub(crate) struct Active {
+pub struct Active {
     tween: Tween<Paint>,
     start: Duration,
 }
 
-pub(crate) struct Moving {
+pub struct Moving {
     pub tween: Tween<Point>,
     /// Set by the next refresh, as for paint, so a request made from a callback
     /// starts at the host's current time rather than the last sampled one.
     start: Option<Duration>,
 }
 
-pub(crate) struct Turning {
+pub struct Turning {
     pub tween: Tween<Spin>,
     start: Option<Duration>,
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Spin(pub Transform);
+pub struct Spin(pub Transform);
 
 impl Interpolate for Spin {
     fn validate(self) -> std::result::Result<(), InvalidValue> {

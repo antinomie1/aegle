@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    ops::Deref,
     rc::{Rc, Weak},
 };
 
@@ -8,27 +7,28 @@ use aegle_core::{Dirty, NodeId};
 use aegle_layout::{
     Dimension, Edges, FlexDirection, LengthPercentage, LengthPercentageAuto, Style,
 };
-use aegle_text::EditorOptions;
 use aegle_types::{Rect, Size};
 
 use crate::{
     Result, Theme, UiError,
-    state::{Content, State, text_style},
+    control::{Control, Plain},
+    state::State,
     ui::container_style,
 };
 
 /// Weak generational identity. Cloning a handle neither copies nor owns its control.
 #[derive(Clone)]
 pub struct Node {
-    pub(crate) state: Weak<RefCell<State>>,
-    pub(crate) id: NodeId,
+    /// The owning UI's state.
+    pub state: Weak<RefCell<State>>,
+    /// The node's identity in that state's tree.
+    pub id: NodeId,
 }
 
 impl Node {
-    pub(crate) fn change<T>(
-        &self,
-        change: impl FnOnce(&mut State, NodeId) -> Result<T>,
-    ) -> Result<T> {
+    /// Runs `change` on the live node with the UI borrowed; the entry point for
+    /// control libraries' typed handles.
+    pub fn change<T>(&self, change: impl FnOnce(&mut State, NodeId) -> Result<T>) -> Result<T> {
         let owner = self.state.upgrade().ok_or(UiError::DeadHandle)?;
         let mut state = owner
             .try_borrow_mut()
@@ -91,13 +91,13 @@ impl Node {
             }
             state.tree.get_mut(id).unwrap().context.enabled = enabled;
             let fonts = Rc::clone(&state.fonts);
-            let outcome = match &mut state.tree.get_mut(id).unwrap().context.content {
-                Content::Button(button, _) => button.set_enabled(enabled),
-                Content::Field(field) => field.set_enabled(&mut fonts.borrow_mut(), enabled),
-                Content::Toggle(toggle) => toggle.control.set_enabled(enabled),
-                Content::Slider(slider) => slider.set_enabled(enabled),
-                _ => Default::default(),
-            };
+            let outcome = state
+                .tree
+                .get_mut(id)
+                .unwrap()
+                .context
+                .control
+                .set_enabled(&mut fonts.borrow_mut(), enabled);
             state.effects(id, outcome)?;
             state.rebuild_order();
             for index in 0..state.order.len() {
@@ -201,8 +201,8 @@ impl Node {
         self.change(|state, id| {
             let node = state.tree.get_mut(id).unwrap();
             if matches!(
-                node.context.content,
-                Content::Container | Content::Scroll(_)
+                node.context.control.kind(),
+                aegle_theme::ControlKind::Container | aegle_theme::ControlKind::ScrollView
             ) {
                 node.context.local_layout |= 2;
                 let mut style = node.style().clone();
@@ -233,44 +233,37 @@ impl Node {
     }
 }
 
+/// Defines a typed handle: a clonable wrapper around a [`Node`] that dereferences to it.
+#[macro_export]
 macro_rules! handle {
     ($name:ident, $doc:literal) => {
         #[doc = $doc]
         #[derive(Clone)]
-        pub struct $name(pub(crate) Node);
-        impl Deref for $name {
-            type Target = Node;
-            fn deref(&self) -> &Node {
+        pub struct $name(pub $crate::Node);
+        impl ::std::ops::Deref for $name {
+            type Target = $crate::Node;
+            fn deref(&self) -> &$crate::Node {
                 &self.0
             }
         }
     };
 }
-pub(crate) use handle;
 handle!(
     Container,
     "A retained row or column. Creation methods append children once."
 );
-handle!(Label, "A retained display paragraph.");
-handle!(
-    Button,
-    "A retained button with shared pointer, keyboard and semantic activation."
-);
-handle!(
-    TextField,
-    "A retained plain text editor, including native IME composition state."
-);
 
 impl Container {
-    pub(crate) fn add(
+    /// Appends a node whose control and layout style `create` provides, inheriting
+    /// the parent's resolved theme. The way control libraries add their controls.
+    pub fn add(
         &self,
-        create: impl FnOnce(&mut State, &Theme) -> Result<(Content, Style)>,
+        create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, Style)>,
     ) -> Result<Node> {
         self.change(|state, parent| {
-            // New controls inherit the parent's resolved theme.
             let theme = *state.theme_of(parent);
-            let (content, style) = create(state, &theme)?;
-            let id = state.insert(parent, usize::MAX, content, style)?;
+            let (control, style) = create(state, &theme)?;
+            let id = state.insert(parent, usize::MAX, control, style)?;
             Ok(Node {
                 state: self.state.clone(),
                 id,
@@ -279,7 +272,7 @@ impl Container {
     }
     /// Appends a vertical container.
     pub fn column(&self) -> Result<Container> {
-        self.add(|_, theme| Ok((Content::Container, container_style(theme, false))))
+        self.add(|_, theme| Ok((Box::new(Plain), container_style(theme, false))))
             .map(Container)
     }
     /// Appends a horizontal container.
@@ -287,94 +280,14 @@ impl Container {
         self.add(|_, theme| {
             let mut style = container_style(theme, false);
             style.flex_direction = FlexDirection::Row;
-            Ok((Content::Container, style))
+            Ok((Box::new(Plain), style))
         })
         .map(Container)
     }
-    /// Appends a paragraph. Text wraps to available layout width.
-    pub fn text(&self, text: &str) -> Result<Label> {
-        self.add(|state, theme| {
-            Ok((
-                Content::Label(Box::new(
-                    state
-                        .fonts
-                        .borrow_mut()
-                        .paragraph(text, &text_style(theme))?,
-                )),
-                Style {
-                    flex_shrink: 0.0,
-                    ..Default::default()
-                },
-            ))
-        })
-        .map(Label)
-    }
-    /// Appends a neutral button with its visible text as the default accessible name.
-    pub fn button(&self, text: &str) -> Result<Button> {
-        self.add(|state, theme| {
-            Ok((
-                Content::Button(
-                    aegle_controls::Button::new(),
-                    Box::new(
-                        state
-                            .fonts
-                            .borrow_mut()
-                            .paragraph(text, &text_style(theme))?,
-                    ),
-                ),
-                Style {
-                    size: aegle_layout::Size {
-                        width: Dimension::auto(),
-                        height: Dimension::length(theme.control_height),
-                    },
-                    flex_shrink: 0.0,
-                    ..Default::default()
-                },
-            ))
-        })
-        .map(Button)
-    }
-    /// Appends a single-line editor. Enter produces a submit action.
-    pub fn text_field(&self, text: &str) -> Result<TextField> {
-        self.editor(text, false)
-    }
-    /// Appends a wrapping multiline editor with a default four-line viewport.
-    pub fn text_area(&self, text: &str) -> Result<TextField> {
-        self.editor(text, true)
-    }
-    fn editor(&self, text: &str, multiline: bool) -> Result<TextField> {
-        self.add(|state, theme| {
-            let editor = state.fonts.borrow_mut().editor(
-                text,
-                &text_style(theme),
-                EditorOptions {
-                    multiline,
-                    ..Default::default()
-                },
-            )?;
-            Ok((
-                Content::Field(Box::new(aegle_controls::TextField::new(editor))),
-                Style {
-                    size: aegle_layout::Size {
-                        width: Dimension::auto(),
-                        height: Dimension::length(
-                            theme.control_height * if multiline { 4.0 } else { 1.0 },
-                        ),
-                    },
-                    min_size: aegle_layout::Size {
-                        width: LengthPercentageAuto::length(0.0),
-                        height: LengthPercentageAuto::length(theme.control_height),
-                    },
-                    flex_shrink: 0.0,
-                    ..Default::default()
-                },
-            ))
-        })
-        .map(TextField)
-    }
 }
 
-fn valid(value: f32) -> Result {
+/// Rejects nonfinite or negative lengths.
+pub fn valid(value: f32) -> Result {
     if value.is_finite() && value >= 0.0 {
         Ok(())
     } else {

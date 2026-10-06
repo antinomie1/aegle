@@ -1,5 +1,5 @@
 use crate::native::Entry;
-use aegle_platform_wayland::{Event, ImeEvent, Keysym, PointerEventKind, TouchPhase, WindowId};
+use aegle_platform_wayland::{Event, ImeEvent, Keysym, PointerEventKind, WindowId};
 use aegle_text::Selection;
 use aegle_ui::{
     ClipboardRequest, ImeEdit, ImeRequest, Key, KeyInput, Modifiers, Point, PointerId, PointerKind,
@@ -146,12 +146,6 @@ impl Entry {
                 let pointer = PointerId(
                     (1 << 40) | (u64::from(seat.id().protocol_id()) << 16) | (id as u16 as u64),
                 );
-                let phase = match phase {
-                    TouchPhase::Down => aegle_ui::TouchPhase::Down,
-                    TouchPhase::Move => aegle_ui::TouchPhase::Move,
-                    TouchPhase::Up => aegle_ui::TouchPhase::Up,
-                    TouchPhase::Cancel => aegle_ui::TouchPhase::Cancel,
-                };
                 self.ui.touch(pointer, phase, position, time)?;
             }
             Event::Ime { seat, event, .. } => {

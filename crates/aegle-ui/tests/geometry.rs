@@ -1,0 +1,95 @@
+//! Scrollbar geometry and scroll helpers stay consistent and inside their bounds.
+use aegle_scene::{Color, Point, Rect, SceneBuilder};
+use aegle_types::Size;
+use aegle_ui::{
+    bar::{self, Bar},
+    scroll_geometry::{clamp_anchor, intersection, reveal_delta},
+};
+
+#[test]
+fn scrollbars_follow_the_offset_and_map_drags_back_to_fractions() {
+    let size = Size::new(200.0, 100.0);
+    // 300 more pixels vertically and nothing horizontally.
+    let [vertical, horizontal] =
+        Bar::layout(size, Point::new(0.0, 150.0), Point::new(0.0, 300.0), true);
+    assert!(horizontal.is_none());
+    let bar = vertical.unwrap();
+    assert!(bar.vertical && bar.length >= 24.0 && bar.length < bar.strip.size.height);
+    assert!(
+        (bar.thumb - bar.travel() * 0.5).abs() < 1e-3,
+        "halfway scrolled, halfway down"
+    );
+    assert!(bar.strip.origin.x + bar.strip.size.width <= size.width);
+
+    // A press on the thumb keeps the grab point; elsewhere it centers the thumb.
+    let on_thumb = bar.thumb + 3.0;
+    assert_eq!(bar.grab(on_thumb), 3.0);
+    assert_eq!(bar.grab(bar.thumb + bar.length + 5.0), bar.length * 0.5);
+    let half = bar
+        .fraction(bar.thumb + bar.grab(on_thumb), bar.grab(on_thumb))
+        .unwrap();
+    assert!((half - 0.5).abs() < 1e-3);
+    assert_eq!(
+        bar.fraction(-1000.0, 0.0),
+        Some(0.0),
+        "dragging past the end clamps"
+    );
+
+    // Both axes leave a corner, and an editor never gets a horizontal bar.
+    let [v, h] = Bar::layout(size, Point::new(0.0, 0.0), Point::new(50.0, 50.0), true);
+    assert!(v.unwrap().strip.size.height < size.height - bar::STRIP + 1.0);
+    assert!(h.is_some());
+    assert!(Bar::layout(size, Point::new(0.0, 0.0), Point::new(50.0, 50.0), false)[1].is_none());
+
+    let mut builder = SceneBuilder::new();
+    bar::paint(
+        &mut builder,
+        [Some(bar), None],
+        [Color::WHITE, Color::BLACK],
+        4.0,
+    )
+    .unwrap();
+    assert_eq!(
+        builder.finish().unwrap().commands().len(),
+        2,
+        "one track and one thumb"
+    );
+}
+
+#[test]
+fn scroll_helpers_stay_inside_their_bounds() {
+    assert_eq!(
+        reveal_delta(5.0, 10.0, 20.0, 100.0),
+        -15.0,
+        "above scrolls up"
+    );
+    assert_eq!(
+        reveal_delta(110.0, 20.0, 20.0, 100.0),
+        10.0,
+        "below scrolls down"
+    );
+    assert_eq!(
+        reveal_delta(30.0, 10.0, 20.0, 100.0),
+        0.0,
+        "visible stays put"
+    );
+    let overlap = intersection(
+        Rect::new(0.0, 0.0, 10.0, 10.0),
+        Rect::new(6.0, 8.0, 10.0, 10.0),
+    );
+    assert_eq!(overlap, Rect::new(6.0, 8.0, 4.0, 2.0));
+    let apart = intersection(
+        Rect::new(0.0, 0.0, 10.0, 10.0),
+        Rect::new(30.0, 30.0, 5.0, 5.0),
+    );
+    assert!(apart.is_empty());
+    let anchor = clamp_anchor(
+        Rect::new(500.0, 3.0, 2.0, 12.0),
+        Rect::new(0.0, 0.0, 100.0, 50.0),
+    );
+    assert_eq!(
+        (anchor.origin.x, anchor.size.width),
+        (100.0, 0.0),
+        "a clipped caret sticks to the edge"
+    );
+}

@@ -8,11 +8,11 @@
 
 | crate | 责任及独立用途 | Aegle 内部依赖 |
 | --- | --- | --- |
-| aegle-types | 几何、颜色、资源 ID、通用错误与能力描述；无平台依赖 | 无 |
+| aegle-types | 几何、颜色、光标形状及 `Preferences`、`TouchPhase` 等两个平台共用的小词汇；无平台依赖 | 无 |
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；不依赖应用 | types、core |
 | aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |
-| aegle-glyph | Swash 字形光栅化、有界 CPU 缓存、共用字形身份/变换策略及有界 PNG 解码（应用图像与字体内嵌位图共用） | scene 按 feature 接入 |
+| aegle-glyph | Swash 字形光栅化、有界 CPU 缓存、共用字形身份/变换策略；字体内嵌位图的 PNG 解码来自 aegle-image | image、scene 按 feature 接入 |
 | aegle-scene | 二维绘制命令、裁剪、共享图像/路径资源及可选字形记录 | types |
 | aegle-gpu | GPU 后端共用、与图形 API 无关的部分：图元/裁剪记录、场景遍历、货架装箱、图像与路径 mask 放置、WGSL 着色器 | types、scene；vector feature 增加 zeno |
 | aegle-render-vulkan | 几何、可选字形图集、裁剪、离屏读回与可选原生 swapchain | types、scene；glyph 按 text feature 接入 |
@@ -20,20 +20,21 @@
 | aegle-render-wgpu | 可选的最小跨平台 GPU 后端：几何、字形图集、裁剪、离屏读回与原生 surface 呈现 | types、scene；glyph 按 text feature 接入 |
 | aegle-platform-wayland | Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板、输出与平台偏好 | types |
 | aegle-platform-win32 | Win32 窗口、IMM 兼容输入、DPI、GDI 软件与 GPU 句柄、外观偏好；TSF 待实现 | types |
-| aegle-platform-appkit | AppKit 窗口、NSTextInputClient 及平台偏好 | types |
+| aegle-platform-appkit | 计划中，**尚未实现**：AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
 | aegle-theme | 无分配的 Theme、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；命名空间 token 注册表是后续目标 | types |
 | aegle-motion | 时间、补间、过渡及可选弹簧；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
-| aegle-widgets | 无状态的默认皮肤绘制（复选框、单选、开关、滑块、进度、下拉箭头）与滚动条/滚动几何；有状态组件仍在 aegle-app | types、scene、theme |
-| aegle-image | 有界图像解码：按签名识别 PNG（复用 aegle-glyph）与可选 JPEG、WebP、GIF 首帧，以及可选的静态 SVG 栅格化 | scene、glyph；解码器按 feature |
+| aegle-widgets | 默认控件库，包含全部默认控件：Label、Button、TextField（单/多行）、CheckBox、Switch、Radio、Slider、Progress、ImageView、Canvas、ScrollView、ListView、Table、Popup、Dropdown，以及它们的纯函数皮肤（`paint`）；通过 `Control` trait 与 `Hooks` 接入 aegle-ui，创建入口是 `Widgets` trait | ui、controls、text、scene、theme、core、layout、types；access 按 feature |
+| aegle-image | 有界图像解码：PNG（始终可用，字体位图用 `decode_into`）与可选 JPEG、WebP、GIF 首帧、静态 SVG 栅格化，以及可选的渐变/阴影图像（`effects`）；不依赖任何 UI | scene；解码器按 feature |
 | aegle-markup | 有界解析、跨度、内建控件 schema、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |
-| aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载 | app、markup |
-| aegle-app | 无窗口 Ui 与可选原生 App，连接保留控件、布局、绘制、文本、主题及语义 | types、core、layout、scene、text、controls、theme；平台/renderer/access 按 feature |
-| aegle | 应用便捷入口与重导出，不提供另一套实现 | app；其他按 feature 重导出 |
+| aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载 | ui、widgets、markup；app 按 feature |
+| aegle-ui | 无窗口保留式 UI 引擎：节点树、布局、输入路由与焦点、滚动与滚动条、光标、触摸/惯性、主题、过渡、IME 与语义导出；控件通过开放的 `Control` trait（经 `InputCx`/`MeasureCx`/`PaintCx`/`SemanticsCx` 上下文）和 `Hooks` 接入，引擎不含任何具体控件 | types、core、layout、scene、text、controls、theme、motion；access 按 feature |
+| aegle-app | 原生应用宿主：App/Window、事件循环、平台与 renderer 选择、系统偏好、后台代理（UiProxy）；每窗口一个 `Ui` | ui、types、scene、text；平台、renderer、access 按 feature；widgets 仅用于测试 |
+| aegle | 应用便捷入口与重导出（app、ui、widgets、image），不提供另一套实现 | app、ui、widgets、image；其他按 feature 重导出 |
 
-`aegle-widgets` 只收纯函数：从尺寸、状态和 `Appearance` 到场景命令或几何，不触碰保留树，所以自带控件树的宿主也能直接复用默认外观。有行为的组件没有拆出：滑块、开关、弹出层、虚拟列表、表格和滚动视图是 `aegle-app` 里封闭的 `Content` 枚举的变体，输入、焦点、语义、布局与绘制按变体分派并读写同一个 `State`；把它们移到下层 crate 需要先把 `Content` 改成开放的接口，这是另一次架构决定，没有现成的第二个使用者支撑，所以不做。
+层次：`aegle-ui` 是引擎，`aegle-widgets` 是默认控件库，`aegle-app` 是原生宿主；三者单向依赖（widgets→ui，app→ui），ui 不依赖 widgets 或任何平台/renderer。自带控件的库可只依赖 `aegle-ui` 实现 `Control`；自带窗口/绘制宿主的程序可只依赖 `aegle-ui` 与 `aegle-widgets`。`Hooks` 让虚拟列表、弹出层、单选组等需要跨节点协作的行为留在控件库内，引擎只提供调用点；各库的节点外数据存于 `State::ext`。
 
 表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`，映射 Parley 的可选 AccessKit 支持；基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
 
@@ -61,11 +62,11 @@
 
 `aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点；局部主题由子树节点共享一份 `Rc<Theme>`。当前没有主题注册表；系统偏好由平台 crate 报告，原生 App 据此选择主题；可选外观/位移过渡由 app 连接独立 motion 模块。
 
-`aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、ScrollView、标签、按钮、复选框、开关、滑块、进度条、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` / `windows` 按目标增加原生 App；`software` / `vulkan` 分别增加 renderer。各窗口独立拥有 Ui，共享平台和字体；软件 renderer 共用，GPU 窗口共享第一个窗口创建的设备，图集按窗口独立。当前基础皮肤和纯函数皮肤由 app 应用到现有控件；尚未抽出独立 widgets crate，出现更多真实行为/绘制消费者时再形成该模块。
+`aegle-ui` 不创建平台依赖。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树，提供容器（row/column）、滚动、主题、过渡、输入、IME 与语义接口，具体控件由 `aegle-widgets` 通过 `Widgets` trait 创建。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`aegle-app` 的 `wayland` / `windows` 按目标增加原生 App，`software` / `vulkan` / `wgpu` 分别增加 renderer；各窗口独立拥有 Ui，共享平台和字体；软件 renderer 共用，GPU 窗口共享第一个窗口创建的设备，图集按窗口独立。
 
-ScrollView 的偏移、嵌套滚轮传递和焦点显露由 app 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 app 派生的滚动几何。
+ScrollView 的偏移、嵌套滚轮传递和焦点显露由 ui 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 ui 派生的滚动几何。
 
-`aegle` 重导出 app，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由 `unix-accessibility` 选择；Windows UIA 由 `windows-accessibility` 选择。`aegle-app` 的 `accessibility` 仅启用语义树导出，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主与缩放/旋转动画仍待实现；动态标记由 `markup` 中的 loader 执行。
+`aegle` 重导出 app、ui、widgets 与 image，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由 `unix-accessibility` 选择；Windows UIA 由 `windows-accessibility` 选择。`aegle-ui` / `aegle-widgets` 的 `accessibility` 仅启用语义树导出，`aegle-app` 转发它，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主与缩放/旋转动画仍待实现；动态标记由 `markup` 中的 loader 执行。
 
 `aegle-markup` 是无第三方依赖的有界解析器、schema 与类型检查器；不依赖 app 或任何平台，可供外部工具独立检查，I/O 由调用方的读取函数提供。`aegle-macros` 复用它，并用 syn/quote/proc-macro-crate 处理 Rust 宏参数、代码生成与依赖别名，避免自建 Rust 语法处理。facade 的可选 `markup` 增加编译期宏与 `aegle-loader`：静态文档生成直接创建控件的代码，不链接引擎；动态文档生成构造已检查程序的代码并由引擎执行，发布程序不带解析器。引擎以 state 单元和效果（effect）记录绑定依赖，绑定与块随控件通过 `Node::keep_alive` 释放；运行时加载额外链接解析器。
 
@@ -77,22 +78,26 @@ ScrollView 的偏移、嵌套滚轮传递和焦点显露由 app 协调现有树�
 
 ```mermaid
 flowchart TD
-  Facade[aegle 便捷入口] --> App[aegle-app 组装]
-  App --> Core[core]
-  App --> Layout[layout / Taffy]
-  App --> Text[text + glyph]
+  Facade[aegle 便捷入口] --> App[aegle-app 原生宿主]
+  Facade --> Widgets[aegle-widgets 默认控件]
+  Facade --> Image[aegle-image]
+  App --> Ui[aegle-ui 引擎]
   App --> Platform[目标平台 + 可选 shell]
-  App --> Access[可选 access]
   App --> Render[scene + 一个 renderer]
-  Facade --> Widgets[widgets / controls]
-  Widgets --> Core
-  Widgets --> Visual[theme / motion / scene]
-  Loader[可选 loader] --> App
+  Widgets --> Ui
+  Widgets --> Controls[controls]
+  Ui --> Core[core]
+  Ui --> Layout[layout / Taffy]
+  Ui --> Text[text + glyph]
+  Ui --> Visual[theme / motion / scene]
+  Ui --> Access[可选 access]
+  Loader[可选 loader] --> Ui
+  Loader --> Widgets
   Loader --> Markup[markup]
   Macros[构建期 macros] --> Markup
 ```
 
-这是一张依赖图，不是每次更新必须经过的多层调用链。core 不依赖 app、widgets、loader、GPU 或操作系统库；renderer 不依赖控件或标记语言。
+这是一张依赖图，不是每次更新必须经过的多层调用链。core 不依赖 ui、app、widgets、loader、GPU 或操作系统库；renderer 不依赖控件或标记语言。
 
 ## 目标默认组合与可裁剪组合
 

@@ -1,6 +1,6 @@
 //! Choice, popup, table and content-sized list screenshots.
 use crate::{Setup, hover};
-use aegle::{Container, Key, KeyInput, Modifiers, Result, TableColumn, Ui};
+use aegle::{Container, Key, KeyInput, Modifiers, NodePopup, Result, TableColumn, Ui, Widgets};
 
 fn enter(ui: &Ui) -> Result {
     for pressed in [true, false] {

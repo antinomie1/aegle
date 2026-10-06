@@ -1,17 +1,4 @@
-use crate::{Modifiers, Point, PointerId, PointerKind, Result, Ui, UiError, state::Content};
-
-/// Stage of one finger's contact with a touch screen.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TouchPhase {
-    /// The finger touched the window.
-    Down,
-    /// The finger moved while touching.
-    Move,
-    /// The finger lifted.
-    Up,
-    /// The system took the contact away: end it without activating anything.
-    Cancel,
-}
+use crate::{Modifiers, Point, PointerId, PointerKind, Result, TouchPhase, Ui, UiError};
 
 /// Logical pixels a finger travels before a tap on scrollable content becomes a pan.
 const SLOP: f32 = 10.0;
@@ -19,7 +6,7 @@ const SLOP: f32 = 10.0;
 const WINDOW: u32 = 100;
 
 /// One finger in contact.
-pub(crate) struct Finger {
+pub struct Finger {
     id: PointerId,
     start: Point,
     last: Point,
@@ -131,12 +118,9 @@ impl Ui {
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
         state.rebuild_order();
-        let control = state.hit(position).is_some_and(|id| {
-            matches!(
-                state.tree.get(id).unwrap().context.content,
-                Content::Slider(_) | Content::Field(_)
-            )
-        });
+        let control = state
+            .hit(position)
+            .is_some_and(|id| state.tree.get(id).unwrap().context.control.drags());
         Ok(control || state.scrollbar_at(position, None).is_some())
     }
 

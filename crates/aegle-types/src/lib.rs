@@ -1,4 +1,4 @@
-//! Allocation-free geometry and compact colors shared by Aegle modules.
+//! Allocation-free geometry, compact colors and small input/system vocabulary shared by Aegle modules.
 #![no_std]
 
 #[cfg(feature = "color-math")]
@@ -9,7 +9,9 @@ mod color;
 pub mod color_math;
 mod cursor;
 mod geometry;
+mod system;
 
 pub use color::Color;
 pub use cursor::Cursor;
 pub use geometry::{Point, Rect, Size};
+pub use system::{Preferences, TouchPhase};

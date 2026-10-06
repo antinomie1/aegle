@@ -4,6 +4,7 @@ use aegle_ui::{
     ClipboardRequest, ImeEdit, Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui,
     UiError,
 };
+use aegle_widgets::*;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,

@@ -18,7 +18,7 @@ fn main() -> Result<()> {
 
 当前 `App::new` 按目标连接 Wayland / Win32 并建立系统字体上下文；`run(self)` 在主线程接管循环，最后一个窗口关闭后退出。各窗口的控件树独立，字体系统和软件 renderer 共享。`App::with_fonts` 接受显式字体集合，可关闭 `system-fonts`；`AppOptions` 配置 app_id、浅色/深色/高对比主题（后两者可为 None）、renderer 选择、可选 Vulkan 预算和软件 mask 预算；motion feature 另提供 transition 与 `reduced_motion: Option<bool>`（None 跟随系统）；`App::preferences` 返回最近应用的系统偏好，`WindowOptions` 配置初始尺寸与 SHM 预算，Linux 上可选 `layer: Some(LayerOptions)` 创建 wlr layer-shell 面板/覆盖层（compositor 缺少协议时创建失败）。macOS 尚未实现；Vulkan 通过原生 swapchain 呈现，Windows 当前输入法为 IMM 兼容路径。
 
-`aegle` 当前默认启用原生窗口、软件绘制、系统字体、编译型标记（含动态标记引擎）与外观过渡；系统无障碍适配需显式启用 `unix-accessibility`（AT-SPI）或 `windows-accessibility`（UI Automation），`accessibility` 单独提供语义树导出。嵌入式宿主可直接使用无默认平台 feature 的 `aegle-app::Ui::with_fonts(Rc<RefCell<TextSystem>>, Theme)`，取得 root 后创建同样的控件；通过输入、`refresh`、`visit_scenes`、IME 和可选语义接口对接自己的宿主。
+`aegle` 当前默认启用原生窗口、软件绘制、系统字体、编译型标记（含动态标记引擎）与外观过渡；系统无障碍适配需显式启用 `unix-accessibility`（AT-SPI）或 `windows-accessibility`（UI Automation），`accessibility` 单独提供语义树导出。嵌入式宿主可直接使用无平台依赖的 `aegle-ui::Ui::with_fonts(Rc<RefCell<TextSystem>>, Theme)`，取得 root 后用 `aegle-widgets` 的 `Widgets` trait（需引入）创建同样的控件，或实现 `aegle_ui::Control` 提供自己的控件；通过输入、`refresh`、`visit_scenes`、IME 和可选语义接口对接自己的宿主。
 
 界面优先写在 `.aegle` 文件中；`App::run_ui(aegle::ui!("main.aegle"))` 完成默认初始化、构造和运行。`let view = aegle::ui!(&window, "panel.aegle")?` 返回带 `root`、各 `id` 和入口 state（`loader::State<T>`）字段的有类型句柄集合，可直接给 `view.done.on_click(...)` 绑定下面的普通 Rust 回调。文件路径相对使用者包清单目录，编译器跟踪其变化；完整已实现属性见[标记语言](markup.md)。
 

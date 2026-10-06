@@ -26,10 +26,9 @@ mod software;
 #[cfg(windows)]
 mod window;
 
+pub use aegle_types::Preferences;
 pub use error::{Error, PresentError};
-pub use events::{
-    Event, Modifiers, PixelSize, PointerKind, Preferences, WindowId, WindowInfo, WindowOptions,
-};
+pub use events::{Event, Modifiers, PixelSize, PointerKind, WindowId, WindowInfo, WindowOptions};
 pub use ime_types::{ImeEvent, ImeRequest, ImeUpdate, Preedit, utf16_cursor};
 #[cfg(windows)]
 pub use window::{WakeHandle, Win32, WindowSurface};

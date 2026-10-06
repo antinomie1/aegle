@@ -1,6 +1,4 @@
-use crate::{
-    Node, Result, Style, Transition, Ui, UiError, callbacks::Handler, motion::Track, state::Content,
-};
+use crate::{Node, Result, Style, Transition, Ui, UiError, callbacks::Handler, motion::Track};
 use aegle_core::Dirty;
 use std::time::Duration;
 
@@ -101,13 +99,10 @@ impl Node {
             state.motion.moving.remove(&id);
             state.motion.turning.remove(&id);
             let value = state.presented_appearance(id)?;
-            let content = &state.tree.get(id).unwrap().context.content;
-            let field = matches!(content, Content::Field(_));
-            let control = content.interactive();
-            let indicator = matches!(
-                content,
-                Content::Toggle(_) | Content::Slider(_) | Content::Progress(_)
-            );
+            let control = &state.tree.get(id).unwrap().context.control;
+            let scope = control.style_scope();
+            let (field, indicator, control) =
+                (scope.editor, scope.indicator, control.interactive());
             state.set_style(
                 id,
                 Style {

@@ -1,19 +1,19 @@
-use std::ops::Deref;
+use std::{any::Any, ops::Deref};
 
-use aegle_layout::Overflow;
-use aegle_types::{Point, Rect, Size};
-
-use crate::{
-    Container, Node, Result, UiError,
-    state::Content,
-    ui::{container_style, scroll_padding},
+use aegle_layout::{Overflow, Style};
+use aegle_theme::{ControlKind, Theme};
+use aegle_types::{Point, Size};
+use aegle_ui::{
+    Container, Control, Result, UiError, bar, container_style,
+    control::{Frame, PaintCx},
+    scroll_padding,
 };
 
 /// A retained column with a clipped, independently scrollable viewport.
-/// Constrain its size or flex allocation to create overflow. It has no scrollbar
-/// widgets; wheel input, focus reveal and explicit offsets share the same state.
+/// Constrain its size or flex allocation to create overflow. Overlay scrollbars,
+/// wheel input, focus reveal and explicit offsets share the same state.
 #[derive(Clone)]
-pub struct ScrollView(pub(crate) Container);
+pub struct ScrollView(pub Container);
 
 impl Deref for ScrollView {
     type Target = Container;
@@ -22,20 +22,59 @@ impl Deref for ScrollView {
     }
 }
 
-impl Container {
-    /// Appends a scrollable column. Children retain their state outside the viewport.
-    /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
-    pub fn scroll_view(&self) -> Result<ScrollView> {
-        self.add(|_, theme| {
-            let mut style = container_style(theme, false);
-            style.padding = scroll_padding(theme);
-            style.overflow.x = Overflow::Scroll;
-            style.overflow.y = Overflow::Scroll;
-            style.flex_shrink = 0.0;
-            Ok((Content::Scroll(Box::default()), style))
-        })
-        .map(|node| ScrollView(Container(node)))
+/// The control inside a [`ScrollView`] node: a viewport whose border and
+/// scrollbars draw over its children.
+pub struct ScrollControl;
+
+impl Control for ScrollControl {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+    fn kind(&self) -> ControlKind {
+        ControlKind::ScrollView
+    }
+    fn viewport(&self) -> bool {
+        true
+    }
+    fn frame(&self) -> Frame {
+        // The border draws after the children, so scrolled content cannot cover it.
+        Frame {
+            background: true,
+            border: false,
+        }
+    }
+    fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
+        aegle_ui::Plain.retheme(theme, local, root, style);
+        if local & 2 == 0 {
+            style.padding = scroll_padding(theme);
+        }
+    }
+    fn paint_overlay(&mut self, cx: &mut PaintCx<'_>) -> Result {
+        aegle_ui::paint::outline(
+            cx.builder,
+            cx.size,
+            cx.appearance.radius,
+            cx.appearance.border_width,
+            cx.appearance.border_color,
+        )?;
+        bar::paint(cx.builder, cx.bars, cx.bar_color, cx.theme.radius)?;
+        Ok(())
+    }
+}
+
+pub(crate) fn create(container: &Container) -> Result<ScrollView> {
+    crate::add(container, |_, theme| {
+        let mut style = container_style(theme, false);
+        style.padding = scroll_padding(theme);
+        style.overflow.x = Overflow::Scroll;
+        style.overflow.y = Overflow::Scroll;
+        style.flex_shrink = 0.0;
+        Ok((Box::new(ScrollControl) as Box<dyn Control>, style))
+    })
+    .map(|node| ScrollView(Container(node)))
 }
 
 impl ScrollView {
@@ -83,34 +122,6 @@ impl ScrollView {
             let old = state.tree.get(id).unwrap().context.scroll;
             state.scroll_to(id, Point::new(old.x + delta.x, old.y + delta.y))?;
             state.update_geometry()
-        })
-    }
-}
-
-impl Node {
-    /// Scrolls ancestor viewports just enough to reveal this control, without changing
-    /// focus. Oversized editors reveal their caret on the constrained axis. Layout
-    /// is refreshed first. Hidden nodes no-op.
-    pub fn ensure_visible(&self) -> Result {
-        self.change(|state, id| {
-            let repaint = state.refresh()?;
-            state.repaint |= repaint;
-            state.reveal(id)
-        })
-    }
-
-    /// Last refreshed bounds intersected with ancestor scroll viewports.
-    /// Returns `None` when hidden or wholly clipped; does not clip to window edges.
-    pub fn visible_bounds(&self) -> Result<Option<Rect>> {
-        self.change(|state, id| {
-            let element = &state.tree.get(id).unwrap().context;
-            Ok(if !element.effective_visible || element.bounds.is_empty() {
-                None
-            } else {
-                element.clip.map_or(Some(element.bounds), |clip| {
-                    clip.intersection(element.bounds)
-                })
-            })
         })
     }
 }

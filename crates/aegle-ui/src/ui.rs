@@ -15,7 +15,8 @@ use aegle_types::{Color, Rect, Size};
 
 use crate::{
     Container, Node,
-    state::{Content, Element, State},
+    control::Plain,
+    state::{Element, State},
 };
 
 /// Application operation or callback result. Underlying module errors are preserved.
@@ -91,7 +92,8 @@ pub enum ClipboardRequest {
 /// This owner is deliberately not `Clone`: handles hold weak references, so
 /// dropping the UI destroys its controls even if application callbacks retain handles.
 pub struct Ui {
-    pub(crate) state: Rc<RefCell<State>>,
+    /// The shared engine state, for control libraries' hooks.
+    pub state: Rc<RefCell<State>>,
 }
 
 impl Ui {
@@ -99,7 +101,7 @@ impl Ui {
     pub fn with_fonts(fonts: Rc<RefCell<TextSystem>>, theme: Theme) -> Result<Self> {
         theme.validate()?;
         let mut tree = Tree::new();
-        let mut element = Element::new(Content::Container);
+        let mut element = Element::new(Box::new(Plain));
         #[cfg(feature = "accessibility")]
         {
             element.access_id = aegle_access::accesskit::NodeId(1);
@@ -135,9 +137,8 @@ impl Ui {
                 clipboard: None,
                 repaint: true,
                 callbacks: HashMap::new(),
-                lists: Vec::new(),
-                popups: Vec::new(),
-                dropdowns: HashMap::new(),
+                ext: HashMap::new(),
+                hooks: Vec::new(),
                 decorations: HashMap::new(),
                 overrides: HashMap::new(),
                 fingers: Vec::new(),
@@ -209,22 +210,47 @@ impl Ui {
                 .map_err(|_| UiError::ReentrantAccess)?
                 .refresh()
         };
-        self.realize_rows()?;
+        self.realize()?;
         let mut repaint = refresh()?;
         // New layout can expose rows of resized or first-laid-out lists, and
         // measured content-sized rows can move the rows after them.
         for _ in 0..4 {
-            let measured = self
-                .state
-                .try_borrow_mut()
-                .map_err(|_| UiError::ReentrantAccess)?
-                .measure_rows()?;
-            if !self.realize_rows()? && !measured {
+            let mut measured = false;
+            {
+                let mut state = self
+                    .state
+                    .try_borrow_mut()
+                    .map_err(|_| UiError::ReentrantAccess)?;
+                for hook in state.hooks.clone() {
+                    if let Some(measure) = hook.measure {
+                        measured |= measure(&mut state)?;
+                    }
+                }
+            }
+            if !self.realize()? && !measured {
                 break;
             }
             repaint |= refresh()?;
         }
         Ok(repaint)
+    }
+
+    /// Lets installed control libraries build or drop virtual content, outside any
+    /// engine borrow. Returns whether anything changed.
+    fn realize(&self) -> Result<bool> {
+        let hooks = self
+            .state
+            .try_borrow()
+            .map_err(|_| UiError::ReentrantAccess)?
+            .hooks
+            .clone();
+        let mut changed = false;
+        for hook in hooks {
+            if let Some(realize) = hook.realize {
+                changed |= realize(self)?;
+            }
+        }
+        Ok(changed)
     }
 
     /// Visits visible records with their window-space translation and ancestor clip.
@@ -243,8 +269,8 @@ impl Ui {
         let mut overlays = state.overlays.iter().peekable();
         let mut draw = |id, overlay: bool| -> Result {
             let element = &state.tree.get(id).unwrap().context;
-            let scene = match &element.content {
-                Content::Scroll(scene) if overlay => scene,
+            let scene = match &element.overlay {
+                Some(scene) if overlay => scene,
                 _ => &element.scene,
             };
             let shown = element.xf.map_or(element.bounds, |xf| {
@@ -301,9 +327,7 @@ impl Ui {
         let reset = std::mem::take(&mut state.ime_reset);
         let request = state.focus.current(&state.tree).and_then(|id| {
             let element = &state.tree.get(id).unwrap().context;
-            let Content::Field(field) = &element.content else {
-                return None;
-            };
+            let field = element.control.editor()?;
             if !field.accepts_ime() {
                 return None;
             }
@@ -320,11 +344,11 @@ impl Ui {
             if let Some(xf) = element.xf {
                 cursor_rect = crate::scroll::map_rect(xf, cursor_rect);
             }
-            cursor_rect = aegle_widgets::clamp_anchor(cursor_rect, element.bounds);
+            cursor_rect = crate::scroll_geometry::clamp_anchor(cursor_rect, element.bounds);
             if let Some(clip) = element.clip {
-                cursor_rect = aegle_widgets::clamp_anchor(cursor_rect, clip);
+                cursor_rect = crate::scroll_geometry::clamp_anchor(cursor_rect, clip);
             }
-            cursor_rect = aegle_widgets::clamp_anchor(
+            cursor_rect = crate::scroll_geometry::clamp_anchor(
                 cursor_rect,
                 Rect::new(0.0, 0.0, state.size.width, state.size.height),
             );
@@ -356,9 +380,7 @@ impl Ui {
         state.overrides.clear();
         state.fingers.clear();
         state.kept.clear();
-        state.lists.clear();
-        state.popups.clear();
-        state.dropdowns.clear();
+        state.ext.clear();
         #[cfg(feature = "motion")]
         {
             state.motion.tracks.clear();
@@ -378,7 +400,7 @@ impl Ui {
 }
 
 /// Scroll views keep content clear of their default border.
-pub(crate) fn scroll_padding(theme: &Theme) -> Edges<LengthPercentage> {
+pub fn scroll_padding(theme: &Theme) -> Edges<LengthPercentage> {
     let p = LengthPercentage::length(theme.padding / 2.0);
     Edges {
         left: p,
@@ -388,7 +410,8 @@ pub(crate) fn scroll_padding(theme: &Theme) -> Edges<LengthPercentage> {
     }
 }
 
-pub(crate) fn container_style(theme: &Theme, root: bool) -> Style {
+/// The default layout style of a plain row or column under `theme`.
+pub fn container_style(theme: &Theme, root: bool) -> Style {
     let gap = LengthPercentage::length(theme.gap);
     let padding = LengthPercentage::length(if root { theme.padding } else { 0.0 });
     Style {

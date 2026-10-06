@@ -21,7 +21,7 @@
 - aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转经 `Node::set_transform` 动画（见末节）；原生 App 跟随系统减少动态效果。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；原生 App 按系统深浅色/高对比选择主题；当前没有 token 注册表。
-- aegle-app 与 aegle：无窗口 Ui 和可选 Wayland/Win32 软件或 Vulkan 应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
+- aegle-ui、aegle-widgets、aegle-app 与 aegle：无窗口引擎（aegle-ui）、全部默认控件（aegle-widgets，经 `Widgets` trait 创建）、可选 Wayland/Win32 软件/Vulkan/wgpu 应用宿主（aegle-app）；命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/radio/slider/progress/list_view/table/popup/dropdown、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Text/Button/TextField/TextArea/CheckBox/Switch/Slider/Progress 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。markup 另有 state/表达式/事件/块/组件的类型检查与多文件 `use` 导入；动态文档由宏生成已检查程序的构造代码。
 - aegle-loader：动态标记执行引擎（state 单元与效果、单向绑定、事件块、按值 key 的 for、if 分支重建、响应式组件参数）、运行时 `Program::load` 与原子 `reload`；绑定随控件经 `Node::keep_alive` 释放。宿主动作、`let`、record、slot、组件事件与可配置限额见末节。
 
@@ -275,7 +275,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 ## 拆出 aegle-widgets：无状态默认皮肤与滚动几何
 
-- 评估：`aegle-app` 的组件行为不能原样拆到下层 crate。滑块、开关、弹出层、虚拟列表、表格和滚动视图是封闭的 `Content` 枚举的变体，输入、焦点、语义、布局、绘制都按变体分派并读写同一个 `State`，下层 crate 会反向依赖它而形成环；要拆就得先把 `Content` 改成开放接口，这是另一次架构决定。所以只拆出确实无状态的部分。
+- 评估：`aegle-app` 的组件行为不能原样拆到下层 crate。滑块、开关、弹出层、虚拟列表、表格和滚动视图是封闭的 `Content` 枚举的变体，输入、焦点、语义、布局、绘制都按变体分派并读写同一个 `State`，下层 crate 会反向依赖它而形成环；要拆就得先把 `Content` 改成开放接口，这是另一次架构决定。所以只拆出确实无状态的部分。（该结论已被下一节「引擎与控件库分离」取代：`Content` 枚举改为开放的 `Control` trait。）
 - 新增 `aegle-widgets`（依赖 types、scene、theme）：`toggle`（复选/混合/开关/单选；标签由调用方的闭包绘制，因此不依赖 aegle-text）、`range`（滑块与进度）、`slider_track`、`check_mark`、`chevron`；`scrollbar::Bar`（布局、命中位置、抓取点、拖动比例）与 `paint`；`reveal_delta`、`intersection`、`clamp_anchor`。`aegle-app` 删除 `widget_paint.rs`，`scrollbar.rs` 只剩手势、命中与颜色；`Mark` 移到 widgets。`aegle-app` 由 7,221 行降到 6,839 行，widgets 为 492 行。
 - 验证：重构前后 `aegle --example gallery` 重新生成的 17 张控件截图与已提交的文件逐字节相同，说明绘制没有变化；`aegle-app --all-features` 全部测试通过（滚动、数值控件、组合控件、外观、动画）；新增 `aegle-widgets/tests/widgets.rs`（166 行）：各控件绘制的命令、标签闭包只在有标签时调用、滚动条随偏移变化、抓取/拖动比例与越界夹紧、双轴留角、编辑器无横向条、揭示与裁剪辅助。没有测量体积或性能。
 
@@ -409,3 +409,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 - PNG 解码（`decode_png` 系列、`DecodedImage`、字体位图用的 `decode_into`）用 `git mv` 从 `aegle-glyph` 移入 `aegle-image::png`，错误统一为 `image::Error`（`NotPng` 变为 `Unsupported`）；`aegle-glyph` 反过来依赖 `aegle-image` 解码字体内嵌 PNG，不再带 png 依赖。`aegle-image` 只依赖 `aegle-scene` 与 `aegle-types`，不带字体栈。facade 删除 `aegle::decode_png/decode_image/DecodeError/DecodedImage`，一律经 `aegle::image`。
 - 渐变与阴影从 `aegle-widgets/effects` 移到 `aegle-image/effects`（facade 的 `effects` feature 不变，路径为 `aegle::image::effects`），测试随文件移动。验证：`aegle-image`、`aegle-glyph` 全 feature 测试通过。
+
+## 引擎、控件库与原生宿主分离
+
+- 原 `aegle-app` 拆为三层：`aegle-ui`（无窗口引擎）、`aegle-widgets`（全部默认控件）、`aegle-app`（原生宿主）。文件用 `git mv` 移动：滚动条/滚动几何 `aegle-widgets → aegle-ui`（`bar.rs`、`scroll_geometry.rs`），list/popup/table/文本/数值/视觉控件 `aegle-ui → aegle-widgets`，测试随控件迁到 `aegle-widgets/tests`，原生测试迁到 `aegle-app/tests`。
+- 引擎中封闭的 `Content` 枚举替换为 `aegle_ui::Control` trait（每节点一个对象）：输入、布局测量、绘制、语义经 `InputCx`/`MeasureCx`/`PaintCx`/`SemanticsCx` 访问；段落、编辑器、视口以能力方法暴露。需要跨节点协作的行为（弹出层的覆盖层放置/外部点击/Esc、单选组方向键、虚拟列表的行实现与测量）经 `Hooks` 函数指针安装，控件库数据存于 `State::ext`；`Container::add` 与 `aegle_ui::handle!` 供第三方控件库使用。`aegle-ui` 不再依赖 widgets 或任何平台/renderer（`cargo tree -e normal -p aegle-ui` 无这些 crate）。
+- 同轮清理：`Preferences` 与 `TouchPhase` 在 Wayland/Win32/ui 中各有一份，现统一在 `aegle-types`，平台与 ui 重导出；删除宿主里的一一映射。facade 重导出 app、ui、widgets、image，prelude 增加 `Widgets`/`NodePopup`；标记宏生成的代码自行引入 `Widgets`。
+- 验证：`cargo check --workspace --all-targets --all-features` 无警告；`cargo test --workspace --all-features` 全部通过（含 aegle-ui 的几何测试与 aegle-widgets 的组合/指针/触摸/滚动/动画/值控件场景）；私有 Sway 上 `aegle-app` 的 ignored 原生测试在软件、Vulkan（lavapipe）与 wgpu 下通过。过程中修复了虚拟列表在借出状态后写回顺序变化导致的越界（`take`/`put_back` 保持位置）。所有源文件不超过 500 行（`popup.rs` 拆出 `dropdown.rs`）；全仓库测试占实现加测试行数约 16%。
+- 未验证：本次拆分之后尚未重新做 Windows 交叉编译检查（`-Zbuild-std` 回退环境在此轮报 `cannot specify features for packages outside of workspace`，未解决），`native_input_windows.rs` 与 Win32 平台 crate 的改动在 Linux 上没有被编译；`cargo clippy` 在此环境不可用，未运行。

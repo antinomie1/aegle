@@ -1,7 +1,4 @@
-use crate::{
-    Result,
-    state::{Content, State},
-};
+use crate::{Result, state::State};
 use aegle_access::accesskit::{Action, ActionData, ScrollUnit};
 use aegle_core::NodeId;
 use aegle_types::Point;
@@ -10,10 +7,7 @@ impl State {
     pub(crate) fn has_scroll_ancestor(&self, id: NodeId) -> bool {
         let mut parent = self.tree.parent(id).unwrap();
         while let Some(id) = parent {
-            if matches!(
-                self.tree.get(id).unwrap().context.content,
-                Content::Scroll(_)
-            ) {
+            if self.tree.get(id).unwrap().context.control.viewport() {
                 return true;
             }
             parent = self.tree.parent(id).unwrap();
@@ -47,7 +41,7 @@ impl State {
             return Ok(None);
         }
         let element = &self.tree.get(target).unwrap().context;
-        if !matches!(element.content, Content::Scroll(_)) {
+        if !element.control.viewport() {
             return Ok(Some(false));
         }
         let limit = self.scroll_limit(target);

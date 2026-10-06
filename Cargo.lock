@@ -85,6 +85,7 @@ dependencies = [
  "aegle-render-software",
  "aegle-text",
  "aegle-ui",
+ "aegle-widgets",
  "png",
 ]
 
@@ -112,6 +113,7 @@ dependencies = [
  "aegle-text",
  "aegle-types",
  "aegle-ui",
+ "aegle-widgets",
  "wayland-client",
 ]
 
@@ -184,6 +186,7 @@ dependencies = [
  "aegle-markup",
  "aegle-text",
  "aegle-ui",
+ "aegle-widgets",
 ]
 
 [[package]]
@@ -329,16 +332,21 @@ dependencies = [
  "aegle-text",
  "aegle-theme",
  "aegle-types",
- "aegle-widgets",
 ]
 
 [[package]]
 name = "aegle-widgets"
 version = "0.1.0"
 dependencies = [
+ "aegle-access",
+ "aegle-controls",
+ "aegle-core",
+ "aegle-layout",
  "aegle-scene",
+ "aegle-text",
  "aegle-theme",
  "aegle-types",
+ "aegle-ui",
 ]
 
 [[package]]

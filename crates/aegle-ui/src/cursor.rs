@@ -7,10 +7,7 @@
 use aegle_core::NodeId;
 use aegle_types::{Cursor, Point};
 
-use crate::{
-    Node, Result, Ui, UiError,
-    state::{Content, State},
-};
+use crate::{Node, Result, Ui, UiError, state::State};
 
 impl State {
     /// Shape for the last pointer position; the arrow while no pointer is inside.
@@ -28,13 +25,17 @@ impl State {
         let Some(target) = captured.or_else(|| self.node_under(position)) else {
             return Cursor::Default;
         };
-        let editor = matches!(
-            self.tree.get(target).unwrap().context.content,
-            Content::Field(_)
-        )
-        .then_some(target);
-        // A shown popup covers any scrollbar below it.
-        if self.popup_at(position).is_none() && self.scrollbar_at(position, editor).is_some() {
+        let editor = self
+            .tree
+            .get(target)
+            .unwrap()
+            .context
+            .control
+            .editor()
+            .is_some()
+            .then_some(target);
+        // A shown overlay covers any scrollbar below it.
+        if self.overlay_at(position).is_none() && self.scrollbar_at(position, editor).is_some() {
             return Cursor::Default;
         }
         self.cursor_of(target)
@@ -43,7 +44,7 @@ impl State {
     /// Topmost visible node under a point, interactive or not, so labels, images
     /// and canvases can carry a cursor too. Disabled controls still count.
     fn node_under(&self, position: Point) -> Option<NodeId> {
-        let popup = self.popup_at(position);
+        let popup = self.overlay_at(position);
         self.order.iter().rev().copied().find(|&id| {
             let element = &self.tree.get(id).unwrap().context;
             popup.is_none_or(|popup| self.contains(popup, id))
@@ -63,10 +64,15 @@ impl State {
         if let Some(cursor) = self.explicit_cursor(target) {
             return cursor;
         }
-        if matches!(
-            self.tree.get(target).unwrap().context.content,
-            Content::Field(_)
-        ) && self.usable(target)
+        if self
+            .tree
+            .get(target)
+            .unwrap()
+            .context
+            .control
+            .editor()
+            .is_some()
+            && self.usable(target)
         {
             return Cursor::Text;
         }

@@ -3,6 +3,7 @@ use aegle_text::{Blob, GenericFamily};
 use aegle_ui::{
     Cursor, Modifiers, Node, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui,
 };
+use aegle_widgets::*;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 fn center(node: &Node) -> Result<Point> {

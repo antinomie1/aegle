@@ -1,9 +1,8 @@
 use crate::{
     Node, Result, Theme, ThemeOverride, Ui, UiError,
-    state::{Content, State, text_style},
+    state::{State, text_style},
 };
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{Dimension, Edges, LengthPercentage, LengthPercentageAuto};
 use std::rc::Rc;
 
 impl Ui {
@@ -136,73 +135,24 @@ impl State {
         let mut style = node.style().clone();
         if font_changed {
             let text_style = text_style(theme);
-            if let Some(text) = node.context.content.paragraph_mut() {
+            if let Some(text) = node.context.control.paragraph_mut() {
                 self.fonts.borrow_mut().restyle(text, &text_style)?;
-            } else if let Content::Field(field) = &mut node.context.content {
+            } else if let Some(field) = node.context.control.editor_mut() {
                 self.fonts
                     .borrow_mut()
                     .edit(field.editor_mut())
                     .restyle(&text_style)?;
             }
         }
-        match &node.context.content {
-            Content::Container | Content::Scroll(_) => {
-                if node.context.local_layout & 4 == 0 {
-                    let gap = LengthPercentage::length(theme.gap);
-                    style.gap = aegle_layout::Size {
-                        width: gap,
-                        height: gap,
-                    };
-                }
-                if is_root && node.context.local_layout & 2 == 0 {
-                    let p = LengthPercentage::length(theme.padding);
-                    style.padding = Edges {
-                        left: p,
-                        right: p,
-                        top: p,
-                        bottom: p,
-                    };
-                }
-                if matches!(node.context.content, Content::Scroll(_))
-                    && node.context.local_layout & 2 == 0
-                {
-                    style.padding = crate::ui::scroll_padding(theme);
-                }
-            }
-            Content::Button(..) | Content::Toggle(_) | Content::Slider(_)
-                if node.context.local_layout & 1 == 0 =>
-            {
-                style.size.height = Dimension::length(theme.control_height)
-            }
-            Content::Progress(_) if node.context.local_layout & 1 == 0 => {
-                style.size.height = Dimension::length(theme.control_height / 2.0)
-            }
-            Content::Field(field) => {
-                if node.context.local_layout & 1 == 0 {
-                    style.size.height = Dimension::length(
-                        theme.control_height
-                            * if field.editor().is_multiline() {
-                                4.0
-                            } else {
-                                1.0
-                            },
-                    );
-                }
-                if node.context.local_layout & 8 == 0 {
-                    style.min_size.height = LengthPercentageAuto::length(theme.control_height);
-                }
-            }
-            _ => {}
-        }
+        node.context
+            .control
+            .retheme(theme, node.context.local_layout, is_root, &mut style);
         if style != *node.style() {
             aegle_layout::set_style(&mut self.tree, id, style)?;
         }
         let custom_skin = self.decorations.get(&id).is_some_and(|d| d.skin.is_some());
-        let toggle_gap_changed = theme.gap != old.gap
-            && matches!(
-                self.tree.get(id).unwrap().context.content,
-                Content::Toggle(_)
-            );
+        let toggle_gap_changed =
+            theme.gap != old.gap && self.tree.get(id).unwrap().context.control.uses_gap();
         let dirty = if font_changed || theme.padding != old.padding || toggle_gap_changed {
             Dirty::ALL
         } else if theme.foreground != old.foreground || theme.muted != old.muted || custom_skin {

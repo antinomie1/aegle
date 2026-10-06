@@ -39,6 +39,7 @@ pub(super) fn builder(document: &CheckedDocument, facade: &TokenStream) -> Token
             #(#fields)*
         }
         move |#parent: &#parent_type| -> #facade::Result<#view> {
+            use #facade::Widgets as _;
             let #root_handle = #create_root?;
             let __aegle_result = (|| -> #facade::Result<#view> {
                 #(#creations)*

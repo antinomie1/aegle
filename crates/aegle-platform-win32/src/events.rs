@@ -1,5 +1,5 @@
 use crate::{Error, ImeEvent};
-use aegle_types::Point;
+use aegle_types::{Point, Preferences};
 
 /// Identity scoped to its event loop; never reused by that loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -108,19 +108,6 @@ pub enum PointerKind {
         /// Horizontal/vertical displacement.
         delta: Point,
     },
-}
-
-/// Desktop appearance preferences; `None` where the system reports nothing.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Preferences {
-    /// Whether the user prefers a dark color scheme.
-    pub dark: Option<bool>,
-    /// Whether high-contrast presentation is requested.
-    pub high_contrast: Option<bool>,
-    /// Whether non-essential motion should be reduced.
-    pub reduced_motion: Option<bool>,
-    /// Text size as a percentage of the default (100), within 50–400.
-    pub text_scale: Option<u16>,
 }
 
 /// Native events in dispatch order; text and physical keys are distinct.

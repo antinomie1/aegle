@@ -1,11 +1,11 @@
-use crate::{
-    Result,
-    state::{Content, Mark, Semantic, State},
-};
+// The engine state's fields and methods are the authoring surface for control
+// libraries; the contract is described in `control` and on `State`.
+#![allow(missing_docs)]
+
+use crate::bar::FOOTPRINT;
+use crate::{Result, control::MeasureCx, state::State};
 use aegle_core::Dirty;
 use aegle_layout::{AvailableSpace, LengthPercentage, Size};
-use aegle_text::Alignment;
-use aegle_widgets::scrollbar::FOOTPRINT;
 
 impl State {
     /// Reserves each overflowing viewport's scrollbar footprint beyond its padding,
@@ -16,10 +16,7 @@ impl State {
         let mut changed = false;
         for index in 0..self.order.len() {
             let id = self.order[index];
-            if !matches!(
-                self.tree.get(id).unwrap().context.content,
-                Content::Scroll(_)
-            ) {
+            if !self.tree.get(id).unwrap().context.control.viewport() {
                 continue;
             }
             let limit = self.scroll_limit(id);
@@ -48,7 +45,7 @@ impl State {
         self.rebuild_order();
         for index in 0..self.order.len() {
             let id = self.order[index];
-            if let Content::Field(field) = &mut self.tree.get_mut(id).unwrap().context.content {
+            if let Some(field) = self.tree.get_mut(id).unwrap().context.control.editor_mut() {
                 let changes = field.editor_mut().take_changes();
                 self.tree.get_mut(id).unwrap().context.ensure_caret |=
                     changes.layout || changes.selection;
@@ -84,64 +81,12 @@ impl State {
                             AvailableSpace::MinContent => Some(0.0),
                             AvailableSpace::MaxContent => None,
                         });
-                        let measured = match &mut element.content {
-                            Content::Label(text) => text
-                                .reflow(
-                                    width.map(|w| (w - 2.0 * padding).max(0.0)),
-                                    Alignment::Start,
-                                )
-                                .map(|s| {
-                                    aegle_types::Size::new(
-                                        s.width + 2.0 * padding,
-                                        s.height + 2.0 * padding,
-                                    )
-                                }),
-                            Content::Button(_, text) => Ok(aegle_types::Size::new(
-                                text.size().width
-                                    + 2.0 * padding
-                                    + if element.semantic == Semantic::Dropdown {
-                                        gap + aegle_widgets::CHEVRON
-                                    } else {
-                                        0.0
-                                    },
-                                text.size().height + 2.0 * padding,
-                            )),
-                            Content::Toggle(toggle) => Ok(aegle_types::Size::new(
-                                if toggle.mark == Mark::Switch {
-                                    36.0
-                                } else {
-                                    18.0
-                                } + if toggle.text.text().is_empty() {
-                                    0.0
-                                } else {
-                                    gap + toggle.text.size().width
-                                } + 2.0 * padding,
-                                toggle.text.size().height.max(20.0) + 2.0 * padding,
-                            )),
-                            Content::Slider(_) | Content::Progress(_) => {
-                                Ok(aegle_types::Size::new(160.0, 20.0 + 2.0 * padding))
-                            }
-                            Content::Field(field) => fonts
-                                .borrow_mut()
-                                .edit(field.editor_mut())
-                                .reflow(
-                                    width.map(|w| (w - 2.0 * padding).max(0.0)),
-                                    Alignment::Start,
-                                )
-                                .map(|s| {
-                                    aegle_types::Size::new(
-                                        s.width + 2.0 * padding,
-                                        s.height + 2.0 * padding,
-                                    )
-                                }),
-                            Content::Image(image) => Ok(aegle_types::Size::new(
-                                image.width() as f32,
-                                image.height() as f32,
-                            )),
-                            Content::Container | Content::Scroll(_) | Content::Canvas(_) => {
-                                Ok(aegle_types::Size::default())
-                            }
-                        };
+                        let measured = element.control.measure(&MeasureCx {
+                            fonts,
+                            padding,
+                            gap,
+                            width,
+                        });
                         match measured {
                             Ok(size) => Size {
                                 width: known.width.unwrap_or(size.width),
@@ -169,18 +114,7 @@ impl State {
                 // when Taffy's measurement callback last evaluated an intrinsic pass.
                 let width = node.bounds().size.width;
                 let padding = node.context.inset(&self.theme);
-                match &mut node.context.content {
-                    Content::Label(text) => {
-                        text.reflow(Some((width - 2.0 * padding).max(0.0)), Alignment::Start)?;
-                    }
-                    Content::Field(field) => {
-                        self.fonts
-                            .borrow_mut()
-                            .edit(field.editor_mut())
-                            .reflow(Some((width - 2.0 * padding).max(0.0)), Alignment::Start)?;
-                    }
-                    _ => {}
-                }
+                node.context.control.finalize(&self.fonts, width, padding)?;
                 self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             }
             self.geometry_dirty = true;
@@ -188,7 +122,13 @@ impl State {
             self.repaint = true;
         }
         self.update_geometry()?;
-        if self.place_popups() {
+        let mut placed = false;
+        for hook in self.hooks.clone() {
+            if let Some(place) = hook.place {
+                placed |= place(self);
+            }
+        }
+        if placed {
             self.geometry_dirty = true;
             self.repaint = true;
             self.update_geometry()?;
@@ -198,7 +138,7 @@ impl State {
             let focused = self.focus.current(&self.tree) == Some(id);
             let element = &mut self.tree.get_mut(id).unwrap().context;
             let padding = element.inset(&self.theme);
-            if let Content::Field(field) = &mut element.content {
+            if let Some(field) = element.control.editor_mut() {
                 let changes = field.editor_mut().take_changes();
                 let viewport = aegle_types::Size::new(
                     (element.bounds.size.width - padding * 2.0).max(0.0),
