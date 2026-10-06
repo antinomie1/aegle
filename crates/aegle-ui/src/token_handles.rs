@@ -1,8 +1,8 @@
 use crate::{
     Color, Node, Result, Ui, UiError,
-    tokens::{ColorSlot, LengthSlot, StyleSlot, check},
+    tokens::{ColorSlot, LengthSlot, TokenSlot, check},
 };
-use aegle_theme::{Token, TokenType};
+use aegle_theme::{Font, Token, TokenType};
 
 impl Ui {
     /// Overrides a token for the whole UI, or with `None` returns a custom
@@ -74,34 +74,52 @@ impl Node {
         self.change(|state, id| state.bind_token(id, slot.into(), token.index()))
     }
 
-    /// [`Self::bind_color`] for a length: a style width or radius, or the
-    /// font size of a text-bearing control, which must stay positive.
+    /// [`Self::bind_color`] for a length: a style width or radius, the font
+    /// size of a text-bearing control, which must stay positive, or a uniform
+    /// padding or gap. `set_style` ends only style bindings.
     pub fn bind_length(&self, slot: LengthSlot, token: Token<f32>) -> Result {
         check(token)?;
         self.change(|state, id| state.bind_token(id, slot.into(), token.index()))
     }
 
+    /// [`Self::bind_color`] for the font face of a text-bearing control;
+    /// [`Self::set_font`] and [`Self::clear_font`] end it.
+    pub fn bind_font(&self, token: Token<Font>) -> Result {
+        check(token)?;
+        self.change(|state, id| state.bind_token(id, TokenSlot::Font, token.index()))
+    }
+
+    /// Animates `property` with `easing` for the duration a token gives,
+    /// following it like [`Self::bind_color`]. A transition setter for the
+    /// property ends the binding.
+    #[cfg(feature = "motion")]
+    pub fn bind_transition(
+        &self,
+        property: crate::TransitionProperty,
+        token: Token<std::time::Duration>,
+        easing: crate::Easing,
+    ) -> Result {
+        check(token)?;
+        self.change(|state, id| {
+            let duration = state.token_value(id, token.index())?;
+            let duration = TokenType::from_value(duration).unwrap();
+            let timing = crate::Transition::new(duration, easing);
+            state.set_property_transition(id, property, Some(timing))?;
+            state.bind_token(id, TokenSlot::Transition(property), token.index())
+        })
+    }
+
     /// Ends a binding and clears the property, returning it to the skin or
-    /// theme. Nothing happens if the property is not bound.
-    pub fn unbind_token(&self, slot: impl Into<StyleSlot>) -> Result {
+    /// theme; a transition becomes immediate. Nothing happens if the property
+    /// is not bound.
+    pub fn unbind_token(&self, slot: impl Into<TokenSlot>) -> Result {
         let slot = slot.into();
         self.change(|state, id| {
             if !state.tokens.is_bound(id, slot) {
                 return Ok(());
             }
             state.tokens.unbind(id, |s| s == slot);
-            let mut style = state
-                .decorations
-                .get(&id)
-                .map_or(Default::default(), |d| d.style);
-            match slot {
-                StyleSlot::Color(slot) => *slot.field(&mut style) = None,
-                StyleSlot::Length(slot) => match slot.field(&mut style) {
-                    Some(field) => *field = None,
-                    None => return state.set_font_size(id, None),
-                },
-            }
-            state.set_style(id, style)
+            state.write_slot(id, slot, None)
         })
     }
 }

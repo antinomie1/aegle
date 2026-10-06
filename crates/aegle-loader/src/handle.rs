@@ -261,12 +261,6 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         Handle::Window(_) => Some(handle.container()),
         _ => None,
     };
-    if let Some(result) = crate::layout::apply(node, container, name, value) {
-        return result;
-    }
-    if let Some(result) = crate::motion::geometry(node, name, value) {
-        return result;
-    }
     if let Literal::Call(function, arguments) = value
         && function == "token"
     {
@@ -274,6 +268,12 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
             unreachable!("checked token")
         };
         return bind_token(node, name, token);
+    }
+    if let Some(result) = crate::layout::apply(node, container, name, value) {
+        return result;
+    }
+    if let Some(result) = crate::motion::geometry(node, name, value) {
+        return result;
     }
     match (name, value) {
         (Grow, Literal::Number(n)) => node.set_grow(*n),
@@ -408,7 +408,7 @@ pub(crate) fn listen(handle: &Handle, event: EventKind, steps: Rc<[Step]>, env: 
     }
 }
 
-/// Binds a checked style property to a token looked up by name.
+/// Binds a checked property to a token looked up by name.
 fn bind_token(node: &Node, name: PropertyName, token: &str) -> Result {
     use PropertyName::*;
     use aegle_ui::{ColorSlot as C, LengthSlot as L};
@@ -430,6 +430,8 @@ fn bind_token(node: &Node, name: PropertyName, token: &str) -> Result {
         Radius => length(L::Radius),
         FocusWidth => length(L::FocusWidth),
         FontSize => length(L::FontSize),
+        Padding => length(L::Padding),
+        Gap => length(L::Gap),
         _ => unreachable!("checked token property"),
     }
 }

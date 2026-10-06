@@ -244,6 +244,29 @@ panel.set_theme_override(Some(ThemeOverride { accent: Some(Color::rgb(200, 40, 4
 
 **局部样式** 覆盖单个控件，优先于主题和皮肤：`set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_focus_color`、`set_focus_width`、`set_hover_background`、`set_pressed_background`、`set_disabled_background`、`set_disabled_foreground`、`set_selection_color`、`set_caret_color`、`set_indicator_color`，以及字号 `set_font_size` / `clear_font_size`。也可以用 `set_style(Style { .. })` 一次设置，`style()` 读取，`appearance()` 返回当前解析结果。不适用的属性返回 `UiError::WrongKind`。
 
+**Token** 是登记过名称的类型化值（`Color`、`f32` 长度、`Duration` 或 `Font`），默认值随主题变化；14 个 Theme 字段即内置 token（`Theme::ACCENT` 等，名为 `theme.accent`）。属性绑定 token 后随主题、覆盖与 reparent 自动更新：
+
+```rust
+fn lane(theme: &Theme) -> Color { theme.accent }
+
+// 组件包登记一次：名称加随主题变化的默认值（纯函数）
+let fill = register_token("studio.lane", lane)?;
+let space = register_token("studio.space", |theme: &Theme| theme.gap * 2.0)?;
+let heading = register_token("studio.heading", |_: &Theme| Font { weight: 700, ..Font::DEFAULT })?;
+let speed = register_token("studio.speed", |_: &Theme| Duration::from_millis(160))?;
+
+play.bind_color(ColorSlot::Background, fill)?;        // 随主题、覆盖与 reparent 更新
+row.bind_length(LengthSlot::Gap, space)?;             // 也可绑定 padding、字号、边框与圆角
+title.bind_font(heading)?;
+play.bind_transition(TransitionProperty::Paint, speed, Easing::EaseOut)?;
+
+panel.set_token(fill, Some(Color::rgb(200, 40, 40)))?; // 只覆盖 panel 子树
+window.set_token(space, Some(4.0))?;                    // 整个窗口
+play.set_background(Color::WHITE)?;                     // 直接 setter 结束该项绑定
+```
+
+若某个绑定拒绝新值（例如字号变为 0），`set_token`、`set_theme`、`set_theme_override` 与 `reparent` 返回错误且不做任何改变。标记中写 `background: token("studio.lane")`，见[标记语言](../markup.md)。
+
 **皮肤** 是纯函数 `fn(&Theme, VisualState) -> Appearance`，可替换默认外观而不改行为，适合组件库：
 
 ```rust

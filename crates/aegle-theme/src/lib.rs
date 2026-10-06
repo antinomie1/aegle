@@ -14,7 +14,7 @@ mod appearance;
 mod token;
 
 pub use appearance::{Appearance, ControlKind, InvalidStyle, Skin, Style, VisualState};
-pub use token::{BUILTIN_TOKENS, Token, TokenDefault, TokenKind, TokenType, TokenValue};
+pub use token::{BUILTIN_TOKENS, Font, Token, TokenDefault, TokenKind, TokenType, TokenValue};
 
 use aegle_types::Color;
 use core::fmt;

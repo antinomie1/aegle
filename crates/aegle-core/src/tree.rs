@@ -201,6 +201,17 @@ impl<T> Tree<T> {
     /// Moves a subtree to the end of another parent's children, or makes a root.
     /// Rejected edits leave the original tree unchanged.
     pub fn reparent(&mut self, id: NodeId, parent: Option<NodeId>) -> Result<(), TreeError> {
+        self.reparent_at(id, parent, usize::MAX)
+    }
+
+    /// [`Self::reparent`] before child `position` of the new parent;
+    /// positions past the end append.
+    pub fn reparent_at(
+        &mut self,
+        id: NodeId,
+        parent: Option<NodeId>,
+        position: usize,
+    ) -> Result<(), TreeError> {
         self.node(id)?;
         let mut ancestor = parent;
         while let Some(node) = ancestor {
@@ -211,7 +222,8 @@ impl<T> Tree<T> {
         }
         self.detach(id)?;
         if let Some(parent) = parent {
-            self.node_mut(parent)?.children.push(id.index() as u32);
+            let children = &mut self.node_mut(parent)?.children;
+            children.insert(position.min(children.len()), id.index() as u32);
             self.node_mut(id)?.parent = parent.index() as u32;
         }
         self.mark_dirty(id, Dirty::ALL)

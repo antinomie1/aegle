@@ -1,11 +1,13 @@
 //! The token registry and per-UI token state: global and subtree overrides of
-//! custom tokens, and style properties bound to tokens.
+//! custom tokens, and properties bound to tokens.
 //!
 //! Names live in one registry per thread, shared by every [`crate::Ui`] on it,
 //! so a component package registers its tokens once. Built-in tokens are the
 //! [`Theme`] fields; their overrides are themes and theme overrides.
 
-use crate::{Color, Result, State, Style, Theme, UiError};
+#[cfg(feature = "motion")]
+use crate::TransitionProperty;
+use crate::{Color, Insets, Result, State, Style, Theme, UiError};
 use aegle_core::NodeId;
 use aegle_theme::{BUILTIN_TOKENS, Token, TokenDefault, TokenKind, TokenType, TokenValue};
 use std::{cell::RefCell, collections::HashMap};
@@ -107,7 +109,8 @@ pub enum ColorSlot {
 }
 
 /// A length property that can follow a token: the [`Style`] widths and
-/// radius, or the font size of a text-bearing control.
+/// radius, the font size of a text-bearing control, or a uniform padding or
+/// gap, as `Node::set_padding` and `Node::set_gap` set them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
 pub enum LengthSlot {
@@ -115,26 +118,52 @@ pub enum LengthSlot {
     Radius,
     FocusWidth,
     FontSize,
+    Padding,
+    Gap,
 }
 
 /// Any property that can follow a token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum StyleSlot {
+pub enum TokenSlot {
     /// A color property.
     Color(ColorSlot),
     /// A length property.
     Length(LengthSlot),
+    /// The font face of a text-bearing control.
+    Font,
+    /// The duration of a property transition.
+    #[cfg(feature = "motion")]
+    Transition(TransitionProperty),
 }
 
-impl From<ColorSlot> for StyleSlot {
+impl From<ColorSlot> for TokenSlot {
     fn from(slot: ColorSlot) -> Self {
         Self::Color(slot)
     }
 }
 
-impl From<LengthSlot> for StyleSlot {
+impl From<LengthSlot> for TokenSlot {
     fn from(slot: LengthSlot) -> Self {
         Self::Length(slot)
+    }
+}
+
+impl TokenSlot {
+    /// Whether the property is a [`Style`] field, which `set_style` replaces.
+    pub(crate) fn is_style(self) -> bool {
+        matches!(
+            self,
+            Self::Color(_)
+                | Self::Length(
+                    LengthSlot::BorderWidth | LengthSlot::Radius | LengthSlot::FocusWidth
+                )
+        )
+    }
+
+    /// Whether the property is a transition duration.
+    #[cfg(feature = "motion")]
+    pub(crate) fn is_transition(self) -> bool {
+        matches!(self, Self::Transition(_))
     }
 }
 
@@ -157,13 +186,12 @@ impl ColorSlot {
 }
 
 impl LengthSlot {
-    /// The style field, or `None` for the font size.
-    pub(crate) fn field(self, style: &mut Style) -> Option<&mut Option<f32>> {
+    fn field(self, style: &mut Style) -> &mut Option<f32> {
         match self {
-            Self::BorderWidth => Some(&mut style.border_width),
-            Self::Radius => Some(&mut style.radius),
-            Self::FocusWidth => Some(&mut style.focus_width),
-            Self::FontSize => None,
+            Self::BorderWidth => &mut style.border_width,
+            Self::Radius => &mut style.radius,
+            Self::FocusWidth => &mut style.focus_width,
+            Self::FontSize | Self::Padding | Self::Gap => unreachable!("not a style field"),
         }
     }
 }
@@ -176,7 +204,7 @@ pub struct Tokens {
     /// Overrides for a subtree; the nearest ancestor's wins.
     local: HashMap<NodeId, Vec<(u16, TokenValue)>>,
     /// Properties following a token, re-resolved whenever it may change.
-    bindings: HashMap<NodeId, Vec<(StyleSlot, u16)>>,
+    bindings: HashMap<NodeId, Vec<(TokenSlot, u16)>>,
 }
 
 impl Tokens {
@@ -187,14 +215,14 @@ impl Tokens {
     }
 
     /// Whether a property of `id` follows a token.
-    pub fn is_bound(&self, id: NodeId, slot: StyleSlot) -> bool {
+    pub fn is_bound(&self, id: NodeId, slot: TokenSlot) -> bool {
         self.bindings
             .get(&id)
             .is_some_and(|bound| bound.iter().any(|&(s, _)| s == slot))
     }
 
     /// Removes a binding, leaving its property's current value.
-    pub fn unbind(&mut self, id: NodeId, slot: impl Fn(StyleSlot) -> bool) {
+    pub fn unbind(&mut self, id: NodeId, slot: impl Fn(TokenSlot) -> bool) {
         if let Some(bound) = self.bindings.get_mut(&id) {
             bound.retain(|&(s, _)| !slot(s));
             if bound.is_empty() {
@@ -204,10 +232,11 @@ impl Tokens {
     }
 }
 
-/// A length token value is finite and nonnegative.
+/// A token value is valid and, for a length, nonnegative.
 fn valid(value: TokenValue) -> Result<TokenValue> {
     match value {
-        TokenValue::Length(v) if !v.is_finite() || v < 0.0 => Err(UiError::InvalidValue.into()),
+        TokenValue::Length(v) if v < 0.0 => Err(UiError::InvalidValue.into()),
+        value if !value.is_valid() => Err(UiError::InvalidValue.into()),
         value => Ok(value),
     }
 }
@@ -281,46 +310,59 @@ impl State {
         old
     }
 
-    /// Binds a property to token `index` and applies its current value; the
-    /// binding is removed again if the control rejects the value.
-    pub fn bind_token(&mut self, id: NodeId, slot: StyleSlot, index: u16) -> Result {
+    /// Binds a property to token `index` and applies its current value; on
+    /// failure, an earlier binding of the property stays.
+    pub fn bind_token(&mut self, id: NodeId, slot: TokenSlot, index: u16) -> Result {
+        self.apply_token(id, slot, index)?;
         self.tokens.unbind(id, |s| s == slot);
-        let outcome = self.apply_token(id, slot, index);
-        if outcome.is_ok() {
-            self.tokens
-                .bindings
-                .entry(id)
-                .or_default()
-                .push((slot, index));
-        }
-        outcome
-    }
-
-    fn apply_token(&mut self, id: NodeId, slot: StyleSlot, index: u16) -> Result {
-        let value = self.token_value(id, index)?;
-        let mut style = self
-            .decorations
-            .get(&id)
-            .map_or(Style::default(), |d| d.style);
-        match (slot, value) {
-            (StyleSlot::Color(slot), TokenValue::Color(color)) => {
-                *slot.field(&mut style) = Some(color)
-            }
-            (StyleSlot::Length(slot), TokenValue::Length(length)) => match slot.field(&mut style) {
-                Some(field) => *field = Some(length),
-                None => return self.set_font_size(id, Some(length)),
-            },
-            _ => unreachable!("binding kinds are checked when bound"),
-        }
-        self.set_style(id, style)
-    }
-
-    /// Sets a font size directly, ending its token binding.
-    pub fn set_font_size_unbound(&mut self, id: NodeId, size: Option<f32>) -> Result {
-        self.set_font_size(id, size)?;
-        let font = StyleSlot::Length(LengthSlot::FontSize);
-        self.tokens.unbind(id, |slot| slot == font);
+        self.tokens
+            .bindings
+            .entry(id)
+            .or_default()
+            .push((slot, index));
         Ok(())
+    }
+
+    fn apply_token(&mut self, id: NodeId, slot: TokenSlot, index: u16) -> Result {
+        let value = self.token_value(id, index)?;
+        self.write_slot(id, slot, Some(value))
+    }
+
+    /// Sets a bindable property, or with `None` clears it, returning it to the
+    /// skin or theme. The value has the slot's kind.
+    pub fn write_slot(&mut self, id: NodeId, slot: TokenSlot, value: Option<TokenValue>) -> Result {
+        fn typed<T: TokenType>(value: Option<TokenValue>) -> Option<T> {
+            value.map(|v| T::from_value(v).expect("binding kinds are checked when bound"))
+        }
+        match slot {
+            TokenSlot::Color(slot) => {
+                let color = typed(value);
+                self.edit_style(id, |style| *slot.field(style) = color)
+            }
+            TokenSlot::Length(LengthSlot::FontSize) => self.set_font_size(id, typed(value)),
+            TokenSlot::Length(LengthSlot::Padding) => {
+                self.set_padding(id, typed::<f32>(value).map(Insets::all))
+            }
+            TokenSlot::Length(LengthSlot::Gap) => {
+                self.set_gaps(id, typed::<f32>(value).map(|g| (g.into(), g.into())))
+            }
+            TokenSlot::Length(slot) => {
+                let length = typed(value);
+                self.edit_style(id, |style| *slot.field(style) = length)
+            }
+            TokenSlot::Font => self.set_font(id, typed(value)),
+            #[cfg(feature = "motion")]
+            TokenSlot::Transition(property) => {
+                let easing = self
+                    .motion
+                    .tracks
+                    .get(&id)
+                    .and_then(|track| track.timing(property))
+                    .map_or(crate::Transition::default().easing, |timing| timing.easing);
+                let timing = typed(value).map(|duration| crate::Transition::new(duration, easing));
+                self.set_property_transition(id, property, timing)
+            }
+        }
     }
 
     /// Re-resolves bindings in the subtree of `scope`, or everywhere.

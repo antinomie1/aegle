@@ -1,8 +1,8 @@
 use crate::{
-    Node, Result, Style, Transition, TransitionProperty, Ui, UiError, callbacks::Handler,
-    motion::Track,
+    Node, Result, State, Style, Transition, TransitionProperty, Ui, UiError, callbacks::Handler,
+    motion::Track, tokens::TokenSlot,
 };
-use aegle_core::Dirty;
+use aegle_core::{Dirty, NodeId};
 use std::time::Duration;
 
 impl Node {
@@ -10,7 +10,7 @@ impl Node {
     /// and rotation with one timing. Layout, font size and control state are
     /// not delayed. Retargeting starts from the last sampled presentation,
     /// including theme and skin changes. A running geometric transition keeps
-    /// the timing it started with.
+    /// the timing it started with. Ends duration token bindings.
     pub fn set_transition(&self, timing: Transition) -> Result {
         self.change(|state, id| {
             let current = state.presented_appearance(id)?;
@@ -21,50 +21,25 @@ impl Node {
             };
             state.motion.tracks.insert(id, track);
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+            state.tokens.unbind(id, TokenSlot::is_transition);
             Ok(())
         })
     }
     /// Sets the timing of one property, keeping the others; `None` makes that
     /// property change immediately, jumping a running transition of it to its
     /// target without a completion callback. A control without any policy
-    /// starts with every other property immediate.
+    /// starts with every other property immediate. Ends a token binding of
+    /// the property's duration.
     pub fn set_property_transition(
         &self,
         property: TransitionProperty,
         timing: Option<Transition>,
     ) -> Result {
         self.change(|state, id| {
-            let current = state.presented_appearance(id)?;
-            let track = state.motion.tracks.entry(id).or_insert(Track {
-                timings: [None; 4],
-                presented: Some(current),
-            });
-            track.timings[property as usize] = timing;
-            if track.timings == [None; 4] {
-                state.motion.tracks.remove(&id);
-            }
-            match property {
-                TransitionProperty::Paint => {
-                    state.motion.active.remove(&id);
-                    state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-                }
-                TransitionProperty::Offset if timing.is_none() => {
-                    state.snap_offset(id);
-                }
-                TransitionProperty::Scale | TransitionProperty::Rotation if timing.is_none() => {
-                    let target = state.target_spin(id);
-                    let mut spin = state.tree.get(id).unwrap().context.spin;
-                    if property == TransitionProperty::Scale {
-                        state.motion.scaling.remove(&id);
-                        spin.scale = target.scale;
-                    } else {
-                        state.motion.rotating.remove(&id);
-                        spin.rotation = target.rotation;
-                    }
-                    state.set_spin(id, spin);
-                }
-                _ => {}
-            }
+            state.set_property_transition(id, property, timing)?;
+            state
+                .tokens
+                .unbind(id, |s| s == TokenSlot::Transition(property));
             Ok(())
         })
     }
@@ -79,7 +54,7 @@ impl Node {
         })
     }
     /// Removes the transition policy and immediately returns to the logical
-    /// targets without a completion callback.
+    /// targets without a completion callback. Ends duration token bindings.
     pub fn clear_transition(&self) -> Result {
         self.change(|state, id| {
             state.motion.active.remove(&id);
@@ -87,6 +62,7 @@ impl Node {
             state.snap_offset(id);
             state.snap_spin(id);
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+            state.tokens.unbind(id, TokenSlot::is_transition);
             Ok(())
         })
     }
@@ -144,8 +120,8 @@ impl Node {
     }
     /// Stops at the sampled appearance and offset, freezing them into local
     /// paint overrides and the offset target. State-specific local colors are
-    /// replaced. Focus visibility still follows behavior; timing remains for
-    /// future setters.
+    /// replaced and style token bindings end. Focus visibility still follows
+    /// behavior; timing remains for future setters.
     pub fn cancel_transition(&self) -> Result {
         self.change(|state, id| {
             state.motion.moving.remove(&id);
@@ -172,6 +148,7 @@ impl Node {
                     ..Default::default()
                 },
             )?;
+            state.tokens.unbind(id, TokenSlot::is_style);
             let target = state.appearance(id)?;
             if let Some(track) = state.motion.tracks.get_mut(&id) {
                 track.presented = Some(target);
@@ -249,6 +226,49 @@ impl Ui {
             let repaint = state.refresh()?;
             // Keep the snapped frame pending for the host's next presentation.
             state.repaint |= repaint;
+        }
+        Ok(())
+    }
+}
+
+impl State {
+    /// [`Node::set_property_transition`] without ending a binding.
+    pub fn set_property_transition(
+        &mut self,
+        id: NodeId,
+        property: TransitionProperty,
+        timing: Option<Transition>,
+    ) -> Result {
+        let current = self.presented_appearance(id)?;
+        let track = self.motion.tracks.entry(id).or_insert(Track {
+            timings: [None; 4],
+            presented: Some(current),
+        });
+        track.timings[property as usize] = timing;
+        if track.timings == [None; 4] {
+            self.motion.tracks.remove(&id);
+        }
+        match property {
+            TransitionProperty::Paint => {
+                self.motion.active.remove(&id);
+                self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+            }
+            TransitionProperty::Offset if timing.is_none() => {
+                self.snap_offset(id);
+            }
+            TransitionProperty::Scale | TransitionProperty::Rotation if timing.is_none() => {
+                let target = self.target_spin(id);
+                let mut spin = self.tree.get(id).unwrap().context.spin;
+                if property == TransitionProperty::Scale {
+                    self.motion.scaling.remove(&id);
+                    spin.scale = target.scale;
+                } else {
+                    self.motion.rotating.remove(&id);
+                    spin.rotation = target.rotation;
+                }
+                self.set_spin(id, spin);
+            }
+            _ => {}
         }
         Ok(())
     }

@@ -270,13 +270,13 @@ fn setter(
     {
         return None;
     }
+    if let Some(call) = token(property, handle, facade) {
+        return Some(call);
+    }
     if let Some(call) = crate::layout::setter(property, handle, facade) {
         return Some(call);
     }
     if let Some(call) = crate::motion::geometry(property, handle, facade) {
-        return Some(call);
-    }
-    if let Some(call) = token(property, handle, facade) {
         return Some(call);
     }
     let name = match property.name {
@@ -359,7 +359,7 @@ fn setter(
     Some(quote! { #handle.#method(#argument)?; })
 }
 
-/// Binds a style property to `token("name")`, looked up when built.
+/// Binds a property to `token("name")`, looked up when built.
 fn token(property: &CheckedProperty, handle: &Ident, facade: &TokenStream) -> Option<TokenStream> {
     use PropertyName::*;
     let Literal::Call(function, arguments) = &property.value else {
@@ -387,6 +387,8 @@ fn token(property: &CheckedProperty, handle: &Ident, facade: &TokenStream) -> Op
         Radius => (false, "Radius"),
         FocusWidth => (false, "FocusWidth"),
         FontSize => (false, "FontSize"),
+        Padding => (false, "Padding"),
+        Gap => (false, "Gap"),
         _ => unreachable!("checked token property"),
     };
     let slot = Ident::new(slot, Span::call_site());

@@ -1,8 +1,9 @@
 use crate::{
     Appearance, Color, Node, Point, Result, Skin, Style, UiError, VisualState,
-    tokens::{ColorSlot, LengthSlot, StyleSlot},
+    tokens::{ColorSlot, LengthSlot, TokenSlot},
 };
 use aegle_core::Dirty;
+use aegle_theme::Font;
 
 macro_rules! setters {
     ($(#[$doc:meta] $name:ident($value:ident: $ty:ty) => $field:ident, $slot:expr;)*) => {
@@ -17,14 +18,13 @@ macro_rules! setters {
 impl Node {
     /// Replaces local paint overrides, preserving the skin and typography.
     /// `Style::default()` removes all paint overrides. Values do not inherit.
-    /// Token bindings of style properties end; a font size binding remains.
+    /// Token bindings of style properties end; font and layout bindings remain.
     /// Hover/focus overrides require an interactive control, pressed requires a
     /// button/toggle/slider, and selection/caret require an editor; otherwise returns WrongKind.
     pub fn set_style(&self, style: Style) -> Result {
         self.change(|state, id| {
             state.set_style(id, style)?;
-            let font = StyleSlot::Length(LengthSlot::FontSize);
-            state.tokens.unbind(id, |slot| slot != font);
+            state.tokens.unbind(id, TokenSlot::is_style);
             Ok(())
         })
     }
@@ -37,14 +37,17 @@ impl Node {
                 .map_or(Style::default(), |d| d.style))
         })
     }
-    fn update_style(&self, slot: StyleSlot, update: impl FnOnce(&mut Style)) -> Result {
+    fn update_style(&self, slot: TokenSlot, update: impl FnOnce(&mut Style)) -> Result {
+        self.write_unbound(slot, |state, id| state.edit_style(id, update))
+    }
+    /// Sets a bindable property through `write`, then ends its binding.
+    fn write_unbound(
+        &self,
+        slot: TokenSlot,
+        write: impl FnOnce(&mut crate::State, aegle_core::NodeId) -> Result,
+    ) -> Result {
         self.change(|state, id| {
-            let mut style = state
-                .decorations
-                .get(&id)
-                .map_or(Style::default(), |d| d.style);
-            update(&mut style);
-            state.set_style(id, style)?;
+            write(state, id)?;
             state.tokens.unbind(id, |s| s == slot);
             Ok(())
         })
@@ -85,12 +88,30 @@ impl Node {
     /// Available on labels, buttons, toggles and editors; it does not inherit to
     /// children. Ends a font size token binding.
     pub fn set_font_size(&self, size: f32) -> Result {
-        self.change(|state, id| state.set_font_size_unbound(id, Some(size)))
+        let slot = LengthSlot::FontSize.into();
+        self.write_unbound(slot, |state, id| state.set_font_size(id, Some(size)))
     }
     /// Returns this text-bearing control to the current theme's font size,
     /// ending a font size token binding.
     pub fn clear_font_size(&self) -> Result {
-        self.change(|state, id| state.set_font_size_unbound(id, None))
+        let slot = LengthSlot::FontSize.into();
+        self.write_unbound(slot, |state, id| state.set_font_size(id, None))
+    }
+    /// Sets the font face of a label, button, toggle or editor, reshaping
+    /// its text and keeping selection and preedit; it does not inherit to
+    /// children. Ends a font token binding. Fails with InvalidValue for blank
+    /// families or a weight outside 1–1000.
+    pub fn set_font(&self, font: Font) -> Result {
+        self.write_unbound(TokenSlot::Font, |state, id| state.set_font(id, Some(font)))
+    }
+    /// Returns this text-bearing control to [`Font::DEFAULT`], ending a font
+    /// token binding.
+    pub fn clear_font(&self) -> Result {
+        self.write_unbound(TokenSlot::Font, |state, id| state.set_font(id, None))
+    }
+    /// The local font face; `None` uses [`Font::DEFAULT`].
+    pub fn font(&self) -> Result<Option<Font>> {
+        self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.font)))
     }
     /// Translates this subtree by a finite logical offset after layout, without
     /// changing layout or scroll extents. Bounds, hit testing, clipping, the IME

@@ -65,6 +65,8 @@ impl Node {
         })
     }
     /// Moves this subtree to the end of another container in the same UI.
+    /// If a bound property rejects its value there, the subtree stays where
+    /// it was and the error is returned.
     pub fn reparent(&self, parent: &Container) -> Result {
         if !Weak::ptr_eq(&self.state, &parent.state) {
             return Err(UiError::ForeignUi.into());
@@ -76,20 +78,33 @@ impl Node {
             if state.tree.get(parent.id).is_none() {
                 return Err(UiError::DeadHandle.into());
             }
+            let old_parent = state.tree.parent(id)?;
+            let position = state
+                .tree
+                .children(old_parent.unwrap())?
+                .position(|child| child == id)
+                .unwrap();
+            let old_style = state.tree.get(id).unwrap().style().clone();
+            let element = &state.tree.get(id).unwrap().context;
+            let local = element.theme.clone().filter(|_| element.local_theme);
             state.tree.reparent(id, Some(parent.id))?;
             #[cfg(feature = "grid")]
             {
-                let mut style = state.tree.get(id).unwrap().style().clone();
+                let mut style = old_style.clone();
                 crate::grid_handles::stack_child(state, parent.id, &mut style);
                 aegle_layout::set_style(&mut state.tree, id, style)?;
+            }
+            state.invalidate_structure();
+            if let Err(error) = state.propagate_theme(id, local.clone()) {
+                state.tree.reparent_at(id, old_parent, position)?;
+                aegle_layout::set_style(&mut state.tree, id, old_style)?;
+                state.invalidate_structure();
+                state.propagate_theme(id, local)?;
+                return Err(error);
             }
             if !state.usable(id) {
                 state.cancel_subtree(id)?;
             }
-            state.invalidate_structure();
-            let element = &state.tree.get(id).unwrap().context;
-            let local = element.theme.clone().filter(|_| element.local_theme);
-            state.propagate_theme(id, local)?;
             state.propagate_direction(id)
         })
     }

@@ -1,5 +1,6 @@
 Column {
     id: lane
+    padding: token("studio.space")
     Button {
         id: play; text: "Play"
         background: token("studio.lane")

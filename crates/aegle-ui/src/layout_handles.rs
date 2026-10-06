@@ -4,11 +4,11 @@
 //! Lengths accept logical pixels (`f32`), `Option<f32>` (`None` is automatic)
 //! or [`Length`], including percentages of the parent's content box.
 
-use aegle_core::Dirty;
+use aegle_core::{Dirty, NodeId};
 use aegle_layout::{Align, Direction, Insets, Justify, Length, Position, Style, Wrap};
 use aegle_theme::ControlKind;
 
-use crate::{Container, Node, Result, UiError};
+use crate::{Container, LengthSlot, Node, Result, State, UiError};
 
 /// Local layout values a theme change keeps: height, padding, gap and minimum height.
 pub(crate) const HEIGHT: u8 = 1;
@@ -149,27 +149,13 @@ impl Node {
     }
     /// Sets inner spacing. Containers accept any [`Insets`]; text-bearing
     /// controls accept only one nonnegative pixel value on every edge.
+    /// Ends a padding token binding.
     pub fn set_padding(&self, padding: impl Into<Insets>) -> Result {
         let padding = padding.into();
         check(padding.is_valid(true, false))?;
         self.change(|state, id| {
-            let node = state.tree.get_mut(id).unwrap();
-            if matches!(
-                node.context.control.kind(),
-                ControlKind::Container | ControlKind::ScrollView
-            ) {
-                node.context.local_layout |= PADDING;
-                let mut style = node.style().clone();
-                style.padding = padding.definite();
-                aegle_layout::set_style(&mut state.tree, id, style)?;
-            } else {
-                let Length::Px(px) = padding.left else {
-                    return Err(UiError::InvalidValue.into());
-                };
-                check(Insets::all(px) == padding)?;
-                node.context.padding = Some(px);
-                state.tree.mark_dirty(id, Dirty::ALL)?;
-            }
+            state.set_padding(id, Some(padding))?;
+            state.tokens.unbind(id, |s| s == LengthSlot::Padding.into());
             Ok(())
         })
     }
@@ -179,13 +165,91 @@ impl Node {
         self.set_gaps(gap, gap)
     }
     /// Sets spacing between columns (horizontal) and between rows (vertical).
+    /// Ends a gap token binding.
     pub fn set_gaps(&self, horizontal: impl Into<Length>, vertical: impl Into<Length>) -> Result {
         let (horizontal, vertical) = (horizontal.into(), vertical.into());
-        let (Some(width), Some(height)) = (horizontal.definite(), vertical.definite()) else {
-            return Err(UiError::InvalidValue.into());
-        };
+        check(horizontal.definite().is_some() && vertical.definite().is_some())?;
         check(horizontal.is_valid(true) && vertical.is_valid(true))?;
-        self.layout(GAP, |s| s.gap = aegle_layout::Size { width, height })
+        self.change(|state, id| {
+            state.set_gaps(id, Some((horizontal, vertical)))?;
+            state.tokens.unbind(id, |s| s == LengthSlot::Gap.into());
+            Ok(())
+        })
+    }
+}
+
+impl State {
+    /// Sets checked local padding, or with `None` returns to the control's
+    /// themed default.
+    pub fn set_padding(&mut self, id: NodeId, padding: Option<Insets>) -> Result {
+        let is_root = id == self.root;
+        let theme = *self.theme_of(id);
+        let node = self.tree.get_mut(id).unwrap();
+        if matches!(
+            node.context.control.kind(),
+            ControlKind::Container | ControlKind::ScrollView
+        ) {
+            let mut style = node.style().clone();
+            match padding {
+                Some(padding) => {
+                    node.context.local_layout |= PADDING;
+                    style.padding = padding.definite();
+                }
+                None => {
+                    node.context.local_layout &= !PADDING;
+                    style.padding = Insets::all(0.0).definite();
+                    let local = node.context.local_layout;
+                    node.context
+                        .control
+                        .retheme(&theme, local, is_root, &mut style);
+                }
+            }
+            aegle_layout::set_style(&mut self.tree, id, style)?;
+        } else {
+            node.context.padding = match padding {
+                Some(padding) => {
+                    let Length::Px(px) = padding.left else {
+                        return Err(UiError::InvalidValue.into());
+                    };
+                    check(Insets::all(px) == padding)?;
+                    Some(px)
+                }
+                None => None,
+            };
+            self.tree.mark_dirty(id, Dirty::ALL)?;
+        }
+        Ok(())
+    }
+
+    /// Sets checked definite gaps, or with `None` returns to the themed ones.
+    pub fn set_gaps(&mut self, id: NodeId, gaps: Option<(Length, Length)>) -> Result {
+        let is_root = id == self.root;
+        let theme = *self.theme_of(id);
+        let node = self.tree.get_mut(id).unwrap();
+        let mut style = node.style().clone();
+        match gaps {
+            Some((horizontal, vertical)) => {
+                node.context.local_layout |= GAP;
+                style.gap = aegle_layout::Size {
+                    width: horizontal.definite().unwrap(),
+                    height: vertical.definite().unwrap(),
+                };
+            }
+            None => {
+                node.context.local_layout &= !GAP;
+                let zero = Length::Px(0.0).definite().unwrap();
+                style.gap = aegle_layout::Size {
+                    width: zero,
+                    height: zero,
+                };
+                let local = node.context.local_layout;
+                node.context
+                    .control
+                    .retheme(&theme, local, is_root, &mut style);
+            }
+        }
+        aegle_layout::set_style(&mut self.tree, id, style)?;
+        Ok(())
     }
 }
 

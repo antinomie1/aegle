@@ -3,13 +3,22 @@
 #![cfg(feature = "markup")]
 
 use aegle::{
-    Color, ColorSlot, LengthSlot, Node, Result, Size, TextSystem, Theme, ThemeOverride, Ui,
-    UiError, Widgets, loader::Program, register_token, token,
+    Color, ColorSlot, Easing, Font, LengthSlot, Node, Result, Size, TextSystem, Theme,
+    ThemeOverride, TokenSlot, Transition, TransitionProperty::Paint, Ui, UiError, Widgets,
+    loader::Program, register_token, token,
 };
-use std::{cell::RefCell, rc::Rc};
+use aegle_text::{Blob, GenericFamily};
+use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 fn ui() -> Result<Ui> {
-    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    let mut fonts = TextSystem::new();
+    let families = fonts.register_fonts(Blob::new(Arc::new(
+        include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+    )))?;
+    fonts
+        .collection_mut()
+        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     ui.resize(Size::new(320.0, 200.0))?;
     Ok(ui)
 }
@@ -57,6 +66,7 @@ fn follows(ui: &Ui, lane: &Node, play: &Node) -> Result {
 fn tokens_resolve_and_bindings_follow() -> Result {
     register_token("studio.lane", lane)?;
     register_token("studio.type", |theme| theme.font_size + 2.0)?;
+    register_token("studio.space", |theme| theme.gap * 2.0)?;
     let again = register_token("studio.lane", |_| Color::WHITE)?;
     assert_eq!(again, token::<Color>("studio.lane")?);
     assert_eq!(token::<f32>("theme.radius")?, Theme::RADIUS);
@@ -106,5 +116,94 @@ fn tokens_resolve_and_bindings_follow() -> Result {
     }))?;
     assert_eq!(label.token_value(token::<f32>("studio.type")?)?, 32.0);
     right.remove()?;
+    Ok(())
+}
+
+fn serif(_: &Theme) -> Font {
+    Font {
+        families: "sans-serif",
+        weight: 700,
+        italic: false,
+    }
+}
+
+#[test]
+fn layout_font_and_transition_bindings_and_atomic_rejection() -> Result {
+    let ui = ui()?;
+    let space = register_token("theme-test.space", |theme| theme.gap * 2.0)?;
+    let column = ui.root().column()?;
+    let (first, second) = (column.text("a")?, column.text("b")?);
+    column.bind_length(LengthSlot::Padding, space)?;
+    column.bind_length(LengthSlot::Gap, space)?;
+    let spacing = || -> Result<(f32, f32)> {
+        ui.refresh()?;
+        let (outer, a, b) = (column.bounds()?, first.bounds()?, second.bounds()?);
+        Ok((
+            a.origin.x - outer.origin.x,
+            b.origin.y - a.origin.y - a.size.height,
+        ))
+    };
+    assert_eq!(spacing()?, (16.0, 16.0));
+    ui.set_token(space, Some(4.0))?;
+    assert_eq!(spacing()?, (4.0, 4.0));
+    column.unbind_token(LengthSlot::Padding)?;
+    column.unbind_token(LengthSlot::Gap)?;
+    assert_eq!(spacing()?, (0.0, Theme::light().gap));
+
+    let face = register_token("theme-test.face", serif)?;
+    first.bind_font(face)?;
+    assert_eq!(first.font()?, Some(serif(&Theme::light())));
+    let thin = Font {
+        weight: 100,
+        ..Font::DEFAULT
+    };
+    ui.set_token(face, Some(thin))?;
+    assert_eq!(first.font()?, Some(thin));
+    assert!(
+        ui.set_token(face, Some(Font { weight: 0, ..thin }))
+            .is_err()
+    );
+    assert!(column.bind_font(face).is_err());
+    first.unbind_token(TokenSlot::Font)?;
+    assert_eq!(first.font()?, None);
+
+    let speed = register_token("theme-test.speed", |_| Duration::from_millis(120))?;
+    first.bind_transition(Paint, speed, Easing::Linear)?;
+    ui.set_token(speed, Some(Duration::from_millis(300)))?;
+    let slow = Transition::new(Duration::from_millis(300), Easing::Linear);
+    assert_eq!(first.property_transition(Paint)?, Some(slow));
+    first.set_transition(Transition::default())?;
+    ui.set_token(speed, None)?;
+    assert_eq!(
+        first.property_transition(Paint)?,
+        Some(Transition::default())
+    );
+
+    // A theme change, override or move whose bound value is rejected (a font
+    // size of 0 or less) is undone.
+    let small = register_token("theme-test.small", |theme| theme.font_size - 16.0)?;
+    let large = ThemeOverride {
+        font_size: Some(20.0),
+        ..Default::default()
+    };
+    column.set_theme_override(Some(large))?;
+    first.bind_length(LengthSlot::FontSize, small)?;
+    let plain = ui.root().row()?;
+    assert!(first.reparent(&plain).is_err());
+    assert_eq!(first.theme()?.font_size, 20.0);
+    assert!(first.bounds()?.origin.y < second.bounds()?.origin.y);
+    assert!(column.set_theme_override(None).is_err());
+    assert!(column.set_theme(Some(Theme::light())).is_err());
+    assert_eq!(column.theme()?.font_size, 20.0);
+    let top = ui.root().text("top")?;
+    let large = Theme {
+        font_size: 20.0,
+        ..Theme::light()
+    };
+    ui.set_theme(large)?;
+    top.bind_length(LengthSlot::FontSize, small)?;
+    assert!(ui.set_theme(Theme::dark()).is_err());
+    assert_eq!(ui.theme(), large);
+    assert_eq!(top.token_value(small)?, 4.0);
     Ok(())
 }

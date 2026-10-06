@@ -185,8 +185,6 @@ fn timing(value: &Literal) -> bool {
     }
 }
 
-/// A finite length, percentage, `calc` sum or, where allowed, `auto`. A sum's
-/// sign depends on the parent's size, so it is never rejected as negative.
 /// A registered token name: dot-separated ASCII letters, digits, `_` and `-`
 /// in two segments or more, as `aegle-ui` requires.
 fn token_name(name: &str) -> bool {
@@ -199,6 +197,8 @@ fn token_name(name: &str) -> bool {
         })
 }
 
+/// A finite length, percentage, `calc` sum or, where allowed, `auto`. A sum's
+/// sign depends on the parent's size, so it is never rejected as negative.
 fn length(value: &Literal, nonnegative: bool, auto: bool) -> bool {
     match value {
         Literal::Length(n) | Literal::Percent(n) => n.is_finite() && (!nonnegative || *n >= 0.0),
@@ -241,6 +241,14 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         (Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis, value) => {
             length(value, true, true)
         }
+        (
+            Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
+            | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
+            | IndicatorColor | BorderWidth | Radius | FocusWidth | FontSize | Padding | Gap,
+            Literal::Call(function, arguments),
+        ) if function == "token" => {
+            matches!(&arguments[..], [Literal::String(token)] if token_name(token))
+        }
         (Padding, value) if kind.is_container() => edges(value, true, false),
         (Margin | Inset, value) => edges(value, false, true),
         (Gap, Literal::List(items)) => {
@@ -270,14 +278,6 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             Literal::Color(_),
         ) => true,
         (
-            Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
-            | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
-            | IndicatorColor | BorderWidth | Radius | FocusWidth | FontSize,
-            Literal::Call(function, arguments),
-        ) if function == "token" => {
-            matches!(&arguments[..], [Literal::String(token)] if token_name(token))
-        }
-        (
             Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate,
             Literal::Bool(_),
         ) => true,
@@ -297,11 +297,13 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis => {
             "a nonnegative dp length, a percentage, calc(...) or auto".into()
         }
-        Padding if kind.is_container() => {
-            "a nonnegative dp length or percentage, or a list of two or four".into()
-        }
+        Padding if kind.is_container() => "a nonnegative dp length or percentage, a list of two \
+            or four, or token(\"package.name\")"
+            .into(),
         Margin | Inset => "a dp length, percentage or auto, or a list of two or four".into(),
-        Gap => "a nonnegative dp length or percentage, or a [row, column] list".into(),
+        Gap => "a nonnegative dp length or percentage, a [row, column] list or \
+            token(\"package.name\")"
+            .into(),
         Columns | Rows => "tracks (dp, %, fr, auto, min_content, max_content, minmax(dp, fr), \
             fit_content(dp)), line name strings and repeat(count, ...) with one automatic \
             repeat at most, whose list then has only fixed tracks"
@@ -315,7 +317,7 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         BorderWidth | Radius | FocusWidth => {
             "a nonnegative dp length or token(\"package.name\")".into()
         }
-        Padding => "a nonnegative dp length".into(),
+        Padding => "a nonnegative dp length or token(\"package.name\")".into(),
         AspectRatio => "a finite positive number".into(),
         FontSize => "a positive dp length or token(\"package.name\")".into(),
         Transition => "nonnegative whole milliseconds with the ms suffix".into(),

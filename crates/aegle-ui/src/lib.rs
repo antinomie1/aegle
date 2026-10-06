@@ -60,7 +60,7 @@ pub use aegle_motion::{Easing, Transition};
 pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{
-    Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, Token, TokenKind, TokenType,
+    Appearance, ControlKind, Font, Skin, Style, Theme, ThemeOverride, Token, TokenKind, TokenType,
     TokenValue, VisualState,
 };
 pub use aegle_types::{Color, Cursor, Point, Preferences, Size, TouchPhase};
@@ -73,7 +73,7 @@ pub use handles::{Container, Node, valid};
 #[cfg(feature = "motion")]
 pub use motion::TransitionProperty;
 pub use state::{Element, Hooks, State, focus_policy, text_style};
-pub use tokens::{ColorSlot, LengthSlot, StyleSlot, Tokens, register_token, token};
+pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token};
 
 pub use transform::Transform;
 pub use ui::{

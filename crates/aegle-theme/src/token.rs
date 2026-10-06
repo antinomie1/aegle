@@ -17,6 +17,39 @@ pub enum TokenKind {
     Length,
     /// A time span, such as a transition length.
     Duration,
+    /// A font face selection.
+    Font,
+}
+
+/// A font face for text, apart from its size: ordered families and style.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Font {
+    /// Ordered family names or generic families, such as `"Inter, sans-serif"`.
+    pub families: &'static str,
+    /// Weight in the CSS range 1–1000; 400 is regular, 700 bold.
+    pub weight: u16,
+    /// Whether to select an italic face.
+    pub italic: bool,
+}
+
+impl Font {
+    /// Regular upright sans-serif, the face of controls without a font.
+    pub const DEFAULT: Self = Self {
+        families: "sans-serif",
+        weight: 400,
+        italic: false,
+    };
+
+    /// Whether the families are not blank and the weight is in range.
+    pub fn is_valid(self) -> bool {
+        !self.families.trim().is_empty() && (1..=1000).contains(&self.weight)
+    }
+}
+
+impl Default for Font {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 
 /// A token value of any kind.
@@ -28,6 +61,8 @@ pub enum TokenValue {
     Length(f32),
     /// A time span.
     Duration(Duration),
+    /// A font face.
+    Font(Font),
 }
 
 impl TokenValue {
@@ -37,12 +72,18 @@ impl TokenValue {
             Self::Color(_) => TokenKind::Color,
             Self::Length(_) => TokenKind::Length,
             Self::Duration(_) => TokenKind::Duration,
+            Self::Font(_) => TokenKind::Font,
         }
     }
 
-    /// Whether a length is finite; colors and durations are always valid.
+    /// Whether a length is finite and a font valid; colors and durations
+    /// always are.
     pub fn is_valid(self) -> bool {
-        !matches!(self, Self::Length(v) if !v.is_finite())
+        match self {
+            Self::Length(v) => v.is_finite(),
+            Self::Font(font) => font.is_valid(),
+            Self::Color(_) | Self::Duration(_) => true,
+        }
     }
 }
 
@@ -56,6 +97,8 @@ pub enum TokenDefault {
     Length(fn(&Theme) -> f32),
     /// A time span from the theme.
     Duration(fn(&Theme) -> Duration),
+    /// A font face from the theme.
+    Font(fn(&Theme) -> Font),
 }
 
 impl TokenDefault {
@@ -65,6 +108,7 @@ impl TokenDefault {
             Self::Color(f) => TokenValue::Color(f(theme)),
             Self::Length(f) => TokenValue::Length(f(theme)),
             Self::Duration(f) => TokenValue::Duration(f(theme)),
+            Self::Font(f) => TokenValue::Font(f(theme)),
         }
     }
 
@@ -74,11 +118,13 @@ impl TokenDefault {
             Self::Color(_) => TokenKind::Color,
             Self::Length(_) => TokenKind::Length,
             Self::Duration(_) => TokenKind::Duration,
+            Self::Font(_) => TokenKind::Font,
         }
     }
 }
 
-/// A Rust type a token can hold: [`Color`], `f32` logical pixels or [`Duration`].
+/// A Rust type a token can hold: [`Color`], `f32` logical pixels, [`Duration`]
+/// or [`Font`].
 pub trait TokenType: Copy + 'static {
     /// The kind of token holding this type.
     const KIND: TokenKind;
@@ -112,6 +158,7 @@ macro_rules! token_type {
 token_type!(Color, Color);
 token_type!(f32, Length);
 token_type!(Duration, Duration);
+token_type!(Font, Font);
 
 /// A typed handle to a registered token: its index in the registry, which
 /// stays valid for the registry's lifetime. The first indices are the

@@ -154,7 +154,7 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
             rows: [fit_content(40dp), repeat(2, 1fr)]; width: calc((100% - 8dp) / 2)
             Text { text: "a"; grid_area: "x"; grid_column: ["a", "b"]; grid_row: [2, "y"] }
         }
-        Stack { Column { inset: [0dp, auto]; padding: 2dp } }
+        Stack { Column { inset: [0dp, auto]; padding: 2dp; gap: token("app.gap") } }
         Button { text: "t"; background: token("app.fill"); radius: token("theme.radius")
             font_size: token("app.type-2") }
     }"#;
@@ -189,7 +189,7 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
         "Window { margin: 1dp }",
         "Column { background: token(\"plain\") }",
         "Column { background: token(\"a.\", \"b.c\") }",
-        "Column { padding: token(\"a.b\") }",
+        "Column { padding: token(\"a\") }",
     ] {
         assert!(parse(body).and_then(check).is_err(), "accepted {body}");
     }
