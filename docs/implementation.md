@@ -19,11 +19,11 @@
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放、事件等待、键盘/指针输入、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。外观偏好经内置最小 D-Bus 客户端读取 desktop portal 并监听变化；尚无触摸、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
 - aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
-- aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转动画尚未实现；原生 App 跟随系统减少动态效果。
+- aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转经 `Node::set_transform` 动画（见末节）；原生 App 跟随系统减少动态效果。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；原生 App 按系统深浅色/高对比选择主题；当前没有 token 注册表。
 - aegle-app 与 aegle：无窗口 Ui 和可选 Wayland/Win32 软件或 Vulkan 应用宿主，命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/slider/progress、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
 - aegle-markup 与 aegle-macros：有界静态语法解析/校验和 `ui!` 编译，Window/Column/Row/ScrollView/Text/Button/TextField/TextArea/CheckBox/Switch/Slider/Progress 直接创建同一套保留控件，具名弱句柄绑定 Rust 回调；默认 facade 包含编译宏。markup 另有 state/表达式/事件/块/组件的类型检查与多文件 `use` 导入；动态文档由宏生成已检查程序的构造代码。
-- aegle-loader：动态标记执行引擎（state 单元与效果、单向绑定、事件块、按值 key 的 for、if 分支重建、响应式组件参数）、运行时 `Program::load` 与原子 `reload`；绑定随控件经 `Node::keep_alive` 释放。宿主动作、slot、record 与可配置限额尚未实现。
+- aegle-loader：动态标记执行引擎（state 单元与效果、单向绑定、事件块、按值 key 的 for、if 分支重建、响应式组件参数）、运行时 `Program::load` 与原子 `reload`；绑定随控件经 `Node::keep_alive` 释放。宿主动作、`let`、record、slot、组件事件与可配置限额见末节。
 
 图像缓存预算不包括字体映射、排版、缓存索引及上游栅格 scratch；具体边界见 [资源](resources.md)。合成/过滤使用线性预乘颜色，公共字形彩色图像为非预乘 sRGB RGBA8。
 
@@ -295,12 +295,12 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
-- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 触摸、fractional scale 与客户端装饰；真实桌面 portal 与 Windows 设置变更的实机验收。
-- 组件/绘制：惯性、可变高度列表、自定义控件输入行为、PNG 以外的图像格式与 SVG、更多基础组件与布局属性、渐变/特效；后台 UiProxy。
-- 标记语言：宿主动作、事件 let、record 列表与 `key` 表达式、slot、组件事件、类型化属性过渡、可配置执行/传播限额；loader 当前错误只带字节跨度，不带文件名。
-- 主题/动画：token 级部分覆盖、系统文本缩放、缩放/旋转动画。
-- 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收；合成粗体/斜体、COLRv1/SVG字形明确不支持。
-- 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU多窗口共享设备/图集尚未实现。现有桌面样本不能替代这些证据。
+- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。
+- 组件/绘制：自定义控件输入行为、更多基础组件与布局属性、三态以外的控件变体、几何属性的逐属性过渡时长。
+- 标记语言：`scale`/`rotation` 等新几何属性尚无标记写法；类型化的逐属性 transition 未实现（过渡仍按节点整体）。
+- 主题/动画：token 注册表（只有按字段的部分覆盖）。
+- 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收。
+- 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU 多窗口只共享实例/设备/管线，图集仍按窗口独立。现有桌面样本不能替代这些证据。
 
 ## 直角默认控件与覆盖式滚动条
 
@@ -381,3 +381,26 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 截图示例改为与原生 App 相同的 120 ms 默认过渡并在结束后截取，新增 radio、dropdown、popup、table、variable-list 与部分选中截图；修正文档中的绝对路径、无障碍文档的过时默认值与 ADR-0001 实现补充。
 - 验证：`tests/composite.rs` 覆盖单选互斥/重复激活/方向键、部分选中、弹出层位置/焦点/Escape/命中阻挡/外部关闭、Dropdown 键盘选择与静默设置、删除、表格按需建格与语义角色、可变高度行的范围与 `set_count`；标记 schema 与编译型视图覆盖 RadioButton/mixed。workspace all-features 测试、检查与严格 Rustdoc 通过。
 
+
+## 补齐功能缺口
+
+按用户要求一次补上此前列出的功能缺口，未开展 macOS。每项都做最小实现，可选的额外格式放在 feature 后面；下列只记录已有证据，没有测量体积、内存或帧时间。
+
+- 合成粗体/斜体：`GlyphRun::synthesized(embolden, skew)` 记录 Parley 的合成建议，`RasterOptions` 与 `GlyphKey` 带这两个值，aegle-glyph 对轮廓做 em/32 的外扩与错切后再光栅；软件、Vulkan、wgpu 三个后端经同一字形键使用，原先的 `PaintError::SyntheticStyle` 已删除。位图字体（sbix/CBDT）不合成。
+- COLRv1 与 OpenType-SVG 字形：`aegle-glyph/colrv1`（tiny-skia，已在 workspace）把渐变、变换、裁剪、混合层与线/径/扫掠渐变画进一张位图，扫掠渐变逐像素计算；`aegle-glyph/svg`（resvg，无文字）渲染 `glyph<N>` 子树或单字形文档。两者结果都是普通彩色字形，GPU 图集不用改。无 ClipList 的 COLRv1 字体按 2 em 方框估算范围。没有这些 feature 时仍返回 `UnsupportedGlyph`。
+- 图像格式：新增 `aegle-image`，`decode` 按签名识别 PNG（复用 aegle-glyph）与可选 JPEG（zune-jpeg）、WebP（image-webp，不含动画）、GIF（首帧，合成到透明逻辑屏），都先按字节预算检查再分配；`svg::rasterize`/`size`（resvg）把静态 SVG 栅格到指定尺寸。facade 的 `jpeg`/`webp`/`gif`/`svg` 开启它们，重导出为 `aegle::image`。
+- 渐变与阴影：`aegle-widgets/effects`（facade 默认启用）生成线性/径向渐变与柔和阴影 `Image`，在预乘线性光中插值，复用各后端已有的图像绘制，不增加渲染命令。
+- 缩放/旋转动画：`Node::set_transform(Transform { scale, rotation })` 以节点中心为原点作用于子树，是呈现层变换：场景（`visit_scenes` 的矩阵含它）、命中、滚动视口裁剪（取变换后的外包框，旋转时是包围盒近似）、IME 锚点与 AccessKit 节点变换都跟随；布局和滚动范围不变。有过渡策略时与位移同样补间并触发完成回调。
+- 惯性滚动：`Ui::fling(position, velocity)` 以 τ=325 ms 的指数衰减推进，经 `advance_animations` 驱动，到 10 px/s、边缘、任何新滚动/按下或减少动态效果时结束。Wayland 触摸板的 axis_stop 用最近 100 ms 的样本估计速度；Windows 驱动自带惯性滚轮，不另做。
+- 主题：`ThemeOverride`（逐字段 `Option`）与 `Node::set_theme_override`，叠加在父级解析主题上并随父级或 UI 主题更新，嵌套叠加；快照 `set_theme` 会替换它。系统文本缩放：`Preferences::text_scale`（百分比）来自 Windows 的 `TextScaleFactor` 与 GNOME 的 `text-scaling-factor`（经同一个 portal 客户端），`AppOptions::text_scale` 可显式覆盖，原生 App 把字号和控件高度按它缩放；没有该设置的桌面（如 KDE portal）保持未知。
+- 后台投递：`App::proxy(handler)` 返回可克隆、可跨线程的 `UiProxy<T>`；`send` 入队（上限 1024 条，满或应用退出时把消息退回）并唤醒事件循环，handler 在 UI 线程于所有借用之外按序运行。
+- 标记语言：`record` 声明与位置式构造 `Task(1, "a")`、`item.title` 字段读取、`for item in items key item.id`（record 列表必须给 key，键相同但值变化的行重建）；`let`；`host.name(args)` 宿主动作（`Program::action` 或线程共享的 `loader::action`，构建时校验名称与参数类型，缺失/不符在挂载前报错）；`slot` 与 `component` 内 `event name(type)`、`emit`、实例上的 `on name(value) { }`；`Program::set_limits` 配置每次处理的语句数（默认 10,000）、单个 `for` 的行数（10,000）与嵌套 emit 深度（64）；运行时错误带文件路径。`ui!` 的 View 把 record 状态暴露为 `State<Data>`，`StateValue::ty` 改为 `accepts`。
+- Wayland：wp-fractional-scale-v1 + wp-viewporter（缺一则回退整数 buffer scale），`WindowInfo::scale` 改为 `f32`，缓冲区按 `round(逻辑尺寸 × scale)` 计算，视口把它映射回逻辑尺寸；`wl_touch` 经 `Event::Touch` 到达，App 的 `Ui::touch` 把点击与控件拖动映射为指针事件，在非拖动内容上超过 10 px 的拖动取消点击并平移滚动视图，抬起时带速度进入惯性。
+- GPU 多窗口：Vulkan 的 `SharedDevice`/`WindowRenderer::with_device` 与 wgpu 的 `SharedGpu`/`with_gpu` 共享实例、设备、队列（wgpu 还有管线）；每窗口仍有自己的 surface/swapchain、管线（Vulkan）与字形图集。App 的第一个窗口创建设备，之后的窗口复用；不能向共享设备呈现的窗口创建失败，不静默改用新设备。
+
+验证（本机；私有 headless Sway/Pixman，不连接用户桌面）：
+
+- 新增测试：`aegle-glyph` 合成粗体/斜体、COLRv1（自建 984 字节字体，覆盖线/径向渐变、平移缩放、前景色、Multiply 合成、扫掠及预算）、SVG 字形（自建字体）；`aegle-image` 的 PNG/JPEG/WebP/GIF 往返、预算、截断与 SVG；`aegle-widgets` 渐变与阴影；`aegle-app` 的转换/命中、惯性、主题覆盖、触摸手势；`aegle-markup` 的 10 类新诊断；`aegle-loader/tests/language.rs` 的完整界面场景（records、slot、事件、let、宿主动作、限额、文件名）；facade 的 `ui!` record 与共享宿主动作。测试字体与生成脚本在 `tests/assets/colrv1-font.py`（FontTools 4.62.1）。
+- 隔离 Sway 上：Wayland 平台新增 ignored 测试在输出缩放 1.5 下确认首帧后收到 preferred_scale 并以 `round(尺寸×1.5)` 呈现；App 的两窗口 native 场景在缩放 1.5 下以软件、Vulkan 与 wgpu 通过（Lavapipe；GLES2 compositor 上另在 RX 6800 XT/RADV 上跑了 Vulkan 与 wgpu 两窗口场景）；Vulkan 平台的两窗口共享设备场景在 Lavapipe 与 RADV 上通过；线程投递场景通过。controls 示例在 1.5 缩放下截图检查。
+- Windows：x86_64-pc-windows-gnu 以同版本 Debian rust-src 加临时提取的 MinGW 做 `-Zbuild-std` 交叉检查，Win32 平台 crate 与 facade（windows、software、vulkan、wgpu、windows-accessibility、markup、motion 及新 feature，all-targets）通过；没有链接或运行，也没有执行 Wine。
+- 未验证：触摸只有无头手势测试，没有真实触摸设备，Wayland 触摸协议路径只通过编译；合成粗体/斜体、COLRv1、SVG 字形只在 CPU 光栅路径做了像素测试，没有逐后端截图；共享 Vulkan 设备没有开启 validation 层；文本缩放的 portal/注册表读取只做了编译与审查，没有对应的探针；没有 Clippy、MSRV 与体积/性能测量。

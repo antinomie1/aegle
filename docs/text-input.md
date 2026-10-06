@@ -8,7 +8,7 @@
 
 `glyph_runs` 借用已有字形位置；可选 `aegle-text/scene` 提供 `paint`，将位置和变化轴复制到 scene，字体字节通过 `FontData` 共享。`paint_with_color` 可重建前景颜色而不重新 shaping。scene 不持有文字引擎，光栅化模块不依赖 Parley。
 
-`TextDiagnostics` 分别报告缺字 glyph 和没有任何字体可成形的 UTF-8 字节数。前者显示字体的 `.notdef`；后者使 `paint` 返回 `MissingFont`，避免整段文字静默消失。目前 scene 桥接拒绝合成粗体/斜体，应用应提供真实字重/字形。字形支持灰度轮廓、COLRv0、SBIX/CBDT PNG 及原始 BGRA/alpha 位图；COLRv1、SVG 字形表示返回不支持。注册字体不等于该字体的每种表示均可绘制。
+`TextDiagnostics` 分别报告缺字 glyph 和没有任何字体可成形的 UTF-8 字节数。前者显示字体的 `.notdef`；后者使 `paint` 返回 `MissingFont`，避免整段文字静默消失。字体缺少所需字重或倾斜时，Parley 给出的合成建议（粗体、倾斜度）随 `GlyphRun` 传到光栅器：轮廓外扩 em/32 并按角度错切，仍是同一字形键与图集；位图字体不合成。字形支持灰度轮廓、COLRv0、SBIX/CBDT PNG 及原始 BGRA/alpha 位图；`colrv1` feature 增加 COLRv1 渐变/变换/混合层，`svg` feature 增加不含文字的 OpenType-SVG，未启用时对应表示返回不支持。注册字体不等于该字体的每种表示均可绘制。
 
 ## 显示与内存
 

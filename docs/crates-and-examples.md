@@ -4,11 +4,11 @@
 
 ## 当前能力概览
 
-紧凑共享类型、保留树、Taffy 布局、保留式 Unicode 段落与编辑器、按需 CJK 字形、绘制记录和软件光栅化已可用。独立 Wayland 后端提供原生窗口、有界 SHM 呈现、键盘/指针输入与 text-input-v3。应用层提供窗口、行、列、滚动视图、标签、按钮、纯文本字段、复选框、开关、滑块和进度条，并带浅色/深色/高对比主题。编译型 `.aegle` 标记与简洁的命令式 Rust 创建相同的保留控件。局部颜色、字体排印和小型主题/状态皮肤函数让组件库复用这些控件。共享的控件行为把输入和焦点接到保留树与编辑器。可选的绘制过渡共享同一状态，以帧驱动采样、平滑重定向，并显式支持减少动态效果。
+紧凑共享类型、保留树、Taffy 布局、保留式 Unicode 段落与编辑器、按需 CJK 字形、绘制记录和软件光栅化已可用。独立 Wayland 后端提供原生窗口、有界 SHM 呈现、键盘/指针输入与 text-input-v3。应用层提供窗口、行、列、滚动视图、标签、按钮、纯文本字段、复选框、开关、滑块和进度条，并带浅色/深色/高对比主题。编译型 `.aegle` 标记与简洁的命令式 Rust 创建相同的保留控件。局部颜色、字体排印和小型主题/状态皮肤函数让组件库复用这些控件。共享的控件行为把输入和焦点接到保留树与编辑器。可选的绘制过渡共享同一状态，以帧驱动采样、平滑重定向，并显式支持减少动态效果；缩放/旋转、惯性滚动、渐变/阴影图像、触摸手势、后台 `UiProxy`、按字段的主题覆盖与系统文本缩放也已提供，可选的 JPEG/WebP/GIF/SVG 解码在 `aegle-image`。
 
 可选的 Unix 无障碍通过 AT-SPI 暴露控件、CJK 文本、选择、焦点与按钮动作；AT-SPI 文本替换仍不支持。Windows 增加 Win32 窗口、软件/Vulkan 呈现、IMM 组合与可选 UIA。TSF、macOS 和完整的辅助技术验收仍未完成。
 
-标记当前支持静态字面量、绑定、事件块、组件导入与运行时加载，细节见[标记语言](markup.md)。标记编译为直接的构造器与 setter；带 `id` 的字段返回类型化的弱句柄，可用于普通 Rust 回调；仅用 `ui!` 的可执行文件不带标记解析器或运行时注册表。
+标记当前支持静态字面量、绑定、事件块、组件（含 slot 与组件事件）、record 与带 key 的列表、`let` 与宿主动作、导入和运行时加载，细节见[标记语言](markup.md)。标记编译为直接的构造器与 setter；带 `id` 的字段返回类型化的弱句柄，可用于普通 Rust 回调；仅用 `ui!` 的可执行文件不带标记解析器或运行时注册表。
 
 ## 默认组合与平台前提
 
@@ -47,13 +47,14 @@ cargo doc --workspace --all-features --no-deps
 - `aegle-layout`：该树上的 Taffy 布局。
 - `aegle-scene`：经过校验的绘制记录。
 - `aegle-text`：段落、字体回退、纯文本编辑、组合与有界 delta 撤销。
-- `aegle-glyph`：按需字形光栅化与有界图像缓存。
+- `aegle-glyph`：按需字形光栅化与有界图像缓存，含合成粗体/斜体；`colrv1`、`svg` feature 增加 COLRv1 与 OpenType-SVG 字形。
+- `aegle-image`：有界图像解码，PNG 加可选 JPEG、WebP、GIF 首帧与静态 SVG 栅格化。
 - `aegle-render-software`：借用帧缓冲与线性光合成。
 - `aegle-gpu`：Vulkan 与 wgpu 后端共用、与图形 API 无关的图元/裁剪记录、场景遍历、图集装箱、图像与路径 mask 放置及 WGSL 着色器。
 - `aegle-render-vulkan`：几何与文字、原生 swapchain、有界分配、显式离屏读回。
 - `aegle-render-wgpu`：可选的全平台几何、文字、图像与路径，离屏或原生 surface。
 - `aegle-controls`：无皮肤的 Button/Toggle/Slider 行为、共享数值 Range 与可选 TextField。
-- `aegle-widgets`：无状态的默认皮肤绘制与滚动条/滚动几何，可被自带控件树的宿主复用。
+- `aegle-widgets`：无状态的默认皮肤绘制与滚动条/滚动几何，可被自带控件树的宿主复用；`effects` feature 生成渐变与阴影图像。
 - `aegle-access`：UI 线程回调邮箱与可选的 Unix/Windows 无障碍。
 - `aegle-platform-wayland`、`aegle-platform-win32`：窗口与原生输入，不依赖绘制。
 - `aegle-theme`：无分配的调色板、基于状态的皮肤与局部样式值。

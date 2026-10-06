@@ -34,10 +34,7 @@ impl Target {
                 budget,
             )?)
         };
-        let window = false;
-        #[cfg(feature = "window")]
-        let window = window || device.surface.is_some();
-        let output = if window {
+        let output = if pipeline.window {
             None
         } else {
             Some(Image::new(

@@ -3,9 +3,13 @@
 use std::rc::Rc;
 
 use aegle_app::Result;
-use aegle_markup::{Expr, ExprKind, Ref, Span, Step, Type, Value};
+use aegle_markup::{Child, Expr, ExprKind, Ref, Span, Step, Type, Value};
 
-use crate::{Data, RuntimeError, handle::Handle, reactive::Cell, reactive::Effect};
+use crate::{
+    Data, RuntimeError, Shared,
+    handle::Handle,
+    reactive::{Cell, Effect},
+};
 
 /// A component argument: an expression in the caller's environment, or a default.
 pub(crate) enum Param {
@@ -13,48 +17,84 @@ pub(crate) enum Param {
     Value(Data),
 }
 
-/// The states and parameters of one document or component instance.
+/// A component event handler, run in the caller's environment.
+pub(crate) struct Emit {
+    pub steps: Rc<[Step]>,
+    pub binds_value: bool,
+    pub env: Env,
+}
+
+/// The children of a component instance, built where its body writes `slot`.
+pub(crate) struct Slot {
+    pub children: Rc<[Child]>,
+    pub env: Env,
+}
+
+/// The states, parameters and event handlers of one document or component instance.
 pub(crate) struct Scope {
+    pub template: usize,
     pub states: Vec<Rc<Cell>>,
     pub params: Vec<Param>,
+    /// One entry per declared event of the template.
+    pub emits: Vec<Option<Emit>>,
 }
 
 /// Everything an expression can read.
 #[derive(Clone)]
 pub(crate) struct Env {
-    pub program: Rc<aegle_markup::Program>,
+    pub shared: Rc<Shared>,
     pub scope: Rc<Scope>,
     /// Items of the enclosing `for` blocks, outermost first.
     pub items: Rc<[Data]>,
+    /// Children passed to the component instance this environment belongs to.
+    pub slot: Option<Rc<Slot>>,
+}
+
+/// What a handler's expressions read besides the environment: the control
+/// that raised the event and the `let` locals.
+pub(crate) struct Frame<'a> {
+    pub source: &'a Handle,
+    pub locals: &'a [Data],
+}
+
+/// Statement budget and event nesting of one handler run.
+pub(crate) struct Run {
+    pub locals: Vec<Data>,
+    pub steps: usize,
+    pub depth: usize,
 }
 
 impl Env {
     /// Creates an instance of `template`: parameters, then states in order.
     /// `carried` may supply a state's value instead of its initializer.
     pub fn instantiate(
-        program: Rc<aegle_markup::Program>,
+        shared: Rc<Shared>,
         template: usize,
         params: Vec<Param>,
+        emits: Vec<Option<Emit>>,
         carried: &dyn Fn(&str, &Type) -> Option<Data>,
     ) -> Result<Self> {
-        let states = &program.templates[template].states;
+        let states = &shared.checked.templates[template].states;
         let cells = states
             .iter()
             .map(|_| Cell::new(Data::Bool(false)))
             .collect();
         let env = Self {
-            program: program.clone(),
+            shared: shared.clone(),
             scope: Rc::new(Scope {
+                template,
                 states: cells,
                 params,
+                emits,
             }),
             items: Rc::from([]),
+            slot: None,
         };
         // Initializers read only parameters and earlier states.
         for (index, (name, ty, initial)) in states.iter().enumerate() {
             let value = match carried(name, ty) {
                 Some(value) => value,
-                None => eval(initial, &env, None, None)?,
+                None => eval(initial, &env, None, None).map_err(|e| env.locate(e))?,
             };
             env.scope.states[index].init(value);
         }
@@ -69,17 +109,31 @@ impl Env {
             ..self.clone()
         }
     }
+
+    /// Names the file of this environment's template in a runtime error.
+    pub fn locate(&self, error: Box<dyn std::error::Error>) -> Box<dyn std::error::Error> {
+        let program = &self.shared.checked;
+        match error.downcast::<RuntimeError>() {
+            Ok(mut error) if error.file.is_none() => {
+                let file = program.templates[self.scope.template].file;
+                error.file = program.files.get(file).cloned();
+                error
+            }
+            Ok(error) => error,
+            Err(other) => other,
+        }
+    }
 }
 
-/// Evaluates a checked expression. Reads subscribe `effect`; `source` serves
-/// `self` fields inside event handlers.
+/// Evaluates a checked expression. Reads subscribe `effect`; `frame` serves
+/// `self` fields and locals inside event handlers.
 pub(crate) fn eval(
     expr: &Expr,
     env: &Env,
     effect: Option<&Rc<Effect>>,
-    source: Option<&Handle>,
+    frame: Option<&Frame>,
 ) -> Result<Data> {
-    let eval = |expr: &Expr| eval(expr, env, effect, source);
+    let eval = |expr: &Expr| eval(expr, env, effect, frame);
     Ok(match &expr.kind {
         ExprKind::Literal(value) => literal(value),
         ExprKind::Ref(Ref::State(index)) => env.scope.states[*index].get(effect),
@@ -88,8 +142,12 @@ pub(crate) fn eval(
             Param::Value(value) => value.clone(),
         },
         ExprKind::Ref(Ref::Item(index)) => env.items[*index].clone(),
-        ExprKind::SelfField(field) => source
+        ExprKind::Ref(Ref::Local(index)) => {
+            frame.expect("checked: locals only in handlers").locals[*index].clone()
+        }
+        ExprKind::SelfField(field) => frame
             .expect("checked: self only in handlers")
+            .source
             .field(field)?,
         ExprKind::Unary("!", operand) => Data::Bool(!truth(eval(operand)?)),
         ExprKind::Unary(_, operand) => match eval(operand)? {
@@ -110,17 +168,52 @@ pub(crate) fn eval(
         ExprKind::List(items) => {
             Data::List(items.iter().map(eval).collect::<Result<Vec<_>>>()?.into())
         }
-        ExprKind::Name(_) => unreachable!("checked expressions are resolved"),
+        ExprKind::Record(_, values) => {
+            Data::Record(values.iter().map(eval).collect::<Result<Vec<_>>>()?.into())
+        }
+        ExprKind::FieldAt(record, index) => match eval(record)? {
+            Data::Record(fields) => fields[*index].clone(),
+            _ => unreachable!("checked record field"),
+        },
+        ExprKind::Name(_) | ExprKind::Field(..) => {
+            unreachable!("checked expressions are resolved")
+        }
     })
 }
 
+/// Runs a handler's statements. An error stops it and keeps earlier assignments.
+pub(crate) fn handle(steps: &[Step], env: &Env, source: &Handle) -> Result {
+    let mut run = Run {
+        locals: Vec::new(),
+        steps: env.shared.limits.get().steps,
+        depth: 0,
+    };
+    exec(steps, env, source, &mut run).map_err(|error| env.locate(error))
+}
+
 /// Runs event statements; each assignment updates dependent bindings at once.
-/// An error stops the handler and keeps earlier assignments.
-pub(crate) fn exec(steps: &[Step], env: &Env, source: &Handle) -> Result {
+fn exec(steps: &[Step], env: &Env, source: &Handle, run: &mut Run) -> Result {
+    let mark = run.locals.len();
+    let result = run_steps(steps, env, source, run);
+    run.locals.truncate(mark);
+    result
+}
+
+fn run_steps(steps: &[Step], env: &Env, source: &Handle, run: &mut Run) -> Result {
     for step in steps {
+        run.steps = run.steps.checked_sub(1).ok_or_else(|| {
+            RuntimeError::new(Span::default(), "the handler exceeded its statement limit")
+        })?;
+        let value_of = |expr: &Expr, run: &Run| {
+            let frame = Frame {
+                source,
+                locals: &run.locals,
+            };
+            eval(expr, env, None, Some(&frame))
+        };
         match step {
             Step::Assign(state, operator, expr) => {
-                let value = eval(expr, env, None, Some(source))?;
+                let value = value_of(expr, run)?;
                 let cell = &env.scope.states[*state];
                 let value = match *operator {
                     "=" => value,
@@ -130,8 +223,38 @@ pub(crate) fn exec(steps: &[Step], env: &Env, source: &Handle) -> Result {
                 cell.set(value)?;
             }
             Step::If(condition, then, otherwise) => {
-                let taken = truth(eval(condition, env, None, Some(source))?);
-                exec(if taken { then } else { otherwise }, env, source)?;
+                let taken = truth(value_of(condition, run)?);
+                exec(if taken { then } else { otherwise }, env, source, run)?;
+            }
+            Step::Let(expr) => {
+                let value = value_of(expr, run)?;
+                run.locals.push(value);
+            }
+            Step::Host(name, arguments, span) => {
+                let values = arguments
+                    .iter()
+                    .map(|argument| value_of(argument, run))
+                    .collect::<Result<Vec<_>>>()?;
+                env.shared.actions.call(name, &values, *span)?;
+            }
+            Step::Emit(index, value) => {
+                let value = value.as_ref().map(|v| value_of(v, run)).transpose()?;
+                let Some(emit) = &env.scope.emits[*index] else {
+                    continue;
+                };
+                if run.depth >= env.shared.limits.get().emit_depth {
+                    let message = "component events nest deeper than the emit limit";
+                    return Err(RuntimeError::new(Span::default(), message).into());
+                }
+                let mut inner = Run {
+                    locals: value.filter(|_| emit.binds_value).into_iter().collect(),
+                    steps: run.steps,
+                    depth: run.depth + 1,
+                };
+                let result = exec(&emit.steps, &emit.env, source, &mut inner)
+                    .map_err(|error| emit.env.locate(error));
+                run.steps = inner.steps;
+                result?;
             }
         }
     }

@@ -1,7 +1,9 @@
+mod statements;
+
 use crate::lexer::{Kind, Lexer, Token};
 use crate::{
-    Component, Document, Error, Event, Item, Limits, Node, Param, Property, Span, State, Statement,
-    Value,
+    Component, Document, Error, Event, EventDecl, Item, Limits, Node, Param, Property, Record,
+    Span, State, Value,
 };
 
 /// Parses one file using the default resource limits.
@@ -38,6 +40,7 @@ pub fn parse_with_limits(source: &str, limits: &Limits) -> Result<Document, Erro
     let mut document = Document {
         uses: Vec::new(),
         components: Vec::new(),
+        records: Vec::new(),
         root: None,
     };
     parser.separators()?;
@@ -58,6 +61,10 @@ pub fn parse_with_limits(source: &str, limits: &Limits) -> Result<Document, Erro
             Kind::Identifier("component") => {
                 let component = parser.component()?;
                 document.components.push(component);
+            }
+            Kind::Identifier("record") => {
+                let record = parser.record()?;
+                document.records.push(record);
             }
             _ => {
                 let (name, start) = parser.identifier()?;
@@ -150,6 +157,29 @@ impl<'a> Parser<'a, '_> {
         Ok(false)
     }
 
+    fn record(&mut self) -> Result<Record, Error> {
+        let start = self.current.span.start;
+        self.advance()?;
+        let (name, _) = self.identifier()?;
+        self.open("expected '{' to start the record fields")?;
+        let mut fields = Vec::new();
+        while !matches!(self.current.kind, Kind::Close) {
+            let (field, _) = self.identifier()?;
+            if !matches!(self.current.kind, Kind::Colon) {
+                return Err(self.error("expected ':' and a field type"));
+            }
+            self.advance()?;
+            fields.push((field, self.ty()?));
+            self.end_declaration(false)?;
+        }
+        self.advance()?;
+        Ok(Record {
+            name,
+            fields,
+            span: self.span(start),
+        })
+    }
+
     fn component(&mut self) -> Result<Component, Error> {
         let start = self.current.span.start;
         self.advance()?;
@@ -182,10 +212,29 @@ impl<'a> Parser<'a, '_> {
         self.advance()?;
         self.open("expected '{' to start the component body")?;
         let mut states = Vec::new();
+        let mut events = Vec::new();
         let mut root = None;
         while !matches!(self.current.kind, Kind::Close) {
             if matches!(self.current.kind, Kind::Identifier("state")) {
                 states.push(self.state()?);
+                self.end_declaration(false)?;
+            } else if matches!(self.current.kind, Kind::Identifier("event")) {
+                let start = self.current.span.start;
+                self.advance()?;
+                let (name, _) = self.identifier()?;
+                let ty = if matches!(self.current.kind, Kind::Punct("(")) {
+                    self.advance()?;
+                    let ty = self.ty()?;
+                    self.expect(")", "expected ')' after the event value type")?;
+                    Some(ty)
+                } else {
+                    None
+                };
+                events.push(EventDecl {
+                    name,
+                    ty,
+                    span: self.span(start),
+                });
                 self.end_declaration(false)?;
             } else if root.is_none() {
                 let (name, start) = self.identifier()?;
@@ -203,6 +252,7 @@ impl<'a> Parser<'a, '_> {
         Ok(Component {
             name,
             params,
+            events,
             root,
             span: self.span(start),
         })
@@ -262,9 +312,18 @@ impl<'a> Parser<'a, '_> {
                     let start = self.current.span.start;
                     self.advance()?;
                     let (name, _) = self.identifier()?;
+                    let param = if matches!(self.current.kind, Kind::Punct("(")) {
+                        self.advance()?;
+                        let (param, _) = self.identifier()?;
+                        self.expect(")", "expected ')' after the event value name")?;
+                        Some(param)
+                    } else {
+                        None
+                    };
                     let body = self.statements(depth + 1)?;
                     node.events.push(Event {
                         name,
+                        param,
                         body,
                         span: self.span(start),
                     });
@@ -295,6 +354,10 @@ impl<'a> Parser<'a, '_> {
                             });
                             false
                         }
+                        _ if name == "slot" => {
+                            node.children.push(Item::Slot);
+                            false
+                        }
                         _ => {
                             return Err(
                                 self.error("expected ':' for a property or '{' for a child")
@@ -321,8 +384,14 @@ impl<'a> Parser<'a, '_> {
             }
             self.advance()?;
             let list = self.expr()?;
+            let key = if matches!(self.current.kind, Kind::Identifier("key")) {
+                self.advance()?;
+                Some(self.expr()?)
+            } else {
+                None
+            };
             let body = self.items(depth)?;
-            return Ok(Item::For(name, list, body));
+            return Ok(Item::For(name, list, key, body));
         }
         let condition = self.expr()?;
         let then = self.items(depth)?;
@@ -346,70 +415,16 @@ impl<'a> Parser<'a, '_> {
                 true
             } else {
                 let (name, start) = self.identifier()?;
-                items.push(Item::Node(self.node(name, start, depth + 1)?));
+                if name == "slot" && !matches!(self.current.kind, Kind::Open) {
+                    items.push(Item::Slot);
+                } else {
+                    items.push(Item::Node(self.node(name, start, depth + 1)?));
+                }
                 false
             };
             self.end_declaration(block)?;
         }
         self.advance()?;
         Ok(items)
-    }
-
-    /// Parses `{ statements }` of an event handler.
-    fn statements(&mut self, depth: usize) -> Result<Vec<Statement>, Error> {
-        self.check_budget(depth)?;
-        self.open("expected '{' to start the statements")?;
-        let mut statements = Vec::new();
-        while !matches!(self.current.kind, Kind::Close) {
-            let start = self.current.span.start;
-            let block = if matches!(self.current.kind, Kind::Identifier("if")) {
-                self.advance()?;
-                let condition = self.expr()?;
-                let then = self.statements(depth + 1)?;
-                let otherwise = if !self.else_keyword()? {
-                    Vec::new()
-                } else if matches!(self.current.kind, Kind::Identifier("if")) {
-                    // `else if` nests a single conditional statement.
-                    self.statements_from_if(depth + 1)?
-                } else {
-                    self.statements(depth + 1)?
-                };
-                statements.push(Statement::If(condition, then, otherwise));
-                true
-            } else {
-                let (target, _) = self.identifier()?;
-                let operator = match self.current.kind {
-                    Kind::Punct(operator @ ("=" | "+=" | "-=")) => operator,
-                    _ => return Err(self.error("expected '=', '+=' or '-=' in an assignment")),
-                };
-                self.advance()?;
-                let value = self.expr()?;
-                statements.push(Statement::Assign {
-                    target,
-                    operator,
-                    value,
-                    span: self.span(start),
-                });
-                false
-            };
-            self.end_declaration(block)?;
-        }
-        self.advance()?;
-        Ok(statements)
-    }
-
-    fn statements_from_if(&mut self, depth: usize) -> Result<Vec<Statement>, Error> {
-        self.check_budget(depth)?;
-        self.advance()?;
-        let condition = self.expr()?;
-        let then = self.statements(depth + 1)?;
-        let otherwise = if !self.else_keyword()? {
-            Vec::new()
-        } else if matches!(self.current.kind, Kind::Identifier("if")) {
-            self.statements_from_if(depth + 1)?
-        } else {
-            self.statements(depth + 1)?
-        };
-        Ok(vec![Statement::If(condition, then, otherwise)])
     }
 }

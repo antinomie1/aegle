@@ -105,3 +105,76 @@ Window {
         assert!(error.0.contains(message), "{library}: {error}");
     }
 }
+
+#[test]
+fn records_events_slots_locals_and_host_calls_are_checked() {
+    let check = |source: &'static str| {
+        compile("main.aegle", &mut |_| Ok(source.to_owned())).map(|(program, _)| program)
+    };
+    let program = check(
+        r#"record Task { id: int; title: string }
+component Box() {
+    event picked(int)
+    Column { slot; Button { on clicked { let n = 1; emit picked(n) } } }
+}
+Column {
+    state tasks: list<Task> = [Task(1, "a")]
+    for task in tasks key task.id { Box { on picked(v) { host.log(v, task.title) } Text { text: task.title } } }
+}"#,
+    )
+    .unwrap();
+    assert_eq!(program.records[0].name, "Task");
+    assert_eq!(
+        program.templates[1].events,
+        [("picked".to_owned(), Some(aegle_markup::Type::Int))]
+    );
+    assert!(program.templates[1].slot && program.files == ["main.aegle"]);
+    let call = &program.host_calls[0];
+    assert_eq!(
+        (call.name.as_str(), &call.types[..]),
+        (
+            "log",
+            &[aegle_markup::Type::Int, aegle_markup::Type::String][..]
+        )
+    );
+
+    for (body, message) in [
+        (
+            "record R { a: list<int> }\nColumn {}",
+            "record fields are bool",
+        ),
+        ("Column { state x: Nope = 1 }", "unknown type `Nope`"),
+        ("Column { slot }", "`slot` belongs once in a component body"),
+        (
+            "component C() { Column {} }\nColumn { C { Text {} } }",
+            "this component has no slot",
+        ),
+        (
+            "component C() { Column { Button { on clicked { emit gone } } } }\nColumn { C {} }",
+            "declares no event `gone`",
+        ),
+        (
+            "component C() { event e\nColumn { slot } }\nColumn { C { on e(v) {} } }",
+            "this event carries no value",
+        ),
+        (
+            "record T { id: int }\nColumn { state ts: list<T> = [T(1)]; for t in ts { Text {} } }",
+            "needs `key`",
+        ),
+        (
+            "Column { state n: int = 0; Button { on clicked { if true { let a = 1; n = a }; n = a } } }",
+            "unknown name `a`",
+        ),
+        (
+            "record T { id: int }\nColumn { state t: T = T(1, 2) }",
+            "takes 1 values",
+        ),
+        (
+            "record T { id: int }\nColumn { state t: T = T(1); Text { text: t.nope } }",
+            "no field `nope`",
+        ),
+    ] {
+        let error = check(Box::leak(body.to_owned().into_boxed_str())).unwrap_err();
+        assert!(error.0.contains(message), "{body}: {}", error.0);
+    }
+}

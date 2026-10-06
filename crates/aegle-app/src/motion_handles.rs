@@ -31,6 +31,7 @@ impl Node {
             state.motion.active.remove(&id);
             state.motion.tracks.remove(&id);
             state.snap_offset(id);
+            state.snap_spin(id);
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             Ok(())
         })
@@ -43,7 +44,9 @@ impl Node {
     /// offset transition, is still running.
     pub fn is_animating(&self) -> Result<bool> {
         self.change(|state, id| {
-            Ok(state.motion.active.contains_key(&id) || state.motion.moving.contains_key(&id))
+            Ok(state.motion.active.contains_key(&id)
+                || state.motion.moving.contains_key(&id)
+                || state.motion.turning.contains_key(&id))
         })
     }
     /// Jumps to the current logical targets, retaining timing for future changes.
@@ -56,7 +59,8 @@ impl Node {
                 track.presented = Some(target);
             }
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            if state.snap_offset(id) || painting {
+            let moved = state.snap_offset(id);
+            if state.snap_spin(id) || moved || painting {
                 state.complete(id);
             }
             Ok(())
@@ -95,6 +99,7 @@ impl Node {
     pub fn cancel_transition(&self) -> Result {
         self.change(|state, id| {
             state.motion.moving.remove(&id);
+            state.motion.turning.remove(&id);
             let value = state.presented_appearance(id)?;
             let content = &state.tree.get(id).unwrap().context.content;
             let field = matches!(content, Content::Field(_));
@@ -152,7 +157,10 @@ impl Ui {
     /// Whether a host must request another frame. The Ui owns no timer or thread.
     pub fn has_animations(&self) -> bool {
         let state = self.state.borrow();
-        !state.motion.active.is_empty() || !state.motion.moving.is_empty()
+        !state.motion.active.is_empty()
+            || !state.motion.moving.is_empty()
+            || !state.motion.turning.is_empty()
+            || state.motion.fling.is_some()
     }
     /// Explicit reduced-motion preference. When true all transitions snap to
     /// their targets, completing, and no new animations start. Changing this
@@ -166,6 +174,9 @@ impl Ui {
             return Ok(());
         }
         state.motion.reduced = reduced;
+        if reduced {
+            state.motion.fling = None;
+        }
         let ids: Vec<_> = state.motion.active.keys().copied().collect();
         for id in ids {
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
@@ -174,6 +185,11 @@ impl Ui {
             let moving: Vec<_> = state.motion.moving.keys().copied().collect();
             for id in moving {
                 state.snap_offset(id);
+                state.complete(id);
+            }
+            let turning: Vec<_> = state.motion.turning.keys().copied().collect();
+            for id in turning {
+                state.snap_spin(id);
                 state.complete(id);
             }
             let repaint = state.refresh()?;

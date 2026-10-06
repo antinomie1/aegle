@@ -239,10 +239,24 @@ impl State {
                 bounds.size.height.into(),
             ));
             let offset = node_data.context.offset;
-            node.set_transform(Affine::translate((
-                f64::from(bounds.origin.x + offset.x - parent_scroll.x),
-                f64::from(bounds.origin.y + offset.y - parent_scroll.y),
-            )));
+            let spin = node_data.context.spin;
+            let (sin, cos) = f64::from(spin.rotation).sin_cos();
+            let (a, b) = (f64::from(spin.scale) * cos, f64::from(spin.scale) * sin);
+            let center = (
+                f64::from(bounds.size.width) / 2.0,
+                f64::from(bounds.size.height) / 2.0,
+            );
+            node.set_transform(Affine::new([
+                a,
+                b,
+                -b,
+                a,
+                f64::from(bounds.origin.x + offset.x - parent_scroll.x) + center.0 - a * center.0
+                    + b * center.1,
+                f64::from(bounds.origin.y + offset.y - parent_scroll.y) + center.1
+                    - b * center.0
+                    - a * center.1,
+            ]));
             if enabled && self.has_scroll_ancestor(id) {
                 node.add_action(Action::ScrollIntoView);
             }

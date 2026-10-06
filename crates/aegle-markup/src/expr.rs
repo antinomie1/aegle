@@ -35,13 +35,13 @@ impl Parser<'_, '_> {
             "list" => {
                 self.expect("<", "expected '<' after list")?;
                 let item = self.ty()?;
-                if !matches!(item, Type::Int | Type::String) {
-                    return Err(self.error("list items must be int or string"));
+                if matches!(item, Type::List(_)) {
+                    return Err(self.error("list items must be int, string or a record"));
                 }
                 self.expect(">", "expected '>' to close the list type")?;
                 Type::List(Box::new(item))
             }
-            _ => return Err(self.error("expected bool, int, float, string or list<...>")),
+            record => Type::Record(record.to_owned()),
         })
     }
 
@@ -108,6 +108,25 @@ impl Parser<'_, '_> {
     fn primary(&mut self, depth: usize) -> Result<Expr, Error> {
         let start = self.current.span.start;
         let token = self.advance()?;
+        let mut expr = self.atom(start, token, depth)?;
+        // Postfix field reads: `task.title`.
+        while matches!(self.current.kind, Kind::Punct(".")) {
+            self.advance()?;
+            let (field, _) = self.identifier()?;
+            expr = Expr {
+                kind: ExprKind::Field(Box::new(expr), field),
+                span: self.span(start),
+            };
+        }
+        Ok(expr)
+    }
+
+    fn atom(
+        &mut self,
+        start: usize,
+        token: crate::lexer::Token<'_>,
+        depth: usize,
+    ) -> Result<Expr, Error> {
         let kind = match token.kind {
             Kind::String(value) => ExprKind::Literal(Value::String(value)),
             Kind::Integer(value) => ExprKind::Literal(Value::Int(value)),
@@ -148,7 +167,7 @@ impl Parser<'_, '_> {
     }
 
     /// Parses comma-separated expressions up to and including `close`.
-    fn list(&mut self, close: &str, depth: usize) -> Result<Vec<Expr>, Error> {
+    pub(crate) fn list(&mut self, close: &str, depth: usize) -> Result<Vec<Expr>, Error> {
         let mut items = Vec::new();
         while !matches!(self.current.kind, Kind::Punct(p) if p == close) {
             items.push(self.binary(0, depth + 1)?);

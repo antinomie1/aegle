@@ -41,6 +41,8 @@ impl Frame<'_, '_, '_> {
                         normalized_coords: run.normalized_coords(),
                         hint: aligned,
                         foreground: [r, g, blue, 255],
+                        embolden: run.embolden(),
+                        skew: run.skew(),
                     },
                 )
                 .map_err(RenderError::Glyph)?;

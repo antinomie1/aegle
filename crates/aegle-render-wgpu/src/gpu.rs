@@ -7,6 +7,8 @@ use wgpu::{
     VertexState,
 };
 
+use std::cell::RefCell;
+
 use crate::{Error, Result};
 
 /// Linear working format: blending happens here, never in sRGB.
@@ -27,7 +29,10 @@ pub(crate) struct Gpu {
     pub sampler: wgpu::Sampler,
     resolve_layout: BindGroupLayout,
     resolve_shader: ShaderModule,
-    resolve: Option<(TextureFormat, RenderPipeline)>,
+    /// Encoding pipelines by output format; a shared device serves several surfaces.
+    resolve: RefCell<Vec<(TextureFormat, RenderPipeline)>>,
+    #[cfg_attr(not(feature = "window"), allow(dead_code))]
+    pub adapter: wgpu::Adapter,
 }
 
 fn wgsl<'a>(label: &'a str, source: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
@@ -67,13 +72,11 @@ impl Gpu {
                 ..Default::default()
             }))?;
         let capabilities = surface.map(|surface| surface.get_capabilities(&adapter));
-        Ok((
-            Self::new(device, queue, adapter.get_info().name),
-            capabilities,
-        ))
+        Ok((Self::new(device, queue, adapter), capabilities))
     }
 
-    fn new(device: Device, queue: Queue, name: String) -> Self {
+    fn new(device: Device, queue: Queue, adapter: wgpu::Adapter) -> Self {
+        let name = adapter.get_info().name;
         let storage = |binding| {
             layout_entry(
                 binding,
@@ -162,7 +165,8 @@ impl Gpu {
             sampler,
             resolve_layout,
             resolve_shader,
-            resolve: None,
+            resolve: RefCell::new(Vec::new()),
+            adapter,
         }
     }
 
@@ -170,30 +174,24 @@ impl Gpu {
         &self.resolve_layout
     }
 
-    /// Builds the pipeline encoding the linear image into `format` as premultiplied
-    /// sRGB, once per distinct output format.
-    pub fn prepare_resolve(&mut self, format: TextureFormat) {
-        if self
-            .resolve
-            .as_ref()
-            .is_none_or(|(have, _)| *have != format)
-        {
-            let pipeline = pipeline(
-                &self.device,
-                &self.resolve_shader,
-                "fs_main",
-                &[Some(&self.resolve_layout)],
-                format,
-                // The shader writes final bytes; blending would re-encode them.
-                BlendState::REPLACE,
-            );
-            self.resolve = Some((format, pipeline));
+    /// The pipeline encoding the linear image into `format` as premultiplied sRGB,
+    /// built once per distinct output format.
+    pub fn resolve(&self, format: TextureFormat) -> RenderPipeline {
+        let mut cache = self.resolve.borrow_mut();
+        if let Some((_, pipeline)) = cache.iter().find(|(have, _)| *have == format) {
+            return pipeline.clone();
         }
-    }
-
-    /// The pipeline selected by the last [`Self::prepare_resolve`].
-    pub fn resolve(&self) -> &RenderPipeline {
-        &self.resolve.as_ref().unwrap().1
+        let pipeline = pipeline(
+            &self.device,
+            &self.resolve_shader,
+            "fs_main",
+            &[Some(&self.resolve_layout)],
+            format,
+            // The shader writes final bytes; blending would re-encode them.
+            BlendState::REPLACE,
+        );
+        cache.push((format, pipeline.clone()));
+        pipeline
     }
 }
 

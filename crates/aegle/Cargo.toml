@@ -11,9 +11,10 @@ default = ["desktop"]
 # System accessibility adapters are opt-in: `unix-accessibility` (AT-SPI over
 # zbus) and `windows-accessibility` (UI Automation); `accessibility` alone
 # exports the semantic tree without a platform adapter.
-desktop = ["native", "software", "system-fonts", "markup", "motion"]
+desktop = ["native", "software", "system-fonts", "markup", "motion", "effects", "colrv1"]
 native = ["wayland", "windows"]
 motion = ["aegle-app/motion", "aegle-loader?/motion"]
+effects = ["aegle-app/effects"]
 markup = ["dep:aegle-macros", "dep:aegle-loader"]
 wayland = ["aegle-app/wayland", "aegle-loader?/wayland"]
 windows = ["aegle-app/windows", "aegle-loader?/windows"]
@@ -24,12 +25,21 @@ system-fonts = ["aegle-app/system-fonts"]
 accessibility = ["aegle-app/accessibility"]
 windows-accessibility = ["aegle-app/windows-accessibility"]
 unix-accessibility = ["aegle-app/unix-accessibility"]
+# Extra image formats beyond the always-available PNG, in `aegle::image`.
+jpeg = ["dep:aegle-image", "aegle-image/jpeg"]
+webp = ["dep:aegle-image", "aegle-image/webp"]
+gif = ["dep:aegle-image", "aegle-image/gif"]
+# Also renders OpenType-SVG glyphs.
+svg = ["dep:aegle-image", "aegle-image/svg", "aegle-glyph/svg"]
+# COLRv1 gradient/composite color glyphs.
+colrv1 = ["aegle-glyph/colrv1"]
 
 [dependencies]
 aegle-app.workspace = true
 aegle-glyph = { workspace = true, features = ["scene"] }
 aegle-macros = { workspace = true, optional = true }
 aegle-loader = { workspace = true, optional = true }
+aegle-image = { workspace = true, optional = true }
 
 [dev-dependencies]
 aegle-text.workspace = true

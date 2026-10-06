@@ -1,7 +1,7 @@
 use skrifa::{MetadataProvider, instance::Size, raw::TableProvider};
 use swash::{
     scale::{ScaleContext, outline::Outline},
-    zeno::{Mask, Origin, Scratch},
+    zeno::{Angle, Mask, Origin, Scratch, Transform},
 };
 
 use crate::{CacheLimits, Content, FontData, GlyphError, Image, Placement, RasterOptions};
@@ -48,21 +48,59 @@ impl Rasterizer {
         {
             return crate::bitmap::render(bitmap, metrics.units_per_em, options, limits, reserve);
         }
-        if parsed
+        if let Some(color) = parsed
             .color_glyphs()
             .get(glyph.into())
-            .is_some_and(|c| matches!(c.format(), skrifa::color::ColorGlyphFormat::ColrV1))
+            .filter(|c| matches!(c.format(), skrifa::color::ColorGlyphFormat::ColrV1))
         {
-            return Err(GlyphError::UnsupportedGlyph);
+            #[cfg(feature = "colrv1")]
+            {
+                let palette = font.color_palettes().next();
+                return crate::colrv1::render(
+                    crate::colrv1::Request {
+                        glyph: color,
+                        outlines: parsed.outline_glyphs(),
+                        coords: options.normalized_coords,
+                        units_per_em: f32::from(metrics.units_per_em),
+                        size: options.size,
+                        offset: options.offset,
+                        palette: palette
+                            .map(|p| (0..p.len()).map(|i| p.get(i)).collect())
+                            .unwrap_or_default(),
+                        foreground: options.foreground,
+                        max_bytes: limits.image_bytes,
+                    },
+                    reserve,
+                );
+            }
+            #[cfg(not(feature = "colrv1"))]
+            {
+                let _ = color;
+                return Err(GlyphError::UnsupportedGlyph);
+            }
         }
         if let Ok(svg) = parsed.svg() {
-            let documents = svg
-                .svg_document_list()
-                .map_err(|_| GlyphError::InvalidFont)?;
-            if documents.document_records().iter().any(|record| {
-                record.start_glyph_id().to_u16() <= glyph && record.end_glyph_id().to_u16() >= glyph
-            }) {
-                return Err(GlyphError::UnsupportedGlyph);
+            if let Some(document) = svg
+                .glyph_data(glyph.into())
+                .map_err(|_| GlyphError::InvalidFont)?
+            {
+                #[cfg(feature = "svg")]
+                return crate::svg::render(
+                    crate::svg::Request {
+                        data: document,
+                        glyph,
+                        units_per_em: f32::from(metrics.units_per_em),
+                        size: options.size,
+                        offset: options.offset,
+                        max_bytes: limits.image_bytes,
+                    },
+                    reserve,
+                );
+                #[cfg(not(feature = "svg"))]
+                {
+                    let _ = document;
+                    return Err(GlyphError::UnsupportedGlyph);
+                }
             }
         }
         let mut scaler = self
@@ -75,6 +113,15 @@ impl Rasterizer {
         let color = scaler.scale_color_outline_into(glyph, &mut self.outline);
         if !color && !scaler.scale_outline_into(glyph, &mut self.outline) {
             return Err(GlyphError::UnsupportedGlyph);
+        }
+        if options.embolden {
+            let strength = options.size / 32.0;
+            self.outline.embolden(strength, strength);
+        }
+        if options.skew != 0 {
+            let angle = Angle::from_degrees(f32::from(options.skew));
+            self.outline
+                .transform(&Transform::skew(angle, Angle::from_degrees(0.0)));
         }
         let offset = [options.offset[0], -options.offset[1]];
         if self

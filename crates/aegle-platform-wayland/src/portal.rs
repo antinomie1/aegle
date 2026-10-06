@@ -1,7 +1,8 @@
 //! Minimal session-bus client for the XDG desktop portal appearance settings.
 //!
-//! It authenticates with EXTERNAL credentials, reads `color-scheme`, `contrast`
-//! and `reduced-motion` with a short bounded wait, then follows `SettingChanged`
+//! It authenticates with EXTERNAL credentials, reads `color-scheme`, `contrast`,
+//! `reduced-motion` and GNOME's `text-scaling-factor` with a short bounded wait,
+//! then follows `SettingChanged`
 //! signals from the event loop. Only the few message shapes involved are
 //! encoded or decoded; anything else is ignored. A missing bus or portal leaves
 //! preferences unknown instead of failing the Wayland connection.
@@ -20,10 +21,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMESPACE: &str = "org.freedesktop.appearance";
-const KEYS: [&str; 3] = ["color-scheme", "contrast", "reduced-motion"];
+const NAMESPACES: [&str; 2] = ["org.freedesktop.appearance", "org.gnome.desktop.interface"];
+const KEYS: [(&str, &str); 4] = [
+    (NAMESPACES[0], "color-scheme"),
+    (NAMESPACES[0], "contrast"),
+    (NAMESPACES[0], "reduced-motion"),
+    (NAMESPACES[1], "text-scaling-factor"),
+];
 /// Serial of the first ReadOne request; the others follow in `KEYS` order.
-const FIRST_READ: u32 = 3;
+const FIRST_READ: u32 = 4;
 /// Larger messages are not settings traffic; the connection is dropped.
 const MESSAGE_LIMIT: usize = 64 * 1024;
 /// Bounds startup when the portal is slow to activate; later replies still apply.
@@ -66,12 +72,14 @@ pub(crate) fn connect(preferences: &mut Preferences) -> Option<(UnixStream, Port
     let mut out = b"BEGIN\r\n".to_vec();
     let (bus, bus_path) = ("org.freedesktop.DBus", "/org/freedesktop/DBus");
     call(&mut out, 1, bus, bus_path, bus, "Hello", &[]);
-    let rule = format!(
-        "type='signal',interface='org.freedesktop.portal.Settings',\
-         member='SettingChanged',arg0='{NAMESPACE}'"
-    );
-    call(&mut out, 2, bus, bus_path, bus, "AddMatch", &[&rule]);
-    for (serial, key) in (FIRST_READ..).zip(KEYS) {
+    for (serial, namespace) in (2..).zip(NAMESPACES) {
+        let rule = format!(
+            "type='signal',interface='org.freedesktop.portal.Settings',\
+             member='SettingChanged',arg0='{namespace}'"
+        );
+        call(&mut out, serial, bus, bus_path, bus, "AddMatch", &[&rule]);
+    }
+    for (serial, (namespace, key)) in (FIRST_READ..).zip(KEYS) {
         call(
             &mut out,
             serial,
@@ -79,7 +87,7 @@ pub(crate) fn connect(preferences: &mut Preferences) -> Option<(UnixStream, Port
             "/org/freedesktop/portal/desktop",
             "org.freedesktop.portal.Settings",
             "ReadOne",
-            &[NAMESPACE, key],
+            &[namespace, key],
         );
     }
     (&stream).write_all(&out).ok()?;
@@ -161,7 +169,7 @@ fn apply(message: &[u8], pending: &mut u8, preferences: &mut Preferences) -> Opt
         }
     }
     reader.align(8);
-    let (key, value) = match message[1] {
+    let (index, value) = match message[1] {
         // A method return or error answering one of our ReadOne calls.
         2 | 3 => {
             let index = reply?.checked_sub(FIRST_READ)? as usize;
@@ -170,28 +178,31 @@ fn apply(message: &[u8], pending: &mut u8, preferences: &mut Preferences) -> Opt
             }
             *pending &= !(1 << index);
             let value = (message[1] == 2 && signature == "v")
-                .then(|| reader.variant_u32())
+                .then(|| reader.variant_number())
                 .flatten();
-            (KEYS[index], value)
+            (index, value)
         }
         4 if member == Some("SettingChanged") && signature == "ssv" => {
-            if reader.string()? != NAMESPACE {
-                return None;
-            }
+            let namespace = reader.string()?;
             let key = reader.string()?;
-            (key, reader.variant_u32())
+            let index = KEYS.iter().position(|entry| *entry == (namespace, key))?;
+            (index, reader.variant_number())
         }
         _ => return None,
     };
     // Portal values: color-scheme 1 dark, 2 light, 0 no preference;
-    // contrast and reduced-motion 1 means requested.
-    match key {
+    // contrast and reduced-motion 1 means requested; the scaling factor is a double.
+    match KEYS[index].1 {
         "color-scheme" => {
-            preferences.dark = value.and_then(|v| (v == 1 || v == 2).then_some(v == 1))
+            preferences.dark = value.and_then(|v| (v == 1.0 || v == 2.0).then_some(v == 1.0))
         }
-        "contrast" => preferences.high_contrast = value.map(|v| v == 1),
-        "reduced-motion" => preferences.reduced_motion = value.map(|v| v == 1),
-        _ => {}
+        "contrast" => preferences.high_contrast = value.map(|v| v == 1.0),
+        "reduced-motion" => preferences.reduced_motion = value.map(|v| v == 1.0),
+        _ => {
+            preferences.text_scale = value
+                .filter(|v| (0.5..=4.0).contains(v))
+                .map(|v| (v * 100.0).round() as u16)
+        }
     }
     Some(())
 }
@@ -320,8 +331,21 @@ impl<'a> Reader<'a> {
         let len = self.byte()? as usize;
         self.text(len)
     }
-    fn variant_u32(&mut self) -> Option<u32> {
-        (self.signature()? == "u").then(|| self.u32()).flatten()
+    /// Reads a `u` or `d` variant as a number.
+    fn variant_number(&mut self) -> Option<f64> {
+        match self.signature()? {
+            "u" => self.u32().map(f64::from),
+            "d" => {
+                self.align(8);
+                let bytes = self.take(8)?.try_into().ok()?;
+                Some(if self.big {
+                    f64::from_be_bytes(bytes)
+                } else {
+                    f64::from_le_bytes(bytes)
+                })
+            }
+            _ => None,
+        }
     }
     /// Skips one basic header value.
     fn skip(&mut self, kind: u8) -> Option<()> {

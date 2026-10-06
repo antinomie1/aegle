@@ -10,7 +10,7 @@ use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Kind, PropertyName,
 
 use crate::{
     Data, RuntimeError,
-    eval::{Env, Param, eval, truth},
+    eval::{Emit, Env, Param, Slot, eval, truth},
     handle::{Handle, apply, consumed, create, listen},
     reactive::Effect,
 };
@@ -70,10 +70,22 @@ pub(crate) fn children(
                     block,
                 )?;
             }
-            Child::For(list, body) => {
+            Child::For(list, key, body) => {
                 let wrapper = wrapper(parent)?;
                 created.push(Handle::Container(wrapper.clone()));
-                repeat(list.clone(), body.clone(), wrapper, parent, env, block)?;
+                repeat(
+                    (list.clone(), key.clone()),
+                    body.clone(),
+                    wrapper,
+                    parent,
+                    env,
+                    block,
+                )?;
+            }
+            Child::Slot => {
+                if let Some(slot) = &env.slot {
+                    self::children(&slot.children, parent, &slot.env, block, created, None)?;
+                }
             }
         }
     }
@@ -93,19 +105,42 @@ pub(crate) fn element(
     let kind = match element.kind {
         ElementKind::Builtin(kind) => kind,
         ElementKind::Component(template) => {
-            let params = env.program.templates[template]
+            let program = &env.shared.checked;
+            let params = program.templates[template]
                 .params
                 .iter()
                 .zip(&element.arguments);
             let params = params
                 .map(|((_, _, default), argument)| match argument {
                     Some(expr) => Ok(Param::Bound(expr.clone(), env.clone())),
-                    None => eval(default.as_ref().unwrap(), env, None, None).map(Param::Value),
+                    None => eval(default.as_ref().unwrap(), env, None, None)
+                        .map(Param::Value)
+                        .map_err(|error| env.locate(error)),
                 })
                 .collect::<Result<_>>()?;
-            let env = Env::instantiate(env.program.clone(), template, params, &|_, _| None)?;
-            let root = &env.program.templates[template].root;
-            return self::element(root, parent, &env, block, created, None);
+            let emits = (0..program.templates[template].events.len())
+                .map(|event| {
+                    element
+                        .handlers
+                        .iter()
+                        .find(|h| h.event == event)
+                        .map(|h| Emit {
+                            steps: h.steps.clone(),
+                            binds_value: h.binds_value,
+                            env: env.clone(),
+                        })
+                })
+                .collect();
+            let mut inner =
+                Env::instantiate(env.shared.clone(), template, params, emits, &|_, _| None)?;
+            inner.slot = element.slot.as_ref().map(|children| {
+                Rc::new(Slot {
+                    children: children.clone(),
+                    env: env.clone(),
+                })
+            });
+            let root = &program.templates[template].root;
+            return self::element(root, parent, &inner, block, created, None);
         }
     };
     let handle = create(kind, element, parent.container)?;
@@ -159,13 +194,15 @@ fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Resu
         if !handle.node().is_alive() {
             return Ok(());
         }
-        let value = eval(&expr, &env, Some(effect), None)?;
+        let value = eval(&expr, &env, Some(effect), None).map_err(|e| env.locate(e))?;
         if last.as_ref() != Some(&value) {
             let literal = match &value {
                 Data::Bool(value) => Value::Bool(*value),
                 Data::Float(value) => Value::Number(*value),
                 Data::String(text) => Value::String(text.to_string()),
-                Data::Int(_) | Data::List(_) => unreachable!("checked binding types"),
+                Data::Int(_) | Data::List(_) | Data::Record(_) => {
+                    unreachable!("checked binding types")
+                }
             };
             apply(&handle, name, &literal)?;
             last = Some(value);
@@ -250,7 +287,7 @@ fn conditional(
         if !wrapper.is_alive() {
             return Ok(());
         }
-        let value = truth(eval(&condition, &env, Some(effect), None)?);
+        let value = truth(eval(&condition, &env, Some(effect), None).map_err(|e| env.locate(e))?);
         if shown == Some(value) {
             return Ok(());
         }
@@ -270,8 +307,8 @@ fn conditional(
     Ok(())
 }
 
-/// A `for` key: list items are ints or strings.
-#[derive(Hash, PartialEq, Eq)]
+/// A `for` key: ints or strings.
+#[derive(Clone, Hash, PartialEq, Eq)]
 enum Key {
     Int(i64),
     String(Rc<str>),
@@ -282,19 +319,20 @@ impl From<&Data> for Key {
         match data {
             Data::Int(value) => Self::Int(*value),
             Data::String(value) => Self::String(value.clone()),
-            _ => unreachable!("checked list item types"),
+            _ => unreachable!("checked key types"),
         }
     }
 }
 
 struct Row {
+    key: Key,
     item: Data,
     handles: Vec<Handle>,
     block: Block,
 }
 
 fn repeat(
-    list: Rc<Expr>,
+    (list, key): (Rc<Expr>, Option<Rc<Expr>>),
     body: Rc<[Child]>,
     wrapper: Container,
     parent: &Parent,
@@ -307,21 +345,38 @@ fn repeat(
         if !wrapper.is_alive() {
             return Ok(());
         }
-        let Data::List(items) = eval(&list, &env, Some(effect), None)? else {
+        let Data::List(items) = eval(&list, &env, Some(effect), None).map_err(|e| env.locate(e))?
+        else {
             unreachable!("checked list type")
         };
+        if items.len() > env.shared.limits.get().rows {
+            let message = "list exceeds the row limit; the list is unchanged";
+            return Err(env.locate(RuntimeError::new(list.span, message).into()));
+        }
+        let mut keyed = Vec::with_capacity(items.len());
         let mut keys = HashSet::with_capacity(items.len());
-        if !items.iter().all(|item| keys.insert(Key::from(item))) {
-            return Err(
-                RuntimeError::new(list.span, "duplicate for item; the list is unchanged").into(),
-            );
+        for item in items.iter() {
+            let item_key = match &key {
+                Some(key) => {
+                    let inner = env.with_item(item.clone());
+                    eval(key, &inner, Some(effect), None).map_err(|e| env.locate(e))?
+                }
+                None => item.clone(),
+            };
+            let item_key = Key::from(&item_key);
+            if !keys.insert(item_key.clone()) {
+                let message = "duplicate for key; the list is unchanged";
+                return Err(env.locate(RuntimeError::new(list.span, message).into()));
+            }
+            keyed.push((item_key, item));
         }
         // Retained rows keep their controls and local state; new rows are built
-        // at the end, so any other order needs one reparenting pass.
+        // at the end, so any other order needs one reparenting pass. A row whose
+        // item value changed under the same key is rebuilt.
         let mut old: HashMap<Key, (usize, Row)> = rows
             .drain(..)
             .enumerate()
-            .map(|(index, row)| (Key::from(&row.item), (index, row)))
+            .map(|(index, row)| (row.key.clone(), (index, row)))
             .collect();
         let (mut previous, mut built, mut moved) = (None, false, false);
         let parent = Parent {
@@ -329,15 +384,19 @@ fn repeat(
             row,
             gap,
         };
-        for item in items.iter() {
-            if let Some((index, retained)) = old.remove(&Key::from(item)) {
-                moved |= built || previous.is_some_and(|previous| index < previous);
-                previous = Some(index);
-                rows.push(retained);
-                continue;
+        for (item_key, item) in keyed {
+            if let Some((index, mut retained)) = old.remove(&item_key) {
+                if retained.item == *item {
+                    moved |= built || previous.is_some_and(|previous| index < previous);
+                    previous = Some(index);
+                    rows.push(retained);
+                    continue;
+                }
+                clear(&mut retained.handles, &mut retained.block)?;
             }
             built = true;
             let mut row = Row {
+                key: item_key.clone(),
                 item: item.clone(),
                 handles: Vec::new(),
                 block: Block::new(),

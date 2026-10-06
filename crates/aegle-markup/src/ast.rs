@@ -18,6 +18,8 @@ pub struct Document {
     pub uses: Vec<Use>,
     /// `component Name(...) { ... }` declarations, in source order.
     pub components: Vec<Component>,
+    /// `record Name { field: type }` declarations, in source order.
+    pub records: Vec<Record>,
     /// The root component instance, if any.
     pub root: Option<Node>,
 }
@@ -28,6 +30,7 @@ impl Document {
     pub fn is_static(&self) -> bool {
         self.uses.is_empty()
             && self.components.is_empty()
+            && self.records.is_empty()
             && self.root.as_ref().is_none_or(Node::is_static)
     }
 }
@@ -41,6 +44,31 @@ pub struct Use {
     pub span: Span,
 }
 
+/// A named group of typed fields, such as the items of a `list<Task>`.
+///
+/// Fields are `bool`, `int`, `float` or `string`. A value is built with a
+/// positional call, `Task(1, "write")`, and read with `task.title`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Record {
+    /// Case-sensitive name, global to the program like component names.
+    pub name: String,
+    /// Fields in declaration order.
+    pub fields: Vec<(String, Type)>,
+    /// The whole declaration.
+    pub span: Span,
+}
+
+/// An event a component can raise with `emit`, optionally carrying one value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EventDecl {
+    /// Event name.
+    pub name: String,
+    /// Type of the carried value.
+    pub ty: Option<Type>,
+    /// The whole declaration.
+    pub span: Span,
+}
+
 /// A reusable component with typed input parameters and one root node.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Component {
@@ -48,6 +76,8 @@ pub struct Component {
     pub name: String,
     /// Typed parameters in declaration order.
     pub params: Vec<Param>,
+    /// Events the body may `emit`, handled by `on name { ... }` on instances.
+    pub events: Vec<EventDecl>,
     /// The single root node of the component body.
     pub root: Node,
     /// The whole declaration.
@@ -78,8 +108,10 @@ pub enum Type {
     Float,
     /// `string`, UTF-8 text.
     String,
-    /// `list<int>` or `list<string>`; items double as `for` keys.
+    /// `list<T>` of int, string or record items; scalar items double as `for` keys.
     List(Box<Type>),
+    /// A declared `record`, by name.
+    Record(String),
 }
 
 /// A component instance with properties, local declarations and children.
@@ -109,7 +141,7 @@ impl Node {
                 .all(|property| !matches!(property.value, Value::Expr(_)))
             && self.children.iter().all(|item| match item {
                 Item::Node(node) => node.is_static(),
-                Item::If(..) | Item::For(..) => false,
+                Item::If(..) | Item::For(..) | Item::Slot => false,
             })
     }
 }
@@ -121,8 +153,10 @@ pub enum Item {
     Node(Node),
     /// `if condition { ... } else { ... }`.
     If(Expr, Vec<Item>, Vec<Item>),
-    /// `for name in list { ... }`, keyed by each item value.
-    For(String, Expr, Vec<Item>),
+    /// `for name in list key expression { ... }`; scalar items are their own key.
+    For(String, Expr, Option<Expr>, Vec<Item>),
+    /// `slot`: where a component places the children of its instance.
+    Slot,
 }
 
 /// A typed local state declaration.
@@ -143,6 +177,8 @@ pub struct State {
 pub struct Event {
     /// Event name, such as `clicked`.
     pub name: String,
+    /// Name binding the carried value, in `on changed(value) { ... }`.
+    pub param: Option<String>,
     /// Statements run when the event fires.
     pub body: Vec<Statement>,
     /// The whole handler.
@@ -165,6 +201,33 @@ pub enum Statement {
     },
     /// `if condition { ... } else { ... }`.
     If(Expr, Vec<Statement>, Vec<Statement>),
+    /// `let name = value`, visible to the statements after it in this block.
+    Let {
+        /// Local name.
+        name: String,
+        /// Value, evaluated once.
+        value: Expr,
+        /// The whole statement.
+        span: Span,
+    },
+    /// `host.name(arguments)`, calling an action the host registered.
+    Host {
+        /// Action name.
+        name: String,
+        /// Arguments in order.
+        arguments: Vec<Expr>,
+        /// The whole statement.
+        span: Span,
+    },
+    /// `emit name(value)`, raising a declared component event.
+    Emit {
+        /// Event name.
+        name: String,
+        /// Carried value, present exactly when the event declares a type.
+        value: Option<Expr>,
+        /// The whole statement.
+        span: Span,
+    },
 }
 
 /// One property assignment.
@@ -225,10 +288,16 @@ pub enum ExprKind {
     Unary(&'static str, Box<Expr>),
     /// Arithmetic, comparison or logical operator.
     Binary(&'static str, Box<Expr>, Box<Expr>),
-    /// A built-in function: `str`, `len`, `int` or `float`.
+    /// A built-in function (`str`, `len`, `int`, `float`) or a record constructor.
     Call(String, Vec<Expr>),
     /// `[a, b, ...]`.
     List(Vec<Expr>),
+    /// `value.field` before checking.
+    Field(Box<Expr>, String),
+    /// A checked field read: field number of a record value.
+    FieldAt(Box<Expr>, usize),
+    /// A checked record construction: record number and one value per field.
+    Record(usize, Vec<Expr>),
     /// A checked reference.
     Ref(Ref),
 }
@@ -242,6 +311,8 @@ pub enum Ref {
     Param(usize),
     /// Item of an enclosing `for`, outermost first.
     Item(usize),
+    /// A `let` local or the value carried by an event, in declaration order.
+    Local(usize),
 }
 
 /// Explicit parsing budgets; the root counts as one node and one level.

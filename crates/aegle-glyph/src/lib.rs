@@ -16,14 +16,20 @@
 //!
 //! Supports grayscale outlines, COLRv0 palette layers, and embedded PNG/BGRA/
 //! alpha bitmaps. Color sampling and layer composition use linear-light
-//! premultiplied arithmetic, then expose straight sRGB pixels. COLRv1 glyphs
-//! return [`GlyphError::UnsupportedGlyph`]; SVG-in-OpenType is not rendered.
+//! premultiplied arithmetic, then expose straight sRGB pixels. The `colrv1`
+//! feature paints COLRv1 gradients, transforms, clips and composite layers into
+//! one bitmap, and `svg` renders static OpenType-SVG documents without text;
+//! without those features such glyphs return [`GlyphError::UnsupportedGlyph`].
 
 mod bitmap;
 mod cache;
+#[cfg(feature = "colrv1")]
+mod colrv1;
 mod decode;
 mod key;
 mod raster;
+#[cfg(feature = "svg")]
+mod svg;
 #[cfg(feature = "scene")]
 mod transform;
 
@@ -86,6 +92,10 @@ pub struct RasterOptions<'a> {
     /// Straight sRGB RGBA used by foreground layers of a COLR glyph.
     /// Ignored in grayscale mask cache identity, so theme colors share pixels.
     pub foreground: [u8; 4],
+    /// Synthetic bold for fonts without a bold face.
+    pub embolden: bool,
+    /// Synthetic slant in degrees within ±89; positive leans right.
+    pub skew: i8,
 }
 
 impl Default for RasterOptions<'_> {
@@ -96,6 +106,8 @@ impl Default for RasterOptions<'_> {
             normalized_coords: &[],
             hint: true,
             foreground: [0, 0, 0, 255],
+            embolden: false,
+            skew: 0,
         }
     }
 }

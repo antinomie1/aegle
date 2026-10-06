@@ -20,13 +20,13 @@ pub(crate) struct Swapchain {
 impl Swapchain {
     pub fn new(
         device: &Device,
+        surface: &crate::surface::Surface,
         pipeline: &Pipeline,
         width: u32,
         height: u32,
         budget: u64,
         transparent: bool,
     ) -> Result<Option<Self>> {
-        let surface = device.surface.as_ref().unwrap();
         // SAFETY: Native owners and instance keep this surface valid throughout.
         let caps = unsafe {
             surface

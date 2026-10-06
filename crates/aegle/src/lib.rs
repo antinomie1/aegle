@@ -9,6 +9,9 @@
 pub use aegle_app::*;
 /// Bounded PNG decoding into scene images, e.g. `ImageView` sources.
 pub use aegle_glyph::{DecodeError, DecodedImage, decode_image, decode_png};
+/// JPEG, WebP, GIF and SVG decoding, enabled by the matching features.
+#[cfg(any(feature = "jpeg", feature = "webp", feature = "gif", feature = "svg"))]
+pub use aegle_image as image;
 extern crate self as aegle;
 
 /// Compile a `.aegle` file to ordinary retained control construction.

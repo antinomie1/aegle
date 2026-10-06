@@ -9,6 +9,7 @@ description = "Retained imperative UI composition and optional native applicatio
 [features]
 default = []
 motion = ["dep:aegle-motion"]
+effects = ["aegle-widgets/effects"]
 system-fonts = ["aegle-text/system-fonts"]
 accessibility = ["dep:aegle-access", "aegle-text/text-a11y"]
 wayland = ["dep:aegle-platform-wayland", "dep:wayland-client"]

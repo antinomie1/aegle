@@ -1,0 +1,6 @@
+record Item { id: int; name: string }
+Column {
+    state items: list<Item> = [Item(1, "one")]
+    Button { id: add; text: "add"; on clicked { host.audit(len(items)); items += [Item(len(items) + 1, "n")] } }
+    for item in items key item.id { Text { text: item.name } }
+}

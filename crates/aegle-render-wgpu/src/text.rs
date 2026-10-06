@@ -26,6 +26,8 @@ impl Renderer {
                 normalized_coords: run.normalized_coords(),
                 hint: raster.hint(),
                 foreground: [r, g, b, 255],
+                embolden: run.embolden(),
+                skew: run.skew(),
             };
             let mut geometry = None;
             let mut visible = |placement: Placement| {

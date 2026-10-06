@@ -1,4 +1,6 @@
-use crate::{Appearance, Point, Result, Transition, UiError, callbacks::Handler, state::State};
+use crate::{
+    Appearance, Point, Result, Transform, Transition, UiError, callbacks::Handler, state::State,
+};
 use aegle_core::{Dirty, NodeId};
 use aegle_motion::{Interpolate, InvalidValue, Tween};
 use std::{collections::HashMap, time::Duration};
@@ -12,6 +14,10 @@ pub(crate) struct Motion {
     pub active: HashMap<NodeId, Active>,
     /// Running offset transitions; the presented value lives on the element.
     pub moving: HashMap<NodeId, Moving>,
+    /// Running scale/rotation transitions.
+    pub turning: HashMap<NodeId, Turning>,
+    /// Momentum scrolling after a finished touchpad gesture.
+    pub fling: Option<crate::fling::Fling>,
     /// Completion handlers, versioned in the shared callback sequence.
     pub ends: HashMap<NodeId, Handler>,
 }
@@ -31,6 +37,30 @@ pub(crate) struct Moving {
     /// Set by the next refresh, as for paint, so a request made from a callback
     /// starts at the host's current time rather than the last sampled one.
     start: Option<Duration>,
+}
+
+pub(crate) struct Turning {
+    pub tween: Tween<Spin>,
+    start: Option<Duration>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Spin(pub Transform);
+
+impl Interpolate for Spin {
+    fn validate(self) -> std::result::Result<(), InvalidValue> {
+        if self.0.valid() {
+            Ok(())
+        } else {
+            Err(InvalidValue)
+        }
+    }
+    fn interpolate(self, to: Self, progress: f32) -> Self {
+        Self(Transform {
+            scale: self.0.scale.interpolate(to.0.scale, progress),
+            rotation: self.0.rotation.interpolate(to.0.rotation, progress),
+        })
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -146,10 +176,52 @@ impl State {
         Ok(())
     }
 
-    /// Starts offset transitions requested since the last refresh.
+    /// Starts, retargets or snaps a scale/rotation like [`Self::transition_offset`].
+    pub fn transition_spin(&mut self, id: NodeId, target: Transform) -> Result {
+        let element = &self.tree.get(id).unwrap().context;
+        let current = element.spin;
+        let timing = self.motion.tracks.get(&id).map(|track| track.timing);
+        let running = self.motion.turning.get(&id).map(|a| a.tween.target().0);
+        if running == Some(target) || (running.is_none() && current == target) {
+            return Ok(());
+        }
+        if let Some(timing) = timing.filter(|timing| {
+            !self.motion.reduced && !timing.duration.is_zero() && element.effective_visible
+        }) {
+            let tween = Tween::new(Spin(current), Spin(target), timing.duration, timing.easing)?;
+            self.motion
+                .turning
+                .insert(id, Turning { tween, start: None });
+            self.repaint = true;
+            return Ok(());
+        }
+        self.motion.turning.remove(&id);
+        self.set_spin(id, target);
+        if timing.is_some() {
+            self.complete(id);
+        }
+        Ok(())
+    }
+
+    /// Jumps a running scale/rotation to its target. Returns whether one was running.
+    pub fn snap_spin(&mut self, id: NodeId) -> bool {
+        let Some(active) = self.motion.turning.remove(&id) else {
+            return false;
+        };
+        self.set_spin(id, active.tween.target().0);
+        true
+    }
+
+    /// Starts offset and spin transitions requested since the last refresh.
     pub fn start_offsets(&mut self) {
         for moving in self.motion.moving.values_mut() {
             moving.start.get_or_insert(self.motion.now);
+        }
+        for turning in self.motion.turning.values_mut() {
+            turning.start.get_or_insert(self.motion.now);
+        }
+        if let Some(fling) = &mut self.motion.fling {
+            fling.last.get_or_insert(self.motion.now);
         }
     }
 
@@ -167,7 +239,10 @@ impl State {
     /// Queues the completion handler once none of the node's transitions remain.
     pub fn complete(&mut self, id: NodeId) {
         let motion = &self.motion;
-        if !motion.active.contains_key(&id) && !motion.moving.contains_key(&id) {
+        if !motion.active.contains_key(&id)
+            && !motion.moving.contains_key(&id)
+            && !motion.turning.contains_key(&id)
+        {
             if let Some(handler) = motion.ends.get(&id) {
                 self.pending.push_back((id, handler.version));
             }
@@ -179,13 +254,35 @@ impl State {
             return Err(UiError::InvalidValue.into());
         }
         self.motion.now = now;
+        self.step_fling(now)?;
         let mut moved = false;
         let Motion {
             moving,
+            turning,
             active,
             ends,
             ..
         } = &mut self.motion;
+        turning.retain(|id, turn| {
+            let Some(start) = turn.start else {
+                return true;
+            };
+            let element = &mut self.tree.get_mut(*id).unwrap().context;
+            let elapsed = now - start;
+            let finished = turn.tween.finished(elapsed) || !element.effective_visible;
+            element.spin = if finished {
+                turn.tween.target().0
+            } else {
+                turn.tween.sample(elapsed).0
+            };
+            moved = true;
+            if finished && !active.contains_key(id) && !moving.contains_key(id) {
+                if let Some(handler) = ends.get(id) {
+                    self.pending.push_back((*id, handler.version));
+                }
+            }
+            !finished
+        });
         moving.retain(|id, tween| {
             let Some(start) = tween.start else {
                 return true;
@@ -200,7 +297,7 @@ impl State {
                 tween.tween.sample(elapsed)
             };
             moved = true;
-            if finished && !active.contains_key(id) {
+            if finished && !active.contains_key(id) && !turning.contains_key(id) {
                 if let Some(handler) = ends.get(id) {
                     self.pending.push_back((*id, handler.version));
                 }
@@ -211,7 +308,12 @@ impl State {
         self.repaint |= moved;
         let tracks = &mut self.motion.tracks;
         let tree = &mut self.tree;
-        let (moving, ends, pending) = (&self.motion.moving, &self.motion.ends, &mut self.pending);
+        let (moving, turning, ends, pending) = (
+            &self.motion.moving,
+            &self.motion.turning,
+            &self.motion.ends,
+            &mut self.pending,
+        );
         self.motion.active.retain(|id, active| {
             let elapsed = now - active.start;
             let next = active.tween.sample(elapsed).0;
@@ -229,7 +331,7 @@ impl State {
                     .expect("animation belongs to a live node");
             }
             let finished = active.tween.finished(elapsed);
-            if finished && !moving.contains_key(id) {
+            if finished && !moving.contains_key(id) && !turning.contains_key(id) {
                 if let Some(handler) = ends.get(id) {
                     pending.push_back((*id, handler.version));
                 }

@@ -85,7 +85,7 @@ impl Wayland {
         }
         let size = window.info.buffer_size().map_err(PresentError::Platform)?;
         let surface = window.window.wl_surface();
-        surface.set_buffer_scale(window.info.scale as i32);
+        window.apply_scale();
         // The external API commits this request with its buffer attachment. A
         // failed acquisition leaves it pending for the next successful commit.
         if !window.frame_requested {

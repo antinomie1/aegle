@@ -8,7 +8,7 @@ use aegle_app::{
 };
 use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
 
-use crate::{Data, eval::Env, eval::exec};
+use crate::{Data, eval::Env, eval::handle as run};
 
 /// A typed handle to a control created from markup.
 #[derive(Clone)]
@@ -278,22 +278,22 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
 pub(crate) fn listen(handle: &Handle, event: EventKind, steps: Rc<[Step]>, env: Env) -> Result {
     match (event, handle) {
         (EventKind::Clicked, Handle::Button(button)) => {
-            button.on_click(move |button| exec(&steps, &env, &Handle::Button(button)))
+            button.on_click(move |button| run(&steps, &env, &Handle::Button(button)))
         }
         (EventKind::Changed, Handle::CheckBox(control)) => {
-            control.on_change(move |control| exec(&steps, &env, &Handle::CheckBox(control)))
+            control.on_change(move |control| run(&steps, &env, &Handle::CheckBox(control)))
         }
         (EventKind::Changed, Handle::Switch(control)) => {
-            control.on_change(move |control| exec(&steps, &env, &Handle::Switch(control)))
+            control.on_change(move |control| run(&steps, &env, &Handle::Switch(control)))
         }
         (EventKind::Changed, Handle::Radio(control)) => {
-            control.on_change(move |control| exec(&steps, &env, &Handle::Radio(control)))
+            control.on_change(move |control| run(&steps, &env, &Handle::Radio(control)))
         }
         (EventKind::Changed, Handle::Slider(control)) => {
-            control.on_change(move |control| exec(&steps, &env, &Handle::Slider(control)))
+            control.on_change(move |control| run(&steps, &env, &Handle::Slider(control)))
         }
         (EventKind::Submitted, Handle::TextField(field)) => {
-            field.on_submit(move |field| exec(&steps, &env, &Handle::TextField(field)))
+            field.on_submit(move |field| run(&steps, &env, &Handle::TextField(field)))
         }
         _ => unreachable!("checked event kinds"),
     }

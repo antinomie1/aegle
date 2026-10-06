@@ -2,6 +2,7 @@
 #![allow(unsafe_code)]
 use aegle_scene::Color;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use std::rc::Rc;
 use wgpu::{
     CompositeAlphaMode, CurrentSurfaceTexture, PresentMode, SurfaceConfiguration,
     SurfaceTargetUnsafe, TextureFormat, TextureUsages,
@@ -16,6 +17,7 @@ pub struct WindowRenderer<W> {
     // Declaration order drops the device, then the surface, then the window.
     renderer: Renderer,
     surface: wgpu::Surface<'static>,
+    instance: wgpu::Instance,
     format: TextureFormat,
     alpha: CompositeAlphaMode,
     configured: [u32; 2],
@@ -33,6 +35,23 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
     /// Handle access and all renderer calls must obey the platform's thread rules.
     /// Raw-window-handle's short borrowed handles alone do not prove this lifetime.
     pub unsafe fn new(window: W, options: Options) -> Result<Self> {
+        // SAFETY: forwarded caller guarantee.
+        unsafe { Self::build(window, options, None) }
+    }
+
+    /// Creates a window renderer on the instance, adapter, device and pipelines
+    /// another window already created. Each window keeps its own swapchain and
+    /// glyph atlas. The adapter must support this window's surface.
+    ///
+    /// # Safety
+    /// Same contract as [`Self::new`], and every renderer sharing the device must
+    /// run on one thread.
+    pub unsafe fn with_gpu(window: W, options: Options, shared: &SharedGpu) -> Result<Self> {
+        // SAFETY: forwarded caller guarantee.
+        unsafe { Self::build(window, options, Some(shared)) }
+    }
+
+    unsafe fn build(window: W, options: Options, shared: Option<&SharedGpu>) -> Result<Self> {
         let display = window
             .display_handle()
             .map_err(|_| Error::Unsupported("native display handle unavailable"))?
@@ -41,8 +60,10 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
             .window_handle()
             .map_err(|_| Error::Unsupported("native window handle unavailable"))?
             .as_raw();
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+        let instance = shared.map_or_else(
+            || wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env()),
+            |shared| shared.instance.clone(),
+        );
         // SAFETY: the caller guarantees both handles outlive `self`, which owns
         // the surface and drops it before `_window`.
         let surface = unsafe {
@@ -52,8 +73,19 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
             })
         }
         .map_err(Error::Surface)?;
-        let (gpu, capabilities) = Gpu::connect(&instance, Some(&surface))?;
-        let capabilities = capabilities.unwrap();
+        let (gpu, capabilities) = match shared {
+            Some(shared) => {
+                if !shared.gpu.adapter.is_surface_supported(&surface) {
+                    return Err(Error::Unsupported("shared adapter cannot present here"));
+                }
+                let capabilities = surface.get_capabilities(&shared.gpu.adapter);
+                (shared.gpu.clone(), capabilities)
+            }
+            None => {
+                let (gpu, capabilities) = Gpu::connect(&instance, Some(&surface))?;
+                (Rc::new(gpu), capabilities.unwrap())
+            }
+        };
         // The resolve pass writes encoded bytes, so an sRGB format would encode twice.
         let format = capabilities
             .formats
@@ -72,11 +104,30 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
         Ok(Self {
             renderer: Renderer::with_gpu(gpu, options),
             surface,
+            instance,
             format,
             alpha,
             configured: [0; 2],
             _window: window,
         })
+    }
+}
+
+/// A wgpu instance, adapter, device, queue and pipelines shared by window
+/// renderers on one thread, from [`WindowRenderer::shared_gpu`].
+#[derive(Clone)]
+pub struct SharedGpu {
+    instance: wgpu::Instance,
+    gpu: Rc<Gpu>,
+}
+
+impl<W> WindowRenderer<W> {
+    /// A handle to this renderer's GPU for [`WindowRenderer::with_gpu`].
+    pub fn shared_gpu(&self) -> SharedGpu {
+        SharedGpu {
+            instance: self.instance.clone(),
+            gpu: self.renderer.gpu.clone(),
+        }
     }
 }
 

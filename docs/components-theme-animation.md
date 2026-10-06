@@ -1,6 +1,6 @@
 # 默认组件、主题与动画
 
-状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；任意行为组件扩展、缩放/旋转动画和文本缩放仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
+状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；缩放/旋转动画、逐 token 的 `ThemeOverride`、系统文本缩放、惯性滚动和渐变/阴影图像已实现；任意行为组件扩展仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
 
 ## 当前行为接口
 
@@ -72,7 +72,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `Ui::set_theme` 和 `Window::set_theme` 更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析。
 
-`Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。局部主题是整份快照，不按 token 部分覆盖；没有 token 注册表。以下是进一步扩展时的目标契约。
+`Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。`Node::set_theme_override(Some(ThemeOverride))` 则只替换指定字段，其余沿父级解析主题；它随父级或 `Ui::set_theme` 的变化重新解析，嵌套覆盖逐层叠加，`set_theme` 的快照会替换它。没有 token 注册表。以下是进一步扩展时的目标契约。
 
 主题使用类型化 token：Color、Length、Font、Radius、Duration 等。Rust 常量提供类型检查，标记使用具名 token。名称只在主题/注册阶段解析为紧凑索引，不给每个控件复制一份字符串样式字典。
 
@@ -84,7 +84,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 默认跟随系统深浅色、对比度、文本缩放与减少动态效果；应用可显式选 Light/Dark/System。系统没有提供某项偏好时用默认值并允许应用配置。系统字体缩放与设备像素缩放各应用一次，不能重复放大。
 
-当前原生 App 从平台读取 `Preferences { dark, high_contrast, reduced_motion }`（各为 `Option<bool>`，None 表示系统未报告）。Linux 经会话总线读取 XDG desktop portal 的 `org.freedesktop.appearance`（color-scheme、contrast、reduced-motion）并监听 SettingChanged；Windows 读取 `AppsUseLightTheme`、`SPI_GETHIGHCONTRAST` 与 `SPI_GETCLIENTAREAANIMATION`，在 `WM_SETTINGCHANGE` 时重读。窗口主题按 high_contrast_theme → dark_theme → theme 解析，对应偏好为 true 且选项不为 None 时才采用；显式选择浅色或深色即把其他两项设为 None 或相同主题。`reduced_motion: None` 跟随系统，未报告时为 false。偏好变化只更新仍等于变化前解析值的窗口主题/减少动态效果，应用用 `Window::set_theme` 等显式设置的值保留。文本缩放尚未读取。无窗口 Ui 不读取系统偏好。
+当前原生 App 从平台读取 `Preferences { dark, high_contrast, reduced_motion }`（各为 `Option<bool>`，None 表示系统未报告）。Linux 经会话总线读取 XDG desktop portal 的 `org.freedesktop.appearance`（color-scheme、contrast、reduced-motion）并监听 SettingChanged；Windows 读取 `AppsUseLightTheme`、`SPI_GETHIGHCONTRAST` 与 `SPI_GETCLIENTAREAANIMATION`，在 `WM_SETTINGCHANGE` 时重读。窗口主题按 high_contrast_theme → dark_theme → theme 解析，对应偏好为 true 且选项不为 None 时才采用；显式选择浅色或深色即把其他两项设为 None 或相同主题。`reduced_motion: None` 跟随系统，未报告时为 false。偏好变化只更新仍等于变化前解析值的窗口主题/减少动态效果，应用用 `Window::set_theme` 等显式设置的值保留。`Preferences::text_scale`（百分比，50–400）来自 Windows 的 `TextScaleFactor` 与 portal 的 GNOME `text-scaling-factor`；`AppOptions::text_scale` 显式覆盖，原生 App 把解析后主题的 `font_size` 与 `control_height` 按它缩放，且与设备像素缩放各应用一次。系统未报告时保持 100%。无窗口 Ui 不读取系统偏好。
 
 ## 当前外观过渡
 
@@ -126,3 +126,9 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 | 动效 | 过渡、显式动画、取消/完成与可选弹簧 |
 
 组件宏和小型示例见 [Rust API](rust-api.md)。一次 MD3 风格 Button/TextField/Switch 示例必须共同覆盖主题、动效、键盘、CJK、IME 和语义，不能只验证静态外观。
+
+## 呈现变换、惯性与图像特效
+
+- `Node::set_transform(Transform { scale, rotation })`：scale 为有限正数，rotation 为弧度，以节点边界中心为原点，子树继承。它只是呈现层变换：布局、滚动范围和 `bounds` 不变；`visit_scenes` 给出的矩阵包含它，命中与指针局部坐标做逆映射，滚动视口的裁剪取变换后的外包框（旋转时是近似），IME 锚点取外包框，AccessKit 节点变换按中心旋转/缩放。有过渡策略时与位移共用补间和完成回调，减少动态效果时直接到目标。
+- `Ui::fling(position, velocity)` 与 `stop_fling`：速度单位为逻辑像素/秒，τ=325 ms 的指数衰减，经 `advance_animations` 推进（需要 motion），低于 10 px/s、视口不能再动、新的滚动或按下时结束。
+- `aegle-widgets/effects`（facade 默认启用）：`linear_gradient`、`radial_gradient`、`shadow` 生成共享 `Image`，颜色在预乘线性光中插值；用 `SceneBuilder::image` 或 `ImageView` 绘制，所有后端复用既有图像路径。

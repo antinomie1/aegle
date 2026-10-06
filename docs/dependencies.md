@@ -24,7 +24,9 @@
 | Unix 无障碍传输 | accesskit_atspi_common 0.19.1、atspi 0.29.0、zbus 5.19.0 | 复用 AccessKit 适配；采用 async-io，无 Tokio |
 | 路径 | 软件复用 tiny-skia，Vulkan 复用 zeno 0.3.3（swash 已依赖） | CPU 覆盖率光栅，不引入 Lyon 或三角细分 |
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
-| SVG | resvg/usvg 0.48.1 | 构建期优先；运行时可选，关闭 text/system-fonts 等默认 feature |
+| SVG | resvg/usvg 0.48.1 | 仅 `aegle-image/svg` 与 `aegle-glyph/svg`：关闭 text、system-fonts 等默认 feature，glyph 侧启用 svgz；不处理 SVG 文字、外部文件或网络资源 |
+| 其他图像格式 | zune-jpeg 0.5、image-webp 0.2、gif 0.14 | 仅 `aegle-image` 的 `jpeg`/`webp`/`gif` feature；都先检查尺寸与字节预算再分配；`image` crate 只作为测试编码器的开发依赖 |
+| COLRv1 字形 | tiny-skia 0.12.0（已在 workspace） | `aegle-glyph/colrv1` 光栅 skrifa 的绘制回调，不增加新包 |
 | 标记编译宏 | syn 2、quote 1、proc-macro2 1、proc-macro-crate 3.5 | 仅编译期；Rust 语法/生成与 facade 重命名识别复用现成库 |
 
 设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何/文字依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。Windows 编译与运行证据、GPU 原生呈现验证另见实现状态，不能将其等同于全部实机验收；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
@@ -37,7 +39,7 @@ Wayland 库本身没有 AccessKit 正常依赖；`example-accessibility` 只为�
 
 `aegle-glyph` 用 Swash std/render 和与 Parley 相同的 Skrifa 0.44 解析字体；使用 png 的有界解码接口处理嵌入 PNG，避免无上限的中间解码分配。`aegle-render-software/text` 与 `aegle-render-vulkan/text` 显式引入此依赖闭包和 scene/text，均不依赖 Parley；默认纯几何构建没有字体栈或 PNG。Vulkan 图集索引复用已有 hashbrown 0.17，不增加另一套字体解析或栅格库。Cargo 测试/示例的 dev-dependencies 不代表库的发布依赖，仍需核查最终应用的 feature 合并。
 
-SVG 默认以路径图标/构建期资产为主；可选运行时 resvg 不处理 SVG text、外部 URL 或网络资源。需要 SVG 文字时在构建期转轮廓。构建期转换为位图需要指定尺寸/缩放档位，不能宣称与任意动态缩放完全等价。
+SVG 默认以路径图标/构建期资产为主；可选运行时 resvg（`aegle-image/svg`、OpenType-SVG 字形的 `aegle-glyph/svg`）不处理 SVG text、外部 URL 或网络资源。需要 SVG 文字时在构建期转轮廓。构建期转换为位图需要指定尺寸/缩放档位，不能宣称与任意动态缩放完全等价。
 
 `aegle-markup` 的语法很小，采用直接流式词法分析和递归下降，表达式按优先级爬升解析，不引入通用脚本或表达式框架；`aegle-loader` 以小型树解释已检查的表达式，同样没有第三方依赖。`aegle-macros` 则复用 syn/quote 和 proc-macro-crate 的清单解析，避免重复实现 Rust 参数语法和重命名依赖规则；这些包只参与构建，不随应用运行。`markup` 的目标依赖闭包与发布体积须区分编译主机侧的宏依赖。
 

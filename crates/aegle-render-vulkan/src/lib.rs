@@ -46,4 +46,4 @@ pub use atlas::{TextOptions, TextStats};
 pub use error::{Error, Result};
 pub use renderer::{Frame, Options, Renderer, Stats};
 #[cfg(feature = "window")]
-pub use window::WindowRenderer;
+pub use window::{SharedDevice, WindowRenderer};

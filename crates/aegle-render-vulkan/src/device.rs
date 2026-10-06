@@ -14,8 +14,9 @@ pub(crate) struct Device {
     pub family: u32,
     pub properties: vk::PhysicalDeviceProperties,
     pub memory: vk::PhysicalDeviceMemoryProperties,
+    /// Only while the creating window renderer takes it; surfaces belong to renderers.
     #[cfg(feature = "window")]
-    pub surface: Option<crate::surface::Surface>,
+    surface: Option<crate::surface::Surface>,
     // Vulkan function pointers remain valid only while their loader is loaded.
     _entry: Entry,
 }
@@ -29,13 +30,23 @@ impl Device {
         )
     }
 
+    /// Creates the device for a window's display; the window's surface is returned
+    /// for its renderer to own, so later windows can share the device.
     #[cfg(feature = "window")]
     pub fn for_window(
         device_index: Option<u32>,
         display: raw_window_handle::RawDisplayHandle,
         window: raw_window_handle::RawWindowHandle,
-    ) -> Result<Self> {
-        Self::create(device_index, Some((display, window)))
+    ) -> Result<(Self, crate::surface::Surface)> {
+        let mut device = Self::create(device_index, Some((display, window)))?;
+        let surface = device.surface.take().expect("created with a window");
+        Ok((device, surface))
+    }
+
+    /// The loader that created this device's instance.
+    #[cfg(feature = "window")]
+    pub fn entry(&self) -> &Entry {
+        &self._entry
     }
 
     fn create(

@@ -64,7 +64,7 @@ button.on_click(move |_| {
 | Node（生命周期） | `keep_alive(value)`：值随控件删除或窗口关闭释放 |
 | Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果 |
 
-`bounds` 返回最近刷新后的窗口逻辑坐标，包含呈现位移。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。`Node::set_theme` 给子树一份局部主题，`theme` 读取解析结果；`set_offset` 在布局后平移子树。启用 motion 后用 `set_transition(Transition::default())` 安装外观与位移过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期，`on_transition_end` 接收完成；详见[主题契约](components-theme-animation.md#主题契约)与[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或 token 注册表。
+`bounds` 返回最近刷新后的窗口逻辑坐标，包含呈现位移。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。`Node::set_theme` 给子树一份局部主题，`theme` 读取解析结果；`set_offset` 在布局后平移子树，`set_transform(Transform { scale, rotation })` 以节点中心缩放/旋转子树（呈现层，可补间）；`set_theme_override(ThemeOverride)` 只替换指定 token 并随父主题更新；`Ui::fling`/`touch` 提供惯性滚动与手指输入。启用 motion 后用 `set_transition(Transition::default())` 安装外观与位移过渡，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期，`on_transition_end` 接收完成；详见[主题契约](components-theme-animation.md#主题契约)与[过渡契约](components-theme-animation.md#当前外观过渡)。当前没有通用属性表或 token 注册表（只有按字段的 `ThemeOverride`）。
 
 数值与切换控件的程序 setter 不触发用户修改回调；范围、步长、键盘及无障碍规则见[值控件契约](components-theme-animation.md#当前切换与数值控件)。
 
@@ -146,7 +146,7 @@ pub fn QuietButton(parent: &Container, text: &str) -> Result<Button> {
 
 ## 所有权与异步
 
-Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 ID。处理器可以捕获其他控件或窗口句柄而不形成强拥有环。UI 句柄不能发送到后台线程；`UiProxy` 尚未实现，后续由其投递后在主线程重新定位 ID，目标已销毁时返回/报告 DeadHandle。
+Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 ID。处理器可以捕获其他控件或窗口句柄而不形成强拥有环。UI 句柄不能发送到后台线程；`App::proxy(handler)` 返回可克隆、可发送的 `UiProxy<T>`，`send` 的消息由 UI 线程上的 handler 处理，handler 里持有的弱句柄在目标已销毁时报告 DeadHandle。
 
 第三方任务系统的 post/取消句柄也是后续目标。框架不要求应用把所有函数变成 async，不让文本输入处理等待任意网络任务。
 

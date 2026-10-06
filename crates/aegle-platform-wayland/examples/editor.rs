@@ -161,7 +161,7 @@ fn main() -> Result<()> {
                 .present(window, |pixels, size| {
                     let mut surface = Surface::new(pixels, size.width, size.height)?;
                     let mut frame = renderer.begin_frame(&mut surface, Color::rgb(245, 246, 248));
-                    let scale = info.scale as f32;
+                    let scale = info.scale;
                     for (scene, origin) in app.records() {
                         frame.draw(
                             scene,

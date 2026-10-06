@@ -10,6 +10,8 @@ pub(crate) struct Pipeline {
     pub output_format: vk::Format,
     /// Pass 0 blends directly into an sRGB swapchain image; no encoding pass.
     pub direct: bool,
+    /// Draws into a swapchain instead of an offscreen output image.
+    pub window: bool,
     pub passes: [vk::RenderPass; 2],
     pub layouts: [vk::PipelineLayout; 2],
     pub pipelines: [vk::Pipeline; 2],
@@ -19,11 +21,15 @@ pub(crate) struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(device: &Device, #[cfg(feature = "window")] transparent: bool) -> Result<Self> {
+    pub fn new(
+        device: &Device,
+        #[cfg(feature = "window")] surface: Option<&crate::surface::Surface>,
+        #[cfg(feature = "window")] transparent: bool,
+    ) -> Result<Self> {
         let format = vk::Format::R8G8B8A8_UNORM;
         let window = false;
         #[cfg(feature = "window")]
-        let (format, window) = if let Some(surface) = &device.surface {
+        let (format, window) = if let Some(surface) = surface {
             (surface.format(device.physical, transparent)?.format, true)
         } else {
             (format, window)
@@ -39,6 +45,7 @@ impl Pipeline {
             #[cfg(feature = "window")]
             output_format: format,
             direct,
+            window,
             passes: [vk::RenderPass::null(); 2],
             layouts: [vk::PipelineLayout::null(); 2],
             pipelines: [vk::Pipeline::null(); 2],

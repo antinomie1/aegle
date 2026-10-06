@@ -202,3 +202,136 @@ fn offsets_move_hit_testing_and_complete_once() -> Result {
     assert!(button.set_offset(Point::new(f32::NAN, 0.0)).is_err());
     Ok(())
 }
+
+#[test]
+fn scale_and_rotation_move_scenes_and_hit_testing() -> Result {
+    use aegle_app::{Modifiers, Point, PointerId, PointerKind, Transform};
+    use std::cell::Cell;
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.root().set_padding(0.0)?;
+    let button = ui.root().button("")?;
+    button.set_size(Some(40.0), Some(20.0))?;
+    ui.resize(Size::new(300.0, 100.0))?;
+    ui.refresh()?;
+    let ends = Rc::new(Cell::new(0));
+    let count = ends.clone();
+    button.on_transition_end(move |_| {
+        count.set(count.get() + 1);
+        Ok(())
+    })?;
+    button.set_transition(Transition::new(Duration::from_millis(100), Easing::Linear))?;
+    button.set_transform(Transform {
+        scale: 2.0,
+        rotation: 0.0,
+    })?;
+    ui.refresh()?;
+    ui.advance_animations(Duration::from_millis(50))?;
+    ui.refresh()?;
+    assert_eq!(button.transform()?.scale, 2.0, "target, not presented");
+    let hover = |x| -> Result<bool> {
+        ui.pointer(
+            PointerId(1),
+            PointerKind::Move,
+            Point::new(x, 10.0),
+            Modifiers::default(),
+        )?;
+        button.visual_state().map(|s| s.hovered)
+    };
+    // Halfway: scale 1.5 about the center (20, 10) covers x in -10..50.
+    assert!(hover(48.0)?);
+    assert!(!hover(52.0)?);
+    ui.advance_animations(Duration::from_millis(100))?;
+    ui.refresh()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(ends.get(), 1);
+    assert!(hover(58.0)?);
+    let mut origin = None;
+    ui.visit_scenes(|_, transform, _| {
+        let [a, _, _, d, e, _] = transform.coefficients();
+        origin.get_or_insert((a, d, e));
+        Ok(())
+    })?;
+    let (a, d, e) = origin.expect("a visible scene");
+    assert_eq!((a, d), (2.0, 2.0));
+    assert!(
+        e <= 0.0,
+        "scaled about the center, so it starts left of zero"
+    );
+    button.set_transform(Transform {
+        scale: 1.0,
+        rotation: std::f32::consts::PI,
+    })?;
+    button.finish_transition()?;
+    ui.refresh()?;
+    assert!(
+        ui.has_animations() || hover(38.0)?,
+        "a half turn keeps the center"
+    );
+    assert!(
+        button
+            .set_transform(Transform {
+                scale: 0.0,
+                rotation: 0.0
+            })
+            .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn flings_decay_then_stop_at_edges_input_or_reduced_motion() -> Result {
+    use aegle_app::Point;
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.root().set_padding(0.0)?;
+    let view = ui.root().scroll_view()?;
+    view.set_size(Some(100.0), Some(100.0))?;
+    view.set_padding(0.0)?;
+    view.set_gap(0.0)?;
+    for _ in 0..10 {
+        view.button("")?.set_height(Some(40.0))?;
+    }
+    ui.resize(Size::new(200.0, 200.0))?;
+    ui.refresh()?;
+    let at = Point::new(10.0, 10.0);
+    let step = |ms| -> Result {
+        ui.advance_animations(Duration::from_millis(ms))?;
+        ui.refresh()?;
+        Ok(())
+    };
+    ui.fling(at, Point::new(0.0, 600.0))?;
+    assert!(ui.has_animations());
+    step(1000)?; // The request starts at the host's current time.
+    assert_eq!(view.offset()?.y, 0.0);
+    step(1100)?;
+    let first = view.offset()?.y;
+    assert!(
+        (45.0..58.0).contains(&first),
+        "600 * 0.325 * (1 - e^-0.31): {first}"
+    );
+    step(11_000)?;
+    let total = view.offset()?.y;
+    assert!(
+        (190.0..196.0).contains(&total),
+        "travels velocity * 0.325: {total}"
+    );
+    assert!(!ui.has_animations());
+    // The first edge ends the fling, whatever speed remains.
+    view.scroll_to(Point::new(0.0, 0.0))?;
+    ui.fling(at, Point::new(0.0, -600.0))?;
+    step(12_000)?;
+    step(12_100)?;
+    assert!(!ui.has_animations());
+    // Any new scroll or press cancels; reduced motion and slow flings never start.
+    ui.fling(at, Point::new(0.0, 600.0))?;
+    ui.scroll_by(at, Point::new(0.0, 1.0))?;
+    assert!(!ui.has_animations());
+    ui.fling(at, Point::new(0.0, 600.0))?;
+    ui.stop_fling()?;
+    ui.fling(at, Point::new(0.0, 5.0))?;
+    assert!(!ui.has_animations());
+    ui.set_reduced_motion(true)?;
+    ui.fling(at, Point::new(0.0, 600.0))?;
+    assert!(!ui.has_animations());
+    assert!(ui.fling(at, Point::new(f32::NAN, 0.0)).is_err());
+    Ok(())
+}

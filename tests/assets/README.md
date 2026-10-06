@@ -44,3 +44,11 @@ Regenerate after the CJK fixture with:
 ```sh
 PYTHONPATH=target/fonttools python3 tests/assets/color-font.py
 ```
+
+`aegle-test-colrv1.ttf` (984 bytes) and `aegle-test-svg.ttf` (876 bytes) are
+built from scratch by `colrv1-font.py` with FontTools 4.62.1; they contain only
+a 1000-unit square outline, so no third-party glyph data applies. The first has
+a COLRv1 paint graph (linear gradient, translate and scale, a foreground-colored
+layer, a Multiply composite of a radial gradient and a sweep gradient); the
+second has one OpenType-SVG document with an opaque and a half-transparent
+rectangle. Regenerate with `uv run --with fonttools python tests/assets/colrv1-font.py`.

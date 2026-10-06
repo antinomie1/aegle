@@ -106,3 +106,25 @@ fn compiled_dynamic_view_types_states_imports_and_bindings() -> Result {
     assert_eq!(status.text()?, "count 41");
     Ok(())
 }
+
+#[test]
+fn compiled_views_hold_records_as_data_and_reach_shared_host_actions() -> Result {
+    use aegle::loader::{Data, markup::Type};
+    let audited = Rc::new(RefCell::new(Vec::new()));
+    let sink = audited.clone();
+    aegle::loader::action("audit", &[Type::Int], move |arguments| {
+        sink.borrow_mut().extend_from_slice(arguments);
+        Ok(())
+    });
+    let ui = ui()?;
+    let view = aegle::ui!(&ui.root(), "tests/fixtures/records.aegle")?;
+    view.add.activate()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(*audited.borrow(), [Data::Int(1)]);
+    let Data::List(items) = view.items.get() else {
+        panic!("a record list")
+    };
+    assert_eq!(items.len(), 2);
+    assert!(view.items.set(Data::Bool(true)).is_err());
+    Ok(())
+}

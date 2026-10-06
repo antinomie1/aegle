@@ -25,10 +25,12 @@ mod schema;
 mod typing;
 
 pub use ast::{
-    Component, Document, Event, Expr, ExprKind, Item, Limits, Node, Param, Property, Ref, Span,
-    State, Statement, Type, Use, Value,
+    Component, Document, Event, EventDecl, Expr, ExprKind, Item, Limits, Node, Param, Property,
+    Record, Ref, Span, State, Statement, Type, Use, Value,
 };
-pub use checked::{Bound, Child, Element, ElementKind, EventKind, Program, Step, Template};
+pub use checked::{
+    Bound, Child, Element, ElementKind, EventKind, Handler, HostCall, Program, Step, Template,
+};
 pub use error::Error;
 pub use files::{File, ProgramError, compile};
 pub use parse::{parse, parse_with_limits};

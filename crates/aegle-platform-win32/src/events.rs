@@ -119,6 +119,8 @@ pub struct Preferences {
     pub high_contrast: Option<bool>,
     /// Whether non-essential motion should be reduced.
     pub reduced_motion: Option<bool>,
+    /// Text size as a percentage of the default (100), within 50–400.
+    pub text_scale: Option<u16>,
 }
 
 /// Native events in dispatch order; text and physical keys are distinct.

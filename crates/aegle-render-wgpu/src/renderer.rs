@@ -1,6 +1,7 @@
 use aegle_gpu::{Primitive, Recording};
 use aegle_scene::Color;
 use aegle_types::color_math::linear_rgba;
+use std::rc::Rc;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, Buffer, BufferDescriptor, BufferUsages,
     Extent3d, LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp,
@@ -83,7 +84,7 @@ struct Buffers {
 /// second pass encodes premultiplied sRGB into the output. Only small draw/clip
 /// records and glyph patches are uploaded. Nothing runs between frames.
 pub struct Renderer {
-    pub(crate) gpu: Gpu,
+    pub(crate) gpu: Rc<Gpu>,
     target: Option<Target>,
     buffers: Buffers,
     pub(crate) rec: Recording,
@@ -105,10 +106,13 @@ impl Renderer {
     pub fn new(options: Options) -> Result<Self> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        Ok(Self::with_gpu(Gpu::connect(&instance, None)?.0, options))
+        Ok(Self::with_gpu(
+            Rc::new(Gpu::connect(&instance, None)?.0),
+            options,
+        ))
     }
 
-    pub(crate) fn with_gpu(gpu: Gpu, options: Options) -> Self {
+    pub(crate) fn with_gpu(gpu: Rc<Gpu>, options: Options) -> Self {
         let _ = options;
         Self {
             gpu,
@@ -296,9 +300,7 @@ impl Renderer {
         if !self.rec.primitives.is_empty() {
             self.upload();
         }
-        if let Some(texture) = output {
-            self.gpu.prepare_resolve(texture.format());
-        }
+        let resolve = output.map(|texture| self.gpu.resolve(texture.format()));
         let target = self.target.as_ref().unwrap();
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         {
@@ -344,7 +346,7 @@ impl Renderer {
                 })],
                 ..Default::default()
             });
-            pass.set_pipeline(self.gpu.resolve());
+            pass.set_pipeline(resolve.as_ref().expect("resolve for output"));
             pass.set_bind_group(0, &target.resolve, &[]);
             pass.draw(0..3, 0..1);
         }

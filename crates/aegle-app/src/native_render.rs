@@ -23,7 +23,7 @@ pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
 
 #[cfg(feature = "vulkan")]
 pub(crate) fn create_gpu(
-    runtime: &Runtime,
+    runtime: &mut Runtime,
     id: crate::platform::WindowId,
 ) -> Result<Option<aegle_render_vulkan::WindowRenderer<crate::platform::WindowSurface>>> {
     if runtime.options.renderer != RendererBackend::Vulkan {
@@ -32,14 +32,25 @@ pub(crate) fn create_gpu(
     let window = runtime.backend.window_surface(id)?;
     // SAFETY: WindowSurface owns the native window and connection. Its public API
     // cannot revoke these handles; Runtime drops the presenter before its platform.
-    Ok(Some(unsafe {
-        aegle_render_vulkan::WindowRenderer::new(window, runtime.options.vulkan)?
-    }))
+    let renderer = unsafe {
+        match &runtime.shared_vulkan {
+            Some(shared) => aegle_render_vulkan::WindowRenderer::with_device(
+                window,
+                runtime.options.vulkan,
+                shared,
+            )?,
+            None => aegle_render_vulkan::WindowRenderer::new(window, runtime.options.vulkan)?,
+        }
+    };
+    runtime
+        .shared_vulkan
+        .get_or_insert_with(|| renderer.shared_device());
+    Ok(Some(renderer))
 }
 
 #[cfg(feature = "wgpu")]
 pub(crate) fn create_wgpu(
-    runtime: &Runtime,
+    runtime: &mut Runtime,
     id: crate::platform::WindowId,
 ) -> Result<Option<aegle_render_wgpu::WindowRenderer<crate::platform::WindowSurface>>> {
     if runtime.options.renderer != RendererBackend::Wgpu {
@@ -48,9 +59,18 @@ pub(crate) fn create_wgpu(
     let window = runtime.backend.window_surface(id)?;
     // SAFETY: WindowSurface owns the native window and connection. Its public API
     // cannot revoke these handles; Runtime drops the presenter before its platform.
-    Ok(Some(unsafe {
-        aegle_render_wgpu::WindowRenderer::new(window, runtime.options.wgpu)?
-    }))
+    let renderer = unsafe {
+        match &runtime.shared_wgpu {
+            Some(shared) => {
+                aegle_render_wgpu::WindowRenderer::with_gpu(window, runtime.options.wgpu, shared)?
+            }
+            None => aegle_render_wgpu::WindowRenderer::new(window, runtime.options.wgpu)?,
+        }
+    };
+    runtime
+        .shared_wgpu
+        .get_or_insert_with(|| renderer.shared_gpu());
+    Ok(Some(renderer))
 }
 
 #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]

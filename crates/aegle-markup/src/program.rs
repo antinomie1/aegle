@@ -1,12 +1,15 @@
 //! Checked dynamic programs: states, bindings, events, blocks and components.
 
+mod instance;
+mod steps;
+
 use std::{collections::HashMap, rc::Rc};
 
-use crate::checked::{Bound, Child, Element, ElementKind, EventKind, Program, Step, Template};
+use crate::checked::{Bound, Element, ElementKind, EventKind, HostCall, Program, Template};
 
 use crate::schema::{allowed, kind as builtin, literal, property_name, valid_id, validate};
 use crate::{
-    Document, Error, Expr, ExprKind, Item, Kind, Node, Param, PropertyName, Span, Statement, Type,
+    Document, Error, Expr, ExprKind, Item, Kind, Node, Param, PropertyName, Record, Span, Type,
     Value,
 };
 
@@ -16,6 +19,8 @@ pub(crate) struct Scope {
     pub params: Vec<(String, Type)>,
     pub states: Vec<(String, Type)>,
     pub items: Vec<(String, Type)>,
+    /// `let` names and an event's carried value, innermost last.
+    pub locals: Vec<(String, Type)>,
     /// The event source kind while checking a handler.
     pub source: Option<Kind>,
 }
@@ -27,6 +32,15 @@ pub(crate) struct Checker {
     uses: Vec<Vec<(usize, Span)>>,
     /// Inside an `if` or `for` block, where controls come and go.
     in_block: bool,
+    pub(crate) records: Vec<Record>,
+    pub(crate) record_index: HashMap<String, usize>,
+    /// Declared events and whether a `slot` exists, per template.
+    event_sigs: Vec<Vec<(String, Option<Type>)>>,
+    slots: Vec<bool>,
+    host_calls: Vec<HostCall>,
+    /// File of the template being checked.
+    file: usize,
+    slot_used: bool,
 }
 
 /// Checks a program. `files[0]` is the entry document and must have a root;
@@ -36,6 +50,8 @@ pub fn check_program(files: Vec<Document>) -> Result<Program, (usize, Error)> {
     let none = Span { start: 0, end: 0 };
     let mut names = HashMap::new();
     let mut declared = Vec::new();
+    let mut records: Vec<Record> = Vec::new();
+    let mut record_index = HashMap::new();
     let mut entry = None;
     for (file, document) in files.into_iter().enumerate() {
         match (file, document.root) {
@@ -49,10 +65,36 @@ pub fn check_program(files: Vec<Document>) -> Result<Program, (usize, Error)> {
             }
             (_, None) => {}
         }
+        for record in document.records {
+            let error = |message: &str| (file, Error::new(record.span, message));
+            if builtin(&record.name).is_some() || names.contains_key(&record.name) {
+                return Err(error("a record cannot reuse a built-in or component name"));
+            }
+            if record_index
+                .insert(record.name.clone(), records.len())
+                .is_some()
+            {
+                return Err(error("duplicate record name"));
+            }
+            let mut seen = Vec::new();
+            for (field, ty) in &record.fields {
+                if seen.contains(&field) || !valid_id(field) {
+                    return Err(error("record fields must be unique Rust identifiers"));
+                }
+                if !matches!(ty, Type::Bool | Type::Int | Type::Float | Type::String) {
+                    return Err(error("record fields are bool, int, float or string"));
+                }
+                seen.push(field);
+            }
+            records.push(record);
+        }
         for component in document.components {
             let error = |message: &str| (file, Error::new(component.span, message));
             if builtin(&component.name).is_some() {
                 return Err(error("a component cannot reuse a built-in name"));
+            }
+            if record_index.contains_key(&component.name) {
+                return Err(error("a component cannot reuse a record name"));
             }
             if names
                 .insert(component.name.clone(), declared.len() + 1)
@@ -64,6 +106,28 @@ pub fn check_program(files: Vec<Document>) -> Result<Program, (usize, Error)> {
         }
     }
     let mut signatures = vec![Vec::new()];
+    let mut event_sigs = vec![Vec::new()];
+    let mut slots = vec![false];
+    for (file, component) in &declared {
+        let mut sig: Vec<(String, Option<Type>)> = Vec::new();
+        for event in &component.events {
+            let error = |message: &str| (*file, Error::new(event.span, message));
+            if sig.iter().any(|(name, _)| *name == event.name) || !valid_id(&event.name) {
+                return Err(error("event names must be unique Rust identifiers"));
+            }
+            if let Some(ty) = &event.ty {
+                resolve(ty, &record_index).map_err(|m| error(&m))?;
+            }
+            sig.push((event.name.clone(), event.ty.clone()));
+        }
+        event_sigs.push(sig);
+        slots.push(has_slot(&component.root));
+    }
+    for (file, component) in &declared {
+        for param in &component.params {
+            resolve(&param.ty, &record_index).map_err(|m| (*file, Error::new(param.span, m)))?;
+        }
+    }
     for (_, component) in &declared {
         let params = component.params.iter();
         signatures.push(
@@ -78,20 +142,33 @@ pub fn check_program(files: Vec<Document>) -> Result<Program, (usize, Error)> {
         ids: Vec::new(),
         uses: vec![Vec::new(); declared.len() + 1],
         in_block: false,
+        records,
+        record_index,
+        event_sigs,
+        slots,
+        host_calls: Vec::new(),
+        file: 0,
+        slot_used: false,
     };
     let root = entry.unwrap();
     let name = root.name.clone();
     let mut templates = vec![
         checker
-            .template(0, name, Vec::new(), root)
+            .template(0, name, Vec::new(), Vec::new(), root)
             .map_err(|e| (0, e))?,
     ];
     let files: Vec<usize> = std::iter::once(0)
         .chain(declared.iter().map(|(f, _)| *f))
         .collect();
     for (index, (file, component)) in declared.into_iter().enumerate() {
-        let template =
-            checker.template(index + 1, component.name, component.params, component.root);
+        checker.file = file;
+        let template = checker.template(
+            index + 1,
+            component.name,
+            component.params,
+            component.events,
+            component.root,
+        );
         templates.push(template.map_err(|e| (file, e))?);
     }
     // Reject recursive instantiation, which would never finish building.
@@ -121,7 +198,32 @@ pub fn check_program(files: Vec<Document>) -> Result<Program, (usize, Error)> {
     Ok(Program {
         templates,
         ids: checker.ids,
+        records: checker.records,
+        host_calls: checker.host_calls,
+        files: Vec::new(),
     })
+}
+
+/// Whether a component body places its instance's children.
+fn has_slot(node: &Node) -> bool {
+    fn any(list: &[Item]) -> bool {
+        list.iter().any(|item| match item {
+            Item::Slot => true,
+            Item::Node(node) => has_slot(node),
+            Item::If(_, then, otherwise) => any(then) || any(otherwise),
+            Item::For(_, _, _, body) => any(body),
+        })
+    }
+    any(&node.children)
+}
+
+/// Rejects a record type that is not declared.
+fn resolve(ty: &Type, records: &HashMap<String, usize>) -> Result<(), String> {
+    match ty {
+        Type::Record(name) if !records.contains_key(name) => Err(format!("unknown type `{name}`")),
+        Type::List(item) => resolve(item, records),
+        _ => Ok(()),
+    }
 }
 
 impl Checker {
@@ -130,13 +232,16 @@ impl Checker {
         index: usize,
         name: String,
         params: Vec<Param>,
+        events: Vec<crate::EventDecl>,
         mut root: Node,
     ) -> Result<Template, Error> {
+        self.slot_used = false;
         let mut scope = Scope {
             template: index,
             params: Vec::new(),
             states: Vec::new(),
             items: Vec::new(),
+            locals: Vec::new(),
             source: None,
         };
         let mut checked_params = Vec::new();
@@ -169,6 +274,8 @@ impl Checker {
                     "state names must be unique Rust identifiers",
                 ));
             }
+            resolve(&state.ty, &self.record_index)
+                .map_err(|message| Error::new(state.span, message))?;
             self.expr(&mut state.value, &scope, Some(&state.ty))?;
             scope.states.push((state.name.clone(), state.ty.clone()));
             states.push((state.name, state.ty, state.value));
@@ -178,6 +285,9 @@ impl Checker {
             name,
             params: checked_params,
             states,
+            events: events.into_iter().map(|e| (e.name, e.ty)).collect(),
+            slot: self.slot_used,
+            file: self.file,
             root,
         })
     }
@@ -213,7 +323,9 @@ impl Checker {
             properties: Vec::new(),
             arguments: Vec::new(),
             events: Vec::new(),
+            handlers: Vec::new(),
             children: Vec::new(),
+            slot: None,
             span: node.span,
         };
         for property in node.properties {
@@ -300,6 +412,9 @@ impl Checker {
             if element.events.iter().any(|(k, _)| *k == event_kind) {
                 return Err(Error::new(event.span, "duplicate event handler"));
             }
+            if event.param.is_some() {
+                return Err(Error::new(event.span, "built-in events carry no value"));
+            }
             scope.source = Some(kind);
             let steps = self.steps(event.body, scope);
             scope.source = None;
@@ -309,145 +424,6 @@ impl Checker {
             element.children.push(self.child(item, scope)?);
         }
         Ok(element)
-    }
-
-    fn instance(
-        &mut self,
-        node: Node,
-        template: usize,
-        scope: &mut Scope,
-    ) -> Result<Element, Error> {
-        self.uses[scope.template].push((template, node.span));
-        if let Some(event) = node.events.first() {
-            return Err(Error::new(event.span, "component instances have no events"));
-        }
-        if !node.children.is_empty() {
-            return Err(Error::new(
-                node.span,
-                "component instances do not accept children",
-            ));
-        }
-        let signature = self.signatures[template].clone();
-        let mut arguments = vec![None; signature.len()];
-        for property in node.properties {
-            let index = signature
-                .iter()
-                .position(|(name, _, _)| *name == property.name)
-                .ok_or_else(|| {
-                    Error::new(
-                        property.span,
-                        format!("unknown parameter `{}`", property.name),
-                    )
-                })?;
-            if arguments[index].is_some() {
-                return Err(Error::new(property.span, "duplicate argument"));
-            }
-            let mut expr = match property.value {
-                Value::Expr(expr) => *expr,
-                Value::Identifier(name) => Expr {
-                    kind: ExprKind::Name(name),
-                    span: property.value_span,
-                },
-                value => Expr {
-                    kind: ExprKind::Literal(value),
-                    span: property.value_span,
-                },
-            };
-            self.expr(&mut expr, scope, Some(&signature[index].1))?;
-            arguments[index] = Some(Rc::new(expr));
-        }
-        if let Some((name, ..)) = signature
-            .iter()
-            .zip(&arguments)
-            .find_map(|(s, a)| (a.is_none() && !s.2).then_some(s))
-        {
-            return Err(Error::new(node.span, format!("missing argument `{name}`")));
-        }
-        Ok(Element {
-            kind: ElementKind::Component(template),
-            id: None,
-            properties: Vec::new(),
-            arguments,
-            events: Vec::new(),
-            children: Vec::new(),
-            span: node.span,
-        })
-    }
-
-    fn child(&mut self, item: Item, scope: &mut Scope) -> Result<Child, Error> {
-        Ok(match item {
-            Item::Node(node) => Child::Element(self.element(node, scope, false)?),
-            Item::If(mut condition, then, otherwise) => {
-                self.expr(&mut condition, scope, Some(&Type::Bool))?;
-                let then = self.block(then, scope)?;
-                let otherwise = self.block(otherwise, scope)?;
-                Child::If(Rc::new(condition), then, otherwise)
-            }
-            Item::For(name, mut list, body) => {
-                let Type::List(item) = self.expr(&mut list, scope, None)? else {
-                    return Err(Error::new(list.span, "for requires a list"));
-                };
-                scope.items.push((name, *item));
-                let body = self.block(body, scope);
-                scope.items.pop();
-                Child::For(Rc::new(list), body?)
-            }
-        })
-    }
-
-    fn block(&mut self, items: Vec<Item>, scope: &mut Scope) -> Result<Rc<[Child]>, Error> {
-        let previous = std::mem::replace(&mut self.in_block, true);
-        let children: Result<Vec<_>, _> = items
-            .into_iter()
-            .map(|item| self.child(item, scope))
-            .collect();
-        self.in_block = previous;
-        Ok(children?.into())
-    }
-
-    fn steps(&mut self, statements: Vec<Statement>, scope: &Scope) -> Result<Vec<Step>, Error> {
-        let mut steps = Vec::new();
-        for statement in statements {
-            steps.push(match statement {
-                Statement::Assign {
-                    target,
-                    operator,
-                    mut value,
-                    span,
-                } => {
-                    let index = scope
-                        .states
-                        .iter()
-                        .position(|(name, _)| *name == target)
-                        .ok_or_else(|| {
-                            Error::new(
-                                span,
-                                format!("`{target}` is not a state of this document or component"),
-                            )
-                        })?;
-                    let ty = &scope.states[index].1;
-                    let numeric = matches!(ty, Type::Int | Type::Float);
-                    let appendable = matches!(ty, Type::String | Type::List(_));
-                    if operator != "=" && !(numeric || (operator == "+=" && appendable)) {
-                        return Err(Error::new(
-                            span,
-                            format!("`{operator}` does not apply to this state"),
-                        ));
-                    }
-                    self.expr(&mut value, scope, Some(ty))?;
-                    Step::Assign(index, operator, value)
-                }
-                Statement::If(mut condition, then, otherwise) => {
-                    self.expr(&mut condition, scope, Some(&Type::Bool))?;
-                    Step::If(
-                        condition,
-                        self.steps(then, scope)?,
-                        self.steps(otherwise, scope)?,
-                    )
-                }
-            });
-        }
-        Ok(steps)
     }
 }
 

@@ -37,7 +37,9 @@ impl Checker {
             }
             ExprKind::Name(name) => {
                 let (reference, ty) =
-                    if let Some(i) = scope.items.iter().rposition(|(n, _)| n == name) {
+                    if let Some(i) = scope.locals.iter().rposition(|(n, _)| n == name) {
+                        (Ref::Local(i), &scope.locals[i].1)
+                    } else if let Some(i) = scope.items.iter().rposition(|(n, _)| n == name) {
                         (Ref::Item(i), &scope.items[i].1)
                     } else if let Some(i) = scope.states.iter().position(|(n, _)| n == name) {
                         (Ref::State(i), &scope.states[i].1)
@@ -81,6 +83,7 @@ impl Checker {
                 let ty = self.unify(left, right, scope)?;
                 let fits = match operator {
                     "==" | "!=" => true,
+                    _ if matches!(ty, Type::Record(_)) => false,
                     "<" | "<=" | ">" | ">=" => matches!(ty, Type::Int | Type::Float | Type::String),
                     "+" => !matches!(ty, Type::Bool),
                     _ => matches!(ty, Type::Int | Type::Float),
@@ -93,6 +96,42 @@ impl Checker {
                 } else {
                     ty
                 }
+            }
+            ExprKind::Call(function, arguments) if self.record_index.contains_key(function) => {
+                let index = self.record_index[function];
+                let fields = self.records[index].fields.clone();
+                if arguments.len() != fields.len() {
+                    return error(format!(
+                        "`{function}` takes {} values, one per field",
+                        fields.len()
+                    ));
+                }
+                for (argument, (_, ty)) in arguments.iter_mut().zip(&fields) {
+                    self.expr(argument, scope, Some(ty))?;
+                }
+                let values = std::mem::take(arguments);
+                let record = Type::Record(function.clone());
+                expr.kind = ExprKind::Record(index, values);
+                record
+            }
+            ExprKind::Field(base, field) => {
+                let Type::Record(record) = self.expr(base, scope, None)? else {
+                    return error(format!("`.{field}` needs a record value"));
+                };
+                let fields = &self.records[self.record_index[&record]].fields;
+                let Some(index) = fields.iter().position(|(name, _)| name == field) else {
+                    return error(format!("record `{record}` has no field `{field}`"));
+                };
+                let ty = fields[index].1.clone();
+                let base = std::mem::replace(
+                    base,
+                    Box::new(Expr {
+                        kind: ExprKind::Literal(Value::Bool(false)),
+                        span,
+                    }),
+                );
+                expr.kind = ExprKind::FieldAt(base, index);
+                ty
             }
             ExprKind::Call(function, arguments) => {
                 let [argument] = arguments.as_mut_slice() else {
@@ -122,15 +161,17 @@ impl Checker {
                         self.expr(first, scope, hint)?
                     }
                 };
-                if !matches!(item, Type::Int | Type::String) {
-                    return error("list items must be int or string".into());
+                if matches!(item, Type::List(_)) {
+                    return error("list items must be int, string or a record".into());
                 }
                 for value in &mut items[1..] {
                     self.expr(value, scope, Some(&item))?;
                 }
                 Type::List(Box::new(item))
             }
-            ExprKind::Ref(_) => return error("unexpected pre-resolved reference".into()),
+            ExprKind::Ref(_) | ExprKind::FieldAt(..) | ExprKind::Record(..) => {
+                return error("unexpected pre-resolved expression".into());
+            }
         })
     }
 
@@ -170,5 +211,6 @@ fn name(ty: &Type) -> String {
         Type::Float => "float".into(),
         Type::String => "string".into(),
         Type::List(item) => format!("list<{}>", name(item)),
+        Type::Record(record) => record.clone(),
     }
 }

@@ -49,7 +49,11 @@ impl App {
         loop {
             let event = self.runtime.borrow_mut().backend.next_event();
             let Some(event) = event else { break };
-            self.runtime.borrow_mut().event(event)?;
+            if matches!(event, Event::Wake) {
+                self.drain_proxies()?;
+            } else {
+                self.runtime.borrow_mut().event(event)?;
+            }
             self.callbacks(callbacks)?;
             // A focus switch cancels the old protocol session before the next
             // queued event, preventing an old IME batch from editing a new field.
@@ -114,9 +118,15 @@ impl Runtime {
         let (options, preferences) = (&self.options, self.preferences);
         let pick =
             |wanted: Option<bool>, theme: Option<Theme>| theme.filter(|_| wanted == Some(true));
-        pick(preferences.high_contrast, options.high_contrast_theme)
+        let mut theme = pick(preferences.high_contrast, options.high_contrast_theme)
             .or(pick(preferences.dark, options.dark_theme))
-            .unwrap_or(options.theme)
+            .unwrap_or(options.theme);
+        if let Some(percent) = options.text_scale.or(preferences.text_scale) {
+            let scale = f32::from(percent.clamp(50, 400)) / 100.0;
+            theme.font_size *= scale;
+            theme.control_height *= scale;
+        }
+        theme
     }
 
     #[cfg(feature = "motion")]

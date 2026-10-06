@@ -59,6 +59,24 @@ pub(crate) struct WindowState {
     pub(crate) frame_requested: bool,
     /// Shape applied whenever a pointer enters the window.
     pub(crate) cursor: aegle_types::Cursor,
+    /// Fractional-scale objects, when the compositor offers the protocol.
+    pub(crate) fractional: Option<crate::scale::Fractional>,
+}
+
+impl WindowState {
+    /// Tells the compositor how the next buffer maps onto the logical surface.
+    pub(crate) fn apply_scale(&self) {
+        let surface = self.window.wl_surface();
+        match &self.fractional {
+            Some(fractional) => {
+                surface.set_buffer_scale(1);
+                fractional
+                    .viewport
+                    .set_destination(self.info.size.width as i32, self.info.size.height as i32);
+            }
+            None => surface.set_buffer_scale(self.info.scale as i32),
+        }
+    }
 }
 
 pub(crate) struct State {
@@ -74,6 +92,7 @@ pub(crate) struct State {
     pub(crate) ime: ImeState,
     pub(crate) clipboard: ClipboardState,
     pub(crate) windows: Vec<WindowState>,
+    pub(crate) scale: Option<crate::scale::ScaleGlobals>,
     pub(crate) events: VecDeque<Event>,
     pub(crate) preferences: crate::Preferences,
 }
@@ -184,9 +203,9 @@ impl CompositorHandler for State {
         if let Some(window) = self
             .windows
             .iter_mut()
-            .find(|w| w.window.wl_surface() == surface)
+            .find(|w| w.window.wl_surface() == surface && w.fractional.is_none())
         {
-            window.info.scale = factor as u32;
+            window.info.scale = factor as f32;
             window.dirty = true;
             self.events.push_back(Event::Configure {
                 window: window.id,

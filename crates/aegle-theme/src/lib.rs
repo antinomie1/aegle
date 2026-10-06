@@ -133,6 +133,62 @@ impl Theme {
     }
 }
 
+/// Replaces chosen tokens of whatever theme it is applied to; unset tokens keep
+/// the base value, so an override follows later changes to its parent theme.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ThemeOverride {
+    /// Replacement for [`Theme::background`].
+    pub background: Option<Color>,
+    /// Replacement for [`Theme::surface`].
+    pub surface: Option<Color>,
+    /// Replacement for [`Theme::foreground`].
+    pub foreground: Option<Color>,
+    /// Replacement for [`Theme::muted`].
+    pub muted: Option<Color>,
+    /// Replacement for [`Theme::accent`].
+    pub accent: Option<Color>,
+    /// Replacement for [`Theme::border`].
+    pub border: Option<Color>,
+    /// Replacement for [`Theme::hover`].
+    pub hover: Option<Color>,
+    /// Replacement for [`Theme::pressed`].
+    pub pressed: Option<Color>,
+    /// Replacement for [`Theme::selection`].
+    pub selection: Option<Color>,
+    /// Replacement for [`Theme::font_size`].
+    pub font_size: Option<f32>,
+    /// Replacement for [`Theme::padding`].
+    pub padding: Option<f32>,
+    /// Replacement for [`Theme::gap`].
+    pub gap: Option<f32>,
+    /// Replacement for [`Theme::radius`].
+    pub radius: Option<f32>,
+    /// Replacement for [`Theme::control_height`].
+    pub control_height: Option<f32>,
+}
+
+impl ThemeOverride {
+    /// The base theme with every set token replaced. The result is not validated.
+    pub fn apply(&self, base: &Theme) -> Theme {
+        Theme {
+            background: self.background.unwrap_or(base.background),
+            surface: self.surface.unwrap_or(base.surface),
+            foreground: self.foreground.unwrap_or(base.foreground),
+            muted: self.muted.unwrap_or(base.muted),
+            accent: self.accent.unwrap_or(base.accent),
+            border: self.border.unwrap_or(base.border),
+            hover: self.hover.unwrap_or(base.hover),
+            pressed: self.pressed.unwrap_or(base.pressed),
+            selection: self.selection.unwrap_or(base.selection),
+            font_size: self.font_size.unwrap_or(base.font_size),
+            padding: self.padding.unwrap_or(base.padding),
+            gap: self.gap.unwrap_or(base.gap),
+            radius: self.radius.unwrap_or(base.radius),
+            control_height: self.control_height.unwrap_or(base.control_height),
+        }
+    }
+}
+
 impl Default for Theme {
     fn default() -> Self {
         Self::light()

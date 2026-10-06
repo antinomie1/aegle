@@ -104,9 +104,7 @@ fn cjk_reflow_reuses_font_and_reports_missing_glyphs() {
             ..style
         };
         system.restyle(&mut paragraph, &bold).unwrap();
-        assert_eq!(
-            paragraph.paint(&mut aegle_scene::SceneBuilder::new()),
-            Err(aegle_text::PaintError::SyntheticStyle)
-        );
+        let mut builder = aegle_scene::SceneBuilder::new();
+        paragraph.paint(&mut builder).unwrap();
     }
 }

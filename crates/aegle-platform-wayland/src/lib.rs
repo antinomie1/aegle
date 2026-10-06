@@ -15,13 +15,14 @@ mod ime;
 mod ime_types;
 mod input;
 mod portal;
+mod scale;
 mod state;
 mod window;
 
 pub use clipboard::CLIPBOARD_LIMIT;
 pub use error::{Error, PresentError};
 pub use events::{
-    Event, LayerOptions, PixelSize, Preferences, WindowId, WindowInfo, WindowOptions,
+    Event, LayerOptions, PixelSize, Preferences, TouchPhase, WindowId, WindowInfo, WindowOptions,
 };
 #[cfg(feature = "gpu")]
 pub use gpu::WindowSurface;

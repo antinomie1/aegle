@@ -59,9 +59,29 @@ pub(crate) fn read() -> Preferences {
     }
     .is_ok()
     .then(|| !animate.as_bool());
+    // The Settings "Text size" slider stores a percentage, 100–225.
+    let mut percent = 0u32;
+    let mut size = size_of::<u32>() as u32;
+    // SAFETY: the data pointer and size describe a live DWORD local.
+    let text_scale = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            w!(r"Software\Microsoft\Accessibility"),
+            w!("TextScaleFactor"),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&raw mut percent).cast()),
+            Some(&mut size),
+        )
+    }
+    .is_ok()
+    .then_some(percent)
+    .filter(|p| (50..=400).contains(p))
+    .map(|p| p as u16);
     Preferences {
         dark,
         high_contrast,
         reduced_motion,
+        text_scale,
     }
 }

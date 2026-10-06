@@ -1,6 +1,6 @@
 # Aegle 标记语言
 
-状态：v0.1。编译型静态结构、类型检查和具名弱句柄已实现；类型化 state、属性表达式绑定、`on` 事件块、`if`/`for` 结构块、组件与 `use` 导入、运行时加载和显式 `reload` 已实现，见[当前动态标记](#当前动态标记)。宿主动作、record、slot、组件事件等仍是下文明确列出的目标。采用 `.aegle` 扩展名；QML 风格的结构，不依赖 Qt/QML，也不强制 JavaScript。
+状态：v0.1。编译型静态结构、类型检查和具名弱句柄已实现；类型化 state、属性表达式绑定、`on` 事件块、`if`/`for` 结构块、组件与 `use` 导入、运行时加载和显式 `reload` 已实现，见[当前动态标记](#当前动态标记)。record 与带 key 的列表、`let`、宿主动作、slot、组件事件和可配置限额也已实现，见[当前动态标记](#当前动态标记)末段；逐属性的类型化 transition 仍是目标。采用 `.aegle` 扩展名；QML 风格的结构，不依赖 Qt/QML，也不强制 JavaScript。
 
 ## 最小程序
 
@@ -109,13 +109,44 @@ Window {
 
 `component Name(p: type = literal, q: type) { state ...; Root { ... } }` 声明组件，组件体只有一个根节点；`Name { p: expr }` 实例化，参数随调用方表达式读取的 state 更新，组件 state 每个实例独立。实例不接受子节点、事件或 id；递归实例化、与内建同名或重复组件名均为错误。`use "relative.aegle"` 导入另一文件声明的所有组件：路径相对于导入方文件、以 `/` 分隔且不能为绝对路径；导入环为错误，重复导入只加载一次，被导入文件只能声明组件，一个程序最多 256 个文件。组件名在已加载文件间全局可见。
 
-`id` 只能用于入口文档中不在块或组件体内的控件。`ui!` 的 View 在 `root` 和各 `id` 外，为入口根的每个 state 生成 `loader::State<T>` 字段（bool、i64、f32、String、Vec<i64>、Vec<String>），`get`/`set` 读写并触发绑定；名称冲突在编译期报错。绑定和块由控件通过 `Node::keep_alive` 持有，丢弃 View 不影响更新。
+**record、key、let、宿主动作、slot、组件事件与限额**：
+
+```text
+record Task { id: int; title: string; done: bool }
+component Card(title: string) {
+    event closed(int)
+    state taps: int = 0
+    Column {
+        Text { text: title + "#" + str(taps) }
+        slot
+        Button { text: "close"; on clicked { taps += 1; let n = taps * 10; host.note(title, n); emit closed(n) } }
+    }
+}
+Column {
+    state tasks: list<Task> = [Task(1, "a", false)]
+    state total: int = 0
+    for task in tasks key task.id {
+        Card { title: task.title; on closed(n) { total += n }; Text { text: "extra " + task.title } }
+    }
+}
+```
+
+- `record Name { field: type }` 全局声明（跨文件，与组件名不得重名），字段为 bool/int/float/string；值用位置式调用 `Task(1, "a", false)` 构造，读取用 `task.title`；record 可作为 state、参数和 `list<Task>` 的元素类型，`==`/`!=` 比较各字段。
+- `for item in list key expression { }`：key 表达式可读本次循环项，类型为 int 或 string；record 列表必须写 key，标量列表默认以项值为 key。同一 key 的行在项值不变时保留控件与本地状态，项值变化则就地重建；重复 key 仍为错误并保留原有行。
+- `let name = expression` 在事件块内声明局部，作用到所在块结束；`on name(value)` 把组件事件携带的值绑定为局部。
+- `host.name(args)`：调用宿主注册的动作。动作用 `Program::action(name, &[Type], f)` 注册，或用 `aegle::loader::action` 注册到线程共享表（`ui!` 生成的视图使用它）；构建视图时校验每个调用有同名动作且参数类型一致，缺失或不符在挂载前报错。动作在 UI 借用外运行，返回的错误停止本次处理；动作不返回值，结果通过更新 state 带回。
+- `slot` 写在组件体中，放置实例的子节点：`Card { title: "x"; Text {} }`；子节点在调用方的环境里求值，不可带 `id`，每个组件至多一个 slot，没有 slot 的组件不接受子节点。
+- 组件事件：组件体内 `event name` 或 `event name(type)` 声明，事件块里 `emit name` / `emit name(expr)` 触发，实例上 `on name { }` / `on name(v) { }` 在调用方的环境里处理。
+- 限额：`Program::set_limits(Limits { steps, rows, emit_depth })`，默认每次处理最多 10,000 条语句、单个 `for` 最多 10,000 行、嵌套 emit 最多 64 层；超限是运行时错误，保留此前的赋值与旧的行。运行时错误带文件路径与字节跨度。
+- Rust 一侧：record 与 record 列表的 state 以 `State<Data>` 访问（`Data::Record`），设置时检查形状；`StateValue::accepts` 取代旧的 `ty()`。
+
+`id` 只能用于入口文档中不在块、slot 内容或组件体内的控件。`ui!` 的 View 在 `root` 和各 `id` 外，为入口根的每个 state 生成 `loader::State<T>` 字段（bool、i64、f32、String、Vec<i64>、Vec<String>），`get`/`set` 读写并触发绑定；名称冲突在编译期报错。绑定和块由控件通过 `Node::keep_alive` 持有，丢弃 View 不影响更新。
 
 运行时加载使用 `aegle::loader::Program::load(path)` 或 `from_sources(entry, read)`，再 `build(&container)` 片段或 `open(&app)` Window 文档；`View` 提供 `root`、`handle(id)`、`get`/`set`、`state::<T>(name)` 和 `reload`。加载复用同一解析、检查和诊断，因此携带解析器；示例文档解析并检查约 0.1 ms。`reload` 先完整构建新界面再移除旧界面，失败保留旧界面；同名同类型的入口 state 保留取值，其余控件本地状态重置。Window 文档保留原生窗口、标题和尺寸并重建内容，新版本省略的窗口属性保留原值。没有文件监视器。可执行示例：`cargo run -p aegle --example dynamic`，其中面板运行时从磁盘加载并可重载。
 
 ## 后续目标：结构、值和状态
 
-当前动态标记之外，以下 record、更多值类型、宿主动作、slot、组件事件、类型化属性过渡及可配置限额仍是目标；示例中的事件块和 state 已按上节实现。
+当前动态标记之外，更多值类型（color、length、duration、enum）、嵌套 record 与逐属性的类型化过渡仍是目标；示例中的事件块和 state 已按上节实现。
 
 ```text
 Window {
@@ -142,7 +173,7 @@ Window {
 
 ## 后续目标：事件与宿主
 
-当前事件块支持赋值与 if/else；局部 let、宿主动作、可配置操作与传播限额仍是目标。当前没有循环或派生 state，执行量受源码大小约束，绑定不会互相触发。
+当前事件块支持赋值、`let`、if/else、宿主动作与 `emit`，并受可配置的语句与嵌套限额约束。当前没有循环或派生 state，绑定不会互相触发。
 
 事件块允许赋值、局部 let、if/else 和调用已声明的宿主动作。内建纯函数只含数值、字符串格式化与 clamp 等有限集合；不允许任意函数定义、递归、while、文件访问或网络访问。
 
@@ -152,7 +183,7 @@ Window {
 
 ## 后续目标：条件、列表和组件
 
-条件、按值 key 的标量列表、组件参数与 `use` 文件导入已按[当前动态标记](#当前动态标记)实现；record 列表与 `key item.id`、具名事件、slot 和 Rust 组件映射仍是目标。
+条件、带 key 的列表（含 record）、组件参数、slot、组件事件与 `use` 文件导入已按[当前动态标记](#当前动态标记)实现；Rust 组件映射仍是目标。
 
 ```text
 if online {
@@ -177,7 +208,7 @@ component Counter(start: int = 0) {
 }
 ```
 
-组件支持有类型的输入属性、具名事件和具名 slot；slot 只表示由调用方提供的子内容，不引入继承层次。首版使用组合，不做组件类继承。导入通过 `use "relative.aegle"` 或 `use md3 from rust("my_md3")`，依赖环拒绝，Rust 映射需构建时或宿主显式注册。
+组件支持有类型的输入属性、具名事件和一个默认 slot（具名 slot 仍是目标）；slot 只表示由调用方提供的子内容，不引入继承层次。首版使用组合，不做组件类继承。导入通过 `use "relative.aegle"` 或 `use md3 from rust("my_md3")`，依赖环拒绝，Rust 映射需构建时或宿主显式注册。
 
 组件间通信采用输入属性和事件；没有隐式全局状态。样式通过主题 token 与本地属性，不实现 CSS 选择器/级联语言。动画通过类型化属性的 transition，例如 `transition opacity: 120ms ease_out`；详见[主题动画](components-theme-animation.md)。
 

@@ -139,6 +139,8 @@ impl Ui {
                 popups: Vec::new(),
                 dropdowns: HashMap::new(),
                 decorations: HashMap::new(),
+                overrides: HashMap::new(),
+                fingers: Vec::new(),
                 kept: HashMap::new(),
                 #[cfg(feature = "motion")]
                 motion: Default::default(),
@@ -240,15 +242,19 @@ impl Ui {
                 Content::Scroll(scene) if overlay => scene,
                 _ => &element.scene,
             };
+            let shown = element.xf.map_or(element.bounds, |xf| {
+                crate::scroll::map_rect(xf, element.bounds)
+            });
             if element.effective_visible
                 && element
                     .clip
-                    .is_none_or(|clip| clip.intersection(element.bounds).is_some())
+                    .is_none_or(|clip| clip.intersection(shown).is_some())
                 && !scene.commands().is_empty()
             {
+                let place = Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?;
                 visit(
                     scene,
-                    Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?,
+                    element.xf.map_or(Ok(place), |xf| place.then(xf))?,
                     element.clip,
                 )?;
             }
@@ -306,6 +312,9 @@ impl Ui {
             cursor_rect.origin.y += element.bounds.origin.y + padding - element.scroll.y;
             // Keep a manually scrolled-out composition alive. Its candidate
             // anchor collapses at the nearest visible edge until it re-enters.
+            if let Some(xf) = element.xf {
+                cursor_rect = crate::scroll::map_rect(xf, cursor_rect);
+            }
             cursor_rect = aegle_widgets::clamp_anchor(cursor_rect, element.bounds);
             if let Some(clip) = element.clip {
                 cursor_rect = aegle_widgets::clamp_anchor(cursor_rect, clip);
@@ -340,6 +349,8 @@ impl Ui {
         state.pending.clear();
         state.callbacks.clear();
         state.decorations.clear();
+        state.overrides.clear();
+        state.fingers.clear();
         state.kept.clear();
         state.lists.clear();
         state.popups.clear();
@@ -349,6 +360,8 @@ impl Ui {
             state.motion.tracks.clear();
             state.motion.active.clear();
             state.motion.moving.clear();
+            state.motion.turning.clear();
+            state.motion.fling = None;
             state.motion.ends.clear();
         }
         state.capture = None;

@@ -70,7 +70,7 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 ## 当前 Wayland 接口
 
-`Wayland::connect/create_window/dispatch/next_event/present` 提供一个连接上的多个 xdg-toplevel。需要 wl_compositor ≥4、xdg-shell 与 wl_shm；text-input-v3 可查询，启用缺失能力返回 `ImeUnavailable`。窗口初始 configure 前不分配像素或呈现；SCTK 处理 configure acknowledgement，宿主使用最新 `WindowInfo` 的逻辑尺寸和整数 scale 生成物理 framebuffer。输出变换由 compositor 处理，当前不提供 fractional-scale/viewport 协议。
+`Wayland::connect/create_window/dispatch/next_event/present` 提供一个连接上的多个 xdg-toplevel。需要 wl_compositor ≥4、xdg-shell 与 wl_shm；text-input-v3 可查询，启用缺失能力返回 `ImeUnavailable`。窗口初始 configure 前不分配像素或呈现；SCTK 处理 configure acknowledgement，宿主使用最新 `WindowInfo` 的逻辑尺寸和 `scale` 生成物理 framebuffer。compositor 同时提供 wp-fractional-scale-v1 与 wp-viewporter 时，surface 保持 buffer scale 1，缓冲区为 `round(逻辑尺寸 × scale)`，viewport 把它映射回逻辑尺寸，scale 取 compositor 的 preferred_scale（1/120 单位）；否则退回输出的整数 scale。preferred_scale 在 surface 映射后才送达，首帧按 1 绘制。输出变换由 compositor 处理。
 
 `request_redraw` 合并变化，仅在已配置、前一 frame callback 完成且有空闲缓冲时通知宿主。每次实际提交才请求下一次 frame callback；没有变化不会持续呈现。`dispatch(None)` 使用 calloop/WaylandSource 的 FD 等待和 prepare-read 流程；已有应用事件时只做非阻塞分发。帧失败不附着，宿主显式请求重试；同时保持活动窗口的最新状态。
 
@@ -78,17 +78,17 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 `configure_ime` 使用带可选周边文字的 ImeRequest；长选区不能完整容纳时可保留组合输入而不报告 surrounding。显式禁用立即结束会话并清除该窗口已排队的 IME Update，避免焦点切换后的串写；其余序号、批次和编辑事务见[文字](text-input.md)。
 
-输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。layer-shell 表面复用同一窗口表与帧门控：两侧相对边同时锚定时该轴拉伸到输出，configure 为 0 的轴保留当前尺寸，层表面始终报告 active。剪贴板按 seat 以 data device 设置/读取，管道读写不阻塞事件循环。外观偏好由会话总线上的 desktop portal 提供：连接时以最多 100 ms 的有界等待读取，之后的回复与 SettingChanged 通过同一事件循环的 socket 源转成 `Event::Preferences`；没有总线或 portal 时偏好保持未知，不影响 Wayland 连接。触摸、客户端窗口装饰、文本缩放及完整系统无障碍仍待接入；gpu feature 的原生租约与 present_external 复用当前窗口与帧门控。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。
+输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。layer-shell 表面复用同一窗口表与帧门控：两侧相对边同时锚定时该轴拉伸到输出，configure 为 0 的轴保留当前尺寸，层表面始终报告 active。剪贴板按 seat 以 data device 设置/读取，管道读写不阻塞事件循环。外观偏好由会话总线上的 desktop portal 提供：连接时以最多 100 ms 的有界等待读取，之后的回复与 SettingChanged 通过同一事件循环的 socket 源转成 `Event::Preferences`；没有总线或 portal 时偏好保持未知，不影响 Wayland 连接。`wl_touch` 以 `Event::Touch`（手指 ID、逻辑坐标、毫秒时间、阶段）交给宿主，窗口移除、能力丢失或 compositor cancel 时合成 Cancel。客户端窗口装饰及完整系统无障碍仍待接入；gpu feature 的原生租约与 present_external 复用当前窗口与帧门控。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。
 
 `wake_handle()` 按需创建一个共享的 calloop ping source，克隆句柄可从后台线程请求 `Event::Wake`；宿主先将工作入自己的队列，再发信号，不引入轮询。该连接点已用于可选 Unix 无障碍回调。示例启用 `example-accessibility` 后，由独立 aegle-access adapter 导出同一控件树；Wayland 库的正常依赖仍不包含它。
 
 ## 当前应用宿主
 
-`aegle-app/wayland` 与 `windows` 将目标平台接口接到同一 Ui；每窗口独立保留树，应用共享 TextSystem。software 共享 renderer/字形缓存；vulkan 当前每窗口独立设备/图集，通过原生 swapchain 呈现。`App::run` 在最后窗口关闭后返回，`dispatch(timeout)` 可由已有主循环显式驱动。嵌套 dispatch 返回重入错误，回调产生的新动作在下一轮执行，有待执行动作时不会进入无限期平台等待。
+`aegle-app/wayland` 与 `windows` 将目标平台接口接到同一 Ui；每窗口独立保留树，应用共享 TextSystem。software 共享 renderer/字形缓存；vulkan 与 wgpu 的窗口共享第一个窗口创建的实例/设备/队列（wgpu 还共享管线），每窗口仍有自己的 surface/swapchain、图集（Vulkan 还有管线），通过原生 swapchain 呈现；共享设备不能向某窗口呈现时创建返回错误，不静默换设备。`App::run` 在最后窗口关闭后返回，`dispatch(timeout)` 可由已有主循环显式驱动。嵌套 dispatch 返回重入错误，回调产生的新动作在下一轮执行，有待执行动作时不会进入无限期平台等待。
 
 启用 motion 时，App 共享一个 Instant 时钟；每次刷新先采样活动过渡，实际呈现后仍有活动动画才请求下一帧。平台的 frame callback 与缓冲门控继续生效；无活动动画或 compositor 暂停回调时不加入轮询定时器。外观动画不改变几何，绘制和语义前景共用呈现值。
 
-窗口、输入和辅助技术动作使用同一个 Ui。每个相关事件后刷新布局并取消旧 IME 会话，再处理下一条排队输入；不存在 text-input-v3 时，请求编辑会话返回能力错误。每窗口由活动键盘 seat 管理一个逻辑焦点域；失焦取消组合/手势，返回时恢复仍可用的原控件。编辑器的剪贴板请求在刷新前交给活动键盘 seat；异步读取在该 seat 仍持有焦点时粘贴，失焦后丢弃。原生双击计数、触摸与动态窗口属性尚未接入应用 API。
+窗口、输入和辅助技术动作使用同一个 Ui。每个相关事件后刷新布局并取消旧 IME 会话，再处理下一条排队输入；不存在 text-input-v3 时，请求编辑会话返回能力错误。每窗口由活动键盘 seat 管理一个逻辑焦点域；失焦取消组合/手势，返回时恢复仍可用的原控件。编辑器的剪贴板请求在刷新前交给活动键盘 seat；异步读取在该 seat 仍持有焦点时粘贴，失焦后丢弃。原生双击计数与动态窗口属性尚未接入应用 API；触摸经 `Ui::touch` 接入：点击与控件拖动成为指针事件，非拖动内容上超过 10 px 的拖动取消点击并平移滚动视图，抬起时带速度惯性滚动。
 
 ## 当前 Windows 原生路径
 

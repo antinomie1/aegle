@@ -50,7 +50,9 @@ pub fn compile(
     let Loader {
         files, documents, ..
     } = loader;
-    let program = check_program(documents).map_err(|(file, error)| render(&files[file], &error))?;
+    let mut program =
+        check_program(documents).map_err(|(file, error)| render(&files[file], &error))?;
+    program.files = files.iter().map(|file| file.path.clone()).collect();
     Ok((program, files))
 }
 

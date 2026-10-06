@@ -30,4 +30,4 @@ pub use error::{Error, Result};
 pub use frame::Frame;
 pub use renderer::{Options, Renderer};
 #[cfg(feature = "window")]
-pub use window::WindowRenderer;
+pub use window::{SharedGpu, WindowRenderer};

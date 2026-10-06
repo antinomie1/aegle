@@ -22,11 +22,11 @@
 | aegle-platform-win32 | Win32 窗口、IMM 兼容输入、DPI、GDI 软件与 GPU 句柄、外观偏好；TSF 待实现 | types |
 | aegle-platform-appkit | AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
-| aegle-theme | 无分配的 Theme、视觉状态、Appearance/Style 和纯函数 Skin；局部 token 继承与命名空间扩展是后续目标 | types |
+| aegle-theme | 无分配的 Theme、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；命名空间 token 注册表是后续目标 | types |
 | aegle-motion | 时间、补间、过渡及可选弹簧；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
 | aegle-widgets | 无状态的默认皮肤绘制（复选框、单选、开关、滑块、进度、下拉箭头）与滚动条/滚动几何；有状态组件仍在 aegle-app | types、scene、theme |
-| aegle-assets（暂不创建） | 运行时 SVG 光栅化；有界 PNG 解码已由 aegle-glyph 提供，SVG 引入前不单独成 crate | types |
+| aegle-image | 有界图像解码：按签名识别 PNG（复用 aegle-glyph）与可选 JPEG、WebP、GIF 首帧，以及可选的静态 SVG 栅格化 | scene、glyph；解码器按 feature |
 | aegle-markup | 有界解析、跨度、内建控件 schema、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |
 | aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载 | app、markup |
@@ -61,7 +61,7 @@
 
 `aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点；局部主题由子树节点共享一份 `Rc<Theme>`。当前没有主题注册表；系统偏好由平台 crate 报告，原生 App 据此选择主题；可选外观/位移过渡由 app 连接独立 motion 模块。
 
-`aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、ScrollView、标签、按钮、复选框、开关、滑块、进度条、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` / `windows` 按目标增加原生 App；`software` / `vulkan` 分别增加 renderer。各窗口独立拥有 Ui，共享平台和字体；软件 renderer 共用，当前 Vulkan 设备/图集按窗口独立。当前基础皮肤和纯函数皮肤由 app 应用到现有控件；尚未抽出独立 widgets crate，出现更多真实行为/绘制消费者时再形成该模块。
+`aegle-app` 默认不创建平台依赖，但包含当前 Ui 所需的文字、布局和基础控件。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树；提供 row/column、ScrollView、标签、按钮、复选框、开关、滑块、进度条、单行/多行文本编辑和弱句柄。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`wayland` / `windows` 按目标增加原生 App；`software` / `vulkan` 分别增加 renderer。各窗口独立拥有 Ui，共享平台和字体；软件 renderer 共用，GPU 窗口共享第一个窗口创建的设备，图集按窗口独立。当前基础皮肤和纯函数皮肤由 app 应用到现有控件；尚未抽出独立 widgets crate，出现更多真实行为/绘制消费者时再形成该模块。
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 app 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 app 派生的滚动几何。
 
@@ -100,11 +100,11 @@ flowchart TD
 
 | 组合 | 包含 | 不自动包含 |
 | --- | --- | --- |
-| `aegle` 默认 desktop | 目标平台、目标 GPU、Taffy Flex/Block、CJK 文本/编辑、默认组件、主题、基本补间、编译宏 | 系统无障碍适配、运行时加载、SVG、路径特效、Grid、词典分词、弹簧 |
+| `aegle` 默认 desktop | 目标平台、目标 GPU、Taffy Flex/Block、CJK 文本/编辑、默认组件、主题、基本补间、编译宏 | 系统无障碍适配、运行时加载、SVG 与 JPEG/WebP/GIF、SVG 字形、Grid、词典分词、弹簧 |
 | `default-features = false` | 不自动选择窗口/renderer；使用者显式加所需功能或直接用独立模块 | 便捷默认组合 |
 | `runtime-ui` | loader、所注册组件的类型描述与宿主动作 | 通用脚本 VM、文件监视器 |
 | `text-dictionary` | 中日词典分词及相关复杂文字分段数据 | 网络字体 |
-| `vector` / `svg` / `effects` | 分别增加路径、SVG 和阴影/模糊能力 | 三者不互相暗中全部开启 |
+| `effects`（桌面默认）/ `colrv1`（桌面默认）/ `jpeg` / `webp` / `gif` / `svg` | 渐变与阴影图像、COLRv1 字形、各图像格式、静态 SVG（图像与 OpenType-SVG 字形） | 彼此不暗中全部开启 |
 
 默认桌面组合启用无障碍与减少动态效果支持。嵌入式应用可以显式不编译 OS 无障碍 adapter；不能将这种构建宣传为完整无障碍构建。省掉平台 adapter 不要求删除控件的基本语义定义。
 

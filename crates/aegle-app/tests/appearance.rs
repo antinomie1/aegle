@@ -168,3 +168,56 @@ fn local_themes_inherit_nest_and_follow_reparenting() -> Result {
     assert!(panel.set_theme(Some(Theme { gap: -1.0, ..tall })).is_err());
     Ok(())
 }
+
+#[test]
+fn token_overrides_follow_the_parent_theme() -> Result {
+    use aegle_app::ThemeOverride;
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    let panel = ui.root().column()?;
+    let inner = panel.column()?;
+    let button = inner.button("Go")?;
+    let loud = ThemeOverride {
+        accent: Some(Color::rgb(255, 0, 0)),
+        gap: Some(2.0),
+        ..Default::default()
+    };
+    panel.set_theme_override(Some(loud))?;
+    let theme = button.theme()?;
+    assert_eq!((theme.accent, theme.gap), (Color::rgb(255, 0, 0), 2.0));
+    assert_eq!(theme.background, Theme::light().background);
+    // Unset tokens keep following the UI theme; the set ones stay.
+    ui.set_theme(Theme::dark())?;
+    let theme = button.theme()?;
+    assert_eq!(
+        (theme.accent, theme.background),
+        (Color::rgb(255, 0, 0), Theme::dark().background)
+    );
+    // A nested override layers over the outer one.
+    inner.set_theme_override(Some(ThemeOverride {
+        radius: Some(6.0),
+        ..Default::default()
+    }))?;
+    let theme = button.theme()?;
+    assert_eq!((theme.accent, theme.radius), (Color::rgb(255, 0, 0), 6.0));
+    panel.set_theme_override(Some(ThemeOverride::default()))?;
+    assert_eq!(button.theme()?.accent, Theme::dark().accent);
+    assert_eq!(button.theme()?.radius, 6.0);
+    assert!(
+        panel
+            .set_theme_override(Some(ThemeOverride {
+                font_size: Some(0.0),
+                ..Default::default()
+            }))
+            .is_err()
+    );
+    // A snapshot replaces the override; None restores the parent's theme.
+    panel.set_theme(Some(Theme::high_contrast()))?;
+    ui.set_theme(Theme::light())?;
+    assert_eq!(
+        button.theme()?.background,
+        Theme::high_contrast().background
+    );
+    panel.set_theme(None)?;
+    assert_eq!(button.theme()?.background, Theme::light().background);
+    Ok(())
+}

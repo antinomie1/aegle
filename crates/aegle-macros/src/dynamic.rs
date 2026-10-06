@@ -75,7 +75,10 @@ pub(super) fn builder(
         .iter()
         .map(|(name, ..)| Ident::new(name, Span::call_site()))
         .collect();
-    let state_types: Vec<_> = states.iter().map(|(_, ty, _)| rust_type(ty)).collect();
+    let state_types: Vec<_> = states
+        .iter()
+        .map(|(_, ty, _)| rust_type(ty, &quote! { #facade::loader }))
+        .collect();
     let state_indices = 0..states.len();
     let view = format_ident!("__AegleView", span = Span::mixed_site());
     let parent = format_ident!("__aegle_parent", span = Span::mixed_site());
@@ -105,15 +108,18 @@ pub(super) fn builder(
     }})
 }
 
-fn rust_type(ty: &Type) -> TokenStream {
+/// Records, and lists of them, are held as untyped [`Data`](loader::Data).
+fn rust_type(ty: &Type, loader: &TokenStream) -> TokenStream {
     match ty {
         Type::Bool => quote! { bool },
         Type::Int => quote! { i64 },
         Type::Float => quote! { f32 },
         Type::String => quote! { ::std::string::String },
+        Type::List(item) if matches!(**item, Type::Record(_)) => quote! { #loader::Data },
         Type::List(item) => {
-            let item = rust_type(item);
+            let item = rust_type(item, loader);
             quote! { ::std::vec::Vec<#item> }
         }
+        Type::Record(_) => quote! { #loader::Data },
     }
 }

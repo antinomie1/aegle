@@ -9,6 +9,8 @@ struct Identity {
     offset: [u32; 2],
     hint: bool,
     foreground: [u8; 4],
+    embolden: bool,
+    skew: i8,
 }
 
 /// Allocation-free raster identity shared by CPU caches and GPU atlases.
@@ -35,6 +37,7 @@ impl<'a> GlyphKey<'a> {
             .offset
             .iter()
             .any(|v| !v.is_finite() || !(0.0..1.0).contains(v))
+            || !(-89..=89).contains(&options.skew)
             || options.normalized_coords.len() > 64
             || options
                 .normalized_coords
@@ -54,6 +57,8 @@ impl<'a> GlyphKey<'a> {
                     .map(|v| if v == 0.0 { 0 } else { v.to_bits() }),
                 hint: options.hint,
                 foreground: options.foreground,
+                embolden: options.embolden,
+                skew: options.skew,
             },
             coords: options.normalized_coords,
         })

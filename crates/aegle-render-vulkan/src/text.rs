@@ -102,6 +102,8 @@ impl Text {
                     normalized_coords: run.normalized_coords(),
                     hint: raster.hint(),
                     foreground: [r, g, b, 255],
+                    embolden: run.embolden(),
+                    skew: run.skew(),
                 },
                 device,
                 &self.pipeline,

@@ -77,6 +77,10 @@ impl Ui {
             .map_err(|_| UiError::ReentrantAccess)?;
         state.rebuild_order();
         if matches!(kind, PointerKind::Down { .. }) {
+            #[cfg(feature = "motion")]
+            {
+                state.motion.fling = None;
+            }
             state.dismiss_popups(position)?;
         }
         state.pointer =
@@ -121,10 +125,15 @@ impl Ui {
         {
             return Err(UiError::InvalidValue.into());
         }
-        self.state
+        let mut state = self
+            .state
             .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .scroll_by_at(position, delta)?;
+            .map_err(|_| UiError::ReentrantAccess)?;
+        #[cfg(feature = "motion")]
+        {
+            state.motion.fling = None;
+        }
+        state.scroll_by_at(position, delta)?;
         Ok(())
     }
     /// Applies one validated native IME transaction to the focused editable field.
@@ -359,6 +368,8 @@ impl State {
         modifiers: Modifiers,
     ) -> Input<'static> {
         let element = &self.tree.get(target).unwrap().context;
+        let window = position;
+        let position = self.untransform(target, position);
         let mut local = Point::new(
             position.x - element.bounds.origin.x,
             position.y - element.bounds.origin.y,
@@ -379,11 +390,11 @@ impl State {
             kind,
             position: local,
             inside: element.bounds.contains(position)
-                && element.clip.is_none_or(|clip| clip.contains(position)),
+                && element.clip.is_none_or(|clip| clip.contains(window)),
             modifiers,
         })
     }
-    fn hit(&self, position: Point) -> Option<NodeId> {
+    pub(crate) fn hit(&self, position: Point) -> Option<NodeId> {
         // A shown popup covers everything below it, including its padding.
         let popup = self.popup_at(position);
         if popup.is_none() {
@@ -396,7 +407,7 @@ impl State {
             popup.is_none_or(|popup| self.contains(popup, id))
                 && element.effective_visible
                 && self.usable(id)
-                && element.bounds.contains(position)
+                && element.bounds.contains(self.untransform(id, position))
                 && element.clip.is_none_or(|clip| clip.contains(position))
                 && element.content.interactive()
         })

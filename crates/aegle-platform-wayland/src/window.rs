@@ -89,6 +89,7 @@ impl Wayland {
             ime,
             clipboard,
             windows: Vec::new(),
+            scale: crate::scale::ScaleGlobals::bind(&globals, &qh),
             events: VecDeque::new(),
             preferences: Default::default(),
         };
@@ -157,7 +158,7 @@ impl Wayland {
     pub fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
         let info = WindowInfo {
             size: options.size,
-            scale: 1,
+            scale: 1.0,
             active: false,
             configured: false,
         };
@@ -174,6 +175,11 @@ impl Wayland {
             .checked_add(1)
             .ok_or_else(|| Error::backend("window identity exhausted"))?;
         let surface = self.state.compositor.create_surface(&self.qh);
+        let fractional = self
+            .state
+            .scale
+            .as_ref()
+            .map(|scale| scale.attach(&surface, &self.qh));
         let window = if let Some(layer) = options.layer {
             let shell = self.state.layer_shell.as_ref().ok_or_else(|| {
                 surface.destroy();
@@ -221,6 +227,7 @@ impl Wayland {
             frame_pending: false,
             frame_requested: false,
             cursor: Cursor::Default,
+            fractional,
         });
         Ok(id)
     }
@@ -245,6 +252,7 @@ impl Wayland {
             | Event::Key { window, .. }
             | Event::Modifiers { window, .. }
             | Event::Pointer { window, .. }
+            | Event::Touch { window, .. }
             | Event::Ime { window, .. }
             | Event::Clipboard { window, .. } => *window != id,
             _ => true,
@@ -384,6 +392,8 @@ impl Wayland {
         }
         window.dirty = false;
         let size = window.info.buffer_size().map_err(PresentError::Platform)?;
+        // Pending surface state only takes effect with the commit below.
+        window.apply_scale();
         let Some(buffer) = window
             .buffers
             .paint(&self.state.shm, size, |pixels| draw(pixels, size))?
@@ -392,7 +402,6 @@ impl Wayland {
             return Ok(false);
         };
         let surface = window.window.wl_surface();
-        surface.set_buffer_scale(window.info.scale as i32);
         surface.damage_buffer(0, 0, size.width as i32, size.height as i32);
         buffer
             .attach_to(surface)

@@ -1,8 +1,12 @@
 //! A native window owner kept alive beyond its Vulkan objects.
 #![allow(unsafe_code)]
-use crate::{Error, Frame, Options, Renderer, Result, Stats, device::Device, swapchain::Swapchain};
+use crate::{
+    Error, Frame, Options, Renderer, Result, Stats, device::Device, surface::Surface,
+    swapchain::Swapchain,
+};
 use aegle_scene::Color;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use std::rc::Rc;
 
 /// Vulkan FIFO presentation for a retained native Wayland or Win32 owner.
 ///
@@ -12,6 +16,10 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 /// swapchain image. No CPU framebuffer/readback or redundant RGBA8 offscreen image
 /// exists. One graphics submission is in flight at a time.
 /// The native event loop remains the caller's responsibility.
+///
+/// Windows on one connection can share a Vulkan instance and logical device with
+/// [`WindowRenderer::with_device`]; each keeps its own swapchain, pipelines and
+/// glyph atlas.
 pub struct WindowRenderer<W> {
     renderer: Renderer,
     // Drops after Renderer, its Vulkan surface and all pending presentation.
@@ -36,11 +44,48 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
             .window_handle()
             .map_err(|_| Error::Unsupported("native window handle unavailable"))?
             .as_raw();
-        let device = Device::for_window(options.device_index, display, handle)?;
+        let (device, surface) = Device::for_window(options.device_index, display, handle)?;
         Ok(Self {
-            renderer: Renderer::with_device(options, device)?,
+            renderer: Renderer::with_device(options, Rc::new(device), Some(surface))?,
             _window: window,
         })
+    }
+
+    /// Creates a window renderer on a device another window already created,
+    /// without a second Vulkan instance, device or queue. The device's queue must
+    /// be able to present to this window; otherwise an unsupported error returns.
+    ///
+    /// # Safety
+    /// Same contract as [`Self::new`]. Both windows must belong to the same
+    /// display connection, and all renderers on the device run on one thread.
+    pub unsafe fn with_device(window: W, options: Options, device: &SharedDevice) -> Result<Self> {
+        let display = window
+            .display_handle()
+            .map_err(|_| Error::Unsupported("native display handle unavailable"))?
+            .as_raw();
+        let handle = window
+            .window_handle()
+            .map_err(|_| Error::Unsupported("native window handle unavailable"))?
+            .as_raw();
+        let shared = &device.0;
+        let surface = Surface::new(shared.entry(), &shared.instance, display, handle)?;
+        surface.supports(&shared.instance, shared.physical, shared.family)?;
+        Ok(Self {
+            renderer: Renderer::with_device(options, shared.clone(), Some(surface))?,
+            _window: window,
+        })
+    }
+}
+
+/// A Vulkan instance and logical device shared by several [`WindowRenderer`]s on
+/// one thread. The last renderer or handle to drop destroys it.
+#[derive(Clone)]
+pub struct SharedDevice(Rc<Device>);
+
+impl<W> WindowRenderer<W> {
+    /// A handle to this renderer's device for [`WindowRenderer::with_device`].
+    pub fn shared_device(&self) -> SharedDevice {
+        SharedDevice(self.renderer.device.clone())
     }
 }
 impl<W> WindowRenderer<W> {
@@ -126,6 +171,9 @@ impl Renderer {
             self.target = None;
             self.swapchain = Swapchain::new(
                 &self.device,
+                self.surface
+                    .as_ref()
+                    .expect("window renderer has a surface"),
                 &self.pipeline,
                 width,
                 height,

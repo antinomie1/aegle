@@ -24,6 +24,8 @@ pub struct GlyphRun {
     color: Color,
     coords: Vec<i16>,
     glyphs: Vec<Glyph>,
+    embolden: bool,
+    skew: i8,
 }
 
 impl GlyphRun {
@@ -55,7 +57,19 @@ impl GlyphRun {
             color,
             coords,
             glyphs,
+            embolden: false,
+            skew: 0,
         })
+    }
+
+    /// Requests synthetic bold and a slant of `skew` degrees (positive leans right)
+    /// for fonts that lack the requested face. Skew must lie within ±89 degrees.
+    pub fn synthesized(mut self, embolden: bool, skew: i8) -> Result<Self, SceneError> {
+        if !(-89..=89).contains(&skew) {
+            return Err(SceneError::InvalidText);
+        }
+        (self.embolden, self.skew) = (embolden, skew);
+        Ok(self)
     }
 
     /// Shared font file and face index.
@@ -73,6 +87,14 @@ impl GlyphRun {
     /// Normalized F2Dot14 variation coordinates in font-axis order.
     pub fn normalized_coords(&self) -> &[i16] {
         &self.coords
+    }
+    /// Whether the rasterizer should apply synthetic bold.
+    pub fn embolden(&self) -> bool {
+        self.embolden
+    }
+    /// Synthetic slant in degrees; zero is upright.
+    pub fn skew(&self) -> i8 {
+        self.skew
     }
     /// Glyph indices and baseline origins.
     pub fn glyphs(&self) -> &[Glyph] {

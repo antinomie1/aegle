@@ -5,6 +5,7 @@ use crate::{
 use aegle_gpu::{Clip, Primitive, Recording, Step, Walker, viewport};
 use aegle_scene::{Affine, Color, Rect, Scene};
 use ash::vk;
+use std::rc::Rc;
 
 /// Fixed configuration; budgets are independent of hidden driver allocations.
 #[derive(Clone, Copy, Debug)]
@@ -65,6 +66,9 @@ pub struct Renderer {
     pub(crate) swapchain: Option<crate::swapchain::Swapchain>,
     #[cfg(feature = "window")]
     pub(crate) window_size: [u32; 2],
+    /// This window's surface; it outlives the swapchain and precedes the device.
+    #[cfg(feature = "window")]
+    pub(crate) surface: Option<crate::surface::Surface>,
     /// Host-visible clip and primitive storage, rewritten after each fence.
     buffers: [Option<Buffer>; 2],
     readback: Option<Buffer>,
@@ -72,7 +76,7 @@ pub struct Renderer {
     text: crate::text::Text,
     pub(crate) pipeline: Pipeline,
     commands: Commands,
-    pub(crate) device: Device,
+    pub(crate) device: Rc<Device>,
     recording: Recording,
     pub(crate) options: Options,
     name: String,
@@ -84,10 +88,19 @@ impl Renderer {
     /// Loads the installed Vulkan loader and creates a Vulkan 1.1 graphics device.
     /// No image, upload buffer or readback allocation is made until first use.
     pub fn new(options: Options) -> Result<Self> {
-        Self::with_device(options, Device::new(options.device_index)?)
+        Self::with_device(
+            options,
+            Rc::new(Device::new(options.device_index)?),
+            #[cfg(feature = "window")]
+            None,
+        )
     }
 
-    pub(crate) fn with_device(options: Options, device: Device) -> Result<Self> {
+    pub(crate) fn with_device(
+        options: Options,
+        device: Rc<Device>,
+        #[cfg(feature = "window")] surface: Option<crate::surface::Surface>,
+    ) -> Result<Self> {
         let name = std::ffi::CStr::from_bytes_until_nul(bytemuck::cast_slice(
             &device.properties.device_name,
         ))
@@ -95,7 +108,7 @@ impl Renderer {
         .to_string_lossy()
         .into_owned();
         #[cfg(feature = "window")]
-        let pipeline = Pipeline::new(&device, options.transparent)?;
+        let pipeline = Pipeline::new(&device, surface.as_ref(), options.transparent)?;
         #[cfg(not(feature = "window"))]
         let pipeline = Pipeline::new(&device)?;
         let commands = Commands::new(&device)?;
@@ -107,6 +120,8 @@ impl Renderer {
             swapchain: None,
             #[cfg(feature = "window")]
             window_size: [0; 2],
+            #[cfg(feature = "window")]
+            surface,
             buffers: [None, None],
             readback: None,
             #[cfg(feature = "text")]

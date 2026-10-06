@@ -1,6 +1,6 @@
 use crate::native::Entry;
 use crate::{ImeEdit, Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size};
-use aegle_platform_wayland::{Event, ImeEvent, Keysym, PointerEventKind, WindowId};
+use aegle_platform_wayland::{Event, ImeEvent, Keysym, PointerEventKind, TouchPhase, WindowId};
 use aegle_text::Selection;
 use wayland_client::Proxy;
 
@@ -13,6 +13,7 @@ pub(crate) fn target(event: &Event) -> Option<WindowId> {
         | Event::Key { window, .. }
         | Event::Modifiers { window, .. }
         | Event::Pointer { window, .. }
+        | Event::Touch { window, .. }
         | Event::Ime { window, .. }
         | Event::Clipboard { window, .. } => Some(*window),
         Event::Wake | Event::Preferences(_) | Event::Error(_) => None,
@@ -20,6 +21,28 @@ pub(crate) fn target(event: &Event) -> Option<WindowId> {
 }
 
 impl Entry {
+    /// Starts momentum from the last 100 ms of finger scrolling; a pause before
+    /// the lift, or a single sample, leaves the view where it stopped.
+    #[cfg(feature = "motion")]
+    fn release_flick(&mut self, time: u32, position: Point) -> Result<()> {
+        let samples = std::mem::take(&mut self.flick);
+        let recent: Vec<_> = samples
+            .iter()
+            .filter(|(at, _)| time.wrapping_sub(*at) <= 100)
+            .collect();
+        let (Some(first), Some(last)) = (recent.first(), recent.last()) else {
+            return Ok(());
+        };
+        let span = last.0.wrapping_sub(first.0) as f32 / 1000.0;
+        if recent.len() < 2 || span <= 0.0 {
+            return Ok(());
+        }
+        let (x, y) = recent[1..]
+            .iter()
+            .fold((0.0, 0.0), |(x, y), (_, d)| (x + d.x, y + d.y));
+        self.ui.fling(position, Point::new(x / span, y / span))
+    }
+
     pub fn event(&mut self, event: Event) -> Result<()> {
         match event {
             Event::Configure { info, .. } => {
@@ -85,18 +108,48 @@ impl Entry {
                     PointerEventKind::Release { button: 0x110, .. } => PointerKind::Up,
                     PointerEventKind::Leave { .. } => return self.ui.pointer_leave(),
                     PointerEventKind::Axis {
+                        #[cfg(feature = "motion")]
+                        time,
                         horizontal,
                         vertical,
                         ..
                     } => {
-                        return self.ui.scroll_by(
-                            position,
-                            Point::new(horizontal.absolute as f32, vertical.absolute as f32),
-                        );
+                        let delta =
+                            Point::new(horizontal.absolute as f32, vertical.absolute as f32);
+                        #[cfg(feature = "motion")]
+                        if horizontal.stop || vertical.stop {
+                            return self.release_flick(time, position);
+                        } else {
+                            if self.flick.len() == 8 {
+                                self.flick.remove(0);
+                            }
+                            self.flick.push((time, delta));
+                        }
+                        return self.ui.scroll_by(position, delta);
                     }
                     _ => return Ok(()),
                 };
                 self.ui.pointer(id, kind, position, self.modifiers)?;
+            }
+            Event::Touch {
+                seat,
+                id,
+                position,
+                time,
+                phase,
+                ..
+            } => {
+                // Fingers are pointers of their own: seat and finger identify them.
+                let pointer = PointerId(
+                    (1 << 40) | (u64::from(seat.id().protocol_id()) << 16) | (id as u16 as u64),
+                );
+                let phase = match phase {
+                    TouchPhase::Down => crate::TouchPhase::Down,
+                    TouchPhase::Move => crate::TouchPhase::Move,
+                    TouchPhase::Up => crate::TouchPhase::Up,
+                    TouchPhase::Cancel => crate::TouchPhase::Cancel,
+                };
+                self.ui.touch(pointer, phase, position, time)?;
             }
             Event::Ime { seat, event, .. } => {
                 // Text-input focus is authoritative even when the seat has not

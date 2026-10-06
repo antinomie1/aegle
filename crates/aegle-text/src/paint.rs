@@ -42,13 +42,6 @@ pub(crate) fn paint_layout(
         return Err(PaintError::MissingFont);
     }
     for line in layout.lines() {
-        for run in line.runs() {
-            if run.synthesis().embolden() || run.synthesis().skew().is_some() {
-                return Err(PaintError::SyntheticStyle);
-            }
-        }
-    }
-    for line in layout.lines() {
         for item in line.items() {
             let PositionedLayoutItem::GlyphRun(positioned) = item else {
                 continue;
@@ -63,13 +56,19 @@ pub(crate) fn paint_layout(
                     })
                 })
                 .collect::<Result<Vec<_>, PaintError>>()?;
-            builder.glyphs(GlyphRun::new(
-                run.font().clone(),
-                run.font_size(),
-                color.unwrap_or(positioned.style().brush),
-                run.normalized_coords().to_vec(),
-                glyphs,
-            )?)?;
+            builder.glyphs(
+                GlyphRun::new(
+                    run.font().clone(),
+                    run.font_size(),
+                    color.unwrap_or(positioned.style().brush),
+                    run.normalized_coords().to_vec(),
+                    glyphs,
+                )?
+                .synthesized(
+                    run.synthesis().embolden(),
+                    run.synthesis().skew().map_or(0, |a| a.round() as i8),
+                )?,
+            )?;
         }
     }
     Ok(())
@@ -80,8 +79,6 @@ pub(crate) fn paint_layout(
 pub enum PaintError {
     /// Some text has no selected font; inspect [`Paragraph::diagnostics`].
     MissingFont,
-    /// Synthetic bold or oblique rendering is not implemented.
-    SyntheticStyle,
     /// A glyph index does not fit the OpenType 16-bit glyph-index range.
     GlyphIndex,
     /// Invalid scene geometry or coordinates.
@@ -98,7 +95,6 @@ impl fmt::Display for PaintError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingFont => f.write_str("paragraph contains text with no selected font"),
-            Self::SyntheticStyle => f.write_str("synthetic font styling is not supported"),
             Self::GlyphIndex => f.write_str("glyph index exceeds the OpenType range"),
             Self::Scene(error) => error.fmt(f),
         }

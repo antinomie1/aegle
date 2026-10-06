@@ -16,6 +16,8 @@ mod access_scroll;
 mod accessibility;
 mod callbacks;
 mod cursor;
+#[cfg(feature = "motion")]
+mod fling;
 mod handles;
 mod input;
 mod layout;
@@ -49,6 +51,11 @@ mod native_loop;
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
 ))]
+mod native_proxy;
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
 mod native_render;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 use aegle_platform_wayland as platform;
@@ -65,6 +72,8 @@ mod style_handles;
 mod table;
 mod text_handles;
 mod theme;
+mod touch;
+mod transform;
 mod ui;
 mod value_handles;
 mod visual_handles;
@@ -78,8 +87,10 @@ pub use aegle_render_vulkan::Options as VulkanOptions;
 pub use aegle_render_wgpu::Options as WgpuOptions;
 pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, Selection, TextSystem};
-pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, VisualState};
+pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, VisualState};
 pub use aegle_types::{Color, Cursor, Point, Size};
+#[cfg(feature = "effects")]
+pub use aegle_widgets::effects;
 pub use handles::{Button, Container, Label, Node, TextField};
 pub use list::ListView;
 #[cfg(any(
@@ -91,12 +102,19 @@ pub use native::{App, AppOptions, RendererBackend, Window, WindowOptions};
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
 ))]
+pub use native_proxy::UiProxy;
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
 pub use platform::Preferences;
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 pub use platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
 pub use popup::{Dropdown, Popup};
 pub use scroll_handles::ScrollView;
 pub use table::{Table, TableColumn};
+pub use touch::TouchPhase;
+pub use transform::Transform;
 pub use ui::{ClipboardRequest, ImeRequest, ImeState, Result, Ui, UiError};
 pub use value_handles::{CheckBox, Progress, Radio, Slider, Switch};
 pub use visual_handles::{Canvas, ImageView};

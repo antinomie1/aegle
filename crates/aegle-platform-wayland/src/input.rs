@@ -1,7 +1,11 @@
 //! Seat-local input state. SCTK translates physical keys; repeat timers are explicitly owned.
 
+#[path = "pointer.rs"]
+mod pointer;
 #[path = "repeat.rs"]
 mod repeat;
+#[path = "touch.rs"]
+mod touch;
 use repeat::Repeat;
 
 use aegle_types::{Cursor, Point};
@@ -12,14 +16,12 @@ use smithay_client_toolkit::{
         keyboard::{
             KeyEvent, KeyboardHandler, Keymap, Keysym, Modifiers, RawModifiers, RepeatInfo,
         },
-        pointer::{
-            CursorIcon, PointerEvent, PointerEventKind, PointerHandler, ThemeSpec, ThemedPointer,
-        },
+        pointer::{CursorIcon, PointerEventKind, ThemeSpec, ThemedPointer},
     },
 };
 use wayland_client::{
     Connection, Proxy, QueueHandle,
-    protocol::{wl_keyboard, wl_pointer::WlPointer, wl_seat::WlSeat, wl_surface::WlSurface},
+    protocol::{wl_keyboard, wl_seat::WlSeat, wl_surface::WlSurface, wl_touch::WlTouch},
 };
 
 use crate::{Error, Event, ImeEvent, State, WindowId};
@@ -43,6 +45,9 @@ struct SeatInput {
     seat: WlSeat,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<ThemedPointer>,
+    touch: Option<WlTouch>,
+    /// Active fingers and the windows they touched down in.
+    fingers: Vec<(i32, WindowId)>,
     focus: Option<(WindowId, WlSurface)>,
     pointer_focus: Option<(WindowId, Point)>,
     modifiers: Modifiers,
@@ -57,6 +62,11 @@ impl Drop for SeatInput {
             }
         }
         self.pointer.take();
+        if let Some(touch) = self.touch.take() {
+            if touch.version() >= 3 {
+                touch.release();
+            }
+        }
         if self.seat.version() >= 5 {
             self.seat.release();
         }
@@ -197,6 +207,8 @@ impl SeatHandler for State {
             seat,
             keyboard: None,
             pointer: None,
+            touch: None,
+            fingers: Vec::new(),
             focus: None,
             pointer_focus: None,
             modifiers: Modifiers::default(),
@@ -238,6 +250,10 @@ impl SeatHandler for State {
                     }
                 }
             }
+            Capability::Touch => match self.seat_state.get_touch(qh, &seat) {
+                Ok(touch) => input.touch = Some(touch),
+                Err(error) => self.events.push_back(Event::Error(Error::backend(error))),
+            },
             _ => {}
         }
     }
@@ -266,6 +282,14 @@ impl SeatHandler for State {
                 self.cancel_pointer_focus(index);
                 self.input.seats[index].pointer.take();
             }
+            Capability::Touch => {
+                self.cancel_fingers(index);
+                if let Some(touch) = self.input.seats[index].touch.take() {
+                    if touch.version() >= 3 {
+                        touch.release();
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -282,6 +306,7 @@ impl SeatHandler for State {
         if let Some(index) = self.input.seats.iter().position(|input| input.seat == seat) {
             self.cancel_keyboard_focus(index);
             self.cancel_pointer_focus(index);
+            self.cancel_fingers(index);
             self.input.seats.swap_remove(index);
         }
     }
@@ -460,64 +485,6 @@ impl KeyboardHandler for State {
             if let Err(error) = input.repeat.keymap(map) {
                 self.events.push_back(Event::Error(error));
             }
-        }
-    }
-}
-
-impl PointerHandler for State {
-    fn pointer_frame(
-        &mut self,
-        conn: &Connection,
-        _: &QueueHandle<Self>,
-        pointer: &WlPointer,
-        events: &[PointerEvent],
-    ) {
-        let Some(index) = self.input.seats.iter().position(|input| {
-            input
-                .pointer
-                .as_ref()
-                .is_some_and(|themed| themed.pointer() == pointer)
-        }) else {
-            return;
-        };
-        for event in events {
-            let Some(window) = self.window_id(&event.surface) else {
-                continue;
-            };
-            let input = &mut self.input.seats[index];
-            if let PointerEventKind::Press { serial, .. } = event.kind {
-                self.clipboard.input(&input.seat, serial);
-            }
-            let position = Point {
-                x: event.position.0 as f32,
-                y: event.position.1 as f32,
-            };
-            input.pointer_focus = match event.kind {
-                PointerEventKind::Leave { .. } => None,
-                _ => Some((window, position)),
-            };
-            if matches!(event.kind, PointerEventKind::Enter { .. }) {
-                // Entering needs a fresh cursor for the serial; keep the window's.
-                let shape = self
-                    .windows
-                    .iter()
-                    .find(|w| w.id == window)
-                    .map_or(Cursor::Default, |w| w.cursor);
-                if let Err(error) = input
-                    .pointer
-                    .as_ref()
-                    .expect("registered pointer")
-                    .set_cursor(conn, icon(shape))
-                {
-                    self.events.push_back(Event::Error(Error::backend(error)));
-                }
-            }
-            self.events.push_back(Event::Pointer {
-                window,
-                seat: input.seat.clone(),
-                position,
-                kind: event.kind.clone(),
-            });
         }
     }
 }

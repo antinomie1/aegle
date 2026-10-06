@@ -15,7 +15,47 @@ pub(super) fn program(program: &Program, m: &TokenStream) -> TokenStream {
         let kind = variant(kind);
         quote! { (::std::string::String::from(#name), #m::Kind::#kind) }
     });
-    quote! { #m::Program { templates: vec![#(#templates),*], ids: vec![#(#ids),*] } }
+    let records = program.records.iter().map(|record| {
+        let name = &record.name;
+        let fields = record.fields.iter().map(|(field, ty)| {
+            let ty = self::ty(ty, m);
+            quote! { (::std::string::String::from(#field), #ty) }
+        });
+        let span = span(record.span, m);
+        quote! {
+            #m::Record {
+                name: ::std::string::String::from(#name),
+                fields: vec![#(#fields),*],
+                span: #span,
+            }
+        }
+    });
+    let host_calls = program.host_calls.iter().map(|call| {
+        let (name, file) = (&call.name, call.file);
+        let types = call.types.iter().map(|t| self::ty(t, m));
+        let span = span(call.span, m);
+        quote! {
+            #m::HostCall {
+                name: ::std::string::String::from(#name),
+                types: vec![#(#types),*],
+                file: #file,
+                span: #span,
+            }
+        }
+    });
+    let files = program
+        .files
+        .iter()
+        .map(|file| quote! { ::std::string::String::from(#file) });
+    quote! {
+        #m::Program {
+            templates: vec![#(#templates),*],
+            ids: vec![#(#ids),*],
+            records: vec![#(#records),*],
+            host_calls: vec![#(#host_calls),*],
+            files: vec![#(#files),*],
+        }
+    }
 }
 
 fn template(template: &Template, m: &TokenStream) -> TokenStream {
@@ -31,12 +71,20 @@ fn template(template: &Template, m: &TokenStream) -> TokenStream {
         let (ty, value) = (self::ty(ty, m), expr(value, m));
         quote! { (::std::string::String::from(#name), #ty, #value) }
     });
+    let events = template.events.iter().map(|(name, ty)| {
+        let ty = option(ty.as_ref().map(|t| self::ty(t, m)));
+        quote! { (::std::string::String::from(#name), #ty) }
+    });
+    let (slot, file) = (template.slot, template.file);
     let root = element(&template.root, m);
     quote! {
         #m::Template {
             name: ::std::string::String::from(#name),
             params: vec![#(#params),*],
             states: vec![#(#states),*],
+            events: vec![#(#events),*],
+            slot: #slot,
+            file: #file,
             root: #root,
         }
     }
@@ -75,6 +123,21 @@ fn element(element: &Element, m: &TokenStream) -> TokenStream {
         let (event, body) = (variant(event), body.iter().map(|s| step(s, m)));
         quote! { (#m::EventKind::#event, ::std::rc::Rc::from(vec![#(#body),*])) }
     });
+    let handlers = element.handlers.iter().map(|handler| {
+        let (event, binds_value) = (handler.event, handler.binds_value);
+        let steps = handler.steps.iter().map(|s| step(s, m));
+        quote! {
+            #m::Handler {
+                event: #event,
+                binds_value: #binds_value,
+                steps: ::std::rc::Rc::from(vec![#(#steps),*]),
+            }
+        }
+    });
+    let slot = option(element.slot.as_ref().map(|children| {
+        let children = children.iter().map(|c| child(c, m));
+        quote! { ::std::rc::Rc::from(vec![#(#children),*]) }
+    }));
     let children = element.children.iter().map(|c| child(c, m));
     let span = span(element.span, m);
     quote! {
@@ -84,7 +147,9 @@ fn element(element: &Element, m: &TokenStream) -> TokenStream {
             properties: vec![#(#properties),*],
             arguments: vec![#(#arguments),*],
             events: vec![#(#events),*],
+            handlers: vec![#(#handlers),*],
             children: vec![#(#children),*],
+            slot: #slot,
             span: #span,
         }
     }
@@ -104,10 +169,15 @@ fn child(child: &Child, m: &TokenStream) -> TokenStream {
             let (condition, then, otherwise) = (expr(condition, m), list(then), list(otherwise));
             quote! { #m::Child::If(::std::rc::Rc::new(#condition), #then, #otherwise) }
         }
-        Child::For(items, body) => {
+        Child::For(items, key, body) => {
             let (items, body) = (expr(items, m), list(body));
-            quote! { #m::Child::For(::std::rc::Rc::new(#items), #body) }
+            let key = option(key.as_ref().map(|key| {
+                let key = expr(key, m);
+                quote! { ::std::rc::Rc::new(#key) }
+            }));
+            quote! { #m::Child::For(::std::rc::Rc::new(#items), #key, #body) }
         }
+        Child::Slot => quote! { #m::Child::Slot },
     }
 }
 
@@ -122,6 +192,21 @@ fn step(step: &Step, m: &TokenStream) -> TokenStream {
             let then = then.iter().map(|s| self::step(s, m));
             let otherwise = otherwise.iter().map(|s| self::step(s, m));
             quote! { #m::Step::If(#condition, vec![#(#then),*], vec![#(#otherwise),*]) }
+        }
+        Step::Let(value) => {
+            let value = expr(value, m);
+            quote! { #m::Step::Let(#value) }
+        }
+        Step::Host(name, arguments, at) => {
+            let arguments = arguments.iter().map(|a| expr(a, m));
+            let at = span(*at, m);
+            quote! {
+                #m::Step::Host(::std::string::String::from(#name), vec![#(#arguments),*], #at)
+            }
+        }
+        Step::Emit(event, value) => {
+            let value = option(value.as_ref().map(|v| expr(v, m)));
+            quote! { #m::Step::Emit(#event, #value) }
         }
     }
 }
@@ -155,15 +240,26 @@ fn expr(expr: &Expr, m: &TokenStream) -> TokenStream {
             let items = items.iter().map(|i| self::expr(i, m));
             quote! { #m::ExprKind::List(vec![#(#items),*]) }
         }
+        ExprKind::Record(index, values) => {
+            let values = values.iter().map(|v| self::expr(v, m));
+            quote! { #m::ExprKind::Record(#index, vec![#(#values),*]) }
+        }
+        ExprKind::FieldAt(record, index) => {
+            let record = boxed(record);
+            quote! { #m::ExprKind::FieldAt(#record, #index) }
+        }
         ExprKind::Ref(reference) => {
             let reference = match reference {
                 Ref::State(i) => quote! { State(#i) },
                 Ref::Param(i) => quote! { Param(#i) },
                 Ref::Item(i) => quote! { Item(#i) },
+                Ref::Local(i) => quote! { Local(#i) },
             };
             quote! { #m::ExprKind::Ref(#m::Ref::#reference) }
         }
-        ExprKind::Name(_) => unreachable!("checked expressions are resolved"),
+        ExprKind::Name(_) | ExprKind::Field(..) => {
+            unreachable!("checked expressions are resolved")
+        }
     };
     let span = span(expr.span, m);
     quote! { #m::Expr { kind: #kind, span: #span } }
@@ -193,6 +289,7 @@ fn ty(ty: &Type, m: &TokenStream) -> TokenStream {
             let item = self::ty(item, m);
             quote! { #m::Type::List(::std::boxed::Box::new(#item)) }
         }
+        Type::Record(name) => quote! { #m::Type::Record(::std::string::String::from(#name)) },
     }
 }
 

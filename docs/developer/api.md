@@ -19,7 +19,11 @@ aegle = { path = "../aegle/crates/aegle" }
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现（Linux 链接 Fontconfig） |
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
-| `motion` | ✓ | 外观/位移过渡与动画 |
+| `motion` | ✓ | 外观/位移/缩放旋转过渡、惯性滚动 |
+| `effects` | ✓ | `aegle::effects`：线性/径向渐变与柔和阴影图像 |
+| `colrv1` | ✓ | COLRv1 彩色字形（渐变、变换、混合层） |
+| `jpeg` / `webp` / `gif` |  | `aegle::image::decode` 解码 JPEG、WebP（静态）、GIF（首帧） |
+| `svg` |  | 静态 SVG（无文字）：`aegle::image::svg` 栅格化，并渲染 OpenType-SVG 字形 |
 | `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译 |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），可与其他后端同时编译 |
 | `accessibility` |  | 语义树导出（`Ui::accessibility`），不接系统 |
@@ -128,7 +132,9 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `image(&Image)` | `ImageView` | 图像 |
 | `canvas(painter)` | `Canvas` | 自定义绘制 |
 
-`Image` 是共享的、不可变的 RGBA8 像素（非预乘 sRGB，自上而下）。从文件加载 PNG 用 `aegle::decode_image(&bytes)?`，或用 `aegle::decode_png` 取得原始像素；任意色彩类型、调色板、`tRNS` 和 16 位都会转为 RGBA8，伽马与 ICC 块被忽略，默认解码结果不超过 64 MiB（`decode_png_with_limit` 可调整），宽高不超过 16,384，超限返回 `DecodeError::TooLarge`，不是 PNG 返回 `NotPng`，损坏返回 `Invalid`。目前只支持 PNG。
+`Image` 是共享的、不可变的 RGBA8 像素（非预乘 sRGB，自上而下）。从文件加载 PNG 用 `aegle::decode_image(&bytes)?`，或用 `aegle::decode_png` 取得原始像素；任意色彩类型、调色板、`tRNS` 和 16 位都会转为 RGBA8，伽马与 ICC 块被忽略，默认解码结果不超过 64 MiB（`decode_png_with_limit` 可调整），宽高不超过 16,384，超限返回 `DecodeError::TooLarge`，不是 PNG 返回 `NotPng`，损坏返回 `Invalid`。
+
+其他格式在可选 feature 后：`aegle::image::decode(&bytes)` 按签名识别 PNG 与已启用的 JPEG/WebP/GIF，返回直接可用的 `Image`（错误为 `image::Error::{Unsupported, Invalid, TooLarge}`，`decode_with_limit` 调整字节预算）；`aegle::image::svg::rasterize(&bytes, width, height)` 把静态 SVG 栅格到指定尺寸，`svg::size` 读取固有尺寸，SVG 文字与外部文件不支持。渐变和阴影用 `aegle::effects::{linear_gradient, radial_gradient, shadow}` 生成 `Image`，再用 `image(&image)` 控件或 `Canvas` 里的 `builder.image` 绘制。
 
 所有类型化句柄都解引用为 `Node`，共享以下方法：
 
@@ -172,7 +178,11 @@ let panel = app.window_with_options("Panel", WindowOptions {
 window.set_theme(Theme { radius: 6.0, ..Theme::dark() })?;   // 整个窗口
 panel.set_theme(Some(Theme::dark()))?;                      // 只作用于 panel 子树
 panel.set_theme(None)?;                                     // 恢复继承
+// 只替换指定 token，其余跟随父主题（含之后的变化）
+panel.set_theme_override(Some(ThemeOverride { accent: Some(Color::rgb(200, 40, 40)), ..Default::default() }))?;
 ```
+
+原生 `App` 把系统文本缩放（Windows 的文本大小、GNOME 的 `text-scaling-factor`，百分比）应用到解析后主题的 `font_size` 与 `control_height`；`AppOptions.text_scale = Some(125)` 可显式指定，`None`（默认）跟随系统。
 
 **局部样式** 覆盖单个控件，优先于主题和皮肤：`set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_focus_color`、`set_focus_width`、`set_hover_background`、`set_pressed_background`、`set_disabled_background`、`set_disabled_foreground`、`set_selection_color`、`set_caret_color`、`set_indicator_color`，以及字号 `set_font_size` / `clear_font_size`。也可以用 `set_style(Style { .. })` 一次设置，`style()` 读取，`appearance()` 返回当前解析结果。不适用的属性返回 `UiError::WrongKind`。
 
@@ -220,6 +230,10 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 - 程序 setter（`set_checked`、`set_value`、`set_text` 等）不触发回调，可安全地相互同步；`activate()`、`toggle()`、`increment()`/`decrement()` 模拟用户操作并触发回调。
 - 每个控件每种事件只有一个处理器，再次设置会替换。
 
+### 后台线程
+
+UI 句柄只能留在 UI 线程。`let proxy = app.proxy(move |message: Job| { label.set_text(&message.text)?; Ok(()) })?;` 返回可克隆、可发送的 `UiProxy<Job>`；任意线程 `proxy.send(job)`（队列上限 1024，满或应用退出时把消息退回）并唤醒事件循环，handler 在 UI 线程于所有借用之外按序运行，可以自由使用其中捕获的控件句柄。
+
 ## 8. 过渡与动画（`motion`）
 
 ```rust
@@ -234,6 +248,9 @@ card.on_transition_end(move |_| window.close())?;       // 全部过渡完成后
 - 外观过渡覆盖背景、文字、边框、圆角、焦点环、选择、caret 和标志颜色；`presented_appearance()` 返回当前呈现值。
 - `finish_transition()` 立即到终点并完成；`cancel_transition()` 停在当前呈现值；`clear_transition()` 移除策略并回到目标。
 - `set_offset` 不改变布局；没有过渡策略时立即生效。
+- `card.set_transform(Transform { scale: 1.2, rotation: 0.1 })` 以节点中心缩放/旋转子树（弧度，呈现层变换，布局不变），同样可补间；命中、滚动视口裁剪（外包框）、IME 锚点与无障碍变换跟随。
+- `ui.fling(position, velocity)` 在触摸板/触摸抬起后继续滚动（逻辑像素/秒，指数衰减），任何新的滚动、按下或 `ui.stop_fling()` 都会停止。
+- 手指输入用 `ui.touch(PointerId(..), TouchPhase::Down/Move/Up/Cancel, position, time_ms)`：点击与控件拖动成为指针事件，在非拖动内容上拖动超过 10 px 会平移滚动视图并在抬起时惯性滚动；Wayland 的 `wl_touch` 已接到它。
 - 原生 App 为新建的交互控件默认安装 120 ms 过渡；`AppOptions.transition = None` 关闭。减少动态效果时所有过渡直接到终点（仍会触发完成回调）。
 - 没有活动动画时不请求帧、不唤醒 CPU。
 
@@ -277,7 +294,7 @@ view.set("count", aegle::loader::Data::Int(2))?;
 view.reload(&Program::load("ui/panel.aegle")?)?;   // 失败时保留旧界面
 ```
 
-完整语法、可绑定属性、类型规则和限制见[标记语言](../markup.md)。
+还可声明 `record`、写 `for item in items key item.id`、在事件块里用 `let`、`emit` 和 `host.name(args)`（宿主用 `aegle::loader::action(name, &[Type], f)` 或 `Program::action` 注册），组件可有 `slot` 与自己的 `event`。完整语法、可绑定属性、类型规则和限制见[标记语言](../markup.md)。
 
 ## 10. 嵌入自有宿主
 

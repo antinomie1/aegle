@@ -51,6 +51,56 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     )
     .unwrap();
     assert_ne!(key, varied);
+    let bold = GlyphKey::new(
+        &font,
+        ids[0],
+        RasterOptions {
+            embolden: true,
+            ..options
+        },
+    )
+    .unwrap();
+    let slanted = GlyphKey::new(
+        &font,
+        ids[0],
+        RasterOptions {
+            skew: 14,
+            ..options
+        },
+    )
+    .unwrap();
+    assert!(bold != key && slanted != key && bold != slanted);
+    let plain = cache
+        .rasterize(&font, ids[0], options)
+        .unwrap()
+        .data
+        .to_vec();
+    let heavier = cache
+        .rasterize(
+            &font,
+            ids[0],
+            RasterOptions {
+                embolden: true,
+                ..options
+            },
+        )
+        .unwrap();
+    let ink = |d: &[u8]| d.iter().map(|v| u32::from(*v)).sum::<u32>();
+    assert!(
+        ink(heavier.data) > ink(&plain),
+        "synthetic bold adds coverage"
+    );
+    let leaning = cache
+        .rasterize(
+            &font,
+            ids[0],
+            RasterOptions {
+                skew: 14,
+                ..options
+            },
+        )
+        .unwrap();
+    assert_ne!(leaning.data, &plain[..], "synthetic skew changes the mask");
     assert_eq!(varied, varied.to_owned().as_key());
     #[cfg(feature = "scene")]
     {

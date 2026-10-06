@@ -1,5 +1,5 @@
 use crate::{
-    Node, Result, Theme, Ui, UiError,
+    Node, Result, Theme, ThemeOverride, Ui, UiError,
     state::{Content, State, text_style},
 };
 use aegle_core::{Dirty, NodeId};
@@ -28,6 +28,13 @@ impl Ui {
             }
         }
         state.theme = theme;
+        // Overrides re-resolve against their parent's new theme, outermost first.
+        for index in 0..state.order.len() {
+            let id = state.order[index];
+            if state.overrides.contains_key(&id) {
+                state.propagate_theme(id, None)?;
+            }
+        }
         Ok(())
     }
 }
@@ -41,7 +48,32 @@ impl Node {
         if let Some(theme) = &theme {
             theme.validate()?;
         }
-        self.change(|state, id| state.propagate_theme(id, theme.map(Rc::new)))
+        self.change(|state, id| {
+            state.overrides.remove(&id);
+            state.propagate_theme(id, theme.map(Rc::new))
+        })
+    }
+    /// Gives this subtree the parent's theme with the set tokens replaced. Unlike a
+    /// snapshot from [`Self::set_theme`], it follows later changes to the parent
+    /// or UI theme. `None` removes the override. Nested overrides and local
+    /// themes work as for `set_theme`; font size and layout overrides still win.
+    pub fn set_theme_override(&self, theme: Option<ThemeOverride>) -> Result {
+        self.change(|state, id| {
+            match theme {
+                Some(theme) => {
+                    let parent = state
+                        .tree
+                        .parent(id)?
+                        .map_or(state.theme, |p| *state.theme_of(p));
+                    theme.apply(&parent).validate()?;
+                    state.overrides.insert(id, theme);
+                }
+                None => {
+                    state.overrides.remove(&id);
+                }
+            }
+            state.propagate_theme(id, None)
+        })
     }
     /// The resolved theme: this control's local theme, the nearest ancestor's,
     /// or the UI theme.
@@ -62,20 +94,26 @@ impl State {
                 break;
             }
             let element = &self.tree.get(n).unwrap().context;
-            let theme = if n == id && local.is_some() {
+            let inherited = self
+                .tree
+                .parent(n)?
+                .and_then(|p| self.tree.get(p).unwrap().context.theme.clone());
+            let theme = if let Some(tokens) = self.overrides.get(&n) {
+                let base = inherited.as_deref().unwrap_or(&self.theme);
+                Some(Rc::new(tokens.apply(base)))
+            } else if n == id && local.is_some() {
                 local.clone()
             } else if n != id && element.local_theme {
                 continue;
             } else {
-                let parent = self.tree.parent(n)?;
-                parent.and_then(|p| self.tree.get(p).unwrap().context.theme.clone())
+                inherited
             };
             let old = *element.theme_or(&self.theme);
             let new = *theme.as_deref().unwrap_or(&self.theme);
             let element = &mut self.tree.get_mut(n).unwrap().context;
             element.theme = theme;
             if n == id {
-                element.local_theme = local.is_some();
+                element.local_theme = local.is_some() || self.overrides.contains_key(&n);
             }
             if old != new {
                 self.retheme(n, &old, &new)?;

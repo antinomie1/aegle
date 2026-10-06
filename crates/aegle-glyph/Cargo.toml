@@ -9,6 +9,10 @@ license.workspace = true
 [features]
 default = []
 scene = ["dep:aegle-scene"]
+# COLRv1 gradient/composite color glyphs, painted with tiny-skia.
+colrv1 = ["dep:tiny-skia"]
+# OpenType-SVG glyph documents (static, no text), rendered by resvg.
+svg = ["dep:resvg"]
 
 [dependencies]
 aegle-scene = { workspace = true, features = ["text"], optional = true }
@@ -16,6 +20,8 @@ linebender_resource_handle.workspace = true
 swash.workspace = true
 skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
 png = { version = "0.18.1", default-features = false }
+tiny-skia = { workspace = true, optional = true }
+resvg = { version = "0.48.1", default-features = false, features = ["svgz"], optional = true }
 hashbrown = { version = "0.17.1", default-features = false }
 lru-slab = "0.1.3"
 

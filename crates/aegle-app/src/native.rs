@@ -76,6 +76,9 @@ pub struct AppOptions {
     /// follows the system preference and is false when none is reported.
     #[cfg(feature = "motion")]
     pub reduced_motion: Option<bool>,
+    /// Text size as a percentage of the themes' (50–400) that scales font size
+    /// and control height. `None`, the default, follows the system's text size.
+    pub text_scale: Option<u16>,
 }
 
 impl Default for AppOptions {
@@ -95,6 +98,7 @@ impl Default for AppOptions {
             transition: Some(Transition::default()),
             #[cfg(feature = "motion")]
             reduced_motion: None,
+            text_scale: None,
         }
     }
 }
@@ -142,11 +146,19 @@ pub struct App {
 pub(crate) struct Runtime {
     // Presenters and their window leases must be destroyed before the event loop.
     pub windows: Vec<Entry>,
+    /// GPU devices shared by all windows, created with the first window and
+    /// dropped before the platform that owns their surfaces' connection.
+    #[cfg(feature = "vulkan")]
+    pub shared_vulkan: Option<aegle_render_vulkan::SharedDevice>,
+    #[cfg(feature = "wgpu")]
+    pub shared_wgpu: Option<aegle_render_wgpu::SharedGpu>,
     pub backend: Platform,
     pub fonts: Rc<RefCell<TextSystem>>,
     #[cfg(feature = "software")]
     pub renderer: Option<Renderer>,
     pub options: AppOptions,
+    /// UI-thread ends of [`UiProxy`] senders.
+    pub proxies: Vec<Rc<RefCell<dyn crate::native_proxy::Drain>>>,
     /// Last system preferences applied to the windows.
     pub preferences: crate::platform::Preferences,
     #[cfg(feature = "motion")]
@@ -169,6 +181,9 @@ pub(crate) struct Entry {
     pub title: String,
     #[cfg(target_os = "linux")]
     pub seat: Option<WlSeat>,
+    /// Recent finger-scroll samples (compositor milliseconds, displacement).
+    #[cfg(all(target_os = "linux", feature = "motion"))]
+    pub flick: Vec<(u32, crate::Point)>,
     pub modifiers: Modifiers,
     pub ready: bool,
     #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
@@ -238,11 +253,16 @@ impl App {
             preferences: backend.preferences(),
             backend,
             windows: Vec::new(),
+            #[cfg(feature = "vulkan")]
+            shared_vulkan: None,
+            #[cfg(feature = "wgpu")]
+            shared_wgpu: None,
             fonts: Rc::new(RefCell::new(fonts)),
             #[cfg(feature = "software")]
             renderer: (options.renderer == RendererBackend::Software)
                 .then(|| Renderer::new(options.mask_budget)),
             options,
+            proxies: Vec::new(),
             #[cfg(feature = "motion")]
             clock: Instant::now(),
         };
@@ -291,7 +311,7 @@ impl App {
                 layer: options.layer,
             })?;
         #[cfg(feature = "vulkan")]
-        let gpu = match crate::native_render::create_gpu(&runtime, id) {
+        let gpu = match crate::native_render::create_gpu(&mut runtime, id) {
             Ok(gpu) => gpu,
             Err(error) => {
                 runtime.backend.remove_window(id)?;
@@ -299,7 +319,7 @@ impl App {
             }
         };
         #[cfg(feature = "wgpu")]
-        let wgpu = match crate::native_render::create_wgpu(&runtime, id) {
+        let wgpu = match crate::native_render::create_wgpu(&mut runtime, id) {
             Ok(wgpu) => wgpu,
             Err(error) => {
                 runtime.backend.remove_window(id)?;
@@ -332,6 +352,8 @@ impl App {
             cursor: crate::Cursor::Default,
             #[cfg(target_os = "linux")]
             seat: None,
+            #[cfg(all(target_os = "linux", feature = "motion"))]
+            flick: Vec::new(),
             modifiers: Modifiers::default(),
             ready: false,
             #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]

@@ -186,3 +186,70 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
     platform.dispatch(Some(Duration::ZERO)).unwrap();
     assert!(platform.next_event().is_none());
 }
+
+#[test]
+#[ignore = "requires a dedicated compositor whose output scale is AEGLE_TEST_SCALE, such as 1.5"]
+fn preferred_scale_sizes_the_buffer_of_a_fractional_window() {
+    let expected: f32 = std::env::var("AEGLE_TEST_SCALE")
+        .expect("AEGLE_TEST_SCALE")
+        .parse()
+        .unwrap();
+    let mut platform = Wayland::connect().unwrap();
+    let window = platform
+        .create_window(WindowOptions {
+            title: "Aegle fractional scale test",
+            app_id: "org.aegle.native-test",
+            size: PixelSize {
+                width: 100,
+                height: 60,
+            },
+            buffer_budget: 2 * 1024 * 1024,
+            layer: None,
+        })
+        .unwrap();
+    // The compositor sends the preferred scale once the surface is mapped, so
+    // present at scale 1 first and follow the redraws it triggers.
+    let deadline = Instant::now() + Duration::from_secs(8);
+    let mut info = None;
+    loop {
+        platform.dispatch(Some(Duration::from_millis(20))).unwrap();
+        let mut ready = false;
+        while let Some(event) = platform.next_event() {
+            match event {
+                Event::Configure {
+                    window: id,
+                    info: new,
+                } if id == window => info = Some(new),
+                Event::Redraw { window: id } if id == window => ready = true,
+                _ => {}
+            }
+        }
+        assert!(Instant::now() < deadline, "no preferred scale {expected}");
+        if !ready {
+            continue;
+        }
+        let info = info.unwrap();
+        let mut buffer = None;
+        let presented = platform
+            .present::<()>(window, |_, size| {
+                buffer = Some(size);
+                Ok(())
+            })
+            .unwrap();
+        if !presented {
+            continue;
+        }
+        let size = buffer.unwrap();
+        assert_eq!(
+            (size.width, size.height),
+            (
+                (info.size.width as f32 * info.scale).round() as u32,
+                (info.size.height as f32 * info.scale).round() as u32
+            )
+        );
+        if info.scale == expected {
+            break;
+        }
+    }
+    platform.remove_window(window).unwrap();
+}

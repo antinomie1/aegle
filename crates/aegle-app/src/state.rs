@@ -93,6 +93,11 @@ pub(crate) struct Element {
     pub padding: Option<f32>,
     /// Presented translation after layout, inherited by the subtree.
     pub offset: Point,
+    /// Presented scale and rotation (radians) about the bounds center, inherited
+    /// by the subtree.
+    pub spin: crate::Transform,
+    /// Layout space to presented space for this node, set only inside a spun subtree.
+    pub xf: Option<aegle_scene::Affine>,
     pub semantic: Semantic,
     /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
     pub theme: Option<Rc<Theme>>,
@@ -130,6 +135,8 @@ impl Element {
             local_layout: 0,
             padding: None,
             offset: Point::default(),
+            spin: crate::Transform::default(),
+            xf: None,
             semantic: Semantic::None,
             theme: None,
             local_theme: false,
@@ -171,6 +178,10 @@ pub(crate) struct State {
     /// Dropdown anchors and their choices.
     pub dropdowns: HashMap<NodeId, crate::popup::DropdownData>,
     pub decorations: HashMap<NodeId, Decoration>,
+    /// Token overrides re-applied to the parent's theme whenever it changes.
+    pub overrides: HashMap<NodeId, aegle_theme::ThemeOverride>,
+    /// Fingers currently in contact.
+    pub fingers: Vec<crate::touch::Finger>,
     /// Application values living exactly as long as their control.
     pub kept: HashMap<NodeId, Vec<Box<dyn std::any::Any>>>,
     #[cfg(feature = "motion")]
@@ -221,6 +232,14 @@ impl State {
             }
         }
         self.topology_dirty = false;
+    }
+
+    /// Maps a window position into a node's layout space, undoing any ancestor spin.
+    pub fn untransform(&self, id: NodeId, position: Point) -> Point {
+        match self.tree.get(id).unwrap().context.xf.map(|xf| xf.inverse()) {
+            Some(Ok(inverse)) => inverse.map_point(position),
+            _ => position,
+        }
     }
 
     pub fn contains(&self, root: NodeId, mut node: NodeId) -> bool {
@@ -333,6 +352,7 @@ impl State {
         self.tree.remove_with(id, |node, _| {
             self.callbacks.remove(&node);
             self.decorations.remove(&node);
+            self.overrides.remove(&node);
             self.kept.remove(&node);
             self.dropdowns.remove(&node);
             self.lists.retain(|(list, _)| *list != node);
@@ -341,6 +361,7 @@ impl State {
                 self.motion.tracks.remove(&node);
                 self.motion.active.remove(&node);
                 self.motion.moving.remove(&node);
+                self.motion.turning.remove(&node);
                 self.motion.ends.remove(&node);
             }
         })?;

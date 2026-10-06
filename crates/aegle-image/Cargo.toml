@@ -1,0 +1,30 @@
+[package]
+name = "aegle-image"
+description = "Bounded decoding of JPEG, WebP, GIF and SVG into scene images"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+jpeg = ["dep:zune-jpeg"]
+webp = ["dep:image-webp"]
+gif = ["dep:gif"]
+# Static SVG without text, rasterized at a requested size.
+svg = ["dep:resvg"]
+
+[dependencies]
+aegle-glyph = { workspace = true, features = ["scene"] }
+aegle-scene.workspace = true
+zune-jpeg = { version = "0.5.9", default-features = false, features = ["std"], optional = true }
+image-webp = { version = "0.2.4", default-features = false, optional = true }
+gif = { version = "0.14.1", default-features = false, features = ["std"], optional = true }
+resvg = { version = "0.48.1", default-features = false, optional = true }
+
+[dev-dependencies]
+# Encoders that build the decoder tests' inputs.
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "webp", "gif", "png"] }
+
+[lints]
+workspace = true

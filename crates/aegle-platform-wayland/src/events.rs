@@ -68,8 +68,10 @@ impl Default for WindowOptions<'_> {
 pub struct WindowInfo {
     /// Logical surface extent.
     pub size: PixelSize,
-    /// Integer buffer scale; multiply logical drawing coordinates by this.
-    pub scale: u32,
+    /// Scale from logical to buffer pixels, at least 1: whole numbers without
+    /// fractional-scale support, otherwise the compositor's preferred scale.
+    /// Multiply logical drawing coordinates by this.
+    pub scale: f32,
     /// Whether the compositor marks this window active; always true for layers.
     pub active: bool,
     /// Whether an initial configure has arrived.
@@ -79,20 +81,15 @@ pub struct WindowInfo {
 impl WindowInfo {
     /// Physical framebuffer extent, rejecting protocol overflow.
     pub fn buffer_size(self) -> Result<PixelSize, Error> {
-        let width = self
-            .size
-            .width
-            .checked_mul(self.scale)
-            .ok_or(Error::InvalidSize)?;
-        let height = self
-            .size
-            .height
-            .checked_mul(self.scale)
-            .ok_or(Error::InvalidSize)?;
-        if width == 0 || width > i32::MAX as u32 / 4 || height == 0 || height > i32::MAX as u32 {
-            return Err(Error::InvalidSize);
+        // Buffers are the logical size times the scale, rounded half away from zero.
+        let scaled = |extent: u32| {
+            let pixels = (f64::from(extent) * f64::from(self.scale)).round();
+            (pixels >= 1.0 && pixels <= f64::from(i32::MAX / 4)).then_some(pixels as u32)
+        };
+        match (scaled(self.size.width), scaled(self.size.height)) {
+            (Some(width), Some(height)) => Ok(PixelSize { width, height }),
+            _ => Err(Error::InvalidSize),
         }
-        Ok(PixelSize { width, height })
     }
 }
 
@@ -105,6 +102,21 @@ pub struct Preferences {
     pub high_contrast: Option<bool>,
     /// Whether non-essential motion should be reduced.
     pub reduced_motion: Option<bool>,
+    /// Text size as a percentage of the default (100), within 50–400.
+    pub text_scale: Option<u16>,
+}
+
+/// Stage of one finger's contact.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TouchPhase {
+    /// The finger touched the surface.
+    Down,
+    /// The finger moved while touching.
+    Move,
+    /// The finger lifted.
+    Up,
+    /// The compositor cancelled the contact, for example to take over a gesture.
+    Cancel,
 }
 
 /// Native events in dispatch order. Coordinates use logical surface pixels.
@@ -175,6 +187,22 @@ pub enum Event {
         position: Point,
         /// Motion, button, enter/leave or scroll details.
         kind: PointerEventKind,
+    },
+    /// One finger of a touch screen. `id` is unique among the seat's active fingers
+    /// and is reused after `Up` or `Cancel`.
+    Touch {
+        /// Window the finger touched down in.
+        window: WindowId,
+        /// Originating seat.
+        seat: WlSeat,
+        /// Finger identity within the seat.
+        id: i32,
+        /// Local logical position.
+        position: Point,
+        /// Compositor time in milliseconds, for velocity.
+        time: u32,
+        /// Contact stage.
+        phase: TouchPhase,
     },
     /// A text-input-v3 batch or focus transition.
     Ime {

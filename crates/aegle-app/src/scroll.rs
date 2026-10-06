@@ -1,5 +1,6 @@
 use aegle_core::{Dirty, NodeId};
-use aegle_types::Point;
+use aegle_scene::Affine;
+use aegle_types::{Point, Rect};
 use aegle_widgets::{clamp_anchor, intersection, reveal_delta, scrollbar::FOOTPRINT};
 
 use crate::{
@@ -71,6 +72,7 @@ impl State {
                     if limit.x > 0.0 {
                         view.size.height = (view.size.height - FOOTPRINT).max(0.0);
                     }
+                    let view = parent.xf.map_or(view, |xf| map_rect(xf, view));
                     Some(parent.clip.map_or(view, |clip| intersection(clip, view)))
                 } else {
                     parent.clip
@@ -84,6 +86,7 @@ impl State {
                     } else {
                         Point::default()
                     },
+                    parent.xf,
                 )
             });
             let limit = self.scroll_limit(id);
@@ -93,13 +96,16 @@ impl State {
             bounds.origin.y += node.context.offset.y;
             let mut visible = node.context.visible;
             let mut clip = None;
-            if let Some((origin, parent_visible, parent_clip, offset)) = parent {
+            let mut parent_xf = None;
+            if let Some((origin, parent_visible, parent_clip, offset, xf)) = parent {
+                parent_xf = xf;
                 bounds.origin.x += origin.x - offset.x;
                 bounds.origin.y += origin.y - offset.y;
                 visible &= parent_visible;
                 clip = parent_clip;
             }
             let element = &mut node.context;
+            let xf = spin_affine(element.spin, bounds, parent_xf);
             let old_offset = element.scroll;
             if visible && matches!(element.content, Content::Scroll(_)) {
                 element.scroll.x = element.scroll.x.min(limit.x);
@@ -108,7 +114,9 @@ impl State {
             let changed = element.bounds != bounds
                 || element.clip != clip
                 || element.effective_visible != visible
-                || old_offset != element.scroll;
+                || old_offset != element.scroll
+                || element.xf != xf;
+            element.xf = xf;
             element.bounds = bounds;
             element.clip = clip;
             element.effective_visible = visible;
@@ -135,7 +143,7 @@ impl State {
             let element = &self.tree.get(id).unwrap().context;
             element.effective_visible
                 && self.usable(id)
-                && element.bounds.contains(position)
+                && element.bounds.contains(self.untransform(id, position))
                 && element.clip.is_none_or(|clip| clip.contains(position))
         });
         let mut changed = false;
@@ -224,4 +232,40 @@ impl State {
         }
         self.update_geometry()
     }
+}
+
+/// Axis-aligned window-space bounds of a layout-space rectangle.
+pub(crate) fn map_rect(xf: Affine, rect: Rect) -> Rect {
+    let corners = [
+        Point::new(rect.origin.x, rect.origin.y),
+        Point::new(rect.origin.x + rect.size.width, rect.origin.y),
+        Point::new(rect.origin.x, rect.origin.y + rect.size.height),
+        Point::new(
+            rect.origin.x + rect.size.width,
+            rect.origin.y + rect.size.height,
+        ),
+    ]
+    .map(|p| xf.map_point(p));
+    let (mut min, mut max) = (corners[0], corners[0]);
+    for p in corners {
+        min = Point::new(min.x.min(p.x), min.y.min(p.y));
+        max = Point::new(max.x.max(p.x), max.y.max(p.y));
+    }
+    Rect::new(min.x, min.y, max.x - min.x, max.y - min.y)
+}
+
+/// Spin about the bounds center, then the parent's presentation.
+fn spin_affine(spin: crate::Transform, bounds: Rect, parent: Option<Affine>) -> Option<Affine> {
+    if spin == crate::Transform::default() {
+        return parent;
+    }
+    let (sin, cos) = spin.rotation.sin_cos();
+    let (a, b) = (spin.scale * cos, spin.scale * sin);
+    let (cx, cy) = (
+        bounds.origin.x + bounds.size.width / 2.0,
+        bounds.origin.y + bounds.size.height / 2.0,
+    );
+    // Validated finite and nonzero scale make this invertible.
+    let own = Affine::new([a, b, -b, a, cx - a * cx + b * cy, cy - b * cx - a * cy]).ok()?;
+    Some(parent.map_or(own, |parent| own.then(parent).unwrap_or(own)))
 }

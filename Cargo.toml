@@ -30,6 +30,7 @@ aegle-markup = { path = "crates/aegle-markup" }
 aegle-macros = { path = "crates/aegle-macros" }
 aegle-loader = { path = "crates/aegle-loader" }
 aegle-motion = { path = "crates/aegle-motion" }
+aegle-image = { path = "crates/aegle-image" }
 accesskit = { version = "0.24.1", default-features = false }
 linebender_resource_handle = { version = "0.1.1", default-features = false }
 parley = { version = "0.11.1", default-features = false, features = ["std"] }
