@@ -94,6 +94,6 @@ geometry 示例只用标准库写 PPM，不增加 PNG 运行依赖。示例能�
 
 呈现使用 FIFO 与 SRGB_NONLINEAR。默认 `Options::transparent = false`：表面提供 BGRA8/RGBA8_SRGB 时，几何与文字直接在 sRGB swapchain 图像上由硬件线性混合，没有 RGBA16F 目标和编码 pass；优先 OPAQUE composite alpha，并要求不透明清屏色。`transparent = true` 或表面只有 UNORM 时，保留 RGBA16F 线性目标并由编码 pass 写入 UNORM swapchain，优先 PRE_MULTIPLIED，否则选择 OPAQUE 并拒绝非不透明清屏色。两条路径都不保留第二张 RGBA8 离屏目标、不经 CPU 读回或 SHM 转送。未指定设备时优先集成 GPU，其次独显、虚拟设备和 CPU 驱动。每窗口一个设备，一次 graphics submission 在途；render-finished semaphore 按 swapchain image 保存，重建等待 device idle，不能把 graphics fence 当作 presentation 完成证明。
 
-`Stats.swapchain_bytes` 为 extent×4×驱动返回的实际图像数估计，单列并计入 memory_budget；WSI 不暴露这些图像的实际 memory requirements，不声称此值包含驱动分配/压缩/对齐。device_bytes 继续报告显式分配；驱动内部资源和线程另计。App 的每窗口设备/图集当前独立，尚无跨窗口共享 GPU 缓存。默认16 MiB设备预算适合小窗口，较大窗口须通过 AppOptions.vulkan 显式调整；不隐藏超预算错误。
+`Stats.swapchain_bytes` 为 extent×4×驱动返回的实际图像数估计，只单列报告，不计入 memory_budget：swapchain 图像由驱动/窗口系统分配，应用无法控制或缩小，WSI 也不暴露其实际 memory requirements，不声称此值包含驱动分配/压缩/对齐。memory_budget 只约束 device_bytes 报告的显式分配（目标图像、缓冲、读回与图集）；驱动内部资源和线程另计。App 的每窗口设备/图集当前独立，尚无跨窗口共享 GPU 缓存。
 
 原生综合场景位于 tests/native.rs，默认 ignored；需隔离 Wayland compositor，设置 AEGLE_TEST_COMPOSITOR=private。App 的同一个 native 场景通过 AEGLE_TEST_VULKAN=1 切换渲染器，覆盖两个 CJK 窗口、回调、关闭和句柄失效。具体设备证据见实现状态。

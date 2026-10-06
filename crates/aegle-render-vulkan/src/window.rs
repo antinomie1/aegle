@@ -201,7 +201,6 @@ impl Renderer {
                 &self.pipeline,
                 width,
                 height,
-                self.remaining(),
                 self.options.transparent,
             )?;
             self.window_size = [width, height];

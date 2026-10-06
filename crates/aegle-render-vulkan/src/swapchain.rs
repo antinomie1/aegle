@@ -24,7 +24,6 @@ impl Swapchain {
         pipeline: &Pipeline,
         width: u32,
         height: u32,
-        budget: u64,
         transparent: bool,
     ) -> Result<Option<Self>> {
         // SAFETY: Native owners and instance keep this surface valid throughout.
@@ -75,7 +74,6 @@ impl Swapchain {
                 .and_then(|bytes| bytes.checked_mul(count))
                 .ok_or(Error::InvalidSize)
         };
-        crate::memory::check_budget(estimate(u64::from(count))?, budget)?;
         // Direct sRGB output stores encoded premultiplied-linear values, which are
         // exact only for opaque pixels; it prefers opaque composition.
         let mut alphas = [
@@ -129,7 +127,6 @@ impl Swapchain {
             this.handle = this.loader.create_swapchain(&info, None)?;
             let images = this.loader.get_swapchain_images(this.handle)?;
             this.bytes = estimate(images.len() as u64)?;
-            crate::memory::check_budget(this.bytes, budget)?;
             this.acquire_fence = this
                 .raw
                 .create_fence(&vk::FenceCreateInfo::default(), None)?;

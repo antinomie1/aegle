@@ -10,6 +10,7 @@ description = "Headless retained UI: tree, layout, input, focus, scrolling, moti
 default = []
 motion = ["dep:aegle-motion"]
 system-fonts = ["aegle-text/system-fonts"]
+text-dictionary = ["aegle-text/text-dictionary"]
 accessibility = ["dep:aegle-access", "aegle-text/text-a11y"]
 # Grid and stack containers (about 244 KiB of Taffy grid code in a release build).
 grid = ["aegle-layout/grid"]

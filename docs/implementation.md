@@ -194,7 +194,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 新增可选 `aegle-render-vulkan/text`，与几何按相同记录顺序绘制，同用变换和八层裁剪。R8灰度与RGBA8_SRGB彩色页按需分配；每字形透明边、页LRU、当前帧固定、取消脏页回滚和独立上传上限保证不会用尚未上传或已被覆盖的条目。GPU缓存使用完整GlyphKey；软件和GPU共用RasterTransform，减少两个后端之间的字号/相位/仿射差异。没有新增第三方包；复用已有glyph/hashbrown依赖，默认几何构建无字体栈，text的normal依赖无Parley/Naga。
 
 - 全workspace all-features仍为30个常规场景；all-targets/all-features、Vulkan无默认feature、glyph/software有/无feature场景、严格Rustdoc和格式检查通过。新增一个224行ignored文字综合场景，仅扩展既有glyph场景验证共享key/变换。
-- RX 6800 XT与Lavapipe分别通过几何和文字综合场景，并开启Khronos层和同步验证，无Vulkan验证错误/警告。文字场景验证CJK/quarterphase、透明颜色、COLRv0/PNG字形、过滤/反射/旋转/clip、几何文字穿插顺序，以及CPU缓存仅一个条目时的GPU命中、取消帧、整页淘汰、预算/超大字形错误、resize和释放重建；与软件逐通道对照容差3。debug下未启用中日词典的既有ICU诊断仍会出现，不代表字形或Vulkan失败。
+- RX 6800 XT与Lavapipe分别通过几何和文字综合场景，并开启Khronos层和同步验证，无Vulkan验证错误/警告。文字场景验证CJK/quarterphase、透明颜色、COLRv0/PNG字形、过滤/反射/旋转/clip、几何文字穿插顺序，以及CPU缓存仅一个条目时的GPU命中、取消帧、整页淘汰、预算/超大字形错误、resize和释放重建；与软件逐通道对照容差3。当时未启用中日词典，debug下的ICU诊断不代表字形或Vulkan失败。
 - 独立复核的临时小探针发现完全裁掉的字形仍因解析几何AA外扩而占用图集，单条目配置错误返回AtlasFull。修复后轴向clip使用真实像素覆盖边界，字形只保留自身过滤支持范围；同一探针及正式文字场景都验证一条目可绘制唯一可见字形。页数上限同时为目标/clip/upload/readback预留五个Vk内存分配；上传缓冲在fence完成即释放，避免只等下一帧。
 - 800×480 release text_scene已在RX硬件运行并检查图片，包含CJK三语、裁剪、四相位和仿射文字；库不内嵌字体，示例使用有OFL许可的测试子集。未重复真人输入法、原生桌面或屏幕阅读器验收。
 - 相同示例场景的临时release成本探针：scene/font准备0.220 ms、renderer初始化14.317 ms、首帧提交及wait为1.911 ms；预热20帧后300帧的begin/draw/finish/wait平均0.166 ms、P95 0.218 ms，无逐帧读回。首次末帧读回另为4.287 ms。它是单次桌面GPU主机wall-time样本，不是GPU timestamp、窗口延迟或嵌入式性能保证。
@@ -469,6 +469,13 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 平台：Wayland 映射 evdev `BTN_RIGHT`/`BTN_MIDDLE`/`BTN_SIDE`/`BTN_EXTRA`（及 `BTN_BACK`/`BTN_FORWARD`）；Win32 处理 `WM_RBUTTON*`、`WM_MBUTTON*`、`WM_XBUTTON*`（返回 TRUE，不再产生 `WM_APPCOMMAND`），原生捕获改为按位记录按住的按键，最后一个释放时才释放捕获。
 - `Canvas`：`CanvasEvent::ButtonPress`/`ButtonRelease`；任一按键的首次按下取得焦点与捕获，全部释放后才释放；窗口丢失时 `Cancel` 结束所有按键；正在按下时其他指针的事件被忽略。
 - 验证：`aegle-widgets/tests/canvas.rs` 检查右键不影响 Slider；中键按住时捕获跨过一次主键单击、移出后仍收到移动、释放中键后不再收到；侧键按下后离开窗口得到 `Cancel`。Windows 交叉检查通过；未在真实鼠标上验证（无头 Sway 没有指针设备），Win32 未实机运行。
+
+## Vulkan 预算不计 swapchain，默认启用词典分词
+
+- 问题：Vulkan 窗口把 swapchain 估计（宽×高×4×图像数）计入每窗口 16 MiB 的 `memory_budget`。RADV 返回 4 张图像，约 2060×958 物理像素的窗口就需要 31,575,680 B，创建 swapchain 时报 `Vulkan allocation requires ... bytes`；大窗口或高 DPI 下一定失败，而这部分内存由驱动持有，应用无法缩小。
+- 修改：`Swapchain::new` 不再检查预算，剩余预算只扣除显式分配；`Stats.swapchain_bytes` 继续单列报告。
+- 验证：私有 headless Sway（Pixman，2560×1440 输出、1.5 倍缩放）上用 Lavapipe 运行 release `showcase vulkan` 并全屏（1706×960 逻辑、2560×1440 物理）：改动前退出并报 `Vulkan allocation requires 24883200 bytes, limit 15414288`，改动后持续运行，截图确认 CJK 文字与控件正常。Vulkan 窗口生命周期 ignored 场景在 Lavapipe 上通过；RADV 需要 GLES2 compositor，这次 Pixman 环境下报 `SURFACE_LOST`，没有在 RADV 上重新运行。
+- 词典：facade 新增 `text-dictionary`（经 `aegle-ui` 转发到 `aegle-text`，即 Parley complex-scripts）并加入默认 `desktop`。中日文字按词移动与双击选词使用词典边界；`aegle/tests/markup.rs` 在 debug 下关闭该 feature 时输出 5 条 `No segmentation model for complex script` 诊断，开启后为 0。代价：Wayland + 软件 + 系统字体 + markup + motion 的 release `hello` 由 4,547,776 B 增至 8,336,576 B，`controls` 由 4,646,088 B 增至 8,438,984 B（各约 +3.7 MiB 词典数据）；不需要时可用 `default-features = false` 关闭。没有测量运行时内存变化。
 
 ## 剩余工作
 

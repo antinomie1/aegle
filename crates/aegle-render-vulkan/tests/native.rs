@@ -69,7 +69,7 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
             frames += 1;
             let stats = renderer.stats();
             assert!(stats.swapchain_bytes > 0);
-            assert!(stats.device_bytes + stats.swapchain_bytes <= Options::default().memory_budget);
+            assert!(stats.device_bytes <= Options::default().memory_budget);
             assert_eq!(platform.buffer_bytes(id)?, 0);
             if frames == 3 {
                 assert!(renderer.begin_frame(0, 0, Color::WHITE)?.is_none());

@@ -13,8 +13,8 @@ pub struct Options {
     /// Vulkan enumeration index. When absent, prefers a suitable integrated GPU,
     /// then discrete, virtual and finally CPU devices.
     pub device_index: Option<u32>,
-    /// Bytes of explicit VkDeviceMemory allocations, including alignment/readback,
-    /// plus the opaque swapchain image estimate when presenting to a window.
+    /// Bytes of explicit VkDeviceMemory allocations, including alignment and
+    /// readback. Swapchain images belong to the window system and are not counted.
     pub memory_budget: u64,
     /// Bytes of CPU draw/clip vector capacity; excludes driver command storage.
     pub recording_budget: usize,
@@ -46,8 +46,9 @@ impl Default for Options {
 pub struct Stats {
     /// Sum of bound VkDeviceMemory allocation sizes owned by this renderer.
     pub device_bytes: u64,
-    /// Estimated swapchain image bytes (width × height × 4 × image count), separate
-    /// from device_bytes because WSI allocations are opaque to Vulkan applications.
+    /// Estimated swapchain image bytes (width × height × 4 × image count), reported
+    /// apart from device_bytes and the memory budget because WSI allocations are
+    /// owned by the driver and opaque to Vulkan applications.
     pub swapchain_bytes: u64,
     /// Capacity bytes of CPU primitive and clipping vectors.
     pub recording_bytes: usize,
@@ -270,7 +271,7 @@ impl Renderer {
     }
 
     pub(crate) fn remaining(&self) -> u64 {
-        self.options.memory_budget - self.stats().device_bytes - self.swapchain_bytes()
+        self.options.memory_budget - self.stats().device_bytes
     }
 
     fn swapchain_bytes(&self) -> u64 {
@@ -332,10 +333,9 @@ impl Renderer {
             }
         }
         #[cfg(feature = "text")]
-        self.text.atlas.prepare_upload(
-            &self.device,
-            self.options.memory_budget - self.base_bytes() - self.swapchain_bytes(),
-        )?;
+        self.text
+            .atlas
+            .prepare_upload(&self.device, self.options.memory_budget - self.base_bytes())?;
         let target = self.target.as_ref().unwrap();
         let [clips, primitives] = &self.buffers;
         self.pipeline.update(
@@ -432,9 +432,7 @@ impl Frame<'_> {
         let target = self.renderer.target.as_ref().unwrap();
         let extent = [target.width, target.height];
         #[cfg(feature = "text")]
-        let text_budget = self.renderer.options.memory_budget
-            - self.renderer.base_bytes()
-            - self.renderer.swapchain_bytes();
+        let text_budget = self.renderer.options.memory_budget - self.renderer.base_bytes();
         let renderer = &mut *self.renderer;
         let view = viewport(extent[0], extent[1], false);
         let result = (|| -> Result {

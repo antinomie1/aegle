@@ -18,6 +18,7 @@ aegle = { path = "../aegle/crates/aegle" }
 | `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32（按编译目标选择） |
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现（Linux 链接 Fontconfig） |
+| `text-dictionary` | ✓ | 中日文及东南亚文字的词典分词（按词移动、双击选词）；release 约增加 3.7 MiB，关闭后 debug 构建会打印 ICU 缺少分段模型的诊断 |
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
 | `motion` | ✓ | 外观/位移/缩放旋转过渡、惯性滚动 |
 | `effects` | ✓ | `aegle::image::effects`：线性/径向渐变与柔和阴影图像 |
