@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 
 use crate::{
-    Affine, Color, Command, Image, MAX_SCOPE_DEPTH, Path, Rect, RoundedRect, SceneError, Stroke,
-    TextureId,
+    Affine, Color, Command, Gradient, Image, MAX_SCOPE_DEPTH, Path, Rect, RoundedRect, SceneError,
+    Stroke, TextureId,
 };
 
 /// Immutable validated drawing commands with no renderer or tree ownership.
@@ -13,6 +13,7 @@ pub struct Scene {
     glyph_runs: Vec<crate::GlyphRun>,
     images: Vec<Image>,
     paths: Vec<Path>,
+    gradients: Vec<Gradient>,
     max_depth: usize,
     max_clip_depth: usize,
 }
@@ -51,7 +52,8 @@ impl Scene {
     pub fn allocated_bytes(&self) -> usize {
         let bytes = self.commands.capacity() * core::mem::size_of::<Command>()
             + self.images.capacity() * core::mem::size_of::<Image>()
-            + self.paths.capacity() * core::mem::size_of::<Path>();
+            + self.paths.capacity() * core::mem::size_of::<Path>()
+            + self.gradients.capacity() * core::mem::size_of::<Gradient>();
         #[cfg(feature = "text")]
         let bytes = bytes
             + self.glyph_runs.capacity() * core::mem::size_of::<crate::GlyphRun>()
@@ -71,6 +73,11 @@ impl Scene {
     /// Shared outlines addressed by [`Command::FillPath`] and [`Command::StrokePath`].
     pub fn paths(&self) -> &[Path] {
         &self.paths
+    }
+
+    /// Gradients addressed by [`Command::FillGradient`].
+    pub fn gradients(&self) -> &[Gradient] {
+        &self.gradients
     }
 
     /// Positioned glyph resources addressed by [`Command::Glyphs`].
@@ -131,6 +138,7 @@ impl SceneBuilder {
         self.scene.glyph_runs.clear();
         self.scene.images.clear();
         self.scene.paths.clear();
+        self.scene.gradients.clear();
         self.scene.max_depth = 0;
         self.scene.max_clip_depth = 0;
         self.transform = Affine::IDENTITY;
@@ -143,6 +151,50 @@ impl SceneBuilder {
         if !shape.is_empty() {
             self.transform.validate_shape(shape, 0.0)?;
             self.scene.commands.push(Command::Fill { shape, color });
+        }
+        Ok(self)
+    }
+
+    /// Fills `shape` with `gradient`, whose geometry shares the shape's local
+    /// coordinates. Empty shapes produce no command.
+    pub fn fill_gradient(
+        &mut self,
+        shape: RoundedRect,
+        gradient: &Gradient,
+    ) -> Result<&mut Self, SceneError> {
+        if !shape.is_empty() {
+            self.transform.validate_shape(shape, 0.0)?;
+            self.scene.gradients.push(gradient.clone());
+            let gradient = self.scene.gradients.len() - 1;
+            self.scene
+                .commands
+                .push(Command::FillGradient { shape, gradient });
+        }
+        Ok(self)
+    }
+
+    /// Records the soft shadow of `shape`; see [`Command::Shadow`]. A zero
+    /// `blur` records an ordinary fill; empty shapes produce no command.
+    pub fn shadow(
+        &mut self,
+        shape: RoundedRect,
+        color: Color,
+        blur: f32,
+    ) -> Result<&mut Self, SceneError> {
+        if !blur.is_finite() {
+            return Err(SceneError::NonFinite);
+        }
+        if blur < 0.0 {
+            return Err(SceneError::NegativeExtent);
+        }
+        if blur == 0.0 {
+            return self.fill(shape, color);
+        }
+        if !shape.is_empty() {
+            self.transform.validate_shape(shape, blur * 3.0)?;
+            self.scene
+                .commands
+                .push(Command::Shadow { shape, color, blur });
         }
         Ok(self)
     }

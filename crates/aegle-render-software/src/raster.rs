@@ -105,6 +105,7 @@ impl Renderer {
                     command,
                     Command::Fill { .. }
                         | Command::Stroke { .. }
+                        | Command::FillGradient { .. }
                         | Command::FillPath { .. }
                         | Command::StrokePath { .. }
                 )
@@ -250,6 +251,12 @@ impl Frame<'_, '_, '_> {
                     color,
                     stroke,
                 } => self.paint_path(&scene.paths()[path], color, Some(stroke), state)?,
+                Command::FillGradient { shape, gradient } => {
+                    self.paint_gradient(shape, &scene.gradients()[gradient], state)?
+                }
+                Command::Shadow { shape, color, blur } => {
+                    self.paint_shadow(shape, color, blur, state)?
+                }
                 #[cfg(feature = "text")]
                 Command::Glyphs(index) => self.paint_text(&scene.glyph_runs()[index], state)?,
                 _ => return Err(RenderError::UnsupportedCommand),
@@ -421,7 +428,7 @@ impl Bounds {
     }
 }
 
-fn rasterize(mask: &mut Mask, path: &Path, bounds: Bounds, rule: FillRule) {
+pub(crate) fn rasterize(mask: &mut Mask, path: &Path, bounds: Bounds, rule: FillRule) {
     if bounds.is_empty() {
         return;
     }

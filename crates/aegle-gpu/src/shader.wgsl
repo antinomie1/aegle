@@ -9,7 +9,7 @@ struct Primitive {
     rect: vec4<f32>, // shape rect or atlas origin and glyph size, excluding gutter
     params: vec4<f32>, // radius or mask contrast, stroke width (-1 for fill), viewport size (negative height flips Y)
     color: vec4<f32>, // linear premultiplied paint, or repeated color-glyph opacity
-    header: vec4<u32>, // clip head, geometry/mask/color-glyph/image kind, reserved
+    header: vec4<u32>, // clip head, geometry/mask/color-glyph/image kind, atlas page or first stop row, effect | stop count << 8
 }
 
 struct Clip {
@@ -18,6 +18,8 @@ struct Clip {
     rect: vec4<f32>,
     extra: vec4<u32>, // radius bits, parent index, reserved
 }
+// Gradient stops reuse clip rows, two per row: colors in row0 and row1,
+// offsets in rect.xy.
 
 struct Vertex {
     @builtin(position) position: vec4<f32>,
@@ -85,6 +87,81 @@ fn clip_coverage(position: vec2<f32>, first: u32) -> f32 {
     return alpha;
 }
 
+fn stop_color(first: u32, index: u32) -> vec4<f32> {
+    let row = clips[first + index / 2u];
+    return select(row.row0, row.row1, index % 2u == 1u);
+}
+
+fn stop_offset(first: u32, index: u32) -> f32 {
+    return clips[first + index / 2u].rect[index % 2u];
+}
+
+// Premultiplied linear interpolation, padded with the end colors.
+fn gradient(primitive: Primitive, point: vec2<f32>) -> vec4<f32> {
+    let g = primitive.color;
+    var t: f32;
+    if (primitive.header.w & 0xffu) == 1u {
+        let direction = g.zw - g.xy;
+        t = dot(point - g.xy, direction) / dot(direction, direction);
+    } else {
+        t = length(point - g.xy) / g.z;
+    }
+    let first = primitive.header.z;
+    var color = stop_color(first, 0u);
+    var offset = stop_offset(first, 0u);
+    if t <= offset {
+        return color;
+    }
+    let count = primitive.header.w / 256u;
+    for (var index = 1u; index < count; index += 1u) {
+        let next = stop_color(first, index);
+        let next_offset = stop_offset(first, index);
+        if t < next_offset {
+            return mix(color, next, (t - offset) / (next_offset - offset));
+        }
+        color = next;
+        offset = next_offset;
+    }
+    return color;
+}
+
+// Abramowitz–Stegun erf approximation, within 5e-4.
+fn erf2(x: vec2<f32>) -> vec2<f32> {
+    let s = sign(x);
+    let a = abs(x);
+    var r = 1.0 + (0.278393 + (0.230389 + 0.078108 * (a * a)) * a) * a;
+    r = r * r;
+    return s - s / (r * r);
+}
+
+// Horizontal integral of the shadow at row offset y from the shape center.
+fn shadow_row(x: f32, y: f32, sigma: f32, corner: f32, half: vec2<f32>) -> f32 {
+    let delta = min(half.y - corner - abs(y), 0.0);
+    let curved = half.x - corner + sqrt(max(0.0, corner * corner - delta * delta));
+    let integral = 0.5 + 0.5 * erf2((x + vec2(-curved, curved)) * (0.70710677 / sigma));
+    return integral.y - integral.x;
+}
+
+// A rounded rectangle convolved with a Gaussian: exact across x; across y,
+// four rows weighted by the Gaussian's exact mass over their intervals within
+// four deviations, so straight edges are exact (after Evan Wallace).
+fn shadow(point: vec2<f32>, rect: vec4<f32>, corner: f32, sigma: f32) -> f32 {
+    let half = rect.zw * 0.5;
+    let p = point - rect.xy - half;
+    let start = clamp(-4.0 * sigma, p.y - half.y, p.y + half.y);
+    let end = clamp(4.0 * sigma, p.y - half.y, p.y + half.y);
+    let step = (end - start) * 0.25;
+    let scale = 0.70710677 / sigma;
+    var value = 0.0;
+    for (var index = 0; index < 4; index += 1) {
+        let edges = start + step * vec2(f32(index), f32(index + 1));
+        let mass = erf2(edges * scale);
+        let y = (edges.x + edges.y) * 0.5;
+        value += shadow_row(p.x, p.y - y, sigma, corner, half) * 0.5 * (mass.y - mass.x);
+    }
+    return clamp(value, 0.0, 1.0);
+}
+
 @fragment
 fn fs_main(input: Vertex) -> @location(0) vec4<f32> {
     let primitive = primitives[input.index];
@@ -92,8 +169,12 @@ fn fs_main(input: Vertex) -> @location(0) vec4<f32> {
     let point = local_point(position.xy, primitive.row0, primitive.row1);
     let radius = primitive.params.x;
     let width = primitive.params.y;
+    let effect = primitive.header.w & 0xffu;
+    var paint = primitive.color;
     var alpha: f32;
-    if width < 0.0 {
+    if effect == 3u {
+        alpha = shadow(point, primitive.rect, radius, width);
+    } else if width < 0.0 {
         alpha = coverage(point, primitive.rect, radius);
     } else {
         let half_width = width * 0.5;
@@ -106,8 +187,11 @@ fn fs_main(input: Vertex) -> @location(0) vec4<f32> {
             alpha = max(alpha - coverage(point, inner, max(radius - half_width, 0.0)), 0.0);
         }
     }
+    if effect == 1u || effect == 2u {
+        paint = gradient(primitive, point);
+    }
     // No coverage-dependent branch precedes derivatives in the clip chain.
-    return primitive.color * (alpha * clip_coverage(position.xy, primitive.header.x));
+    return paint * (alpha * clip_coverage(position.xy, primitive.header.x));
 }
 
 @fragment

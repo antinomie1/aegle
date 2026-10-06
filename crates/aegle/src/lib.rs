@@ -31,7 +31,7 @@ pub mod prelude {
     pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
     pub use aegle_ui::{
         Align, Appearance, Color, Container, ControlKind, Cursor, Direction, Insets, Justify,
-        Length, Node, Point, Result, Skin, Style, Theme, Ui, VisualState, Wrap,
+        Length, Node, Point, Result, Shadow, Skin, Style, Theme, Ui, VisualState, Wrap,
     };
     #[cfg(feature = "motion")]
     pub use aegle_ui::{Easing, Transition, TransitionProperty};

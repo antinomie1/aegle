@@ -3,7 +3,7 @@ use std::{cell::Cell, rc::Rc};
 
 use aegle::{
     prelude::*,
-    scene::{Affine, FillRule, Image, PathBuilder, Point, Stroke},
+    scene::{Affine, FillRule, Gradient, GradientStop, Image, PathBuilder, Point, Stroke},
 };
 
 const THEMES: [&str; 3] = ["Light", "Dark", "High contrast"];
@@ -140,6 +140,26 @@ fn views(pane: &Container) -> Result {
         turn.set(turn.get() + 0.3);
         canvas.invalidate()
     })?;
+    // Native effects: a shadow beneath a gradient background, on every backend.
+    let card = media.column()?;
+    card.set_size(Some(112.0), Some(48.0))?;
+    card.set_radius(8.0)?;
+    card.set_justify_content(Some(Justify::Center))?;
+    card.set_align_items(Some(Align::Center))?;
+    let stop = |offset, color| GradientStop { offset, color };
+    let stops = [
+        stop(0.0, Color::rgb(255, 120, 80)),
+        stop(1.0, Color::rgb(90, 60, 220)),
+    ];
+    let gradient = Gradient::linear(Point::new(0.0, 0.0), Point::new(1.0, 1.0), &stops)?;
+    card.set_background_gradient(Some(gradient))?;
+    card.set_shadow(Some(Shadow {
+        offset: Point::new(0.0, 4.0),
+        blur: 6.0,
+        spread: 0.0,
+        color: Color::rgba(0, 0, 0, 110),
+    }))?;
+    card.text("Gradient")?.set_foreground(Color::WHITE)?;
 
     let lists = column.row()?;
     let scroll = lists.scroll_view()?;
@@ -190,7 +210,18 @@ fn views(pane: &Container) -> Result {
 }
 
 fn main() -> Result<()> {
-    let app = App::new()?;
+    // `showcase vulkan` or `showcase wgpu` selects a GPU backend built in.
+    let renderer = match std::env::args().nth(1).as_deref() {
+        #[cfg(feature = "vulkan")]
+        Some("vulkan") => RendererBackend::Vulkan,
+        #[cfg(feature = "wgpu")]
+        Some("wgpu") => RendererBackend::Wgpu,
+        _ => RendererBackend::default(),
+    };
+    let app = App::with_options(AppOptions {
+        renderer,
+        ..Default::default()
+    })?;
     let options = WindowOptions {
         width: 960,
         height: 720,

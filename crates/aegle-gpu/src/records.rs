@@ -28,11 +28,15 @@ pub struct Primitive {
     pub params: [f32; 4],
     /// Linear premultiplied paint, or repeated color-glyph opacity.
     pub color: [f32; 4],
-    /// Clip head, kind (0 geometry, 1 mask, 2 color glyph, 3 image), atlas page.
+    /// Clip head, kind (0 geometry, 1 mask, 2 color glyph, 3 image), atlas
+    /// page or first gradient stop row, and for geometry the effect (0 solid,
+    /// 1 linear or 2 radial gradient, 3 shadow) with the stop count above bit 8.
     pub header: [u32; 4],
 }
 
-/// One immutable clip, shared by all following draws in its scope.
+/// One immutable clip, shared by all following draws in its scope. Gradient
+/// stops share these rows, two per row: linear premultiplied colors in `row0`
+/// and `row1`, their offsets in `rect`.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct Clip {
@@ -131,12 +135,14 @@ pub fn visible(area: [f32; 4], bounds: [f32; 4]) -> bool {
         && area[3].ceil() > bounds[1]
 }
 
-struct LocalShape {
-    row0: [f32; 4],
-    row1: [f32; 4],
-    rect: [f32; 4],
-    radius: f32,
-    stroke: f32,
+pub(crate) struct LocalShape {
+    pub(crate) row0: [f32; 4],
+    pub(crate) row1: [f32; 4],
+    pub(crate) rect: [f32; 4],
+    pub(crate) radius: f32,
+    pub(crate) stroke: f32,
+    /// Local units per normalized shader unit; the shape origin maps to zero.
+    pub(crate) scale: f32,
 }
 
 impl Recording {
@@ -245,7 +251,11 @@ fn rect_values(rect: Rect) -> [f32; 4] {
     ]
 }
 
-fn local_shape(shape: RoundedRect, transform: Affine, stroke: f32) -> Result<LocalShape> {
+pub(crate) fn local_shape(
+    shape: RoundedRect,
+    transform: Affine,
+    stroke: f32,
+) -> Result<LocalShape> {
     let [x, y, w, h] = rect_values(shape.rect()).map(f64::from);
     // Normalize isotropically on the CPU. Large/tiny local units can map to an
     // ordinary device rectangle; shader SDF squares and AA thresholds must not
@@ -275,6 +285,7 @@ fn local_shape(shape: RoundedRect, transform: Affine, stroke: f32) -> Result<Loc
         } else {
             (f64::from(stroke) / scale) as f32
         },
+        scale: scale as f32,
     })
 }
 
@@ -322,7 +333,7 @@ pub fn bounds(shape: RoundedRect, transform: Affine, outset: f32, fringe: f32) -
     Ok(area)
 }
 
-fn intersection(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+pub(crate) fn intersection(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     [
         a[0].max(b[0]),
         a[1].max(b[1]),
@@ -332,7 +343,7 @@ fn intersection(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
 }
 
 /// Grow only the exhausted array, keeping both retained capacities in budget.
-fn reserve<T, U>(values: &mut Vec<T>, other: &mut Vec<U>, limit: usize) -> Result<()> {
+pub(crate) fn reserve<T, U>(values: &mut Vec<T>, other: &mut Vec<U>, limit: usize) -> Result<()> {
     if values.len() < values.capacity() {
         return Ok(());
     }

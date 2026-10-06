@@ -296,7 +296,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。
-- 组件/绘制：自定义控件输入行为；其余见末节。
+- 组件/绘制：自定义控件输入行为；组透明度与区域模糊（需要离屏层）；阴影与渐变的标记写法。
 - 主题/动画：token 注册表（只有按字段的部分覆盖）。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收。
 - 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU 多窗口只共享实例/设备/管线，图集仍按窗口独立。现有桌面样本不能替代这些证据。
@@ -479,3 +479,12 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 引擎（`aegle-ui/src/motion.rs`）：`TransitionProperty { Paint, Offset, Scale, Rotation }`；过渡策略改为四项各自可选的 `Transition`，`set_transition` 设四项相同，`Node::set_property_transition`/`property_transition` 单独设置或读取。位移、缩放、旋转分别补间（各有运行表），缩放和旋转仍共用 `Transform` 目标；完成回调在最后一项结束时排队一次，减少动态效果、`finish`/`cancel` 与删除节点覆盖所有项。去掉某项时间时该项跳到目标而不单独完成。原生 App 的默认策略在首次绘制前不补间几何。
 - 标记：`offset_x`、`offset_y`（dp）、`scale`、`rotation`（度）可写字面量或绑定 float，`ui!` 与加载器都调用 `set_offset`/`set_transform` 并保留另一轴或另一分量；`paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition` 接受 `200ms` 或 `[200ms, easing]`，在 `transition` 之后逐项覆盖。schema 拒绝 Window 上的几何、非 dp 位移、非正或大于 1000 的缩放与不完整的时长列表。facade 预导出 `TransitionProperty`。
 - 验证：`aegle-ui/tests/transitions.rs`（位移 200 ms、缩放 100 ms 线性分别取样，旋转无时长直接到位；只在最后一项结束时完成一次；去掉位移时长时跳到目标且不完成）；`aegle/tests/motion.rs`（同一 `.aegle` 经 `ui!` 与加载器得到相同的四项时长、位移与 90° 旋转，绑定的 scale 改变后补间 100 ms 结束）；schema 接受与拒绝用例。
+
+## 原生渐变与阴影
+
+- `aegle-scene`：`Gradient`（线性/圆形，2–16 个色标，`with_geometry` 共享色标换几何）、`Command::FillGradient` 与 `Command::Shadow`（标准差 blur，零 blur 记录为普通填充）、`Scene::gradients`、`SceneError::InvalidGradient`。`aegle-image::effects::Stop` 改为同一 `GradientStop`。
+- GPU（`aegle-gpu`，Vulkan 与 wgpu 共用）：`Recording::gradient`/`shadow` 写几何图元，`header[3]` 选择效果，色标两个一行附在裁剪缓冲中；WGSL 的 `fs_main` 求渐变与阴影，Vulkan 构建期 Naga 校验同一 WGSL。没有新增绑定、管线、离屏纹理或预算项。
+- 软件：`effects.rs` 在像素中心用与 shader 相同的公式求值，渐变复用覆盖率 mask，阴影只读取裁剪 mask，不需要新的 mask。
+- UI：`Node::set_shadow(Option<Shadow>)` 与 `set_background_gradient(Option<Gradient>)` 存在稀疏的 Decoration 中，阴影在背景之前录制，渐变按节点尺寸比例换算后替代背景色。`showcase` 增加渐变卡片，并可用 `showcase vulkan|wgpu` 选择 GPU 后端。
+- 验证：`aegle-scene/tests/recording.rs`（非法色标、零长度线、非正半径、负 blur、零 blur 变填充）；`aegle-render-software/tests/effects.rs`（两端外延与线性光中点值、阴影中心满强度、边缘约半、三倍标准差外不绘制、裁剪生效）；`aegle-render-{vulkan,wgpu}/tests/effects.rs`（旋转、圆角裁剪、半透明与硬色标下与软件结果比较）：Vulkan 在 RADV 与 Lavapipe 上开启 Khronos validation 与同步检查通过，平均通道差 0.136/0.128，无验证消息；wgpu 在 RADV 与 llvmpipe（Vulkan 后端）上通过。`aegle-ui/tests/effects.rs`（录制顺序、尺寸换算、清除）。私有 headless Sway 上 release `showcase` 分别以软件、Vulkan、wgpu 截图，渐变卡片区域相对软件的平均通道差为 0.15/0.18，最大差在文字边缘。
+- 未实现：组透明度与区域模糊（需要离屏层和临时纹理预算）；阴影/渐变的过渡与标记属性。wgpu 的 GL 后端未编译，未验证。

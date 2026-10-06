@@ -143,4 +143,5 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 - `Node::set_transform(Transform { scale, rotation })`：scale 为有限正数，rotation 为弧度，以节点边界中心为原点，子树继承。它只是呈现层变换：布局、滚动范围和 `bounds` 不变；`visit_scenes` 给出的矩阵包含它，命中与指针局部坐标做逆映射，滚动视口的裁剪取变换后的外包框（旋转时是近似），IME 锚点取外包框，AccessKit 节点变换按中心旋转/缩放。有过渡策略时与位移共用补间和完成回调，减少动态效果时直接到目标。
 - `Ui::fling(position, velocity)` 与 `stop_fling`：速度单位为逻辑像素/秒，τ=325 ms 的指数衰减，经 `advance_animations` 推进（需要 motion），低于 10 px/s、视口不能再动、新的滚动或按下时结束。
+- `Node::set_shadow(Some(Shadow { offset, blur, spread, color }))` 在背景下绘制随圆角的柔和阴影，可超出节点边界，不影响布局与命中，仍受祖先裁剪；`set_background_gradient(Some(Gradient))` 以渐变代替背景色，坐标为节点尺寸的比例（x 按宽、y 按高，圆形半径按较长边），不绘制背景的控件忽略它。两者使用 scene 的原生渐变与阴影命令，软件、Vulkan 与 wgpu 结果一致；没有过渡，也还没有标记写法。
 - `aegle-image/effects`（facade 默认启用）：`linear_gradient`、`radial_gradient`、`shadow` 生成共享 `Image`，颜色在预乘线性光中插值；用 `SceneBuilder::image` 或 `ImageView` 绘制，所有后端复用既有图像路径。

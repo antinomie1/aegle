@@ -18,6 +18,7 @@ pub mod bar;
 mod callbacks;
 pub mod control;
 mod cursor;
+mod effects;
 mod events;
 #[cfg(feature = "motion")]
 mod fling;
@@ -58,6 +59,7 @@ pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, VisualState};
 pub use aegle_types::{Color, Cursor, Point, Preferences, Size, TouchPhase};
 pub use control::{Control, Plain};
+pub use effects::Shadow;
 pub use events::KeyEvent;
 #[cfg(feature = "grid")]
 pub use grid_handles::Stack;

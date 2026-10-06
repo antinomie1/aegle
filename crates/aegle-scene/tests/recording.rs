@@ -132,3 +132,54 @@ fn shared_images_and_validated_paths() {
     assert_eq!(scene.len(), 3);
     assert_eq!((scene.images().len(), scene.paths().len()), (1, 2));
 }
+
+#[test]
+fn validated_gradients_and_shadows() {
+    use aegle_scene::{Gradient, GradientStop};
+    let stop = |offset| GradientStop {
+        offset,
+        color: Color::BLACK,
+    };
+    let (a, b) = (Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+    for stops in [
+        &[stop(0.0)][..],
+        &[stop(0.6), stop(0.4)],
+        &[stop(0.0), stop(1.5)],
+    ] {
+        assert_eq!(
+            Gradient::linear(a, b, stops).unwrap_err(),
+            SceneError::InvalidGradient
+        );
+    }
+    let stops = [stop(0.0), stop(0.5), stop(0.5), stop(1.0)];
+    assert!(Gradient::linear(a, a, &stops).is_err());
+    assert!(Gradient::radial(a, 0.0, &stops).is_err());
+    assert_eq!(
+        Gradient::radial(a, f32::NAN, &stops).unwrap_err(),
+        SceneError::NonFinite
+    );
+    let gradient = Gradient::linear(a, b, &stops).unwrap();
+    let shape = RoundedRect::new(Rect::new(0.0, 0.0, 8.0, 8.0), 2.0).unwrap();
+    let mut builder = SceneBuilder::new();
+    assert_eq!(
+        builder.shadow(shape, Color::BLACK, -1.0).unwrap_err(),
+        SceneError::NegativeExtent
+    );
+    builder
+        .fill_gradient(shape, &gradient)
+        .unwrap()
+        .shadow(shape, Color::BLACK, 0.0)
+        .unwrap()
+        .shadow(shape, Color::BLACK, 3.0)
+        .unwrap();
+    let scene = builder.finish().unwrap();
+    assert_eq!(scene.gradients(), [gradient]);
+    assert!(matches!(
+        scene.commands(),
+        [
+            Command::FillGradient { gradient: 0, .. },
+            Command::Fill { .. },
+            Command::Shadow { blur: 3.0, .. }
+        ]
+    ));
+}

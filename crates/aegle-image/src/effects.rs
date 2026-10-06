@@ -1,7 +1,8 @@
 //! Gradients and soft shadows rendered once into shared scene images.
 //!
-//! Every backend already draws, filters and clips images, so these effects need
-//! no new renderer commands: draw the returned [`Image`] stretched over a rect.
+//! Draw the returned [`Image`] stretched over a rect, for example as a widget
+//! image. To paint a shape directly, prefer the scene's resolution-independent
+//! `SceneBuilder::fill_gradient` and `SceneBuilder::shadow`.
 //! Colors interpolate in premultiplied linear light, like motion does; the
 //! pixels are straight sRGB RGBA8. Images are at most 64 MiB.
 
@@ -10,16 +11,9 @@ use aegle_types::{Color, color_math};
 
 /// Largest generated image, in bytes.
 const MAX_BYTES: usize = 64 << 20;
-const MAX_STOPS: usize = 16;
 
-/// A color at an offset along a gradient, `0.0` first to `1.0` last.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Stop {
-    /// Position in `0..=1`.
-    pub offset: f32,
-    /// Unpremultiplied sRGB color.
-    pub color: Color,
-}
+/// A color at an offset along a gradient, shared with scene gradients.
+pub use aegle_scene::GradientStop as Stop;
 
 /// Fills a `width` × `height` image with a linear gradient. The direction is
 /// `angle` radians clockwise from left-to-right, so `FRAC_PI_2` runs top to
@@ -129,7 +123,7 @@ impl Ramp {
         let ordered = stops
             .windows(2)
             .all(|pair| pair[0].offset <= pair[1].offset);
-        if !(2..=MAX_STOPS).contains(&stops.len())
+        if !(2..=aegle_scene::Gradient::MAX_STOPS).contains(&stops.len())
             || !ordered
             || !stops.iter().all(|s| (0.0..=1.0).contains(&s.offset))
         {

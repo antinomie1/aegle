@@ -44,7 +44,7 @@
 
 `aegle-render-vulkan` 通过 ash 0.38 和 bytemuck 1.25 消费相同 Scene，支持几何、最多八层裁剪及显式 RGBA8 读回。默认纯几何不带字体；可选 `text` 用 glyph、scene/text 和 hashbrown 管理按需 R8/RGBA8_SRGB 图集，复用下述字形身份与光栅策略，不依赖 Parley。没有 core、平台窗口库或软件 renderer 的正常依赖；可选 window 仅增加 raw-window-handle；Naga 30 仅在构建期生成 SPIR-V。swapchain 与 App 显式后端选择已接入，详见 [Vulkan 契约](vulkan.md)。
 
-`aegle-gpu` 不接触任何图形 API：`Walker` 把 Scene 逐命令转成 112 B 图元行与 64 B 裁剪行（`Recording`，带字节上限），几何命令就地记录，字形、图像、路径交回后端处理；`aegle-gpu` 因此是两个 GPU 后端行为一致的单一来源，也是它们的 WGSL 的来源（Vulkan 的 build.rs 以它为构建依赖）。
+`aegle-gpu` 不接触任何图形 API：`Walker` 把 Scene 逐命令转成 112 B 图元行与 64 B 裁剪行（`Recording`，带字节上限），几何、渐变与阴影命令就地记录（渐变色标两个一行附在裁剪行中），字形、图像、路径交回后端处理；`aegle-gpu` 因此是两个 GPU 后端行为一致的单一来源，也是它们的 WGSL 的来源（Vulkan 的 build.rs 以它为构建依赖）。
 
 `aegle-render-wgpu` 消费相同 Scene，经 wgpu 30 在 Vulkan、Metal、Direct3D 12 上绘制几何、最多八层裁剪与 mask/color 字形，不依赖 Parley、Vulkan 后端或 ash；可选 `window` 只增加 raw-window-handle。图像与 CPU 光栅的路径 mask 共用同一图集，放不下的得到专用纹理。与 Vulkan 后端共用的部分见 [wgpu 契约](wgpu.md)。
 

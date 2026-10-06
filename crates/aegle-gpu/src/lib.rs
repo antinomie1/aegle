@@ -9,6 +9,7 @@
 //!
 //! Nothing here touches a graphics API, so the geometry, clip and placement rules
 //! are tested once and behave identically on every backend.
+mod effects;
 mod error;
 mod records;
 mod shelf;
@@ -30,7 +31,7 @@ pub use walk::{Step, Walker};
 #[cfg(feature = "vector")]
 pub use zeno::Scratch;
 
-/// Rounded-rectangle, stroke and atlas shaders: entries `vs_main`, `fs_main`, `fs_text`.
+/// Rounded-rectangle, stroke, gradient, shadow and atlas shaders: entries `vs_main`, `fs_main`, `fs_text`.
 pub const GEOMETRY_WGSL: &str = include_str!("shader.wgsl");
 /// Full-screen pass encoding the linear image into premultiplied sRGB.
 pub const RESOLVE_WGSL: &str = include_str!("resolve.wgsl");

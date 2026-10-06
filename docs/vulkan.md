@@ -4,7 +4,7 @@
 
 ## 范围与依赖
 
-`aegle-render-vulkan` 消费现有不可变 Scene，与软件后端共用颜色、变换和裁剪语义；不拥有控件树、Taffy、字体系统或窗口循环。默认提供实色矩形、统一圆角、居中边框、二维仿射变换与嵌套裁剪。可选 `text` 接受同一 Scene 的定位字形，依赖 glyph/scene 和现有 hashbrown；不依赖 Parley。未启用 text 时文字命令返回不支持错误，不允许跳过字形后报告成功。
+`aegle-render-vulkan` 消费现有不可变 Scene，与软件后端共用颜色、变换和裁剪语义；不拥有控件树、Taffy、字体系统或窗口循环。默认提供实色矩形、统一圆角、居中边框、渐变填充、柔和阴影、二维仿射变换与嵌套裁剪。渐变与阴影仍走几何管线：图元 `header[3]` 选择效果，色标两个一行写入裁剪缓冲，不新增绑定、管线或离屏纹理。可选 `text` 接受同一 Scene 的定位字形，依赖 glyph/scene 和现有 hashbrown；不依赖 Parley。未启用 text 时文字命令返回不支持错误，不允许跳过字形后报告成功。
 
 以 Vulkan 1.1 为基线，复用 ash 0.38 调用驱动，bytemuck 1.25 检查 CPU/shader 数据布局；Naga 30 仅在构建期将 WGSL 转为 SPIR-V 1.3，不引入 wgpu 或运行时 shader 编译器。使用传统 render pass、一个 graphics queue 和可复用 fence，不要求可选 GPU feature。
 

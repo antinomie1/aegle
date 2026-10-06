@@ -4,7 +4,7 @@
 
 //! Painting a node's scene from its control, and the border helper controls share.
 
-use crate::{Result, control::PaintCx, state::State};
+use crate::{Result, control::PaintCx, effects, state::State};
 use aegle_core::NodeId;
 use aegle_scene::{Color, Rect, RoundedRect, SceneBuilder};
 use aegle_types::Size;
@@ -25,6 +25,7 @@ impl State {
         #[cfg(not(feature = "motion"))]
         let reduced_motion = false;
         let mut next_frame = false;
+        let decoration = self.decorations.get(&id);
         let element = &mut self.tree.get_mut(id).unwrap().context;
         let padding = element.inset(&theme);
         let size = element.bounds.size;
@@ -36,7 +37,10 @@ impl State {
                 Rect::new(0.0, 0.0, size.width, size.height),
                 appearance.radius,
             )?;
-            if frame.background && appearance.background.to_rgba()[3] != 0 {
+            effects::paint_shadow(decoration, &mut builder, size, appearance.radius)?;
+            let gradient =
+                frame.background && effects::paint_gradient(decoration, &mut builder, shape)?;
+            if frame.background && !gradient && appearance.background.to_rgba()[3] != 0 {
                 builder.fill(shape, appearance.background)?;
             }
             if frame.border {

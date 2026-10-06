@@ -8,12 +8,14 @@ use aegle_core::{Dirty, NodeId};
 use aegle_text::TextStyle;
 
 /// Stored only for nodes with an explicit visual or typography override.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct Decoration {
     pub skin: Option<Skin>,
     pub style: Style,
     pub font_size: Option<f32>,
     pub cursor: Option<aegle_types::Cursor>,
+    pub shadow: Option<crate::Shadow>,
+    pub gradient: Option<aegle_scene::Gradient>,
 }
 
 impl State {
@@ -67,6 +69,8 @@ impl State {
                 && d.style == Style::default()
                 && d.font_size.is_none()
                 && d.cursor.is_none()
+                && d.shadow.is_none()
+                && d.gradient.is_none()
         }) {
             self.decorations.remove(&id);
         }

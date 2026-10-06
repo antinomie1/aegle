@@ -8,6 +8,7 @@
 //! separate from the mask budget.
 
 mod blend;
+mod effects;
 mod path;
 mod raster;
 mod surface;

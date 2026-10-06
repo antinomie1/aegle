@@ -22,6 +22,7 @@ pub enum Step {
 /// command at a time lets the backend flush its records between commands.
 pub struct Walker<'a> {
     commands: std::slice::Iter<'a, Command>,
+    gradients: &'a [aegle_scene::Gradient],
     state: State,
     saved: [State; MAX_SCOPE_DEPTH],
     depth: usize,
@@ -53,6 +54,7 @@ impl<'a> Walker<'a> {
         }
         Ok(Self {
             commands: scene.commands().iter(),
+            gradients: scene.gradients(),
             state,
             // Scene scopes have a validated maximum: no per-walk heap scratch.
             saved: [state; MAX_SCOPE_DEPTH],
@@ -91,6 +93,13 @@ impl<'a> Walker<'a> {
                 width,
             } => {
                 recording.shape(state, shape, color, width, self.viewport)?;
+            }
+            Command::FillGradient { shape, gradient } => {
+                let gradient = &self.gradients[gradient];
+                recording.gradient(state, shape, gradient, self.viewport)?;
+            }
+            Command::Shadow { shape, color, blur } => {
+                recording.shadow(state, shape, color, blur, self.viewport)?;
             }
             #[allow(unreachable_patterns)]
             command => return Ok(Step::Command(command, state)),

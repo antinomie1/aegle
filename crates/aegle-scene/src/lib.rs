@@ -15,6 +15,7 @@ extern crate alloc;
 
 mod builder;
 mod geometry;
+mod paint;
 mod resource;
 #[cfg(feature = "text")]
 mod text;
@@ -22,6 +23,7 @@ mod text;
 pub use aegle_types::{Color, Point, Rect};
 pub use builder::{Scene, SceneBuilder};
 pub use geometry::{Affine, RoundedRect};
+pub use paint::{Gradient, GradientGeometry, GradientStop};
 pub use resource::{FillRule, Image, LineCap, LineJoin, Path, PathBuilder, Stroke, Verb};
 #[cfg(feature = "text")]
 pub use text::{Blob, FontData, Glyph, GlyphRun};
@@ -81,6 +83,24 @@ pub enum Command {
         /// Positive local width, caps and joins.
         stroke: Stroke,
     },
+    /// Fill a shape with [`Scene::gradients`]`[gradient]`.
+    FillGradient {
+        /// Shape in the current local coordinate system, as for the gradient.
+        shape: RoundedRect,
+        /// Index into [`Scene::gradients`].
+        gradient: usize,
+    },
+    /// Draw the soft shadow of a shape: its coverage convolved with a Gaussian.
+    /// Offset and spread are applied by moving or growing `shape`.
+    Shadow {
+        /// Shape casting the shadow, in the current local coordinate system.
+        shape: RoundedRect,
+        /// Unpremultiplied sRGB shadow color.
+        color: Color,
+        /// Positive Gaussian standard deviation in local units; the shadow
+        /// fades out within three of them beyond the shape.
+        blur: f32,
+    },
     /// Draw a positioned glyph run from [`Scene::glyph_runs`].
     #[cfg(feature = "text")]
     Glyphs(usize),
@@ -123,6 +143,9 @@ pub enum SceneError {
     InvalidImage,
     /// A path segment or close does not follow a `move_to`.
     InvalidPath,
+    /// Gradient stops are too few, too many, unordered or outside `0..=1`, or its
+    /// line has no length or its radius is not positive.
+    InvalidGradient,
 }
 
 impl core::fmt::Display for SceneError {
@@ -138,6 +161,7 @@ impl core::fmt::Display for SceneError {
             Self::InvalidText => "invalid glyph run size or variation coordinate",
             Self::InvalidImage => "image extents or pixel length are invalid",
             Self::InvalidPath => "path segment does not follow a move",
+            Self::InvalidGradient => "gradient stops or geometry are invalid",
         })
     }
 }
