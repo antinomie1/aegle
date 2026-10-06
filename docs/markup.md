@@ -45,17 +45,28 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 
 构造期间先建立子树再设置属性；任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。编译型 View 不提供重载；运行时加载的 View 用 `reload` 原子替换。
 
-支持 Window、Column、Row、ScrollView、Text、Button、TextField、TextArea、CheckBox、Switch、RadioButton、Slider、Progress。只有前四种可以包含子节点；Window 只可为文件根。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
+支持 Window、Column、Row、ScrollView、Grid、Stack、Text、Button、TextField、TextArea、CheckBox、Switch、RadioButton、Slider、Progress。只有前六种可以包含子节点；Window 只可为文件根。Grid 与 Stack 需要 facade 的 `grid` feature：编译型标记未启用时生成代码报找不到方法，运行时加载返回错误。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
 
 | 属性 | 值与适用范围 |
 | --- | --- |
 | `id` | 唯一标识符，生成有类型句柄 |
 | `title` | Window 字符串，最多 4000 UTF-8 字节且无 NUL |
 | `text` | Text/Button/TextField/TextArea/CheckBox/Switch 字符串；单行编辑器拒绝硬换行 |
-| `width`、`height` | 控件为非负 `dp` 或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
-| `min_width`、`min_height`、`padding` | 非负 `dp` |
-| `gap` | Window/Column/Row/ScrollView 的非负 `dp` |
-| `grow` | 有限非负数值 |
+| `width`、`height` | 控件为非负 `dp`、百分比或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
+| `min_width`、`min_height`、`max_width`、`max_height`、`basis` | 非负 `dp`、百分比或 `auto`（最大尺寸的 `auto` 为不限） |
+| `aspect_ratio` | 正数，宽/高 |
+| `padding` | 容器为非负 `dp`/百分比，或按 CSS 顺序的 `[上下, 左右]`、`[上, 右, 下, 左]`；其他控件为一个非负 `dp` |
+| `margin` | 同 padding 的写法，可为负或 `auto`（左右 `auto` 水平居中） |
+| `inset` | 同 margin 的写法；设置即绝对定位，相对父容器内边距框，绘制在兄弟之上 |
+| `gap` | 容器的非负 `dp`/百分比，或 `[行间距, 列间距]` |
+| `grow`、`shrink` | 有限非负数值 |
+| `direction` | Window/Column/Row/ScrollView 的 `row`、`column`、`row_reverse`、`column_reverse` |
+| `wrap` | 同上容器的 `no_wrap`、`wrap`、`wrap_reverse` |
+| `align`、`align_self` | 容器子项 / 本控件的交叉轴对齐：`start`、`end`、`center`、`stretch`、`baseline` |
+| `justify`、`align_content` | 容器的主轴剩余空间 / 行间剩余空间：`start`、`end`、`center`、`stretch`、`space_between`、`space_around`、`space_evenly` |
+| `columns`、`rows`、`auto_columns`、`auto_rows` | Grid 的轨道：`dp`、百分比、`fr`、`auto`、`min_content`、`max_content`，单个或列表 |
+| `flow`、`justify_items` | Grid 的 `row`、`column`、`row_dense`、`column_dense`；子项水平对齐 |
+| `grid_column`、`grid_row`、`justify_self` | Grid 子项：非零整数线号（负数从末尾数），或 `[线号或 auto, 跨度]`；格内水平对齐 |
 | `visible`、`enabled` | bool，作用于控件子树 |
 | `label` | 无障碍名称字符串 |
 | `read_only` | TextField/TextArea 的 bool |
@@ -82,7 +93,7 @@ Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐�
 
 ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`、`width` 或 flex 分配约束视口即可产生滚动溢出。它接受普通容器的布局和外观属性，不接受 font_size、hover/pressed/focus 等交互状态属性。当前没有初始滚动偏移属性；通过具名 ScrollView 句柄调用 `scroll_to`，或对子控件调用 `ensure_visible`。布局刷新、裁剪、嵌套滚轮和保留状态遵守同一套 [Rust 滚动契约](rust-api.md#当前滚动契约)；完整示例为 `crates/aegle/examples/scrolling.aegle`。
 
-声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出；当前不支持百分比。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
+声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 
 `transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。宏在整棵结构创建及全部静态属性设置后安装过渡，首次显示没有初始样式动画。它控制同一套 Node 外观 API，不改变几何、字号或文本行为。
 
@@ -105,7 +116,7 @@ Window {
 
 属性值写表达式即为单向绑定，可绑定 text/label（string）、visible/enabled/checked/read_only（bool）与 value（float），其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。Button 支持 `on clicked`，CheckBox/Switch/Slider 支持 `on changed`，单行 TextField 支持 `on submitted`；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受源码大小约束。标记事件块占用控件的回调槽，Rust 再设置同一回调会替换它。
 
-`if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点位于一个内部行/列中，方向和字面量 gap 跟随父容器，空时隐藏；因此块内 `grow` 相对该内部容器生效。release 测量：1000 行 `for` 首次构建 6.5–12 ms（命令式创建同样 1000 个文本 2.9 ms），追加一行约 1.1 ms，整体反序约 5.1 ms；大数据仍应使用 ListView。
+`if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点放在一个透明的 contents 分组中，直接参与父容器的布局：在 Row/Column 中与兄弟共享对齐、换行、gap 和 grow，在 Grid 中各自占一格，在 Stack 中叠放。release 测量（本机 CJK 测试字体，7 次中位数）：1000 行 `for` 首次构建加刷新 3.6 ms，追加一行 0.8 ms，整体反序 5.8 ms；大数据仍应使用 ListView。
 
 `component Name(p: type = literal, q: type) { state ...; Root { ... } }` 声明组件，组件体只有一个根节点；`Name { p: expr }` 实例化，参数随调用方表达式读取的 state 更新，组件 state 每个实例独立。实例不接受子节点、事件或 id；递归实例化、与内建同名或重复组件名均为错误。`use "relative.aegle"` 导入另一文件声明的所有组件：路径相对于导入方文件、以 `/` 分隔且不能为绝对路径；导入环为错误，重复导入只加载一次，被导入文件只能声明组件，一个程序最多 256 个文件。组件名在已加载文件间全局可见。
 

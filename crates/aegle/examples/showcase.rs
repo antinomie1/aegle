@@ -6,7 +6,7 @@ use aegle::{
     scene::{Affine, FillRule, Image, PathBuilder, Point, Stroke},
 };
 
-const THEMES: [&str; 3] = ["Light theme", "Dark theme", "High contrast"];
+const THEMES: [&str; 3] = ["Light", "Dark", "High contrast"];
 
 fn star() -> Result<aegle::scene::Path> {
     let mut star = PathBuilder::new();
@@ -67,8 +67,11 @@ fn inputs(window: &Window, column: &Container, status: &Label) -> Result {
     let progress = column.progress(0.0, 100.0, 60.0)?;
     slider.on_change(move |slider| progress.set_value(slider.value()?))?;
 
-    let theme = column.dropdown(&THEMES, 0)?;
-    theme.set_accessible_label("Theme")?;
+    let themes = column.row()?;
+    themes.set_align_items(Some(Align::Center))?;
+    themes.text("Theme")?;
+    let theme = themes.dropdown(&THEMES, 0)?;
+    theme.set_grow(1.0)?;
     let window = window.clone();
     theme.on_change(move |theme| {
         window.set_theme(match theme.selected()? {
@@ -148,7 +151,8 @@ fn views(column: &Container) -> Result {
         cell.text(&text).map(drop)
     })?;
     table.set_grow(1.0)?;
-    table.set_height(Some(0.0))?;
+    // Share only the space left, instead of starting from all 1,000 rows.
+    table.set_basis(0.0)?;
     Ok(())
 }
 

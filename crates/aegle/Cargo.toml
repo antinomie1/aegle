@@ -34,6 +34,9 @@ gif = ["aegle-image/gif"]
 svg = ["aegle-image/svg", "aegle-glyph/svg"]
 # COLRv1 gradient/composite color glyphs.
 colrv1 = ["aegle-glyph/colrv1"]
+# Grid and stack containers, and the Grid/Stack markup components (about
+# 244 KiB of Taffy grid code in a release build).
+grid = ["aegle-ui/grid", "aegle-loader?/grid"]
 
 [dependencies]
 aegle-ui.workspace = true
@@ -95,3 +98,7 @@ required-features = ["motion"]
 [[example]]
 name = "showcase"
 required-features = ["native", "system-fonts"]
+
+[[example]]
+name = "layout"
+required-features = ["native", "system-fonts", "markup", "grid"]

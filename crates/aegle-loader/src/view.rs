@@ -42,11 +42,7 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
     let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), carried)?;
     let mut ids = vec![None; program.0.checked.ids.len()];
     let (mut block, mut created) = (Block::new(), Vec::new());
-    let host = Parent {
-        container: parent,
-        row: false,
-        gap: None,
-    };
+    let host = Parent { container: parent };
     let result = build::element(root, &host, &env, &mut block, &mut created, Some(&mut ids));
     if let Err(error) = result {
         if let Some(root) = created.first() {
@@ -229,7 +225,7 @@ impl View {
             ids[index] = Some(self.root.clone());
         }
         let mut block = Block::new();
-        let parent = Parent::of(root, &self.root);
+        let parent = Parent::of(&self.root);
         let result = build::children(
             &root.children,
             &parent,

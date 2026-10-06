@@ -10,9 +10,31 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "height" => Height,
         "min_width" => MinWidth,
         "min_height" => MinHeight,
+        "max_width" => MaxWidth,
+        "max_height" => MaxHeight,
+        "aspect_ratio" => AspectRatio,
         "padding" => Padding,
+        "margin" => Margin,
+        "inset" => Inset,
         "gap" => Gap,
         "grow" => Grow,
+        "shrink" => Shrink,
+        "basis" => Basis,
+        "direction" => Direction,
+        "wrap" => Wrap,
+        "align" => Align,
+        "justify" => Justify,
+        "align_content" => AlignContent,
+        "align_self" => AlignSelf,
+        "justify_self" => JustifySelf,
+        "justify_items" => JustifyItems,
+        "columns" => Columns,
+        "rows" => Rows,
+        "auto_columns" => AutoColumns,
+        "auto_rows" => AutoRows,
+        "flow" => Flow,
+        "grid_column" => GridColumn,
+        "grid_row" => GridRow,
         "visible" => Visible,
         "enabled" => Enabled,
         "label" => Label,
@@ -46,9 +68,38 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
     })
 }
 
+/// Identifier values of each enum-valued property, in Rust variant order.
+pub(crate) fn choices(name: PropertyName) -> &'static [&'static str] {
+    use PropertyName::*;
+    const ALIGN: &[&str] = &["start", "end", "center", "stretch", "baseline"];
+    const JUSTIFY: &[&str] = &[
+        "start",
+        "end",
+        "center",
+        "stretch",
+        "space_between",
+        "space_around",
+        "space_evenly",
+    ];
+    match name {
+        Direction => &["row", "column", "row_reverse", "column_reverse"],
+        Wrap => &["no_wrap", "wrap", "wrap_reverse"],
+        Align | AlignSelf | JustifySelf | JustifyItems => ALIGN,
+        Justify | AlignContent => JUSTIFY,
+        Flow => &["row", "column", "row_dense", "column_dense"],
+        Easing => &["linear", "ease_in", "ease_out", "ease_in_out"],
+        Theme => &["light", "dark", "high_contrast"],
+        _ => &[],
+    }
+}
+
 /// Whether a property applies to a component kind, regardless of its value.
 pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
     use PropertyName::*;
+    let flex = matches!(
+        kind,
+        Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
+    );
     match name {
         Title | Theme => kind == Kind::Window,
         Text | FontSize => matches!(
@@ -87,11 +138,62 @@ pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
             kind,
             Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider | Kind::Progress
         ),
-        Gap => matches!(
-            kind,
-            Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
-        ),
+        Gap | Align | Justify | AlignContent => kind.is_container(),
+        Direction | Wrap => flex,
+        Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems => kind == Kind::Grid,
+        MaxWidth | MaxHeight | AspectRatio | Margin | Inset | Shrink | Basis | AlignSelf
+        | JustifySelf | GridColumn | GridRow => kind != Kind::Window,
         _ => true,
+    }
+}
+
+/// A finite length, percentage or, where allowed, `auto`.
+fn length(value: &Literal, nonnegative: bool, auto: bool) -> bool {
+    match value {
+        Literal::Length(n) | Literal::Percent(n) => n.is_finite() && (!nonnegative || *n >= 0.0),
+        Literal::Identifier(name) => auto && name == "auto",
+        _ => false,
+    }
+}
+
+/// One length or a list of two or four in CSS order.
+fn edges(value: &Literal, nonnegative: bool, auto: bool) -> bool {
+    match value {
+        Literal::List(items) => {
+            matches!(items.len(), 2 | 4) && items.iter().all(|i| length(i, nonnegative, auto))
+        }
+        value => length(value, nonnegative, auto),
+    }
+}
+
+/// One grid track or a list of them.
+fn tracks(value: &Literal) -> bool {
+    let track = |value: &Literal| match value {
+        Literal::Length(n) | Literal::Percent(n) | Literal::Fraction(n) => {
+            n.is_finite() && *n >= 0.0
+        }
+        Literal::Identifier(name) => {
+            matches!(name.as_str(), "auto" | "min_content" | "max_content")
+        }
+        _ => false,
+    };
+    match value {
+        Literal::List(items) => items.iter().all(track),
+        value => track(value),
+    }
+}
+
+/// A nonzero whole grid line, or a `[line or auto, span]` pair.
+fn placement(value: &Literal) -> bool {
+    let whole = |value: &Literal, low: f32, high: f32| matches!(value, Literal::Number(n) if n.fract() == 0.0 && (low..=high).contains(n));
+    let line = |value: &Literal| whole(value, -32768.0, 32767.0) && *value != Literal::Number(0.0);
+    match value {
+        Literal::List(items) => {
+            items.len() == 2
+                && (line(&items[0]) || items[0] == Literal::Identifier("auto".into()))
+                && whole(&items[1], 1.0, 65535.0)
+        }
+        value => line(value),
     }
 }
 
@@ -109,22 +211,24 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         (Width | Height, Literal::Length(n)) if kind == Kind::Window => {
             n.is_finite() && *n > 0.0 && n.fract() == 0.0 && f64::from(*n) <= f64::from(u32::MAX)
         }
-        (Width | Height, Literal::Identifier(name)) => kind != Kind::Window && name == "auto",
-        (
-            Width | Height | MinWidth | MinHeight | Padding | Gap | BorderWidth | Radius
-            | FocusWidth,
-            Literal::Length(n),
-        )
-        | (Grow | Step, Literal::Number(n)) => n.is_finite() && *n >= 0.0,
+        (Width | Height, _) if kind == Kind::Window => false,
+        (Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis, value) => {
+            length(value, true, true)
+        }
+        (Padding, value) if kind.is_container() => edges(value, true, false),
+        (Margin | Inset, value) => edges(value, false, true),
+        (Gap, Literal::List(items)) => {
+            items.len() == 2 && items.iter().all(|i| length(i, true, false))
+        }
+        (Gap, value) => length(value, true, false),
+        (Columns | Rows | AutoColumns | AutoRows, value) => tracks(value),
+        (GridColumn | GridRow, value) => placement(value),
+        (Padding | BorderWidth | Radius | FocusWidth, Literal::Length(n))
+        | (Grow | Shrink | Step, Literal::Number(n)) => n.is_finite() && *n >= 0.0,
+        (AspectRatio, Literal::Number(n)) => n.is_finite() && *n > 0.0,
         (Min | Max | Value, Literal::Number(n)) => n.is_finite(),
         (FontSize, Literal::Length(n)) => n.is_finite() && *n > 0.0,
         (Transition, Literal::Duration(_)) => true,
-        (Easing, Literal::Identifier(name)) => {
-            matches!(
-                name.as_str(),
-                "linear" | "ease_in" | "ease_out" | "ease_in_out"
-            )
-        }
         (
             Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
             | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
@@ -132,33 +236,41 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             Literal::Color(_),
         ) => true,
         (Visible | Enabled | ReadOnly | Password | Checked | Mixed, Literal::Bool(_)) => true,
-        (Theme, Literal::Identifier(name)) => {
-            matches!(name.as_str(), "light" | "dark" | "high_contrast")
-        }
+        (_, Literal::Identifier(value)) => choices(name).contains(&value.as_str()),
         _ => false,
     };
     if valid {
         return Ok(());
     }
     let expected = match name {
-        Title => "a string of at most 4000 bytes without NUL",
-        Text if kind == Kind::TextField => "a string without hard line separators",
-        Text | Label => "a string",
-        Width | Height if kind == Kind::Window => "a positive whole dp length fitting u32",
-        Width | Height => "a nonnegative dp length or auto",
-        MinWidth | MinHeight | Padding | Gap | BorderWidth | Radius | FocusWidth => {
-            "a nonnegative dp length"
+        Title => "a string of at most 4000 bytes without NUL".into(),
+        Text if kind == Kind::TextField => "a string without hard line separators".into(),
+        Text | Label => "a string".into(),
+        Width | Height if kind == Kind::Window => "a positive whole dp length fitting u32".into(),
+        Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis => {
+            "a nonnegative dp length, a percentage or auto".into()
         }
-        FontSize => "a positive dp length",
-        Transition => "nonnegative whole milliseconds with the ms suffix",
-        Easing => "linear, ease_in, ease_out or ease_in_out",
+        Padding if kind.is_container() => {
+            "a nonnegative dp length or percentage, or a list of two or four".into()
+        }
+        Margin | Inset => "a dp length, percentage or auto, or a list of two or four".into(),
+        Gap => "a nonnegative dp length or percentage, or a [row, column] list".into(),
+        Columns | Rows | AutoColumns | AutoRows => {
+            "tracks: dp, %, fr, auto, min_content or max_content, alone or in a list".into()
+        }
+        GridColumn | GridRow => "a nonzero whole line, or a [line or auto, span] list".into(),
+        Padding | BorderWidth | Radius | FocusWidth => "a nonnegative dp length".into(),
+        AspectRatio => "a finite positive number".into(),
+        FontSize => "a positive dp length".into(),
+        Transition => "nonnegative whole milliseconds with the ms suffix".into(),
         Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
         | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
-        | IndicatorColor => "a #RRGGBB or #RRGGBBAA color",
-        Grow | Step => "a finite nonnegative number",
-        Min | Max | Value => "a finite number",
-        Visible | Enabled | ReadOnly | Password | Checked | Mixed => "true or false",
-        Theme => "light, dark or high_contrast",
+        | IndicatorColor => "a #RRGGBB or #RRGGBBAA color".into(),
+        Grow | Shrink | Step => "a finite nonnegative number".into(),
+        Min | Max | Value => "a finite number".into(),
+        Visible | Enabled | ReadOnly | Password | Checked | Mixed => "true or false".into(),
+        Direction | Wrap | Align | Justify | AlignContent | AlignSelf | JustifySelf
+        | JustifyItems | Flow | Easing | Theme => choices(name).join(", "),
     };
     Err(format!("{name:?} requires {expected}"))
 }

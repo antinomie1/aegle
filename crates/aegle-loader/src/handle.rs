@@ -171,6 +171,14 @@ pub(crate) fn create(kind: Kind, element: &Element, parent: &Container) -> Resul
     Ok(match kind {
         Kind::Column => Handle::Container(parent.column()?),
         Kind::Row => Handle::Container(parent.row()?),
+        #[cfg(feature = "grid")]
+        Kind::Grid => Handle::Container(parent.grid(&[])?),
+        #[cfg(feature = "grid")]
+        Kind::Stack => Handle::Container(parent.stack()?),
+        #[cfg(not(feature = "grid"))]
+        Kind::Grid | Kind::Stack => {
+            return Err("markup Grid and Stack require the grid feature".into());
+        }
         Kind::ScrollView => Handle::ScrollView(parent.scroll_view()?),
         Kind::Text => Handle::Label(parent.text(text)?),
         Kind::Button => Handle::Button(parent.button(text)?),
@@ -195,15 +203,19 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         };
         Color::rgba(r, g, b, a)
     };
+    let container = match handle {
+        Handle::Container(_) | Handle::ScrollView(_) => Some(handle.container()),
+        #[cfg(any(
+            all(feature = "wayland", target_os = "linux"),
+            all(feature = "windows", target_os = "windows")
+        ))]
+        Handle::Window(_) => Some(handle.container()),
+        _ => None,
+    };
+    if let Some(result) = crate::layout::apply(node, container, name, value) {
+        return result;
+    }
     match (name, value) {
-        (Width | Height, Literal::Identifier(_)) if name == Width => node.set_width(None),
-        (Width | Height, Literal::Identifier(_)) => node.set_height(None),
-        (Width, Literal::Length(n)) => node.set_width(Some(*n)),
-        (Height, Literal::Length(n)) => node.set_height(Some(*n)),
-        (MinWidth, Literal::Length(n)) => node.set_min_width(*n),
-        (MinHeight, Literal::Length(n)) => node.set_min_height(*n),
-        (Padding, Literal::Length(n)) => node.set_padding(*n),
-        (Gap, Literal::Length(n)) => node.set_gap(*n),
         (Grow, Literal::Number(n)) => node.set_grow(*n),
         (BorderWidth, Literal::Length(n)) => node.set_border_width(*n),
         (Radius, Literal::Length(n)) => node.set_radius(*n),

@@ -20,6 +20,7 @@ mod actions;
 mod build;
 mod eval;
 mod handle;
+mod layout;
 mod reactive;
 mod view;
 

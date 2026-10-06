@@ -24,6 +24,7 @@ aegle = { path = "../aegle/crates/aegle" }
 | `colrv1` | ✓ | COLRv1 彩色字形（渐变、变换、混合层） |
 | `jpeg` / `webp` / `gif` |  | `aegle::image::decode` 解码 JPEG、WebP（静态）、GIF（首帧） |
 | `svg` |  | 静态 SVG（无文字）：`aegle::image::svg` 栅格化，并渲染 OpenType-SVG 字形 |
+| `grid` |  | 网格与叠放容器（`grid`、`stack`）及标记的 `Grid`/`Stack`；release 约增加 244 KiB |
 | `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译 |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），可与其他后端同时编译 |
 | `accessibility` |  | 语义树导出（`Ui::accessibility`），不接系统 |
@@ -156,17 +157,74 @@ let panel = app.window_with_options("Panel", WindowOptions {
 
 ## 5. 布局
 
-布局由 Taffy flexbox 计算。列/行的子控件沿主轴排列，交叉轴默认拉伸。
+布局由 Taffy 计算，规则与 CSS flexbox / grid 相同。行、列的子控件沿主轴排列，交叉轴默认拉伸。长度参数接受 `f32`（逻辑像素）、`Option<f32>`（`None` 为自动）或 `Length::{Px, Percent, Auto}`；百分比相对父内容框，写 0–100。四边参数接受 `f32`、`Length` 或 `Insets::{all, symmetric(水平, 垂直), new(上, 右, 下, 左)}`。非有限值、负尺寸等不合法输入返回 `UiError::InvalidValue`。
+
+| 子项方法（`Node`） | 说明 |
+| --- | --- |
+| `set_size(w, h)`、`set_width`、`set_height` | 尺寸；自动高度会替换控件的主题高度 |
+| `set_min_size(w, h)`、`set_min_width`、`set_min_height` | 最小尺寸；自动表示由内容决定 |
+| `set_max_size(w, h)`、`set_max_width`、`set_max_height` | 最大尺寸；自动表示不限 |
+| `set_aspect_ratio(Some(r))` | 宽/高比，一边自动时由另一边推出 |
+| `set_grow(f)`、`set_shrink(f)`、`set_basis(len)` | 分配剩余空间、空间不足时的收缩比例（默认 1）、增减前的主轴尺寸 |
+| `set_align_self(Some(Align))` | 覆盖父容器的交叉轴对齐；网格中为纵向对齐 |
+| `set_margin(insets)` | 外边距，可为负；左右都为 `Length::Auto` 时水平居中 |
+| `set_absolute(Some(insets))` | 移出流式布局，按父容器内边距框的四边定位并绘制在兄弟之上；`None` 恢复 |
+| `set_padding(insets)` | 内边距；容器接受任意四边，文字控件只接受统一像素值 |
+| `set_gap(g)`、`set_gaps(水平, 垂直)` | 子控件间距 |
+
+| 容器方法（`Container`） | 说明 |
+| --- | --- |
+| `row()`、`column()` | 追加行、列 |
+| `contents()` | 追加透明分组：其子控件直接参与本容器的行、列、换行或网格布局，可整体显示、隐藏或替换 |
+| `set_direction(Direction)` | `Row`、`Column`、`RowReverse`、`ColumnReverse` |
+| `set_wrap(Wrap::Wrap)` | 放不下时换行，类似 QML `Flow` |
+| `set_align_items(Some(Align))` | 交叉轴对齐：`Start`、`End`、`Center`、`Stretch`、`Baseline`；`None` 恢复拉伸 |
+| `set_justify_content(Some(Justify))` | 主轴剩余空间：`Start`、`End`、`Center`、`SpaceBetween`、`SpaceAround`、`SpaceEvenly` |
+| `set_align_content(Some(Justify))` | 换行后各行之间（网格中各行之间）的剩余空间 |
+
+```rust
+let bar = window.row()?;
+bar.set_justify_content(Some(Justify::SpaceBetween))?;
+bar.set_align_items(Some(Align::Center))?;
+bar.text("标题")?;
+bar.button("设置")?;
+
+let tags = window.row()?;
+tags.set_wrap(Wrap::Wrap)?;
+tags.set_gaps(6.0, 6.0)?;
+
+let fab = window.button("+")?;
+fab.set_absolute(Some(Insets::new(Length::Auto, 24.0, 24.0, Length::Auto)))?;
+```
+
+**网格与叠放**（facade `grid` feature，release 约增加 244 KiB）：
 
 | 方法 | 说明 |
 | --- | --- |
-| `set_size(w, h)`、`set_width(Some(w))`、`set_height(None)` | 固定尺寸，`None` 恢复自动 |
-| `set_min_size(Size)`、`set_min_width`、`set_min_height` | 最小尺寸 |
-| `set_grow(f)` | 占用剩余空间的比例 |
-| `set_padding(p)` | 内边距（文字控件的内容边距） |
-| `set_gap(g)` | 容器子控件间距 |
+| `grid(&[Track])` | 追加网格，给出列轨道；子控件逐行填入，行不够时自动增加 |
+| `stack()` | 追加叠放容器：所有子控件位于同一格并互相覆盖，容器至少与最大的子控件一样大，后加的绘制在上面 |
+| `set_columns`、`set_rows`、`set_auto_columns`、`set_auto_rows` | 显式轨道与自动增加的轨道 |
+| `set_flow(Flow)`、`set_justify_items(Some(Align))` | 自动放置顺序（`Row`、`Column`、`RowDense`、`ColumnDense`）；子项在格内的水平对齐 |
+| `set_grid_column(Placement)`、`set_grid_row(Placement)`、`set_justify_self` | 子项位置：`Placement::at(2)`、`Placement::at(1).spanning(2)`、`Placement::span(2)`；线号从 1 开始，负数从末尾数 |
 
-默认值来自主题：控件高 36、间距 8、窗口根内边距 8，文字 14。显式设置的布局值在切换主题后保留。文字按父宽度自动换行。内容超出时放进 `ScrollView` 或 `ListView`。
+`Track` 有 `Px`、`Percent`、`Fr`（按份分配剩余空间）、`Auto`、`MinContent`、`MaxContent`、`FitContent(px)` 与 `MinMax(px, fr)`。
+
+```rust
+let cards = window.grid(&[Track::Px(160.0), Track::Fr(1.0), Track::Fr(1.0)])?;
+cards.set_auto_rows(&[Track::Px(96.0)])?;
+let wide = cards.column()?;
+wide.set_grid_column(Placement::at(2).spanning(2))?;
+
+let avatar = window.stack()?;
+avatar.image(&photo)?;
+let badge = avatar.text("3")?;
+badge.set_align_self(Some(Align::Start))?;
+badge.set_justify_self(Some(Align::End))?;
+```
+
+**最小尺寸**：与 CSS flex 一样，容器在主轴上的最小尺寸默认由内容决定。滚动视图、虚拟列表和表格本身可以收缩，但若它们放在一个中间行/列里，要让这个中间容器也能缩小，需对它 `set_min_height(0.0)`（行中为 `set_min_width`）。要让一个内容很多的子项只占剩余空间，用 `set_basis(0.0)` 加 `set_grow(1.0)`，否则它会从完整内容尺寸开始参与收缩。
+
+默认值来自主题：控件高 36、间距 8、窗口根内边距 8，文字 14。显式设置的高度、最小高度、内边距和间距在切换主题后保留。文字按父宽度自动换行。内容超出时放进 `ScrollView` 或 `ListView`。标记中的对应写法见[标记语言](../markup.md)。
 
 <img src="images/layout.png" width="690" alt="列、行与 grow 布局">
 

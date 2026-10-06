@@ -292,6 +292,7 @@ table.rows().set_count(200)?;
 ```
 
 - 带边框的表头行加等高虚拟行（基于 ListView）；`fill(cell, row, column)` 在行进入可见区域时填充单元格列，可放任意控件。`rows()` 返回行列表，用于 `set_count`、`reload` 和滚动。
+- 表格的最小高度不随行数增长，可以收缩到父容器给它的空间；与其他控件分享剩余空间时用 `set_basis(0.0)` 加 `set_grow(1.0)`，见 [API 指南的最小尺寸说明](api.md#5-布局)。表格、表头和弹出列表的背景按当前主题解析，切换主题后随之更新。
 - 无障碍角色 Table / Row / Cell / ColumnHeader。不内置排序、列宽拖动或单元格选择，可在表头和单元格中放按钮实现。
 
 ## Dropdown

@@ -8,6 +8,7 @@ license.workspace = true
 
 [features]
 motion = ["aegle-ui/motion", "aegle-widgets/motion"]
+grid = ["aegle-ui/grid"]
 wayland = ["dep:aegle-app", "aegle-app/wayland"]
 windows = ["dep:aegle-app", "aegle-app/windows"]
 

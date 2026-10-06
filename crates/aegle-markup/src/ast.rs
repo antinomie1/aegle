@@ -138,7 +138,10 @@ impl Node {
             && self
                 .properties
                 .iter()
-                .all(|property| !matches!(property.value, Value::Expr(_)))
+                .all(|property| match &property.value {
+                    Value::Expr(expr) => crate::schema::constant_list(expr).is_some(),
+                    _ => true,
+                })
             && self.children.iter().all(|item| match item {
                 Item::Node(node) => node.is_static(),
                 Item::If(..) | Item::For(..) | Item::Slot => false,
@@ -256,6 +259,13 @@ pub enum Value {
     Number(f32),
     /// A finite logical length, written with the `dp` suffix.
     Length(f32),
+    /// A finite percentage of the parent's size, written with the `%` suffix.
+    Percent(f32),
+    /// A finite grid track share, written with the `fr` suffix.
+    Fraction(f32),
+    /// A constant list of literals and bare identifiers, such as
+    /// `[8dp, auto]`; only layout properties accept one.
+    List(Vec<Value>),
     /// Exact nonnegative whole milliseconds, written as decimal digits and `ms`.
     Duration(u64),
     /// Unpremultiplied sRGB bytes, written as `#RRGGBB` or `#RRGGBBAA`.

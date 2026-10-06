@@ -3,7 +3,7 @@
 mod values;
 
 use std::collections::HashSet;
-pub(crate) use values::{allowed, property_name, valid_id, validate, validate_range};
+pub(crate) use values::{allowed, choices, property_name, valid_id, validate, validate_range};
 
 use crate::{Document, Error, Item, Node, Span, Value};
 
@@ -51,6 +51,10 @@ pub enum Kind {
     Row,
     /// A clipped, scrollable vertical container.
     ScrollView,
+    /// A grid container; requires the `grid` feature at run time.
+    Grid,
+    /// Children overlapping in one cell; requires the `grid` feature.
+    Stack,
     /// Static text label.
     Text,
     /// Activatable text button.
@@ -78,20 +82,64 @@ pub enum PropertyName {
     Title,
     /// Initial label, button or editor text.
     Text,
-    /// Logical width, or automatic sizing for non-window nodes.
+    /// Width: dp, percent or auto; a whole dp length on a window.
     Width,
-    /// Logical height, or automatic sizing for non-window nodes.
+    /// Height: dp, percent or auto; a whole dp length on a window.
     Height,
-    /// Minimum logical width.
+    /// Minimum width: dp, percent or auto.
     MinWidth,
-    /// Minimum logical height.
+    /// Minimum height: dp, percent or auto.
     MinHeight,
-    /// Uniform logical padding.
+    /// Maximum width: dp, percent or auto (no limit).
+    MaxWidth,
+    /// Maximum height: dp, percent or auto (no limit).
+    MaxHeight,
+    /// Positive width-to-height ratio.
+    AspectRatio,
+    /// Inner spacing: one length or a CSS-order list of two or four.
     Padding,
-    /// Container child spacing.
+    /// Outer spacing: like padding, but may be negative or auto.
+    Margin,
+    /// Absolute placement from the parent's edges, in CSS order; removes the item from the flow.
+    Inset,
+    /// Child spacing: one length, or `[row, column]` gaps.
     Gap,
     /// Nonnegative flex growth factor.
     Grow,
+    /// Nonnegative flex shrink factor.
+    Shrink,
+    /// Main-axis size before growing and shrinking.
+    Basis,
+    /// Flex container main axis.
+    Direction,
+    /// Flex line wrapping.
+    Wrap,
+    /// Cross-axis alignment of children.
+    Align,
+    /// Distribution of main-axis free space.
+    Justify,
+    /// Distribution of space between lines or grid rows.
+    AlignContent,
+    /// This item's cross-axis alignment.
+    AlignSelf,
+    /// This grid item's horizontal alignment.
+    JustifySelf,
+    /// Grid children's horizontal alignment.
+    JustifyItems,
+    /// Explicit grid column tracks.
+    Columns,
+    /// Explicit grid row tracks.
+    Rows,
+    /// Implicit grid column tracks.
+    AutoColumns,
+    /// Implicit grid row tracks.
+    AutoRows,
+    /// Grid auto-placement order.
+    Flow,
+    /// Grid column placement: a line, or `[line or auto, span]`.
+    GridColumn,
+    /// Grid row placement: a line, or `[line or auto, span]`.
+    GridRow,
     /// Visibility of the subtree.
     Visible,
     /// Whether the subtree accepts interaction.
@@ -185,6 +233,8 @@ pub(crate) fn kind(name: &str) -> Option<Kind> {
         "Column" => Kind::Column,
         "Row" => Kind::Row,
         "ScrollView" => Kind::ScrollView,
+        "Grid" => Kind::Grid,
+        "Stack" => Kind::Stack,
         "Text" => Kind::Text,
         "Button" => Kind::Button,
         "TextField" => Kind::TextField,
@@ -203,17 +253,35 @@ impl Kind {
     pub fn is_container(self) -> bool {
         matches!(
             self,
-            Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
+            Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView | Kind::Grid | Kind::Stack
         )
     }
 }
 
-/// Integer literals are numbers wherever a static property expects one.
+/// Integer literals are numbers wherever a static property expects one, and
+/// a list of literals and bare identifiers is a constant list value.
 pub(crate) fn literal(value: Value) -> Value {
     match value {
         Value::Int(n) => Value::Number(n as f32),
+        Value::Expr(expr) => constant_list(&expr).unwrap_or(Value::Expr(expr)),
         value => value,
     }
+}
+
+/// A `[...]` expression of literals and bare identifiers as a list value.
+pub(crate) fn constant_list(expr: &crate::Expr) -> Option<Value> {
+    let crate::ExprKind::List(items) = &expr.kind else {
+        return None;
+    };
+    items
+        .iter()
+        .map(|item| match &item.kind {
+            crate::ExprKind::Literal(value) => Some(literal(value.clone())),
+            crate::ExprKind::Name(name) => Some(Value::Identifier(name.clone())),
+            _ => None,
+        })
+        .collect::<Option<_>>()
+        .map(Value::List)
 }
 
 fn check_node(

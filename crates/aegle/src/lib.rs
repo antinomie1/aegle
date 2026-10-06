@@ -30,11 +30,13 @@ pub mod prelude {
     ))]
     pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
     pub use aegle_ui::{
-        Appearance, Color, Container, ControlKind, Cursor, Node, Point, Result, Skin, Style, Theme,
-        Ui, VisualState,
+        Align, Appearance, Color, Container, ControlKind, Cursor, Direction, Insets, Justify,
+        Length, Node, Point, Result, Skin, Style, Theme, Ui, VisualState, Wrap,
     };
     #[cfg(feature = "motion")]
     pub use aegle_ui::{Easing, Transition};
+    #[cfg(feature = "grid")]
+    pub use aegle_ui::{Flow, Placement, Track};
     pub use aegle_widgets::{
         Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, NodePopup, Popup, Progress,
         Radio, ScrollView, Slider, Switch, Table, TableColumn, TextField, Widgets,

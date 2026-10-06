@@ -268,6 +268,8 @@ impl State {
             style.overflow.x = aegle_layout::Overflow::Hidden;
             style.overflow.y = aegle_layout::Overflow::Hidden;
         }
+        #[cfg(feature = "grid")]
+        crate::grid_handles::stack_child(self, parent, &mut style);
         let mut element = Element::new(control);
         element.theme = self.tree.get(parent).unwrap().context.theme.clone();
         #[cfg(feature = "accessibility")]

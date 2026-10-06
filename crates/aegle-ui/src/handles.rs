@@ -4,10 +4,8 @@ use std::{
 };
 
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{
-    Dimension, Edges, FlexDirection, LengthPercentage, LengthPercentageAuto, Style,
-};
-use aegle_types::{Rect, Size};
+use aegle_layout::{FlexDirection, Style};
+use aegle_types::Rect;
 
 use crate::{
     Result, Theme, UiError,
@@ -70,6 +68,12 @@ impl Node {
                 return Err(UiError::DeadHandle.into());
             }
             state.tree.reparent(id, Some(parent.id))?;
+            #[cfg(feature = "grid")]
+            {
+                let mut style = state.tree.get(id).unwrap().style().clone();
+                crate::grid_handles::stack_child(state, parent.id, &mut style);
+                aegle_layout::set_style(&mut state.tree, id, style)?;
+            }
             if !state.usable(id) {
                 state.cancel_subtree(id)?;
             }
@@ -125,112 +129,6 @@ impl Node {
             Ok(())
         })
     }
-    fn layout(&self, local: u8, change: impl FnOnce(&mut Style)) -> Result {
-        self.change(|state, id| {
-            let mut style = state.tree.get(id).unwrap().style().clone();
-            change(&mut style);
-            state.tree.get_mut(id).unwrap().context.local_layout |= local;
-            aegle_layout::set_style(&mut state.tree, id, style)?;
-            Ok(())
-        })
-    }
-    /// Sets explicit logical dimensions; `None` restores automatic sizing.
-    pub fn set_size(&self, width: Option<f32>, height: Option<f32>) -> Result {
-        for value in [width, height].into_iter().flatten() {
-            valid(value)?;
-        }
-        self.layout(1, |s| {
-            s.size = aegle_layout::Size {
-                width: width.map_or(Dimension::auto(), Dimension::length),
-                height: height.map_or(Dimension::auto(), Dimension::length),
-            }
-        })
-    }
-    /// Sets the logical width, preserving height and its theme default.
-    /// `None` restores automatic width.
-    pub fn set_width(&self, width: Option<f32>) -> Result {
-        if let Some(width) = width {
-            valid(width)?;
-        }
-        self.layout(0, |s| {
-            s.size.width = width.map_or(Dimension::auto(), Dimension::length)
-        })
-    }
-    /// Sets the logical height; `None` selects automatic rather than themed height.
-    pub fn set_height(&self, height: Option<f32>) -> Result {
-        if let Some(height) = height {
-            valid(height)?;
-        }
-        self.layout(1, |s| {
-            s.size.height = height.map_or(Dimension::auto(), Dimension::length)
-        })
-    }
-    /// Sets nonnegative minimum logical dimensions.
-    pub fn set_min_size(&self, size: Size) -> Result {
-        valid(size.width)?;
-        valid(size.height)?;
-        self.layout(8, |s| {
-            s.min_size = aegle_layout::Size {
-                width: LengthPercentageAuto::length(size.width),
-                height: LengthPercentageAuto::length(size.height),
-            }
-        })
-    }
-    /// Sets minimum logical width without changing the minimum height.
-    pub fn set_min_width(&self, width: f32) -> Result {
-        valid(width)?;
-        self.layout(0, |s| {
-            s.min_size.width = LengthPercentageAuto::length(width)
-        })
-    }
-    /// Sets minimum logical height, overriding the corresponding theme default.
-    pub fn set_min_height(&self, height: f32) -> Result {
-        valid(height)?;
-        self.layout(8, |s| {
-            s.min_size.height = LengthPercentageAuto::length(height)
-        })
-    }
-    /// Sets a finite nonnegative flex grow factor; zero keeps intrinsic sizing.
-    pub fn set_grow(&self, grow: f32) -> Result {
-        valid(grow)?;
-        self.layout(0, |s| s.flex_grow = grow)
-    }
-    /// Sets uniform nonnegative content padding.
-    pub fn set_padding(&self, padding: f32) -> Result {
-        valid(padding)?;
-        self.change(|state, id| {
-            let node = state.tree.get_mut(id).unwrap();
-            if matches!(
-                node.context.control.kind(),
-                aegle_theme::ControlKind::Container | aegle_theme::ControlKind::ScrollView
-            ) {
-                node.context.local_layout |= 2;
-                let mut style = node.style().clone();
-                let p = LengthPercentage::length(padding);
-                style.padding = Edges {
-                    left: p,
-                    right: p,
-                    top: p,
-                    bottom: p,
-                };
-                aegle_layout::set_style(&mut state.tree, id, style)?;
-            } else {
-                node.context.padding = Some(padding);
-                state.tree.mark_dirty(id, Dirty::ALL)?;
-            }
-            Ok(())
-        })
-    }
-    /// Sets horizontal and vertical spacing between children.
-    pub fn set_gap(&self, gap: f32) -> Result {
-        valid(gap)?;
-        self.layout(4, |s| {
-            s.gap = aegle_layout::Size {
-                width: LengthPercentage::length(gap),
-                height: LengthPercentage::length(gap),
-            }
-        })
-    }
 }
 
 /// Defines a typed handle: a clonable wrapper around a [`Node`] that dereferences to it.
@@ -283,6 +181,15 @@ impl Container {
             Ok((Box::new(Plain), style))
         })
         .map(Container)
+    }
+    /// Appends a transparent group: its children take part in this
+    /// container's layout (row, column, wrap or grid) as if they were its own
+    /// children, so they can be shown, hidden or replaced as a unit. Its own
+    /// layout settings are ignored; hiding it hides its children.
+    pub fn contents(&self) -> Result<Container> {
+        let group = self.add(|_, _| Ok((Box::new(Plain), Style::default())))?;
+        group.change(|state, id| Ok(aegle_layout::set_contents(&mut state.tree, id, true)?))?;
+        Ok(Container(group))
     }
 }
 

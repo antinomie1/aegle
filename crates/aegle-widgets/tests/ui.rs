@@ -28,7 +28,7 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     let label = row.text("Hello")?;
     let field = root.text_area("Hello, 世界\n你好 / 日本語 / 한글\nthird\nfourth\nfifth\nsixth")?;
     field.set_size(None, Some(60.0))?;
-    field.set_min_size(Size::new(0.0, 0.0))?;
+    field.set_min_size(0.0, 0.0)?;
     let button = root.button("Clear")?;
     ui.resize(Size::new(320.0, 200.0))?;
     assert!(ui.refresh()?);

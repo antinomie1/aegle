@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Kind, PropertyName, Value};
+use aegle_markup::{Bound, Child, Element, ElementKind, Expr, PropertyName, Value};
 use aegle_ui::{Container, Result};
 
 use crate::{
@@ -21,23 +21,12 @@ pub(crate) type Block = Vec<Rc<Effect>>;
 /// Where children are appended.
 pub(crate) struct Parent<'a> {
     pub container: &'a Container,
-    pub row: bool,
-    pub gap: Option<f32>,
 }
 
 impl<'a> Parent<'a> {
-    pub fn of(element: &Element, handle: &'a Handle) -> Self {
-        let gap = element
-            .properties
-            .iter()
-            .find_map(|(name, bound)| match bound {
-                Bound::Literal(Value::Length(gap)) if *name == PropertyName::Gap => Some(*gap),
-                _ => None,
-            });
+    pub fn of(handle: &'a Handle) -> Self {
         Self {
             container: handle.container(),
-            row: element.kind == ElementKind::Builtin(Kind::Row),
-            gap,
         }
     }
 }
@@ -65,7 +54,6 @@ pub(crate) fn children(
                     then.clone(),
                     otherwise.clone(),
                     wrapper,
-                    parent,
                     env,
                     block,
                 )?;
@@ -77,7 +65,6 @@ pub(crate) fn children(
                     (list.clone(), key.clone()),
                     body.clone(),
                     wrapper,
-                    parent,
                     env,
                     block,
                 )?;
@@ -160,7 +147,7 @@ pub(crate) fn populate(
     ids: Option<&mut [Option<Handle>]>,
 ) -> Result {
     if !element.children.is_empty() {
-        let parent = Parent::of(element, handle);
+        let parent = Parent::of(handle);
         children(&element.children, &parent, env, block, &mut Vec::new(), ids)?;
     }
     decorate(element, handle, env, block)
@@ -250,17 +237,9 @@ fn transition(element: &Element, _: &Handle) -> Result {
     Ok(())
 }
 
-/// An internal row or column holding a block's children in the parent's flow.
+/// A transparent group holding a block's children in the parent's own layout.
 fn wrapper(parent: &Parent) -> Result<Container> {
-    let wrapper = if parent.row {
-        parent.container.row()?
-    } else {
-        parent.container.column()?
-    };
-    if let Some(gap) = parent.gap {
-        wrapper.set_gap(gap)?;
-    }
-    Ok(wrapper)
+    parent.container.contents()
 }
 
 /// Removes built controls and drops the effects that updated them.
@@ -277,11 +256,10 @@ fn conditional(
     then: Rc<[Child]>,
     otherwise: Rc<[Child]>,
     wrapper: Container,
-    parent: &Parent,
     env: &Env,
     block: &mut Block,
 ) -> Result {
-    let (row, gap, env) = (parent.row, parent.gap, env.clone());
+    let env = env.clone();
     let (mut shown, mut handles, mut owned) = (None, Vec::new(), Block::new());
     block.push(Effect::new(move |effect| {
         if !wrapper.is_alive() {
@@ -295,8 +273,6 @@ fn conditional(
         clear(&mut handles, &mut owned)?;
         let parent = Parent {
             container: &wrapper,
-            row,
-            gap,
         };
         let items = if value { &then } else { &otherwise };
         children(items, &parent, &env, &mut owned, &mut handles, None)?;
@@ -335,11 +311,10 @@ fn repeat(
     (list, key): (Rc<Expr>, Option<Rc<Expr>>),
     body: Rc<[Child]>,
     wrapper: Container,
-    parent: &Parent,
     env: &Env,
     block: &mut Block,
 ) -> Result {
-    let (row, gap, env) = (parent.row, parent.gap, env.clone());
+    let env = env.clone();
     let mut rows: Vec<Row> = Vec::new();
     block.push(Effect::new(move |effect| {
         if !wrapper.is_alive() {
@@ -381,8 +356,6 @@ fn repeat(
         let (mut previous, mut built, mut moved) = (None, false, false);
         let parent = Parent {
             container: &wrapper,
-            row,
-            gap,
         };
         for (item_key, item) in keyed {
             if let Some((index, mut retained)) = old.remove(&item_key) {

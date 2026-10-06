@@ -7,7 +7,9 @@ use std::{collections::HashMap, rc::Rc};
 
 use crate::checked::{Bound, Element, ElementKind, EventKind, HostCall, Program, Template};
 
-use crate::schema::{allowed, kind as builtin, literal, property_name, valid_id, validate};
+use crate::schema::{
+    allowed, choices, kind as builtin, literal, property_name, valid_id, validate,
+};
 use crate::{
     Document, Error, Expr, ExprKind, Item, Kind, Node, Param, PropertyName, Record, Span, Type,
     Value,
@@ -352,7 +354,7 @@ impl Checker {
             if element.properties.iter().any(|(n, _)| *n == name) {
                 return Err(error(format!("duplicate property `{}`", property.name)));
             }
-            let value = match property.value {
+            let value = match literal(property.value) {
                 Value::Identifier(id) if !identifier_literal(name) => {
                     let span = property.value_span;
                     Err(Expr {
@@ -361,7 +363,7 @@ impl Checker {
                     })
                 }
                 Value::Expr(expr) => Err(*expr),
-                value => Ok(literal(value)),
+                value => Ok(value),
             };
             let value = match value {
                 Ok(value) => {
@@ -438,10 +440,26 @@ fn bindable(name: PropertyName) -> Option<Type> {
     }
 }
 
-/// Properties that take bare identifiers as enum values.
+/// Properties that take bare identifiers as enum values or `auto`.
 fn identifier_literal(name: PropertyName) -> bool {
     use PropertyName::*;
-    matches!(name, Width | Height | Theme | Easing)
+    !choices(name).is_empty()
+        || matches!(
+            name,
+            Width
+                | Height
+                | MinWidth
+                | MinHeight
+                | MaxWidth
+                | MaxHeight
+                | Basis
+                | Margin
+                | Inset
+                | Columns
+                | Rows
+                | AutoColumns
+                | AutoRows
+        )
 }
 
 /// Literals and lists of literals.

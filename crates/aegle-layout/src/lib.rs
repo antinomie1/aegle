@@ -4,14 +4,22 @@
 //! measurement is supplied by the host, so this crate needs no text or GPU stack.
 
 mod adapter;
+#[cfg(feature = "grid")]
+mod grid;
 mod node;
+mod values;
 
+#[cfg(feature = "grid")]
+pub use grid::{Flow, Placement, Track};
 pub use node::LayoutNode;
 pub use taffy::geometry::{Rect as Edges, Size};
 pub use taffy::{
     AlignItems, AvailableSpace, Dimension, Display, FlexDirection, LengthPercentage,
     LengthPercentageAuto, Overflow, Position, Style,
 };
+#[cfg(feature = "grid")]
+pub use taffy::{GridTemplateComponent, TrackSizingFunction};
+pub use values::{Align, Direction, Insets, Justify, Length, Wrap};
 
 use aegle_core::{Dirty, NodeId, Tree, TreeError};
 
@@ -28,7 +36,11 @@ pub fn compute<C>(
     measure: impl FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
 ) -> Result<(), TreeError> {
     tree.get(root).ok_or(TreeError::DeadNode)?;
-    let mut adapter = adapter::Adapter { tree, measure };
+    let mut adapter = adapter::Adapter {
+        tree,
+        measure,
+        flat: Default::default(),
+    };
     taffy::compute_root_layout(&mut adapter, adapter::to_taffy(root), available);
     Ok(())
 }
@@ -40,4 +52,17 @@ pub fn set_style<C>(
     style: Style,
 ) -> Result<(), TreeError> {
     tree.update(id, Dirty::ALL, |node| node.set_style(style))
+}
+
+/// Makes a node transparent to layout, like CSS `display: contents`: its
+/// children are laid out as children of its nearest non-contents ancestor,
+/// in tree order, and its own style is ignored. The node itself gets that
+/// ancestor's size at offset zero, so child positions stay relative to it.
+/// A hidden (`Display::None`) contents node hides its children.
+pub fn set_contents<C>(
+    tree: &mut Tree<LayoutNode<C>>,
+    id: NodeId,
+    contents: bool,
+) -> Result<(), TreeError> {
+    tree.update(id, Dirty::ALL, |node| node.contents = contents)
 }

@@ -15,6 +15,8 @@ pub struct LayoutNode<C> {
     pub(crate) style: Rc<Style>,
     pub(crate) cache: Cache,
     pub(crate) layout: Layout,
+    /// Transparent: children take part in the nearest non-contents ancestor's layout.
+    pub(crate) contents: bool,
     /// Host-owned measurement or control data.
     pub context: C,
 }
@@ -26,6 +28,7 @@ impl<C> LayoutNode<C> {
             style: DEFAULT_STYLE.with(Rc::clone),
             cache: Cache::new(),
             layout: Layout::with_order(0),
+            contents: false,
             context,
         }
     }
@@ -40,6 +43,11 @@ impl<C> LayoutNode<C> {
     /// The node's layout style.
     pub fn style(&self) -> &Style {
         &self.style
+    }
+
+    /// Whether this node is transparent to layout; see [`crate::set_contents`].
+    pub fn is_contents(&self) -> bool {
+        self.contents
     }
 
     /// Computed bounds relative to the parent's content coordinate space.

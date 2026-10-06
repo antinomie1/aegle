@@ -1,0 +1,70 @@
+// Alignment, wrapping, a grid filled by a `for` block, a stack and an absolute button.
+Window {
+    title: "Aegle — layout"
+    width: 900dp
+    height: 620dp
+    padding: [16dp, 20dp]
+    gap: 14dp
+    state cards: list<string> = ["Inbox", "Calendar", "Files", "Photos", "Music"]
+    Row {
+        justify: space_between
+        align: center
+        Text { text: "Layout gallery"; font_size: 22dp }
+        Row {
+            gap: 8dp
+            Button { text: "Remove"; enabled: len(cards) > 0; on clicked { cards = [] } }
+            Button { text: "Add card"; on clicked { cards += ["Card " + str(len(cards) + 1)] } }
+        }
+    }
+    Row {
+        grow: 1
+        min_height: 0dp
+        gap: 20dp
+        Column {
+            width: 200dp
+            gap: 8dp
+            Text { text: "Tags wrap onto new lines" }
+            Row {
+                wrap: wrap
+                gap: [6dp, 6dp]
+                Button { text: "rust" }
+                Button { text: "layout" }
+                Button { text: "flexbox" }
+                Button { text: "grid" }
+                Button { text: "CJK 文本" }
+                Button { text: "IME" }
+            }
+            Text { text: "Centered with auto margins" }
+            Column { width: 120dp; height: 32dp; margin: [0dp, auto]; background: #355cda; radius: 6dp }
+            Text { text: "Fixed aspect ratio 16:9" }
+            Column { width: 100%; aspect_ratio: 1.7778; background: #e0e6f8; border_width: 1dp; border_color: #9aa7c7 }
+        }
+        Grid {
+            grow: 1
+            columns: [1fr, 1fr, 1fr]
+            auto_rows: 92dp
+            gap: 12dp
+            align_content: start
+            Stack {
+                grid_column: [1, 2]
+                Column { background: #355cda; radius: 8dp; padding: 14dp; justify: end
+                    Text { text: "Featured: spans two columns"; foreground: #ffffff; font_size: 16dp }
+                }
+                Text { text: "NEW"; align_self: start; justify_self: end; margin: 8dp
+                    background: #f4b400; padding: 4dp }
+            }
+            Column { grid_row: [auto, 2]; background: #eef1f7; border_width: 1dp; border_color: #c5cbd8
+                padding: 12dp; justify: space_between
+                Text { text: "Tall card" }
+                Text { text: "Spans two rows" }
+            }
+            for card in cards {
+                Column { background: #ffffff; border_width: 1dp; border_color: #c5cbd8; padding: 12dp
+                    justify: center; align: center
+                    Text { text: card }
+                }
+            }
+        }
+    }
+    Button { text: "+"; width: 48dp; height: 48dp; inset: [auto, 24dp, 24dp, auto]; font_size: 22dp }
+}

@@ -2,6 +2,7 @@
 
 use std::ops::Deref;
 
+use aegle_layout::Overflow;
 use aegle_ui::{Container, Result, UiError};
 
 use crate::{
@@ -68,6 +69,14 @@ pub(crate) fn table(
     // Keeps the header fill inside the border.
     table.set_padding(1.0)?;
     table.set_skin(group::panel)?;
+    // A clipping box has no content-based minimum size, so the virtual rows'
+    // full extent never stops the table from shrinking to the space it is given.
+    table.change(|state, id| {
+        let mut style = state.tree.get(id).unwrap().style().clone();
+        style.overflow.x = Overflow::Hidden;
+        style.overflow.y = Overflow::Hidden;
+        Ok(aegle_layout::set_style(&mut state.tree, id, style)?)
+    })?;
     let header = group::add(&table, Role::TableRow, true)?;
     header.set_gap(0.0)?;
     header.set_skin(group::header)?;
@@ -81,11 +90,7 @@ pub(crate) fn table(
         line.set_gap(0.0)?;
         line.set_grow(1.0)?;
         for (column, &width) in widths.iter().enumerate() {
-            let cell = cell(
-                &line,
-                &TableColumn { title: "", width },
-                Role::TableCell,
-            )?;
+            let cell = cell(&line, &TableColumn { title: "", width }, Role::TableCell)?;
             fill(&cell, index, column)?;
         }
         Ok(())

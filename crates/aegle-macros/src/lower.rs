@@ -265,13 +265,19 @@ fn expr(expr: &Expr, m: &TokenStream) -> TokenStream {
     quote! { #m::Expr { kind: #kind, span: #span } }
 }
 
-fn value(value: &Value, m: &TokenStream) -> TokenStream {
-    match value {
+fn value(literal: &Value, m: &TokenStream) -> TokenStream {
+    match literal {
         Value::String(v) => quote! { #m::Value::String(::std::string::String::from(#v)) },
         Value::Bool(v) => quote! { #m::Value::Bool(#v) },
         Value::Int(v) => quote! { #m::Value::Int(#v) },
         Value::Number(v) => quote! { #m::Value::Number(#v) },
         Value::Length(v) => quote! { #m::Value::Length(#v) },
+        Value::Percent(v) => quote! { #m::Value::Percent(#v) },
+        Value::Fraction(v) => quote! { #m::Value::Fraction(#v) },
+        Value::List(items) => {
+            let items = items.iter().map(|item| value(item, m));
+            quote! { #m::Value::List(::std::vec![#(#items),*]) }
+        }
         Value::Duration(v) => quote! { #m::Value::Duration(#v) },
         Value::Color([r, g, b, a]) => quote! { #m::Value::Color([#r, #g, #b, #a]) },
         Value::Identifier(v) => quote! { #m::Value::Identifier(::std::string::String::from(#v)) },

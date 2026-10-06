@@ -221,3 +221,29 @@ fn table_and_popup_surfaces_follow_theme_changes() -> Result {
     }
     Ok(())
 }
+
+#[test]
+fn a_growing_table_shrinks_to_the_space_left() -> Result {
+    let ui = ui()?;
+    ui.resize(aegle_ui::Size::new(320.0, 240.0))?;
+    // Like CSS flex, a container's minimum height follows its content; zero
+    // lets this column shrink, and the table itself needs no such setting.
+    let column = ui.root().column()?;
+    column.set_grow(1.0)?;
+    column.set_min_height(0.0)?;
+    column.text("Above")?;
+    let column_spec = [TableColumn {
+        title: "Name",
+        width: None,
+    }];
+    let table = column.table(&column_spec, 28.0, 1000, |cell, row, _| {
+        cell.text(&format!("{row}")).map(drop)
+    })?;
+    table.set_grow(1.0)?;
+    let below = ui.root().text("Below")?;
+    ui.refresh()?;
+    let (table, below) = (table.bounds()?, below.bounds()?);
+    assert!(below.origin.y + below.size.height <= 240.0);
+    assert!(table.size.height > 100.0 && table.origin.y + table.size.height <= below.origin.y);
+    Ok(())
+}

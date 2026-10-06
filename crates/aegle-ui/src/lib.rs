@@ -20,9 +20,12 @@ pub mod control;
 mod cursor;
 #[cfg(feature = "motion")]
 mod fling;
+#[cfg(feature = "grid")]
+mod grid_handles;
 mod handles;
 mod input;
 mod layout;
+mod layout_handles;
 #[cfg(feature = "motion")]
 mod motion;
 #[cfg(feature = "motion")]
@@ -43,6 +46,9 @@ mod ui;
 #[cfg(feature = "accessibility")]
 pub use aegle_access::accesskit;
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
+pub use aegle_layout::{Align, Direction, Insets, Justify, Length, Wrap};
+#[cfg(feature = "grid")]
+pub use aegle_layout::{Flow, Placement, Track};
 #[cfg(feature = "motion")]
 pub use aegle_motion::{Easing, Transition};
 pub use aegle_scene as scene;
@@ -50,6 +56,8 @@ pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, VisualState};
 pub use aegle_types::{Color, Cursor, Point, Preferences, Size, TouchPhase};
 pub use control::{Control, Plain};
+#[cfg(feature = "grid")]
+pub use grid_handles::Stack;
 pub use handles::{Container, Node, valid};
 pub use state::{Element, Hooks, State, focus_policy, text_style};
 

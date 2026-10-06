@@ -8,6 +8,10 @@ pub(crate) enum Kind<'a> {
     Integer(i64),
     Number(f32),
     Length(f32),
+    /// A number with the `%` suffix, written without a space.
+    Percent(f32),
+    /// A grid track share with the `fr` suffix.
+    Fraction(f32),
     Duration(u64),
     Color([u8; 4]),
     Open,
@@ -162,6 +166,12 @@ impl<'a> Lexer<'a> {
         if self.source[self.cursor..].starts_with("dp") {
             self.cursor += 2;
             Ok(Kind::Length(number))
+        } else if self.peek() == Some(b'%') {
+            self.cursor += 1;
+            Ok(Kind::Percent(number))
+        } else if self.source[self.cursor..].starts_with("fr") {
+            self.cursor += 2;
+            Ok(Kind::Fraction(number))
         } else if let Some(integer) = literal
             .bytes()
             .all(|byte| byte.is_ascii_digit())

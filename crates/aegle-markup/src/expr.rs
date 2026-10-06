@@ -88,6 +88,7 @@ impl Parser<'_, '_> {
             ("-", ExprKind::Literal(Value::Int(n))) => ExprKind::Literal(Value::Int(-n)),
             ("-", ExprKind::Literal(Value::Number(n))) => ExprKind::Literal(Value::Number(-n)),
             ("-", ExprKind::Literal(Value::Length(n))) => ExprKind::Literal(Value::Length(-n)),
+            ("-", ExprKind::Literal(Value::Percent(n))) => ExprKind::Literal(Value::Percent(-n)),
             ("-", ExprKind::Literal(Value::Duration(_))) => {
                 return Err(Error::new(
                     span,
@@ -132,6 +133,8 @@ impl Parser<'_, '_> {
             Kind::Integer(value) => ExprKind::Literal(Value::Int(value)),
             Kind::Number(value) => ExprKind::Literal(Value::Number(value)),
             Kind::Length(value) => ExprKind::Literal(Value::Length(value)),
+            Kind::Percent(value) => ExprKind::Literal(Value::Percent(value)),
+            Kind::Fraction(value) => ExprKind::Literal(Value::Fraction(value)),
             Kind::Duration(value) => ExprKind::Literal(Value::Duration(value)),
             Kind::Color(value) => ExprKind::Literal(Value::Color(value)),
             Kind::Identifier("true") => ExprKind::Literal(Value::Bool(true)),

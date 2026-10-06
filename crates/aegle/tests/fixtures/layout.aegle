@@ -1,0 +1,38 @@
+Column {
+    width: 400dp
+    height: 300dp
+    padding: [4dp, 8dp]
+    gap: [6dp, 0dp]
+    Row {
+        id: bar
+        justify: space_between
+        align: center
+        height: 40dp
+        Column { id: lead; width: 20%; height: 10dp }
+        Column { id: trail; width: 30dp; height: 20dp; align_self: end; margin: [0dp, 4dp] }
+    }
+    Row {
+        id: flow
+        wrap: wrap
+        gap: [2dp, 4dp]
+        width: 100dp
+        Column { id: one; basis: 40dp; height: 10dp; shrink: 0 }
+        Column { id: two; basis: 40dp; height: 10dp; shrink: 0 }
+        Column { id: three; basis: 40dp; height: 10dp; max_width: 30dp }
+    }
+    Grid {
+        id: grid
+        columns: [50dp, 1fr, 2fr]
+        auto_rows: 12dp
+        gap: 0dp
+        Column { id: span; grid_column: [2, 2]; grid_row: 1 }
+        Column { id: corner; grid_column: -2; grid_row: 2; width: 10dp; justify_self: end }
+    }
+    Stack {
+        id: stack
+        height: 30dp
+        Column { id: back }
+        Column { id: badge; width: 8dp; height: 8dp; align_self: center; justify_self: center }
+    }
+    Column { id: overlay; inset: [auto, 0dp, 0dp, auto]; width: 16dp; height: 16dp; aspect_ratio: 1 }
+}
