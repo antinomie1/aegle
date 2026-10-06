@@ -43,7 +43,7 @@ SVG 默认以路径图标/构建期资产为主；可选运行时 resvg（`aegle
 
 `aegle-markup` 的语法很小，采用直接流式词法分析和递归下降，表达式按优先级爬升解析，不引入通用脚本或表达式框架；`aegle-loader` 以小型树解释已检查的表达式，同样没有第三方依赖。`aegle-macros` 则复用 syn/quote 和 proc-macro-crate 的清单解析，避免重复实现 Rust 参数语法和重命名依赖规则；这些包只参与构建，不随应用运行。`markup` 的目标依赖闭包与发布体积须区分编译主机侧的宏依赖。
 
-来源：[Parley 发布清单](https://docs.rs/crate/parley/0.11.1/source/Cargo.toml)、[Swash 发布清单](https://docs.rs/crate/swash/0.2.10/source/Cargo.toml)、[AccessKit](https://github.com/AccessKit/accesskit)、[resvg 发布清单](https://docs.rs/crate/resvg/0.48.1/source/Cargo.toml.orig)。其他原始调查来源保留在[选型记录](selection-candidates.md)。
+来源：[Parley 发布清单](https://docs.rs/crate/parley/0.11.1/source/Cargo.toml)、[Swash 发布清单](https://docs.rs/crate/swash/0.2.10/source/Cargo.toml)、[AccessKit](https://github.com/AccessKit/accesskit)、[resvg 发布清单](https://docs.rs/crate/resvg/0.48.1/source/Cargo.toml.orig)。
 
 Wayland 软件后端使用 SCTK 0.21.1/calloop 0.14，键盘使用同一版本的 xkbcommon 0.8 包；不引入 winit、Tokio、softbuffer 或 wgpu。SCTK 自带自动重复计时器不提供完整取消接口，因此平台持有自身 repeat token，在焦点/设备/窗口销毁和 backend drop 时移除。按键翻译仍复用 SCTK，重复状态额外持有一份 XKB keymap/state 用于按键可重复性与 modifier 更新；这是实际额外内存，不宣称零成本封装。后续上游若提供借用 keymap 与取消 timer 接口，可移除此重复状态。
 
