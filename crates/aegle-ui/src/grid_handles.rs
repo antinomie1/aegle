@@ -2,7 +2,7 @@
 
 use std::any::Any;
 
-use aegle_layout::{Align, Display, Flow, Placement, Style, Track};
+use aegle_layout::{Align, Display, Flow, GridLines, Placement, Style, TemplateItem, Track};
 use aegle_theme::{ControlKind, Theme};
 
 use aegle_core::NodeId;
@@ -58,6 +58,15 @@ fn sizing(implicit: &[Track]) -> Result<Vec<aegle_layout::TrackSizingFunction>> 
     Ok(implicit.iter().map(|track| track.sizing()).collect())
 }
 
+fn placement_lines(
+    lines: GridLines,
+) -> Result<aegle_layout::Line<aegle_layout::GridPlacement<String>>> {
+    if !lines.is_valid() {
+        return Err(UiError::InvalidValue.into());
+    }
+    Ok(lines.lines())
+}
+
 impl Container {
     /// Appends a grid with explicit column tracks, like QML's `GridLayout`.
     /// Children fill the cells row by row, adding automatic rows as needed;
@@ -97,6 +106,34 @@ impl Container {
         let rows = tracks(rows)?;
         self.layout(0, |s| s.grid_template_rows = rows)
     }
+    /// Replaces the explicit columns with a track list that may name lines and
+    /// repeat tracks, like CSS `grid-template-columns`; see [`TemplateItem`].
+    pub fn set_column_template(&self, items: &[TemplateItem]) -> Result {
+        let (columns, names) = aegle_layout::template(items).ok_or(UiError::InvalidValue)?;
+        self.layout(0, |s| {
+            s.grid_template_columns = columns;
+            s.grid_template_column_names = names;
+        })
+    }
+    /// Replaces the explicit rows with a track list, like CSS `grid-template-rows`.
+    pub fn set_row_template(&self, items: &[TemplateItem]) -> Result {
+        let (rows, names) = aegle_layout::template(items).ok_or(UiError::InvalidValue)?;
+        self.layout(0, |s| {
+            s.grid_template_rows = rows;
+            s.grid_template_row_names = names;
+        })
+    }
+    /// Names rectangular areas, like CSS `grid-template-areas`: one string per
+    /// row of whitespace-separated cell names, `.` for an unnamed cell. The
+    /// areas extend the explicit grid with automatic tracks where it has fewer.
+    /// Children enter an area with [`Node::set_grid_area`]; an empty slice clears.
+    pub fn set_areas(&self, rows: &[&str]) -> Result {
+        let areas = match rows {
+            [] => None,
+            rows => Some(aegle_layout::areas(rows).ok_or(UiError::InvalidValue)?),
+        };
+        self.layout(0, |s| s.grid_template_areas = areas)
+    }
     /// Sizes rows the grid adds beyond its explicit tracks, cycling through
     /// `rows`; empty restores automatic rows.
     pub fn set_auto_rows(&self, rows: &[Track]) -> Result {
@@ -119,19 +156,25 @@ impl Container {
 }
 
 impl Node {
-    /// Places this grid child on the column axis.
-    pub fn set_grid_column(&self, placement: Placement) -> Result {
-        if !placement.is_valid() {
-            return Err(UiError::InvalidValue.into());
-        }
-        self.layout(0, |s| s.grid_column = placement.lines())
+    /// Places this grid child on the column axis: a [`Placement`] by number,
+    /// or [`GridLines`] that may use line and area names.
+    pub fn set_grid_column(&self, placement: impl Into<GridLines>) -> Result {
+        let lines = placement_lines(placement.into())?;
+        self.layout(0, |s| s.grid_column = lines)
     }
     /// Places this grid child on the row axis.
-    pub fn set_grid_row(&self, placement: Placement) -> Result {
-        if !placement.is_valid() {
-            return Err(UiError::InvalidValue.into());
-        }
-        self.layout(0, |s| s.grid_row = placement.lines())
+    pub fn set_grid_row(&self, placement: impl Into<GridLines>) -> Result {
+        let lines = placement_lines(placement.into())?;
+        self.layout(0, |s| s.grid_row = lines)
+    }
+    /// Places this grid child in the area called `name` on both axes, like
+    /// CSS `grid-area: name`; see [`Container::set_areas`].
+    pub fn set_grid_area(&self, name: &str) -> Result {
+        let lines = placement_lines(GridLines::named(name))?;
+        self.layout(0, |s| {
+            s.grid_row = lines.clone();
+            s.grid_column = lines;
+        })
     }
     /// Overrides the grid's horizontal alignment for this child; `None` follows the grid.
     pub fn set_justify_self(&self, align: Option<Align>) -> Result {

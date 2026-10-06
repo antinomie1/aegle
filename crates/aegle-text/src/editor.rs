@@ -202,6 +202,10 @@ impl Editor {
     pub fn size(&self) -> Size {
         Size::new(self.layout().width(), self.layout().height())
     }
+    /// Offset of the first line's baseline from the top, if there is a line.
+    pub fn first_baseline(&self) -> Option<f32> {
+        Some(self.layout().lines().next()?.metrics().baseline)
+    }
     /// Font coverage of the displayed buffer, including preedit.
     pub fn diagnostics(&self) -> TextDiagnostics {
         self.diagnostics

@@ -195,6 +195,9 @@ impl Control for NumberFieldControl {
     fn set_enabled(&mut self, fonts: &mut TextSystem, enabled: bool) -> Outcome {
         self.field.set_enabled(fonts, enabled)
     }
+    fn baseline(&self, size: Size, padding: f32) -> Option<f32> {
+        self.field.baseline(size, padding)
+    }
     fn content_offset(&self, size: Size, padding: f32, scroll: Point) -> Point {
         let offset = self.field.content_offset(size, padding, scroll);
         Point::new(offset.x - self.lead(), offset.y)

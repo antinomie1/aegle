@@ -40,5 +40,28 @@ Column {
         height: 10dp
         Column { id: first; width: 20dp }
     }
+    Grid {
+        id: areas
+        width: calc(100% - 84dp)
+        columns: ["left", 60dp, "content", repeat(2, 1fr, "half")]
+        rows: [20dp, 20dp]
+        areas: ["nav head head", "nav main ."]
+        gap: 0dp
+        Column { id: header; grid_area: "head" }
+        Column { id: nav; grid_area: "nav" }
+        Column { id: body; grid_column: ["content", 1]; grid_row: 2 }
+        Column { id: tail; grid_column: "half"; grid_row: -2 }
+    }
+    Grid {
+        id: tiles
+        width: 130dp
+        columns: repeat(auto_fill, 40dp)
+        auto_rows: 10dp
+        gap: 0dp
+        Column {}
+        Column {}
+        Column {}
+        Column { id: wrapped }
+    }
     Column { id: overlay; inset: [auto, 0dp, 0dp, auto]; width: 16dp; height: 16dp; aspect_ratio: 1 }
 }

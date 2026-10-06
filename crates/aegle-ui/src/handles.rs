@@ -46,6 +46,15 @@ impl Node {
     pub fn bounds(&self) -> Result<Rect> {
         self.change(|state, id| Ok(state.tree.get(id).unwrap().context.bounds))
     }
+    /// The first text baseline below the top of [`Self::bounds`] as of the last
+    /// layout, the line `Align::Baseline` lines up; `None` without text.
+    pub fn baseline(&self) -> Result<Option<f32>> {
+        self.change(|state, id| {
+            let element = &state.tree.get(id).unwrap().context;
+            let padding = element.inset(&state.theme);
+            Ok(element.control.baseline(element.bounds.size, padding))
+        })
+    }
     /// Removes this control and every descendant, cancelling focus, capture and callbacks.
     pub fn remove(&self) -> Result {
         self.change(|state, id| {

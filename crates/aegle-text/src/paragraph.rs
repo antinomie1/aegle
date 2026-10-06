@@ -64,6 +64,11 @@ impl Paragraph {
         Size::new(self.layout.width(), self.layout.height())
     }
 
+    /// Offset of the first line's baseline from the top, if there is a line.
+    pub fn first_baseline(&self) -> Option<f32> {
+        Some(self.layout.lines().next()?.metrics().baseline)
+    }
+
     /// Returns intrinsic soft-wrap limits from the shaping result.
     ///
     /// Parley currently documents imperfect estimates for mixed-direction text.

@@ -131,6 +131,10 @@ impl Control for FieldControl {
     fn content_offset(&self, _: Size, padding: f32, scroll: Point) -> Point {
         Point::new(scroll.x - padding, scroll.y - padding)
     }
+    fn baseline(&self, _: Size, padding: f32) -> Option<f32> {
+        // The unscrolled text origin, as CSS aligns scroll containers.
+        Some(padding + self.0.editor().first_baseline()?)
+    }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
         let size = cx
             .fonts

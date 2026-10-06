@@ -131,6 +131,10 @@ impl Control for ButtonControl {
     ) -> Result<Outcome> {
         self.handle(cx, input)
     }
+    fn baseline(&self, size: Size, _: f32) -> Option<f32> {
+        // Painted centered vertically.
+        Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
+    }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
         let chevron = if matches!(self.variant, Variant::Dropdown { .. }) {
             cx.gap + CHEVRON

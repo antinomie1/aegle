@@ -9,7 +9,8 @@ use taffy::{
     LengthPercentageAuto,
 };
 
-/// A logical length: pixels, a percentage of the parent's content box, or automatic.
+/// A logical length: pixels, a percentage of the parent's content box, their
+/// sum, or automatic.
 ///
 /// Percentages use 0–100. A percentage of an indefinite parent size behaves
 /// like `Auto`. Lengths are logical pixels before the window scale.
@@ -22,6 +23,14 @@ pub enum Length {
     Px(f32),
     /// Percent of the parent's content box on the same axis (inline axis for margins and padding).
     Percent(f32),
+    /// CSS `calc(percent% + px)`, such as `100% - 20px` as `{ percent: 100, px: -20 }`.
+    /// Needs a 64-bit target, where the sum fits Taffy's calc handle.
+    Calc {
+        /// Percent of the same basis as [`Self::Percent`].
+        percent: f32,
+        /// Logical pixels added to it.
+        px: f32,
+    },
 }
 
 impl Length {
@@ -30,35 +39,69 @@ impl Length {
         match self {
             Self::Auto => true,
             Self::Px(v) | Self::Percent(v) => v.is_finite() && (!nonnegative || v >= 0.0),
+            // The sum's sign depends on the basis, so `nonnegative` cannot be checked here;
+            // Taffy clamps negative sizes and padding to zero.
+            Self::Calc { percent, px } => {
+                cfg!(target_pointer_width = "64") && percent.is_finite() && px.is_finite()
+            }
+        }
+    }
+
+    /// `Calc` with a zero part as the plain length, which Taffy also resolves
+    /// without a parent size.
+    fn simplified(self) -> Self {
+        match self {
+            Self::Calc { percent, px } if percent == 0.0 => Self::Px(px),
+            Self::Calc { percent, px } if px == 0.0 => Self::Percent(percent),
+            length => length,
         }
     }
 
     /// As a size, basis or other dimension.
     pub fn dimension(self) -> Dimension {
-        match self {
+        match self.simplified() {
             Self::Auto => Dimension::auto(),
             Self::Px(v) => Dimension::length(v),
             Self::Percent(v) => Dimension::percent(v / 100.0),
+            Self::Calc { percent, px } => Dimension::calc(calc_handle(percent, px)),
         }
     }
 
     /// As a minimum/maximum size, margin or inset.
     pub fn auto_length(self) -> LengthPercentageAuto {
-        match self {
+        match self.simplified() {
             Self::Auto => LengthPercentageAuto::auto(),
             Self::Px(v) => LengthPercentageAuto::length(v),
             Self::Percent(v) => LengthPercentageAuto::percent(v / 100.0),
+            Self::Calc { percent, px } => LengthPercentageAuto::calc(calc_handle(percent, px)),
         }
     }
 
     /// As padding or gap, which have no automatic value: `None` for `Auto`.
     pub fn definite(self) -> Option<LengthPercentage> {
-        match self {
+        match self.simplified() {
             Self::Auto => None,
             Self::Px(v) => Some(LengthPercentage::length(v)),
             Self::Percent(v) => Some(LengthPercentage::percent(v / 100.0)),
+            Self::Calc { percent, px } => Some(LengthPercentage::calc(calc_handle(percent, px))),
         }
     }
+}
+
+/// Packs `fraction × basis + px` into Taffy's opaque calc handle, which Taffy
+/// only passes back to [`resolve_calc`]: pixels in the high 32 bits and the
+/// fraction's bits in the low 32, whose three lowest bits Taffy reserves for
+/// its tag (a relative error below 10⁻⁶). Never dereferenced, so no allocation
+/// has to outlive the style. Both parts are nonzero, so the handle is too.
+fn calc_handle(percent: f32, px: f32) -> *const () {
+    let fraction = u64::from((percent / 100.0).to_bits()) & !0b111;
+    std::ptr::without_provenance((u64::from(px.to_bits()) << 32 | fraction) as usize)
+}
+
+/// Resolves a handle from [`calc_handle`] against the percentage basis.
+pub(crate) fn resolve_calc(handle: *const (), basis: f32) -> f32 {
+    let bits = handle.addr() as u64;
+    f32::from_bits((bits >> 32) as u32) + f32::from_bits(bits as u32) * basis
 }
 
 impl From<f32> for Length {

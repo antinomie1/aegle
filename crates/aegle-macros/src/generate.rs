@@ -341,7 +341,11 @@ fn setter(
             quote! { #facade::Theme::#name() }
         }
         Literal::Duration(_) => unreachable!("transitions are emitted after static setters"),
-        Literal::Identifier(_) | Literal::Percent(_) | Literal::Fraction(_) | Literal::List(_) => {
+        Literal::Identifier(_)
+        | Literal::Percent(_)
+        | Literal::Fraction(_)
+        | Literal::List(_)
+        | Literal::Call(..) => {
             unreachable!("only layout properties take these values")
         }
         Literal::Int(_) | Literal::Expr(_) => {

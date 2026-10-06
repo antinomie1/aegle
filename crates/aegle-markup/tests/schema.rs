@@ -150,6 +150,10 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
             auto_rows: [20dp]; flow: column_dense; justify_items: end
             Text { text: "a"; grid_column: [auto, 2]; grid_row: -1; justify_self: start }
         }
+        Grid { columns: ["a", repeat(auto_fit, minmax(80dp, 1fr), "b")]; areas: ["x x", ". y"]
+            rows: [fit_content(40dp), repeat(2, 1fr)]; width: calc((100% - 8dp) / 2)
+            Text { text: "a"; grid_area: "x"; grid_column: ["a", "b"]; grid_row: [2, "y"] }
+        }
         Stack { Column { inset: [0dp, auto]; padding: 2dp } }
     }"#;
     let document = check(parse(source).unwrap()).unwrap();
@@ -167,6 +171,16 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
         "Grid { Text { text: \"a\"; grid_row: 1.5 } }",
         "Grid { direction: row }",
         "Column { layout_direction: up }",
+        "Grid { columns: [repeat(auto_fill, 10dp), repeat(auto_fit, 10dp)] }",
+        "Grid { columns: [1fr, repeat(auto_fill, 10dp)] }",
+        "Grid { columns: [repeat(0, 10dp)] }",
+        "Grid { columns: [repeat(2, \"a\")] }",
+        "Grid { columns: [repeat(2, repeat(2, 1fr))] }",
+        "Grid { areas: [\"a b\", \"a\"] }",
+        "Grid { areas: [\"a b\", \"b a\"] }",
+        "Grid { Text { text: \"a\"; grid_area: \"\" } }",
+        "Column { width: calc(10dp * 2dp) }",
+        "Column { areas: [\"a\"] }",
         "Column { aspect_ratio: 0 }",
         "Column { width: -5% }",
         "Column { margin: [1dp, x + 1] }",

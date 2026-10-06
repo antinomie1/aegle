@@ -14,6 +14,37 @@ fn from_taffy(id: taffy::NodeId) -> NodeId {
     NodeId::from_raw(id.into()).unwrap()
 }
 
+/// The host's leaf callbacks: content measurement and the first baseline.
+pub(crate) trait Host<C> {
+    fn measure(
+        &mut self,
+        id: NodeId,
+        context: &mut C,
+        known: Size<Option<f32>>,
+        available: Size<AvailableSpace>,
+    ) -> Size<f32>;
+    fn baseline(&mut self, id: NodeId, context: &C, size: Size<f32>) -> Option<f32>;
+}
+
+impl<C, M, B> Host<C> for (M, B)
+where
+    M: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
+    B: FnMut(NodeId, &C, Size<f32>) -> Option<f32>,
+{
+    fn measure(
+        &mut self,
+        id: NodeId,
+        context: &mut C,
+        known: Size<Option<f32>>,
+        available: Size<AvailableSpace>,
+    ) -> Size<f32> {
+        (self.0)(id, context, known, available)
+    }
+    fn baseline(&mut self, id: NodeId, context: &C, size: Size<f32>) -> Option<f32> {
+        (self.1)(id, context, size)
+    }
+}
+
 pub(crate) struct Adapter<'a, C, F> {
     pub tree: &'a mut Tree<LayoutNode<C>>,
     pub measure: F,
@@ -129,7 +160,7 @@ impl<C, F> TraversePartialTree for Adapter<'_, C, F> {
 
 impl<C, F> LayoutPartialTree for Adapter<'_, C, F>
 where
-    F: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
+    F: Host<C>,
 {
     type CustomIdent = String;
     type CoreContainerStyle<'a>
@@ -145,8 +176,8 @@ where
             self.place_contents(from_taffy(id), layout);
         }
     }
-    fn resolve_calc_value(&self, _: *const (), _: f32) -> f32 {
-        unreachable!("calc values are unsupported")
+    fn resolve_calc_value(&self, handle: *const (), basis: f32) -> f32 {
+        crate::values::resolve_calc(handle, basis)
     }
 
     fn compute_child_layout(&mut self, id: taffy::NodeId, inputs: LayoutInput) -> LayoutOutput {
@@ -156,7 +187,7 @@ where
 
 impl<C, F> Adapter<'_, C, F>
 where
-    F: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
+    F: Host<C>,
 {
     fn compute_node(
         &mut self,
@@ -173,14 +204,23 @@ where
             if this.child_count(id) == 0 {
                 let node = this.tree.get_mut(from_taffy(id)).unwrap();
                 let style = &*node.style;
-                return compute_leaf_layout(
+                let mut output = compute_leaf_layout(
                     inputs,
                     style,
-                    |_, _| unreachable!("calc values are unsupported"),
+                    crate::values::resolve_calc,
                     |known, available| {
-                        (this.measure)(from_taffy(id), &mut node.context, known, available)
+                        this.measure
+                            .measure(from_taffy(id), &mut node.context, known, available)
                     },
                 );
+                // Parents read baselines only from a performed layout, whose
+                // final size places the text.
+                if inputs.run_mode == taffy::RunMode::PerformLayout {
+                    output.baselines.first =
+                        this.measure
+                            .baseline(from_taffy(id), &node.context, output.size);
+                }
+                return output;
             }
             match this.node(id).style().display {
                 Display::Flex => taffy::compute_flexbox_layout(this, id, inputs),
@@ -216,7 +256,7 @@ impl<C, F> CacheTree for Adapter<'_, C, F> {
 
 impl<C, F> taffy::LayoutFlexboxContainer for Adapter<'_, C, F>
 where
-    F: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
+    F: Host<C>,
 {
     type FlexboxContainerStyle<'a>
         = &'a Style
@@ -235,7 +275,7 @@ where
 }
 impl<C, F> taffy::LayoutBlockContainer for Adapter<'_, C, F>
 where
-    F: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
+    F: Host<C>,
 {
     type BlockContainerStyle<'a>
         = &'a Style
@@ -263,7 +303,7 @@ where
 #[cfg(feature = "grid")]
 impl<C, F> taffy::LayoutGridContainer for Adapter<'_, C, F>
 where
-    F: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
+    F: Host<C>,
 {
     type GridContainerStyle<'a>
         = &'a Style

@@ -58,6 +58,9 @@ impl Control for LabelControl {
     fn paragraph_mut(&mut self) -> Option<&mut Paragraph> {
         Some(&mut self.0)
     }
+    fn baseline(&self, _: Size, padding: f32) -> Option<f32> {
+        Some(padding + self.0.first_baseline()?)
+    }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
         let size = self.0.reflow(cx.content_width(), cx.alignment())?;
         Ok(Size::new(

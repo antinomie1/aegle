@@ -1,4 +1,5 @@
-//! Compiled and runtime-loaded markup produce the same advanced layout, and
+//! Compiled and runtime-loaded markup produce the same advanced layout,
+//! including named grid areas and lines, `repeat()` and `calc()`, and
 //! generated `for` rows take part in their grid like ordinary children.
 #![cfg(all(feature = "markup", feature = "grid"))]
 
@@ -9,9 +10,9 @@ use aegle::{
 };
 use std::{cell::RefCell, rc::Rc};
 
-const IDS: [&str; 14] = [
+const IDS: [&str; 21] = [
     "bar", "lead", "trail", "flow", "one", "two", "three", "span", "corner", "stack", "badge",
-    "mirrored", "first", "overlay",
+    "mirrored", "first", "areas", "header", "nav", "body", "tail", "tiles", "wrapped", "overlay",
 ];
 
 fn ui() -> Result<Ui> {
@@ -40,6 +41,14 @@ fn compiled_and_loaded_layouts_match() -> Result {
         (&view.corner, rect(382.0, 90.0, 10.0, 12.0)),
         (&view.badge, rect(196.0, 119.0, 8.0, 8.0)),
         (&view.first, rect(372.0, 144.0, 20.0, 10.0)),
+        // calc(100% - 84dp) of 384; areas, a named line and a repeated one.
+        (&view.areas, rect(8.0, 160.0, 300.0, 40.0)),
+        (&view.header, rect(68.0, 160.0, 240.0, 20.0)),
+        (&view.nav, rect(8.0, 160.0, 60.0, 40.0)),
+        (&view.body, rect(68.0, 180.0, 120.0, 20.0)),
+        (&view.tail, rect(188.0, 180.0, 120.0, 20.0)),
+        // Three 40dp columns fit 130dp, so the fourth tile wraps.
+        (&view.wrapped, rect(8.0, 216.0, 40.0, 10.0)),
         (&view.overlay, rect(384.0, 284.0, 16.0, 16.0)),
     ];
     for (node, bounds) in expected {
@@ -67,6 +76,13 @@ fn compiled_and_loaded_layouts_match() -> Result {
         &view.badge,
         &*view.mirrored,
         &view.first,
+        &*view.areas,
+        &view.header,
+        &view.nav,
+        &view.body,
+        &view.tail,
+        &*view.tiles,
+        &view.wrapped,
         &view.overlay,
     ];
     assert_eq!(runtime.root().node().bounds()?, view.root.bounds()?);

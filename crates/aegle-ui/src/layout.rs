@@ -73,7 +73,7 @@ impl State {
                 let theme = &self.theme;
                 let fonts = &self.fonts;
                 let mut error = None;
-                aegle_layout::compute(
+                aegle_layout::compute_with_baselines(
                     &mut self.tree,
                     self.root,
                     Size {
@@ -105,6 +105,10 @@ impl State {
                                 Size::ZERO
                             }
                         }
+                    },
+                    |_, element, size| {
+                        let size = aegle_types::Size::new(size.width, size.height);
+                        element.control.baseline(size, element.inset(theme))
                     },
                 )?;
                 if let Some(error) = error {

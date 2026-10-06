@@ -52,7 +52,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `id` | 唯一标识符，生成有类型句柄 |
 | `title` | Window 或 Tab 的字符串，最多 4000 UTF-8 字节且无 NUL |
 | `text` | Text/Button/TextField/TextArea/CheckBox/Switch 字符串；单行编辑器拒绝硬换行 |
-| `width`、`height` | 控件为非负 `dp`、百分比或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
+| `width`、`height` | 控件为非负 `dp`、百分比、`calc(...)` 或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
 | `min_width`、`min_height`、`max_width`、`max_height`、`basis` | 非负 `dp`、百分比或 `auto`（最大尺寸的 `auto` 为不限） |
 | `aspect_ratio` | 正数，宽/高 |
 | `padding` | 容器为非负 `dp`/百分比，或按 CSS 顺序的 `[上下, 左右]`、`[上, 右, 下, 左]`；其他控件为一个非负 `dp` |
@@ -65,11 +65,15 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `wrap` | 同上容器的 `no_wrap`、`wrap`、`wrap_reverse` |
 | `align`、`align_self` | 容器子项 / 本控件的交叉轴对齐：`start`、`end`、`center`、`stretch`、`baseline` |
 | `justify`、`align_content` | 容器的主轴剩余空间 / 行间剩余空间：`start`、`end`、`center`、`stretch`、`space_between`、`space_around`、`space_evenly` |
-| `columns`、`rows`、`auto_columns`、`auto_rows` | Grid 的轨道：`dp`、百分比、`fr`、`auto`、`min_content`、`max_content`，单个或列表 |
+| `columns`、`rows` | Grid 的显式轨道列表：轨道（`dp`、百分比、`fr`、`auto`、`min_content`、`max_content`、`minmax(dp, fr)`、`fit_content(dp)`）、字符串线名，以及 `repeat(次数或 auto_fill/auto_fit, 轨道与线名…)`；repeat 不嵌套且至少含一条轨道，自动 repeat 至多一个，此时全部轨道须为固定尺寸（`dp`、百分比、`minmax(dp, fr)`） |
+| `auto_columns`、`auto_rows` | Grid 的隐式轨道：单个或列表，不含线名与 repeat |
+| `areas`、`grid_area` | Grid 的命名区域：每行一个字符串，空白分隔的格名，各行格数相同，`.` 为未命名格，同名格须构成矩形；子项以区域名字符串放入区域（区域生成 `名-start`/`名-end` 线） |
 | `flow`、`justify_items` | Grid 的 `row`、`column`、`row_dense`、`column_dense`；子项水平对齐 |
-| `grid_column`、`grid_row`、`justify_self` | Grid 子项：非零整数线号（负数从末尾数），或 `[线号或 auto, 跨度]`；格内水平对齐 |
+| `grid_column`、`grid_row`、`justify_self` | Grid 子项：非零整数线号（负数从末尾数）或线名/区域名字符串（同 CSS `grid-column: name`），或 `[线号、auto 或线名, 跨度或结束线名]`；格内水平对齐 |
 | `visible`、`enabled` | bool，作用于控件子树 |
 | `label` | 无障碍名称字符串 |
+
+长度属性（尺寸、内外边距、inset、gap）还接受 `calc(...)`：百分比与 `dp` 的线性组合，可用 `+`、`-`、一元负号与数字乘除，如 `calc((100% - 8dp) / 2)`；检查时折叠为“百分比 + dp”，因此不支持 `min`/`max`/`clamp` 或两个长度相乘。结果的正负取决于父尺寸，不按非负约束拒绝；Taffy 把负尺寸与内边距截为零。需要 64 位目标。
 | `read_only` | TextField/TextArea 的 bool |
 | `password` | TextField 的 bool；以 `•` 遮盖值，禁用复制/剪切、IME 组合与撤销历史 |
 | `theme` | Window 的 `light`、`dark`、`high_contrast` |

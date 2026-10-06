@@ -1,5 +1,8 @@
 //! Layout properties applied through the imperative setters.
 
+#[cfg(feature = "grid")]
+mod grid;
+
 use aegle_markup::{PropertyName, Value as Literal};
 use aegle_ui::{Align, Container, Insets, Justify, Length, Node, Result};
 
@@ -7,6 +10,10 @@ fn length(value: &Literal) -> Length {
     match value {
         Literal::Length(v) => Length::Px(*v),
         Literal::Percent(v) => Length::Percent(*v),
+        Literal::Call(_, parts) => match parts[..] {
+            [Literal::Percent(percent), Literal::Length(px)] => Length::Calc { percent, px },
+            _ => unreachable!("checked calc"),
+        },
         _ => Length::Auto,
     }
 }
@@ -27,14 +34,14 @@ fn insets(value: &Literal) -> Insets {
     }
 }
 
-fn identifier(value: &Literal) -> &str {
+pub(crate) fn identifier(value: &Literal) -> &str {
     let Literal::Identifier(name) = value else {
         unreachable!("checked identifier")
     };
     name
 }
 
-fn align(value: &Literal) -> Option<Align> {
+pub(crate) fn align(value: &Literal) -> Option<Align> {
     Some(match identifier(value) {
         "start" => Align::Start,
         "end" => Align::End,
@@ -56,7 +63,7 @@ fn justify(value: &Literal) -> Option<Justify> {
     })
 }
 
-fn number(value: &Literal) -> f32 {
+pub(crate) fn number(value: &Literal) -> f32 {
     let Literal::Number(n) = value else {
         unreachable!("checked number")
     };
@@ -112,65 +119,21 @@ pub(crate) fn apply(
         Justify => container().set_justify_content(justify(value)),
         AlignContent => container().set_align_content(justify(value)),
         JustifySelf | JustifyItems | Columns | Rows | AutoColumns | AutoRows | Flow
-        | GridColumn | GridRow => grid(node, parent, name, value),
+        | GridColumn | GridRow | Areas | GridArea => grid::apply(node, parent, name, value),
         _ => return None,
     })
 }
 
-#[cfg(feature = "grid")]
-fn grid(node: &Node, parent: Option<&Container>, name: PropertyName, value: &Literal) -> Result {
-    use PropertyName::*;
-    use aegle_ui::{Flow, Placement, Track};
-    let container = || parent.expect("checked container property");
-    let tracks = || -> Vec<Track> {
-        let track = |value: &Literal| match value {
-            Literal::Length(v) => Track::Px(*v),
-            Literal::Percent(v) => Track::Percent(*v),
-            Literal::Fraction(v) => Track::Fr(*v),
-            Literal::Identifier(name) if name == "min_content" => Track::MinContent,
-            Literal::Identifier(name) if name == "max_content" => Track::MaxContent,
-            _ => Track::Auto,
-        };
-        match value {
-            Literal::List(items) => items.iter().map(track).collect(),
-            value => vec![track(value)],
-        }
-    };
-    let placement = || {
-        let line = |value: &Literal| match value {
-            Literal::Number(n) => Some(*n as i16),
-            _ => None,
-        };
-        match value {
-            Literal::List(items) => Placement {
-                line: line(&items[0]),
-                span: number(&items[1]) as u16,
-            },
-            value => Placement {
-                line: line(value),
-                span: 1,
-            },
-        }
-    };
-    match name {
-        JustifySelf => node.set_justify_self(align(value)),
-        JustifyItems => container().set_justify_items(align(value)),
-        Columns => container().set_columns(&tracks()),
-        Rows => container().set_rows(&tracks()),
-        AutoColumns => container().set_auto_columns(&tracks()),
-        AutoRows => container().set_auto_rows(&tracks()),
-        Flow => container().set_flow(match identifier(value) {
-            "row" => Flow::Row,
-            "column" => Flow::Column,
-            "row_dense" => Flow::RowDense,
-            _ => Flow::ColumnDense,
-        }),
-        GridColumn => node.set_grid_column(placement()),
-        _ => node.set_grid_row(placement()),
-    }
-}
-
 #[cfg(not(feature = "grid"))]
-fn grid(_: &Node, _: Option<&Container>, name: PropertyName, _: &Literal) -> Result {
-    Err(format!("markup {name:?} requires the grid feature").into())
+mod grid {
+    use super::*;
+
+    pub(crate) fn apply(
+        _: &Node,
+        _: Option<&Container>,
+        name: PropertyName,
+        _: &Literal,
+    ) -> Result {
+        Err(format!("markup {name:?} requires the grid feature").into())
+    }
 }

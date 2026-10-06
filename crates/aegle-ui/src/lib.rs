@@ -52,7 +52,7 @@ pub use aegle_access::accesskit;
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 pub use aegle_layout::{Align, Direction, Insets, Justify, LayoutDirection, Length, Wrap};
 #[cfg(feature = "grid")]
-pub use aegle_layout::{Flow, Placement, Track};
+pub use aegle_layout::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
 #[cfg(feature = "motion")]
 pub use aegle_motion::{Easing, Transition};
 pub use aegle_scene as scene;

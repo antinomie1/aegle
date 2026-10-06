@@ -139,7 +139,7 @@ impl Node {
                 .properties
                 .iter()
                 .all(|property| match &property.value {
-                    Value::Expr(expr) => crate::schema::constant_list(expr).is_some(),
+                    Value::Expr(expr) => crate::schema::constant(expr).is_some(),
                     _ => true,
                 })
             && self.children.iter().all(|item| match item {
@@ -266,6 +266,10 @@ pub enum Value {
     /// A constant list of literals and bare identifiers, such as
     /// `[8dp, auto]`; only layout properties accept one.
     List(Vec<Value>),
+    /// A constant layout function: `repeat`, `minmax` or `fit_content` with
+    /// constant arguments, or `calc` folded to `[percent, length]`, such as
+    /// `calc(100% - 8dp)` as `calc(100%, -8dp)`; only layout properties accept one.
+    Call(String, Vec<Value>),
     /// Exact nonnegative whole milliseconds, written as decimal digits and `ms`.
     Duration(u64),
     /// Unpremultiplied sRGB bytes, written as `#RRGGBB` or `#RRGGBBAA`.

@@ -276,6 +276,11 @@ pub trait Control: Any {
     fn measure(&mut self, _cx: &MeasureCx<'_>) -> Result<Size> {
         Ok(Size::default())
     }
+    /// The first text baseline from the top of a box of `size` laid out by the
+    /// last measurement, for baseline alignment; `None` aligns the bottom edge.
+    fn baseline(&self, _size: Size, _padding: f32) -> Option<f32> {
+        None
+    }
     /// Re-lays out retained text for the final width after layout, given as
     /// `cx.width`.
     fn finalize(&mut self, _cx: &MeasureCx<'_>) -> Result {

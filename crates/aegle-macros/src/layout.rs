@@ -23,6 +23,12 @@ fn length(value: &Literal, f: &TokenStream) -> TokenStream {
     match value {
         Literal::Length(v) => quote! { #f::Length::Px(#v) },
         Literal::Percent(v) => quote! { #f::Length::Percent(#v) },
+        Literal::Call(_, parts) => {
+            let [Literal::Percent(percent), Literal::Length(px)] = parts[..] else {
+                unreachable!("checked calc")
+            };
+            quote! { #f::Length::Calc { percent: #percent, px: #px } }
+        }
         _ => quote! { #f::Length::Auto },
     }
 }
@@ -41,8 +47,15 @@ fn insets(value: &Literal, f: &TokenStream) -> TokenStream {
     }
 }
 
-fn tracks(value: &Literal, f: &TokenStream) -> TokenStream {
-    let track = |value: &Literal| match value {
+fn items(value: &Literal) -> &[Literal] {
+    match value {
+        Literal::List(items) => items,
+        value => std::slice::from_ref(value),
+    }
+}
+
+fn track(value: &Literal, f: &TokenStream) -> TokenStream {
+    match value {
         Literal::Length(v) => quote! { #f::Track::Px(#v) },
         Literal::Percent(v) => quote! { #f::Track::Percent(#v) },
         Literal::Fraction(v) => quote! { #f::Track::Fr(#v) },
@@ -50,33 +63,79 @@ fn tracks(value: &Literal, f: &TokenStream) -> TokenStream {
             let name = variant(name);
             quote! { #f::Track::#name }
         }
+        Literal::Call(_, arguments) => match arguments[..] {
+            [Literal::Length(min), Literal::Fraction(fr)] => {
+                quote! { #f::Track::MinMax(#min, #fr) }
+            }
+            [Literal::Length(max)] => quote! { #f::Track::FitContent(#max) },
+            _ => unreachable!("checked track function"),
+        },
         _ => unreachable!("checked tracks"),
-    };
-    let tracks: Vec<_> = match value {
-        Literal::List(items) => items.iter().map(track).collect(),
-        value => vec![track(value)],
-    };
-    quote! { &[#(#tracks),*] }
+    }
 }
 
-fn placement(value: &Literal, f: &TokenStream) -> TokenStream {
-    let line = |value: &Literal| match value {
+/// A template item: a track, a line name or a repeat of those.
+fn template_item(value: &Literal, f: &TokenStream) -> TokenStream {
+    match value {
+        Literal::String(name) => {
+            quote! { #f::TemplateItem::Line(::std::string::String::from(#name)) }
+        }
+        Literal::Call(function, arguments) if function == "repeat" => {
+            let count = match &arguments[0] {
+                Literal::Number(n) => {
+                    let n = *n as u16;
+                    quote! { #f::Repeat::Count(#n) }
+                }
+                Literal::Identifier(name) => {
+                    let name = variant(name);
+                    quote! { #f::Repeat::#name }
+                }
+                _ => unreachable!("checked repeat count"),
+            };
+            let inner = arguments[1..].iter().map(|item| template_item(item, f));
+            quote! { #f::TemplateItem::Repeat(#count, ::std::vec![#(#inner),*]) }
+        }
+        value => {
+            let track = track(value, f);
+            quote! { #f::TemplateItem::Track(#track) }
+        }
+    }
+}
+
+fn grid_line(value: &Literal, end: bool, f: &TokenStream) -> TokenStream {
+    match value {
+        Literal::Number(n) if end => {
+            let n = *n as u16;
+            quote! { #f::GridLine::Span(#n) }
+        }
         Literal::Number(n) => {
             let n = *n as i16;
-            quote! { ::core::option::Option::Some(#n) }
+            quote! { #f::GridLine::Line(#n) }
         }
-        _ => quote! { ::core::option::Option::None },
-    };
-    let (start, span) = match value {
+        Literal::String(name) => {
+            quote! { #f::GridLine::Named(::std::string::String::from(#name), 1) }
+        }
+        _ => quote! { #f::GridLine::Auto },
+    }
+}
+
+/// A line or name alone covers one track or the named area; a pair is
+/// `[start, span or end name]`.
+fn placement(value: &Literal, f: &TokenStream) -> TokenStream {
+    match value {
         Literal::List(items) => {
-            let Literal::Number(span) = items[1] else {
-                unreachable!("checked span")
-            };
-            (line(&items[0]), span as u16)
+            let (start, end) = (
+                grid_line(&items[0], false, f),
+                grid_line(&items[1], true, f),
+            );
+            quote! { #f::GridLines { start: #start, end: #end } }
         }
-        value => (line(value), 1),
-    };
-    quote! { #f::Placement { line: #start, span: #span } }
+        Literal::String(name) => quote! { #f::GridLines::named(#name) },
+        value => {
+            let start = grid_line(value, false, f);
+            quote! { #f::GridLines { start: #start, end: #f::GridLine::Span(1) } }
+        }
+    }
 }
 
 /// The setter call for a layout property, or `None` for other properties.
@@ -183,16 +242,40 @@ pub(super) fn setter(
             let justify = enumerated("Justify");
             quote! { #handle.#method(::core::option::Option::Some(#justify)) }
         }
-        Columns | Rows | AutoColumns | AutoRows => {
-            let method = match property.name {
-                Columns => "set_columns",
-                Rows => "set_rows",
-                AutoColumns => "set_auto_columns",
-                _ => "set_auto_rows",
+        Columns | Rows => {
+            let method = if property.name == Columns {
+                "set_column_template"
+            } else {
+                "set_row_template"
             };
             let method = Ident::new(method, Span::call_site());
-            let tracks = tracks(value, f);
-            quote! { #handle.#method(#tracks) }
+            let items = items(value).iter().map(|item| template_item(item, f));
+            quote! { #handle.#method(&[#(#items),*]) }
+        }
+        AutoColumns | AutoRows => {
+            let method = if property.name == AutoColumns {
+                "set_auto_columns"
+            } else {
+                "set_auto_rows"
+            };
+            let method = Ident::new(method, Span::call_site());
+            let tracks = items(value).iter().map(|item| track(item, f));
+            quote! { #handle.#method(&[#(#tracks),*]) }
+        }
+        Areas => {
+            let rows = items(value).iter().map(|row| {
+                let Literal::String(row) = row else {
+                    unreachable!("checked area rows")
+                };
+                quote! { #row }
+            });
+            quote! { #handle.set_areas(&[#(#rows),*]) }
+        }
+        GridArea => {
+            let Literal::String(name) = value else {
+                unreachable!("checked area name")
+            };
+            quote! { #handle.set_grid_area(#name) }
         }
         GridColumn | GridRow => {
             let method = if property.name == GridColumn {

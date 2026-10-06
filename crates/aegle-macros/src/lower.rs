@@ -278,6 +278,12 @@ fn value(literal: &Value, m: &TokenStream) -> TokenStream {
             let items = items.iter().map(|item| value(item, m));
             quote! { #m::Value::List(::std::vec![#(#items),*]) }
         }
+        Value::Call(name, arguments) => {
+            let arguments = arguments.iter().map(|argument| value(argument, m));
+            quote! {
+                #m::Value::Call(::std::string::String::from(#name), ::std::vec![#(#arguments),*])
+            }
+        }
         Value::Duration(v) => quote! { #m::Value::Duration(#v) },
         Value::Color([r, g, b, a]) => quote! { #m::Value::Color([#r, #g, #b, #a]) },
         Value::Identifier(v) => quote! { #m::Value::Identifier(::std::string::String::from(#v)) },

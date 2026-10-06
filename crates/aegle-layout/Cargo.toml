@@ -13,7 +13,7 @@ grid = ["taffy/grid"]
 [dependencies]
 aegle-types.workspace = true
 aegle-core.workspace = true
-taffy.workspace = true
+taffy = { workspace = true, features = ["calc"] }
 
 [lints]
 workspace = true

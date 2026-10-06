@@ -4,7 +4,7 @@
 
 ## 当前显示接口
 
-`TextSystem` 共享字体集合及 shaping 临时存储；`Paragraph` 拥有 UTF-8 文本和保留的 Parley 布局。`paragraph/update/restyle` 完成字体选择与 shaping；`reflow` 仅换行和对齐，相同约束直接复用结果。`content_widths` 提供 intrinsic 测量值，宿主通过 Taffy 测量回调接入；最终绘制前采用最终布局宽度。Parley 对混合双向文本的 intrinsic 宽度仍有估计限制。
+`TextSystem` 共享字体集合及 shaping 临时存储；`Paragraph` 拥有 UTF-8 文本和保留的 Parley 布局。`paragraph/update/restyle` 完成字体选择与 shaping；`reflow` 仅换行和对齐，相同约束直接复用结果。`content_widths` 提供 intrinsic 测量值，宿主通过 Taffy 测量回调接入；最终绘制前采用最终布局宽度。段落与编辑器按布局方向左对齐或右对齐（`Node::set_layout_direction`），混排文本的基础方向仍由 Parley 按内容检测。`Paragraph::first_baseline` 与编辑器的同名方法给出首行基线，文字控件据此按最终尺寸与绘制位置（居中或内边距处）向 Taffy 报告首基线，供 `Align::Baseline`。Parley 对混合双向文本的 intrinsic 宽度仍有估计限制。
 
 `glyph_runs` 借用已有字形位置；可选 `aegle-text/scene` 提供 `paint`，将位置和变化轴复制到 scene，字体字节通过 `FontData` 共享。`paint_with_color` 可重建前景颜色而不重新 shaping。scene 不持有文字引擎，光栅化模块不依赖 Parley。
 

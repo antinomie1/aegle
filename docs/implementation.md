@@ -439,7 +439,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 验证：`cargo test --workspace --all-features` 通过；默认 feature（无 grid）的 workspace `check --all-targets` 通过。新增测试：`aegle-ui/tests/layout.rs`（对齐、SpaceBetween、百分比、auto 外边距居中、basis 与 grow 分配、max 截断、换行、宽高比、绝对定位、反向、contents 分组及隐藏、主题切换保留本地布局、非法输入；grid：显式/自动轨道、跨列、自动放置、justify/align self、contents 子项入格、stack 叠放与 reparent 入格）；`aegle-widgets` 表格在中间列中收缩（修改前失败）；`aegle/tests/layout.rs` 同一布局文件经 `ui!` 与运行时加载得到完全相同的边界，`for` 生成的子控件各占网格一格；markup schema 的接受与拒绝用例。所有源文件不超过 500 行，测试约占实现加测试行数的 16.6%。
 - 测量：Taffy grid 使 `aegle-layout` 的 release `retained` 示例从 475,992 B 增至 725,856 B（+249,864 B）。临时 release 探针（CJK 测试字体，1000 行 `for`，7 次中位数），修改前/后：首次构建加刷新 3.83/3.59 ms，追加一行 1.04/0.80 ms，整体反序 5.61/5.80 ms。
 - 私有 headless Sway（GLES2 compositor）上运行默认软件绘制加 `grid` 的 release `layout` 与 `showcase`，截图确认换行标签、auto 外边距居中、16:9 宽高比、跨两列的叠放卡片与角标、跨两行卡片、`for` 卡片入格及 wtype 新增的卡片、右下角绝对定位按钮；`showcase` 深色主题下表格主体、表头与下拉列表背景正确，"Theme" 标签与下拉框垂直居中。
-- 未完成或未验证：RTL 当时未暴露，后见“从右到左布局”；没有命名网格线/区域、`repeat()` 与 `calc`；baseline 对齐只经过编译与 Taffy 自身语义，没有文字控件的专门测试；本轮没有做 Windows 交叉检查；`cargo clippy` 在此环境不可用。
+- 未完成或未验证：RTL 当时未暴露，后见“从右到左布局”；命名网格线/区域、`repeat()`、`calc` 与文字控件基线当时未完成，后见“命名网格、repeat、calc 与文字基线”；本轮没有做 Windows 交叉检查；`cargo clippy` 在此环境不可用。
 
 ## 逐帧回调、输入时间与窗口级按键
 
@@ -499,3 +499,12 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 标记：`layout_direction: ltr|rtl`，`ui!` 与加载器都调用 `set_layout_direction`；facade 预导出 `LayoutDirection`。`showcase ... rtl` 以右到左运行。
 - 验证：`aegle-widgets/tests/rtl.rs`（行镜像、左侧槽位等于 `FOOTPRINT`、向左滚动 50 后偏移 50 且内容右移、滑块右端为最小值与方向键反转、切回后左内边距与宽度恢复）；`aegle-ui/tests/geometry.rs`（右到左竖直条在 x=0、横向滑块起于右端、比例为逻辑值）；`aegle/tests/layout.rs` 的 `.aegle` 夹具经 `ui!` 与加载器得到相同的镜像位置；schema 拒绝非法方向。私有 headless Sway 上 release `showcase` 以软件后端右到左截图，分隔条、标签页、文字、开关、滑块、进度条、步进条、下拉箭头与滚动条均镜像；Vulkan 左到右截图不变。
 - 未实现：没有按段落内容自动选择布局方向；Windows 原生输入法候选窗位置未在右到左下验证。Windows 目标交叉检查通过。
+
+## 命名网格、repeat、calc 与文字基线
+
+- `calc`：`Length::Calc { percent, px }`（CSS `calc(percent% + px)`）用于尺寸、最小/最大尺寸、basis、内外边距、inset 与 gap。开启 Taffy 的 `calc` feature；Taffy 只把不透明的 calc 句柄回传给适配器而不解引用，因此在 64 位目标上把像素与比例的位直接打包进句柄（比例丢弃低 3 位尾数，相对误差低于 10⁻⁶），无需分配、表或 unsafe，样式克隆与比较不受影响；有一项为零时退化为普通长度。32 位目标上 `is_valid` 拒绝 `Calc`。
+- 网格（`aegle-layout/src/template.rs`）：`TemplateItem`（线名、轨道、`Repeat::{Count, AutoFill, AutoFit}`）经 `template` 转为 Taffy 的轨道与线名，并检查 repeat 不嵌套、至少一条轨道、自动 repeat 唯一且全部轨道固定；`areas` 解析 CSS 式区域字符串并检查矩形；`GridLine`/`GridLines` 支持线号、跨度、命名线与命名跨度，`Placement` 可转换。`aegle-ui` 增加 `set_column_template`、`set_row_template`、`set_areas`、`set_grid_area`，`set_grid_column`/`set_grid_row` 接受 `impl Into<GridLines>`（原 `Placement` 调用不变）。
+- 基线：Taffy 叶节点不报告基线，原先 `Align::Baseline` 实际按底边对齐文字控件。`aegle-layout::compute_with_baselines` 在 PerformLayout 时以最终边框盒尺寸向宿主取首基线；`Control::baseline` 由 Label、Button/Dropdown（居中）、TextField/TextArea 与 NumberField（内边距处，按未滚动位置）、CheckBox/Switch/Radio（标签居中）实现，`Node::baseline` 公开同一值。`compute` 保持原签名。
+- 标记：标记值新增常量函数 `Value::Call`。`calc(...)` 在检查时折叠为百分比加 `dp` 的线性组合；`columns`/`rows` 接受字符串线名、`repeat(...)`、`minmax(dp, fr)`、`fit_content(dp)`；新增 Grid 的 `areas` 与子项的 `grid_area`；`grid_column`/`grid_row` 接受线名或区域名字符串及 `[起点, 跨度或结束线名]`。`ui!` 与加载器生成相同的 setter 调用；schema 在 `schema/grid.rs` 中按与 `aegle-layout` 相同的规则检查，因此通过检查的文档在运行时不会因这些规则失败。
+- 验证：`aegle/tests/layout.rs` 的 `.aegle` 夹具经 `ui!` 与加载器得到相同且符合手算的结果：`calc(100% - 84dp)` 在 384 宽下为 300，区域 `head`/`nav`、命名线 `content`、repeat 内的线名 `half` 与负线号，以及 `repeat(auto_fill, 40dp)` 在 130 宽下排三列后换行；schema 接受与拒绝用例覆盖两个自动 repeat、自动 repeat 与 `fr` 混用、零次、只有线名、嵌套 repeat、参差与非矩形区域、空区域名、长度相乘与非 Grid 上的 `areas`。`aegle-widgets/tests/baseline.rs` 使用 CJK 测试字体，在一行中让 32px 标签、60 高的按钮、文本框、数字框与复选框的首基线重合（误差 0.01），并确认它们的顶边不同；关闭布局基线回调时该测试失败（基线相差约 15）。
+- 未实现：`calc` 只有线性组合，没有 `min()`/`max()`/`clamp()`，网格轨道不接受 `calc`；没有子网格（subgrid）与 `masonry`；基线只取首行，`last baseline` 对齐未暴露。

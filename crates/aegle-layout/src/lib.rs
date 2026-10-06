@@ -7,6 +7,8 @@ mod adapter;
 #[cfg(feature = "grid")]
 mod grid;
 mod node;
+#[cfg(feature = "grid")]
+mod template;
 mod values;
 
 #[cfg(feature = "grid")]
@@ -20,27 +22,46 @@ pub use taffy::{
     LengthPercentageAuto, Overflow, Position, Style,
 };
 #[cfg(feature = "grid")]
-pub use taffy::{GridTemplateComponent, TrackSizingFunction};
+pub use taffy::{
+    GridPlacement, GridTemplateAreas, GridTemplateComponent, Line, TrackSizingFunction,
+};
+#[cfg(feature = "grid")]
+pub use template::{GridLine, GridLines, Repeat, Template, TemplateItem, areas, template};
 pub use values::{Align, Direction, Insets, Justify, Length, Wrap};
 
 use aegle_core::{Dirty, NodeId, Tree, TreeError};
 
 /// Computes logical, unrounded geometry using the retained tree's cache.
 ///
-/// A measurement callback must return the same result while its context is
-/// unchanged. Update context through `Tree::update(id, Dirty::LAYOUT, ...)` to
-/// invalidate it. Changes to pixels alone need not invalidate layout.
-/// Taffy `calc` pointer values are not supported.
+/// `measure` returns a leaf's content size. It must return the same result
+/// while its context is unchanged. Update context through
+/// `Tree::update(id, Dirty::LAYOUT, ...)` to invalidate it. Changes to pixels
+/// alone need not invalidate layout. Leaves have no baseline here; see
+/// [`compute_with_baselines`]. Taffy `calc` values must come from
+/// [`Length::Calc`]; other handles are read as packed numbers, never dereferenced.
 pub fn compute<C>(
     tree: &mut Tree<LayoutNode<C>>,
     root: NodeId,
     available: Size<AvailableSpace>,
     measure: impl FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
 ) -> Result<(), TreeError> {
+    compute_with_baselines(tree, root, available, measure, |_, _, _| None)
+}
+
+/// [`compute`], where `baseline` gives a leaf's first text baseline from the
+/// top of its final border box, for `Align::Baseline`; `None` aligns its
+/// bottom edge, as for a leaf without text.
+pub fn compute_with_baselines<C>(
+    tree: &mut Tree<LayoutNode<C>>,
+    root: NodeId,
+    available: Size<AvailableSpace>,
+    measure: impl FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
+    baseline: impl FnMut(NodeId, &C, Size<f32>) -> Option<f32>,
+) -> Result<(), TreeError> {
     tree.get(root).ok_or(TreeError::DeadNode)?;
     let mut adapter = adapter::Adapter {
         tree,
-        measure,
+        measure: (measure, baseline),
         flat: Default::default(),
     };
     taffy::compute_root_layout(&mut adapter, adapter::to_taffy(root), available);

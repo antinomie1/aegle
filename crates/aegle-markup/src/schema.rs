@@ -1,7 +1,10 @@
 //! The built-in static component schema, independent of any UI runtime.
 
+mod constant;
+mod grid;
 mod values;
 
+pub(crate) use constant::{constant, literal};
 use std::collections::HashSet;
 pub(crate) use values::{allowed, choices, property_name, valid_id, validate, validate_range};
 
@@ -152,6 +155,10 @@ pub enum PropertyName {
     GridColumn,
     /// Grid row placement: a line, or `[line or auto, span]`.
     GridRow,
+    /// Named grid areas: one string of cell names per row.
+    Areas,
+    /// The grid area this child fills, by name.
+    GridArea,
     /// Slider, progress or splitter axis.
     Orientation,
     /// Progress of unknown length.
@@ -322,32 +329,6 @@ pub(crate) fn structure(parent: Kind, children: &[Option<Kind>]) -> Result<(), &
         _ if parent != Kind::Tabs && tabs > 0 => Err("Tab is only allowed inside Tabs"),
         _ => Ok(()),
     }
-}
-
-/// Integer literals are numbers wherever a static property expects one, and
-/// a list of literals and bare identifiers is a constant list value.
-pub(crate) fn literal(value: Value) -> Value {
-    match value {
-        Value::Int(n) => Value::Number(n as f32),
-        Value::Expr(expr) => constant_list(&expr).unwrap_or(Value::Expr(expr)),
-        value => value,
-    }
-}
-
-/// A `[...]` expression of literals and bare identifiers as a list value.
-pub(crate) fn constant_list(expr: &crate::Expr) -> Option<Value> {
-    let crate::ExprKind::List(items) = &expr.kind else {
-        return None;
-    };
-    items
-        .iter()
-        .map(|item| match &item.kind {
-            crate::ExprKind::Literal(value) => Some(literal(value.clone())),
-            crate::ExprKind::Name(name) => Some(Value::Identifier(name.clone())),
-            _ => None,
-        })
-        .collect::<Option<_>>()
-        .map(Value::List)
 }
 
 fn check_node(

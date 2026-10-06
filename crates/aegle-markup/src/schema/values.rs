@@ -1,4 +1,4 @@
-use super::{Kind, PropertyName};
+use super::{Kind, PropertyName, grid};
 use crate::{Error, Span, Value as Literal};
 
 pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
@@ -36,6 +36,8 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "flow" => Flow,
         "grid_column" => GridColumn,
         "grid_row" => GridRow,
+        "areas" => Areas,
+        "grid_area" => GridArea,
         "visible" => Visible,
         "enabled" => Enabled,
         "label" => Label,
@@ -162,9 +164,9 @@ pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
         ),
         Gap | Align | Justify | AlignContent => kind.is_container(),
         Direction | Wrap => flex,
-        Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems => kind == Kind::Grid,
+        Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems | Areas => kind == Kind::Grid,
         MaxWidth | MaxHeight | AspectRatio | Margin | Inset | Shrink | Basis | AlignSelf
-        | JustifySelf | GridColumn | GridRow | OffsetX | OffsetY | Scale | Rotation => {
+        | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale | Rotation => {
             kind != Kind::Window
         }
         _ => true,
@@ -183,10 +185,14 @@ fn timing(value: &Literal) -> bool {
     }
 }
 
-/// A finite length, percentage or, where allowed, `auto`.
+/// A finite length, percentage, `calc` sum or, where allowed, `auto`. A sum's
+/// sign depends on the parent's size, so it is never rejected as negative.
 fn length(value: &Literal, nonnegative: bool, auto: bool) -> bool {
     match value {
         Literal::Length(n) | Literal::Percent(n) => n.is_finite() && (!nonnegative || *n >= 0.0),
+        Literal::Call(function, parts) if function == "calc" => {
+            matches!(&parts[..], [Literal::Percent(p), Literal::Length(l)] if p.is_finite() && l.is_finite())
+        }
         Literal::Identifier(name) => auto && name == "auto",
         _ => false,
     }
@@ -199,37 +205,6 @@ fn edges(value: &Literal, nonnegative: bool, auto: bool) -> bool {
             matches!(items.len(), 2 | 4) && items.iter().all(|i| length(i, nonnegative, auto))
         }
         value => length(value, nonnegative, auto),
-    }
-}
-
-/// One grid track or a list of them.
-fn tracks(value: &Literal) -> bool {
-    let track = |value: &Literal| match value {
-        Literal::Length(n) | Literal::Percent(n) | Literal::Fraction(n) => {
-            n.is_finite() && *n >= 0.0
-        }
-        Literal::Identifier(name) => {
-            matches!(name.as_str(), "auto" | "min_content" | "max_content")
-        }
-        _ => false,
-    };
-    match value {
-        Literal::List(items) => items.iter().all(track),
-        value => track(value),
-    }
-}
-
-/// A nonzero whole grid line, or a `[line or auto, span]` pair.
-fn placement(value: &Literal) -> bool {
-    let whole = |value: &Literal, low: f32, high: f32| matches!(value, Literal::Number(n) if n.fract() == 0.0 && (low..=high).contains(n));
-    let line = |value: &Literal| whole(value, -32768.0, 32767.0) && *value != Literal::Number(0.0);
-    match value {
-        Literal::List(items) => {
-            items.len() == 2
-                && (line(&items[0]) || items[0] == Literal::Identifier("auto".into()))
-                && whole(&items[1], 1.0, 65535.0)
-        }
-        value => line(value),
     }
 }
 
@@ -260,8 +235,11 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             items.len() == 2 && items.iter().all(|i| length(i, true, false))
         }
         (Gap, value) => length(value, true, false),
-        (Columns | Rows | AutoColumns | AutoRows, value) => tracks(value),
-        (GridColumn | GridRow, value) => placement(value),
+        (Columns | Rows, value) => grid::template(value),
+        (AutoColumns | AutoRows, value) => grid::auto_tracks(value),
+        (GridColumn | GridRow, value) => grid::placement(value),
+        (Areas, value) => grid::areas(value),
+        (GridArea, value) => grid::name(value),
         (Padding | BorderWidth | Radius | FocusWidth, Literal::Length(n))
         | (Grow | Shrink | Step, Literal::Number(n)) => n.is_finite() && *n >= 0.0,
         (AspectRatio, Literal::Number(n)) => n.is_finite() && *n > 0.0,
@@ -297,17 +275,23 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         Ratio => "a number from 0 to 1 or a percentage".into(),
         Width | Height if kind == Kind::Window => "a positive whole dp length fitting u32".into(),
         Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis => {
-            "a nonnegative dp length, a percentage or auto".into()
+            "a nonnegative dp length, a percentage, calc(...) or auto".into()
         }
         Padding if kind.is_container() => {
             "a nonnegative dp length or percentage, or a list of two or four".into()
         }
         Margin | Inset => "a dp length, percentage or auto, or a list of two or four".into(),
         Gap => "a nonnegative dp length or percentage, or a [row, column] list".into(),
-        Columns | Rows | AutoColumns | AutoRows => {
-            "tracks: dp, %, fr, auto, min_content or max_content, alone or in a list".into()
+        Columns | Rows => "tracks (dp, %, fr, auto, min_content, max_content, minmax(dp, fr), \
+            fit_content(dp)), line name strings and repeat(count, ...) with one automatic \
+            repeat at most, whose list then has only fixed tracks"
+            .into(),
+        AutoColumns | AutoRows => "tracks, alone or in a list".into(),
+        GridColumn | GridRow => {
+            "a nonzero whole line or a name, or [line, auto or name, span or end name]".into()
         }
-        GridColumn | GridRow => "a nonzero whole line, or a [line or auto, span] list".into(),
+        Areas => "row strings of equally many cell names, each name a rectangle".into(),
+        GridArea => "an area name string".into(),
         Padding | BorderWidth | Radius | FocusWidth => "a nonnegative dp length".into(),
         AspectRatio => "a finite positive number".into(),
         FontSize => "a positive dp length".into(),

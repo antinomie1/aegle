@@ -177,6 +177,13 @@ impl Control for ToggleControl {
     ) -> Result<Outcome> {
         self.handle(cx, input)
     }
+    fn baseline(&self, size: Size, _: f32) -> Option<f32> {
+        // The label is centered vertically beside the marker.
+        if self.text.text().is_empty() {
+            return None;
+        }
+        Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
+    }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
         let marker = if self.mark == Mark::Switch {
             36.0

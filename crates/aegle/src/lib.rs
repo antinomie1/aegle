@@ -37,7 +37,7 @@ pub mod prelude {
     #[cfg(feature = "motion")]
     pub use aegle_ui::{Easing, Transition, TransitionProperty};
     #[cfg(feature = "grid")]
-    pub use aegle_ui::{Flow, Placement, Track};
+    pub use aegle_ui::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
     pub use aegle_widgets::{
         Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, NodePopup, NodeTooltip,
         NumberField, Orientation, Popup, Progress, Radio, ScrollView, Separator, Slider, Splitter,
