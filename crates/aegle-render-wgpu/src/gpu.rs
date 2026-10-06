@@ -27,6 +27,9 @@ pub(crate) struct Gpu {
     pub text: RenderPipeline,
     #[cfg(feature = "text")]
     pub sampler: wgpu::Sampler,
+    /// Application textures registered on this device.
+    #[cfg(feature = "text")]
+    pub external: crate::external::Registry,
     resolve_layout: BindGroupLayout,
     resolve_shader: ShaderModule,
     /// Encoding pipelines by output format; a shared device serves several surfaces.
@@ -172,6 +175,8 @@ impl Gpu {
             text,
             #[cfg(feature = "text")]
             sampler,
+            #[cfg(feature = "text")]
+            external: Default::default(),
             resolve_layout,
             resolve_shader,
             resolve: RefCell::new(Vec::new()),

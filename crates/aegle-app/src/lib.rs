@@ -50,9 +50,9 @@ mod native_proxy;
 mod native_render;
 
 #[cfg(feature = "vulkan")]
-pub use aegle_render_vulkan::Options as VulkanOptions;
+pub use aegle_render_vulkan::{Options as VulkanOptions, RawDevice, SharedDevice, ash};
 #[cfg(feature = "wgpu")]
-pub use aegle_render_wgpu::Options as WgpuOptions;
+pub use aegle_render_wgpu::{Options as WgpuOptions, SharedGpu, wgpu};
 #[cfg(any(
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")

@@ -14,6 +14,9 @@ pub(crate) struct Device {
     pub family: u32,
     pub properties: vk::PhysicalDeviceProperties,
     pub memory: vk::PhysicalDeviceMemoryProperties,
+    /// Application image views registered for drawing.
+    #[cfg(feature = "text")]
+    pub textures: crate::external::Registry,
     /// Only while the creating window renderer takes it; surfaces belong to renderers.
     #[cfg(feature = "window")]
     surface: Option<crate::surface::Surface>,
@@ -118,6 +121,8 @@ impl Device {
                     family,
                     properties,
                     memory,
+                    #[cfg(feature = "text")]
+                    textures: Default::default(),
                     #[cfg(feature = "window")]
                     surface,
                     _entry: entry,

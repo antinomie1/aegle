@@ -455,3 +455,12 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - `Canvas` 移到 `aegle-widgets/src/canvas.rs`。`on_input(FnMut(Canvas, CanvasEvent))` 使其可聚焦、带焦点框（专用皮肤）、按下时取得焦点并捕获指针、消费其上的滚轮并在聚焦时接收按键；事件在控件内排队，每批第一个事件以 `Action::Change` 调度一次回调，回调在借用之外按序取出。`CanvasEvent` 为 Press/Move（含 pressed）/Release/Leave/Cancel/Wheel/Key/Focus，坐标为局部逻辑坐标并带 `Instant`。`clear_on_input` 恢复为纯绘制并移出焦点。
 - 引擎：`aegle-controls::Input::Wheel { delta, position, modifiers }`；`Control::takes_wheel()`；`Ui::wheel(point, delta, modifiers, Instant)` 从命中控件向上，先把滚轮交给取用滚轮的控件，处理即停止，否则照常滚动视口；`scroll_by` 以无修饰键调用它，惯性滚动跳过这类控件。原生宿主把 Wayland axis 与 Win32 滚轮连同修饰键和平台时间交给 `Ui::wheel`。
 - 验证：`aegle-widgets/tests/canvas.rs`（未启用输入时滚轮滚动外层视图；启用后悬停移动、带时间的按下、焦点、捕获下窗外移动与释放、Ctrl+滚轮被消费且视图不动、按键；清除后失焦且滚轮恢复滚动视图）；`cargo test --workspace --all-features` 通过。
+
+## 应用 GPU 纹理
+
+- `aegle-scene`：`TextureId(u64)` 与 `Command::Texture { texture, rect }`，`SceneBuilder::texture` 校验矩形。`aegle-gpu::stretch` 从 `image_placement` 抽出，图像与纹理共用放置。
+- wgpu：共享 `Gpu` 上的登记表（`register_texture(&wgpu::Texture)` 校验二维、单采样、`TEXTURE_BINDING` 与可过滤浮点格式并建 bind group；`unregister_texture`；`device()`/`queue()`），`Renderer` 与 `SharedGpu` 都提供。录制时 bind group 进入本次提交的列表，图元页字段用最高位标记应用纹理；`UnknownTexture` 使帧失败。重导出 `wgpu`。
+- Vulkan：共享 `Device` 上的登记表（unsafe `register_texture(view, extent)`、`unregister_texture`、`raw_device()` 返回 `RawDevice`），描述符池在图集页之外预留 16 个集合，每帧 fence 之后清空映射并在首次使用时写描述符；`TooManyTextures`、`UnknownTexture`。此前 `Text::record` 对未处理命令 `unreachable!`，现在返回 `UnsupportedCommand`。重导出 `ash`。软件后端对该命令返回 `UnsupportedCommand`。
+- `aegle-app`：`App::wgpu()`、`App::vulkan()` 返回窗口共用的设备句柄，并重导出 `SharedGpu`、`SharedDevice`、`RawDevice`、`wgpu`、`ash`；新增 `gpu_texture` 示例（wgpu 渲染通道每帧在 `on_frame` 中绘制旋转三角形到应用纹理，Canvas 显示）。
+- 验证：`aegle-render-wgpu/tests/texture.rs`（2×2 纹理拉伸后角落纯色、中心混合，非法用途拒绝，注销后帧失败）在 RADV 与 Lavapipe 上通过；`aegle-render-vulkan/tests/texture.rs`（ash 创建并清除的 sRGB 图像读回颜色、17 个纹理超出预留、注销后帧失败）在 Lavapipe 与 RADV 上开启 Khronos validation 1.4.363 与同步检查通过，无验证消息；Vulkan 其余离屏测试同样在验证层下通过（验证层为提取到 scratchpad 的 Debian 包）。私有 headless Sway 上运行 release `gpu_texture`，截图确认三角形逐帧旋转、文字计数增长（约 64 帧/秒）。
+- 未验证：Vulkan 后端没有端到端示例（只有离屏测试）；Metal/D3D12 上的应用纹理未运行。

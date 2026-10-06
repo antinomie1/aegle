@@ -14,6 +14,10 @@ pub(crate) struct Text {
     pub pipeline: TextPipeline,
     /// Reused path-mask rasterizer storage.
     pub scratch: aegle_gpu::Scratch,
+    /// Application textures bound in this frame, by reserved descriptor set.
+    pub textures: Vec<Option<aegle_scene::TextureId>>,
+    /// Atlas page sets precede the reserved texture sets.
+    max_pages: u32,
 }
 
 /// Shader viewport parameters and remaining device budget for atlas-backed draws.
@@ -33,9 +37,20 @@ impl Text {
         }
         Ok(Self {
             atlas: Atlas::new(options)?,
-            pipeline: TextPipeline::new(device, pipeline, options.max_pages)?,
+            pipeline: TextPipeline::new(
+                device,
+                pipeline,
+                options.max_pages + crate::external::FRAME_TEXTURES,
+            )?,
             scratch: aegle_gpu::Scratch::new(),
+            textures: vec![None; crate::external::FRAME_TEXTURES as usize],
+            max_pages: options.max_pages,
         })
+    }
+
+    /// The descriptor set index of a reserved texture slot.
+    pub fn external_set(&self, slot: usize) -> u32 {
+        self.max_pages + slot as u32
     }
 
     /// Records one glyph, image or path command through the atlas.
@@ -72,7 +87,10 @@ impl Text {
                 let path = &scene.paths()[path];
                 self.path(device, recording, path, color, Some(stroke), state, limits)
             }
-            _ => unreachable!("geometry commands are recorded without the atlas"),
+            Command::Texture { texture, rect } => {
+                self.texture(&device.textures, recording, texture, rect, state, limits)
+            }
+            _ => Err(Error::UnsupportedCommand),
         }
     }
 

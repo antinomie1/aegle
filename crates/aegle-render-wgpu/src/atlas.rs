@@ -34,7 +34,12 @@ pub(crate) enum Slot {
     Color,
     /// Index into the exact-size textures.
     Own(u32),
+    /// Index into the application textures recorded since the last submission.
+    External(u32),
 }
+
+/// Page-field bit marking an application texture.
+const EXTERNAL: u32 = 1 << 31;
 
 impl Slot {
     /// Selector stored in a primitive's page field, read back when batching.
@@ -43,6 +48,7 @@ impl Slot {
             Self::Mask => 0,
             Self::Color => 1,
             Self::Own(index) => 2 + index,
+            Self::External(index) => EXTERNAL | index,
         }
     }
 
@@ -50,6 +56,7 @@ impl Slot {
         match page {
             0 => Self::Mask,
             1 => Self::Color,
+            page if page & EXTERNAL != 0 => Self::External(page & !EXTERNAL),
             _ => Self::Own(page - 2),
         }
     }
@@ -198,6 +205,7 @@ impl Atlas {
             Slot::Mask => &store.mask.gpu.as_ref().unwrap().group,
             Slot::Color => &store.color.gpu.as_ref().unwrap().group,
             Slot::Own(index) => &store.own[index as usize].as_ref().unwrap().gpu.group,
+            Slot::External(_) => unreachable!("application textures bind from the renderer"),
         }
     }
 

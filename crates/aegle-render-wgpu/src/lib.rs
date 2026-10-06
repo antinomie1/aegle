@@ -16,6 +16,8 @@
 #[cfg(feature = "text")]
 mod atlas;
 mod error;
+#[cfg(feature = "text")]
+mod external;
 mod frame;
 mod gpu;
 mod renderer;
@@ -26,8 +28,11 @@ mod vector;
 #[cfg(feature = "window")]
 mod window;
 
+pub use aegle_scene::TextureId;
 pub use error::{Error, Result};
 pub use frame::Frame;
 pub use renderer::{Options, Renderer};
+/// The wgpu version this renderer uses, for creating registered textures.
+pub use wgpu;
 #[cfg(feature = "window")]
 pub use window::{SharedGpu, WindowRenderer};

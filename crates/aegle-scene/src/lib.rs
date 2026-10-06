@@ -84,7 +84,21 @@ pub enum Command {
     /// Draw a positioned glyph run from [`Scene::glyph_runs`].
     #[cfg(feature = "text")]
     Glyphs(usize),
+    /// Draw a texture owned by the application and registered with the
+    /// renderer, stretched over `rect` and bilinearly filtered. Renderers
+    /// without that texture fail the frame instead of skipping it.
+    Texture {
+        /// The renderer's identity for the texture.
+        texture: TextureId,
+        /// Destination in the current local coordinate system.
+        rect: Rect,
+    },
 }
+
+/// A GPU texture owned by the application, identified by the renderer that
+/// registered it. Its sampled values are linear premultiplied RGBA.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TextureId(pub u64);
 
 /// Invalid geometry or scope usage at the drawing-record boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

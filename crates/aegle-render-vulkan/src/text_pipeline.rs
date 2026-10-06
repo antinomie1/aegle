@@ -20,6 +20,7 @@ pub(crate) struct TextPipeline {
 }
 
 impl TextPipeline {
+    /// `max_pages` descriptor sets serve atlas pages and reserved texture slots.
     pub fn new(device: &Device, geometry: &Pipeline, max_pages: u32) -> Result<Self> {
         if max_pages == 0 {
             return Err(Error::InvalidState("text atlas needs at least one page"));

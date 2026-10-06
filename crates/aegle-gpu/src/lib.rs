@@ -23,7 +23,7 @@ pub use records::{
 pub use shelf::Shelf;
 #[cfg(feature = "vector")]
 pub use vector::{
-    ImagePlacement, PathRaster, ResourceKey, image_placement, path_raster, rasterize_path,
+    ImagePlacement, PathRaster, ResourceKey, image_placement, path_raster, rasterize_path, stretch,
 };
 pub use walk::{Step, Walker};
 /// Reusable path-mask rasterizer storage.

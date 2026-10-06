@@ -12,7 +12,7 @@
 
 绘制遵守记录顺序。解析覆盖率使用 shader 导数估计边缘，不承诺与软件覆盖率逐像素相同；内部实色、颜色混合和裁剪边界分别验证。
 
-window feature 仅增加 raw-window-handle 0.6.2，复用现有平台循环、IME 与无障碍；图像与路径见下文，特效尚未实现。
+window feature 仅增加 raw-window-handle 0.6.2，复用现有平台循环、IME 与无障碍；图像、路径与应用图像见下文。
 
 ## 可选文字与图集
 
@@ -27,6 +27,12 @@ window feature 仅增加 raw-window-handle 0.6.2，复用现有平台循环、IM
 图像和路径复用字形图集与 pipeline，不新增 descriptor 或绘制通道；未启用 text 时这两类命令返回 UnsupportedCommand。图像以 RGBA8_SRGB color 条目上传（上传前线性预乘），按 Image id 缓存，shader 钳制到边缘纹素并乘以矩形解析覆盖率。路径由 zeno 在 CPU 生成 R8 覆盖率，键为路径 id、线性 2×2 矩阵、两轴四分之一像素相位、描边样式与宽度：整像素平移命中原条目，新的缩放/旋转再光栅化一次并占用新条目，平移动画不会逐帧重建。超过页尺寸的条目获得恰好其尺寸的专用页，仍计入页数、条目和设备预算；单个条目还受 CPU `upload_bytes`（默认 1 MiB，约 512×512 RGBA）限制，超出返回 Budget，超出设备图像尺寸返回 InvalidSize，不静默跳过。没有 mipmap。
 
 新增字形在成功提交后才视为已上传。取消或失败帧的脏页在下一帧清掉对应条目并重置，避免命中未上传内容；此前同页的有效条目也会失效。GPU 上传缓冲在 fence 完成时释放，CPU 上传容量保留复用；页图像在安全等待后才替换。空字形无需图集页，可复用 CPU 缓存。
+
+## 应用图像（需 text）
+
+`Renderer::register_texture(view, extent)`（unsafe，`SharedDevice` 上同名方法供多窗口共用）把应用创建的 `vk::ImageView` 登记为 `TextureId`，场景用 `SceneBuilder::texture` 绘制，复用图像管线与采样器。`raw_device()` 返回实例、物理设备、逻辑设备、图形队列与队列族（`RawDevice`，`aegle_render_vulkan::ash` 重导出所用 ash 版本），应用在其上创建并渲染图像。调用方保证：视图属于该设备、单采样二维颜色、带 SAMPLED 用途、可过滤的浮点格式且采样值为线性预乘 RGBA；执行引用它的帧时处于 `SHADER_READ_ONLY_OPTIMAL`，并以先于该帧提交到同一队列的屏障使写入对片段着色器可见；视图在注销且使用它的帧完成（`wait`）之前保持有效。
+
+每个渲染器在描述符池中为应用图像额外保留 16 个描述符集。每帧开始（已等待上一提交的 fence）清空映射，本帧首次画某个纹理时取一个空闲集合并写入描述符，所以从不改写在途命令使用的集合；一帧画超过 16 个不同纹理返回 `TooManyTextures`，未登记的 id 返回 `UnknownTexture`，均使帧失败。
 
 ## 调用与生命周期
 

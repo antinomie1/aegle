@@ -28,6 +28,8 @@ pub enum Error {
     ClipDepth,
     /// The scene contains a command this renderer does not implement.
     UnsupportedCommand,
+    /// The scene draws a texture that is not registered on this device.
+    UnknownTexture,
     /// Glyph data or raster settings failed validation.
     #[cfg(feature = "text")]
     Glyph(aegle_glyph::GlyphError),
@@ -63,6 +65,9 @@ impl fmt::Display for Error {
             Self::InvalidState(reason) => f.write_str(reason),
             Self::Coordinates => f.write_str("wgpu geometry exceeds the coordinate range"),
             Self::ClipDepth => f.write_str("wgpu clip depth exceeds eight layers"),
+            Self::UnknownTexture => {
+                f.write_str("scene texture is not registered with this renderer")
+            }
             Self::UnsupportedCommand => f.write_str("unsupported wgpu scene command"),
             #[cfg(feature = "text")]
             Self::Glyph(e) => write!(f, "wgpu glyph: {e}"),

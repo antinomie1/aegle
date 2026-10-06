@@ -102,3 +102,7 @@ required-features = ["native", "system-fonts"]
 [[example]]
 name = "layout"
 required-features = ["native", "system-fonts", "markup", "grid"]
+
+[[example]]
+name = "gpu_texture"
+required-features = ["native", "wgpu", "system-fonts"]

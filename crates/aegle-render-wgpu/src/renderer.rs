@@ -92,6 +92,9 @@ pub struct Renderer {
     batches: Vec<(Kind, u32, u32)>,
     #[cfg(feature = "text")]
     pub(crate) atlas: crate::atlas::Atlas,
+    /// Application textures referenced by the records since the last submission.
+    #[cfg(feature = "text")]
+    pub(crate) frame_textures: Vec<BindGroup>,
     pub(crate) size: [u32; 2],
     /// Shader viewport parameters; the negative height selects WebGPU clip space.
     pub(crate) viewport: [f32; 2],
@@ -122,6 +125,8 @@ impl Renderer {
             batches: Vec::new(),
             #[cfg(feature = "text")]
             atlas: crate::atlas::Atlas::new(options.atlas_size),
+            #[cfg(feature = "text")]
+            frame_textures: Vec::new(),
             size: [0; 2],
             viewport: [0.0; 2],
             clear: [0.0; 4],
@@ -353,6 +358,8 @@ impl Renderer {
         self.gpu.queue.submit([encoder.finish()]);
         self.loaded = true;
         self.rec.primitives.clear();
+        #[cfg(feature = "text")]
+        self.frame_textures.clear();
         Ok(())
     }
 
@@ -362,7 +369,11 @@ impl Renderer {
             #[cfg(feature = "text")]
             Kind::Atlas(slot) => {
                 pass.set_pipeline(&self.gpu.text);
-                pass.set_bind_group(1, self.atlas.group(slot), &[]);
+                let group = match slot {
+                    crate::atlas::Slot::External(index) => &self.frame_textures[index as usize],
+                    slot => self.atlas.group(slot),
+                };
+                pass.set_bind_group(1, group, &[]);
             }
         }
     }

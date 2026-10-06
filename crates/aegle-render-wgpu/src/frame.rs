@@ -101,6 +101,7 @@ impl Renderer {
                             color,
                             stroke,
                         } => self.path(&scene.paths()[path], color, Some(stroke), state)?,
+                        Command::Texture { texture, rect } => self.texture(texture, rect, state)?,
                         _ => return Err(Error::UnsupportedCommand),
                     }
                 }

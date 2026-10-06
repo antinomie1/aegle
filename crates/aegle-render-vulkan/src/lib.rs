@@ -22,6 +22,8 @@ mod atlas_pages;
 mod commands;
 mod device;
 mod error;
+#[cfg(feature = "text")]
+mod external;
 mod memory;
 mod pipeline;
 mod renderer;
@@ -41,9 +43,14 @@ mod vector;
 #[cfg(feature = "window")]
 mod window;
 
+pub use aegle_scene::TextureId;
+/// The ash version this renderer uses, for working with its raw Vulkan handles.
+pub use ash;
 #[cfg(feature = "text")]
 pub use atlas::{TextOptions, TextStats};
 pub use error::{Error, Result};
+#[cfg(feature = "text")]
+pub use external::RawDevice;
 pub use renderer::{Frame, Options, Renderer, Stats};
 #[cfg(feature = "window")]
 pub use window::{SharedDevice, WindowRenderer};

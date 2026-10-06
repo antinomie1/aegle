@@ -82,6 +82,30 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
 #[derive(Clone)]
 pub struct SharedDevice(Rc<Device>);
 
+#[cfg(feature = "text")]
+impl SharedDevice {
+    /// See [`Renderer::register_texture`].
+    ///
+    /// # Safety
+    /// As for [`Renderer::register_texture`].
+    pub unsafe fn register_texture(
+        &self,
+        view: ash::vk::ImageView,
+        extent: [u32; 2],
+    ) -> Result<crate::TextureId> {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.0.textures.register(view, extent) }
+    }
+    /// See [`Renderer::unregister_texture`].
+    pub fn unregister_texture(&self, id: crate::TextureId) -> bool {
+        self.0.textures.unregister(id)
+    }
+    /// See [`Renderer::raw_device`].
+    pub fn raw_device(&self) -> crate::RawDevice {
+        self.0.raw_handles()
+    }
+}
+
 impl<W> WindowRenderer<W> {
     /// A handle to this renderer's device for [`WindowRenderer::with_device`].
     pub fn shared_device(&self) -> SharedDevice {

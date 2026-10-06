@@ -121,6 +121,26 @@ pub struct SharedGpu {
     gpu: Rc<Gpu>,
 }
 
+#[cfg(feature = "text")]
+impl SharedGpu {
+    /// See [`Renderer::register_texture`].
+    pub fn register_texture(&self, texture: &wgpu::Texture) -> Result<crate::TextureId> {
+        self.gpu.register_texture(texture)
+    }
+    /// See [`Renderer::unregister_texture`].
+    pub fn unregister_texture(&self, id: crate::TextureId) -> bool {
+        self.gpu.unregister_texture(id)
+    }
+    /// See [`Renderer::device`].
+    pub fn device(&self) -> &wgpu::Device {
+        &self.gpu.device
+    }
+    /// See [`Renderer::queue`].
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.gpu.queue
+    }
+}
+
 impl<W> WindowRenderer<W> {
     /// A handle to this renderer's GPU for [`WindowRenderer::with_gpu`].
     pub fn shared_gpu(&self) -> SharedGpu {

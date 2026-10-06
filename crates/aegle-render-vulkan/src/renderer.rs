@@ -165,7 +165,10 @@ impl Renderer {
         self.image_ready = false;
         self.recording.clear();
         #[cfg(feature = "text")]
-        self.text.atlas.begin_frame();
+        {
+            self.text.atlas.begin_frame();
+            self.text.begin_textures();
+        }
         if self
             .target
             .as_ref()

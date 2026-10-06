@@ -31,7 +31,22 @@ pub struct ImagePlacement {
 /// Places `image` stretched over `rect`, or `None` when it cannot reach `state`'s
 /// clip bounds.
 pub fn image_placement(image: &Image, rect: Rect, state: State) -> Result<Option<ImagePlacement>> {
-    let (width, height) = (image.width(), image.height());
+    let placed = stretch([image.width(), image.height()], rect, state)?;
+    Ok(placed.map(|(area, inverse)| ImagePlacement {
+        key: ResourceKey {
+            id: image.id(),
+            params: [0; 7],
+        },
+        area,
+        inverse,
+    }))
+}
+
+/// Places a `size` texel texture stretched over `rect`: its antialiased
+/// device quad and device-to-texel affine, or `None` when it cannot reach
+/// `state`'s clip bounds.
+pub fn stretch(size: [u32; 2], rect: Rect, state: State) -> Result<Option<([f32; 4], Affine)>> {
+    let (width, height) = (size[0], size[1]);
     let transform = Affine::new([
         rect.size.width / width as f32,
         0.0,
@@ -43,19 +58,13 @@ pub fn image_placement(image: &Image, rect: Rect, state: State) -> Result<Option
     .and_then(|local| local.then(state.transform))
     .map_err(|_| Error::Coordinates)?;
     let shape = RoundedRect::new(Rect::new(0.0, 0.0, width as f32, height as f32), 0.0)?;
-    // Edge coverage antialiases within one device pixel of the image rect.
+    // Edge coverage antialiases within one device pixel of the rect.
     let area = bounds(shape, transform, 0.0, 1.0)?;
     if !visible(area, state.bounds) {
         return Ok(None);
     }
-    Ok(Some(ImagePlacement {
-        key: ResourceKey {
-            id: image.id(),
-            params: [0; 7],
-        },
-        area,
-        inverse: transform.inverse().map_err(|_| Error::Coordinates)?,
-    }))
+    let inverse = transform.inverse().map_err(|_| Error::Coordinates)?;
+    Ok(Some((area, inverse)))
 }
 
 /// A path mask request after quantizing its transform.

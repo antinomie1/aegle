@@ -214,6 +214,21 @@ pub struct Window {
 }
 
 impl App {
+    /// The wgpu device shared by this app's windows, once a window using
+    /// [`RendererBackend::Wgpu`] exists. Create textures on it and register
+    /// them to draw them with `SceneBuilder::texture`.
+    #[cfg(feature = "wgpu")]
+    pub fn wgpu(&self) -> Option<aegle_render_wgpu::SharedGpu> {
+        self.runtime.borrow().shared_wgpu.clone()
+    }
+
+    /// The Vulkan device shared by this app's windows, once a window using
+    /// [`RendererBackend::Vulkan`] exists.
+    #[cfg(feature = "vulkan")]
+    pub fn vulkan(&self) -> Option<aegle_render_vulkan::SharedDevice> {
+        self.runtime.borrow().shared_vulkan.clone()
+    }
+
     /// Connects to the native platform and discovers installed system fonts.
     #[cfg(feature = "system-fonts")]
     pub fn new() -> Result<Self> {

@@ -26,6 +26,10 @@
 
 窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的设备与验证错误当作致命错误并 panic（已在其源码确认）；本后端没有安装自己的处理器，设备丢失尚未转为可恢复错误。
 
+## 应用纹理
+
+`Renderer::register_texture(&wgpu::Texture)`（窗口共用设备时也可经 `SharedGpu`，原生 App 用 `App::wgpu()` 取得）把应用自己的纹理登记为 `TextureId`，场景用 `SceneBuilder::texture(id, rect)` 绘制，与图像一样双线性过滤、钳制到边缘纹素并带解析边缘覆盖率。要求：创建于 `Renderer::device()`、单采样二维、带 `TEXTURE_BINDING`、可过滤的浮点格式，采样结果须是线性预乘 RGBA（例如内容不透明或已预乘的 `Rgba8UnormSrgb`），取 mip 0；不满足时登记返回 `Unsupported`。登记表在共享设备上，所有窗口都能画同一纹理。录制时把该纹理的 bind group 复制进本次提交的列表，因此帧中途注销不影响已录制的绘制；之后的帧画未登记的 id 以 `UnknownTexture` 使帧失败。应用在 Aegle 帧之前把写纹理的命令提交到同一个 `queue()`，队列顺序保证采样时已完成。`aegle_render_wgpu::wgpu` 重导出所用 wgpu 版本。需要 `text` feature（纹理与图像共用带纹理管线）。
+
 ## 与 Vulkan 后端共享的部分
 
 图元与裁剪记录、场景遍历、边界与裁剪几何、货架装箱、图像放置、路径 mask 的量化与光栅化，以及两个 WGSL 着色器，都在 `aegle-gpu`，两个后端共用，没有第二份副本。顶点阶段的 Y 轴方向由视口高度的符号选择：Vulkan 传正高度，wgpu 传负高度，所以同一份 WGSL 既在构建期编译为 SPIR-V，又在运行时交给 wgpu。两个后端各自保留的是与 API 相关的部分：资源与同步、图集页的上传与淘汰策略、呈现。

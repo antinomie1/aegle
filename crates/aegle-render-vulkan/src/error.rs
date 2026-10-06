@@ -22,6 +22,12 @@ pub enum Error {
     ClipDepth,
     /// The scene contains a command not implemented by this renderer.
     UnsupportedCommand,
+    /// The scene draws a texture that is not registered on this device.
+    #[cfg(feature = "text")]
+    UnknownTexture,
+    /// A frame draws more distinct registered textures than its 16 reserved bindings.
+    #[cfg(feature = "text")]
+    TooManyTextures,
     /// Glyph data, raster settings or raster-cache resources failed validation.
     #[cfg(feature = "text")]
     Glyph(aegle_glyph::GlyphError),
@@ -64,6 +70,10 @@ impl fmt::Display for Error {
             Self::Coordinates => f.write_str("Vulkan geometry exceeds the coordinate range"),
             Self::ClipDepth => f.write_str("Vulkan clip depth exceeds eight layers"),
             Self::UnsupportedCommand => f.write_str("unsupported Vulkan scene command"),
+            #[cfg(feature = "text")]
+            Self::UnknownTexture => f.write_str("scene texture is not registered with this device"),
+            #[cfg(feature = "text")]
+            Self::TooManyTextures => f.write_str("a frame draws more than 16 registered textures"),
             #[cfg(feature = "text")]
             Self::Glyph(e) => write!(f, "Vulkan glyph: {e}"),
             #[cfg(feature = "text")]

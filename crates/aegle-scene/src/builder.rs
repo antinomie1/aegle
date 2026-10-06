@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 
 use crate::{
     Affine, Color, Command, Image, MAX_SCOPE_DEPTH, Path, Rect, RoundedRect, SceneError, Stroke,
+    TextureId,
 };
 
 /// Immutable validated drawing commands with no renderer or tree ownership.
@@ -157,6 +158,17 @@ impl SceneBuilder {
                 image: image_index,
                 rect,
             });
+        }
+        Ok(self)
+    }
+
+    /// Draws a registered application texture stretched over `rect`. Empty
+    /// rectangles produce no command; see [`Command::Texture`].
+    pub fn texture(&mut self, texture: TextureId, rect: Rect) -> Result<&mut Self, SceneError> {
+        let shape = RoundedRect::new(rect, 0.0)?;
+        if !shape.is_empty() {
+            self.transform.validate_shape(shape, 0.0)?;
+            self.scene.commands.push(Command::Texture { texture, rect });
         }
         Ok(self)
     }
