@@ -417,3 +417,10 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 同轮清理：`Preferences` 与 `TouchPhase` 在 Wayland/Win32/ui 中各有一份，现统一在 `aegle-types`，平台与 ui 重导出；删除宿主里的一一映射。facade 重导出 app、ui、widgets、image，prelude 增加 `Widgets`/`NodePopup`；标记宏生成的代码自行引入 `Widgets`。
 - 验证：`cargo check --workspace --all-targets --all-features` 无警告；`cargo test --workspace --all-features` 全部通过（含 aegle-ui 的几何测试与 aegle-widgets 的组合/指针/触摸/滚动/动画/值控件场景）；私有 Sway 上 `aegle-app` 的 ignored 原生测试在软件、Vulkan（lavapipe）与 wgpu 下通过。过程中修复了虚拟列表在借出状态后写回顺序变化导致的越界（`take`/`put_back` 保持位置）。所有源文件不超过 500 行（`popup.rs` 拆出 `dropdown.rs`）；全仓库测试占实现加测试行数约 16%。
 - 未验证：本次拆分之后尚未重新做 Windows 交叉编译检查（`-Zbuild-std` 回退环境在此轮报 `cannot specify features for packages outside of workspace`，未解决），`native_input_windows.rs` 与 Win32 平台 crate 的改动在 Linux 上没有被编译；`cargo clippy` 在此环境不可用，未运行。
+
+## wgpu 适配器能力检查与全控件示例
+
+- `aegle-render-wgpu` 的适配器检查原先读的是 `Limits::downlevel_defaults().using_resolution(..)` 的结果；`using_resolution` 只取适配器的纹理尺寸，存储缓冲数恒为默认值 4，检查从不触发，能力不足的适配器只会在 `request_device` 失败。现改为要求 `DownlevelFlags::VERTEX_STORAGE` 且适配器 `max_storage_buffers_per_shader_stage ≥ 2`，否则返回 `Unsupported`（GL 在顶点阶段为 0 时会报片段阶段的数量，单看限额不够）；设备请求的存储缓冲数随之降为实际需要的 2。GLES 后端仍不编译，拒绝路径没有实测。
+- 新增 `showcase` 示例：一个窗口包含全部默认控件（标签、单行/密码/多行编辑、按钮与禁用按钮、弹出层、复选框含 mixed、开关、单选组、滑块联动进度条、切换主题的下拉框、图像、可旋转 Canvas、滚动视图、等高与可变高度虚拟列表、表格）和状态行。
+- 验证：`aegle-render-wgpu` 的 ignored GPU 测试在 RADV（RX 6800 XT）与 Lavapipe 上通过。私有 headless Sway（GLES2 compositor）上以 RADV 运行 wgpu 构建的 release `showcase`，wtype 键盘 Tab 遍历显示焦点框、空格打开弹出层、下拉框切换到深色主题并截图。默认（软件）构建也在同一 compositor 上启动并显示同一布局，未做主题切换。
+- 发现未修复：运行时 `set_theme` 后表格主体与弹出层（含下拉列表）背景仍是创建时主题的 `surface`，因为两者在创建时把主题颜色写成固定 `Style`；深色主题下表格文字不可读。另：wtype 每次退出会移除虚拟键盘，窗口收到 keyboard leave 后清除焦点，截图焦点态需在 wtype 存活期间捕获。

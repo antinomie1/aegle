@@ -6,7 +6,7 @@
 
 `aegle-render-wgpu` 是全平台通用的第二条 GPU 路径，原生 Metal 方案已放弃。它不替代 ash/Vulkan：体积、分配预算和空闲行为仍以 [Vulkan](vulkan.md) 为准，wgpu 换来的是同一份代码覆盖 Vulkan、Metal 与 Direct3D 12。调用方通过 `aegle-app` 的 `wgpu` feature 与 `RendererBackend::Wgpu` 显式选择，失败不会切换后端。
 
-依赖见 [依赖版本](dependencies.md)：wgpu 30.0.1 关闭默认 feature，只启用 std、parking_lot、wgsl、vulkan、dx12、metal；pollster 1.0.1。不启用 GLES：它没有顶点阶段存储缓冲，而记录以存储缓冲提供。适配器没有至少两个顶点可见的存储缓冲时，创建返回 `Unsupported`。
+依赖见 [依赖版本](dependencies.md)：wgpu 30.0.1 关闭默认 feature，只启用 std、parking_lot、wgsl、vulkan、dx12、metal；pollster 1.0.1。不启用 GLES：它没有顶点阶段存储缓冲，而记录以存储缓冲提供。适配器缺少 `DownlevelFlags::VERTEX_STORAGE` 或每阶段存储缓冲少于两个时，创建返回 `Unsupported`；设备只请求两个存储缓冲。
 
 ## 范围
 

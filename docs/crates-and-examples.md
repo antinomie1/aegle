@@ -29,6 +29,7 @@ cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
+cargo run -p aegle --example showcase --release
 cargo test --workspace --all-features
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release

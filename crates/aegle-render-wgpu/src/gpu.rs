@@ -61,10 +61,19 @@ impl Gpu {
         let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
             instance, surface,
         ))?;
-        let limits = wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits());
-        if limits.max_storage_buffers_per_shader_stage < 2 {
+        // GL reports the fragment count when the vertex stage has none, so the
+        // vertex stage needs its own flag besides the per-stage limit.
+        let vertex_storage = adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::VERTEX_STORAGE);
+        if !vertex_storage || adapter.limits().max_storage_buffers_per_shader_stage < 2 {
             return Err(Error::Unsupported("vertex-visible storage buffers"));
         }
+        let limits = wgpu::Limits {
+            max_storage_buffers_per_shader_stage: 2,
+            ..wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits())
+        };
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                 label: Some("aegle"),
