@@ -69,4 +69,71 @@ impl Rect {
         let bottom = (self.origin.y + self.size.height).min(other.origin.y + other.size.height);
         (right > x && bottom > y).then(|| Self::new(x, y, right - x, bottom - y))
     }
+
+    /// The smallest rectangle containing both.
+    pub fn union(self, other: Self) -> Self {
+        let x = self.origin.x.min(other.origin.x);
+        let y = self.origin.y.min(other.origin.y);
+        let right = (self.origin.x + self.size.width).max(other.origin.x + other.size.width);
+        let bottom = (self.origin.y + self.size.height).max(other.origin.y + other.size.height);
+        Self::new(x, y, right - x, bottom - y)
+    }
+}
+
+/// An axis-aligned rectangle of whole buffer pixels.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PixelRect {
+    /// Left column.
+    pub x: u32,
+    /// Top row.
+    pub y: u32,
+    /// Columns covered.
+    pub width: u32,
+    /// Rows covered.
+    pub height: u32,
+}
+
+impl PixelRect {
+    /// The whole buffer of `width` × `height` pixels.
+    pub const fn full(width: u32, height: u32) -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        }
+    }
+
+    /// The pixels touched by a logical rectangle at `scale`, rounded outward and
+    /// limited to a `width` × `height` buffer.
+    pub fn covering(rect: Rect, scale: f32, width: u32, height: u32) -> Self {
+        // Clamped values are nonnegative, so truncation rounds down (no_std
+        // has no floor or ceil).
+        let edge = |value: f32, limit: u32| (value * scale).clamp(0.0, limit as f32);
+        let up = |value: f32| value as u32 + u32::from((value as u32 as f32) < value);
+        let left = edge(rect.origin.x, width) as u32;
+        let top = edge(rect.origin.y, height) as u32;
+        let right = up(edge(rect.origin.x + rect.size.width, width));
+        let bottom = up(edge(rect.origin.y + rect.size.height, height));
+        Self {
+            x: left,
+            y: top,
+            width: right.saturating_sub(left),
+            height: bottom.saturating_sub(top),
+        }
+    }
+
+    /// The smallest rectangle containing both.
+    pub fn union(self, other: Self) -> Self {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let right = (self.x + self.width).max(other.x + other.width);
+        let bottom = (self.y + self.height).max(other.y + other.height);
+        Self {
+            x,
+            y,
+            width: right - x,
+            height: bottom - y,
+        }
+    }
 }

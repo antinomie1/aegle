@@ -7,12 +7,16 @@ use smithay_client_toolkit::shm::{
 use wayland_client::protocol::wl_shm;
 
 use crate::{Error, PixelSize, PresentError};
+use aegle_types::PixelRect;
 
 struct Image {
     // Destroy the buffer before releasing its pool when the image is idle.
     buffer: Buffer,
     pool: SlotPool,
     width: u32,
+    /// Pixels changed by frames drawn into the other image since this one was
+    /// last drawn; `None` when it is current.
+    stale: Option<PixelRect>,
 }
 
 impl Image {
@@ -56,18 +60,24 @@ impl SoftwareBuffers {
             .any(|image| image.as_ref().is_none_or(Image::is_idle))
     }
 
-    /// Draw a complete frame as tightly packed premultiplied sRGB RGBA8.
+    /// Draws a frame as tightly packed premultiplied sRGB RGBA8, changing
+    /// `damage` (`None`: every pixel) since the previous frame.
     ///
-    /// The caller must clear or overwrite every pixel: a reused mapping contains
-    /// a previous frame in native ARGB format. A failed draw stays unattached and
-    /// reusable. The returned buffer has not been activated; attach and commit it
+    /// `draw` receives the region it must clear or overwrite: the damage plus
+    /// whatever this mapping missed while the other one was drawn, or all of a
+    /// new mapping. Pixels outside it already show the current frame in native
+    /// ARGB format. A failed draw stays unattached and makes its mapping fully
+    /// stale. The returned buffer has not been activated; attach and commit it
     /// before drawing another frame. `None` means both slots await server release.
     pub(crate) fn paint<E>(
         &mut self,
         shm: &Shm,
         size: PixelSize,
-        draw: impl FnOnce(&mut [u8]) -> Result<(), E>,
+        damage: Option<PixelRect>,
+        draw: impl FnOnce(&mut [u8], PixelRect) -> Result<(), E>,
     ) -> Result<Option<&Buffer>, PresentError<E>> {
+        let full = PixelRect::full(size.width, size.height);
+        let damage = damage.unwrap_or(full);
         let (stride, mapping_bytes) = dimensions(size).map_err(PresentError::Platform)?;
 
         // Release only idle old-size images, before considering the new allocation.
@@ -115,22 +125,38 @@ impl SoftwareBuffers {
                 buffer,
                 pool,
                 width: size.width,
+                stale: Some(full),
             });
         }
 
         let image = self.images[index]
             .as_mut()
             .expect("selected image is allocated");
+        let region = image.stale.map_or(damage, |stale| stale.union(damage));
+        // A failed draw may leave any pixel of the region half drawn.
+        image.stale = Some(full);
         let pixels = image
             .buffer
             .canvas(&mut image.pool)
             .expect("selected image is idle");
-        draw(pixels).map_err(PresentError::Draw)?;
-        for pixel in pixels.chunks_exact_mut(4) {
-            let argb = u32::from_be_bytes([pixel[3], pixel[0], pixel[1], pixel[2]]);
-            pixel.copy_from_slice(&argb.to_ne_bytes());
+        draw(pixels, region).map_err(PresentError::Draw)?;
+        let stride = size.width as usize * 4;
+        let columns = region.x as usize * 4..(region.x + region.width) as usize * 4;
+        let rows = pixels
+            .chunks_exact_mut(stride)
+            .skip(region.y as usize)
+            .take(region.height as usize);
+        for row in rows {
+            for pixel in row[columns.clone()].chunks_exact_mut(4) {
+                let argb = u32::from_be_bytes([pixel[3], pixel[0], pixel[1], pixel[2]]);
+                pixel.copy_from_slice(&argb.to_ne_bytes());
+            }
         }
-        Ok(Some(&image.buffer))
+        image.stale = None;
+        if let Some(other) = &mut self.images[1 - index] {
+            other.stale = Some(other.stale.map_or(damage, |stale| stale.union(damage)));
+        }
+        Ok(self.images[index].as_ref().map(|image| &image.buffer))
     }
 }
 

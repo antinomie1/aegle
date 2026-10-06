@@ -29,7 +29,7 @@ use crate::{
     input::InputState,
     state::{Shell, WindowState},
 };
-use aegle_types::Cursor;
+use aegle_types::{Cursor, PixelRect};
 
 /// One Wayland connection and blocking event loop, shared by all its windows.
 ///
@@ -372,13 +372,18 @@ impl Wayland {
 
     /// Draws directly into an idle SHM buffer as premultiplied sRGB RGBA8.
     ///
-    /// Clear or overwrite every pixel. Returns false without invoking `draw` if
-    /// not yet configured, a frame is pending, or both buffers await release.
-    /// A drawing error never presents partial pixels; request a redraw to retry.
+    /// `damage` is the area that changed since the last presented frame, in
+    /// buffer pixels; `None` changes every pixel. `draw` must clear or
+    /// overwrite the region it is given; the rest of the buffer already holds
+    /// the previous frame, and only `damage` is reported to the compositor.
+    /// Returns false without invoking `draw` if not yet configured, a frame is
+    /// pending, or both buffers await release. A drawing error never presents
+    /// partial pixels; request a redraw to retry.
     pub fn present<E>(
         &mut self,
         id: WindowId,
-        draw: impl FnOnce(&mut [u8], PixelSize) -> Result<(), E>,
+        damage: Option<PixelRect>,
+        draw: impl FnOnce(&mut [u8], PixelSize, PixelRect) -> Result<(), E>,
     ) -> Result<bool, PresentError<E>> {
         let window = self
             .state
@@ -394,15 +399,24 @@ impl Wayland {
         let size = window.info.buffer_size().map_err(PresentError::Platform)?;
         // Pending surface state only takes effect with the commit below.
         window.apply_scale();
-        let Some(buffer) = window
-            .buffers
-            .paint(&self.state.shm, size, |pixels| draw(pixels, size))?
+        let Some(buffer) =
+            window
+                .buffers
+                .paint(&self.state.shm, size, damage, |pixels, region| {
+                    draw(pixels, size, region)
+                })?
         else {
             window.dirty = true;
             return Ok(false);
         };
         let surface = window.window.wl_surface();
-        surface.damage_buffer(0, 0, size.width as i32, size.height as i32);
+        let damage = damage.unwrap_or(PixelRect::full(size.width, size.height));
+        surface.damage_buffer(
+            damage.x as i32,
+            damage.y as i32,
+            damage.width as i32,
+            damage.height as i32,
+        );
         buffer
             .attach_to(surface)
             .map_err(|e| PresentError::Platform(Error::backend(e)))?;

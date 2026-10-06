@@ -159,6 +159,8 @@ impl Ui {
                 input_time: std::time::Instant::now(),
                 frame_time: std::time::Instant::now(),
                 animated: Default::default(),
+                damage: None,
+                damage_full: true,
                 wake: None,
                 descriptions: Default::default(),
                 #[cfg(feature = "accessibility")]

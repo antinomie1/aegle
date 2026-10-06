@@ -108,6 +108,16 @@ fn range_variants_number_fields_and_separators() -> Result {
         ui.run_frame(Instant::now() + Duration::from_secs(1))?;
         ui.refresh()?;
         assert!(!ui.wants_frames());
+        // After an idle period it starts now, not at the long-past last frame.
+        let idle = self::ui()?;
+        let bar = idle.root().progress(0.0, 1.0, 0.0)?;
+        idle.run_frame(Instant::now() - Duration::from_secs(1))?;
+        idle.refresh()?;
+        bar.set_value(1.0)?;
+        idle.refresh()?;
+        idle.run_frame(Instant::now() + Duration::from_millis(16))?;
+        idle.refresh()?;
+        assert!(idle.wants_frames());
     }
 
     let changes = Rc::new(Cell::new(0));

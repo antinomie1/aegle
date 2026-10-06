@@ -95,7 +95,7 @@ impl Probe {
                 match event {
                     Event::Redraw { window } => {
                         self.app
-                            .present::<()>(window, |pixels, _| {
+                            .present::<()>(window, None, |pixels, _, _| {
                                 pixels.fill(255);
                                 Ok(())
                             })

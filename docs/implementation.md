@@ -483,6 +483,15 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 修改：`Renderer::default()`、`AppOptions::mask_budget`、App 与两个平台的 `WindowOptions::buffer_budget` 默认改为不限（`usize::MAX`），选项保留供小设备设上限。软件 renderer 的场景加外部裁剪最多 8 层，与 GPU 后端一致，超过返回新增的 `RenderError::ClipDepth`，因此 mask 最多 9 字节/像素。
 - 验证：`aegle-render-software/tests/render.rs` 检查默认 renderer 画 8 层裁剪占 9 层 mask，再加一层非整像素外部裁剪返回 `ClipDepth`。私有 headless Sway（Pixman，2560×1440 输出、1.5 倍缩放）上 release `showcase`（软件）：改动前默认尺寸即退出；改动后在 1373×639 逻辑（2060×958 物理）与全屏 2560×1440 物理下都持续运行，全屏截图正常，RSS 53,564 KiB。Win32 默认值只改常量，没有在 Windows 上运行。
 
+## 动画卡顿：滑块补间起点与软件局部重绘
+
+- 现象：原生窗口中带动效的控件卡顿，窗口越大越明显。私有 headless Sway（Pixman，2560×1440@60Hz、1.5 倍缩放）上用临时探针让滑块每 400 ms 改值并记录每次 present：每次改值只呈现 1 帧，过渡中没有中间帧（呈现间隔约 400 ms）；外观过渡（按钮背景）有中间帧，但整窗口损伤下 1706×960 逻辑窗口的帧间隔约 18.2 ms，300×200 窗口约 16.2 ms。无窗口探针的整窗口软件帧耗时：800×480 为 1.4 ms，2060×958 为 4.0 ms，2560×1440 为 5.4 ms，绘制本身不超出 16.7 ms 帧预算。
+- 原因一：`PaintCx::time` 来自只有 `run_frame` 更新的 `frame_time`。空闲一段时间后改值，滑块/进度条在 refresh 中以过时的时间作为补间起点，下一帧时已超过 120 ms，直接到终点。修改：refresh 录制前若没有控件在逐帧动画，`frame_time` 取当前时刻。
+- 原因二：每帧整窗口清屏、重绘、ARGB 转换并上报整窗口损伤，compositor 也要重合成（GPU 桌面上还要重新上传整块 SHM）整个窗口；把损伤临时缩到 64×64 后，同一大窗口的帧间隔回到 16.0 ms。修改：Ui 记录变化区域（`Ui::damage`/`clear_damage`，几何、结构、主题与阴影变化为整窗口）；软件 renderer 增加 `begin_region`；Wayland 两块 SHM 缓冲各记录错过的区域，只重绘、转换并 `damage_buffer` 该区域；Win32 只重绘、检查透明度和转换该区域，仍上传整块 DIB。新增 `aegle_types::PixelRect` 与 `Rect::union`，`aegle-ui` 重导出 `Rect`。平台 `present` 增加 `damage` 参数。GPU 路径不变（仍整窗口）。
+- 结果（同一私有 Sway、1706×960 逻辑窗口）：滑块改值后每 16.1 ms 呈现一帧直至补间结束（3 秒内 93 次呈现，改前 12 次）；外观过渡帧间隔中位数 16.1 ms（改前 18.2 ms）；每帧软件绘制由约 3 ms 降到 0.2–0.5 ms，上报区域为滑块所在的 1152×54 至 1152×99 像素而非 2560×1440。差分检查：7 次改值并停在 10 之后的截图（70 个局部帧、4 个整窗口帧）与直接以 10 创建的整帧截图逐字节相同。
+- 验证：`aegle-widgets/tests/components.rs` 增加空闲后改值仍在补间的检查（去掉修复时失败）；`aegle-ui/tests/damage.rs` 检查只改颜色时损伤为节点区域、阴影外扩与累积、布局与阴影变化为整窗口；`aegle-render-software/tests/render.rs` 检查区域外像素不变、区域向外取整。workspace all-features 测试、私有 Sway 上 Wayland 与 App 的 ignored 原生测试（含 1.5 倍缩放）、Windows 交叉检查通过。Win32 未实机运行；没有测量真实 GPU 桌面上的 compositor 耗时或功耗。
+- 限制：节点记录须留在自身边界加阴影以内，超出部分（如自定义 Canvas 越界绘制、少数字体的字形外伸）在仅颜色变化时不保证更新；滚动、位移、缩放与旋转按整窗口重绘。
+
 ## 剩余工作
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。

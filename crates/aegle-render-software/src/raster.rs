@@ -54,14 +54,43 @@ impl Renderer {
         surface: &'s mut Surface<'p>,
         clear: Color,
     ) -> Frame<'r, 's, 'p> {
+        let all = Rect::new(0.0, 0.0, surface.width as f32, surface.height as f32);
+        self.begin_region(surface, clear, all)
+    }
+
+    /// Like [`Self::begin_frame`], but clears and draws only inside `region`,
+    /// leaving the other pixels of a retained framebuffer as they are. The
+    /// region is in device pixels; its edges are rounded outward to whole
+    /// pixels and it is limited to the surface, so it never needs a mask.
+    pub fn begin_region<'r, 's, 'p>(
+        &'r mut self,
+        surface: &'s mut Surface<'p>,
+        clear: Color,
+        region: Rect,
+    ) -> Frame<'r, 's, 'p> {
         if self.dimensions != (surface.width, surface.height) {
             self.masks.clear();
             self.dimensions = (surface.width, surface.height);
         }
-        surface.clear(clear);
+        let edge = |value: f32, limit: u32| value.clamp(0.0, limit as f32);
+        let (left, top) = (
+            edge(region.origin.x.floor(), surface.width),
+            edge(region.origin.y.floor(), surface.height),
+        );
+        let right = edge((region.origin.x + region.size.width).ceil(), surface.width);
+        let bottom = edge(
+            (region.origin.y + region.size.height).ceil(),
+            surface.height,
+        );
+        let region = Rect::new(left, top, (right - left).max(0.0), (bottom - top).max(0.0));
+        surface.clear(
+            clear,
+            [left, top, right.max(left), bottom.max(top)].map(|v| v as usize),
+        );
         Frame {
             renderer: self,
             surface,
+            region,
         }
     }
 
@@ -147,6 +176,8 @@ impl Renderer {
 pub struct Frame<'r, 's, 'p> {
     pub(crate) renderer: &'r mut Renderer,
     pub(crate) surface: &'s mut Surface<'p>,
+    /// Whole device pixels this frame may change.
+    region: Rect,
 }
 
 impl Frame<'_, '_, '_> {
@@ -175,9 +206,12 @@ impl Frame<'_, '_, '_> {
         transform: Affine,
         clip: Option<Rect>,
     ) -> Result<(), RenderError> {
+        // The frame's whole-pixel region bounds every draw, without a mask.
+        let region = Bounds::aligned(self.region, self.surface).unwrap();
         // A clip on whole device pixels only narrows the raster bounds and
         // needs no surface-sized mask.
         if let Some(bounds) = clip.and_then(|rect| Bounds::aligned(rect, self.surface)) {
+            let bounds = bounds.intersect(region);
             if scene.is_empty() {
                 return Ok(());
             }
@@ -212,7 +246,7 @@ impl Frame<'_, '_, '_> {
         let mut state = State {
             transform,
             clips: 0,
-            bounds: Bounds::surface(self.surface.width, self.surface.height),
+            bounds: region,
         };
         if let Some(clip) = clip {
             if let Some(path) = clip {
@@ -368,13 +402,6 @@ impl Bounds {
         right: 0,
         bottom: 0,
     };
-    fn surface(width: u32, height: u32) -> Self {
-        Self {
-            right: width as usize,
-            bottom: height as usize,
-            ..Self::EMPTY
-        }
-    }
     /// The pixels of a valid in-range rectangle whose edges are whole device
     /// pixels; `None` for any other rectangle.
     fn aligned(rect: Rect, surface: &Surface<'_>) -> Option<Self> {

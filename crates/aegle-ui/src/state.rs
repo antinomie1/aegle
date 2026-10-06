@@ -187,6 +187,10 @@ pub struct State {
     pub frame_time: std::time::Instant,
     /// Controls that asked to repaint on the next frame.
     pub animated: std::collections::HashSet<NodeId>,
+    /// Changed area not yet presented, see [`crate::Ui::damage`].
+    pub damage: Option<aegle_types::Rect>,
+    /// The whole window changed since the last present.
+    pub damage_full: bool,
     /// When a control library wants its [`Hooks::wake`] called; see [`crate::Ui::next_wake`].
     pub wake: Option<std::time::Instant>,
     /// Accessible descriptions, see [`crate::Node::set_accessible_description`].

@@ -28,7 +28,7 @@ fn redraw(platform: &mut Wayland, target: WindowId) {
 fn present(platform: &mut Wayland, window: WindowId) {
     assert!(
         platform
-            .present::<()>(window, |pixels, size| {
+            .present::<()>(window, None, |pixels, size, _| {
                 assert_eq!(pixels.len(), size.width as usize * size.height as usize * 4);
                 for pixel in pixels.chunks_exact_mut(4) {
                     pixel.copy_from_slice(&[32, 48, 64, 255]);
@@ -64,12 +64,12 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
     assert_eq!(platform.buffer_bytes(window).unwrap(), 0);
     assert!(
         !platform
-            .present::<()>(window, |_, _| panic!("unconfigured draw"))
+            .present::<()>(window, None, |_, _, _| panic!("unconfigured draw"))
             .unwrap()
     );
     redraw(&mut platform, window);
     assert!(matches!(
-        platform.present(window, |_, _| Err("incomplete frame")),
+        platform.present(window, None, |_, _, _| Err("incomplete frame")),
         Err(PresentError::Draw("incomplete frame"))
     ));
     platform.request_redraw(window).unwrap();
@@ -77,7 +77,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
     present(&mut platform, window);
     assert!(
         !platform
-            .present::<()>(window, |_, _| panic!("frame still pending"))
+            .present::<()>(window, None, |_, _, _| panic!("frame still pending"))
             .unwrap()
     );
     for _ in 0..4 {
@@ -138,7 +138,9 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
         .unwrap();
     redraw(&mut platform, constrained);
     assert!(matches!(
-        platform.present::<()>(constrained, |_, _| panic!("budget rejected before drawing")),
+        platform.present::<()>(constrained, None, |_, _, _| panic!(
+            "budget rejected before drawing"
+        )),
         Err(PresentError::Platform(Error::BufferBudget {
             budget: 0,
             ..
@@ -231,7 +233,7 @@ fn preferred_scale_sizes_the_buffer_of_a_fractional_window() {
         let info = info.unwrap();
         let mut buffer = None;
         let presented = platform
-            .present::<()>(window, |_, size| {
+            .present::<()>(window, None, |_, size, _| {
                 buffer = Some(size);
                 Ok(())
             })

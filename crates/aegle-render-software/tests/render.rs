@@ -102,6 +102,25 @@ fn nested_clips_transform_borders_and_mask_reuse() -> Result<(), Box<dyn std::er
             .draw_clipped(&deep, Affine::IDENTITY, Some(Rect::new(0.5, 0.0, 8.0, 8.0))),
         Err(RenderError::ClipDepth)
     );
+    // A region frame clears and draws only its whole pixels, outward-rounded.
+    let fill = |color| -> Result<_, Box<dyn std::error::Error>> {
+        let mut builder = SceneBuilder::new();
+        builder.fill(shape(0.0, 0.0, 32.0, 32.0, 0.0), color)?;
+        Ok(builder.finish()?)
+    };
+    unlimited
+        .begin_frame(&mut surface, Color::WHITE)
+        .draw(&fill(Color::BLACK)?, Affine::IDENTITY)?;
+    unlimited
+        .begin_region(&mut surface, Color::WHITE, Rect::new(8.5, 4.0, 3.0, 2.0))
+        .draw(&fill(Color::rgb(255, 0, 0))?, Affine::IDENTITY)?;
+    unlimited.begin_region(&mut surface, Color::WHITE, Rect::new(16.0, 16.0, 4.0, 4.0));
+    let red = |x: usize, y: usize| surface.data()[(y * 32 + x) * 4];
+    assert_eq!(
+        [red(8, 4), red(11, 5), red(12, 4), red(8, 6)],
+        [255, 255, 0, 0]
+    );
+    assert_eq!([red(16, 16), red(19, 19), red(20, 20)], [255, 255, 0]);
     renderer.release_scratch();
     assert_eq!(renderer.allocated_mask_bytes(), 0);
     Ok(())

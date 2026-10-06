@@ -196,11 +196,19 @@ impl State {
                 self.reveal(target)?;
             }
         }
+        // Any earlier cause moved geometry, structure or clips.
+        self.damage_full |= self.repaint;
+        // An animation that starts outside a frame starts now, not at the
+        // last frame, which may be long past.
+        if self.animated.is_empty() {
+            self.frame_time = std::time::Instant::now();
+        }
         for index in 0..self.order.len() {
             let id = self.order[index];
             if self.tree.dirty(id)?.intersects(Dirty::PAINT) {
                 self.record(id)?;
                 self.tree.clear_dirty(id, Dirty::PAINT)?;
+                self.damage_node(id);
                 self.repaint = true;
             }
         }

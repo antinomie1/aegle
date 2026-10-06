@@ -195,6 +195,7 @@ impl Win32 {
             high_surrogate: Cell::new(None),
             ime: Ime::new()?,
             pixels: RefCell::new(Vec::new()),
+            drawn: Cell::new(None),
             budget: options.buffer_budget,
         });
         let title: Vec<u16> = options.title.encode_utf16().chain(Some(0)).collect();

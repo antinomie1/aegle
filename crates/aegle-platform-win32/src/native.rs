@@ -32,6 +32,8 @@ pub(crate) struct Native {
     pub high_surrogate: Cell<Option<u16>>,
     pub ime: Ime,
     pub pixels: RefCell<Vec<u8>>,
+    /// Size of the complete frame `pixels` holds, if any.
+    pub drawn: Cell<Option<crate::PixelSize>>,
     pub budget: usize,
 }
 /// The shared system cursor closest to `cursor`; shared cursors are never destroyed.

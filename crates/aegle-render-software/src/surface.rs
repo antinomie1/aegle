@@ -50,12 +50,16 @@ impl<'a> Surface<'a> {
         self.data
     }
 
-    pub(crate) fn clear(&mut self, color: Color) {
+    /// Clears the pixel rows `top..bottom`, columns `left..right`.
+    pub(crate) fn clear(&mut self, color: Color, [left, top, right, bottom]: [usize; 4]) {
         let [r, g, b, a] = color.to_rgba();
         let premul = |c: u8| ((u16::from(c) * u16::from(a) + 127) / 255) as u8;
         let pixel = [premul(r), premul(g), premul(b), a];
-        for dst in self.data.chunks_exact_mut(4) {
-            dst.copy_from_slice(&pixel);
+        let stride = self.width as usize * 4;
+        for row in self.data.chunks_exact_mut(stride).take(bottom).skip(top) {
+            for dst in row[left * 4..right * 4].chunks_exact_mut(4) {
+                dst.copy_from_slice(&pixel);
+            }
         }
     }
 }

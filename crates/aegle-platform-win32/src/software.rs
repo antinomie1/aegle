@@ -1,5 +1,6 @@
 #![allow(unsafe_code)]
 use crate::{Error, PixelSize, PresentError, Win32, WindowId};
+use aegle_types::PixelRect;
 use windows::Win32::{
     Graphics::{Dwm::DwmFlush, Gdi::*},
     UI::WindowsAndMessaging::*,
@@ -7,14 +8,17 @@ use windows::Win32::{
 
 impl Win32 {
     /// Borrows a tightly packed, top-down premultiplied-sRGB RGBA8 framebuffer.
-    /// Overwrite every pixel and use an opaque background (all final alpha=255).
+    /// `damage` is the area changed since the last frame (`None`: all of it);
+    /// `draw` must overwrite the region it is given, which is the whole buffer
+    /// after a resize or failed frame, with an opaque background (alpha=255).
     /// Drawing errors retain the last displayed frame. One CPU buffer is reused;
     /// GDI upload and compositor-owned storage are outside `buffer_budget`.
     /// Software frames wait for DWM completion, avoiding a busy animation loop.
     pub fn present<E>(
         &mut self,
         id: WindowId,
-        draw: impl FnOnce(&mut [u8], PixelSize) -> Result<(), E>,
+        damage: Option<PixelRect>,
+        draw: impl FnOnce(&mut [u8], PixelSize, PixelRect) -> Result<(), E>,
     ) -> Result<bool, PresentError<E>> {
         let native = self.window(id).map_err(PresentError::Platform)?;
         native.redraw_queued.set(false);
@@ -43,12 +47,30 @@ impl Win32 {
                 .map_err(|e| PresentError::Platform(Error::Backend(e.to_string())))?;
         }
         pixels.resize(length, 0);
-        draw(&mut pixels, size).map_err(PresentError::Draw)?;
-        if pixels.chunks_exact(4).any(|pixel| pixel[3] != 255) {
+        let full = PixelRect::full(size.width, size.height);
+        let region = match native.drawn.take() {
+            Some(drawn) if drawn == size => damage.unwrap_or(full),
+            _ => full,
+        };
+        draw(&mut pixels, size, region).map_err(PresentError::Draw)?;
+        let columns = region.x as usize * 4..(region.x + region.width) as usize * 4;
+        let rows = || {
+            pixels
+                .chunks_exact(size.width as usize * 4)
+                .skip(region.y as usize)
+                .take(region.height as usize)
+        };
+        if rows().any(|row| row[columns.clone()].chunks_exact(4).any(|p| p[3] != 255)) {
             return Err(PresentError::Platform(Error::UnsupportedTransparency));
         }
-        for pixel in pixels.chunks_exact_mut(4) {
-            pixel.swap(0, 2);
+        for row in pixels
+            .chunks_exact_mut(size.width as usize * 4)
+            .skip(region.y as usize)
+            .take(region.height as usize)
+        {
+            for pixel in row[columns.clone()].chunks_exact_mut(4) {
+                pixel.swap(0, 2);
+            }
         }
         let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
@@ -97,6 +119,7 @@ impl Win32 {
             DwmFlush().map_err(|e| PresentError::Platform(e.into()))?;
         }
         native.dirty.set(false);
+        native.drawn.set(Some(size));
         Ok(true)
     }
 }

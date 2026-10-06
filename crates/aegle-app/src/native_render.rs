@@ -110,20 +110,36 @@ impl Runtime {
                 #[cfg(feature = "software")]
                 RendererBackend::Software => {
                     let renderer = self.renderer.as_mut().unwrap();
-                    self.backend
-                        .present(entry.id, |pixels, size| -> Result<()> {
+                    let scale = info.scale as f32;
+                    // Only the changed area is redrawn into a retained buffer.
+                    let size = info.buffer_size()?;
+                    let damage = entry.ui.damage()?.map(|rect| {
+                        aegle_types::PixelRect::covering(rect, scale, size.width, size.height)
+                    });
+                    let presented = self
+                        .backend
+                        .present(entry.id, damage, |pixels, size, region| -> Result<()> {
                             let mut surface = aegle_render_software::Surface::new(
                                 pixels,
                                 size.width,
                                 size.height,
                             )?;
-                            let mut frame = renderer.begin_frame(&mut surface, background);
-                            scenes(&entry.ui, info.scale as f32, |scene, transform, clip| {
+                            let region = Rect::new(
+                                region.x as f32,
+                                region.y as f32,
+                                region.width as f32,
+                                region.height as f32,
+                            );
+                            let mut frame = renderer.begin_region(&mut surface, background, region);
+                            scenes(&entry.ui, scale, |scene, transform, clip| {
                                 frame.draw_clipped(scene, transform, clip)?;
                                 Ok(())
                             })
                         })
                         .map_err(|error| format!("present: {error}"))?;
+                    if presented {
+                        entry.ui.clear_damage()?;
+                    }
                 }
                 #[cfg(feature = "vulkan")]
                 RendererBackend::Vulkan => {
@@ -150,7 +166,9 @@ impl Runtime {
                                 Err(error) => Err(error.into()),
                             }
                         });
-                    if !result.map_err(|error| format!("Vulkan present: {error}"))? {
+                    if result.map_err(|error| format!("Vulkan present: {error}"))? {
+                        entry.ui.clear_damage()?;
+                    } else {
                         self.backend.request_redraw(entry.id)?;
                     }
                 }
@@ -175,7 +193,9 @@ impl Runtime {
                             frame.finish()?;
                             Ok(true)
                         });
-                    if !result.map_err(|error| format!("wgpu present: {error}"))? {
+                    if result.map_err(|error| format!("wgpu present: {error}"))? {
+                        entry.ui.clear_damage()?;
+                    } else {
                         self.backend.request_redraw(entry.id)?;
                     }
                 }
