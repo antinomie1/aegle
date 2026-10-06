@@ -380,6 +380,7 @@ canvas.on_input(move |canvas, event| {
         CanvasEvent::Press { position, modifiers, .. } => editor.begin(position, modifiers),
         CanvasEvent::Move { position, pressed: true, .. } => editor.drag(position),
         CanvasEvent::Release { .. } | CanvasEvent::Cancel => editor.end(),
+        CanvasEvent::ButtonPress { button: PointerButton::Secondary, position, .. } => editor.context_menu(position),
         CanvasEvent::Wheel { delta, modifiers, position, .. } if modifiers.control => editor.zoom(position, delta.y),
         CanvasEvent::Wheel { delta, .. } => editor.scroll(delta),
         CanvasEvent::Key { key: Key::Delete, pressed: true, .. } => editor.delete_selection(),
@@ -390,6 +391,7 @@ canvas.on_input(move |canvas, event| {
 ```
 
 - 事件坐标是 Canvas 的局部逻辑坐标，带平台时间 `time`。按下时获得焦点并捕获指针，之后的 `Move { pressed: true }` 与 `Release` 即使在 Canvas 外也会送达；未按下时的移动是 `Move { pressed: false }`，离开是 `Leave`；捕获丢失为 `Cancel`。
+- 右键、中键与侧键（`PointerButton::{Secondary, Middle, Back, Forward}`）作为 `ButtonPress`/`ButtonRelease { button, .. }` 送达，同样获得焦点并捕获指针，直到在 Canvas 上按下的所有按键都释放；`Move` 的 `pressed` 只表示主键，按住其他键拖动（如中键平移）时用自己记录的按键状态。默认控件忽略这些按键。
 - 鼠标滚轮与触控板滚动先交给其下的交互 Canvas 并被消费，外层 ScrollView 不滚动；惯性滚动只作用于滚动视图。
 - 获得焦点时有焦点框并加入 Tab 顺序，聚焦时收到全部按键（Tab 仍用于切换焦点）；`Focus(bool)` 报告焦点变化。
 - 同一批输入的事件按顺序在该批之后、所有借用之外交给回调，回调里可以修改任意控件；`clear_on_input` 恢复为纯绘制。

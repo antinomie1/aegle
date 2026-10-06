@@ -1,5 +1,5 @@
 #![allow(unsafe_code)]
-use crate::{Error, Event, Modifiers, PointerKind, native::Native};
+use crate::{Error, Event, Modifiers, PointerButton, PointerKind, native::Native};
 use aegle_types::Point;
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::{
@@ -67,6 +67,21 @@ pub(crate) fn text(native: &Native, value: usize) -> Result<(), Error> {
     Ok(())
 }
 
+/// The held-button bit and, for buttons other than the primary one, the
+/// button of a mouse message; `None` for an unknown side button.
+fn button(msg: u32, w: WPARAM) -> Option<(u8, Option<PointerButton>)> {
+    Some(match msg {
+        WM_LBUTTONDOWN | WM_LBUTTONDBLCLK | WM_LBUTTONUP => (1, None),
+        WM_RBUTTONDOWN | WM_RBUTTONDBLCLK | WM_RBUTTONUP => (2, Some(PointerButton::Secondary)),
+        WM_MBUTTONDOWN | WM_MBUTTONDBLCLK | WM_MBUTTONUP => (4, Some(PointerButton::Middle)),
+        _ => match (w.0 >> 16) as u16 {
+            XBUTTON1 => (8, Some(PointerButton::Back)),
+            XBUTTON2 => (16, Some(PointerButton::Forward)),
+            _ => return None,
+        },
+    })
+}
+
 pub(crate) fn pointer(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<(), Error> {
     let mut point = POINT {
         x: l.0 as i16 as i32,
@@ -88,35 +103,52 @@ pub(crate) fn pointer(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result
             }
             PointerKind::Move
         }
-        WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => {
-            native.pressed.set(true);
-            // SAFETY: capture and focus are confined to the current live HWND.
-            unsafe {
-                SetCapture(native.hwnd.get());
-                let _ = SetFocus(Some(native.hwnd.get()));
+        WM_LBUTTONDOWN | WM_LBUTTONDBLCLK | WM_RBUTTONDOWN | WM_RBUTTONDBLCLK | WM_MBUTTONDOWN
+        | WM_MBUTTONDBLCLK | WM_XBUTTONDOWN | WM_XBUTTONDBLCLK => {
+            let Some((bit, button)) = button(msg, w) else {
+                return Ok(());
+            };
+            if native.held.replace(native.held.get() | bit) == 0 {
+                // SAFETY: capture and focus are confined to the current live HWND.
+                unsafe {
+                    SetCapture(native.hwnd.get());
+                    let _ = SetFocus(Some(native.hwnd.get()));
+                }
             }
-            PointerKind::Down {
-                clicks: if msg == WM_LBUTTONDBLCLK { 2 } else { 1 },
+            match button {
+                Some(button) => PointerKind::ButtonDown(button),
+                None => PointerKind::Down {
+                    clicks: if msg == WM_LBUTTONDBLCLK { 2 } else { 1 },
+                },
             }
         }
-        WM_LBUTTONUP => {
-            native.pressed.set(false);
-            // SAFETY: release our capture; synchronous WM_CAPTURECHANGED observes
-            // pressed=false and cannot synthesize a cancel before this release.
-            unsafe {
-                ReleaseCapture()?;
+        WM_LBUTTONUP | WM_RBUTTONUP | WM_MBUTTONUP | WM_XBUTTONUP => {
+            let Some((bit, button)) = button(msg, w) else {
+                return Ok(());
+            };
+            let held = native.held.get();
+            if held & bit == 0 {
+                return Ok(());
             }
-            PointerKind::Up
+            native.held.set(held & !bit);
+            if held == bit {
+                // SAFETY: release our capture; synchronous WM_CAPTURECHANGED observes
+                // no held buttons and cannot synthesize a cancel before this release.
+                unsafe {
+                    ReleaseCapture()?;
+                }
+            }
+            button.map_or(PointerKind::Up, PointerKind::ButtonUp)
         }
         WM_MOUSELEAVE => {
             native.tracking.set(false);
-            if native.pressed.get() {
+            if native.held.get() != 0 {
                 return Ok(());
             }
             PointerKind::Leave
         }
         WM_CAPTURECHANGED | WM_CANCELMODE => {
-            if !native.pressed.replace(false) {
+            if native.held.replace(0) == 0 {
                 return Ok(());
             }
             PointerKind::Leave

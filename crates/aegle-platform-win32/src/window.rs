@@ -191,7 +191,7 @@ impl Win32 {
             redraw_queued: Cell::new(false),
             tracking: Cell::new(false),
             cursor: Cell::new(aegle_types::Cursor::Default),
-            pressed: Cell::new(false),
+            held: Cell::new(0),
             high_surrogate: Cell::new(None),
             ime: Ime::new()?,
             pixels: RefCell::new(Vec::new()),

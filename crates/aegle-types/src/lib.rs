@@ -14,4 +14,4 @@ mod system;
 pub use color::Color;
 pub use cursor::Cursor;
 pub use geometry::{Point, Rect, Size};
-pub use system::{Preferences, TouchPhase};
+pub use system::{PointerButton, Preferences, TouchPhase};

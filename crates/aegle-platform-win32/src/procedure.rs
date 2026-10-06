@@ -166,9 +166,15 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
                 });
             }
         }
-        WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONDBLCLK | WM_LBUTTONUP | WM_MOUSELEAVE
-        | WM_CAPTURECHANGED | WM_CANCELMODE | WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
+        WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONDBLCLK | WM_LBUTTONUP | WM_RBUTTONDOWN
+        | WM_RBUTTONDBLCLK | WM_RBUTTONUP | WM_MBUTTONDOWN | WM_MBUTTONDBLCLK | WM_MBUTTONUP
+        | WM_MOUSELEAVE | WM_CAPTURECHANGED | WM_CANCELMODE | WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
             input::pointer(native, msg, w, l)?
+        }
+        WM_XBUTTONDOWN | WM_XBUTTONDBLCLK | WM_XBUTTONUP => {
+            input::pointer(native, msg, w, l)?;
+            // Handled side buttons return TRUE, so no WM_APPCOMMAND follows.
+            return Ok(Some(LRESULT(1)));
         }
         WM_IME_SETCONTEXT => return Ok(Some(crate::ime::suppress_system_composition(hwnd, w, l))),
         WM_IME_STARTCOMPOSITION => {

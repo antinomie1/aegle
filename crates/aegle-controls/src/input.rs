@@ -1,4 +1,4 @@
-use aegle_types::Point;
+use aegle_types::{Point, PointerButton};
 
 /// Host-assigned identity of a pointer, stable for its lifetime.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -68,7 +68,8 @@ pub struct KeyInput<'a> {
     pub repeat: bool,
 }
 
-/// Primary-button pointer interactions used by default controls.
+/// Pointer interactions. Default controls use the primary button and ignore
+/// [`Self::ButtonDown`]/[`Self::ButtonUp`], which custom controls may handle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PointerKind {
     /// Enter or move, including captured motion outside the control.
@@ -80,6 +81,10 @@ pub enum PointerKind {
     },
     /// Primary-button release.
     Up,
+    /// Another button went down; no click count is kept for it.
+    ButtonDown(PointerButton),
+    /// Another button was released.
+    ButtonUp(PointerButton),
     /// Pointer left the control; capture may remain active.
     Leave,
     /// Device/capture loss: stop without activating or committing.

@@ -119,6 +119,14 @@ impl Entry {
                         PointerKind::Down { clicks: 1 }
                     }
                     PointerEventKind::Release { button: 0x110, .. } => PointerKind::Up,
+                    PointerEventKind::Press { button, .. } => match evdev_button(button) {
+                        Some(button) => PointerKind::ButtonDown(button),
+                        None => return Ok(()),
+                    },
+                    PointerEventKind::Release { button, .. } => match evdev_button(button) {
+                        Some(button) => PointerKind::ButtonUp(button),
+                        None => return Ok(()),
+                    },
                     PointerEventKind::Leave { .. } => return self.ui.pointer_leave(),
                     PointerEventKind::Axis {
                         time: axis_time,
@@ -140,7 +148,6 @@ impl Entry {
                         let time = self.clock.at(axis_time);
                         return self.ui.wheel(position, delta, self.modifiers, time);
                     }
-                    _ => return Ok(()),
                 };
                 self.ui
                     .pointer_at(id, kind, position, self.modifiers, time)?;
@@ -260,5 +267,17 @@ pub(crate) fn ime_request(
             ImeCause::Other
         },
         ..Default::default()
+    })
+}
+
+/// A Linux input-event code for a non-primary mouse button.
+fn evdev_button(code: u32) -> Option<aegle_ui::PointerButton> {
+    use aegle_ui::PointerButton::*;
+    Some(match code {
+        0x111 => Secondary,
+        0x112 => Middle,
+        0x113 | 0x116 => Back,
+        0x114 | 0x115 => Forward,
+        _ => return None,
     })
 }

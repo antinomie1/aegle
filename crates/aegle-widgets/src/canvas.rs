@@ -2,7 +2,9 @@
 
 use std::{any::Any, time::Instant};
 
-use aegle_controls::{Capture, Input, Key, Modifiers, Outcome, PointerId, PointerKind};
+use aegle_controls::{
+    Capture, Input, Key, Modifiers, Outcome, PointerButton, PointerId, PointerKind,
+};
 use aegle_core::Dirty;
 use aegle_layout::Style;
 use aegle_scene::SceneBuilder;
@@ -58,9 +60,34 @@ pub enum CanvasEvent {
         /// When the platform reported it.
         time: Instant,
     },
+    /// Another button went down, such as the secondary button for a context
+    /// action or the middle one to pan. The canvas captures the pointer until
+    /// every button pressed on it is released; `Move` keeps `pressed` for the
+    /// primary button only.
+    ButtonPress {
+        /// The button.
+        button: PointerButton,
+        /// Local position.
+        position: Point,
+        /// Keyboard modifiers.
+        modifiers: Modifiers,
+        /// When the platform reported it.
+        time: Instant,
+    },
+    /// A button from a `ButtonPress` on this canvas was released.
+    ButtonRelease {
+        /// The button.
+        button: PointerButton,
+        /// Local position.
+        position: Point,
+        /// Keyboard modifiers.
+        modifiers: Modifiers,
+        /// When the platform reported it.
+        time: Instant,
+    },
     /// The hovering pointer left the canvas.
     Leave,
-    /// A press ended without release: capture or the window was lost.
+    /// Presses ended without release: capture or the window was lost.
     Cancel,
     /// Wheel or touchpad scrolling over the canvas, which it consumes.
     Wheel {
@@ -99,6 +126,8 @@ pub struct CanvasControl {
     interactive: bool,
     /// The pointer that pressed on this canvas.
     pressed: Option<PointerId>,
+    /// Buttons it holds: bit 0 is the primary one, then [`PointerButton`] in order.
+    buttons: u8,
     /// Input waiting for the next callback dispatch.
     events: Vec<CanvasEvent>,
     /// A splitter grip's orientation (vertical) and first-pane share, for semantics.
@@ -180,6 +209,15 @@ impl Canvas {
 }
 
 impl CanvasControl {
+    /// Ends all presses without release events.
+    fn cancel(&mut self) -> Outcome {
+        self.buttons = 0;
+        match self.pressed.take() {
+            Some(_) => self.push(CanvasEvent::Cancel),
+            None => Outcome::default(),
+        }
+    }
+
     /// Queues an event; the first one of a batch schedules the callback.
     fn push(&mut self, event: CanvasEvent) -> Outcome {
         let first = self.events.is_empty();
@@ -225,46 +263,72 @@ impl Control for CanvasControl {
     fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
         let time = cx.time;
         Ok(match input {
-            Input::Pointer(p) => match p.kind {
-                PointerKind::Down { clicks } => {
-                    self.pressed = Some(p.id);
-                    Outcome {
-                        focus: true,
-                        capture: Some(Capture::Acquire(p.id)),
-                        ..self.push(CanvasEvent::Press {
-                            position: p.position,
-                            clicks,
-                            modifiers: p.modifiers,
+            Input::Pointer(p) if self.pressed.is_some_and(|id| id != p.id) => Outcome::default(),
+            Input::Pointer(p) => {
+                let (position, modifiers) = (p.position, p.modifiers);
+                let (bit, down) = match p.kind {
+                    PointerKind::Down { .. } => (1, true),
+                    PointerKind::Up => (1, false),
+                    PointerKind::ButtonDown(button) => (2 << button as u8, true),
+                    PointerKind::ButtonUp(button) => (2 << button as u8, false),
+                    PointerKind::Move => {
+                        return Ok(self.push(CanvasEvent::Move {
+                            position,
+                            pressed: self.buttons & 1 != 0,
+                            modifiers,
                             time,
-                        })
+                        }));
                     }
+                    PointerKind::Leave if self.pressed.is_none() => {
+                        return Ok(self.push(CanvasEvent::Leave));
+                    }
+                    PointerKind::Cancel => return Ok(self.cancel()),
+                    PointerKind::Leave => return Ok(Outcome::default()),
+                };
+                if down == (self.buttons & bit != 0) {
+                    return Ok(Outcome::default());
                 }
-                PointerKind::Move if self.pressed.is_none_or(|id| id == p.id) => {
-                    self.push(CanvasEvent::Move {
-                        position: p.position,
-                        pressed: self.pressed.is_some(),
-                        modifiers: p.modifiers,
+                let first = self.buttons == 0;
+                self.buttons ^= bit;
+                self.pressed = (self.buttons != 0).then_some(p.id);
+                let event = match p.kind {
+                    PointerKind::Down { clicks } => CanvasEvent::Press {
+                        position,
+                        clicks,
+                        modifiers,
                         time,
-                    })
+                    },
+                    PointerKind::Up => CanvasEvent::Release {
+                        position,
+                        modifiers,
+                        time,
+                    },
+                    PointerKind::ButtonDown(button) => CanvasEvent::ButtonPress {
+                        button,
+                        position,
+                        modifiers,
+                        time,
+                    },
+                    PointerKind::ButtonUp(button) => CanvasEvent::ButtonRelease {
+                        button,
+                        position,
+                        modifiers,
+                        time,
+                    },
+                    _ => unreachable!("other kinds returned above"),
+                };
+                let capture = match (first, self.buttons) {
+                    (true, _) => Some(Capture::Acquire(p.id)),
+                    (false, 0) => Some(Capture::Release(p.id)),
+                    _ => None,
+                };
+                Outcome {
+                    focus: first,
+                    capture,
+                    ..self.push(event)
                 }
-                PointerKind::Up if self.pressed == Some(p.id) => {
-                    self.pressed = None;
-                    Outcome {
-                        capture: Some(Capture::Release(p.id)),
-                        ..self.push(CanvasEvent::Release {
-                            position: p.position,
-                            modifiers: p.modifiers,
-                            time,
-                        })
-                    }
-                }
-                PointerKind::Leave if self.pressed.is_none() => self.push(CanvasEvent::Leave),
-                PointerKind::Cancel if self.pressed.take().is_some() => {
-                    self.push(CanvasEvent::Cancel)
-                }
-                _ => Outcome::default(),
-            },
-            Input::Cancel if self.pressed.take().is_some() => self.push(CanvasEvent::Cancel),
+            }
+            Input::Cancel => self.cancel(),
             Input::Wheel {
                 delta,
                 position,
@@ -323,6 +387,7 @@ pub(crate) fn canvas(
                 painter: Box::new(painter),
                 interactive: false,
                 pressed: None,
+                buttons: 0,
                 events: Vec::new(),
                 splitter: None,
             }) as Box<dyn Control>,

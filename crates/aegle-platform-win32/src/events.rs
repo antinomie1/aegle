@@ -1,5 +1,5 @@
 use crate::{Error, ImeEvent};
-use aegle_types::{Point, Preferences};
+use aegle_types::{Point, PointerButton, Preferences};
 
 /// Identity scoped to its event loop; never reused by that loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -101,6 +101,10 @@ pub enum PointerKind {
     },
     /// Primary up.
     Up,
+    /// Another button down: right, middle or a side button.
+    ButtonDown(PointerButton),
+    /// Another button up.
+    ButtonUp(PointerButton),
     /// Leave or loss of native capture; cancel the current gesture.
     Leave,
     /// Logical displacement, positive right/down. Native wheel settings apply.

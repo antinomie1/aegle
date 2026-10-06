@@ -12,6 +12,7 @@ mod slider;
 mod text_field;
 mod toggle;
 
+pub use aegle_types::PointerButton;
 pub use button::Button;
 pub use input::{
     Action, Capture, Clipboard, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,

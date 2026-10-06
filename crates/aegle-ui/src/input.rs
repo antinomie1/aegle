@@ -103,7 +103,7 @@ impl Ui {
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
         state.rebuild_order();
-        if matches!(kind, PointerKind::Down { .. }) {
+        if matches!(kind, PointerKind::Down { .. } | PointerKind::ButtonDown(_)) {
             #[cfg(feature = "motion")]
             {
                 state.motion.fling = None;

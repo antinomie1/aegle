@@ -400,7 +400,7 @@ if ui.refresh()? {
 
 | 输入与同步 | 说明 |
 | --- | --- |
-| `pointer(id, kind, point, modifiers)`、`pointer_leave()` | 指针移动/按下/释放/离开 |
+| `pointer(id, kind, point, modifiers)`、`pointer_leave()` | 指针移动/按下/释放/离开；`Down`/`Up` 是主键，`ButtonDown`/`ButtonUp(PointerButton)` 是右键、中键与侧键，只交给自定义控件 |
 | `cursor()` | 指针当前位置应显示的 `Cursor`；在 `pointer` 与 `refresh` 之后读取，布局变化也会改变它 |
 | `key(KeyInput { key, text, modifiers, pressed, repeat })`、`key_at(input, Instant)` | 键盘；`text` 为已翻译文字，先交给 `on_key` 处理器 |
 | `pointer_at(id, kind, point, modifiers, Instant)` | 带平台时间的指针事件 |

@@ -7,7 +7,8 @@ use std::{
 };
 
 use aegle_ui::{
-    Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui,
+    Key, KeyInput, Modifiers, Point, PointerButton, PointerId, PointerKind, Result, Size,
+    TextSystem, Theme, Ui,
 };
 use aegle_widgets::{CanvasEvent, Widgets};
 
@@ -99,5 +100,89 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     assert!(!canvas.visual_state()?.focused);
     ui.scroll_by(Point::new(50.0, 50.0), Point::new(0.0, 30.0))?;
     assert_eq!(view.offset()?.y, revealed.y + 30.0);
+    Ok(())
+}
+
+#[test]
+fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(300.0, 300.0))?;
+    ui.root().set_padding(0.0)?;
+    let slider = ui.root().slider(0.0, 10.0, 0.0)?;
+    let canvas = ui.root().canvas(|_, _| Ok(()))?;
+    canvas.set_size(100.0, 100.0)?;
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let log = events.clone();
+    canvas.on_input(move |_, event| {
+        log.borrow_mut().push(event);
+        Ok(())
+    })?;
+    ui.refresh()?;
+    let (id, mods) = (PointerId(1), Modifiers::default());
+    let centre = |bounds: aegle_ui::scene::Rect| {
+        Point::new(
+            bounds.origin.x + bounds.size.width / 2.0,
+            bounds.origin.y + bounds.size.height / 2.0,
+        )
+    };
+    let right = PointerKind::ButtonDown(PointerButton::Secondary);
+    let (thumb, inside) = (centre(slider.bounds()?), centre(canvas.bounds()?));
+    ui.pointer(id, right, thumb, mods)?;
+    ui.pointer(
+        id,
+        PointerKind::ButtonUp(PointerButton::Secondary),
+        thumb,
+        mods,
+    )?;
+    assert_eq!(slider.value()?, 0.0);
+    assert!(!slider.visual_state()?.focused);
+
+    // A middle drag keeps the pointer captured across a primary click and
+    // ends with the last release; motion after it no longer arrives.
+    let middle = PointerButton::Middle;
+    let far = Point::new(290.0, 290.0);
+    ui.pointer(id, PointerKind::ButtonDown(middle), inside, mods)?;
+    ui.pointer(id, PointerKind::Move, far, mods)?;
+    ui.pointer(id, PointerKind::Down { clicks: 1 }, far, mods)?;
+    ui.pointer(id, PointerKind::Up, far, mods)?;
+    ui.pointer(id, PointerKind::Move, far, mods)?;
+    ui.pointer(id, PointerKind::ButtonUp(middle), far, mods)?;
+    ui.pointer(id, PointerKind::Move, far, mods)?;
+    // A lost window cancels a press of any button.
+    ui.pointer(
+        id,
+        PointerKind::ButtonDown(PointerButton::Back),
+        inside,
+        mods,
+    )?;
+    ui.pointer_leave()?;
+    ui.dispatch_callbacks()?;
+    let kinds: Vec<_> = events
+        .borrow()
+        .iter()
+        .filter_map(|event| match event {
+            CanvasEvent::ButtonPress { button, .. } => Some(format!("+{button:?}")),
+            CanvasEvent::ButtonRelease { button, .. } => Some(format!("-{button:?}")),
+            CanvasEvent::Press { .. } => Some("+primary".into()),
+            CanvasEvent::Release { .. } => Some("-primary".into()),
+            CanvasEvent::Move { pressed, .. } => Some(format!("move {pressed}")),
+            CanvasEvent::Cancel => Some("cancel".into()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            "+Middle",
+            "move false",
+            "+primary",
+            "-primary",
+            "move false",
+            "-Middle",
+            "+Back",
+            "cancel"
+        ]
+    );
+    assert!(canvas.visual_state()?.focused);
     Ok(())
 }

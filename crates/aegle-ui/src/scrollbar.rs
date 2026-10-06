@@ -77,7 +77,9 @@ impl State {
         if let Some(drag) = self.drag.filter(|drag| drag.pointer == pointer) {
             match kind {
                 PointerKind::Move => self.drag_to(drag, position)?,
-                PointerKind::Down { .. } => {}
+                PointerKind::Down { .. }
+                | PointerKind::ButtonDown(_)
+                | PointerKind::ButtonUp(_) => {}
                 _ => self.end_drag()?,
             }
             return Ok(true);

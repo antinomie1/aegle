@@ -296,7 +296,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。
-- 组件/绘制：自定义控件输入行为；组透明度与区域模糊（需要离屏层）；阴影与渐变的标记写法。
+- 组件/绘制：组透明度与区域模糊（需要离屏层）；阴影与渐变的标记写法。
 - 主题/动画：Font 类型的 token；token 值的过渡。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收。
 - 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU 多窗口只共享实例/设备/管线，图集仍按窗口独立。现有桌面样本不能替代这些证据。
@@ -516,3 +516,11 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 标记：颜色属性与 `border_width`、`radius`、`focus_width`、`font_size` 接受 `token("包.名称")`（含 `theme.radius` 等内置名），schema 检查名称形式；`ui!` 与加载器在构建时按名查找并调用 `bind_color`/`bind_length`，名称未登记或类型不符时构建返回 `UiError::Token`。
 - 验证：`aegle/tests/tokens.rs` 用同一 `.aegle` 夹具经 `ui!` 与加载器，检查默认值随 `set_theme` 变化、子树覆盖优先于 Ui 覆盖、内置 `theme.radius` 的子树覆盖、字号为零时回滚、直接 setter 结束绑定；Rust API 部分检查 reparent 后按新子树解析、`unbind_token` 清除、Caret 绑定在非编辑器上被拒绝、`ThemeOverride` 改变后默认值跟随；schema 接受与拒绝用例。
 - 未实现：Font 类型 token；token 值没有独立的过渡；绑定只覆盖 Style 与字号，不覆盖布局属性（padding、gap 等仍用主题或本地 setter）。
+
+## 自定义控件的其他鼠标按键
+
+- 此前原生宿主只转发主键：Wayland 的 `0x110` 之外的按键与 Win32 的右键、中键消息都被丢弃，自定义控件无法实现右键菜单、中键平移或侧键导航。
+- `aegle-types::PointerButton { Secondary, Middle, Back, Forward }`；`PointerKind::ButtonDown/ButtonUp(PointerButton)`，`Down`/`Up` 仍只表示主键，默认控件不处理新增种类（Slider 在右键按下时不改变值也不取得焦点）。`Ui` 对其他按键同样运行按下钩子（关闭弹出层）并停止惯性滚动；滚动条拖动期间忽略它们。
+- 平台：Wayland 映射 evdev `BTN_RIGHT`/`BTN_MIDDLE`/`BTN_SIDE`/`BTN_EXTRA`（及 `BTN_BACK`/`BTN_FORWARD`）；Win32 处理 `WM_RBUTTON*`、`WM_MBUTTON*`、`WM_XBUTTON*`（返回 TRUE，不再产生 `WM_APPCOMMAND`），原生捕获改为按位记录按住的按键，最后一个释放时才释放捕获。
+- `Canvas`：`CanvasEvent::ButtonPress`/`ButtonRelease`；任一按键的首次按下取得焦点与捕获，全部释放后才释放；窗口丢失时 `Cancel` 结束所有按键；正在按下时其他指针的事件被忽略。
+- 验证：`aegle-widgets/tests/canvas.rs` 检查右键不影响 Slider；中键按住时捕获跨过一次主键单击、移出后仍收到移动、释放中键后不再收到；侧键按下后离开窗口得到 `Cancel`。Windows 交叉检查通过；未在真实鼠标上验证（无头 Sway 没有指针设备），Win32 未实机运行。

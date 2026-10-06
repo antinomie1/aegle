@@ -27,7 +27,8 @@ pub(crate) struct Native {
     pub tracking: Cell<bool>,
     /// Shape shown over the client area, applied by WM_SETCURSOR.
     pub cursor: Cell<aegle_types::Cursor>,
-    pub pressed: Cell<bool>,
+    /// Held mouse buttons: bit 0 primary, then right, middle, back, forward.
+    pub held: Cell<u8>,
     pub high_surrogate: Cell<Option<u16>>,
     pub ime: Ime,
     pub pixels: RefCell<Vec<u8>>,

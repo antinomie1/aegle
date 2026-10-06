@@ -89,6 +89,10 @@ impl Entry {
                     crate::platform::PointerKind::Move => PointerKind::Move,
                     crate::platform::PointerKind::Down { clicks } => PointerKind::Down { clicks },
                     crate::platform::PointerKind::Up => PointerKind::Up,
+                    crate::platform::PointerKind::ButtonDown(button) => {
+                        PointerKind::ButtonDown(button)
+                    }
+                    crate::platform::PointerKind::ButtonUp(button) => PointerKind::ButtonUp(button),
                     crate::platform::PointerKind::Leave => return self.ui.pointer_leave(),
                     crate::platform::PointerKind::Scroll { delta } => {
                         return self.ui.wheel(position, delta, self.modifiers, time);

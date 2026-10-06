@@ -11,6 +11,20 @@ pub struct Preferences {
     pub text_scale: Option<u16>,
 }
 
+/// A mouse button other than the primary one, which custom controls may use
+/// for context actions, panning or navigation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PointerButton {
+    /// Usually the right button.
+    Secondary,
+    /// The middle button or wheel press.
+    Middle,
+    /// The back side button.
+    Back,
+    /// The forward side button.
+    Forward,
+}
+
 /// Stage of one finger's contact with a touch screen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TouchPhase {
