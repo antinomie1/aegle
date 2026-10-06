@@ -20,7 +20,7 @@ aegle = { path = "../aegle/crates/aegle" }
 | `system-fonts` | ✓ | 系统字体发现（Linux 链接 Fontconfig） |
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
 | `motion` | ✓ | 外观/位移/缩放旋转过渡、惯性滚动 |
-| `effects` | ✓ | `aegle::effects`：线性/径向渐变与柔和阴影图像 |
+| `effects` | ✓ | `aegle::image::effects`：线性/径向渐变与柔和阴影图像 |
 | `colrv1` | ✓ | COLRv1 彩色字形（渐变、变换、混合层） |
 | `jpeg` / `webp` / `gif` |  | `aegle::image::decode` 解码 JPEG、WebP（静态）、GIF（首帧） |
 | `svg` |  | 静态 SVG（无文字）：`aegle::image::svg` 栅格化，并渲染 OpenType-SVG 字形 |
@@ -132,9 +132,9 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `image(&Image)` | `ImageView` | 图像 |
 | `canvas(painter)` | `Canvas` | 自定义绘制 |
 
-`Image` 是共享的、不可变的 RGBA8 像素（非预乘 sRGB，自上而下）。从文件加载 PNG 用 `aegle::decode_image(&bytes)?`，或用 `aegle::decode_png` 取得原始像素；任意色彩类型、调色板、`tRNS` 和 16 位都会转为 RGBA8，伽马与 ICC 块被忽略，默认解码结果不超过 64 MiB（`decode_png_with_limit` 可调整），宽高不超过 16,384，超限返回 `DecodeError::TooLarge`，不是 PNG 返回 `NotPng`，损坏返回 `Invalid`。
+`Image` 是共享的、不可变的 RGBA8 像素（非预乘 sRGB，自上而下）。从文件加载图像用 `aegle::image::decode(&bytes)?`（PNG 总是可用），或用 `aegle::image::png::decode` 取得原始像素；任意色彩类型、调色板、`tRNS` 和 16 位都会转为 RGBA8，伽马与 ICC 块被忽略，默认解码结果不超过 64 MiB（`decode_with_limit` 可调整），宽高不超过 16,384，超限返回 `image::Error::TooLarge`，不是支持的格式返回 `Unsupported`，损坏返回 `Invalid`。
 
-其他格式在可选 feature 后：`aegle::image::decode(&bytes)` 按签名识别 PNG 与已启用的 JPEG/WebP/GIF，返回直接可用的 `Image`（错误为 `image::Error::{Unsupported, Invalid, TooLarge}`，`decode_with_limit` 调整字节预算）；`aegle::image::svg::rasterize(&bytes, width, height)` 把静态 SVG 栅格到指定尺寸，`svg::size` 读取固有尺寸，SVG 文字与外部文件不支持。渐变和阴影用 `aegle::effects::{linear_gradient, radial_gradient, shadow}` 生成 `Image`，再用 `image(&image)` 控件或 `Canvas` 里的 `builder.image` 绘制。
+其他格式在可选 feature 后：`aegle::image::decode(&bytes)` 按签名识别 PNG 与已启用的 JPEG/WebP/GIF，返回直接可用的 `Image`（错误为 `image::Error::{Unsupported, Invalid, TooLarge}`，`decode_with_limit` 调整字节预算）；`aegle::image::svg::rasterize(&bytes, width, height)` 把静态 SVG 栅格到指定尺寸，`svg::size` 读取固有尺寸，SVG 文字与外部文件不支持。渐变和阴影用 `aegle::image::effects::{linear_gradient, radial_gradient, shadow}` 生成 `Image`，再用 `image(&image)` 控件或 `Canvas` 里的 `builder.image` 绘制。
 
 所有类型化句柄都解引用为 `Node`，共享以下方法：
 

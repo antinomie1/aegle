@@ -6,11 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 description = "Stateless default-skin painters and scroll geometry for retained controls"
 
-[features]
-default = []
-# Gradient and shadow images.
-effects = ["aegle-types/color-math"]
-
 [dependencies]
 aegle-types.workspace = true
 aegle-scene.workspace = true

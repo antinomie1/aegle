@@ -1,6 +1,6 @@
 [package]
 name = "aegle-image"
-description = "Bounded decoding of JPEG, WebP, GIF and SVG into scene images"
+description = "Bounded image decoding (PNG, JPEG, WebP, GIF, SVG) and gradient/shadow generation as scene images"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,8 @@ license.workspace = true
 
 [features]
 default = []
+# Linear/radial gradient and soft shadow images.
+effects = ["aegle-types/color-math"]
 jpeg = ["dep:zune-jpeg"]
 webp = ["dep:image-webp"]
 gif = ["dep:gif"]
@@ -15,8 +17,9 @@ gif = ["dep:gif"]
 svg = ["dep:resvg"]
 
 [dependencies]
-aegle-glyph = { workspace = true, features = ["scene"] }
 aegle-scene.workspace = true
+aegle-types.workspace = true
+png = { version = "0.18.1", default-features = false }
 zune-jpeg = { version = "0.5.9", default-features = false, features = ["std"], optional = true }
 image-webp = { version = "0.2.4", default-features = false, optional = true }
 gif = { version = "0.14.1", default-features = false, features = ["std"], optional = true }
@@ -25,6 +28,7 @@ resvg = { version = "0.48.1", default-features = false, optional = true }
 [dev-dependencies]
 # Encoders that build the decoder tests' inputs.
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "webp", "gif", "png"] }
+png = "0.18.1"
 
 [lints]
 workspace = true

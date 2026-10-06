@@ -57,12 +57,16 @@ pub(crate) fn render(
                 dst[3] = src[3];
             }
         }
-        BitmapData::Png(data) => crate::decode::decode_png_into(
+        BitmapData::Png(data) => aegle_image::png::decode_into(
             data,
             [bitmap.width, bitmap.height],
             limits.bitmap_bytes,
             &mut source,
-        )?,
+        )
+        .map_err(|error| match error {
+            aegle_image::Error::TooLarge => GlyphError::BitmapBudget,
+            _ => GlyphError::InvalidFont,
+        })?,
     }
     let mut pixels = vec![0; bytes].into_boxed_slice();
     for row in 0..height {

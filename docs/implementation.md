@@ -404,3 +404,8 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 隔离 Sway 上：Wayland 平台新增 ignored 测试在输出缩放 1.5 下确认首帧后收到 preferred_scale 并以 `round(尺寸×1.5)` 呈现；App 的两窗口 native 场景在缩放 1.5 下以软件、Vulkan 与 wgpu 通过（Lavapipe；GLES2 compositor 上另在 RX 6800 XT/RADV 上跑了 Vulkan 与 wgpu 两窗口场景）；Vulkan 平台的两窗口共享设备场景在 Lavapipe 与 RADV 上通过；线程投递场景通过。controls 示例在 1.5 缩放下截图检查。
 - Windows：x86_64-pc-windows-gnu 以同版本 Debian rust-src 加临时提取的 MinGW 做 `-Zbuild-std` 交叉检查，Win32 平台 crate 与 facade（windows、software、vulkan、wgpu、windows-accessibility、markup、motion 及新 feature，all-targets）通过；没有链接或运行，也没有执行 Wine。
 - 未验证：触摸只有无头手势测试，没有真实触摸设备，Wayland 触摸协议路径只通过编译；合成粗体/斜体、COLRv1、SVG 字形只在 CPU 光栅路径做了像素测试，没有逐后端截图；共享 Vulkan 设备没有开启 validation 层；文本缩放的 portal/注册表读取只做了编译与审查，没有对应的探针；没有 Clippy、MSRV 与体积/性能测量。
+
+## 拆分 aegle-image（PNG、其他格式与渐变阴影）
+
+- PNG 解码（`decode_png` 系列、`DecodedImage`、字体位图用的 `decode_into`）用 `git mv` 从 `aegle-glyph` 移入 `aegle-image::png`，错误统一为 `image::Error`（`NotPng` 变为 `Unsupported`）；`aegle-glyph` 反过来依赖 `aegle-image` 解码字体内嵌 PNG，不再带 png 依赖。`aegle-image` 只依赖 `aegle-scene` 与 `aegle-types`，不带字体栈。facade 删除 `aegle::decode_png/decode_image/DecodeError/DecodedImage`，一律经 `aegle::image`。
+- 渐变与阴影从 `aegle-widgets/effects` 移到 `aegle-image/effects`（facade 的 `effects` feature 不变，路径为 `aegle::image::effects`），测试随文件移动。验证：`aegle-image`、`aegle-glyph` 全 feature 测试通过。

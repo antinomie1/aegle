@@ -1,5 +1,8 @@
 //! PNG decoding covers every color type, enforces limits and rejects bad input.
-use aegle_glyph::{DecodeError, decode_png, decode_png_with_limit};
+use aegle_image::{
+    Error,
+    png::{decode as decode_png, decode_with_limit as decode_png_with_limit},
+};
 
 /// Encodes `data` as a PNG with the given color type and depth.
 fn encode(
@@ -82,25 +85,21 @@ fn every_color_type_becomes_straight_rgba_and_bad_input_is_rejected() {
     }
 
     let png = &cases[0].1;
-    assert_eq!(decode_png(b"GIF89a....").unwrap_err(), DecodeError::NotPng);
-    assert_eq!(decode_png(&[]).unwrap_err(), DecodeError::NotPng);
+    assert_eq!(decode_png(b"GIF89a....").unwrap_err(), Error::Unsupported);
+    assert_eq!(decode_png(&[]).unwrap_err(), Error::Unsupported);
     assert_eq!(
         decode_png(&png[..png.len() - 20]).unwrap_err(),
-        DecodeError::Invalid
+        Error::Invalid
     );
-    assert_eq!(decode_png(&png[..12]).unwrap_err(), DecodeError::Invalid);
+    assert_eq!(decode_png(&png[..12]).unwrap_err(), Error::Invalid);
 
     // The limit is checked from the header: 2 × 1 RGBA needs 8 bytes.
     assert!(decode_png_with_limit(png, 8).is_ok());
-    assert_eq!(
-        decode_png_with_limit(png, 7).unwrap_err(),
-        DecodeError::TooLarge
-    );
+    assert_eq!(decode_png_with_limit(png, 7).unwrap_err(), Error::TooLarge);
     let wide = encode([16_385, 1], Grayscale, Eight, None, &vec![0; 16_385]);
-    assert_eq!(decode_png(&wide).unwrap_err(), DecodeError::TooLarge);
+    assert_eq!(decode_png(&wide).unwrap_err(), Error::TooLarge);
 }
 
-#[cfg(feature = "scene")]
 #[test]
 fn decoded_pixels_become_a_scene_image() {
     let bytes = encode(
@@ -110,7 +109,7 @@ fn decoded_pixels_become_a_scene_image() {
         None,
         &[1, 2, 3, 4],
     );
-    let image = aegle_glyph::decode_image(&bytes).unwrap();
+    let image = aegle_image::decode(&bytes).unwrap();
     assert_eq!(
         (image.width(), image.height(), image.pixels()),
         (1, 1, &[1, 2, 3, 4][..])

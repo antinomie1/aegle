@@ -7,10 +7,8 @@
 //! remain independent; no macOS host is currently implemented.
 
 pub use aegle_app::*;
-/// Bounded PNG decoding into scene images, e.g. `ImageView` sources.
-pub use aegle_glyph::{DecodeError, DecodedImage, decode_image, decode_png};
-/// JPEG, WebP, GIF and SVG decoding, enabled by the matching features.
-#[cfg(any(feature = "jpeg", feature = "webp", feature = "gif", feature = "svg"))]
+/// Bounded image decoding into scene images (PNG always; JPEG, WebP, GIF and SVG by
+/// feature) and, with `effects`, gradient and shadow images.
 pub use aegle_image as image;
 extern crate self as aegle;
 

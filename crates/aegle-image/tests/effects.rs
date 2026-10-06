@@ -1,8 +1,8 @@
 //! Gradient and shadow images: stop interpolation, geometry and input bounds.
 #![cfg(feature = "effects")]
+use aegle_image::effects::{Stop, linear_gradient, radial_gradient, shadow};
 use aegle_scene::SceneError;
 use aegle_types::Color;
-use aegle_widgets::effects::{Stop, linear_gradient, radial_gradient, shadow};
 
 fn stops() -> [Stop; 2] {
     [

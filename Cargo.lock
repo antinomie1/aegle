@@ -135,11 +135,11 @@ version = "0.1.0"
 name = "aegle-glyph"
 version = "0.1.0"
 dependencies = [
+ "aegle-image",
  "aegle-scene",
  "hashbrown 0.17.1",
  "linebender_resource_handle",
  "lru-slab",
- "png",
  "resvg",
  "skrifa",
  "swash",
@@ -160,11 +160,12 @@ dependencies = [
 name = "aegle-image"
 version = "0.1.0"
 dependencies = [
- "aegle-glyph",
  "aegle-scene",
+ "aegle-types",
  "gif",
  "image",
  "image-webp",
+ "png",
  "resvg",
  "zune-jpeg",
 ]

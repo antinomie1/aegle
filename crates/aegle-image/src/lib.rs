@@ -1,25 +1,31 @@
 //! Bounded decoding of common image formats into shared scene images.
 //!
-//! PNG is always available through `aegle-glyph`; the `jpeg`, `webp` and `gif`
+//! PNG is always available; the `jpeg`, `webp` and `gif`
 //! features add those decoders (GIF and WebP yield only a still image: the
 //! first GIF frame, and non-animated WebP), and `svg` rasterizes a static SVG
 //! without text at a size the caller chooses. Every decoder checks dimensions
 //! against the caller's byte budget before allocating pixels, and returns
-//! straight (non-premultiplied) sRGB RGBA8, the same as `aegle_glyph::decode_png`.
+//! straight (non-premultiplied) sRGB RGBA8. The `effects` feature generates
+//! gradient and shadow images instead of decoding them. The crate depends only
+//! on `aegle-scene` for the shared [`Image`] type, so fonts, windows and
+//! controls never come with it.
 
 use aegle_scene::Image;
 
+#[cfg(feature = "effects")]
+pub mod effects;
 #[cfg(feature = "gif")]
 mod gif_format;
 #[cfg(feature = "jpeg")]
 mod jpeg;
+pub mod png;
 #[cfg(feature = "svg")]
 pub mod svg;
 #[cfg(feature = "webp")]
 mod webp;
 
 /// Default cap on decoded RGBA bytes, 64 MiB.
-pub const DEFAULT_MAX_BYTES: usize = aegle_glyph::DEFAULT_MAX_BYTES;
+pub const DEFAULT_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 /// Why an image could not be decoded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,12 +72,9 @@ pub fn decode(bytes: &[u8]) -> Result<Image, Error> {
 /// Like [`decode`], rejecting images whose RGBA pixels exceed `max_bytes`.
 pub fn decode_with_limit(bytes: &[u8], max_bytes: usize) -> Result<Image, Error> {
     let decoded = match bytes {
-        [0x89, b'P', b'N', b'G', ..] => aegle_glyph::decode_png_with_limit(bytes, max_bytes)
-            .map(|image| (image.width, image.height, image.pixels))
-            .map_err(|error| match error {
-                aegle_glyph::DecodeError::TooLarge => Error::TooLarge,
-                _ => Error::Invalid,
-            }),
+        [0x89, b'P', b'N', b'G', ..] => {
+            png::decode_with_limit(bytes, max_bytes).map(|i| (i.width, i.height, i.pixels))
+        }
         #[cfg(feature = "jpeg")]
         [0xff, 0xd8, 0xff, ..] => jpeg::decode(bytes, max_bytes),
         #[cfg(feature = "webp")]

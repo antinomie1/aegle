@@ -5,8 +5,6 @@
 //! builds its own tree on `aegle-controls` can reuse the default look without
 //! `aegle-app`. Behavior that needs the retained tree (focus, hit testing,
 //! popups, virtual lists) stays in the application layer.
-#[cfg(feature = "effects")]
-pub mod effects;
 mod paint;
 mod scroll;
 pub mod scrollbar;

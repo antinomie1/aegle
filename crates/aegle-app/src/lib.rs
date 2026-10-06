@@ -89,8 +89,6 @@ pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{Appearance, ControlKind, Skin, Style, Theme, ThemeOverride, VisualState};
 pub use aegle_types::{Color, Cursor, Point, Size};
-#[cfg(feature = "effects")]
-pub use aegle_widgets::effects;
 pub use handles::{Button, Container, Label, Node, TextField};
 pub use list::ListView;
 #[cfg(any(
