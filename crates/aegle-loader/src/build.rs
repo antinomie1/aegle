@@ -185,7 +185,7 @@ pub(crate) fn decorate(element: &Element, handle: &Handle, env: &Env, block: &mu
             }
         }
     }
-    transition(element, handle)?;
+    crate::motion::transitions(element, handle)?;
     for (event, steps) in &element.events {
         listen(handle, *event, steps.clone(), env.clone())?;
     }
@@ -214,45 +214,6 @@ fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Resu
         }
         Ok(())
     })
-}
-
-#[cfg(feature = "motion")]
-fn transition(element: &Element, handle: &Handle) -> Result {
-    use aegle_ui::{Easing, Transition};
-    let literal = |name| {
-        element
-            .properties
-            .iter()
-            .find_map(|(n, bound)| match bound {
-                Bound::Literal(value) if *n == name => Some(value),
-                _ => None,
-            })
-    };
-    let Some(Value::Duration(milliseconds)) = literal(PropertyName::Transition) else {
-        return Ok(());
-    };
-    let easing = match literal(PropertyName::Easing) {
-        Some(Value::Identifier(name)) if name == "linear" => Easing::Linear,
-        Some(Value::Identifier(name)) if name == "ease_in" => Easing::EaseIn,
-        Some(Value::Identifier(name)) if name == "ease_in_out" => Easing::EaseInOut,
-        _ => Easing::EaseOut,
-    };
-    let duration = std::time::Duration::from_millis(*milliseconds);
-    handle
-        .node()
-        .set_transition(Transition::new(duration, easing))
-}
-
-#[cfg(not(feature = "motion"))]
-fn transition(element: &Element, _: &Handle) -> Result {
-    if element
-        .properties
-        .iter()
-        .any(|(name, _)| *name == PropertyName::Transition)
-    {
-        return Err("markup transitions require the motion feature".into());
-    }
-    Ok(())
 }
 
 /// A transparent group holding a block's children in the parent's own layout.

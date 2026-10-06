@@ -156,7 +156,18 @@ pub(crate) fn consumed(kind: Kind, name: PropertyName) -> bool {
     use PropertyName::*;
     matches!(
         name,
-        Title | Text | Checked | Min | Max | Value | Transition | Easing
+        Title
+            | Text
+            | Checked
+            | Min
+            | Max
+            | Value
+            | Transition
+            | Easing
+            | PaintTransition
+            | OffsetTransition
+            | ScaleTransition
+            | RotationTransition
     ) || (kind == Kind::Window && matches!(name, Width | Height))
         || (kind == Kind::Splitter && name == Orientation)
 }
@@ -251,6 +262,9 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         _ => None,
     };
     if let Some(result) = crate::layout::apply(node, container, name, value) {
+        return result;
+    }
+    if let Some(result) = crate::motion::geometry(node, name, value) {
         return result;
     }
     match (name, value) {

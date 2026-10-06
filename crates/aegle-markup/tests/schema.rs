@@ -19,7 +19,11 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
                     disabled_background: #778899; disabled_foreground: #000000
                     easing: linear; transition: 0ms
                 }
-                Text { id: status; text: "Ready" }
+                Text { id: status; text: "Ready"; offset_x: -2dp; offset_y: 1.5dp
+                    scale: 1.25; rotation: -45; paint_transition: [80ms, ease_in]
+                    offset_transition: 200ms; scale_transition: [0ms, linear]
+                    rotation_transition: [1ms, ease_in_out]
+                }
             }
             TextField { id: title; text: "你好"; read_only: false }
             ScrollView { height: 100dp; gap: 4dp; padding: 3dp
@@ -56,6 +60,15 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "transition: 120dp",
         "transition: 1ms; easing: cubic",
         "transition: 1ms; easing: 100",
+        "offset_x: 1dp",
+        "Text { offset_x: 1 }",
+        "Text { rotation: 1dp }",
+        "Text { scale: 0 }",
+        "Text { scale: 1001 }",
+        "Text { scale_transition: 1dp }",
+        "Text { offset_transition: [1ms] }",
+        "Text { paint_transition: [1ms, cubic] }",
+        "Text { rotation_transition: [1ms, linear, linear] }",
         "Slider { min: 1; max: 1 }",
         "Progress { min: 1; max: 0 }",
         "Slider { step: -1 }",

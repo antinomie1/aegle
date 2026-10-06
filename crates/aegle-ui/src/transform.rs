@@ -63,9 +63,8 @@ impl Node {
     pub fn transform(&self) -> Result<Transform> {
         self.change(|state, id| {
             #[cfg(feature = "motion")]
-            if let Some(turning) = state.motion.turning.get(&id) {
-                return Ok(turning.tween.target().0);
-            }
+            return Ok(state.target_spin(id));
+            #[cfg(not(feature = "motion"))]
             Ok(state.tree.get(id).unwrap().context.spin)
         })
     }

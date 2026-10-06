@@ -309,13 +309,9 @@ impl State {
         #[cfg(feature = "motion")]
         if self.tree.get(id).unwrap().context.control.interactive() {
             if let Some(timing) = self.motion.default {
-                self.motion.tracks.insert(
-                    id,
-                    crate::motion::Track {
-                        timing,
-                        presented: None,
-                    },
-                );
+                self.motion
+                    .tracks
+                    .insert(id, crate::motion::Track::uniform(timing));
             }
         }
         self.invalidate_structure();
@@ -338,13 +334,7 @@ impl State {
             self.overrides.remove(&node);
             self.kept.remove(&node);
             #[cfg(feature = "motion")]
-            {
-                self.motion.tracks.remove(&node);
-                self.motion.active.remove(&node);
-                self.motion.moving.remove(&node);
-                self.motion.turning.remove(&node);
-                self.motion.ends.remove(&node);
-            }
+            self.motion.forget(node);
         })?;
         self.pending.retain(|(id, _)| self.tree.get(*id).is_some());
         self.invalidate_structure();

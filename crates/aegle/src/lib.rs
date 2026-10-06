@@ -34,7 +34,7 @@ pub mod prelude {
         Length, Node, Point, Result, Skin, Style, Theme, Ui, VisualState, Wrap,
     };
     #[cfg(feature = "motion")]
-    pub use aegle_ui::{Easing, Transition};
+    pub use aegle_ui::{Easing, Transition, TransitionProperty};
     #[cfg(feature = "grid")]
     pub use aegle_ui::{Flow, Placement, Track};
     pub use aegle_widgets::{

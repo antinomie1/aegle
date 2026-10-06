@@ -453,7 +453,7 @@ fn bindable(name: PropertyName) -> Option<Type> {
     match name {
         Text | Label | Tooltip => Some(Type::String),
         Visible | Enabled | Checked | Mixed | ReadOnly | Indeterminate => Some(Type::Bool),
-        Value => Some(Type::Float),
+        Value | OffsetX | OffsetY | Scale | Rotation => Some(Type::Float),
         _ => None,
     }
 }

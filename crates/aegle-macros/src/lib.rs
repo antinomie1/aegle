@@ -11,6 +11,7 @@ mod dynamic;
 mod generate;
 mod layout;
 mod lower;
+mod motion;
 
 use std::{fs::File, io::Read, path::Path};
 

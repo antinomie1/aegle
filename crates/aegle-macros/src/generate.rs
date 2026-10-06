@@ -88,7 +88,7 @@ impl Output {
                 self.setters.push(setter);
             }
         }
-        if let Some(transition) = transition(node, handle, facade) {
+        if let Some(transition) = crate::motion::transitions(node, handle, facade) {
             self.transitions.push(transition);
         }
         // A splitter's two children fill its panes.
@@ -273,8 +273,12 @@ fn setter(
     if let Some(call) = crate::layout::setter(property, handle, facade) {
         return Some(call);
     }
+    if let Some(call) = crate::motion::geometry(property, handle, facade) {
+        return Some(call);
+    }
     let name = match property.name {
-        Title | Text | Checked | Min | Max | Value | Transition | Easing => return None,
+        Title | Text | Checked | Min | Max | Value | Transition | Easing | PaintTransition
+        | OffsetTransition | ScaleTransition | RotationTransition => return None,
         Grow => "set_grow",
         Visible => "set_visible",
         Enabled => "set_enabled",
@@ -346,38 +350,4 @@ fn setter(
     };
     let method = Ident::new(name, Span::call_site());
     Some(quote! { #handle.#method(#argument)?; })
-}
-
-fn transition(node: &CheckedNode, handle: &Ident, facade: &TokenStream) -> Option<TokenStream> {
-    let property = node
-        .properties
-        .iter()
-        .find(|property| property.name == PropertyName::Transition)?;
-    let Literal::Duration(milliseconds) = property.value else {
-        unreachable!()
-    };
-    let easing = node
-        .properties
-        .iter()
-        .find(|property| property.name == PropertyName::Easing)
-        .map(|property| {
-            let Literal::Identifier(name) = &property.value else {
-                unreachable!()
-            };
-            match name.as_str() {
-                "linear" => "Linear",
-                "ease_in" => "EaseIn",
-                "ease_out" => "EaseOut",
-                "ease_in_out" => "EaseInOut",
-                _ => unreachable!(),
-            }
-        })
-        .unwrap_or("EaseOut");
-    let easing = Ident::new(easing, Span::call_site());
-    Some(quote! {
-        #handle.set_transition(#facade::Transition::new(
-            ::core::time::Duration::from_millis(#milliseconds),
-            #facade::Easing::#easing,
-        ))?;
-    })
 }

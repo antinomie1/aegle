@@ -1,0 +1,16 @@
+Column {
+    state zoom: float = 1
+    Column {
+        id: panel
+        width: 40dp
+        height: 20dp
+        background: #202020
+        offset_x: 10dp
+        offset_y: 4dp
+        rotation: 90
+        scale: zoom
+        transition: 50ms
+        offset_transition: [200ms, linear]
+        scale_transition: 100ms
+    }
+}

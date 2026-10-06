@@ -1,6 +1,6 @@
 # Aegle 标记语言
 
-状态：v0.1。编译型静态结构、类型检查和具名弱句柄已实现；类型化 state、属性表达式绑定、`on` 事件块、`if`/`for` 结构块、组件与 `use` 导入、运行时加载和显式 `reload` 已实现，见[当前动态标记](#当前动态标记)。record 与带 key 的列表、`let`、宿主动作、slot、组件事件和可配置限额也已实现，见[当前动态标记](#当前动态标记)末段；逐属性的类型化 transition 仍是目标。采用 `.aegle` 扩展名；QML 风格的结构，不依赖 Qt/QML，也不强制 JavaScript。
+状态：v0.1。编译型静态结构、类型检查和具名弱句柄已实现；类型化 state、属性表达式绑定、`on` 事件块、`if`/`for` 结构块、组件与 `use` 导入、运行时加载和显式 `reload` 已实现，见[当前动态标记](#当前动态标记)。record 与带 key 的列表、`let`、宿主动作、slot、组件事件和可配置限额也已实现，见[当前动态标记](#当前动态标记)末段；呈现几何（offset_x/offset_y/scale/rotation）与逐属性过渡时长也已实现。采用 `.aegle` 扩展名；QML 风格的结构，不依赖 Qt/QML，也不强制 JavaScript。
 
 ## 最小程序
 
@@ -91,6 +91,10 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `indicator_color` | CheckBox/Switch/Slider/Progress 的标志或完成部分颜色 |
 | `transition` | 全节点外观过渡，非负整数毫秒，如 `120ms`；零表示立即到目标 |
 | `easing` | 同节点须有 transition；linear/ease_in/ease_out/ease_in_out，默认 ease_out |
+| `offset_x`、`offset_y` | 除 Window 外任意控件的呈现位移，有限 `dp`；可绑定 float（按 dp）。另一轴保持当前目标 |
+| `scale` | 除 Window 外任意控件以中心缩放子树，(0, 1000] 的数，默认 1；可绑定 |
+| `rotation` | 除 Window 外任意控件以中心旋转子树，有限的度数（顺时针为正）；可绑定 |
+| `paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition` | 单独设置外观、位移、缩放、旋转的过渡：`200ms` 或 `[200ms, linear]`，未写 easing 时为 ease_out；覆盖同节点 `transition` 中的对应部分 |
 
 数值控件的 min/max/value 在全部属性收集完成后一起交给构造器，不依赖源码顺序；step 随后设置。当前标记数字保持有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。四种新控件均为叶，Progress 拒绝交互状态、text、font_size 和 step 等不适用属性。
 
@@ -100,7 +104,7 @@ ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`
 
 声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 
-`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。宏在整棵结构创建及全部静态属性设置后安装过渡，首次显示没有初始样式动画。它控制同一套 Node 外观 API，不改变几何、字号或文本行为。
+`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。宏在整棵结构创建及全部静态属性设置后安装过渡，首次显示没有初始样式动画。`transition` 为外观、位移、缩放和旋转统一设置时长，四个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
 
 独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、静态文档的 `check`、多文件 `compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，表达式嵌套也受层数上限约束；显式解析深度最多 256，schema 检查最多 256 层/10,000 节点。`ui!` 使用默认上限。静态文档的运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
 
@@ -162,7 +166,7 @@ Column {
 
 ## 后续目标：结构、值和状态
 
-当前动态标记之外，更多值类型（color、length、duration、enum）、嵌套 record 与逐属性的类型化过渡仍是目标；示例中的事件块和 state 已按上节实现。
+当前动态标记之外，更多值类型（color、length、duration、enum）、嵌套 record 仍是目标；示例中的事件块和 state 已按上节实现。
 
 ```text
 Window {
@@ -226,7 +230,7 @@ component Counter(start: int = 0) {
 
 组件支持有类型的输入属性、具名事件和一个默认 slot（具名 slot 仍是目标）；slot 只表示由调用方提供的子内容，不引入继承层次。首版使用组合，不做组件类继承。导入通过 `use "relative.aegle"` 或 `use md3 from rust("my_md3")`，依赖环拒绝，Rust 映射需构建时或宿主显式注册。
 
-组件间通信采用输入属性和事件；没有隐式全局状态。样式通过主题 token 与本地属性，不实现 CSS 选择器/级联语言。动画通过类型化属性的 transition，例如 `transition opacity: 120ms ease_out`；详见[主题动画](components-theme-animation.md)。
+组件间通信采用输入属性和事件；没有隐式全局状态。样式通过主题 token 与本地属性，不实现 CSS 选择器/级联语言。动画通过按属性组的 transition，例如 `scale_transition: [120ms, ease_out]`；详见[主题动画](components-theme-animation.md)。
 
 ## 后续目标：加载与重载
 

@@ -390,14 +390,7 @@ impl Ui {
         state.kept.clear();
         state.ext.clear();
         #[cfg(feature = "motion")]
-        {
-            state.motion.tracks.clear();
-            state.motion.active.clear();
-            state.motion.moving.clear();
-            state.motion.turning.clear();
-            state.motion.fling = None;
-            state.motion.ends.clear();
-        }
+        state.motion.clear();
         state.capture = None;
         state.drag = None;
         state.hover = None;

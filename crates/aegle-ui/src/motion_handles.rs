@@ -1,25 +1,81 @@
-use crate::{Node, Result, Style, Transition, Ui, UiError, callbacks::Handler, motion::Track};
+use crate::{
+    Node, Result, Style, Transition, TransitionProperty, Ui, UiError, callbacks::Handler,
+    motion::Track,
+};
 use aegle_core::Dirty;
 use std::time::Duration;
 
 impl Node {
-    /// Animates future changes to this control's paint values and offset.
-    /// Layout, font size and control state are not delayed. Retargeting starts
-    /// from the last sampled presentation, including theme and skin changes.
-    /// A running offset keeps the timing it started with.
+    /// Animates future changes to this control's paint values, offset, scale
+    /// and rotation with one timing. Layout, font size and control state are
+    /// not delayed. Retargeting starts from the last sampled presentation,
+    /// including theme and skin changes. A running geometric transition keeps
+    /// the timing it started with.
     pub fn set_transition(&self, timing: Transition) -> Result {
         self.change(|state, id| {
             let current = state.presented_appearance(id)?;
             state.motion.active.remove(&id);
-            state.motion.tracks.insert(
-                id,
-                Track {
-                    timing,
-                    presented: Some(current),
-                },
-            );
+            let track = Track {
+                presented: Some(current),
+                ..Track::uniform(timing)
+            };
+            state.motion.tracks.insert(id, track);
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             Ok(())
+        })
+    }
+    /// Sets the timing of one property, keeping the others; `None` makes that
+    /// property change immediately, jumping a running transition of it to its
+    /// target without a completion callback. A control without any policy
+    /// starts with every other property immediate.
+    pub fn set_property_transition(
+        &self,
+        property: TransitionProperty,
+        timing: Option<Transition>,
+    ) -> Result {
+        self.change(|state, id| {
+            let current = state.presented_appearance(id)?;
+            let track = state.motion.tracks.entry(id).or_insert(Track {
+                timings: [None; 4],
+                presented: Some(current),
+            });
+            track.timings[property as usize] = timing;
+            if track.timings == [None; 4] {
+                state.motion.tracks.remove(&id);
+            }
+            match property {
+                TransitionProperty::Paint => {
+                    state.motion.active.remove(&id);
+                    state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+                }
+                TransitionProperty::Offset if timing.is_none() => {
+                    state.snap_offset(id);
+                }
+                TransitionProperty::Scale | TransitionProperty::Rotation if timing.is_none() => {
+                    let target = state.target_spin(id);
+                    let mut spin = state.tree.get(id).unwrap().context.spin;
+                    if property == TransitionProperty::Scale {
+                        state.motion.scaling.remove(&id);
+                        spin.scale = target.scale;
+                    } else {
+                        state.motion.rotating.remove(&id);
+                        spin.rotation = target.rotation;
+                    }
+                    state.set_spin(id, spin);
+                }
+                _ => {}
+            }
+            Ok(())
+        })
+    }
+    /// The timing of one property, if it animates.
+    pub fn property_transition(&self, property: TransitionProperty) -> Result<Option<Transition>> {
+        self.change(|state, id| {
+            Ok(state
+                .motion
+                .tracks
+                .get(&id)
+                .and_then(|track| track.timing(property)))
         })
     }
     /// Removes the transition policy and immediately returns to the logical
@@ -38,14 +94,10 @@ impl Node {
     pub fn presented_appearance(&self) -> Result<crate::Appearance> {
         self.change(|state, id| state.presented_appearance(id))
     }
-    /// Whether a paint transition started by the most recent refresh, or an
-    /// offset transition, is still running.
+    /// Whether a paint transition started by the most recent refresh, or a
+    /// geometric transition, is still running.
     pub fn is_animating(&self) -> Result<bool> {
-        self.change(|state, id| {
-            Ok(state.motion.active.contains_key(&id)
-                || state.motion.moving.contains_key(&id)
-                || state.motion.turning.contains_key(&id))
-        })
+        self.change(|state, id| Ok(state.motion.running(id)))
     }
     /// Jumps to the current logical targets, retaining timing for future changes.
     /// Completes a running transition.
@@ -97,7 +149,8 @@ impl Node {
     pub fn cancel_transition(&self) -> Result {
         self.change(|state, id| {
             state.motion.moving.remove(&id);
-            state.motion.turning.remove(&id);
+            state.motion.scaling.remove(&id);
+            state.motion.rotating.remove(&id);
             let value = state.presented_appearance(id)?;
             let control = &state.tree.get(id).unwrap().context.control;
             let scope = control.style_scope();
@@ -152,10 +205,7 @@ impl Ui {
     /// Whether a host must request another frame. The Ui owns no timer or thread.
     pub fn has_animations(&self) -> bool {
         let state = self.state.borrow();
-        !state.motion.active.is_empty()
-            || !state.motion.moving.is_empty()
-            || !state.motion.turning.is_empty()
-            || state.motion.fling.is_some()
+        state.motion.any_running() || state.motion.fling.is_some()
     }
     /// Whether reduced motion is currently in effect.
     pub fn reduced_motion(&self) -> bool {
@@ -186,7 +236,12 @@ impl Ui {
                 state.snap_offset(id);
                 state.complete(id);
             }
-            let turning: Vec<_> = state.motion.turning.keys().copied().collect();
+            let spins = state
+                .motion
+                .scaling
+                .keys()
+                .chain(state.motion.rotating.keys());
+            let turning: std::collections::HashSet<_> = spins.copied().collect();
             for id in turning {
                 state.snap_spin(id);
                 state.complete(id);

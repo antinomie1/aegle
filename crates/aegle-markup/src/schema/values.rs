@@ -69,6 +69,14 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "tooltip" => Tooltip,
         "decimals" => Decimals,
         "ratio" => Ratio,
+        "paint_transition" => PaintTransition,
+        "offset_transition" => OffsetTransition,
+        "scale_transition" => ScaleTransition,
+        "rotation_transition" => RotationTransition,
+        "offset_x" => OffsetX,
+        "offset_y" => OffsetY,
+        "scale" => Scale,
+        "rotation" => Rotation,
         _ => return None,
     })
 }
@@ -154,8 +162,22 @@ pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
         Direction | Wrap => flex,
         Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems => kind == Kind::Grid,
         MaxWidth | MaxHeight | AspectRatio | Margin | Inset | Shrink | Basis | AlignSelf
-        | JustifySelf | GridColumn | GridRow => kind != Kind::Window,
+        | JustifySelf | GridColumn | GridRow | OffsetX | OffsetY | Scale | Rotation => {
+            kind != Kind::Window
+        }
         _ => true,
+    }
+}
+
+/// A duration, or a `[duration, easing]` pair.
+fn timing(value: &Literal) -> bool {
+    match value {
+        Literal::Duration(_) => true,
+        Literal::List(items) => {
+            matches!(&items[..], [Literal::Duration(_), Literal::Identifier(easing)]
+                if choices(PropertyName::Easing).contains(&easing.as_str()))
+        }
+        _ => false,
     }
 }
 
@@ -244,6 +266,11 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         (Min | Max | Value, Literal::Number(n)) => n.is_finite(),
         (FontSize, Literal::Length(n)) => n.is_finite() && *n > 0.0,
         (Transition, Literal::Duration(_)) => true,
+        (OffsetX | OffsetY, Literal::Length(n)) | (Rotation, Literal::Number(n)) => n.is_finite(),
+        (Scale, Literal::Number(n)) => *n > 0.0 && *n <= 1000.0,
+        (PaintTransition | OffsetTransition | ScaleTransition | RotationTransition, value) => {
+            timing(value)
+        }
         (
             Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
             | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
@@ -283,6 +310,13 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         AspectRatio => "a finite positive number".into(),
         FontSize => "a positive dp length".into(),
         Transition => "nonnegative whole milliseconds with the ms suffix".into(),
+        PaintTransition | OffsetTransition | ScaleTransition | RotationTransition => format!(
+            "milliseconds, or [milliseconds, easing] with easing one of {}",
+            choices(Easing).join(", ")
+        ),
+        OffsetX | OffsetY => "a finite dp length".into(),
+        Scale => "a number in (0, 1000]".into(),
+        Rotation => "finite degrees".into(),
         Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
         | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
         | IndicatorColor => "a #RRGGBB or #RRGGBBAA color".into(),

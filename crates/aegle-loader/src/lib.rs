@@ -21,6 +21,7 @@ mod build;
 mod eval;
 mod handle;
 mod layout;
+mod motion;
 mod reactive;
 mod view;
 

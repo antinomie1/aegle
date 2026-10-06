@@ -296,8 +296,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 本轮限定范围的实现与证据见上节；此前暂停的完整 GUI 目标仍未完成。本轮收尾后不自动开始 macOS 或其他里程碑。
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。
-- 组件/绘制：自定义控件输入行为、更多基础组件与布局属性、三态以外的控件变体、几何属性的逐属性过渡时长。
-- 标记语言：`scale`/`rotation` 等新几何属性尚无标记写法；类型化的逐属性 transition 未实现（过渡仍按节点整体）。
+- 组件/绘制：自定义控件输入行为；其余见末节。
 - 主题/动画：token 注册表（只有按字段的部分覆盖）。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制；真实屏幕阅读器与候选窗验收。
 - 工程验收：MSRV1.88、Clippy、多compositor/GPU与嵌入式完整资源测量；GPU 多窗口只共享实例/设备/管线，图集仍按窗口独立。现有桌面样本不能替代这些证据。
@@ -474,3 +473,9 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 验证：`aegle-widgets/tests/components.rs`（竖直滑块指针与键盘、聚焦滚轮、不确定进度的帧请求与停止、`motion` 下滑动结束后停止请求帧、NumberField 步进/提交/clamp/非法文本恢复/步进区点击/回调次数、分隔线方向与厚度；Tabs 单击、Left/Right、`select` 不回调、越界拒绝；Splitter 拖动、End、越界拒绝、比例为零时首窗格内容被裁出；Tooltip 延时唤醒插入标签、Escape 移除、无障碍描述）；`aegle/tests/components.rs`（同一 `.aegle` 经 `ui!` 与加载器得到相同边界与属性，加载器中 NumberField/Tabs 的 `on changed` 更新 state）；schema 接受与拒绝用例；软件渲染测试改为验证整像素裁剪不占 mask、分数裁剪仍需一层。`cargo test --workspace --all-features` 通过，默认 feature 的 workspace `check --all-targets` 通过，Windows 交叉 `cargo check`（与上一节相同组合）通过。
 - 私有 headless Sway（GLES2 compositor）上运行 release `showcase`（软件后端）：截图确认分割窗格、标签页下划线与键盘切换到表格页、NumberField 步进区、竖直滑块、分隔线、不确定进度扫动；两窗口平铺时左窗格内容在把手处被裁剪，修改前该布局因 mask 预算报错退出。
 - 未验证：headless Sway 没有指针设备，Tooltip 与 Splitter 拖动只经单元测试，未在原生窗口中实测；新增语义角色未经 AT-SPI 查询；Vulkan/wgpu 后端未截图验证裁剪对齐。`aegle-widgets` 测试行数占比约 32%（修改前为 38%），仍高于 20% 的目标。
+
+## 逐属性过渡与标记几何
+
+- 引擎（`aegle-ui/src/motion.rs`）：`TransitionProperty { Paint, Offset, Scale, Rotation }`；过渡策略改为四项各自可选的 `Transition`，`set_transition` 设四项相同，`Node::set_property_transition`/`property_transition` 单独设置或读取。位移、缩放、旋转分别补间（各有运行表），缩放和旋转仍共用 `Transform` 目标；完成回调在最后一项结束时排队一次，减少动态效果、`finish`/`cancel` 与删除节点覆盖所有项。去掉某项时间时该项跳到目标而不单独完成。原生 App 的默认策略在首次绘制前不补间几何。
+- 标记：`offset_x`、`offset_y`（dp）、`scale`、`rotation`（度）可写字面量或绑定 float，`ui!` 与加载器都调用 `set_offset`/`set_transform` 并保留另一轴或另一分量；`paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition` 接受 `200ms` 或 `[200ms, easing]`，在 `transition` 之后逐项覆盖。schema 拒绝 Window 上的几何、非 dp 位移、非正或大于 1000 的缩放与不完整的时长列表。facade 预导出 `TransitionProperty`。
+- 验证：`aegle-ui/tests/transitions.rs`（位移 200 ms、缩放 100 ms 线性分别取样，旋转无时长直接到位；只在最后一项结束时完成一次；去掉位移时长时跳到目标且不完成）；`aegle/tests/motion.rs`（同一 `.aegle` 经 `ui!` 与加载器得到相同的四项时长、位移与 90° 旋转，绑定的 scale 改变后补间 100 ms 结束）；schema 接受与拒绝用例。

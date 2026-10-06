@@ -9,6 +9,25 @@ use aegle_core::{Dirty, NodeId};
 use aegle_motion::{Interpolate, InvalidValue, Tween};
 use std::{collections::HashMap, time::Duration};
 
+/// A presented value whose transition timing can be set on its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TransitionProperty {
+    /// Every paint value of the appearance: colors, border and focus widths,
+    /// and radius.
+    Paint,
+    /// The translation set by `Node::set_offset`.
+    Offset,
+    /// The scale of `Node::set_transform`.
+    Scale,
+    /// The rotation of `Node::set_transform`.
+    Rotation,
+}
+
+impl TransitionProperty {
+    /// Every property, in slot order.
+    pub const ALL: [Self; 4] = [Self::Paint, Self::Offset, Self::Scale, Self::Rotation];
+}
+
 #[derive(Default)]
 pub struct Motion {
     pub now: Duration,
@@ -16,19 +35,37 @@ pub struct Motion {
     pub default: Option<Transition>,
     pub tracks: HashMap<NodeId, Track>,
     pub active: HashMap<NodeId, Active>,
-    /// Running offset transitions; the presented value lives on the element.
-    pub moving: HashMap<NodeId, Moving>,
-    /// Running scale/rotation transitions.
-    pub turning: HashMap<NodeId, Turning>,
+    /// Running geometric transitions; presented values live on the element.
+    pub moving: HashMap<NodeId, Running<Point>>,
+    pub scaling: HashMap<NodeId, Running<f32>>,
+    pub rotating: HashMap<NodeId, Running<f32>>,
     /// Momentum scrolling after a finished touchpad gesture.
     pub fling: Option<crate::fling::Fling>,
     /// Completion handlers, versioned in the shared callback sequence.
     pub ends: HashMap<NodeId, Handler>,
+    /// Nodes whose transition finished during the current advance.
+    finished: Vec<NodeId>,
 }
 
+/// A node's transition policy.
 pub struct Track {
-    pub timing: Transition,
+    /// Timing per property, in [`TransitionProperty::ALL`] order; `None`
+    /// changes that property immediately.
+    pub timings: [Option<Transition>; 4],
     pub presented: Option<Appearance>,
+}
+
+impl Track {
+    /// The same timing for every property.
+    pub fn uniform(timing: Transition) -> Self {
+        Self {
+            timings: [Some(timing); 4],
+            presented: None,
+        }
+    }
+    pub fn timing(&self, property: TransitionProperty) -> Option<Transition> {
+        self.timings[property as usize]
+    }
 }
 
 pub struct Active {
@@ -36,35 +73,11 @@ pub struct Active {
     start: Duration,
 }
 
-pub struct Moving {
-    pub tween: Tween<Point>,
+pub struct Running<T: Interpolate> {
+    pub tween: Tween<T>,
     /// Set by the next refresh, as for paint, so a request made from a callback
     /// starts at the host's current time rather than the last sampled one.
     start: Option<Duration>,
-}
-
-pub struct Turning {
-    pub tween: Tween<Spin>,
-    start: Option<Duration>,
-}
-
-#[derive(Clone, Copy)]
-pub struct Spin(pub Transform);
-
-impl Interpolate for Spin {
-    fn validate(self) -> std::result::Result<(), InvalidValue> {
-        if self.0.valid() {
-            Ok(())
-        } else {
-            Err(InvalidValue)
-        }
-    }
-    fn interpolate(self, to: Self, progress: f32) -> Self {
-        Self(Transform {
-            scale: self.0.scale.interpolate(to.0.scale, progress),
-            rotation: self.0.rotation.interpolate(to.0.rotation, progress),
-        })
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -92,9 +105,120 @@ impl Interpolate for Paint {
     }
 }
 
+/// What a geometric request did.
+#[derive(PartialEq)]
+enum Step {
+    Unchanged,
+    Started,
+    Snapped,
+}
+
+/// Starts or retargets a tween when `timing` animates, otherwise drops any
+/// running one so the caller snaps.
+fn plan<T: Interpolate + PartialEq>(
+    running: &mut HashMap<NodeId, Running<T>>,
+    id: NodeId,
+    current: T,
+    target: T,
+    timing: Option<Transition>,
+) -> Result<Step> {
+    let goal = running.get(&id).map(|r| r.tween.target());
+    if goal == Some(target) || (goal.is_none() && current == target) {
+        return Ok(Step::Unchanged);
+    }
+    let Some(timing) = timing else {
+        running.remove(&id);
+        return Ok(Step::Snapped);
+    };
+    let tween = Tween::new(current, target, timing.duration, timing.easing)?;
+    running.insert(id, Running { tween, start: None });
+    Ok(Step::Started)
+}
+
+/// Samples running tweens into the tree, recording finished nodes.
+fn advance<T: Interpolate>(
+    running: &mut HashMap<NodeId, Running<T>>,
+    state: &mut aegle_core::Tree<aegle_layout::LayoutNode<crate::state::Element>>,
+    now: Duration,
+    finished: &mut Vec<NodeId>,
+    apply: impl Fn(&mut crate::state::Element, T),
+) -> bool {
+    let mut moved = false;
+    running.retain(|id, run| {
+        let Some(start) = run.start else {
+            return true;
+        };
+        let element = &mut state.get_mut(*id).unwrap().context;
+        let elapsed = now - start;
+        // Hidden subtrees go straight to their target.
+        let done = run.tween.finished(elapsed) || !element.effective_visible;
+        let value = if done {
+            run.tween.target()
+        } else {
+            run.tween.sample(elapsed)
+        };
+        apply(element, value);
+        moved = true;
+        if done {
+            finished.push(*id);
+        }
+        !done
+    });
+    moved
+}
+
+impl Motion {
+    /// Drops every transition, policy and handler of a removed node.
+    pub fn forget(&mut self, id: NodeId) {
+        self.tracks.remove(&id);
+        self.active.remove(&id);
+        self.moving.remove(&id);
+        self.scaling.remove(&id);
+        self.rotating.remove(&id);
+        self.ends.remove(&id);
+    }
+    pub fn clear(&mut self) {
+        self.tracks.clear();
+        self.active.clear();
+        self.moving.clear();
+        self.scaling.clear();
+        self.rotating.clear();
+        self.fling = None;
+        self.ends.clear();
+    }
+    /// Whether any transition of `id` runs.
+    pub fn running(&self, id: NodeId) -> bool {
+        self.active.contains_key(&id)
+            || self.moving.contains_key(&id)
+            || self.scaling.contains_key(&id)
+            || self.rotating.contains_key(&id)
+    }
+    pub fn any_running(&self) -> bool {
+        !(self.active.is_empty()
+            && self.moving.is_empty()
+            && self.scaling.is_empty()
+            && self.rotating.is_empty())
+    }
+}
+
 impl State {
+    /// Whether the policy has a timing for one property, and that timing when
+    /// it animates now (motion allowed, nonzero, visible). A control not yet
+    /// painted has nothing to animate from, so its geometry is set directly.
+    fn timing(&self, id: NodeId, property: TransitionProperty) -> (bool, Option<Transition>) {
+        let timing = self.motion.tracks.get(&id).and_then(|t| {
+            (property == TransitionProperty::Paint || t.presented.is_some())
+                .then(|| t.timing(property))
+                .flatten()
+        });
+        let visible = self.tree.get(id).unwrap().context.effective_visible;
+        let animates = timing.filter(|t| !self.motion.reduced && !t.duration.is_zero() && visible);
+        (timing.is_some(), animates)
+    }
+
     /// Called only for invalidated records, after the new skin target is validated.
     pub fn transition_appearance(&mut self, id: NodeId, target: Appearance) -> Result<Appearance> {
+        let (policy, animates) = self.timing(id, TransitionProperty::Paint);
         let Some(track) = self.motion.tracks.get_mut(&id) else {
             return Ok(target);
         };
@@ -102,17 +226,14 @@ impl State {
             track.presented = Some(target);
             return Ok(target);
         };
-        if self.motion.reduced
-            || track.timing.duration.is_zero()
-            || !self.tree.get(id).unwrap().context.effective_visible
-        {
+        let Some(timing) = animates else {
             // A change that snaps instead of animating still completes.
             track.presented = Some(target);
-            if self.motion.active.remove(&id).is_some() || current != target {
+            if policy && (self.motion.active.remove(&id).is_some() || current != target) {
                 self.complete(id);
             }
             return Ok(target);
-        }
+        };
         if self
             .motion
             .active
@@ -126,18 +247,14 @@ impl State {
                 self.complete(id);
             }
         } else {
-            self.motion.active.insert(
-                id,
-                Active {
-                    tween: Tween::new(
-                        Paint(current),
-                        Paint(target),
-                        track.timing.duration,
-                        track.timing.easing,
-                    )?,
-                    start: self.motion.now,
-                },
-            );
+            let tween = Tween::new(
+                Paint(current),
+                Paint(target),
+                timing.duration,
+                timing.easing,
+            )?;
+            let start = self.motion.now;
+            self.motion.active.insert(id, Active { tween, start });
         }
         Ok(current)
     }
@@ -151,81 +268,106 @@ impl State {
             .unwrap_or_else(|| self.appearance(id))
     }
 
-    /// Starts, retargets or snaps an offset. Without a running policy the
+    /// Starts, retargets or snaps an offset. Without an offset timing the
     /// offset snaps; a policy's snap (reduced motion, hidden, zero duration)
     /// still completes.
     pub fn transition_offset(&mut self, id: NodeId, target: Point) -> Result {
-        let element = &self.tree.get(id).unwrap().context;
-        let current = element.offset;
-        let timing = self.motion.tracks.get(&id).map(|track| track.timing);
-        let running = self.motion.moving.get(&id).map(|a| a.tween.target());
-        if running == Some(target) || (running.is_none() && current == target) {
-            return Ok(());
+        let (policy, timing) = self.timing(id, TransitionProperty::Offset);
+        let current = self.tree.get(id).unwrap().context.offset;
+        match plan(&mut self.motion.moving, id, current, target, timing)? {
+            Step::Unchanged => {}
+            Step::Started => self.repaint = true,
+            Step::Snapped => {
+                self.tree.get_mut(id).unwrap().context.offset = target;
+                self.geometry_dirty = true;
+                self.repaint = true;
+                if policy {
+                    self.complete(id);
+                }
+            }
         }
-        if let Some(timing) = timing.filter(|timing| {
-            !self.motion.reduced && !timing.duration.is_zero() && element.effective_visible
-        }) {
-            let tween = Tween::new(current, target, timing.duration, timing.easing)?;
-            self.motion.moving.insert(id, Moving { tween, start: None });
+        Ok(())
+    }
+
+    /// Starts, retargets or snaps scale and rotation, each with its own timing,
+    /// like [`Self::transition_offset`].
+    pub fn transition_spin(&mut self, id: NodeId, target: Transform) -> Result {
+        let (scale_policy, scale_timing) = self.timing(id, TransitionProperty::Scale);
+        let (turn_policy, turn_timing) = self.timing(id, TransitionProperty::Rotation);
+        let mut spin = self.tree.get(id).unwrap().context.spin;
+        let motion = &mut self.motion;
+        let scale = plan(
+            &mut motion.scaling,
+            id,
+            spin.scale,
+            target.scale,
+            scale_timing,
+        )?;
+        let turn = plan(
+            &mut motion.rotating,
+            id,
+            spin.rotation,
+            target.rotation,
+            turn_timing,
+        )?;
+        if scale == Step::Started || turn == Step::Started {
             self.repaint = true;
-            return Ok(());
         }
-        self.motion.moving.remove(&id);
-        self.tree.get_mut(id).unwrap().context.offset = target;
-        self.geometry_dirty = true;
-        self.repaint = true;
-        if timing.is_some() {
+        if scale == Step::Snapped {
+            spin.scale = target.scale;
+        }
+        if turn == Step::Snapped {
+            spin.rotation = target.rotation;
+        }
+        if scale == Step::Snapped || turn == Step::Snapped {
+            self.set_spin(id, spin);
+        }
+        if (scale == Step::Snapped && scale_policy) || (turn == Step::Snapped && turn_policy) {
             self.complete(id);
         }
         Ok(())
     }
 
-    /// Starts, retargets or snaps a scale/rotation like [`Self::transition_offset`].
-    pub fn transition_spin(&mut self, id: NodeId, target: Transform) -> Result {
-        let element = &self.tree.get(id).unwrap().context;
-        let current = element.spin;
-        let timing = self.motion.tracks.get(&id).map(|track| track.timing);
-        let running = self.motion.turning.get(&id).map(|a| a.tween.target().0);
-        if running == Some(target) || (running.is_none() && current == target) {
-            return Ok(());
+    /// The logical target scale and rotation.
+    pub fn target_spin(&self, id: NodeId) -> Transform {
+        let spin = self.tree.get(id).unwrap().context.spin;
+        Transform {
+            scale: self
+                .motion
+                .scaling
+                .get(&id)
+                .map_or(spin.scale, |r| r.tween.target()),
+            rotation: self
+                .motion
+                .rotating
+                .get(&id)
+                .map_or(spin.rotation, |r| r.tween.target()),
         }
-        if let Some(timing) = timing.filter(|timing| {
-            !self.motion.reduced && !timing.duration.is_zero() && element.effective_visible
-        }) {
-            let tween = Tween::new(Spin(current), Spin(target), timing.duration, timing.easing)?;
-            self.motion
-                .turning
-                .insert(id, Turning { tween, start: None });
-            self.repaint = true;
-            return Ok(());
-        }
-        self.motion.turning.remove(&id);
-        self.set_spin(id, target);
-        if timing.is_some() {
-            self.complete(id);
-        }
-        Ok(())
     }
 
     /// Jumps a running scale/rotation to its target. Returns whether one was running.
     pub fn snap_spin(&mut self, id: NodeId) -> bool {
-        let Some(active) = self.motion.turning.remove(&id) else {
-            return false;
-        };
-        self.set_spin(id, active.tween.target().0);
-        true
+        let target = self.target_spin(id);
+        let scaled = self.motion.scaling.remove(&id).is_some();
+        let turned = self.motion.rotating.remove(&id).is_some();
+        if scaled || turned {
+            self.set_spin(id, target);
+        }
+        scaled || turned
     }
 
-    /// Starts offset and spin transitions requested since the last refresh.
+    /// Starts geometric transitions requested since the last refresh.
     pub fn start_offsets(&mut self) {
+        let now = self.motion.now;
         for moving in self.motion.moving.values_mut() {
-            moving.start.get_or_insert(self.motion.now);
+            moving.start.get_or_insert(now);
         }
-        for turning in self.motion.turning.values_mut() {
-            turning.start.get_or_insert(self.motion.now);
+        let spins = self.motion.scaling.values_mut();
+        for running in spins.chain(self.motion.rotating.values_mut()) {
+            running.start.get_or_insert(now);
         }
         if let Some(fling) = &mut self.motion.fling {
-            fling.last.get_or_insert(self.motion.now);
+            fling.last.get_or_insert(now);
         }
     }
 
@@ -242,12 +384,8 @@ impl State {
 
     /// Queues the completion handler once none of the node's transitions remain.
     pub fn complete(&mut self, id: NodeId) {
-        let motion = &self.motion;
-        if !motion.active.contains_key(&id)
-            && !motion.moving.contains_key(&id)
-            && !motion.turning.contains_key(&id)
-        {
-            if let Some(handler) = motion.ends.get(&id) {
+        if !self.motion.running(id) {
+            if let Some(handler) = self.motion.ends.get(&id) {
                 self.pending.push_back((id, handler.version));
             }
         }
@@ -259,66 +397,22 @@ impl State {
         }
         self.motion.now = now;
         self.step_fling(now)?;
-        let mut moved = false;
         let Motion {
             moving,
-            turning,
+            scaling,
+            rotating,
             active,
-            ends,
+            tracks,
+            finished,
             ..
         } = &mut self.motion;
-        turning.retain(|id, turn| {
-            let Some(start) = turn.start else {
-                return true;
-            };
-            let element = &mut self.tree.get_mut(*id).unwrap().context;
-            let elapsed = now - start;
-            let finished = turn.tween.finished(elapsed) || !element.effective_visible;
-            element.spin = if finished {
-                turn.tween.target().0
-            } else {
-                turn.tween.sample(elapsed).0
-            };
-            moved = true;
-            if finished && !active.contains_key(id) && !moving.contains_key(id) {
-                if let Some(handler) = ends.get(id) {
-                    self.pending.push_back((*id, handler.version));
-                }
-            }
-            !finished
-        });
-        moving.retain(|id, tween| {
-            let Some(start) = tween.start else {
-                return true;
-            };
-            let element = &mut self.tree.get_mut(*id).unwrap().context;
-            let elapsed = now - start;
-            // Hidden subtrees go straight to their target.
-            let finished = tween.tween.finished(elapsed) || !element.effective_visible;
-            element.offset = if finished {
-                tween.tween.target()
-            } else {
-                tween.tween.sample(elapsed)
-            };
-            moved = true;
-            if finished && !active.contains_key(id) && !turning.contains_key(id) {
-                if let Some(handler) = ends.get(id) {
-                    self.pending.push_back((*id, handler.version));
-                }
-            }
-            !finished
-        });
+        let tree = &mut self.tree;
+        let mut moved = advance(moving, tree, now, finished, |e, v| e.offset = v);
+        moved |= advance(scaling, tree, now, finished, |e, v| e.spin.scale = v);
+        moved |= advance(rotating, tree, now, finished, |e, v| e.spin.rotation = v);
         self.geometry_dirty |= moved;
         self.repaint |= moved;
-        let tracks = &mut self.motion.tracks;
-        let tree = &mut self.tree;
-        let (moving, turning, ends, pending) = (
-            &self.motion.moving,
-            &self.motion.turning,
-            &self.motion.ends,
-            &mut self.pending,
-        );
-        self.motion.active.retain(|id, active| {
+        active.retain(|id, active| {
             let elapsed = now - active.start;
             let next = active.tween.sample(elapsed).0;
             let track = tracks.get_mut(id).unwrap();
@@ -334,14 +428,21 @@ impl State {
                 tree.mark_dirty(*id, dirty)
                     .expect("animation belongs to a live node");
             }
-            let finished = active.tween.finished(elapsed);
-            if finished && !moving.contains_key(id) && !turning.contains_key(id) {
-                if let Some(handler) = ends.get(id) {
-                    pending.push_back((*id, handler.version));
-                }
+            let done = active.tween.finished(elapsed);
+            if done {
+                finished.push(*id);
             }
-            !finished
+            !done
         });
+        let mut finished = std::mem::take(&mut self.motion.finished);
+        for (index, &id) in finished.iter().enumerate() {
+            // A node finishing several properties at once completes once.
+            if !finished[..index].contains(&id) {
+                self.complete(id);
+            }
+        }
+        finished.clear();
+        self.motion.finished = finished;
         Ok(())
     }
 }

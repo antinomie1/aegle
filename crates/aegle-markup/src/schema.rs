@@ -204,6 +204,22 @@ pub enum PropertyName {
     Transition,
     /// Transition easing; requires a sibling `transition` property.
     Easing,
+    /// Paint transition timing: a duration or `[duration, easing]`.
+    PaintTransition,
+    /// Offset transition timing: a duration or `[duration, easing]`.
+    OffsetTransition,
+    /// Scale transition timing: a duration or `[duration, easing]`.
+    ScaleTransition,
+    /// Rotation transition timing: a duration or `[duration, easing]`.
+    RotationTransition,
+    /// Horizontal presented translation in dp, after layout.
+    OffsetX,
+    /// Vertical presented translation in dp, after layout.
+    OffsetY,
+    /// Uniform presented scale about the center, in `(0, 1000]`.
+    Scale,
+    /// Clockwise presented rotation about the center, in degrees.
+    Rotation,
     /// Initial toggle state; defaults to false.
     Checked,
     /// Whether a check box shows the mixed (partially checked) state.

@@ -98,13 +98,15 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 当前外观过渡
 
-可选 `motion` 已提供 `Node::set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))`，同时过渡背景、文字、边框、圆角、焦点环、选择和 caret 的外观值。`appearance()` 返回逻辑目标，`presented_appearance()` 返回最近采样值；失焦/禁用的焦点宽度目标为零，绘制使用相同呈现值。前景动画同步语义颜色，不重新成形文字，也不延迟焦点、文本、预编辑或命中状态。布局、字号、缩放/旋转和窗口清屏背景当前不做过渡。
+可选 `motion` 已提供 `Node::set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))`，同时过渡背景、文字、边框、圆角、焦点环、选择和 caret 的外观值。`appearance()` 返回逻辑目标，`presented_appearance()` 返回最近采样值；失焦/禁用的焦点宽度目标为零，绘制使用相同呈现值。前景动画同步语义颜色，不重新成形文字，也不延迟焦点、文本、预编辑或命中状态。同一策略也过渡位移、缩放与旋转；布局、字号和窗口清屏背景当前不做过渡。
+
+`set_property_transition(TransitionProperty, Option<Transition>)` 单独设置外观（Paint）、位移（Offset）、缩放（Scale）或旋转（Rotation）的时长与曲线，`property_transition` 读取；`set_transition` 等同于四项相同。某项为 None 时该属性直接到目标，运行中的该项补间立即跳到目标且不单独完成；四项都为 None 时移除策略。各项独立补间，缩放与旋转共用一个 Transform 目标，但呈现值分别取样。原生 App 的默认策略在首次绘制前不补间几何。
 
 `Node::set_offset(Point)` 在布局后平移节点及其子树，不改变布局或滚动范围；`bounds`、命中、裁剪、IME 候选锚点和无障碍边界都使用呈现位移。没有 motion 或过渡策略时立即生效；有策略时从当前呈现位移开始补间，请求在下一次刷新时以宿主当前时钟开始，因而回调中设置也不会因旧时间戳直接结束。位移采样只更新几何，不重新录制绘制记录。`offset()` 返回逻辑目标。运行中的位移保留开始时的时长。
 
 `clear_transition()` 移除策略并立即回到目标；`finish_transition()` 立即到达当前目标；`cancel_transition()` 将最近呈现写为本地外观覆盖和位移目标，替换状态颜色覆盖，保留后续设置的过渡策略。焦点轮廓的可见性仍受真实行为约束。
 
-`on_transition_end(callback)` 在节点所有活动过渡（外观和位移）到达目标后排队一次，与点击回调共用版本化队列，在借用外执行。正常结束、`finish_transition()`，以及有策略时因减少动态效果、隐藏或零时长而直接跳到目标的变化都会完成；取消、`clear_transition()`、删除节点或关闭窗口不完成，已排队的通知随节点删除丢弃。尚无关键帧、弹簧或循环 API。
+`on_transition_end(callback)` 在节点所有活动过渡（外观、位移、缩放和旋转中最晚的一项）到达目标后排队一次，与点击回调共用版本化队列，在借用外执行。正常结束、`finish_transition()`，以及有策略时因减少动态效果、隐藏或零时长而直接跳到目标的变化都会完成；取消、`clear_transition()`、删除节点或关闭窗口不完成，已排队的通知随节点删除丢弃。尚无关键帧、弹簧或循环 API。
 
 无窗口 Ui 默认不安装过渡。`set_default_transition` 只影响随后创建的交互控件；首次刷新直接建立呈现值，不做入场动画。原生 App 在启用 motion 时为交互控件默认安装120ms EaseOut，`AppOptions.transition=None` 可关闭自动安装。各 App 共用一个单调时钟，通过 Wayland frame callback 推进；没有活动动画时不请求动画帧，无轮询定时器。隐藏子树刷新时直接到目标；compositor 暂停窗口帧回调时不主动唤醒，恢复时采样当前时刻。
 
