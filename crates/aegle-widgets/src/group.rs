@@ -3,7 +3,7 @@
 use std::any::Any;
 
 use aegle_layout::Style;
-use aegle_theme::{ControlKind, Theme};
+use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
 use aegle_ui::{Container, Control, Result, container_style};
 
 /// The role a [`Group`] exports to assistive technology.
@@ -35,7 +35,25 @@ impl Control for Group {
         ControlKind::Container
     }
     fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
+        use aegle_layout::{Edges, LengthPercentage, Size};
         aegle_ui::Plain.retheme(theme, local, root, style);
+        let popup = matches!(self.role, Role::Popup { .. });
+        if (popup || matches!(self.role, Role::TableCell | Role::TableHeader)) && local & 2 == 0 {
+            let p = LengthPercentage::length(theme.padding / 2.0);
+            style.padding = Edges {
+                left: p,
+                right: p,
+                top: p,
+                bottom: p,
+            };
+        }
+        if popup && local & 4 == 0 {
+            let zero = LengthPercentage::length(0.0);
+            style.gap = Size {
+                width: zero,
+                height: zero,
+            };
+        }
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
@@ -51,6 +69,25 @@ impl Control for Group {
     }
 }
 
+/// A bordered surface for tables and popups, resolved from the current theme
+/// so a theme change repaints it rather than keeping the creation-time colors.
+pub(crate) fn panel(theme: &Theme, state: VisualState) -> Appearance {
+    Appearance {
+        background: theme.surface,
+        border_color: theme.border,
+        border_width: 1.0,
+        ..Appearance::new(theme, state)
+    }
+}
+
+/// A table header row: the window background inside the table's surface.
+pub(crate) fn header(theme: &Theme, state: VisualState) -> Appearance {
+    Appearance {
+        background: theme.background,
+        ..Appearance::new(theme, state)
+    }
+}
+
 /// Appends a column or row (by `style`) with `role`.
 pub(crate) fn add(container: &Container, role: Role, row: bool) -> Result<Container> {
     crate::add(container, |_, theme| {
@@ -58,7 +95,9 @@ pub(crate) fn add(container: &Container, role: Role, row: bool) -> Result<Contai
         if row {
             style.flex_direction = aegle_layout::FlexDirection::Row;
         }
-        Ok((Box::new(Group { role }) as Box<dyn Control>, style))
+        let group = Group { role };
+        group.retheme(theme, 0, false, &mut style);
+        Ok((Box::new(group) as Box<dyn Control>, style))
     })
     .map(Container)
 }

@@ -423,4 +423,10 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - `aegle-render-wgpu` 的适配器检查原先读的是 `Limits::downlevel_defaults().using_resolution(..)` 的结果；`using_resolution` 只取适配器的纹理尺寸，存储缓冲数恒为默认值 4，检查从不触发，能力不足的适配器只会在 `request_device` 失败。现改为要求 `DownlevelFlags::VERTEX_STORAGE` 且适配器 `max_storage_buffers_per_shader_stage ≥ 2`，否则返回 `Unsupported`（GL 在顶点阶段为 0 时会报片段阶段的数量，单看限额不够）；设备请求的存储缓冲数随之降为实际需要的 2。GLES 后端仍不编译，拒绝路径没有实测。
 - 新增 `showcase` 示例：一个窗口包含全部默认控件（标签、单行/密码/多行编辑、按钮与禁用按钮、弹出层、复选框含 mixed、开关、单选组、滑块联动进度条、切换主题的下拉框、图像、可旋转 Canvas、滚动视图、等高与可变高度虚拟列表、表格）和状态行。
 - 验证：`aegle-render-wgpu` 的 ignored GPU 测试在 RADV（RX 6800 XT）与 Lavapipe 上通过。私有 headless Sway（GLES2 compositor）上以 RADV 运行 wgpu 构建的 release `showcase`，wtype 键盘 Tab 遍历显示焦点框、空格打开弹出层、下拉框切换到深色主题并截图。默认（软件）构建也在同一 compositor 上启动并显示同一布局，未做主题切换。
-- 发现未修复：运行时 `set_theme` 后表格主体与弹出层（含下拉列表）背景仍是创建时主题的 `surface`，因为两者在创建时把主题颜色写成固定 `Style`；深色主题下表格文字不可读。另：wtype 每次退出会移除虚拟键盘，窗口收到 keyboard leave 后清除焦点，截图焦点态需在 wtype 存活期间捕获。
+- 当时发现的问题：运行时 `set_theme` 后表格主体与弹出层（含下拉列表）背景仍是创建时主题的 `surface`，见下一节的修复。另：wtype 每次退出会移除虚拟键盘，窗口收到 keyboard leave 后清除焦点，截图焦点态需在 wtype 存活期间捕获。
+
+## 表格与弹出层随主题更新
+
+- 表格、表头与弹出层（含下拉列表）原先在创建时把主题颜色写成固定的本地 `Style`，`set_theme` 后保持旧颜色。现在改用纯函数皮肤 `group::panel`（surface + border + 1 dp 边框）与 `group::header`（background），每次按当前解析主题求值；用户自己设置的本地 `Style` 仍优先。
+- 弹出层的半 padding 与零 gap、表格单元格的半 padding 原先同样在创建时写死，而且弹出层没有记录本地布局位，主题变化后 `Plain::retheme` 会把 gap 重置为 `theme.gap`。现在由 `Group::retheme` 按角色给出这些默认值，创建与换主题走同一函数。
+- 验证：新增 `table_and_popup_surfaces_follow_theme_changes`，在深色与高对比主题下检查表格与弹出层的背景、边框、零 gap 和内边距；修改前该测试在背景断言处失败。`cargo test --workspace --all-features` 通过。

@@ -189,3 +189,35 @@ fn tables_and_content_sized_rows() -> Result {
     }
     Ok(())
 }
+
+#[test]
+fn table_and_popup_surfaces_follow_theme_changes() -> Result {
+    let ui = ui()?;
+    let table = ui.root().table(
+        &[TableColumn {
+            title: "Name",
+            width: None,
+        }],
+        28.0,
+        10,
+        |cell, row, _| cell.text(&format!("{row}")).map(drop),
+    )?;
+    table.set_height(Some(120.0))?;
+    let popup = ui.root().button("Menu")?.popup()?;
+    let (first, second) = (popup.text("One")?, popup.text("Two")?);
+    ui.refresh()?;
+    popup.show()?;
+    for theme in [Theme::dark(), Theme::high_contrast()] {
+        ui.set_theme(theme)?;
+        ui.refresh()?;
+        for panel in [table.appearance()?, popup.appearance()?] {
+            assert_eq!(panel.background, theme.surface);
+            assert_eq!(panel.border_color, theme.border);
+        }
+        // The popup keeps its zero gap and half-padding inset across themes.
+        let (a, b, outer) = (first.bounds()?, second.bounds()?, popup.bounds()?);
+        assert_eq!(b.origin.y, a.origin.y + a.size.height);
+        assert_eq!(a.origin.y - outer.origin.y, theme.padding / 2.0);
+    }
+    Ok(())
+}

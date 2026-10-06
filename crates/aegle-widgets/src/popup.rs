@@ -4,9 +4,9 @@ use std::{collections::HashMap, ops::Deref};
 
 use aegle_controls::{Key, KeyInput};
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{Edges, LengthPercentage, LengthPercentageAuto, Position};
+use aegle_layout::{Edges, LengthPercentageAuto, Position};
 use aegle_types::{Point, Rect};
-use aegle_ui::{Container, Node, Result, State, Style, container_style};
+use aegle_ui::{Container, Control, Node, Result, State, container_style};
 
 use crate::{
     button::Variant,
@@ -70,41 +70,19 @@ impl NodePopup for Node {
                 right: LengthPercentageAuto::auto(),
                 bottom: LengthPercentageAuto::auto(),
             };
-            let padding = LengthPercentage::length(theme.padding / 2.0);
-            style.padding = Edges {
-                left: padding,
-                right: padding,
-                top: padding,
-                bottom: padding,
-            };
-            style.gap = aegle_layout::Size {
-                width: LengthPercentage::length(0.0),
-                height: LengthPercentage::length(0.0),
-            };
             let root = state.root;
-            let id = state.insert(
-                root,
-                usize::MAX,
-                Box::new(Group {
-                    role: Role::Popup { list: false },
-                }),
-                style,
-            )?;
+            let group = Group {
+                role: Role::Popup { list: false },
+            };
+            group.retheme(&theme, 0, false, &mut style);
+            let id = state.insert(root, usize::MAX, Box::new(group), style)?;
             state.set_visible(id, false)?;
             let anchor_element = &state.tree.get(anchor).unwrap().context;
             if anchor_element.theme.is_some() {
                 let local = anchor_element.theme.clone();
                 state.propagate_theme(id, local)?;
             }
-            state.set_style(
-                id,
-                Style {
-                    background: Some(theme.surface),
-                    border_color: Some(theme.border),
-                    border_width: Some(1.0),
-                    ..Default::default()
-                },
-            )?;
+            state.decorations.entry(id).or_default().skin = Some(crate::group::panel);
             popups(state).entries.push(PopupEntry {
                 popup: id,
                 anchor,

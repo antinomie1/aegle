@@ -2,7 +2,7 @@
 
 use std::ops::Deref;
 
-use aegle_ui::{Container, Result, Style, UiError};
+use aegle_ui::{Container, Result, UiError};
 
 use crate::{
     ListView, Widgets,
@@ -42,9 +42,8 @@ impl Table {
 }
 
 /// A header or body cell sized by its column.
-fn cell(line: &Container, column: &TableColumn, padding: f32, role: Role) -> Result<Container> {
+fn cell(line: &Container, column: &TableColumn, role: Role) -> Result<Container> {
     let cell = group::add(line, role, false)?;
-    cell.set_padding(padding)?;
     match column.width {
         Some(width) => cell.set_width(Some(width))?,
         None => cell.set_grow(1.0)?,
@@ -64,23 +63,16 @@ pub(crate) fn table(
     if columns.is_empty() || !columns.iter().all(|c| valid(c.width)) {
         return Err(UiError::InvalidValue.into());
     }
-    let theme = container.theme()?;
-    let padding = theme.padding / 2.0;
     let table = group::add(container, Role::Table, false)?;
     table.set_gap(0.0)?;
     // Keeps the header fill inside the border.
     table.set_padding(1.0)?;
-    table.set_style(Style {
-        background: Some(theme.surface),
-        border_color: Some(theme.border),
-        border_width: Some(1.0),
-        ..Default::default()
-    })?;
+    table.set_skin(group::panel)?;
     let header = group::add(&table, Role::TableRow, true)?;
     header.set_gap(0.0)?;
-    header.set_background(theme.background)?;
+    header.set_skin(group::header)?;
     for column in columns {
-        let cell = cell(&header, column, padding, Role::TableHeader)?;
+        let cell = cell(&header, column, Role::TableHeader)?;
         cell.text(column.title)?;
     }
     let widths: Vec<_> = columns.iter().map(|c| c.width).collect();
@@ -92,7 +84,6 @@ pub(crate) fn table(
             let cell = cell(
                 &line,
                 &TableColumn { title: "", width },
-                padding,
                 Role::TableCell,
             )?;
             fill(&cell, index, column)?;
