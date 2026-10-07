@@ -6,7 +6,7 @@ use tiny_skia::{PathStroker, Transform};
 
 use crate::{
     Frame, RenderError, Surface,
-    blend::{blend_linear, linear_rgba},
+    blend::{blend_linear_span, linear_rgba},
     path,
     raster::{Bounds, State},
     surface::order,
@@ -129,24 +129,23 @@ impl Frame<'_, '_, '_> {
         for row in bounds.rows(stride) {
             let y = (row.start / stride) as f32 + 0.5;
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
-            for (i, pixel) in row.zip(pixels.chunks_exact_mut(4)) {
+            blend_linear_span(pixels, row.start, |i, pixel| {
                 let local = inverse.map_point(Point::new((i % stride) as f32 + 0.5, y));
                 let coverage = clip.map_or(255, |mask| mask[i]);
                 if aligned {
                     let texel = order(bgra, fetch(image, local.x as u32, local.y as u32));
                     if texel[3] == 255 && coverage == 255 {
                         pixel.copy_from_slice(&texel);
-                    } else {
-                        blend_linear(pixel, linear_rgba(texel), coverage);
+                        return ([0.0; 4], 0);
                     }
-                } else {
-                    let alpha = edge(local.x, width as f32, footprint[0])
-                        * edge(local.y, height as f32, footprint[1]);
-                    let source =
-                        order(bgra, sample(image, local.x - 0.5, local.y - 0.5)).map(|v| v * alpha);
-                    blend_linear(pixel, source, coverage);
+                    return (linear_rgba(texel), coverage);
                 }
-            }
+                let alpha = edge(local.x, width as f32, footprint[0])
+                    * edge(local.y, height as f32, footprint[1]);
+                let source =
+                    order(bgra, sample(image, local.x - 0.5, local.y - 0.5)).map(|v| v * alpha);
+                (source, coverage)
+            });
         }
         Ok(())
     }

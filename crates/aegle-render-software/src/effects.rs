@@ -7,7 +7,7 @@ use tiny_skia::FillRule;
 
 use crate::{
     Frame, RenderError,
-    blend::{blend_linear, linear_rgba},
+    blend::{blend_linear_span, linear_rgba},
     path,
     raster::{Bounds, State, coverage_product},
 };
@@ -45,14 +45,15 @@ impl Frame<'_, '_, '_> {
         let width = self.surface.width as usize;
         for (y, row) in (bounds.top..).zip(bounds.rows(width)) {
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
-            for ((x, i), pixel) in (bounds.left..).zip(row).zip(pixels.chunks_exact_mut(4)) {
+            blend_linear_span(pixels, row.start, |i, _| {
                 let alpha = clip.map_or(mask[i], |clip| coverage_product(mask[i], clip[i]));
                 if alpha == 0 {
-                    continue;
+                    return ([0.0; 4], 0);
                 }
-                let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
-                blend_linear(pixel, ramp(stops, offset(gradient, local)), alpha);
-            }
+                let x = (i % width) as f32;
+                let local = inverse.map_point(Point::new(x + 0.5, y as f32 + 0.5));
+                (ramp(stops, offset(gradient, local)), alpha)
+            });
         }
         self.renderer.path = path.clear();
         Ok(())
@@ -128,7 +129,8 @@ impl Frame<'_, '_, '_> {
             let rows = shadow.rows(start.y - center.1);
             let shared = !columns.is_empty() && rows.iter().all(|&(curved, _)| curved == straight);
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
-            for ((x, i), pixel) in (bounds.left..).zip(row).zip(pixels.chunks_exact_mut(4)) {
+            blend_linear_span(pixels, row.start, |i, _| {
+                let x = i % row_width;
                 let alpha = clip.map_or(255, |clip| clip[i]);
                 let value = if shared {
                     let part = columns[x - bounds.left];
@@ -143,10 +145,9 @@ impl Frame<'_, '_, '_> {
                         }
                     }
                 };
-                if alpha > 0 && value > 0.0 {
-                    blend_linear(pixel, paint.map(|channel| channel * value), alpha);
-                }
-            }
+                // A zero value scales the source to nothing, which is skipped.
+                (paint.map(|channel| channel * value), alpha)
+            });
         }
         Ok(())
     }

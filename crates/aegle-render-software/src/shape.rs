@@ -86,15 +86,12 @@ impl Frame<'_, '_, '_> {
         for row in parts.iter().flat_map(|part| part.rows(stride)) {
             let y = (row.start / stride) as f32;
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
-            for (i, pixel) in row.zip(pixels.chunks_exact_mut(4)) {
+            paint.blend_span(pixels, row.start, |i| {
                 let x = (i % stride) as f32;
                 let area = overlap(outer, x, y) - hole.map_or(0.0, |hole| overlap(hole, x, y));
                 let coverage = (area * 255.0 + 0.5) as u8;
-                paint.blend(
-                    pixel,
-                    clip.map_or(coverage, |c| coverage_product(coverage, c[i])),
-                );
-            }
+                clip.map_or(coverage, |c| coverage_product(coverage, c[i]))
+            });
         }
         if hole.is_none() && !inside.is_empty() {
             self.solid(inside, color, state);
@@ -120,9 +117,7 @@ impl Frame<'_, '_, '_> {
         let paint = Solid::new(color);
         for row in inner.rows(self.surface.width as usize) {
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
-            for (i, pixel) in row.zip(pixels.chunks_exact_mut(4)) {
-                paint.blend(pixel, clip.map_or(255, |clip| clip[i]));
-            }
+            paint.blend_span(pixels, row.start, |i| clip.map_or(255, |clip| clip[i]));
         }
     }
 }

@@ -63,24 +63,26 @@ impl Frame<'_, '_, '_> {
             for row in bounds.rows(width) {
                 let y = (row.start / width) as f32 + 0.5;
                 let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
-                for (i, pixel) in row.zip(pixels.chunks_exact_mut(4)) {
+                let texel = |i: usize| {
                     let local = inverse.map_point(Point::new((i % width) as f32 + 0.5, y));
-                    let rgba = if aligned {
-                        fetch(image, local.x.floor() as i32, local.y.floor() as i32)
-                    } else {
-                        sample(image, local.x - 0.5, local.y - 0.5)
-                    };
-                    let coverage = clip.map_or(255, |mask| mask[i]);
-                    match image.content {
-                        Content::Mask => {
-                            solid.blend(pixel, coverage_product(adjust(rgba[3]), coverage))
-                        }
-                        Content::Color => {
-                            let [r, g, b, _] = order(bgra, rgba);
-                            Solid::new(Color::rgba(r, g, b, coverage_product(rgba[3], opacity)))
-                                .blend(pixel, coverage);
-                        }
+                    match aligned {
+                        true => fetch(image, local.x.floor() as i32, local.y.floor() as i32),
+                        false => sample(image, local.x - 0.5, local.y - 0.5),
                     }
+                };
+                if image.content == Content::Mask {
+                    solid.blend_span(pixels, row.start, |i| {
+                        let coverage = clip.map_or(255, |mask| mask[i]);
+                        coverage_product(adjust(texel(i)[3]), coverage)
+                    });
+                    continue;
+                }
+                // Color glyphs change paint per pixel; they are rare (emoji).
+                for (i, pixel) in row.zip(pixels.chunks_exact_mut(4)) {
+                    let rgba = texel(i);
+                    let [r, g, b, _] = order(bgra, rgba);
+                    Solid::new(Color::rgba(r, g, b, coverage_product(rgba[3], opacity)))
+                        .blend(pixel, clip.map_or(255, |mask| mask[i]));
                 }
             }
         }
