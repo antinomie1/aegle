@@ -3,12 +3,11 @@
 #![cfg(feature = "markup")]
 
 use aegle::{
-    Color, ColorSlot, Easing, Font, LengthSlot, Node, Result, Size, TextSystem, Theme,
-    ThemeOverride, TokenSlot, Transition, TransitionProperty::Paint, Ui, UiError, Widgets,
-    loader::Program, register_token, token,
+    Color, ColorSlot, Font, LengthSlot, Node, Result, Size, TextSystem, Theme, ThemeOverride,
+    TokenSlot, Ui, UiError, Widgets, loader::Program, register_token, token,
 };
 use aegle_text::{Blob, GenericFamily};
-use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 fn ui() -> Result<Ui> {
     let mut fonts = TextSystem::new();
@@ -167,17 +166,22 @@ fn layout_font_and_transition_bindings_and_atomic_rejection() -> Result {
     first.unbind_token(TokenSlot::Font)?;
     assert_eq!(first.font()?, None);
 
-    let speed = register_token("theme-test.speed", |_| Duration::from_millis(120))?;
-    first.bind_transition(Paint, speed, Easing::Linear)?;
-    ui.set_token(speed, Some(Duration::from_millis(300)))?;
-    let slow = Transition::new(Duration::from_millis(300), Easing::Linear);
-    assert_eq!(first.property_transition(Paint)?, Some(slow));
-    first.set_transition(Transition::default())?;
-    ui.set_token(speed, None)?;
-    assert_eq!(
-        first.property_transition(Paint)?,
-        Some(Transition::default())
-    );
+    #[cfg(feature = "motion")]
+    {
+        use aegle::{Easing, Transition, TransitionProperty::Paint};
+        use std::time::Duration;
+        let speed = register_token("theme-test.speed", |_| Duration::from_millis(120))?;
+        first.bind_transition(Paint, speed, Easing::Linear)?;
+        ui.set_token(speed, Some(Duration::from_millis(300)))?;
+        let slow = Transition::new(Duration::from_millis(300), Easing::Linear);
+        assert_eq!(first.property_transition(Paint)?, Some(slow));
+        first.set_transition(Transition::default())?;
+        ui.set_token(speed, None)?;
+        assert_eq!(
+            first.property_transition(Paint)?,
+            Some(Transition::default())
+        );
+    }
 
     // A theme change, override or move whose bound value is rejected (a font
     // size of 0 or less) is undone.

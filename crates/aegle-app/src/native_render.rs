@@ -115,6 +115,12 @@ fn device_damage(
 }
 
 impl Runtime {
+    // Without a renderer feature no App is created, and only the
+    // unreachable arm remains.
+    #[cfg_attr(
+        not(any(feature = "software", feature = "vulkan", feature = "wgpu")),
+        allow(unreachable_code)
+    )]
     pub(crate) fn present(&mut self) -> Result<()> {
         for entry in &mut self.windows {
             if !std::mem::take(&mut entry.ready) {

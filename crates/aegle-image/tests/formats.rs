@@ -2,7 +2,7 @@
 use std::io::Cursor;
 
 use aegle_image::{Error, decode, decode_with_limit};
-use image::{DynamicImage, ImageFormat, RgbImage, RgbaImage};
+use image::{DynamicImage, ImageFormat, RgbaImage};
 
 fn encode(image: &DynamicImage, format: ImageFormat) -> Vec<u8> {
     let mut out = Cursor::new(Vec::new());
@@ -26,6 +26,7 @@ fn halves() -> RgbaImage {
     })
 }
 
+#[cfg(any(feature = "jpeg", feature = "gif"))]
 fn near(a: [u8; 4], b: [u8; 4], tolerance: u8) -> bool {
     a.iter().zip(&b).all(|(a, b)| a.abs_diff(*b) <= tolerance)
 }
@@ -33,13 +34,13 @@ fn near(a: [u8; 4], b: [u8; 4], tolerance: u8) -> bool {
 #[test]
 fn formats_decode_by_signature_within_budgets() {
     let source = DynamicImage::ImageRgba8(halves());
-    let png = decode(&encode(&source, ImageFormat::Png)).unwrap();
-    assert_eq!(pixel(&png, 3, 3), [255, 0, 0, 255]);
     let red = [255, 0, 0, 255];
     let blue = [0, 0, 255, 255];
+    let png = decode(&encode(&source, ImageFormat::Png)).unwrap();
+    assert_eq!((pixel(&png, 3, 3), pixel(&png, 12, 3)), (red, blue));
     #[cfg(feature = "jpeg")]
     {
-        let rgb = DynamicImage::ImageRgb8(RgbImage::from_fn(16, 8, |x, _| {
+        let rgb = DynamicImage::ImageRgb8(image::RgbImage::from_fn(16, 8, |x, _| {
             if x < 8 {
                 image::Rgb([255, 0, 0])
             } else {

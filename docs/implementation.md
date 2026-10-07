@@ -559,6 +559,12 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 验证：Vulkan 离屏场景在 Lavapipe 与 RADV 上开启 Khronos validation 与同步检查通过，无验证消息：裁剪内 40,000 个 1×1 填充分三次提交，按绘制顺序取样的像素正确；单条目图集画 96 px 的“你好你好”与参考一致（改动前 `AtlasFull`）；一帧画 17 个纹理（改动前 `TooManyTextures`），16 个被裁掉的纹理不占绑定。`tests/native.rs` 在 swapchain 上画一帧 20,000 个填充，Lavapipe（Pixman Sway）与 RADV（GLES2 Sway）同样无验证消息。wgpu 新测试在设备上做非法操作后 `begin_frame` 返回 `Error::Gpu`（改动前 panic），Lavapipe 与 RADV 通过。App 新测试：半透明主题背景的软件窗口返回错误；App 原生场景以 Vulkan 与 wgpu 在两种驱动上通过。私有 Sway 截图确认 XRGB 窗口颜色正确。workspace all-features 测试、all-targets 检查与 Windows 交叉检查通过；Win32 呈现未在 Windows 上运行。
 - 性能：普通帧不分段，没有新增等待；只有超过上限的帧在提交间多一次 CPU 等待。删除 Win32 逐像素扫描、XRGB 让合成器可省去混合，这两项未测量。
 
+## feature 组合的编译与警告
+
+- 问题：只有默认与全部 feature 无警告。facade 只开 `markup` 不开 `motion` 时 `tests/tokens.rs` 编译失败；没有原生平台或 GPU renderer 时 `pub use aegle_app::*` 为空导入；只开平台不开 renderer 时 `Runtime::present` 有不可达语句；`aegle-image` 不开任何格式时测试有未用的导入、变量和函数。
+- 修改：tokens 测试的过渡部分只在 `motion` 下编译；空的 glob 重导出与无 renderer 时的不可达代码按条件允许并注明原因；`aegle-image` 测试按格式 feature 引入辅助函数，PNG 断言改用两种颜色。
+- 验证：workspace 每个 crate 分别在默认、无默认与全部 feature 下 `cargo check --all-targets` 无警告；facade 另检查无 feature、`markup`、`markup,wayland`、`markup,wayland,software`、`markup,motion`、`motion,wayland,software`、`grid,markup` 及 `wayland` 搭配各 GPU renderer，Windows 交叉检查 `windows`、`windows,markup`、`windows,software,markup,motion`，均无警告；facade 在默认、`markup`、`markup,motion,grid` 下测试通过，`aegle-image` 在无格式、各单一格式与全部格式下测试通过。其他组合未逐一检查。
+
 ## 剩余工作
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。

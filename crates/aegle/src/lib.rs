@@ -6,6 +6,8 @@
 //! or `wgpu` and select `RendererBackend::Vulkan` or `RendererBackend::Wgpu` for GPU presentation. Lower-level crates
 //! remain independent; no macOS host is currently implemented.
 
+// Empty without a native platform or GPU renderer feature.
+#[allow(unused_imports)]
 pub use aegle_app::*;
 /// Bounded image decoding into scene images (PNG always; JPEG, WebP, GIF and SVG by
 /// feature) and, with `effects`, gradient and shadow images.
