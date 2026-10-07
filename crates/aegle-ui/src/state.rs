@@ -344,12 +344,12 @@ impl State {
             .tree
             .insert_at(parent, position, LayoutNode::with_style(style, element))?;
         #[cfg(feature = "motion")]
-        if self.tree.get(id).unwrap().context.control.interactive() {
-            if let Some(timing) = self.motion.default {
-                self.motion
-                    .tracks
-                    .insert(id, crate::motion::Track::uniform(timing));
-            }
+        if self.tree.get(id).unwrap().context.control.interactive()
+            && let Some(timing) = self.motion.default
+        {
+            self.motion
+                .tracks
+                .insert(id, crate::motion::Track::uniform(timing));
         }
         self.invalidate_structure();
         Ok(id)

@@ -64,6 +64,9 @@ impl Commands {
         Ok(())
     }
 
+    // The text pipeline is the eighth argument only with `text`; every other
+    // argument is a distinct per-frame resource recorded here.
+    #[cfg_attr(feature = "text", expect(clippy::too_many_arguments))]
     pub fn render(
         &self,
         target: &Target,

@@ -145,23 +145,24 @@ impl App {
             }
             match step.phase {
                 EventPhase::Capture if step.node == self.root => {
-                    if let Input::Key(key) = input {
-                        if key.key == Key::Tab && key.pressed {
-                            let direction = if key.modifiers.shift {
-                                FocusDirection::Backward
-                            } else {
-                                FocusDirection::Forward
-                            };
-                            let change = self.focus.advance(
-                                &self.tree,
-                                self.root,
-                                direction,
-                                true,
-                                focus_policy,
-                            )?;
-                            self.change_focus(change)?;
-                            event.prevent_default();
-                        }
+                    if let Input::Key(key) = input
+                        && key.key == Key::Tab
+                        && key.pressed
+                    {
+                        let direction = if key.modifiers.shift {
+                            FocusDirection::Backward
+                        } else {
+                            FocusDirection::Forward
+                        };
+                        let change = self.focus.advance(
+                            &self.tree,
+                            self.root,
+                            direction,
+                            true,
+                            focus_policy,
+                        )?;
+                        self.change_focus(change)?;
+                        event.prevent_default();
                     }
                 }
                 EventPhase::Target if !event.is_default_prevented() => {

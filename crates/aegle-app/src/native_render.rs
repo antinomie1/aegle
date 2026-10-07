@@ -139,7 +139,7 @@ impl Runtime {
                         return Err("software windows require an opaque background".into());
                     }
                     let renderer = self.renderer.as_mut().unwrap();
-                    let scale = info.scale as f32;
+                    let scale = info.scale;
                     // Only the changed area is redrawn into a retained buffer.
                     let size = info.buffer_size()?;
                     let damage = device_damage(&entry.ui, scale, size.width, size.height)?;
@@ -188,7 +188,7 @@ impl Runtime {
                                     Err(error) => return Err(error.into()),
                                 };
                             let [width, height] = frame.extent();
-                            let scale = info.scale as f32;
+                            let scale = info.scale;
                             if let Some(damage) = device_damage(&entry.ui, scale, width, height)? {
                                 frame.set_damage(damage.rects());
                             }
@@ -222,7 +222,7 @@ impl Runtime {
                                     }
                                     Err(error) => return Err(error.into()),
                                 };
-                            scenes(&entry.ui, info.scale as f32, |scene, transform, clip| {
+                            scenes(&entry.ui, info.scale, |scene, transform, clip| {
                                 frame.draw_clipped(scene, transform, clip)?;
                                 Ok(())
                             })?;

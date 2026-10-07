@@ -56,16 +56,16 @@ struct SeatInput {
 
 impl Drop for SeatInput {
     fn drop(&mut self) {
-        if let Some(keyboard) = self.keyboard.take() {
-            if keyboard.version() >= 3 {
-                keyboard.release();
-            }
+        if let Some(keyboard) = self.keyboard.take()
+            && keyboard.version() >= 3
+        {
+            keyboard.release();
         }
         self.pointer.take();
-        if let Some(touch) = self.touch.take() {
-            if touch.version() >= 3 {
-                touch.release();
-            }
+        if let Some(touch) = self.touch.take()
+            && touch.version() >= 3
+        {
+            touch.release();
         }
         if self.seat.version() >= 5 {
             self.seat.release();
@@ -104,12 +104,11 @@ impl State {
             return;
         };
         for input in &self.input.seats {
-            if let Some(pointer) = &input.pointer {
-                if input.pointer_focus.is_some_and(|(id, _)| id == window) {
-                    if let Err(error) = pointer.set_cursor(conn, icon(shape)) {
-                        self.events.push_back(Event::Error(Error::backend(error)));
-                    }
-                }
+            if let Some(pointer) = &input.pointer
+                && input.pointer_focus.is_some_and(|(id, _)| id == window)
+                && let Err(error) = pointer.set_cursor(conn, icon(shape))
+            {
+                self.events.push_back(Event::Error(Error::backend(error)));
             }
         }
     }
@@ -180,17 +179,16 @@ impl State {
             .seats
             .iter()
             .find(|input| input.keyboard.as_ref() == Some(keyboard))
+            && let Some((window, _)) = input.focus
         {
-            if let Some((window, _)) = input.focus {
-                self.events.push_back(Event::Key {
-                    window,
-                    seat: input.seat.clone(),
-                    key,
-                    pressed,
-                    repeat,
-                    modifiers: input.modifiers,
-                });
-            }
+            self.events.push_back(Event::Key {
+                window,
+                seat: input.seat.clone(),
+                key,
+                pressed,
+                repeat,
+                modifiers: input.modifiers,
+            });
         }
     }
 }
@@ -272,10 +270,10 @@ impl SeatHandler for State {
             Capability::Keyboard => {
                 self.cancel_keyboard_focus(index);
                 self.input.seats[index].repeat.remove_keyboard();
-                if let Some(keyboard) = self.input.seats[index].keyboard.take() {
-                    if keyboard.version() >= 3 {
-                        keyboard.release();
-                    }
+                if let Some(keyboard) = self.input.seats[index].keyboard.take()
+                    && keyboard.version() >= 3
+                {
+                    keyboard.release();
                 }
             }
             Capability::Pointer => {
@@ -284,10 +282,10 @@ impl SeatHandler for State {
             }
             Capability::Touch => {
                 self.cancel_fingers(index);
-                if let Some(touch) = self.input.seats[index].touch.take() {
-                    if touch.version() >= 3 {
-                        touch.release();
-                    }
+                if let Some(touch) = self.input.seats[index].touch.take()
+                    && touch.version() >= 3
+                {
+                    touch.release();
                 }
             }
             _ => {}
@@ -374,10 +372,10 @@ impl KeyboardHandler for State {
             .find(|input| input.keyboard.as_ref() == Some(keyboard))
         {
             self.clipboard.input(&input.seat, serial);
-            if input.focus.is_some() {
-                if let Err(error) = input.repeat.press(&key, keyboard) {
-                    self.events.push_back(Event::Error(error));
-                }
+            if input.focus.is_some()
+                && let Err(error) = input.repeat.press(&key, keyboard)
+            {
+                self.events.push_back(Event::Error(error));
             }
         }
         self.key_event(keyboard, key, true, false);
@@ -462,10 +460,9 @@ impl KeyboardHandler for State {
             .seats
             .iter_mut()
             .find(|input| input.keyboard.as_ref() == Some(keyboard))
+            && let Err(error) = input.repeat.configure(info, keyboard)
         {
-            if let Err(error) = input.repeat.configure(info, keyboard) {
-                self.events.push_back(Event::Error(error));
-            }
+            self.events.push_back(Event::Error(error));
         }
     }
 
@@ -481,10 +478,9 @@ impl KeyboardHandler for State {
             .seats
             .iter_mut()
             .find(|input| input.keyboard.as_ref() == Some(keyboard))
+            && let Err(error) = input.repeat.keymap(map)
         {
-            if let Err(error) = input.repeat.keymap(map) {
-                self.events.push_back(Event::Error(error));
-            }
+            self.events.push_back(Event::Error(error));
         }
     }
 }

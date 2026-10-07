@@ -128,10 +128,10 @@ fn entry(state: &mut State, popup: NodeId) -> &mut PopupEntry {
 }
 
 fn set_expanded(state: &mut State, anchor: NodeId, expanded: bool) {
-    if let Some(button) = state.control_as::<crate::button::ButtonControl>(anchor) {
-        if let Variant::Dropdown { expanded: old } = &mut button.variant {
-            *old = expanded;
-        }
+    if let Some(button) = state.control_as::<crate::button::ButtonControl>(anchor)
+        && let Variant::Dropdown { expanded: old } = &mut button.variant
+    {
+        *old = expanded;
     }
 }
 

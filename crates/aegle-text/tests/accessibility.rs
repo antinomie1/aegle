@@ -61,7 +61,7 @@ fn selection_round_trip_obeys_run_boundaries_readonly_and_composition() {
     assert_eq!(node.role(), Role::MultilineTextInput);
     let text: String = update.nodes.iter().filter_map(|(_, n)| n.value()).collect();
     assert_eq!(text, editor.display_text());
-    let saved = node.text_selection().unwrap().clone();
+    let saved = *node.text_selection().unwrap();
     system
         .edit(&mut editor)
         .select(Selection::default())
@@ -88,7 +88,7 @@ fn selection_round_trip_obeys_run_boundaries_readonly_and_composition() {
         .select_accessibility(&selection)
         .unwrap();
     assert_eq!(editor.selected_text(), first.value().unwrap());
-    let mut invalid = selection.clone();
+    let mut invalid = selection;
     invalid.anchor.character_index = usize::MAX;
     editor.take_changes();
     assert_eq!(

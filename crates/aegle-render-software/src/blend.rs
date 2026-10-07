@@ -254,9 +254,9 @@ fn over_opaque(pixels: &mut [u8], lanes: &Lanes, transfer: &SrgbTransfer) {
             result[lane][channel] = round_u8(encoded * output[lane] * 255.0).min(result[lane][3]);
         }
     }
-    for lane in 0..count {
-        let offset = lanes.offsets[lane] * 4;
-        pixels[offset..offset + 4].copy_from_slice(&result[lane]);
+    for (offset, lane) in lanes.offsets.iter().zip(&result[..count]) {
+        let offset = offset * 4;
+        pixels[offset..offset + 4].copy_from_slice(lane);
     }
 }
 

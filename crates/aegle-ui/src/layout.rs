@@ -118,7 +118,7 @@ impl State {
                     },
                 )?;
                 if let Some(error) = error {
-                    return Err(error.into());
+                    return Err(error);
                 }
                 if pass == 0 && self.update_gutters()? {
                     continue;
@@ -210,10 +210,11 @@ impl State {
                     .clamp(0.0, (size.height - viewport.height).max(0.0));
             }
         }
-        if let Some(target) = self.reveal_target.take() {
-            if self.tree.get(target).is_some() && self.usable(target) {
-                self.reveal(target)?;
-            }
+        if let Some(target) = self.reveal_target.take()
+            && self.tree.get(target).is_some()
+            && self.usable(target)
+        {
+            self.reveal(target)?;
         }
         // An animation that starts outside a frame starts now, not at the
         // last frame, which may be long past.

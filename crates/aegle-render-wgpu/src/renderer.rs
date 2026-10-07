@@ -16,7 +16,7 @@ use crate::{
 const OFFSCREEN: TextureFormat = TextureFormat::Rgba8Unorm;
 
 /// Fixed configuration.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Options {
     /// Square atlas page extent, including one transparent pixel around every
     /// entry. Mask and color pages are allocated when first needed; larger images
@@ -27,16 +27,6 @@ pub struct Options {
     /// Otherwise windows are opaque and require an opaque clear color.
     #[cfg(feature = "window")]
     pub transparent: bool,
-}
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            #[cfg(feature = "text")]
-            atlas_size: 1024,
-            #[cfg(feature = "window")]
-            transparent: false,
-        }
-    }
 }
 
 /// Which pipeline and texture draws a run of primitives.

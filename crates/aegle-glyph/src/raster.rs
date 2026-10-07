@@ -79,28 +79,27 @@ impl Rasterizer {
                 return Err(GlyphError::UnsupportedGlyph);
             }
         }
-        if let Ok(svg) = parsed.svg() {
-            if let Some(document) = svg
+        if let Ok(svg) = parsed.svg()
+            && let Some(document) = svg
                 .glyph_data(glyph.into())
                 .map_err(|_| GlyphError::InvalidFont)?
+        {
+            #[cfg(feature = "svg")]
+            return crate::svg::render(
+                crate::svg::Request {
+                    data: document,
+                    glyph,
+                    units_per_em: f32::from(metrics.units_per_em),
+                    size: options.size,
+                    offset: options.offset,
+                    max_bytes: limits.image_bytes,
+                },
+                reserve,
+            );
+            #[cfg(not(feature = "svg"))]
             {
-                #[cfg(feature = "svg")]
-                return crate::svg::render(
-                    crate::svg::Request {
-                        data: document,
-                        glyph,
-                        units_per_em: f32::from(metrics.units_per_em),
-                        size: options.size,
-                        offset: options.offset,
-                        max_bytes: limits.image_bytes,
-                    },
-                    reserve,
-                );
-                #[cfg(not(feature = "svg"))]
-                {
-                    let _ = document;
-                    return Err(GlyphError::UnsupportedGlyph);
-                }
+                let _ = document;
+                return Err(GlyphError::UnsupportedGlyph);
             }
         }
         let mut scaler = self

@@ -48,11 +48,9 @@ pub(crate) fn render(
             for (src, dst) in data.chunks_exact(4).zip(source.chunks_exact_mut(4)) {
                 let a = src[3] as u32;
                 for c in 0..3 {
-                    dst[c] = if a == 0 {
-                        0
-                    } else {
-                        ((src[2 - c] as u32 * 255 + a / 2) / a).min(255) as u8
-                    };
+                    dst[c] = (src[2 - c] as u32 * 255 + a / 2)
+                        .checked_div(a)
+                        .map_or(0, |value| value.min(255) as u8);
                 }
                 dst[3] = src[3];
             }

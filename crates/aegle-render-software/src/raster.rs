@@ -147,7 +147,7 @@ impl Renderer {
             });
         let count = if needs_masks { depth + 1 } else { 0 };
         let pixels = surface.data.len() / 4;
-        let required = pixels.checked_mul(count).unwrap_or(usize::MAX);
+        let required = pixels.saturating_mul(count);
         if required > self.mask_budget {
             return Err(RenderError::MaskBudget {
                 required,

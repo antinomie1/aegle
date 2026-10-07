@@ -107,7 +107,6 @@ fn gallery(
             Ok(())
         })?;
     }
-    drop(frame);
     let mut encoder = png::Encoder::new(BufWriter::new(File::create(path)?), width, height);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);

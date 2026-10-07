@@ -153,8 +153,7 @@ impl Control for ToggleControl {
                 let chosen = !was;
                 outcome.action = chosen.then_some(Action::Change);
                 if chosen {
-                    cx.deferred
-                        .push(Box::new(|state, id| select_radio(state, id)));
+                    cx.deferred.push(Box::new(select_radio));
                 }
             } else if std::mem::take(&mut self.mixed) {
                 self.control.set_checked(true);
@@ -272,11 +271,12 @@ pub(crate) fn select_radio(state: &mut State, id: NodeId) -> Result {
     };
     let siblings: Vec<_> = state.tree.children(parent)?.filter(|&n| n != id).collect();
     for sibling in siblings {
-        if let Some(toggle) = state.control_as::<ToggleControl>(sibling) {
-            if toggle.mark == Mark::Radio && toggle.control.is_checked() {
-                let outcome = toggle.control.set_checked(false);
-                state.effects(sibling, outcome)?;
-            }
+        if let Some(toggle) = state.control_as::<ToggleControl>(sibling)
+            && toggle.mark == Mark::Radio
+            && toggle.control.is_checked()
+        {
+            let outcome = toggle.control.set_checked(false);
+            state.effects(sibling, outcome)?;
         }
     }
     Ok(())

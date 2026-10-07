@@ -384,10 +384,10 @@ impl State {
 
     /// Queues the completion handler once none of the node's transitions remain.
     pub fn complete(&mut self, id: NodeId) {
-        if !self.motion.running(id) {
-            if let Some(handler) = self.motion.ends.get(&id) {
-                self.pending.push_back((id, handler.version));
-            }
+        if !self.motion.running(id)
+            && let Some(handler) = self.motion.ends.get(&id)
+        {
+            self.pending.push_back((id, handler.version));
         }
     }
 

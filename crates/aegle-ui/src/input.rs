@@ -312,10 +312,9 @@ impl State {
         if matches!(
             outcome.action,
             Some(Action::Activate | Action::Submit | Action::Change)
-        ) {
-            if let Some(handler) = self.callbacks.get(&target) {
-                self.pending.push_back((target, handler.version));
-            }
+        ) && let Some(handler) = self.callbacks.get(&target)
+        {
+            self.pending.push_back((target, handler.version));
         }
         Ok(())
     }
@@ -436,10 +435,10 @@ impl State {
     pub(crate) fn hit(&self, position: Point) -> Option<NodeId> {
         // A shown overlay covers everything below it, including its padding.
         let popup = self.overlay_at(position);
-        if popup.is_none() {
-            if let Some((id, _)) = self.scrollbar_at(position, None) {
-                return Some(id);
-            }
+        if popup.is_none()
+            && let Some((id, _)) = self.scrollbar_at(position, None)
+        {
+            return Some(id);
         }
         self.order.iter().rev().copied().find(|&id| {
             let element = &self.tree.get(id).unwrap().context;

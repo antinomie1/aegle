@@ -55,8 +55,9 @@ impl Frame<'_, '_, '_> {
     /// Draws an upright sharp-cornered fill, or a border when `hole` is set.
     fn sharp(&mut self, outer: Edges, hole: Option<Edges>, color: Color, state: State) {
         let (width, height) = (self.surface.width as f32, self.surface.height as f32);
+        type Round = fn(f32) -> f32;
         let pixels = |[left, top, right, bottom]: Edges, outward: bool| {
-            let (low, high): (fn(f32) -> f32, fn(f32) -> f32) = match outward {
+            let (low, high): (Round, Round) = match outward {
                 true => (f32::floor, f32::ceil),
                 false => (f32::ceil, f32::floor),
             };

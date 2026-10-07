@@ -103,12 +103,12 @@ impl Repeat {
     /// Compositor-generated repeats already have a timestamp and never need
     /// a client timer. Preserve composed text from the initial press.
     pub(super) fn server_event(&self, mut event: KeyEvent) -> KeyEvent {
-        if let Some(key) = &self.key {
-            if key.raw_code == event.raw_code {
-                event.keysym = key.keysym;
-                event.utf8.clone_from(&key.utf8);
-                return event;
-            }
+        if let Some(key) = &self.key
+            && key.raw_code == event.raw_code
+        {
+            event.keysym = key.keysym;
+            event.utf8.clone_from(&key.utf8);
+            return event;
         }
         if let Some(state) = &self.xkb {
             let code = xkb::Keycode::new(event.raw_code + 8);

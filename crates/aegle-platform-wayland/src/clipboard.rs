@@ -175,11 +175,11 @@ impl DataSourceHandler for State {
         _: String,
         pipe: WritePipe,
     ) {
-        if let Some((current, data)) = &self.clipboard.source {
-            if current.inner() == source {
-                let data = data.clone();
-                self.write_selection(pipe, data);
-            }
+        if let Some((current, data)) = &self.clipboard.source
+            && current.inner() == source
+        {
+            let data = data.clone();
+            self.write_selection(pipe, data);
         }
     }
 

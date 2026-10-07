@@ -11,6 +11,9 @@ use aegle_ui::{
 
 use crate::{ScrollView, Widgets};
 
+/// Builds the content of one row from its index.
+type RowBuilder = Box<dyn FnMut(&Container, usize) -> Result>;
+
 /// Virtual lists of one UI, kept in the engine's per-library storage.
 #[derive(Default)]
 pub(crate) struct Lists {
@@ -35,7 +38,7 @@ pub(crate) struct List {
     spacer: NodeId,
     /// Realized rows sorted by index; they are the spacer's only children.
     rows: Vec<(usize, NodeId)>,
-    builder: Option<Box<dyn FnMut(&Container, usize) -> Result>>,
+    builder: Option<RowBuilder>,
     reload: bool,
 }
 
@@ -62,7 +65,7 @@ pub(crate) fn virtual_list(
     row_height: f32,
     count: usize,
     variable: bool,
-    row: Box<dyn FnMut(&Container, usize) -> Result>,
+    row: RowBuilder,
 ) -> Result<ListView> {
     let height = extent(row_height, count)?;
     let view = container.scroll_view()?;

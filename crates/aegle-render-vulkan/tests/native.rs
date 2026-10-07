@@ -50,9 +50,9 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
             }
             let presented = platform.present_external(id, |size| -> Result<bool, Error> {
                 if frames == 1 {
-                    drop(renderer.begin_frame(64, 48, Color::WHITE)?);
+                    let _ = renderer.begin_frame(64, 48, Color::WHITE)?;
                     assert_eq!(renderer.extent(), [64, 48]);
-                    drop(renderer.begin_frame(size.width, size.height, Color::WHITE)?);
+                    let _ = renderer.begin_frame(size.width, size.height, Color::WHITE)?;
                     let mut bad = renderer
                         .begin_frame(size.width, size.height, Color::WHITE)?
                         .unwrap();

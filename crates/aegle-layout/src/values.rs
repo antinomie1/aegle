@@ -51,8 +51,8 @@ impl Length {
     /// without a parent size.
     fn simplified(self) -> Self {
         match self {
-            Self::Calc { percent, px } if percent == 0.0 => Self::Px(px),
-            Self::Calc { percent, px } if px == 0.0 => Self::Percent(percent),
+            Self::Calc { percent: 0.0, px } => Self::Px(px),
+            Self::Calc { percent, px: 0.0 } => Self::Percent(percent),
             length => length,
         }
     }

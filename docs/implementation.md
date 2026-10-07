@@ -571,7 +571,7 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 加载器：`for` 无 `key` 时，列表项必须是 int 或 string（record、float、bool 要求显式 key），`list<float>` 不再在构建时 panic。
 - UI：`set_visible(true)` 恢复隐藏前的 display（grid/stack 不再被改成 flex）；非编辑器控件请求剪贴板写入返回 `WrongKind`；`on_key` 处理器出错时保留，错误照常返回；`Hooks::removed` 文档改为"节点已销毁，id 仅作库数据的键"；令牌索引在 `token_value`/`write_slot` 中按类型检查并返回 `Token` 错误。
 - Win32：窗口销毁前先清除 userdata，销毁回调不再从 `&mut self` 之外构造 `&Native`；删除无人发送的 `WM_QUIT` 分支。**此改动未在 Windows 上编译或运行。**
-- 工程：Vulkan 示例改名 `vulkan_text_scene`，不再与软件渲染示例重名；新增 `.github/workflows/ci.yml`、`clippy.toml`、`deny.toml`；README 默认 feature 列表与 vulkan.md 的设备共享描述已更正。**Clippy 与 cargo-deny 在本机未安装，尚未运行，CI 首次运行可能需要清理告警。**
+- 工程：Vulkan 示例改名 `vulkan_text_scene`，不再与软件渲染示例重名；新增 `.github/workflows/ci.yml`、`clippy.toml`、`deny.toml`；README 默认 feature 列表与 vulkan.md 的设备共享描述已更正。Clippy 已在默认与 all-features 下清零；cargo-deny 在本机未安装，尚未运行。
 
 ## 剩余工作
 

@@ -172,7 +172,7 @@ pub(crate) fn consumed(kind: Kind, name: PropertyName) -> bool {
         || (kind == Kind::Splitter && name == Orientation)
 }
 
-fn literal<'a>(element: &'a Element, name: PropertyName) -> Option<&'a Literal> {
+fn literal(element: &Element, name: PropertyName) -> Option<&Literal> {
     element
         .properties
         .iter()

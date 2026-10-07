@@ -114,13 +114,13 @@ fn normalize(position: TextPosition, runs: &[(NodeId, usize)]) -> Result<TextPos
     }
     // Parley 0.11.1 indexes past the current run at this boundary. Its export
     // orders runs/spans by source position, so the next span's start is equivalent.
-    if position.character_index == count {
-        if let Some((node, _)) = runs.get(index + 1) {
-            return Ok(TextPosition {
-                node: *node,
-                character_index: 0,
-            });
-        }
+    if position.character_index == count
+        && let Some((node, _)) = runs.get(index + 1)
+    {
+        return Ok(TextPosition {
+            node: *node,
+            character_index: 0,
+        });
     }
     Ok(position)
 }
