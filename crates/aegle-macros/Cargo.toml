@@ -14,7 +14,7 @@ categories.workspace = true
 proc-macro = true
 
 [dependencies]
-aegle-markup = { path = "../aegle-markup" }
+aegle-markup = { path = "../aegle-markup", version = "0.1.0" }
 proc-macro-crate = "3.5.0"
 proc-macro2 = "1.0"
 quote = "1.0"

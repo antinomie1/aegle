@@ -109,7 +109,10 @@ impl Frame<'_, '_, '_> {
         let rgba = color.to_rgba();
         if clip.is_none() && rgba[3] == 255 {
             for row in inner.rows(self.surface.width as usize) {
-                for pixel in self.surface.data[row.start * 4..row.end * 4].chunks_exact_mut(4) {
+                for pixel in self.surface.data[row.start * 4..row.end * 4]
+                    .as_chunks_mut::<4>()
+                    .0
+                {
                     pixel.copy_from_slice(&rgba);
                 }
             }

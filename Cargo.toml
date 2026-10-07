@@ -13,29 +13,29 @@ keywords = ["gui", "ui", "retained", "text", "accessibility"]
 categories = ["gui", "graphics"]
 
 [workspace.dependencies]
-aegle-types = { path = "crates/aegle-types" }
-aegle-core = { path = "crates/aegle-core" }
-aegle-layout = { path = "crates/aegle-layout" }
-aegle-scene = { path = "crates/aegle-scene" }
-aegle-render-software = { path = "crates/aegle-render-software" }
-aegle-gpu = { path = "crates/aegle-gpu" }
-aegle-render-vulkan = { path = "crates/aegle-render-vulkan" }
-aegle-render-wgpu = { path = "crates/aegle-render-wgpu" }
-aegle-text = { path = "crates/aegle-text" }
-aegle-glyph = { path = "crates/aegle-glyph" }
-aegle-controls = { path = "crates/aegle-controls" }
-aegle-access = { path = "crates/aegle-access" }
-aegle-theme = { path = "crates/aegle-theme" }
-aegle-widgets = { path = "crates/aegle-widgets" }
-aegle-app = { path = "crates/aegle-app" }
-aegle-ui = { path = "crates/aegle-ui" }
-aegle-platform-wayland = { path = "crates/aegle-platform-wayland" }
-aegle-platform-win32 = { path = "crates/aegle-platform-win32" }
-aegle-markup = { path = "crates/aegle-markup" }
-aegle-macros = { path = "crates/aegle-macros" }
-aegle-loader = { path = "crates/aegle-loader" }
-aegle-motion = { path = "crates/aegle-motion" }
-aegle-image = { path = "crates/aegle-image" }
+aegle-types = { path = "crates/aegle-types", version = "0.1.0" }
+aegle-core = { path = "crates/aegle-core", version = "0.1.0" }
+aegle-layout = { path = "crates/aegle-layout", version = "0.1.0" }
+aegle-scene = { path = "crates/aegle-scene", version = "0.1.0" }
+aegle-render-software = { path = "crates/aegle-render-software", version = "0.1.0" }
+aegle-gpu = { path = "crates/aegle-gpu", version = "0.1.0" }
+aegle-render-vulkan = { path = "crates/aegle-render-vulkan", version = "0.1.0" }
+aegle-render-wgpu = { path = "crates/aegle-render-wgpu", version = "0.1.0" }
+aegle-text = { path = "crates/aegle-text", version = "0.1.0" }
+aegle-glyph = { path = "crates/aegle-glyph", version = "0.1.0" }
+aegle-controls = { path = "crates/aegle-controls", version = "0.1.0" }
+aegle-access = { path = "crates/aegle-access", version = "0.1.0" }
+aegle-theme = { path = "crates/aegle-theme", version = "0.1.0" }
+aegle-widgets = { path = "crates/aegle-widgets", version = "0.1.0" }
+aegle-app = { path = "crates/aegle-app", version = "0.1.0" }
+aegle-ui = { path = "crates/aegle-ui", version = "0.1.0" }
+aegle-platform-wayland = { path = "crates/aegle-platform-wayland", version = "0.1.0" }
+aegle-platform-win32 = { path = "crates/aegle-platform-win32", version = "0.1.0" }
+aegle-markup = { path = "crates/aegle-markup", version = "0.1.0" }
+aegle-macros = { path = "crates/aegle-macros", version = "0.1.0" }
+aegle-loader = { path = "crates/aegle-loader", version = "0.1.0" }
+aegle-motion = { path = "crates/aegle-motion", version = "0.1.0" }
+aegle-image = { path = "crates/aegle-image", version = "0.1.0" }
 accesskit = { version = "0.24.1", default-features = false }
 linebender_resource_handle = { version = "0.1.1", default-features = false }
 parley = { version = "0.11.1", default-features = false, features = ["std"] }

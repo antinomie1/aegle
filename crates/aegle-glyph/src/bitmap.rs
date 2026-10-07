@@ -45,7 +45,12 @@ pub(crate) fn render(
             if data.len() != source.len() {
                 return Err(GlyphError::InvalidFont);
             }
-            for (src, dst) in data.chunks_exact(4).zip(source.chunks_exact_mut(4)) {
+            for (src, dst) in data
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(source.as_chunks_mut::<4>().0.iter_mut())
+            {
                 let a = src[3] as u32;
                 for c in 0..3 {
                     dst[c] = (src[2 - c] as u32 * 255 + a / 2)

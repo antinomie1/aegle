@@ -34,6 +34,15 @@ fn at(pixels: &[u8], x: u32, y: u32) -> &[u8] {
 #[test]
 #[ignore = "requires a GPU adapter; select one with WGPU_BACKEND / WGPU_ADAPTER_NAME"]
 fn geometry_text_atlas_recycling_and_failed_frames() -> Result {
+    // A page must fit a bordered pixel; the default holds ordinary glyphs.
+    assert!(matches!(
+        Renderer::new(Options {
+            atlas_size: 2,
+            ..Options::default()
+        }),
+        Err(Error::InvalidSize)
+    ));
+    assert_eq!(Options::default().atlas_size, 1024);
     let mut renderer = Renderer::new(Options {
         // Holds a few CJK glyphs, so one text run clears the page mid-frame.
         atlas_size: 40,
@@ -108,7 +117,12 @@ fn geometry_text_atlas_recycling_and_failed_frames() -> Result {
     builder.pop()?;
     let text = builder.finish()?;
     let (actual, expected) = (gpu(&mut renderer, &text, None)?, software(&text, None)?);
-    let inked = actual.chunks_exact(4).filter(|p| p[0] != 250).count();
+    let inked = actual
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| p[0] != 250)
+        .count();
     assert!(inked > 100, "text produced {inked} inked pixels");
     for (i, (a, e)) in actual.iter().zip(&expected).enumerate() {
         assert!(a.abs_diff(*e) <= 3, "byte {i}: GPU {a}, software {e}");

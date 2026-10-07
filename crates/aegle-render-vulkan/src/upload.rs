@@ -72,8 +72,10 @@ impl Uploads {
                 let transfer = SrgbTransfer::get();
                 for (source, dest) in glyph
                     .data
-                    .chunks_exact(4)
-                    .zip(self.bytes[offset..].chunks_exact_mut(4))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(self.bytes[offset..].as_chunks_mut::<4>().0.iter_mut())
                 {
                     let alpha = source[3] as f32 / 255.0;
                     for c in 0..3 {

@@ -137,4 +137,6 @@ RadioButton 导出同名角色；复选框部分选中时 Toggled 为 Mixed。Dr
 
 `aegle-access/windows` 复用 accesskit_windows 0.34 的 SubclassingAdapter，在 HWND 首次显示之前安装，并持有原生租约到 subclass 卸载之后。WM_GETOBJECT 的激活回调仅排队并唤醒；上游临时 placeholder 由 UI 线程首次完整语义树替换。动作仍经 Mailbox 进入同一 Ui，原生查询不重入借用控件树。发布后先释放 AccessKit 借用再 raise 系统事件；上游直接处理窗口焦点消息。
 
-Ui 检查 API 继续使用逻辑坐标，Windows App 在语义根应用 DPI scale，UIA adapter 再负责 client-to-screen；DPI 改变重新发布。没有维护第二棵可修改的 UI 树；AccessKit 派生缓存、标准库消息队列及 COM/UIA 成本仍需计量。Windows 真实屏幕阅读器、文本模式及通知完整验收尚未完成。
+Ui 检查 API 继续使用逻辑坐标，Windows App 在语义根应用 DPI scale，UIA adapter 再负责 client-to-screen；DPI 改变重新发布。没有维护第二棵可修改的 UI 树；AccessKit 派生缓存、标准库消息队列及 COM/UIA 成本仍需计量。
+
+控件自身的角色与名称来自 `aegle-widgets/accessibility`；facade 的 `windows-accessibility`、`unix-accessibility` 因此同时启用 `accessibility`（此前只接系统 adapter，按钮和标签被导出为无名容器，`aegle/tests/accessibility.rs` 覆盖）。直接组合 `aegle-app` 时须自行启用该 feature。Windows 11 上用系统 UI Automation 客户端检查 `controls` 示例：窗口下依次为两个 Text、名为 "Text editor" 的 Edit（TextPattern 返回含 CJK 的全文）和三个支持 Invoke 的 Button；Invoke "Clear text" 清空编辑器，SetFocus 把系统焦点移到编辑器。Windows 真实屏幕阅读器（讲述人/NVDA）、文本模式的选择与编辑及通知的完整验收尚未完成。

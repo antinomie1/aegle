@@ -115,6 +115,7 @@ dependencies = [
  "aegle-ui",
  "aegle-widgets",
  "wayland-client",
+ "windows",
 ]
 
 [[package]]

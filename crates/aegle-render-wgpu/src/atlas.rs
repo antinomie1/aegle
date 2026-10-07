@@ -444,7 +444,12 @@ fn write(
             }
             // Premultiply in linear light, then sRGB-encode so the texture decodes
             // to the premultiplied value before filtering. Alpha stays linear.
-            for (source, dest) in source.chunks_exact(4).zip(dest.chunks_exact_mut(4)) {
+            for (source, dest) in source
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(dest.as_chunks_mut::<4>().0.iter_mut())
+            {
                 let alpha = source[3] as f32 / 255.0;
                 for c in 0..3 {
                     dest[c] = (transfer.encode(transfer.decode(source[c] as f32 / 255.0) * alpha)

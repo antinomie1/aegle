@@ -64,8 +64,8 @@ Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`,
 | `vulkan` |  | Vulkan rendering |
 | `wgpu` |  | Portable minimal wgpu rendering |
 | `accessibility` |  | Semantic tree export without a platform adapter |
-| `unix-accessibility` |  | AT-SPI adapter on Linux |
-| `windows-accessibility` |  | UI Automation adapter on Windows |
+| `unix-accessibility` |  | AT-SPI adapter on Linux (includes `accessibility`) |
+| `windows-accessibility` |  | UI Automation adapter on Windows (includes `accessibility`) |
 
 Finer-grained features (`wayland`, `windows`) and the crate-level breakdown are in the [crate guide](docs/crates-and-examples.md).
 

@@ -43,7 +43,7 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
     while backend.next_event().is_some() {}
     let mut draws = 0;
     assert!(backend.present(first, None, |pixels, _, _| {
-        for pixel in pixels.chunks_exact_mut(4) {
+        for pixel in pixels.as_chunks_mut::<4>().0 {
             pixel.copy_from_slice(&[20, 100, 220, 255]);
         }
         draws += 1;

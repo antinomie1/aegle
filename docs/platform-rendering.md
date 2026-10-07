@@ -107,4 +107,4 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 `aegle-platform-win32` 直接管理 Win32 HWND、消息循环、每显示器 DPI、鼠标/滚轮/双击、键盘和 UTF-16 字符输入。空闲以 MsgWaitForMultipleObjectsEx 等待消息与共享 wake event；重绘期间仍泵消息，避免动画饿死关闭和输入。窗口先隐藏创建，GPU/UIA 完成安装并成功绘制后才显示。逻辑关闭先停路由和隐藏，最后一个原生租约释放时才 DestroyWindow。
 
-软件呈现借用一个有界 RGBA8 CPU buffer，经 GDI DIB 上传，窗口不透明：GDI 忽略 alpha，半透明像素按预乘颜色（等同叠在黑色上）显示，与 Wayland 的 XRGB 呈现一致，不逐像素检查；Vulkan 用同一 HWND 直接呈现。平台与 renderer 的预算独立，GDI/DWM 与驱动分配不属于 CPU buffer_budget。输入法使用原生 IMM 兼容接口，完整 TSF、周边文字重转换与触屏键盘契约尚未实现。UIA 通过独立 aegle-access/windows 接入；真实 Windows 设备验收仍需单列，不能以 Wine 或交叉编译替代。
+软件呈现借用一个有界 RGBA8 CPU buffer，经 GDI DIB 上传，窗口不透明：GDI 忽略 alpha，半透明像素按预乘颜色（等同叠在黑色上）显示，与 Wayland 的 XRGB 呈现一致，不逐像素检查；Vulkan 用同一 HWND 直接呈现。平台与 renderer 的预算独立，GDI/DWM 与驱动分配不属于 CPU buffer_budget。输入法使用原生 IMM 兼容接口，完整 TSF、周边文字重转换与触屏键盘契约尚未实现。UIA 通过独立 aegle-access/windows 接入。Windows 11 实机上已运行原生窗口生命周期、软件/Vulkan/wgpu 呈现、Microsoft Pinyin 组合与 UIA 客户端查询，证据与仍缺的硬件 GPU、ARM64 及屏幕阅读器验收见[实现状态](implementation.md)；Wine 或交叉编译不能替代这些证据。

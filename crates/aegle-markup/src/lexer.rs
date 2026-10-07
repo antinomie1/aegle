@@ -202,7 +202,10 @@ impl<'a> Lexer<'a> {
             return Err(error());
         }
         let mut channels = [0, 0, 0, 255];
-        for (channel, bytes) in channels.iter_mut().zip(digits.as_bytes().chunks_exact(2)) {
+        for (channel, bytes) in channels
+            .iter_mut()
+            .zip(digits.as_bytes().as_chunks::<2>().0.iter())
+        {
             let high = (bytes[0] as char).to_digit(16).ok_or_else(error)?;
             let low = (bytes[1] as char).to_digit(16).ok_or_else(error)?;
             *channel = (high * 16 + low) as u8;

@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     renderer.read_pixels(&mut pixels)?;
     let mut output = BufWriter::new(File::create(&path)?);
     output.write_all(b"P6\n800 480\n255\n")?;
-    for pixel in pixels.chunks_exact(4) {
+    for pixel in pixels.as_chunks::<4>().0 {
         output.write_all(&pixel[..3])?;
     }
     output.flush()?;

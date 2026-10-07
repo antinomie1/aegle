@@ -36,11 +36,20 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
         renderer
             .begin_frame(&mut surface, Color::TRANSPARENT)
             .draw(&scene, Affine::IDENTITY)?;
-        assert!(surface.data().chunks_exact(4).filter(|p| p[3] != 0).count() > 100);
-        for (i, pixel) in surface.data().chunks_exact(4).enumerate() {
+        assert!(
+            surface
+                .data()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[3] != 0)
+                .count()
+                > 100
+        );
+        for (i, pixel) in surface.data().as_chunks::<4>().0.iter().enumerate() {
             let (x, y) = (i % 64, i / 64);
             if !(4..40).contains(&x) || !(4..32).contains(&y) {
-                assert_eq!(pixel, [0; 4]);
+                assert_eq!(*pixel, [0; 4]);
             }
             let channel = if color.to_rgba()[0] == 0 { 2 } else { 0 };
             assert_eq!(pixel[channel], pixel[3]);
@@ -54,8 +63,14 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
                 Color::TRANSPARENT,
             )
             .draw(&scene, Affine::IDENTITY)?;
-        for (a, b) in surface.data().chunks_exact(4).zip(bgra.chunks_exact(4)) {
-            assert_eq!([a[2], a[1], a[0], a[3]], b);
+        for (a, b) in surface
+            .data()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(bgra.as_chunks::<4>().0.iter())
+        {
+            assert_eq!([a[2], a[1], a[0], a[3]], *b);
         }
         let stats = renderer.glyph_cache().stats();
         if let Some(previous) = warm {
@@ -75,10 +90,17 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
                 Affine::translation(2.0, 0.0)?,
                 Some(Rect::new(12.0, 0.0, 8.0, 48.0)),
             )?;
-        assert!(surface.data().chunks_exact(4).any(|pixel| pixel[3] != 0));
-        for (i, pixel) in surface.data().chunks_exact(4).enumerate() {
+        assert!(
+            surface
+                .data()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[3] != 0)
+        );
+        for (i, pixel) in surface.data().as_chunks::<4>().0.iter().enumerate() {
             if !(12..20).contains(&(i % 64)) || !(4..32).contains(&(i / 64)) {
-                assert_eq!(pixel, [0; 4]);
+                assert_eq!(*pixel, [0; 4]);
             }
         }
     }
@@ -88,7 +110,7 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
     renderer
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw(&scene, Affine::new([0.0, 1.0, -1.0, 0.0, 40.0, 0.0])?)?;
-    assert!(surface.data().chunks_exact(4).any(|p| p[3] > 200));
+    assert!(surface.data().as_chunks::<4>().0.iter().any(|p| p[3] > 200));
     // Font data lives in the retained record, independent of the shaping context.
     drop(text);
     drop(fonts);
@@ -206,8 +228,9 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
         assert_eq!(
             surface
                 .data()
-                .chunks_exact(4)
-                .any(|p| p == [255, 0, 0, 255]),
+                .as_chunks::<4>()
+                .0
+                .contains(&[255, 0, 0, 255]),
             visible
         );
         // The one-pixel underline sits slightly off the pixel grid, so its
@@ -215,7 +238,9 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
         assert!(
             surface
                 .data()
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .any(|p| p[1] == 255 && p[0] < 80 && p[2] < 80)
         );
         assert_eq!(editor.text(), "你好");
@@ -237,8 +262,9 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
     assert!(
         surface
             .data()
-            .chunks_exact(4)
-            .any(|p| p == [0, 0, 255, 255])
+            .as_chunks::<4>()
+            .0
+            .contains(&[0, 0, 255, 255])
     );
     Ok(())
 }

@@ -23,7 +23,7 @@ pub(crate) fn decode(bytes: &[u8], max_bytes: usize) -> Result<(u32, u32, Vec<u8
         return Ok((width, height, pixels));
     }
     let mut rgba = Vec::with_capacity(size);
-    for rgb in pixels.chunks_exact(3) {
+    for rgb in pixels.as_chunks::<3>().0 {
         rgba.extend([rgb[0], rgb[1], rgb[2], 255]);
     }
     Ok((width, height, rgba))

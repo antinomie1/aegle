@@ -16,17 +16,30 @@ use crate::{
 const OFFSCREEN: TextureFormat = TextureFormat::Rgba8Unorm;
 
 /// Fixed configuration.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct Options {
     /// Square atlas page extent, including one transparent pixel around every
     /// entry. Mask and color pages are allocated when first needed; larger images
-    /// and path masks get exact-size textures instead.
+    /// and path masks get exact-size textures instead. Default 1024; must be at
+    /// least 3 and at most the device's texture dimension limit.
     #[cfg(feature = "text")]
     pub atlas_size: u32,
     /// Window only: keep premultiplied window alpha when the compositor offers it.
     /// Otherwise windows are opaque and require an opaque clear color.
     #[cfg(feature = "window")]
     pub transparent: bool,
+}
+// Derivable only without `text`; a derived zero-sized page would reject every glyph.
+#[allow(clippy::derivable_impls)]
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            #[cfg(feature = "text")]
+            atlas_size: 1024,
+            #[cfg(feature = "window")]
+            transparent: false,
+        }
+    }
 }
 
 /// Which pipeline and texture draws a run of primitives.
@@ -96,15 +109,20 @@ impl Renderer {
     pub fn new(options: Options) -> Result<Self> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        Ok(Self::with_gpu(
-            Rc::new(Gpu::connect(&instance, None)?.0),
-            options,
-        ))
+        Self::with_gpu(Rc::new(Gpu::connect(&instance, None)?.0), options)
     }
 
-    pub(crate) fn with_gpu(gpu: Rc<Gpu>, options: Options) -> Self {
+    pub(crate) fn with_gpu(gpu: Rc<Gpu>, options: Options) -> Result<Self> {
+        // A page holds at least one pixel inside its transparent border.
+        #[cfg(feature = "text")]
+        if options.atlas_size < 3
+            || options.atlas_size > gpu.device.limits().max_texture_dimension_2d
+        {
+            return Err(Error::InvalidSize);
+        }
+        #[cfg(not(feature = "text"))]
         let _ = options;
-        Self {
+        Ok(Self {
             gpu,
             target: None,
             buffers: Buffers::default(),
@@ -118,7 +136,7 @@ impl Renderer {
             viewport: [0.0; 2],
             clear: [0.0; 4],
             loaded: false,
-        }
+        })
     }
 
     /// Name reported by the selected adapter (including CPU implementations).

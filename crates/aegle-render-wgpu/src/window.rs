@@ -102,7 +102,7 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
             capabilities.alpha_modes[0]
         };
         Ok(Self {
-            renderer: Renderer::with_gpu(gpu, options),
+            renderer: Renderer::with_gpu(gpu, options)?,
             surface,
             instance,
             format,

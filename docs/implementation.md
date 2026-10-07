@@ -4,7 +4,7 @@
 
 ## 已实现
 
-- Rust 2024 workspace，MIT OR Apache-2.0；目标 MSRV 1.88，实际验证工具链为 1.96.1。
+- Rust 2024 workspace，MIT OR Apache-2.0；目标 MSRV 1.88，Linux 验证工具链为 1.96.1，Windows 为 1.99.0；MSRV 1.88 已在 Windows 上 `cargo check --workspace --all-features`（不含仅限 Linux 的 Wayland crate）通过。
 - aegle-types：no_std 几何与紧凑 RGBA 颜色，无第三方依赖。
 - aegle-core：代数 ID、可复用槽位、保留树、索引子节点、结构变更与三通道失效，另有路由快照、默认动作控制及策略化焦点遍历；无第三方依赖。叶节点不分配子节点数组，删除不递归。
 - aegle-layout：Taffy 0.14.0 直接适配同一棵保留树，无第二份拓扑；共享默认样式、测量缓存、Flex/Block、可选 Grid。它不依赖字体、窗口或 renderer。
@@ -18,7 +18,7 @@
 - aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；可选 window 已提供原生 swapchain，App 可显式选择。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放、事件等待、键盘/指针输入、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。外观偏好经内置最小 D-Bus 客户端读取 desktop portal 并监听变化；尚无触摸、客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
-- aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已交叉编译，执行证据见本页末尾，TSF/重转换/触屏键盘及真实 Windows 验收未完成。
+- aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已在 Windows 11 上运行，执行证据见本页末尾，TSF/重转换/触屏键盘及硬件 GPU、ARM64 验收未完成。
 - aegle-motion：独立无分配 Tween/Transition，标量、Point 与预乘线性 Color 插值、四种 easing；共用 types 的可选 std 颜色转换表。app 的可选 motion 已连接外观与平移过渡、完成回调、生命周期、语义颜色和 Wayland 帧驱动。缩放/旋转经 `Node::set_transform` 动画（见末节）；原生 App 跟随系统减少动态效果。
 - aegle-theme：无分配的有类型配色/尺寸、VisualState、Appearance/Style 和纯函数 Skin；浅色、深色与显式高对比主题。app 支持整份主题快照的子树继承；原生 App 按系统深浅色/高对比选择主题；类型化 token（颜色、长度、时长、字体）的注册表、全局与子树覆盖及属性绑定见“主题 token”一节。
 - aegle-ui、aegle-widgets、aegle-app 与 aegle：无窗口引擎（aegle-ui）、全部默认控件（aegle-widgets，经 `Widgets` trait 创建）、可选 Wayland/Win32 软件/Vulkan/wgpu 应用宿主（aegle-app）；命令式 row/column/scroll_view/text/button/text_field/text_area/check_box/switch/radio/slider/progress/list_view/table/popup/dropdown、弱句柄、布局 setter、可替换回调及主题切换。每窗口独立树，应用共享字体和 renderer；可选语义能力已接到原生循环。
@@ -64,8 +64,26 @@ AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-platform-wayland --tests -- --
   需自行设定隔离的 `XDG_RUNTIME_DIR` 与 `WAYLAND_DISPLAY`，compositor 须提供 input-method-v2、virtual-keyboard-v1；不得使用用户正在使用的输入法会话。
 - Vulkan：离屏几何与文字场景在 RX 硬件上运行并与软件像素比较（允许 3 级通道量化误差），窗口渲染器与共享设备由 native 集成测试覆盖。
 - 标记：编译型与运行时加载由 facade 的 `tests/paths.rs` 用同一文档对照绘制记录与过渡时序；解析器对超深表达式、字段链与 `list<` 嵌套返回错误而不溢出栈。
-- Windows：`aegle-platform-win32` 已交叉检查，**未在 Windows 上运行**；窗口销毁、IME、UIA、硬件 Vulkan 均无执行证据。
-- 许可证为 `MIT OR Apache-2.0`（仓库仅一位作者，已重新授权）。CI（`.github/workflows/ci.yml`）含 fmt、clippy、测试、feature 矩阵、MSRV 1.88、doc、Windows 检查与 cargo-deny；其中 MSRV、Windows 与 cargo-deny 作业尚未在本机或 CI 上实际运行。
+- Windows（2026-10-08，Windows 11 Pro for Workstations 26100，rustc 1.99.0 `x86_64-pc-windows-gnu`，无 GPU 的 Microsoft Basic Display Adapter 虚拟机）：工作区（不含 Wayland crate）`cargo fmt --check`、默认与 `--all-features` 的 `cargo clippy --all-targets -D warnings`、`cargo test` 及 `cargo doc -D warnings` 均通过；facade 的 Windows 组合（含 vulkan、wgpu、windows-accessibility 与全部可选格式）clippy 无告警。下列 opt-in 测试在真实桌面会话中执行通过：
+  - `aegle-platform-win32` `native`：窗口创建/隐藏到显示、GDI 呈现、UTF-16 surrogate 文字、IMM 上下文、已发布输入不被动画饿死、WM_SIZE 几何、逻辑关闭到最后租约释放时 DestroyWindow、`CF_UNICODETEXT` 往返与跨线程唤醒。
+  - Microsoft Pinyin：`aegle-platform-win32` `ime` 与 `aegle-app` `ime_windows` 发送真实按键，覆盖预编辑、单次提交、取消、焦点转移与重新启用，详见[文字输入](text-input.md)。
+  - `aegle-app` `native` 三个场景分别以软件、Vulkan（Mesa lavapipe 26.2.4 ICD，`AEGLE_TEST_VULKAN=1`）与 wgpu（lavapipe Vulkan 与 DX12 WARP，`AEGLE_TEST_WGPU=1`）呈现；`aegle` `window` 标记窗口文档通过。
+  - 离屏 GPU：`aegle-render-vulkan` 全部 ignored 测试在 lavapipe 上通过；`aegle-render-wgpu` 全部 ignored 测试在 `WGPU_BACKEND=vulkan`（lavapipe）与 `WGPU_BACKEND=dx12`（Microsoft Basic Render Driver）上通过。
+  - UIA：系统 UI Automation 客户端读取 `controls` 示例的完整控件树并执行 Invoke/TextPattern/SetFocus，见[无障碍](accessibility.md)。
+
+  运行方式（在专用测试桌面；IME 测试会向前台测试窗口输入，需安装简体中文 Microsoft Pinyin）：
+
+```sh
+cargo test -p aegle-platform-win32 -- --ignored --test-threads=1
+AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-app --features windows,software,vulkan,wgpu --tests -- --ignored --test-threads=1
+AEGLE_TEST_COMPOSITOR=private AEGLE_TEST_VULKAN=1 cargo test -p aegle-app --features windows,software,vulkan,wgpu --test native -- --ignored windows_callbacks
+AEGLE_TEST_COMPOSITOR=private AEGLE_TEST_WGPU=1 cargo test -p aegle-app --features windows,software,vulkan,wgpu --test native -- --ignored windows_callbacks
+cargo test -p aegle-render-vulkan --all-features -- --ignored --test-threads=1
+WGPU_BACKEND=dx12 cargo test -p aegle-render-wgpu --all-features -- --ignored --test-threads=1
+```
+
+  这次运行发现并修复两处问题：wgpu `Options::default()` 的图集页尺寸被派生为 0，Win32 + wgpu 窗口首帧即以 `TooLarge` 失败（现恢复默认 1024 并在构造时校验）；facade 的系统无障碍 feature 未启用控件语义（见[无障碍](accessibility.md)）。硬件 GPU 驱动、ARM64 与真实屏幕阅读器仍无执行证据。
+- 许可证为 `MIT OR Apache-2.0`（仓库仅一位作者，已重新授权）。CI（`.github/workflows/ci.yml`）含 fmt、clippy、测试、feature 矩阵、MSRV 1.88、doc、Windows 检查与 cargo-deny。本机复现 CI 步骤时有两处失败：stable clippy 新增的 `chunks_exact_to_as_chunks` 告警（`-D warnings`）及 cargo-deny 把无版本的 workspace 路径依赖判为通配；现以 `as_chunks` 替换常量分块、为路径依赖标注 `version = "0.1.0"`，本机 clippy 与 `cargo deny check`（advisories、bans、licenses、sources）通过。Windows 作业另运行 win32 crate 与 facade（含 `windows-accessibility`）的测试。Linux 专属的 Wayland crate 依赖 libxkbcommon，未能在本机交叉检查，其两处改动等待 CI 的 Linux 作业确认。
 
 ## 已知取舍
 
@@ -76,7 +94,7 @@ AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-platform-wayland --tests -- --
 
 ## 剩余工作
 
-- 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更；fcitx/IBus 真人候选窗与真实屏幕阅读器验收。
+- 平台验收：Windows 硬件 Vulkan/DX12 驱动与 ARM64、日文/韩文输入法与候选窗位置、讲述人/NVDA、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更；fcitx/IBus 真人候选窗与真实屏幕阅读器验收。
 - 组件/绘制：组透明度与区域模糊（需要离屏层）；阴影与渐变的标记写法。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制。
-- 工程：多 compositor/GPU 与嵌入式完整资源测量；首次运行并清理 MSRV、Windows 与 cargo-deny 作业。现有桌面样本不能替代这些证据。
+- 工程：多 compositor/GPU 与嵌入式完整资源测量；在 CI 上确认 Linux MSRV 与 Wayland 作业。现有桌面样本不能替代这些证据。

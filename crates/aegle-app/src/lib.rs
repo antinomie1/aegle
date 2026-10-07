@@ -5,7 +5,9 @@
 //! Windows share fonts, the platform connection and (for GPU renderers) one
 //! device; each keeps its own control tree. [`App::proxy`] posts messages from
 //! other threads to the UI thread. `unix-accessibility` and
-//! `windows-accessibility` connect the semantic tree to the system.
+//! `windows-accessibility` connect the semantic tree to the system; the
+//! controls' own roles and names additionally need `aegle-widgets/accessibility`,
+//! which the `aegle` facade's adapter features enable.
 
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 use aegle_platform_wayland as platform;

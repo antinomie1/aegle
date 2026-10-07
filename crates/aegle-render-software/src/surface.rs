@@ -75,7 +75,7 @@ impl<'a> Surface<'a> {
         let pixel = [premul(r), premul(g), premul(b), a];
         let stride = self.width as usize * 4;
         for row in self.data.chunks_exact_mut(stride).take(bottom).skip(top) {
-            for dst in row[left * 4..right * 4].chunks_exact_mut(4) {
+            for dst in row[left * 4..right * 4].as_chunks_mut::<4>().0 {
                 dst.copy_from_slice(&pixel);
             }
         }

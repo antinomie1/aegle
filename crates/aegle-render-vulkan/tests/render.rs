@@ -151,7 +151,13 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
     renderer.begin_frame(16, 8, Color::BLACK)?.finish()?;
     let mut resized = vec![0; 16 * 8 * 4];
     renderer.read_pixels(&mut resized)?;
-    assert!(resized.chunks_exact(4).all(|pixel| pixel == [0, 0, 0, 255]));
+    assert!(
+        resized
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|&pixel| pixel == [0, 0, 0, 255])
+    );
     renderer.release_images()?;
     assert_eq!(renderer.stats().device_bytes, 0);
     assert_eq!(renderer.stats().recording_bytes, 0);

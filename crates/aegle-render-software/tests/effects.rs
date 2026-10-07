@@ -131,8 +131,13 @@ fn bgra_surfaces_hold_the_same_pixels_with_red_and_blue_exchanged() -> Result {
     builder.pop()?;
     builder.image(&image, Rect::new(2.0, 2.0, 2.0, 2.0))?;
     let (rgba, bgra) = both_orders(&builder.finish()?)?;
-    for (a, b) in rgba.chunks_exact(4).zip(bgra.chunks_exact(4)) {
-        assert_eq!([a[2], a[1], a[0], a[3]], b);
+    for (a, b) in rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(bgra.as_chunks::<4>().0.iter())
+    {
+        assert_eq!([a[2], a[1], a[0], a[3]], *b);
     }
     Ok(())
 }

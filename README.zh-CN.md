@@ -64,8 +64,8 @@ fn main() -> Result<()> {
 | `vulkan` |  | Vulkan 绘制 |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制 |
 | `accessibility` |  | 导出语义树，不接系统适配器 |
-| `unix-accessibility` |  | Linux AT-SPI 适配 |
-| `windows-accessibility` |  | Windows UI Automation 适配 |
+| `unix-accessibility` |  | Linux AT-SPI 适配（含 `accessibility`） |
+| `windows-accessibility` |  | Windows UI Automation 适配（含 `accessibility`） |
 
 更细的 feature（`wayland`、`windows`）和各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
 

@@ -63,6 +63,10 @@ jobs:
       # Only the Windows crates: the Wayland crate needs libxkbcommon.
       - run: cargo clippy -p aegle-platform-win32 --all-targets -- -D warnings
       - run: cargo clippy -p aegle --all-targets --no-default-features --features "windows,software,markup,motion" -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "windows,software,vulkan,wgpu,windows-accessibility" -- -D warnings
+      # Native window and input-method tests stay opt-in (`--ignored`) on a test desktop.
+      - run: cargo test -p aegle-platform-win32
+      - run: cargo test -p aegle --no-default-features --features "windows,software,markup,motion,windows-accessibility"
   deny:
     runs-on: ubuntu-latest
     steps:

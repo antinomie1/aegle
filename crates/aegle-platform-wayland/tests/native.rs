@@ -30,7 +30,7 @@ fn present(platform: &mut Wayland, window: WindowId) {
         platform
             .present::<()>(window, None, |pixels, size, _| {
                 assert_eq!(pixels.len(), size.width as usize * size.height as usize * 4);
-                for pixel in pixels.chunks_exact_mut(4) {
+                for pixel in pixels.as_chunks_mut::<4>().0.iter_mut() {
                     pixel.copy_from_slice(&[32, 48, 64, 255]);
                 }
                 Ok(())

@@ -38,11 +38,17 @@ aegle-platform-wayland = { workspace = true, optional = true }
 wayland-client = { version = "0.31.15", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-aegle-platform-win32 = { path = "../aegle-platform-win32", optional = true }
+aegle-platform-win32 = { path = "../aegle-platform-win32", version = "0.1.0", optional = true }
 
 [dev-dependencies]
 aegle-widgets.workspace = true
 aegle-text = { workspace = true, features = ["scene"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+windows = { version = "0.62.2", default-features = false, features = [
+    "Win32_Foundation", "Win32_System_Threading", "Win32_UI_Input_Ime",
+    "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging",
+] }
 
 [lints.rust]
 unsafe_code = "warn"

@@ -29,8 +29,8 @@ aegle = { path = "../aegle/crates/aegle" }
 | `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译 |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），可与其他后端同时编译 |
 | `accessibility` |  | 语义树导出（`Ui::accessibility`），不接系统 |
-| `unix-accessibility` |  | Linux AT-SPI 适配，引入 zbus |
-| `windows-accessibility` |  | Windows UI Automation 适配 |
+| `unix-accessibility` |  | Linux AT-SPI 适配（含 `accessibility`），引入 zbus |
+| `windows-accessibility` |  | Windows UI Automation 适配（含 `accessibility`） |
 
 Linux 构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon；启用 `system-fonts` 时还需要 Fontconfig。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。
 

@@ -74,7 +74,7 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
     let transform = Affine::translation(4.25, 4.5)?;
     let clip = Some(Rect::new(4.0, 4.0, 52.0, 32.0));
     let first = compare(&mut renderer, &plain, transform, clip, 64)?;
-    assert!(first.chunks_exact(4).filter(|p| p[3] > 0).count() > 100);
+    assert!(first.as_chunks::<4>().0.iter().filter(|p| p[3] > 0).count() > 100);
     let cold = renderer.text_stats();
     assert!(cold.raster_requests > 1 && cold.glyph_cache.entries == 1);
     assert_eq!(compare(&mut renderer, &plain, transform, clip, 64)?, first);
@@ -103,7 +103,13 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
     let mut pixels = vec![0; 64 * 64 * 4];
     renderer.read_pixels(&mut pixels)?;
     assert_eq!(&pixels[(12 * 64 + 12) * 4..][..4], &[255, 0, 0, 255]);
-    assert!(pixels.chunks_exact(4).any(|p| p[2] > p[0] && p[3] == 255));
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[2] > p[0] && p[3] == 255)
+    );
     let c = std::f32::consts::FRAC_1_SQRT_2;
     compare(
         &mut renderer,
@@ -207,7 +213,13 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
         Some(Rect::new(2.0, 0.0, 2.0, 2.0)),
         8,
     )?;
-    assert!(edge_pixels.chunks_exact(4).any(|pixel| pixel[3] != 0));
+    assert!(
+        edge_pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[3] != 0)
+    );
     assert_eq!(limited.text_stats().atlas_entries, 1);
     limited.release_images()?;
     let empty = limited.text_stats();

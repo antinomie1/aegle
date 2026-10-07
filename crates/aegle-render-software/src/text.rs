@@ -78,7 +78,7 @@ impl Frame<'_, '_, '_> {
                     continue;
                 }
                 // Color glyphs change paint per pixel; they are rare (emoji).
-                for (i, pixel) in row.zip(pixels.chunks_exact_mut(4)) {
+                for (i, pixel) in row.zip(pixels.as_chunks_mut::<4>().0.iter_mut()) {
                     let rgba = texel(i);
                     let [r, g, b, _] = order(bgra, rgba);
                     Solid::new(Color::rgba(r, g, b, coverage_product(rgba[3], opacity)))

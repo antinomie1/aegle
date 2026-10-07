@@ -100,4 +100,9 @@ ScrollView 仅平移既有控件几何，Editor 继续拥有自己的文字滚�
 
 Win32 普通文本由 WM_CHAR/WM_UNICHAR 产生，UTF-16 surrogate pair 合并为 Unicode scalar；按键与文字分开送入同一 Ui/Editor，保留 AltGr/dead-key 的系统翻译。IMM 从自有 HIMC 读取组合/结果，UTF-16 cursor 检查边界后转成 UTF-8 偏移，候选窗使用 Ui 光标矩形按 DPI 向外取整；由 Editor 绘制预编辑，系统仍绘制候选窗。自行消费 WM_IME_COMPOSITION/WM_IME_CHAR，避免默认过程再次产生已提交文本。切换编辑器/关闭禁用旧会话、取消组合并清理已排队结果。
 
-当前提供 IMM 兼容路径，未实现 TSF text store、周边文字查询/重转换或触屏键盘支持。不能将系统提供 HIMC 或人工注入 WM_CHAR 当作真实中文输入法验证；实机 Microsoft Pinyin、候选窗、焦点切换与取消仍需验收。
+当前提供 IMM 兼容路径，未实现 TSF text store、周边文字查询/重转换或触屏键盘支持。真实 Microsoft Pinyin（TSF 输入法经系统 IMM 兼容层）已在 Windows 11 上验证：两个 opt-in 测试以 `SendInput` 向测试窗口发送真实按键，只在测试窗口处于前台时输入。`aegle-platform-win32/tests/ime.rs` 检查组合按键不进入宿主、预编辑、首候选只经 GCS_RESULTSTR 提交一次（WM_IME_CHAR 不重复）、Esc 取消、关闭会话丢弃预编辑及已排队结果、重新启用后开始新组合；`aegle-app/tests/ime_windows.rs` 经原生 App 把拼音提交进获得焦点的 TextField，并检查预编辑不改变已提交值、焦点移到按钮时不提交残留组合、回到字段后在光标处追加。候选窗的屏幕位置、日文/韩文输入法与 TSF 专属功能仍需人工验收。
+
+```sh
+cargo test -p aegle-platform-win32 --test ime -- --ignored
+AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-app --features windows,software --test ime_windows -- --ignored
+```

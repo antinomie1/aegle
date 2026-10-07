@@ -141,7 +141,7 @@ pub(crate) fn blend_linear_span(
     let (mut sources, mut coverage) = ([[0.0; 4]; CHUNK], [0u8; CHUNK]);
     for (chunk, pixels) in pixels.chunks_mut(CHUNK * 4).enumerate() {
         let count = pixels.len() / 4;
-        for (offset, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+        for (offset, pixel) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             (sources[offset], coverage[offset]) = source(start + chunk * CHUNK + offset, pixel);
         }
         blend_linear_row(pixels, &sources[..count], &coverage[..count]);
@@ -153,7 +153,12 @@ impl Solid {
     pub(crate) fn blend_row(&self, pixels: &mut [u8], coverage: &[u8]) {
         for (pixels, coverage) in pixels.chunks_mut(LANES * 4).zip(coverage.chunks(LANES)) {
             let mut lanes = Lanes::default();
-            for (offset, (pixel, &coverage)) in pixels.chunks_exact_mut(4).zip(coverage).enumerate()
+            for (offset, (pixel, &coverage)) in pixels
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(coverage)
+                .enumerate()
             {
                 if coverage == 0 || self.rgba[3] == 0 {
                     continue;
@@ -185,7 +190,9 @@ pub(crate) fn blend_linear_row(pixels: &mut [u8], sources: &[[f32; 4]], coverage
     {
         let mut lanes = Lanes::default();
         for (offset, ((pixel, &source), &coverage)) in pixels
-            .chunks_exact_mut(4)
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
             .zip(sources)
             .zip(coverage)
             .enumerate()

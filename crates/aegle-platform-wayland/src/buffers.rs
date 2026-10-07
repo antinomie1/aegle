@@ -164,7 +164,7 @@ fn to_big_endian(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) {
             .skip(rect.y as usize)
             .take(rect.height as usize);
         for row in rows {
-            for pixel in row[columns.clone()].chunks_exact_mut(4) {
+            for pixel in row[columns.clone()].as_chunks_mut::<4>().0.iter_mut() {
                 pixel.reverse();
             }
         }

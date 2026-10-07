@@ -19,7 +19,7 @@ pub enum Error {
     /// The surface was lost; create a new window renderer.
     #[cfg(feature = "window")]
     SurfaceLost,
-    /// Invalid or unsupported target extent.
+    /// Invalid or unsupported target extent or atlas page size.
     InvalidSize,
     /// An operation requires a completed frame or another established state.
     InvalidState(&'static str),
@@ -68,7 +68,7 @@ impl fmt::Display for Error {
             Self::SurfaceOutOfDate => f.write_str("wgpu surface changed; redraw required"),
             #[cfg(feature = "window")]
             Self::SurfaceLost => f.write_str("wgpu surface lost"),
-            Self::InvalidSize => f.write_str("invalid wgpu render target size"),
+            Self::InvalidSize => f.write_str("invalid wgpu render target or atlas page size"),
             Self::InvalidState(reason) => f.write_str(reason),
             Self::Coordinates => f.write_str("wgpu geometry exceeds the coordinate range"),
             Self::ClipDepth => f.write_str("wgpu clip depth exceeds eight layers"),

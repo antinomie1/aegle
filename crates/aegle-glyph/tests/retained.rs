@@ -220,7 +220,9 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     assert!(
         image
             .data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .any(|p| (186..=190).contains(&p[0])
                 && p[1] == 0
                 && (186..=190).contains(&p[2])

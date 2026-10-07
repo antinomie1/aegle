@@ -30,8 +30,8 @@ system-fonts = ["aegle-ui/system-fonts", "aegle-app/system-fonts"]
 # scripts (word selection and movement); without it ICU logs a missing model.
 text-dictionary = ["aegle-ui/text-dictionary"]
 accessibility = ["aegle-ui/accessibility", "aegle-widgets/accessibility", "aegle-app/accessibility"]
-windows-accessibility = ["aegle-app/windows-accessibility"]
-unix-accessibility = ["aegle-app/unix-accessibility"]
+windows-accessibility = ["accessibility", "aegle-app/windows-accessibility"]
+unix-accessibility = ["accessibility", "aegle-app/unix-accessibility"]
 # Extra image formats beyond the always-available PNG, in `aegle::image`; `effects`
 # adds `aegle::image::effects`.
 jpeg = ["aegle-image/jpeg"]

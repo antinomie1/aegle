@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     renderer.read_pixels(&mut pixels)?;
     let mut file = BufWriter::new(File::create(&output)?);
     file.write_all(b"P6\n800 480\n255\n")?;
-    for pixel in pixels.chunks_exact(4) {
+    for pixel in pixels.as_chunks::<4>().0 {
         file.write_all(&pixel[..3])?;
     }
     file.flush()?;

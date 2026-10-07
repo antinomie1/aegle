@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Opaque background: premultiplied bytes are also straight RGB.
     let mut file = File::create(&output)?;
     write!(file, "P6\n400 200\n255\n")?;
-    for pixel in rgba.chunks_exact(4) {
+    for pixel in rgba.as_chunks::<4>().0 {
         file.write_all(&pixel[..3])?;
     }
     println!("wrote {}", output.to_string_lossy());
