@@ -1,0 +1,4 @@
+Column {
+    enabled: false
+    Slider { id: slider; value: 0.5; transition: 200ms }
+}

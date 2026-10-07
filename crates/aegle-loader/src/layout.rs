@@ -10,11 +10,12 @@ fn length(value: &Literal) -> Length {
     match value {
         Literal::Length(v) => Length::Px(*v),
         Literal::Percent(v) => Length::Percent(*v),
+        Literal::Identifier(name) if name == "auto" => Length::Auto,
         Literal::Call(_, parts) => match parts[..] {
             [Literal::Percent(percent), Literal::Length(px)] => Length::Calc { percent, px },
             _ => unreachable!("checked calc"),
         },
-        _ => Length::Auto,
+        _ => unreachable!("checked length"),
     }
 }
 
@@ -47,7 +48,8 @@ pub(crate) fn align(value: &Literal) -> Option<Align> {
         "end" => Align::End,
         "center" => Align::Center,
         "stretch" => Align::Stretch,
-        _ => Align::Baseline,
+        "baseline" => Align::Baseline,
+        other => unreachable!("checked alignment `{other}`"),
     })
 }
 
@@ -59,7 +61,8 @@ fn justify(value: &Literal) -> Option<Justify> {
         "stretch" => Justify::Stretch,
         "space_between" => Justify::SpaceBetween,
         "space_around" => Justify::SpaceAround,
-        _ => Justify::SpaceEvenly,
+        "space_evenly" => Justify::SpaceEvenly,
+        other => unreachable!("checked justification `{other}`"),
     })
 }
 
@@ -104,16 +107,19 @@ pub(crate) fn apply(
             "row" => aegle_ui::Direction::Row,
             "column" => aegle_ui::Direction::Column,
             "row_reverse" => aegle_ui::Direction::RowReverse,
-            _ => aegle_ui::Direction::ColumnReverse,
+            "column_reverse" => aegle_ui::Direction::ColumnReverse,
+            other => unreachable!("checked direction `{other}`"),
         }),
         LayoutDirection => node.set_layout_direction(Some(match identifier(value) {
             "ltr" => aegle_ui::LayoutDirection::Ltr,
-            _ => aegle_ui::LayoutDirection::Rtl,
+            "rtl" => aegle_ui::LayoutDirection::Rtl,
+            other => unreachable!("checked layout direction `{other}`"),
         })),
         Wrap => container().set_wrap(match identifier(value) {
             "no_wrap" => aegle_ui::Wrap::NoWrap,
             "wrap" => aegle_ui::Wrap::Wrap,
-            _ => aegle_ui::Wrap::WrapReverse,
+            "wrap_reverse" => aegle_ui::Wrap::WrapReverse,
+            other => unreachable!("checked wrap `{other}`"),
         }),
         Align => container().set_align_items(align(value)),
         Justify => container().set_justify_content(justify(value)),

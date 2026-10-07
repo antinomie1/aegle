@@ -6,7 +6,7 @@ use quote::quote;
 use syn::Ident;
 
 /// `snake_case` markup identifiers name `CamelCase` Rust variants.
-fn variant(name: &str) -> Ident {
+pub(crate) fn variant(name: &str) -> Ident {
     let camel: String = name
         .split('_')
         .map(|word| {

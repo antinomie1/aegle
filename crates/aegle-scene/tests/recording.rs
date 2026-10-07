@@ -187,8 +187,7 @@ fn validated_gradients_and_shadows() {
 #[test]
 fn bounds_cover_drawn_pixels_within_clips() -> Result<(), SceneError> {
     let shape = |x, y, w, h| RoundedRect::new(Rect::new(x, y, w, h), 0.0);
-    let mut builder = SceneBuilder::new();
-    assert_eq!(builder.finish()?.bounds(), None);
+    assert_eq!(SceneBuilder::new().finish()?.bounds(), None);
     let mut builder = SceneBuilder::new();
     builder.fill(shape(0.0, 0.0, 10.0, 10.0)?, Color::BLACK)?;
     builder.push_transform(Affine::translation(20.0, 0.0)?.then(Affine::scale(2.0, 2.0)?)?)?;

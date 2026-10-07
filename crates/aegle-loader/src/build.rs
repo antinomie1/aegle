@@ -18,161 +18,259 @@ use crate::{
 /// Effects owned by one built region; dropping it stops their updates.
 pub(crate) type Block = Vec<Rc<Effect>>;
 
-/// Where children are appended.
-pub(crate) struct Parent<'a> {
-    pub container: &'a Container,
+/// The passes over one built region, in document order: every control is
+/// created, then properties, bindings and nested blocks apply, then
+/// transitions and events are installed. `ui!` emits the same order for static
+/// documents, so containers see their children when their properties apply and
+/// no initial value, including one inherited from an ancestor, animates.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    Create,
+    Apply,
+    Finish,
 }
 
-impl<'a> Parent<'a> {
-    pub fn of(handle: &'a Handle) -> Self {
-        Self {
-            container: handle.container(),
-        }
-    }
+/// What the creation pass made, in walk order, revisited by the later passes.
+#[derive(Clone)]
+enum Made {
+    Control(Handle),
+    Block(Container),
+    Instance(Env),
 }
 
-/// Builds `children` into `parent`, recording the top-level handles created.
-/// `ids` collects entry-level named controls outside blocks and components.
+/// One region: a view, an `if` branch or a `for` row.
+struct Region<'r> {
+    pass: Pass,
+    made: Vec<Made>,
+    next: usize,
+    block: &'r mut Block,
+    /// Top-level controls, recorded as soon as they exist so a failed build
+    /// can still remove them.
+    created: &'r mut Vec<Handle>,
+    /// Entry-level named controls, outside blocks and components.
+    ids: Option<&'r mut [Option<Handle>]>,
+}
+
+/// Builds `children` into `parent` as one region.
 pub(crate) fn children(
     children: &[Child],
-    parent: &Parent,
+    parent: &Container,
     env: &Env,
     block: &mut Block,
     created: &mut Vec<Handle>,
-    mut ids: Option<&mut [Option<Handle>]>,
 ) -> Result {
-    for child in children {
-        match child {
-            Child::Element(child) => {
-                element(child, parent, env, block, created, ids.as_deref_mut())?
-            }
-            Child::If(condition, then, otherwise) => {
-                let wrapper = wrapper(parent)?;
-                created.push(Handle::Container(wrapper.clone()));
-                conditional(
-                    condition.clone(),
-                    then.clone(),
-                    otherwise.clone(),
-                    wrapper,
-                    env,
-                    block,
-                )?;
-            }
-            Child::For(list, key, body) => {
-                let wrapper = wrapper(parent)?;
-                created.push(Handle::Container(wrapper.clone()));
-                repeat(
-                    (list.clone(), key.clone()),
-                    body.clone(),
-                    wrapper,
-                    env,
-                    block,
-                )?;
-            }
-            Child::Slot => {
-                if let Some(slot) = &env.slot {
-                    self::children(&slot.children, parent, &slot.env, block, created, None)?;
+    Region::run(block, created, None, |region| {
+        region.children(children, parent, env, true)
+    })
+}
+
+/// Builds the entry root `element` into `parent` as one region.
+pub(crate) fn root(
+    element: &Element,
+    parent: &Container,
+    env: &Env,
+    block: &mut Block,
+    created: &mut Vec<Handle>,
+    ids: &mut [Option<Handle>],
+) -> Result {
+    Region::run(block, created, Some(ids), |region| {
+        region.element(element, parent, env, true)
+    })
+}
+
+/// Builds the entry root `element` of an open `window` as one region: the
+/// window's properties, then its content, recorded in `content`.
+pub(crate) fn window(
+    element: &Element,
+    window: &Handle,
+    env: &Env,
+    block: &mut Block,
+    content: &mut Vec<Handle>,
+    ids: &mut [Option<Handle>],
+) -> Result {
+    Region::run(block, content, Some(ids), |region| {
+        region.control(element, window, env, true)
+    })
+}
+
+impl<'r> Region<'r> {
+    fn run(
+        block: &'r mut Block,
+        created: &'r mut Vec<Handle>,
+        ids: Option<&'r mut [Option<Handle>]>,
+        walk: impl Fn(&mut Self) -> Result,
+    ) -> Result {
+        let mut region = Self {
+            pass: Pass::Create,
+            made: Vec::new(),
+            next: 0,
+            block,
+            created,
+            ids,
+        };
+        for pass in [Pass::Create, Pass::Apply, Pass::Finish] {
+            (region.pass, region.next) = (pass, 0);
+            walk(&mut region)?;
+        }
+        Ok(())
+    }
+
+    /// Records what the creation pass made, or replays it in a later pass.
+    fn made(&mut self, make: impl FnOnce(&mut Self) -> Result<Made>) -> Result<Made> {
+        if self.pass == Pass::Create {
+            let made = make(self)?;
+            self.made.push(made.clone());
+            return Ok(made);
+        }
+        self.next += 1;
+        Ok(self.made[self.next - 1].clone())
+    }
+
+    fn children(&mut self, children: &[Child], parent: &Container, env: &Env, top: bool) -> Result {
+        for child in children {
+            match child {
+                Child::Element(element) => self.element(element, parent, env, top)?,
+                Child::If(..) | Child::For(..) => {
+                    let Made::Block(wrapper) = self.made(|region| {
+                        // A transparent group keeps the block in the parent's layout.
+                        let wrapper = parent.contents()?;
+                        if top {
+                            region.created.push(Handle::Container(wrapper.clone()));
+                        }
+                        Ok(Made::Block(wrapper))
+                    })?
+                    else {
+                        unreachable!("replayed in creation order")
+                    };
+                    match (self.pass, child) {
+                        (Pass::Apply, Child::If(condition, then, otherwise)) => conditional(
+                            condition.clone(),
+                            then.clone(),
+                            otherwise.clone(),
+                            wrapper,
+                            env,
+                            self.block,
+                        )?,
+                        (Pass::Apply, Child::For(list, key, body)) => repeat(
+                            (list.clone(), key.clone()),
+                            body.clone(),
+                            wrapper,
+                            env,
+                            self.block,
+                        )?,
+                        _ => {}
+                    }
+                }
+                Child::Slot => {
+                    if let Some(slot) = &env.slot {
+                        self.children(&slot.children, parent, &slot.env, top)?;
+                    }
                 }
             }
         }
+        Ok(())
     }
-    Ok(())
+
+    /// Visits one element or component instance.
+    fn element(&mut self, element: &Element, parent: &Container, env: &Env, top: bool) -> Result {
+        let kind = match element.kind {
+            ElementKind::Builtin(kind) => kind,
+            ElementKind::Component(template) => {
+                let Made::Instance(inner) =
+                    self.made(|_| instance(element, template, env).map(Made::Instance))?
+                else {
+                    unreachable!("replayed in creation order")
+                };
+                let root = &env.shared.checked.templates[template].root;
+                return self.element(root, parent, &inner, top);
+            }
+        };
+        let Made::Control(handle) = self.made(|region| {
+            let handle = create(kind, element, parent)?;
+            if top {
+                region.created.push(handle.clone());
+            }
+            if let (Some(index), Some(ids)) = (element.id, region.ids.as_deref_mut()) {
+                ids[index] = Some(handle.clone());
+            }
+            Ok(Made::Control(handle))
+        })?
+        else {
+            unreachable!("replayed in creation order")
+        };
+        self.control(element, &handle, env, false)
+    }
+
+    /// Runs this pass for an existing control, then for its children; `top`
+    /// marks the children as top-level controls of the region.
+    fn control(&mut self, element: &Element, handle: &Handle, env: &Env, top: bool) -> Result {
+        match self.pass {
+            Pass::Create => {}
+            Pass::Apply => properties(element, handle, env, self.block)?,
+            Pass::Finish => {
+                crate::motion::transitions(element, handle)?;
+                for (event, steps) in &element.events {
+                    listen(handle, *event, steps.clone(), env.clone())?;
+                }
+            }
+        }
+        if let Handle::Splitter(splitter) = handle {
+            // Its two checked children fill the two panes.
+            for (child, pane) in element
+                .children
+                .iter()
+                .zip([splitter.first(), splitter.second()])
+            {
+                self.children(std::slice::from_ref(child), pane, env, top)?;
+            }
+        } else if !element.children.is_empty() {
+            self.children(&element.children, handle.container(), env, top)?;
+        }
+        Ok(())
+    }
 }
 
-/// Builds one element or component instance. Its control is pushed to
-/// `created` as soon as it exists, so a failed build can still be removed.
-pub(crate) fn element(
-    element: &Element,
-    parent: &Parent,
-    env: &Env,
-    block: &mut Block,
-    created: &mut Vec<Handle>,
-    mut ids: Option<&mut [Option<Handle>]>,
-) -> Result {
-    let kind = match element.kind {
-        ElementKind::Builtin(kind) => kind,
-        ElementKind::Component(template) => {
-            let program = &env.shared.checked;
-            let params = program.templates[template]
-                .params
+/// Creates a component instance's environment: its arguments, event handlers,
+/// slot children and states.
+fn instance(element: &Element, template: usize, env: &Env) -> Result<Env> {
+    let program = &env.shared.checked;
+    let params = program.templates[template]
+        .params
+        .iter()
+        .zip(&element.arguments);
+    let params = params
+        .map(|((_, _, default), argument)| match argument {
+            Some(expr) => Ok(Param::Bound(expr.clone(), env.clone())),
+            None => eval(default.as_ref().unwrap(), env, None, None)
+                .map(Param::Value)
+                .map_err(|error| env.locate(error)),
+        })
+        .collect::<Result<_>>()?;
+    let emits = (0..program.templates[template].events.len())
+        .map(|event| {
+            element
+                .handlers
                 .iter()
-                .zip(&element.arguments);
-            let params = params
-                .map(|((_, _, default), argument)| match argument {
-                    Some(expr) => Ok(Param::Bound(expr.clone(), env.clone())),
-                    None => eval(default.as_ref().unwrap(), env, None, None)
-                        .map(Param::Value)
-                        .map_err(|error| env.locate(error)),
-                })
-                .collect::<Result<_>>()?;
-            let emits = (0..program.templates[template].events.len())
-                .map(|event| {
-                    element
-                        .handlers
-                        .iter()
-                        .find(|h| h.event == event)
-                        .map(|h| Emit {
-                            steps: h.steps.clone(),
-                            binds_value: h.binds_value,
-                            env: env.clone(),
-                        })
-                })
-                .collect();
-            let mut inner =
-                Env::instantiate(env.shared.clone(), template, params, emits, &|_, _| None)?;
-            inner.slot = element.slot.as_ref().map(|children| {
-                Rc::new(Slot {
-                    children: children.clone(),
+                .find(|h| h.event == event)
+                .map(|h| Emit {
+                    steps: h.steps.clone(),
+                    binds_value: h.binds_value,
                     env: env.clone(),
                 })
-            });
-            let root = &program.templates[template].root;
-            return self::element(root, parent, &inner, block, created, None);
-        }
-    };
-    let handle = create(kind, element, parent.container)?;
-    created.push(handle.clone());
-    if let (Some(index), Some(ids)) = (element.id, ids.as_deref_mut()) {
-        ids[index] = Some(handle.clone());
-    }
-    populate(element, &handle, env, block, ids)
+        })
+        .collect();
+    let mut inner = Env::instantiate(env.shared.clone(), template, params, emits, &|_, _| None)?;
+    inner.slot = element.slot.as_ref().map(|children| {
+        Rc::new(Slot {
+            children: children.clone(),
+            env: env.clone(),
+        })
+    });
+    Ok(inner)
 }
 
-/// Builds children, then applies properties, bindings, transitions and events.
-pub(crate) fn populate(
-    element: &Element,
-    handle: &Handle,
-    env: &Env,
-    block: &mut Block,
-    mut ids: Option<&mut [Option<Handle>]>,
-) -> Result {
-    if let Handle::Splitter(splitter) = handle {
-        // Its two checked children fill the two panes.
-        for (child, pane) in element
-            .children
-            .iter()
-            .zip([splitter.first(), splitter.second()])
-        {
-            let parent = Parent { container: pane };
-            let child = std::slice::from_ref(child);
-            children(
-                child,
-                &parent,
-                env,
-                block,
-                &mut Vec::new(),
-                ids.as_deref_mut(),
-            )?;
-        }
-    } else if !element.children.is_empty() {
-        let parent = Parent::of(handle);
-        children(&element.children, &parent, env, block, &mut Vec::new(), ids)?;
-    }
-    decorate(element, handle, env, block)
-}
-
-/// Applies an element's own properties, bindings, transition and events.
-pub(crate) fn decorate(element: &Element, handle: &Handle, env: &Env, block: &mut Block) -> Result {
+/// Applies an element's own literal properties and bindings.
+fn properties(element: &Element, handle: &Handle, env: &Env, block: &mut Block) -> Result {
     let ElementKind::Builtin(kind) = element.kind else {
         unreachable!("component instances are expanded")
     };
@@ -184,10 +282,6 @@ pub(crate) fn decorate(element: &Element, handle: &Handle, env: &Env, block: &mu
                 block.push(binding(handle.clone(), *name, expr.clone(), env.clone())?)
             }
         }
-    }
-    crate::motion::transitions(element, handle)?;
-    for (event, steps) in &element.events {
-        listen(handle, *event, steps.clone(), env.clone())?;
     }
     Ok(())
 }
@@ -214,11 +308,6 @@ fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Resu
         }
         Ok(())
     })
-}
-
-/// A transparent group holding a block's children in the parent's own layout.
-fn wrapper(parent: &Parent) -> Result<Container> {
-    parent.container.contents()
 }
 
 /// Removes built controls and drops the effects that updated them.
@@ -250,11 +339,8 @@ fn conditional(
         }
         shown = None;
         clear(&mut handles, &mut owned)?;
-        let parent = Parent {
-            container: &wrapper,
-        };
         let items = if value { &then } else { &otherwise };
-        children(items, &parent, &env, &mut owned, &mut handles, None)?;
+        children(items, &wrapper, &env, &mut owned, &mut handles)?;
         wrapper.set_visible(!handles.is_empty())?;
         shown = Some(value);
         Ok(())
@@ -333,9 +419,6 @@ fn repeat(
             .map(|(index, row)| (row.key.clone(), (index, row)))
             .collect();
         let (mut previous, mut built, mut moved) = (None, false, false);
-        let parent = Parent {
-            container: &wrapper,
-        };
         for (item_key, item) in keyed {
             if let Some((index, mut retained)) = old.remove(&item_key) {
                 if retained.item == *item {
@@ -354,7 +437,7 @@ fn repeat(
                 block: Block::new(),
             };
             let env = env.with_item(item.clone());
-            let result = children(&body, &parent, &env, &mut row.block, &mut row.handles, None);
+            let result = children(&body, &wrapper, &env, &mut row.block, &mut row.handles);
             rows.push(row);
             if let Err(error) = result {
                 // Rows not yet visited keep their controls and stay tracked.

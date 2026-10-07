@@ -1,0 +1,62 @@
+// Every identifier choice of every enum-valued property except the
+// window-only `theme`, built alike by `ui!` and the runtime engine.
+Row {
+    wrap: wrap
+    gap: 4dp
+    width: 640dp
+    Row { direction: row; width: 30dp; height: 30dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { direction: column; width: 30dp; height: 30dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { direction: row_reverse; width: 30dp; height: 30dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { direction: column_reverse; width: 30dp; height: 30dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { layout_direction: ltr; width: 30dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { layout_direction: rtl; width: 30dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { wrap: no_wrap; align_content: start; width: 25dp; height: 30dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap; align_content: start; width: 25dp; height: 30dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap_reverse; align_content: start; width: 25dp; height: 30dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { align: start; width: 20dp; height: 30dp; Column { width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { align: end; width: 20dp; height: 30dp; Column { width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { align: center; width: 20dp; height: 30dp; Column { width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { align: stretch; width: 20dp; height: 30dp; Column { width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { align: baseline; width: 20dp; height: 30dp; Column { width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { width: 20dp; height: 30dp; Column { align_self: start; width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { width: 20dp; height: 30dp; Column { align_self: end; width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { width: 20dp; height: 30dp; Column { align_self: center; width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { width: 20dp; height: 30dp; Column { align_self: stretch; width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { width: 20dp; height: 30dp; Column { align_self: baseline; width: 10dp; min_height: 10dp; background: #C00000 } }
+    Row { justify: start; width: 40dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { justify: end; width: 40dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { justify: center; width: 40dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { justify: stretch; width: 40dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { justify: space_between; width: 40dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { justify: space_around; width: 40dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { justify: space_evenly; width: 40dp; height: 10dp; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Row { wrap: wrap; align_content: start; width: 20dp; height: 40dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap; align_content: end; width: 20dp; height: 40dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap; align_content: center; width: 20dp; height: 40dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap; align_content: stretch; width: 20dp; height: 40dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap; align_content: space_between; width: 20dp; height: 40dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap; align_content: space_around; width: 20dp; height: 40dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Row { wrap: wrap; align_content: space_evenly; width: 20dp; height: 40dp; Column { width: 10dp; height: 10dp; background: #C00000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #00A000; shrink: 0 }; Column { width: 10dp; height: 10dp; background: #0000C0; shrink: 0 } }
+    Grid { columns: [30dp]; Column { justify_self: start; min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { columns: [30dp]; Column { justify_self: end; min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { columns: [30dp]; Column { justify_self: center; min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { columns: [30dp]; Column { justify_self: stretch; min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { columns: [30dp]; Column { justify_self: baseline; min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { justify_items: start; columns: [30dp]; Column { min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { justify_items: end; columns: [30dp]; Column { min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { justify_items: center; columns: [30dp]; Column { min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { justify_items: stretch; columns: [30dp]; Column { min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { justify_items: baseline; columns: [30dp]; Column { min_width: 10dp; height: 10dp; background: #C00000 } }
+    Grid { flow: row; columns: [10dp, 10dp]; rows: [10dp, 10dp]; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #00A000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Grid { flow: column; columns: [10dp, 10dp]; rows: [10dp, 10dp]; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #00A000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Grid { flow: row_dense; columns: [10dp, 10dp]; rows: [10dp, 10dp]; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #00A000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Grid { flow: column_dense; columns: [10dp, 10dp]; rows: [10dp, 10dp]; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #00A000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
+    Column { id: linear; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: linear; offset_transition: [80ms, linear] }
+    Column { id: ease_in; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: ease_in; offset_transition: [80ms, ease_in] }
+    Column { id: ease_out; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: ease_out; offset_transition: [80ms, ease_out] }
+    Column { id: ease_in_out; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: ease_in_out; offset_transition: [80ms, ease_in_out] }
+    Splitter { orientation: horizontal; width: 40dp; height: 40dp; Column { background: #C00000 }; Column { background: #0000C0 } }
+    Slider { orientation: horizontal; width: 40dp; height: 40dp; value: 0.25 }
+    Splitter { orientation: vertical; width: 40dp; height: 40dp; Column { background: #C00000 }; Column { background: #0000C0 } }
+    Slider { orientation: vertical; width: 40dp; height: 40dp; value: 0.25 }
+}

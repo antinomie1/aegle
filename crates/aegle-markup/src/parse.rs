@@ -16,7 +16,7 @@ pub fn parse(source: &str) -> Result<Document, Error> {
 /// A file holds `use` imports and `component` declarations followed by at most
 /// one root node. Unknown types and property names are left to checking.
 pub fn parse_with_limits(source: &str, limits: &Limits) -> Result<Document, Error> {
-    if limits.max_depth > 256 {
+    if limits.max_depth > Limits::MAX_DEPTH {
         return Err(Error::new(
             Span { start: 0, end: 0 },
             "configured depth limit must not exceed 256",

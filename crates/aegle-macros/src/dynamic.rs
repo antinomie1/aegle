@@ -51,15 +51,6 @@ pub(super) fn builder(
         (quote! { #facade::Container }, quote! { build })
     };
     let states = &program.templates[0].states;
-    if let Some((name, _)) = program
-        .ids
-        .iter()
-        .find(|(id, _)| states.iter().any(|(s, ..)| s == id))
-    {
-        return Err(diagnostic(format!(
-            "`{name}` names both a control and a state"
-        )));
-    }
     let ids: Vec<Ident> = program
         .ids
         .iter()

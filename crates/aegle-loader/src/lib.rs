@@ -140,8 +140,11 @@ impl Program {
         Ok(Self::new(program))
     }
 
-    /// Wraps a program already checked by [`markup::check_program`], as
-    /// compiled views construct it without parsing.
+    /// Wraps a program produced by [`markup::check_program`]; only code that
+    /// `ui!` generates calls it, with a program it checked while compiling.
+    /// It is not an entry point: the engine relies on the checker's
+    /// invariants and panics on a program that skipped it.
+    #[doc(hidden)]
     pub fn from_checked(program: markup::Program) -> Self {
         Self::new(program)
     }

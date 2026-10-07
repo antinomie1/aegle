@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use super::{Checker, Scope};
 use crate::checked::{Child, Element, ElementKind, Handler};
-use crate::{Error, Expr, ExprKind, Item, Node, Span, Type, Value};
+use crate::{Error, Expr, ExprKind, Item, Limits, Node, Span, Type, Value};
 
 impl Checker {
     pub(super) fn instance(
@@ -109,7 +109,25 @@ impl Checker {
         })
     }
 
+    /// Checks one nested item, rejecting hand-built documents nested deeper
+    /// than any parse allows.
     pub(super) fn child(&mut self, item: Item, scope: &mut Scope) -> Result<Child, Error> {
+        if self.depth + 1 == Limits::MAX_DEPTH {
+            let span = match &item {
+                Item::Node(node) => node.span,
+                Item::If(condition, ..) => condition.span,
+                Item::For(_, list, ..) => list.span,
+                Item::Slot => Span::default(),
+            };
+            return Err(Error::new(span, crate::schema::TOO_DEEP));
+        }
+        self.depth += 1;
+        let child = self.nested(item, scope);
+        self.depth -= 1;
+        child
+    }
+
+    fn nested(&mut self, item: Item, scope: &mut Scope) -> Result<Child, Error> {
         Ok(match item {
             Item::Node(node) => Child::Element(self.element(node, scope, false)?),
             Item::If(mut condition, then, otherwise) => {

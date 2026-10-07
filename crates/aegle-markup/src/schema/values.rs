@@ -84,8 +84,10 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
     })
 }
 
-/// Identifier values of each enum-valued property, in Rust variant order.
-pub(crate) fn choices(name: PropertyName) -> &'static [&'static str] {
+/// The identifiers an enum-valued property accepts, in Rust variant order;
+/// empty for other properties. `ui!` names the variant `snake_case` →
+/// `CamelCase`, and the runtime engine maps each one explicitly.
+pub fn choices(name: PropertyName) -> &'static [&'static str] {
     use PropertyName::*;
     const ALIGN: &[&str] = &["start", "end", "center", "stretch", "baseline"];
     const JUSTIFY: &[&str] = &[

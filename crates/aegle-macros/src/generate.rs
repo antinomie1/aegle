@@ -4,6 +4,8 @@ use aegle_markup::{
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 
+use crate::layout::variant;
+
 /// Only validated nodes reach generation; each property has its schema's type.
 pub(super) fn builder(document: &CheckedDocument, facade: &TokenStream) -> TokenStream {
     let root = &document.root;
@@ -221,8 +223,7 @@ fn constructor(node: &CheckedNode, parent: &TokenStream, facade: &TokenStream) -
         Kind::Tabs => quote! { #parent.tabs() },
         Kind::Tab => quote! { #parent.add(#text) },
         Kind::Splitter => {
-            let orientation = orientation(node).unwrap_or("Horizontal");
-            let orientation = Ident::new(orientation, Span::call_site());
+            let orientation = orientation(node).unwrap_or_else(|| variant("horizontal"));
             quote! { #parent.splitter(#facade::Orientation::#orientation) }
         }
         Kind::Window
@@ -237,17 +238,8 @@ fn constructor(node: &CheckedNode, parent: &TokenStream, facade: &TokenStream) -
     }
 }
 
-/// The Rust variant of an orientation identifier.
-fn variant(value: &str) -> &'static str {
-    if value == "vertical" {
-        "Vertical"
-    } else {
-        "Horizontal"
-    }
-}
-
 /// A node's literal orientation variant.
-fn orientation(node: &CheckedNode) -> Option<&'static str> {
+fn orientation(node: &CheckedNode) -> Option<Ident> {
     node.properties
         .iter()
         .find_map(|property| match &property.value {
@@ -336,7 +328,7 @@ fn setter(
             quote! { #value }
         }
         Literal::Identifier(value) if property.name == Orientation => {
-            let name = Ident::new(variant(value), Span::call_site());
+            let name = variant(value);
             quote! { #facade::Orientation::#name }
         }
         Literal::Identifier(value) if property.name == Theme => {

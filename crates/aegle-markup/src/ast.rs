@@ -337,10 +337,17 @@ pub enum Ref {
 pub struct Limits {
     /// Maximum source size in UTF-8 bytes.
     pub max_source_bytes: usize,
-    /// Maximum nesting depth, including the root. Must not exceed 256.
+    /// Maximum nesting depth, including the root. Must not exceed
+    /// [`Self::MAX_DEPTH`].
     pub max_depth: usize,
     /// Maximum total number of component nodes.
     pub max_nodes: usize,
+}
+
+impl Limits {
+    /// The deepest nesting any parse may allow. The checkers reject deeper
+    /// hand-built documents, so building never recurses further.
+    pub const MAX_DEPTH: usize = 256;
 }
 
 impl Default for Limits {

@@ -4,6 +4,8 @@ use aegle_markup::{CheckedNode, CheckedProperty, PropertyName, Value as Literal}
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 
+use crate::layout::variant;
+
 /// A literal offset, scale or rotation setter; it keeps the other parts of
 /// the node's target geometry.
 pub(super) fn geometry(
@@ -35,16 +37,6 @@ pub(super) fn geometry(
     })
 }
 
-fn easing(name: &str) -> Ident {
-    let variant = match name {
-        "linear" => "Linear",
-        "ease_in" => "EaseIn",
-        "ease_in_out" => "EaseInOut",
-        _ => "EaseOut",
-    };
-    Ident::new(variant, Span::call_site())
-}
-
 fn timing(milliseconds: u64, easing: &Ident, facade: &TokenStream) -> TokenStream {
     quote! {
         #facade::Transition::new(::core::time::Duration::from_millis(#milliseconds), #facade::Easing::#easing)
@@ -65,8 +57,8 @@ pub(super) fn transitions(
             unreachable!()
         };
         let curve = match find(PropertyName::Easing).map(|p| &p.value) {
-            Some(Literal::Identifier(name)) => easing(name),
-            _ => easing("ease_out"),
+            Some(Literal::Identifier(name)) => variant(name),
+            _ => variant("ease_out"),
         };
         let timing = timing(milliseconds, &curve, facade);
         calls.push(quote! { #handle.set_transition(#timing)?; });
@@ -80,10 +72,10 @@ pub(super) fn transitions(
             _ => continue,
         };
         let (milliseconds, curve) = match &property.value {
-            Literal::Duration(milliseconds) => (*milliseconds, easing("ease_out")),
+            Literal::Duration(milliseconds) => (*milliseconds, variant("ease_out")),
             Literal::List(items) => match &items[..] {
                 [Literal::Duration(milliseconds), Literal::Identifier(name)] => {
-                    (*milliseconds, easing(name))
+                    (*milliseconds, variant(name))
                 }
                 _ => unreachable!("checked timing"),
             },

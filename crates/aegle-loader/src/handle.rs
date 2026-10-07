@@ -183,9 +183,14 @@ fn literal<'a>(element: &'a Element, name: PropertyName) -> Option<&'a Literal> 
 }
 
 fn orientation(element: &Element) -> Orientation {
-    match literal(element, PropertyName::Orientation) {
-        Some(Literal::Identifier(value)) if value == "vertical" => Orientation::Vertical,
-        _ => Orientation::Horizontal,
+    literal(element, PropertyName::Orientation).map_or(Orientation::Horizontal, orientation_of)
+}
+
+fn orientation_of(value: &Literal) -> Orientation {
+    match crate::layout::identifier(value) {
+        "horizontal" => Orientation::Horizontal,
+        "vertical" => Orientation::Vertical,
+        other => unreachable!("checked orientation `{other}`"),
     }
 }
 
@@ -317,12 +322,8 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
             Handle::NumberField(handle) => handle.set_value(f64::from(*n)),
             _ => unreachable!("checked range property"),
         },
-        (Orientation, Literal::Identifier(value)) => {
-            let orientation = if value == "vertical" {
-                aegle_widgets::Orientation::Vertical
-            } else {
-                aegle_widgets::Orientation::Horizontal
-            };
+        (Orientation, Literal::Identifier(_)) => {
+            let orientation = orientation_of(value);
             match handle {
                 Handle::Slider(handle) => handle.set_orientation(orientation),
                 Handle::Progress(handle) => handle.set_orientation(orientation),
@@ -368,9 +369,10 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
                 unreachable!("checked: themes apply to windows")
             };
             window.set_theme(match theme.as_str() {
+                "light" => aegle_ui::Theme::light(),
                 "dark" => aegle_ui::Theme::dark(),
                 "high_contrast" => aegle_ui::Theme::high_contrast(),
-                _ => aegle_ui::Theme::light(),
+                other => unreachable!("checked theme `{other}`"),
             })
         }
         _ => unreachable!("checked property {name:?}"),

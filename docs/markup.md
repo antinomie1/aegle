@@ -43,7 +43,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 
 生成的局部 View 有 `root` 字段和每个 `id` 对应的有类型公开字段；没有运行时字符串查询表。ID 在一个文件中唯一，使用 ASCII Rust 标识符，不能是 Rust 关键字、`_` 或保留名 `root`。丢弃 View 不删除控件；它与命令式 API 使用相同弱句柄、回调、布局、主题、IME 和语义树。
 
-构造期间先建立子树再设置属性；任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。编译型 View 不提供重载；运行时加载的 View 用 `reload` 原子替换。
+一次构建（视图本身，或一个 `if` 分支、一行 `for`）分三步：先按文档顺序创建全部控件，再按文档顺序（父先于子）设置属性、建立绑定与 `if`/`for` 块，最后安装过渡与事件。编译型构造与运行时引擎顺序相同，因此容器设置属性时子控件已存在，祖先的初始值（如 `enabled: false`、窗口主题）不会让后代的过渡在首次显示时启动。任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。编译型 View 不提供重载；运行时加载的 View 用 `reload` 原子替换。
 
 支持 Window、Column、Row、ScrollView、Grid、Stack、Tabs、Tab、Splitter、Text、Button、TextField、TextArea、CheckBox、Switch、RadioButton、Slider、Progress、NumberField、Separator。只有前九种可以包含子节点；Window 只可为文件根。Tabs 只接受 Tab 子节点，Tab 只能在 Tabs 中且必须有字面量 `title`；Splitter 必须恰好有两个内建控件子节点（不能是块、slot 或组件实例），依次放入两个窗格；编译型 View 中 Tab 的句柄类型为 Container。Grid 与 Stack 需要 facade 的 `grid` feature：编译型标记未启用时生成代码报找不到方法，运行时加载返回错误。文本默认为空字符串，窗口标题默认为 `Aegle`，其他默认值沿用命令式构造器。
 
@@ -110,9 +110,9 @@ ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`
 
 声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知类型/属性、重复属性/ID、不适用属性、错误类型及未实现语法均在编译期拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 
-`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。宏在整棵结构创建及全部静态属性设置后安装过渡，首次显示没有初始样式动画。`transition` 为外观、位移、缩放和旋转统一设置时长，四个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
+`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。过渡在本次构建的全部属性设置后才安装（见上文构建顺序），首次显示没有初始样式动画。`transition` 为外观、位移、缩放和旋转统一设置时长，四个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
 
-独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、静态文档的 `check`、多文件 `compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，表达式嵌套也受层数上限约束；显式解析深度最多 256，schema 检查最多 256 层/10,000 节点。`ui!` 使用默认上限。静态文档的运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
+独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、静态文档的 `check`、多文件 `compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，表达式嵌套也受层数上限约束；显式解析深度最多 `Limits::MAX_DEPTH`（256）。尺寸预算只由解析器执行；`check` 与 `check_program` 对手工构造的 AST 只施加同一 256 层上限，使构建不会递归更深。`ui!` 与 `Program::load` 使用默认上限。`choices(name)` 列出枚举属性接受的标识符：`ui!` 按 `snake_case` → `CamelCase` 生成变体，缺少变体即编译错误；运行时引擎逐项显式映射，不把未知值落到默认值。静态文档的运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
 
 ## 当前动态标记
 
@@ -166,9 +166,9 @@ Column {
 - 限额：`Program::set_limits(Limits { steps, rows, emit_depth })`，默认每次处理最多 10,000 条语句、单个 `for` 最多 10,000 行、嵌套 emit 最多 64 层；超限是运行时错误，保留此前的赋值与旧的行。运行时错误带文件路径与字节跨度。
 - Rust 一侧：record 与 record 列表的 state 以 `State<Data>` 访问（`Data::Record`），设置时检查形状；`StateValue::accepts` 取代旧的 `ty()`。
 
-`id` 只能用于入口文档中不在块、slot 内容或组件体内的控件。`ui!` 的 View 在 `root` 和各 `id` 外，为入口根的每个 state 生成 `loader::State<T>` 字段（bool、i64、f32、String、Vec<i64>、Vec<String>），`get`/`set` 读写并触发绑定；名称冲突在编译期报错。绑定和块由控件通过 `Node::keep_alive` 持有，丢弃 View 不影响更新。
+`id` 只能用于入口文档中不在块、slot 内容或组件体内的控件。`ui!` 的 View 在 `root` 和各 `id` 外，为入口根的每个 state 生成 `loader::State<T>` 字段（bool、i64、f32、String、Vec<i64>、Vec<String>），`get`/`set` 读写并触发绑定。`id` 与入口 state 同名由共享检查器拒绝（“names both a control and a state”），`ui!` 与运行时加载给出同一诊断。绑定和块由控件通过 `Node::keep_alive` 持有，丢弃 View 不影响更新。
 
-运行时加载使用 `aegle::loader::Program::load(path)` 或 `from_sources(entry, read)`，再 `build(&container)` 片段或 `open(&app)` Window 文档；`View` 提供 `root`、`handle(id)`、`get`/`set`、`state::<T>(name)` 和 `reload`。加载复用同一解析、检查和诊断，因此携带解析器；示例文档解析并检查约 0.1 ms。`reload` 先完整构建新界面再移除旧界面，失败保留旧界面；同名同类型的入口 state 保留取值，其余控件本地状态重置。Window 文档保留原生窗口、标题和尺寸并重建内容，新版本省略的窗口属性保留原值。没有文件监视器。可执行示例：`cargo run -p aegle --example dynamic`，其中面板运行时从磁盘加载并可重载。
+运行时加载使用 `aegle::loader::Program::load(path)` 或 `from_sources(entry, read)`，再 `build(&container)` 片段或 `open(&app)` Window 文档；`View` 提供 `root`、`handle(id)`、`get`/`set`、`state::<T>(name)` 和 `reload`。加载复用同一解析、检查和诊断，因此携带解析器；示例文档解析并检查约 0.1 ms。`reload` 与首次构建一样先校验宿主动作，再完整构建新界面、移除旧界面，失败保留旧界面；同名同类型的入口 state 保留取值，其余控件本地状态重置。Window 文档保留原生窗口、标题和尺寸并重建内容，新版本省略的窗口属性保留原值。没有文件监视器。可执行示例：`cargo run -p aegle --example dynamic`，其中面板运行时从磁盘加载并可重载。
 
 ## 后续目标：结构、值和状态
 

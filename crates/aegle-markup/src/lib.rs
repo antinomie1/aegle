@@ -35,4 +35,6 @@ pub use error::Error;
 pub use files::{File, ProgramError, compile};
 pub use parse::{parse, parse_with_limits};
 pub use program::check_program;
-pub use schema::{CheckedDocument, CheckedNode, CheckedProperty, Kind, PropertyName, check};
+pub use schema::{
+    CheckedDocument, CheckedNode, CheckedProperty, Kind, PropertyName, check, choices,
+};

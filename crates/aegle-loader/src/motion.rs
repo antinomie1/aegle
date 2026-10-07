@@ -36,11 +36,15 @@ pub(crate) fn geometry(node: &Node, name: PropertyName, value: &Value) -> Option
 #[cfg(feature = "motion")]
 fn easing(value: Option<&Value>) -> aegle_ui::Easing {
     use aegle_ui::Easing;
-    match value {
-        Some(Value::Identifier(name)) if name == "linear" => Easing::Linear,
-        Some(Value::Identifier(name)) if name == "ease_in" => Easing::EaseIn,
-        Some(Value::Identifier(name)) if name == "ease_in_out" => Easing::EaseInOut,
-        _ => Easing::EaseOut,
+    let Some(value) = value else {
+        return Easing::EaseOut;
+    };
+    match crate::layout::identifier(value) {
+        "linear" => Easing::Linear,
+        "ease_in" => Easing::EaseIn,
+        "ease_out" => Easing::EaseOut,
+        "ease_in_out" => Easing::EaseInOut,
+        other => unreachable!("checked easing `{other}`"),
     }
 }
 

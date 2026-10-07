@@ -1,0 +1,13 @@
+Window {
+    title: "Paths"
+    width: 160dp
+    height: 120dp
+    theme: dark
+    Column {
+        id: panel
+        width: 40dp
+        height: 20dp
+        background: token("theme.accent")
+        transition: 200ms
+    }
+}

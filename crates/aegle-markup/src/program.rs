@@ -43,6 +43,8 @@ pub(crate) struct Checker {
     /// File of the template being checked.
     file: usize,
     slot_used: bool,
+    /// Nesting below the template root being checked.
+    depth: usize,
 }
 
 /// Checks a program. `files[0]` is the entry document and must have a root;
@@ -151,6 +153,7 @@ pub fn check_program(files: Vec<Document>) -> Result<Program, (usize, Error)> {
         host_calls: Vec::new(),
         file: 0,
         slot_used: false,
+        depth: 0,
     };
     let root = entry.unwrap();
     let name = root.name.clone();
@@ -353,6 +356,10 @@ impl Checker {
                 if element.id.is_some() || !valid_id(&id) || self.ids.iter().any(|(n, _)| *n == id)
                 {
                     return Err(error(format!("invalid, duplicate or reserved id `{id}`")));
+                }
+                // Views expose entry ids and states as fields of one struct.
+                if scope.states.iter().any(|(state, _)| *state == id) {
+                    return Err(error(format!("`{id}` names both a control and a state")));
                 }
                 element.id = Some(self.ids.len());
                 self.ids.push((id, kind));

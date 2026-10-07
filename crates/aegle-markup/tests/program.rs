@@ -1,6 +1,9 @@
 //! Imports, components, states, bindings, events and blocks are resolved and typed.
 
-use aegle_markup::{Bound, Child, ElementKind, ExprKind, Kind, Ref, compile};
+use aegle_markup::{
+    Bound, Child, ElementKind, ExprKind, Item, Kind, Limits, Ref, check, check_program, compile,
+    parse, parse_with_limits,
+};
 
 fn files(entry: &str, library: &'static str) -> impl FnMut(&str) -> Result<String, String> {
     let entry = entry.to_owned();
@@ -173,8 +176,54 @@ Column {
             "record T { id: int }\nColumn { state t: T = T(1); Text { text: t.nope } }",
             "no field `nope`",
         ),
+        (
+            "Column { state count: int = 0; Text { id: count } }",
+            "names both a control and a state",
+        ),
     ] {
         let error = check(Box::leak(body.to_owned().into_boxed_str())).unwrap_err();
         assert!(error.0.contains(message), "{body}: {}", error.0);
     }
+}
+
+#[test]
+fn both_checkers_stop_hand_built_documents_at_the_parse_ceiling() {
+    // A main thread's stack: unoptimized checking at the ceiling needs more
+    // than a test thread's 2 MiB.
+    std::thread::Builder::new()
+        .stack_size(8 << 20)
+        .spawn(ceiling)
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+fn ceiling() {
+    let deepest = |depth| {
+        let source = "Column {".repeat(depth) + &"}".repeat(depth);
+        let limits = Limits {
+            max_depth: Limits::MAX_DEPTH,
+            ..Limits::default()
+        };
+        parse_with_limits(&source, &limits).unwrap()
+    };
+    assert!(check(deepest(Limits::MAX_DEPTH)).is_ok());
+    assert!(check_program(vec![deepest(Limits::MAX_DEPTH)]).is_ok());
+    let deeper = || {
+        let mut document = parse("Column {}").unwrap();
+        let inner = deepest(Limits::MAX_DEPTH).root.unwrap();
+        document
+            .root
+            .as_mut()
+            .unwrap()
+            .children
+            .push(Item::Node(inner));
+        document
+    };
+    let message = "nesting exceeds 256 levels";
+    assert_eq!(check(deeper()).unwrap_err().message, message);
+    assert_eq!(
+        check_program(vec![deeper()]).unwrap_err().1.message,
+        message
+    );
 }

@@ -7,7 +7,7 @@ use aegle_ui::{Container, Result};
 
 use crate::{
     Data, Program, RuntimeError,
-    build::{self, Block, Parent},
+    build::{self, Block},
     eval::Env,
     handle::Handle,
     reactive::Cell,
@@ -42,8 +42,7 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
     let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), carried)?;
     let mut ids = vec![None; program.0.checked.ids.len()];
     let (mut block, mut created) = (Block::new(), Vec::new());
-    let host = Parent { container: parent };
-    let result = build::element(root, &host, &env, &mut block, &mut created, Some(&mut ids));
+    let result = build::root(root, parent, &env, &mut block, &mut created, &mut ids);
     if let Err(error) = result {
         if let Some(root) = created.first() {
             root.node().remove()?;
@@ -200,6 +199,7 @@ impl View {
             *self = view;
             return Ok(());
         }
+        program.0.actions.validate(&program.0.checked)?;
         let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), &carried)?;
         let old = std::mem::take(&mut self.content);
         let (old_ids, old_block) = (std::mem::take(&mut self.ids), self.effects.take());
@@ -225,17 +225,14 @@ impl View {
             ids[index] = Some(self.root.clone());
         }
         let mut block = Block::new();
-        let parent = Parent::of(&self.root);
-        let result = build::children(
-            &root.children,
-            &parent,
+        build::window(
+            root,
+            &self.root,
             &env,
             &mut block,
             &mut self.content,
-            Some(&mut ids),
-        )
-        .and_then(|()| build::decorate(root, &self.root, &env, &mut block));
-        result?;
+            &mut ids,
+        )?;
         *self.effects.borrow_mut() = block;
         self.program = program.clone();
         self.env = env;

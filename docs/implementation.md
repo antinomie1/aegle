@@ -537,6 +537,13 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 修改：设备提供 `VK_KHR_incremental_present` 时窗口渲染器启用它；`Frame::set_damage(&[PixelRect])` 声明变化矩形（裁到 swapchain 范围），present 时附上 `VkPresentRegionsKHR`，新 swapchain 的第一次呈现与未声明时上报整个 surface。App 的软件与 Vulkan 路径共用同一个把 `Ui::damage` 换算为缓冲像素的函数。wgpu 没有对应接口，保持整幅上报；Win32 软件路径仍整块上传 DIB（本次环境没有 Wine，未改动未能运行验证的 GDI 部分）。
 - 验证：`WAYLAND_DEBUG` 下滑块拖动时 Mesa WSI 发出的 `wl_surface.damage_buffer` 即这些矩形（进度条带、滑块与状态行等），只有首帧与全屏切换时为整个 surface，RADV 与 Lavapipe 相同；Vulkan 拖动后的截图与强制整窗口重绘逐像素相同（滑块与分隔线各一次，GLES2 合成器按损伤合成）。`aegle-render-vulkan/tests/native.rs` 在后续帧调用 `set_damage`（含越界矩形），在 Lavapipe（Pixman）与 RADV（GLES2）上开启 Khronos validation 1.4.363 与同步检查通过（已确认加载器插入该层），无验证消息；Vulkan 离屏 ignored 场景、wgpu ignored 场景、workspace all-features 测试与 Windows 交叉检查通过。
 
+## 统一标记语言两条执行路径
+
+- 问题：同一文档经 `ui!` 直接构造与经运行时引擎执行时有差异。①构建顺序：宏先创建全部控件，再按先序设置属性，最后安装过渡；引擎先构建子控件再设置父控件属性，每个控件设完属性立即安装过渡，因此祖先随后设置的初始值会让后代过渡启动——`Column { enabled: false; Slider { transition: 200ms } }` 经引擎构建后滑块处于动画中，Window 文档的 `theme: dark` 让绑定 `token("theme.accent")` 且有过渡的子控件启动时从浅色补间。②`id` 与 state 同名只有 `ui!` 拒绝，运行时加载接受。③Window 文档 `reload` 不校验宿主动作，缺失的动作要到事件触发时才在引擎里 panic；片段 reload 与首次构建都校验。④引擎把枚举标识符的未知值落到默认分支（宏的方向与缓动同样有默认分支），新增 schema 值时会静默用错。⑤静态 `check` 写死 256 层/10,000 节点，`check_program` 对手工 AST 没有上限。
+- 修改：引擎每次构建（视图、`if` 分支、`for` 行）按与宏相同的顺序分三遍走同一棵树——创建、属性/绑定/块、过渡/事件；第一遍记录句柄与组件实例环境，后两遍按序取回，Window 根的属性排在其内容之前。重名规则移入 `check_program`，宏中的单独检查删除。Window 重载先校验宿主动作。引擎逐项映射所有枚举标识符，其余值 `unreachable!`；宏的方向与缓动改用与布局相同的 `snake_case` → `CamelCase` 变体生成，缺变体即编译错误。`aegle_markup::choices` 公开为唯一来源。新增 `Limits::MAX_DEPTH`，解析器配置校验、`check` 与 `check_program` 共用这一层数上限，节点数预算只在解析器。`Program::from_checked` 文档隐藏并写明只供生成代码使用。
+- 验证：facade 新增 `tests/paths.rs`：同一份覆盖所有枚举属性每个值（窗口专用的 `theme` 除外）的文档经两条路径构建，全部绘制记录（含位置与裁剪）及缓动时序相同，并检查文档覆盖 `choices` 的每个值；故意把引擎的 `end` 映射为 `Start` 或把 `ease_in` 映射为 `EaseInOut` 时测试失败。同文件的禁用父容器场景在改动前失败（引擎构建的滑块在动画中、颜色不同）。`tests/window.rs`（ignored，私有 headless Sway）覆盖 Window 主题与 token 过渡、以及缺失宿主动作的 reload 返回错误并保留旧内容，两项在改动前均失败。`aegle-markup/tests/program.rs` 增加重名诊断，以及两种检查器在 256 层通过、手工多包一层时报同一错误。workspace 测试、all-targets 检查、无默认 feature 组合检查与 Windows 交叉检查通过。
+- 已知限制：未优化构建中 `check_program` 每层约用 8 KiB 栈，在 2 MiB 的测试线程里检查 256 层文档会栈溢出（release 与 8 MiB 主线程正常，默认解析上限为 64 层）；对应测试在 8 MiB 线程中运行。窗口专用的 `theme` 映射只由原生 ignored 场景间接覆盖。
+
 ## 剩余工作
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。

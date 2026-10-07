@@ -6,7 +6,8 @@ mod values;
 
 pub(crate) use constant::{constant, literal};
 use std::collections::HashSet;
-pub(crate) use values::{allowed, choices, property_name, valid_id, validate, validate_range};
+pub use values::choices;
+pub(crate) use values::{allowed, property_name, valid_id, validate, validate_range};
 
 use crate::{Document, Error, Item, Node, Span, Value};
 
@@ -245,12 +246,15 @@ pub enum PropertyName {
     IndicatorColor,
 }
 
+pub(crate) const TOO_DEEP: &str = "nesting exceeds 256 levels";
+
 /// Checks a static document without loading fonts or creating any UI objects.
 ///
 /// IDs must be unique ASCII Rust identifiers other than keywords, `_` and
 /// `root`. Unknown components/properties and unsupported values are errors.
 /// Only containers accept children; a Window must be the document root.
-/// Manually constructed ASTs are limited to 256 levels and 10,000 nodes too.
+/// Size budgets belong to the parser; a hand-built AST deeper than
+/// [`Limits::MAX_DEPTH`](crate::Limits::MAX_DEPTH) is rejected.
 /// Documents with states, events, blocks, components or imports are rejected;
 /// check those with [`crate::check_program`].
 pub fn check(document: Document) -> Result<CheckedDocument, Error> {
@@ -265,9 +269,8 @@ pub fn check(document: Document) -> Result<CheckedDocument, Error> {
         .root
         .ok_or_else(|| Error::new(span, "the document has no root component"))?;
     let mut ids = HashSet::new();
-    let mut remaining = 10_000;
     Ok(CheckedDocument {
-        root: check_node(root, 1, &mut remaining, &mut ids)?,
+        root: check_node(root, 1, &mut ids)?,
     })
 }
 
@@ -331,19 +334,11 @@ pub(crate) fn structure(parent: Kind, children: &[Option<Kind>]) -> Result<(), &
     }
 }
 
-fn check_node(
-    node: Node,
-    depth: usize,
-    remaining: &mut usize,
-    ids: &mut HashSet<String>,
-) -> Result<CheckedNode, Error> {
+fn check_node(node: Node, depth: usize, ids: &mut HashSet<String>) -> Result<CheckedNode, Error> {
     let error = |message| Error::new(node.span, message);
-    if depth > 256 || *remaining == 0 {
-        return Err(error(
-            "schema limit exceeded (256 levels, 10,000 nodes)".into(),
-        ));
+    if depth > crate::Limits::MAX_DEPTH {
+        return Err(error(TOO_DEEP.into()));
     }
-    *remaining -= 1;
     let kind =
         kind(&node.name).ok_or_else(|| error(format!("unknown component `{}`", node.name)))?;
     if kind == Kind::Window && depth != 1 {
@@ -423,9 +418,7 @@ fn check_node(
         let Item::Node(child) = child else {
             unreachable!("static documents contain only nodes")
         };
-        result
-            .children
-            .push(check_node(child, depth + 1, remaining, ids)?);
+        result.children.push(check_node(child, depth + 1, ids)?);
     }
     Ok(result)
 }

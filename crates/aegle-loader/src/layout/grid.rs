@@ -17,14 +17,18 @@ fn track(value: &Literal) -> Track {
         Literal::Length(v) => Track::Px(*v),
         Literal::Percent(v) => Track::Percent(*v),
         Literal::Fraction(v) => Track::Fr(*v),
-        Literal::Identifier(name) if name == "min_content" => Track::MinContent,
-        Literal::Identifier(name) if name == "max_content" => Track::MaxContent,
+        Literal::Identifier(name) => match name.as_str() {
+            "auto" => Track::Auto,
+            "min_content" => Track::MinContent,
+            "max_content" => Track::MaxContent,
+            other => unreachable!("checked track `{other}`"),
+        },
         Literal::Call(_, arguments) => match arguments[..] {
             [Literal::Length(min), Literal::Fraction(fr)] => Track::MinMax(min, fr),
             [Literal::Length(max)] => Track::FitContent(max),
             _ => unreachable!("checked track function"),
         },
-        _ => Track::Auto,
+        _ => unreachable!("checked track"),
     }
 }
 
@@ -35,7 +39,8 @@ fn template_item(value: &Literal) -> TemplateItem {
             let count = match &arguments[0] {
                 Literal::Number(n) => Repeat::Count(*n as u16),
                 Literal::Identifier(name) if name == "auto_fill" => Repeat::AutoFill,
-                _ => Repeat::AutoFit,
+                Literal::Identifier(name) if name == "auto_fit" => Repeat::AutoFit,
+                _ => unreachable!("checked repeat count"),
             };
             TemplateItem::Repeat(count, arguments[1..].iter().map(template_item).collect())
         }
@@ -48,7 +53,8 @@ fn grid_line(value: &Literal, end: bool) -> GridLine {
         Literal::Number(n) if end => GridLine::Span(*n as u16),
         Literal::Number(n) => GridLine::Line(*n as i16),
         Literal::String(name) => GridLine::Named(name.clone(), 1),
-        _ => GridLine::Auto,
+        Literal::Identifier(name) if name == "auto" => GridLine::Auto,
+        _ => unreachable!("checked grid line"),
     }
 }
 
@@ -89,7 +95,8 @@ pub(crate) fn apply(
             "row" => aegle_ui::Flow::Row,
             "column" => aegle_ui::Flow::Column,
             "row_dense" => aegle_ui::Flow::RowDense,
-            _ => aegle_ui::Flow::ColumnDense,
+            "column_dense" => aegle_ui::Flow::ColumnDense,
+            other => unreachable!("checked flow `{other}`"),
         }),
         Areas => {
             let rows: Vec<&str> = items(value)
@@ -106,6 +113,7 @@ pub(crate) fn apply(
             _ => unreachable!("checked area name"),
         },
         GridColumn => node.set_grid_column(placement(value)),
-        _ => node.set_grid_row(placement(value)),
+        GridRow => node.set_grid_row(placement(value)),
+        _ => unreachable!("dispatched grid property"),
     }
 }

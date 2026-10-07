@@ -61,7 +61,7 @@ button.on_click(move |_| {
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |
 | ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter` |
 | ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
-| loader::Program / View | `load`、`from_sources`、`from_checked`、`build(&Container)`、`open(&App)`；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`；`State<T>` 有 `get`、`set` |
+| loader::Program / View | `load`、`from_sources`、`build(&Container)`、`open(&App)`（`from_checked` 仅供 `ui!` 生成的代码，文档隐藏）；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`；`State<T>` 有 `get`、`set` |
 | Node（生命周期） | `keep_alive(value)`：值随控件删除或窗口关闭释放 |
 | Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果 |
 
