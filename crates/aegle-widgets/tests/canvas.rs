@@ -186,3 +186,31 @@ fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
     assert!(canvas.visual_state()?.focused);
     Ok(())
 }
+
+#[test]
+fn canvas_drawing_beyond_its_bounds_is_damaged() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(300.0, 300.0))?;
+    let reach = Rc::new(std::cell::Cell::new(10.0f32));
+    let painted = reach.clone();
+    let canvas = ui.root().canvas(move |builder, _| {
+        let far = aegle_ui::scene::Rect::new(0.0, 0.0, painted.get(), 4.0);
+        builder.fill(
+            aegle_ui::scene::RoundedRect::new(far, 0.0)?,
+            aegle_ui::Color::BLACK,
+        )?;
+        Ok(())
+    })?;
+    canvas.set_size(20.0, 20.0)?;
+    ui.refresh()?;
+    ui.clear_damage()?;
+    reach.set(150.0);
+    canvas.invalidate()?;
+    ui.refresh()?;
+    let origin = canvas.bounds()?.origin;
+    let damage = ui.damage()?.unwrap();
+    assert_eq!(damage.rects().len(), 1);
+    let rect = damage.rects()[0];
+    assert_eq!((rect.origin, rect.size.width), (origin, 150.0));
+    Ok(())
+}

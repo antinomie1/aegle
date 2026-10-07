@@ -183,3 +183,30 @@ fn validated_gradients_and_shadows() {
         ]
     ));
 }
+
+#[test]
+fn bounds_cover_drawn_pixels_within_clips() -> Result<(), SceneError> {
+    let shape = |x, y, w, h| RoundedRect::new(Rect::new(x, y, w, h), 0.0);
+    let mut builder = SceneBuilder::new();
+    assert_eq!(builder.finish()?.bounds(), None);
+    let mut builder = SceneBuilder::new();
+    builder.fill(shape(0.0, 0.0, 10.0, 10.0)?, Color::BLACK)?;
+    builder.push_transform(Affine::translation(20.0, 0.0)?.then(Affine::scale(2.0, 2.0)?)?)?;
+    builder.stroke(shape(0.0, 0.0, 5.0, 5.0)?, Color::BLACK, 2.0)?;
+    builder.pop()?;
+    builder.shadow(shape(0.0, 30.0, 10.0, 10.0)?, Color::BLACK, 2.0)?;
+    // Clipped drawing counts only inside its clip; an empty clip hides all.
+    builder.push_clip(shape(-5.0, -5.0, 2.0, 2.0)?)?;
+    builder.fill(shape(-100.0, -100.0, 200.0, 200.0)?, Color::BLACK)?;
+    builder.pop()?;
+    builder.push_clip(shape(0.0, 0.0, 0.0, 0.0)?)?;
+    builder.fill(shape(500.0, 500.0, 10.0, 10.0)?, Color::BLACK)?;
+    builder.pop()?;
+    // Translated then scaled, the stroke reaches x 38..52; the shadow reaches
+    // 6 beyond its shape and the clipped fill up to y -5.
+    assert_eq!(
+        builder.finish()?.bounds(),
+        Some(Rect::new(-6.0, -5.0, 58.0, 51.0))
+    );
+    Ok(())
+}

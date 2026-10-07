@@ -143,6 +143,22 @@ impl Affine {
         )
     }
 
+    /// The bounding box of `rect`, grown by `outset` on every side, mapped
+    /// through this transform.
+    pub(crate) fn bounds(self, rect: Rect, outset: f32) -> Rect {
+        let (x0, y0) = (rect.origin.x - outset, rect.origin.y - outset);
+        let x1 = rect.origin.x + rect.size.width + outset;
+        let y1 = rect.origin.y + rect.size.height + outset;
+        let corners =
+            [(x0, y0), (x1, y0), (x0, y1), (x1, y1)].map(|(x, y)| self.map_point(Point::new(x, y)));
+        let (mut low, mut high) = (corners[0], corners[0]);
+        for corner in corners {
+            (low.x, low.y) = (low.x.min(corner.x), low.y.min(corner.y));
+            (high.x, high.y) = (high.x.max(corner.x), high.y.max(corner.y));
+        }
+        Rect::new(low.x, low.y, high.x - low.x, high.y - low.y)
+    }
+
     pub(crate) fn validate_shape(self, shape: RoundedRect, outset: f32) -> Result<(), SceneError> {
         let rect = shape.rect;
         let x0 = rect.origin.x - outset;

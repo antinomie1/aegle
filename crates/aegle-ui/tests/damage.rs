@@ -67,5 +67,17 @@ fn changes_damage_only_old_and_new_areas() -> Result {
     ui.root().column()?;
     ui.refresh()?;
     assert_eq!(damage(&ui)?, None, "structure changes are whole");
+    ui.clear_damage()?;
+    // A new window background repaints areas no record covers.
+    ui.set_theme(Theme::dark())?;
+    ui.refresh()?;
+    assert_eq!(damage(&ui)?, None);
+    ui.clear_damage()?;
+    ui.root().set_theme_override(Some(aegle_ui::ThemeOverride {
+        background: Some(Color::rgb(10, 20, 30)),
+        ..Default::default()
+    }))?;
+    ui.refresh()?;
+    assert_eq!(damage(&ui)?, None);
     Ok(())
 }

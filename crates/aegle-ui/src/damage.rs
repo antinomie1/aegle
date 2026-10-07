@@ -1,7 +1,8 @@
 //! The window area whose pixels changed, so a host can redraw and present
 //! only that part. Re-recorded, moved, resized or newly clipped nodes add
-//! their old and new presented areas; structure changes and resizing the
-//! window damage all of it.
+//! the old and new areas their records draw, even beyond the node's bounds;
+//! structure changes, resizing the window and a new window background damage
+//! all of it.
 
 use crate::{Result, Ui, UiError, state::State};
 use aegle_core::NodeId;
@@ -23,30 +24,29 @@ impl State {
             .for_each(|rect| self.damage.add(rect));
     }
 
-    /// The presented window area of a node's records, including its shadow;
-    /// `None` when it draws nothing visible.
+    /// The presented window area of a node's records: the bounds of what its
+    /// scene and overlay draw, wherever that is relative to the node, placed
+    /// and clipped as when drawn; `None` when it draws nothing visible.
     fn painted_area(&self, id: NodeId) -> Option<Rect> {
         let element = &self.tree.get(id).unwrap().context;
-        let empty = element.scene.commands().is_empty()
-            && element
-                .overlay
-                .as_ref()
-                .is_none_or(|o| o.commands().is_empty());
-        if !element.effective_visible || empty {
+        if !element.effective_visible {
             return None;
         }
-        let mut area = element.bounds;
-        if let Some(shadow) = self.decorations.get(&id).and_then(|d| d.shadow) {
-            // A Gaussian shadow is invisible beyond three standard deviations.
-            let reach = shadow.spread.max(0.0) + shadow.blur * 3.0;
-            let cast = Rect::new(
-                area.origin.x + shadow.offset.x - reach,
-                area.origin.y + shadow.offset.y - reach,
-                area.size.width + reach * 2.0,
-                area.size.height + reach * 2.0,
-            );
-            area = area.union(cast);
-        }
+        let overlay = element
+            .overlay
+            .as_ref()
+            .and_then(|overlay| overlay.bounds());
+        let local = match (element.scene.bounds(), overlay) {
+            (Some(scene), Some(overlay)) => scene.union(overlay),
+            (scene, overlay) => scene.or(overlay)?,
+        };
+        let origin = element.bounds.origin;
+        let area = Rect::new(
+            origin.x + local.origin.x,
+            origin.y + local.origin.y,
+            local.size.width,
+            local.size.height,
+        );
         let shown = element
             .xf
             .map_or(area, |xf| crate::scroll::map_rect(xf, area));

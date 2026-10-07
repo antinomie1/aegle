@@ -154,6 +154,11 @@ impl State {
     /// paint, without recreating its editor.
     fn retheme(&mut self, id: NodeId, old: &Theme, theme: &Theme) -> Result {
         let is_root = id == self.root;
+        // The window clear color is the root's background: areas no record
+        // covers change with it.
+        if is_root && theme.background != old.background {
+            self.damage_full = true;
+        }
         let font_changed = theme.font_size != old.font_size
             && self
                 .decorations
