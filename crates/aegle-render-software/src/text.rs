@@ -6,6 +6,7 @@ use crate::{
     Frame, RenderError,
     blend::{Solid, encoded_rgba, linear_rgba},
     raster::{State, coverage_product},
+    surface::order,
     vector::device_bounds,
 };
 
@@ -17,7 +18,8 @@ impl Frame<'_, '_, '_> {
         let raster =
             RasterTransform::new(state.transform, run.size()).map_err(RenderError::Glyph)?;
         let aligned = raster.hint();
-        let solid = Solid::new(run.color());
+        let solid = Solid::new(self.surface.color(run.color()));
+        let bgra = self.surface.bgra;
         let [r, g, blue, opacity] = run.color().to_rgba();
         let contrast = (aegle_glyph::mask_contrast(run.color().to_rgba()) * 255.0).round() as i32;
         // Integer form of the shared monotonic curve: c + c(255 - c)k / 255².
@@ -74,13 +76,9 @@ impl Frame<'_, '_, '_> {
                             solid.blend(pixel, coverage_product(adjust(rgba[3]), coverage))
                         }
                         Content::Color => {
-                            Solid::new(Color::rgba(
-                                rgba[0],
-                                rgba[1],
-                                rgba[2],
-                                coverage_product(rgba[3], opacity),
-                            ))
-                            .blend(pixel, coverage);
+                            let [r, g, b, _] = order(bgra, rgba);
+                            Solid::new(Color::rgba(r, g, b, coverage_product(rgba[3], opacity)))
+                                .blend(pixel, coverage);
                         }
                     }
                 }

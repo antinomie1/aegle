@@ -46,6 +46,17 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
             assert_eq!(pixel[channel], pixel[3]);
             assert!(pixel[..3].iter().all(|value| *value <= pixel[3]));
         }
+        // The same glyph pixels in a BGRA surface, red and blue exchanged.
+        let mut bgra = vec![0; 64 * 48 * 4];
+        renderer
+            .begin_frame(
+                &mut Surface::new_bgra(&mut bgra, 64, 48)?,
+                Color::TRANSPARENT,
+            )
+            .draw(&scene, Affine::IDENTITY)?;
+        for (a, b) in surface.data().chunks_exact(4).zip(bgra.chunks_exact(4)) {
+            assert_eq!([a[2], a[1], a[0], a[3]], b);
+        }
         let stats = renderer.glyph_cache().stats();
         if let Some(previous) = warm {
             assert_eq!(stats, previous);
@@ -199,11 +210,13 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
                 .any(|p| p == [255, 0, 0, 255]),
             visible
         );
+        // The one-pixel underline sits slightly off the pixel grid, so its
+        // strongest row is nearly, not exactly, the full color.
         assert!(
             surface
                 .data()
                 .chunks_exact(4)
-                .any(|p| p == [0, 255, 0, 255])
+                .any(|p| p[1] == 255 && p[0] < 80 && p[2] < 80)
         );
         assert_eq!(editor.text(), "你好");
     }

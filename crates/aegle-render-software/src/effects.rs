@@ -25,7 +25,10 @@ impl Frame<'_, '_, '_> {
         let inverse = inverse(state.transform)?;
         let mut stops = [(0.0, [0.0; 4]); Gradient::MAX_STOPS];
         for (stop, entry) in gradient.stops().iter().zip(&mut stops) {
-            *entry = (stop.offset, linear_rgba(stop.color.to_rgba()));
+            *entry = (
+                stop.offset,
+                linear_rgba(self.surface.color(stop.color).to_rgba()),
+            );
         }
         let stops = &stops[..gradient.stops().len()];
         let path = path::build(
@@ -92,7 +95,7 @@ impl Frame<'_, '_, '_> {
             right: device[2].ceil().clamp(0.0, width) as usize,
             bottom: device[3].ceil().clamp(0.0, height) as usize,
         });
-        let paint = linear_rgba(color.to_rgba());
+        let paint = linear_rgba(self.surface.color(color).to_rgba());
         let clip = state.clips.checked_sub(1);
         let clip = clip.map(|index| self.renderer.masks[index + 1].data());
         let half = (rect.size.width * 0.5, rect.size.height * 0.5);
@@ -104,19 +107,41 @@ impl Frame<'_, '_, '_> {
         };
         // Without rotation or skew, a device row has one local y, so the
         // vertical part of the profile is evaluated once per row.
-        let upright =
-            inverse.map_point(Point::new(0.0, 0.0)).y == inverse.map_point(Point::new(1.0, 0.0)).y;
+        let origin = inverse.map_point(Point::new(0.0, 0.0));
+        let upright = origin.y == inverse.map_point(Point::new(1.0, 0.0)).y;
+        // Away from the corners every sample row has the straight width, so a
+        // column's horizontal part is shared by those rows when it has one x.
+        let straight = shadow.straight();
+        let columns: Vec<f32> =
+            match upright && origin.x == inverse.map_point(Point::new(0.0, 1.0)).x {
+                true => (bounds.left..bounds.right)
+                    .map(|x| {
+                        let local = inverse.map_point(Point::new(x as f32 + 0.5, 0.5));
+                        shadow.part(local.x - center.0, straight)
+                    })
+                    .collect(),
+                false => Vec::new(),
+            };
         let row_width = self.surface.width as usize;
         for (y, row) in (bounds.top..).zip(bounds.rows(row_width)) {
             let start = inverse.map_point(Point::new(bounds.left as f32 + 0.5, y as f32 + 0.5));
             let rows = shadow.rows(start.y - center.1);
+            let shared = !columns.is_empty() && rows.iter().all(|&(curved, _)| curved == straight);
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
             for ((x, i), pixel) in (bounds.left..).zip(row).zip(pixels.chunks_exact_mut(4)) {
                 let alpha = clip.map_or(255, |clip| clip[i]);
-                let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
-                let value = match upright {
-                    true => shadow.across(local.x - center.0, &rows),
-                    false => shadow.across(local.x - center.0, &shadow.rows(local.y - center.1)),
+                let value = if shared {
+                    let part = columns[x - bounds.left];
+                    let value: f32 = rows.iter().map(|&(_, mass)| part * mass).sum();
+                    value.clamp(0.0, 1.0)
+                } else {
+                    let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
+                    match upright {
+                        true => shadow.across(local.x - center.0, &rows),
+                        false => {
+                            shadow.across(local.x - center.0, &shadow.rows(local.y - center.1))
+                        }
+                    }
                 };
                 if alpha > 0 && value > 0.0 {
                     blend_linear(pixel, paint.map(|channel| channel * value), alpha);
@@ -194,14 +219,31 @@ impl Shadow {
 
     /// The value at `x` across the rows of [`Self::rows`].
     fn across(&self, x: f32, rows: &[(f32, f32); 4]) -> f32 {
+        // The same arithmetic as `part` for each row, as eight independent
+        // lanes the compiler can evaluate together.
         let scale = std::f32::consts::FRAC_1_SQRT_2 / self.sigma;
-        let value: f32 = rows
-            .iter()
-            .map(|&(curved, mass)| {
-                0.5 * (erf((x + curved) * scale) - erf((x - curved) * scale)) * mass
-            })
+        let edges: [f32; 8] = std::array::from_fn(|i| match i % 2 {
+            0 => (x + rows[i / 2].0) * scale,
+            _ => (x - rows[i / 2].0) * scale,
+        });
+        let erfs = edges.map(erf);
+        let value: f32 = (0..4)
+            .map(|i| 0.5 * (erfs[i * 2] - erfs[i * 2 + 1]) * rows[i].1)
             .sum();
         value.clamp(0.0, 1.0)
+    }
+
+    /// The horizontal part at `x` of a row whose half width is `curved`.
+    fn part(&self, x: f32, curved: f32) -> f32 {
+        let scale = std::f32::consts::FRAC_1_SQRT_2 / self.sigma;
+        0.5 * (erf((x + curved) * scale) - erf((x - curved) * scale))
+    }
+
+    /// The half width of a row beside the straight sides, as [`Self::rows`]
+    /// computes it there.
+    fn straight(&self) -> f32 {
+        let delta = 0.0f32;
+        self.half.0 - self.corner + (self.corner * self.corner - delta * delta).max(0.0).sqrt()
     }
 }
 

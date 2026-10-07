@@ -370,7 +370,8 @@ impl Wayland {
         Ok(())
     }
 
-    /// Draws directly into an idle SHM buffer as premultiplied sRGB RGBA8.
+    /// Draws directly into an idle SHM buffer as premultiplied sRGB BGRA8, the
+    /// memory order of little-endian ARGB8888 (big-endian targets reorder it).
     ///
     /// `damage` is the area that changed since the last presented frame, in
     /// buffer pixels; `None` changes every pixel. `draw` must clear or

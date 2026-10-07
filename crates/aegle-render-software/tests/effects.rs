@@ -65,3 +65,74 @@ fn gradients_and_shadows() -> Result {
     assert_eq!(pixel(&pixels, 32, 44), [255; 4]);
     Ok(())
 }
+
+/// Draws `scene` into an RGBA and a BGRA surface over a colored background.
+fn both_orders(scene: &Scene) -> Result<(Vec<u8>, Vec<u8>)> {
+    let mut renderer = Renderer::default();
+    let background = Color::rgb(30, 90, 200);
+    let (mut rgba, mut bgra) = (vec![0; 96 * 64 * 4], vec![0; 96 * 64 * 4]);
+    let scale = Affine::scale(1.5, 1.5)?;
+    renderer
+        .begin_frame(&mut Surface::new(&mut rgba, 96, 64)?, background)
+        .draw(scene, scale)?;
+    renderer
+        .begin_frame(&mut Surface::new_bgra(&mut bgra, 96, 64)?, background)
+        .draw(scene, scale)?;
+    Ok((rgba, bgra))
+}
+
+#[test]
+fn bgra_surfaces_hold_the_same_pixels_with_red_and_blue_exchanged() -> Result {
+    let shape = |x, y, w, h, r| RoundedRect::new(Rect::new(x, y, w, h), r);
+    let stops = [
+        GradientStop {
+            offset: 0.0,
+            color: Color::rgb(250, 120, 10),
+        },
+        GradientStop {
+            offset: 1.0,
+            color: Color::rgba(10, 200, 90, 160),
+        },
+    ];
+    let gradient = Gradient::linear(Point::new(0.0, 0.0), Point::new(1.0, 1.0), &stops)?;
+    let image = aegle_scene::Image::new(
+        2,
+        2,
+        vec![
+            255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 200, 100, 50, 255,
+        ],
+    )?;
+    let mut square = aegle_scene::PathBuilder::new();
+    square.move_to(Point::new(40.0, 4.0));
+    square.line_to(Point::new(56.0, 6.0));
+    square.line_to(Point::new(50.0, 20.0));
+    square.close();
+    let square = square.finish(aegle_scene::FillRule::NonZero)?;
+    let mut builder = SceneBuilder::new();
+    builder.shadow(
+        shape(4.0, 4.0, 24.0, 16.0, 4.0)?,
+        Color::rgba(0, 0, 0, 120),
+        3.0,
+    )?;
+    builder.fill(shape(4.0, 4.0, 24.0, 16.0, 0.0)?, Color::rgb(220, 40, 60))?;
+    builder.fill(
+        shape(10.3, 8.6, 30.0, 20.0, 3.0)?,
+        Color::rgba(40, 180, 90, 140),
+    )?;
+    builder.stroke(
+        shape(2.5, 24.5, 40.0, 14.0, 0.0)?,
+        Color::rgb(200, 20, 120),
+        1.5,
+    )?;
+    builder.fill_gradient(shape(44.0, 24.0, 16.0, 14.0, 2.0)?, &gradient)?;
+    builder.fill_path(&square, Color::rgb(255, 210, 0))?;
+    builder.push_clip(shape(30.0, 2.0, 30.0, 40.0, 5.0)?)?;
+    builder.image(&image, Rect::new(30.0, 28.0, 12.0, 12.0))?;
+    builder.pop()?;
+    builder.image(&image, Rect::new(2.0, 2.0, 2.0, 2.0))?;
+    let (rgba, bgra) = both_orders(&builder.finish()?)?;
+    for (a, b) in rgba.chunks_exact(4).zip(bgra.chunks_exact(4)) {
+        assert_eq!([a[2], a[1], a[0], a[3]], b);
+    }
+    Ok(())
+}

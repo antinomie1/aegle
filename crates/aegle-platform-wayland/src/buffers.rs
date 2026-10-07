@@ -60,13 +60,12 @@ impl SoftwareBuffers {
             .any(|image| image.as_ref().is_none_or(Image::is_idle))
     }
 
-    /// Draws a frame as tightly packed premultiplied sRGB RGBA8, changing
+    /// Draws a frame as tightly packed premultiplied sRGB BGRA8, changing
     /// `damage` (`None`: every pixel) since the previous frame.
     ///
     /// `draw` receives the region it must clear or overwrite: the damage plus
     /// whatever this mapping missed while the other one was drawn, or all of a
-    /// new mapping. Pixels outside it already show the current frame in native
-    /// ARGB format. A failed draw stays unattached and makes its mapping fully
+    /// new mapping. Pixels outside it already show the current frame. A failed draw stays unattached and makes its mapping fully
     /// stale. The returned buffer has not been activated; attach and commit it
     /// before drawing another frame. `None` means both slots await server release.
     pub(crate) fn paint<E>(
@@ -142,7 +141,9 @@ impl SoftwareBuffers {
             .canvas(&mut image.pool)
             .expect("selected image is idle");
         draw(pixels, &region).map_err(PresentError::Draw)?;
-        to_argb(pixels, size.width, &region);
+        // Little-endian ARGB8888 is BGRA in memory, as drawn.
+        #[cfg(target_endian = "big")]
+        to_big_endian(pixels, size.width, &region);
         image.stale = Region::default();
         if let Some(other) = &mut self.images[1 - index] {
             other.stale.extend(&damage);
@@ -151,9 +152,10 @@ impl SoftwareBuffers {
     }
 }
 
-/// Converts RGBA8 to native ARGB8888 inside `region`. Not generic, so it is
-/// compiled with this crate's optimization rather than each caller's.
-fn to_argb(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) {
+/// Reorders BGRA8 into big-endian ARGB8888 inside `region`. Not generic, so
+/// it is compiled with this crate's optimization rather than each caller's.
+#[cfg(target_endian = "big")]
+fn to_big_endian(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) {
     let stride = width as usize * 4;
     for rect in region.rects() {
         let columns = rect.x as usize * 4..(rect.x + rect.width) as usize * 4;
@@ -163,8 +165,7 @@ fn to_argb(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) {
             .take(rect.height as usize);
         for row in rows {
             for pixel in row[columns.clone()].chunks_exact_mut(4) {
-                let argb = u32::from_be_bytes([pixel[3], pixel[0], pixel[1], pixel[2]]);
-                pixel.copy_from_slice(&argb.to_ne_bytes());
+                pixel.reverse();
             }
         }
     }

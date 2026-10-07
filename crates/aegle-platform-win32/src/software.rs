@@ -7,7 +7,8 @@ use windows::Win32::{
 };
 
 impl Win32 {
-    /// Borrows a tightly packed, top-down premultiplied-sRGB RGBA8 framebuffer.
+    /// Borrows a tightly packed, top-down premultiplied-sRGB BGRA8 framebuffer,
+    /// the order of a 32-bit DIB.
     /// `damage` is the area changed since the last frame (`None`: all of it);
     /// `draw` must overwrite the region it is given, which is the whole buffer
     /// after a resize or failed frame, with an opaque background (alpha=255).
@@ -54,7 +55,7 @@ impl Win32 {
             _ => full,
         };
         draw(&mut pixels, size, &region).map_err(PresentError::Draw)?;
-        to_bgra(&mut pixels, size.width, &region).map_err(PresentError::Platform)?;
+        check_opaque(&pixels, size.width, &region).map_err(PresentError::Platform)?;
         let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -107,23 +108,19 @@ impl Win32 {
     }
 }
 
-/// Converts opaque RGBA8 to BGRA inside `region`. Not generic, so it is
-/// compiled with this crate's optimization rather than each caller's.
-fn to_bgra(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) -> Result<(), Error> {
+/// Rejects transparent pixels inside `region`. Not generic, so it is compiled
+/// with this crate's optimization rather than each caller's.
+fn check_opaque(pixels: &[u8], width: u32, region: &Region<PixelRect>) -> Result<(), Error> {
     let stride = width as usize * 4;
     for rect in region.rects() {
         let columns = rect.x as usize * 4..(rect.x + rect.width) as usize * 4;
         let rows = pixels
-            .chunks_exact_mut(stride)
+            .chunks_exact(stride)
             .skip(rect.y as usize)
             .take(rect.height as usize);
         for row in rows {
-            let row = &mut row[columns.clone()];
-            if row.chunks_exact(4).any(|p| p[3] != 255) {
+            if row[columns.clone()].chunks_exact(4).any(|p| p[3] != 255) {
                 return Err(Error::UnsupportedTransparency);
-            }
-            for pixel in row.chunks_exact_mut(4) {
-                pixel.swap(0, 2);
             }
         }
     }

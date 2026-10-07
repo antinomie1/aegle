@@ -9,6 +9,7 @@ use crate::{
     blend::{blend_linear, linear_rgba},
     path,
     raster::{Bounds, State},
+    surface::order,
 };
 
 impl Frame<'_, '_, '_> {
@@ -124,7 +125,7 @@ impl Frame<'_, '_, '_> {
             ((size - p) / footprint + 0.5).clamp(0.0, 1.0) - (0.5 - p / footprint).clamp(0.0, 1.0)
         };
         let clip = (state.clips > 0).then(|| self.renderer.masks[state.clips].data());
-        let stride = self.surface.width as usize;
+        let (stride, bgra) = (self.surface.width as usize, self.surface.bgra);
         for row in bounds.rows(stride) {
             let y = (row.start / stride) as f32 + 0.5;
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
@@ -132,7 +133,7 @@ impl Frame<'_, '_, '_> {
                 let local = inverse.map_point(Point::new((i % stride) as f32 + 0.5, y));
                 let coverage = clip.map_or(255, |mask| mask[i]);
                 if aligned {
-                    let texel = fetch(image, local.x as u32, local.y as u32);
+                    let texel = order(bgra, fetch(image, local.x as u32, local.y as u32));
                     if texel[3] == 255 && coverage == 255 {
                         pixel.copy_from_slice(&texel);
                     } else {
@@ -141,7 +142,8 @@ impl Frame<'_, '_, '_> {
                 } else {
                     let alpha = edge(local.x, width as f32, footprint[0])
                         * edge(local.y, height as f32, footprint[1]);
-                    let source = sample(image, local.x - 0.5, local.y - 0.5).map(|v| v * alpha);
+                    let source =
+                        order(bgra, sample(image, local.x - 0.5, local.y - 0.5)).map(|v| v * alpha);
                     blend_linear(pixel, source, coverage);
                 }
             }

@@ -159,7 +159,7 @@ fn main() -> Result<()> {
         if ready
             && backend
                 .present(window, None, |pixels, size, _| {
-                    let mut surface = Surface::new(pixels, size.width, size.height)?;
+                    let mut surface = Surface::new_bgra(pixels, size.width, size.height)?;
                     let mut frame = renderer.begin_frame(&mut surface, Color::rgb(245, 246, 248));
                     let scale = info.scale;
                     for (scene, origin) in app.records() {

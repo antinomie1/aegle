@@ -360,12 +360,33 @@ impl Frame<'_, '_, '_> {
         state: State,
         bounds: Bounds,
     ) {
+        self.cover_parts(path, rule, color, state, &[bounds]);
+    }
+
+    /// Fills the parts of a device-space path inside each of `parts`, which
+    /// must contain every pixel the path covers, with one rasterization.
+    pub(crate) fn cover_parts(
+        &mut self,
+        path: &Path,
+        rule: FillRule,
+        color: Color,
+        state: State,
+        parts: &[Bounds],
+    ) {
+        if parts.iter().all(|part| part.is_empty()) {
+            return;
+        }
         let (coverage, clips) = self.renderer.masks.split_at_mut(1);
         let mask = &mut coverage[0];
-        rasterize(mask, path, bounds, rule);
+        // Only these pixels are read; others may keep an earlier draw.
+        let width = mask.width() as usize;
+        for row in parts.iter().flat_map(|part| part.rows(width)) {
+            mask.data_mut()[row].fill(0);
+        }
+        mask.fill_path(path, rule, true, Transform::identity());
         let clip = state.clips.checked_sub(1).map(|index| clips[index].data());
-        let paint = Solid::new(color);
-        for row in bounds.rows(self.surface.width as usize) {
+        let paint = Solid::new(self.surface.color(color));
+        for row in parts.iter().flat_map(|part| part.rows(width)) {
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
             for (i, pixel) in row.zip(pixels.chunks_exact_mut(4)) {
                 let alpha = clip.map_or(mask.data()[i], |clip| {
@@ -393,7 +414,7 @@ pub(crate) struct Bounds {
 }
 
 impl Bounds {
-    const EMPTY: Self = Self {
+    pub(crate) const EMPTY: Self = Self {
         left: 0,
         top: 0,
         right: 0,

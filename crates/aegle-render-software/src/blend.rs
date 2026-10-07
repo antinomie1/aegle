@@ -36,9 +36,9 @@ impl Solid {
         }
         let source_alpha = self.alpha * (coverage as f32 / 255.0);
         if dst[3] == 0 {
-            let alpha = (source_alpha * 255.0).round() as u8;
+            let alpha = round_u8(source_alpha * 255.0);
             for (i, channel) in dst[..3].iter_mut().enumerate() {
-                *channel = ((self.rgba[i] as f32 * source_alpha).round() as u8).min(alpha);
+                *channel = (round_u8(self.rgba[i] as f32 * source_alpha)).min(alpha);
             }
             dst[3] = alpha;
             return;
@@ -62,10 +62,10 @@ pub(crate) fn blend_linear(dst: &mut [u8], source: [f32; 4], coverage: u8) {
     }
     let transfer = SrgbTransfer::get();
     if dst[3] == 0 {
-        let alpha = (source[3] * 255.0).round() as u8;
+        let alpha = round_u8(source[3] * 255.0);
         for (i, channel) in dst[..3].iter_mut().enumerate() {
             let encoded = transfer.encode((source[i] / source[3]).min(1.0));
-            *channel = ((encoded * source[3] * 255.0).round() as u8).min(alpha);
+            *channel = (round_u8(encoded * source[3] * 255.0)).min(alpha);
         }
         dst[3] = alpha;
     } else {
@@ -78,13 +78,36 @@ pub(crate) fn blend_linear(dst: &mut [u8], source: [f32; 4], coverage: u8) {
 fn over_visible(dst: &mut [u8], source: [f32; 4], transfer: &SrgbTransfer) {
     let destination_weight = (dst[3] as f32 / 255.0) * (1.0 - source[3]);
     let output_alpha = source[3] + destination_weight;
-    let alpha = (output_alpha * 255.0).round() as u8;
+    let alpha = round_u8(output_alpha * 255.0);
     let unpremultiply = 1.0 / dst[3] as f32;
     let normalize = 1.0 / output_alpha;
+    // Windows are opaque: such a destination's decode depends on its byte only.
+    let opaque = (dst[3] == 255).then(opaque_decode);
     for (i, channel) in dst[..3].iter_mut().enumerate() {
-        let destination = transfer.decode(*channel as f32 * unpremultiply);
+        let destination = match opaque {
+            Some(decoded) => decoded[*channel as usize],
+            None => transfer.decode(*channel as f32 * unpremultiply),
+        };
         let linear = ((source[i] + destination * destination_weight) * normalize).min(1.0);
-        *channel = ((transfer.encode(linear) * output_alpha * 255.0).round() as u8).min(alpha);
+        *channel = (round_u8(transfer.encode(linear) * output_alpha * 255.0)).min(alpha);
     }
     dst[3] = alpha;
+}
+
+/// `value.round() as u8`, without the `roundf` call that baseline x86-64
+/// makes for `round`: the remainder after truncation is exact below 2^24.
+#[inline]
+fn round_u8(value: f32) -> u8 {
+    let whole = value as u32;
+    let up = u32::from(value - whole as f32 >= 0.5);
+    (whole + up).min(255) as u8
+}
+
+/// Linear values of opaque sRGB bytes, computed as `over_visible` would.
+fn opaque_decode() -> &'static [f32; 256] {
+    static TABLE: std::sync::OnceLock<[f32; 256]> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        let (transfer, unpremultiply) = (SrgbTransfer::get(), 1.0 / 255.0f32);
+        std::array::from_fn(|byte| transfer.decode(byte as f32 * unpremultiply))
+    })
 }

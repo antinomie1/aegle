@@ -128,7 +128,7 @@ impl Runtime {
                     let presented = self
                         .backend
                         .present(entry.id, damage, |pixels, size, region| -> Result<()> {
-                            let mut surface = aegle_render_software::Surface::new(
+                            let mut surface = aegle_render_software::Surface::new_bgra(
                                 pixels,
                                 size.width,
                                 size.height,
