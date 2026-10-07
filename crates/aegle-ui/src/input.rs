@@ -1,6 +1,5 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
-#![allow(missing_docs)]
 
 use crate::{
     ClipboardRequest, Result, Ui, UiError,
@@ -233,6 +232,7 @@ impl Ui {
 }
 
 impl State {
+    /// Delivers `input` to `target` through the control, then applies the outcome; unusable targets ignore it.
     pub fn dispatch(&mut self, target: NodeId, input: Input<'_>) -> Result {
         if !self.usable(target) {
             return Ok(());
@@ -277,6 +277,7 @@ impl State {
         }
         Ok(outcome)
     }
+    /// Applies a control outcome: invalidation, IME, focus, capture and clipboard requests.
     pub fn effects(&mut self, target: NodeId, outcome: Outcome) -> Result {
         if outcome.repaint {
             self.dirty_visual_state(target)?;
@@ -318,6 +319,7 @@ impl State {
         }
         Ok(())
     }
+    /// Moves logical focus to `target` (or clears it) under the shared enabled/visible policy.
     pub fn set_focus(&mut self, target: Option<NodeId>) -> Result {
         let change = self
             .focus
@@ -348,6 +350,7 @@ impl State {
         self.tree.mark_dirty(self.root, Dirty::SEMANTICS)?;
         Ok(())
     }
+    /// Releases focus, capture, hover and pointer routes that point into the subtree of `root`.
     pub fn cancel_subtree(&mut self, root: NodeId) -> Result {
         if self
             .focus

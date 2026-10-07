@@ -6,7 +6,11 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-license = "LGPL-3.0-only"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/antinomie1/aegle"
+readme = "README.md"
+keywords = ["gui", "ui", "retained", "text", "accessibility"]
+categories = ["gui", "graphics"]
 
 [workspace.dependencies]
 aegle-types = { path = "crates/aegle-types" }

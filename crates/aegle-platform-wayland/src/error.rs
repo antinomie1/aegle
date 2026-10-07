@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Window, input or software storage failure.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// A required protocol, connection or OS operation failed.
     Backend(String),
@@ -55,6 +56,7 @@ impl std::error::Error for Error {}
 
 /// Presentation preserves the application's original drawing error.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum PresentError<E> {
     /// Window or SHM failure.
     Platform(Error),

@@ -38,6 +38,7 @@ impl FocusChange {
 
 /// Invalid explicit focus request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FocusError {
     /// Invalid root, destination or ancestry.
     Route(RouteError),

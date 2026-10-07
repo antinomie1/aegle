@@ -1,6 +1,5 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
-#![allow(missing_docs)]
 
 //! Painting a node's scene from its control, and the border helper controls share.
 

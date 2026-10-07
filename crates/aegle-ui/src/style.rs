@@ -1,6 +1,5 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
-#![allow(missing_docs)]
 
 use crate::control::StyleScope;
 use crate::state::State;
@@ -22,6 +21,7 @@ pub struct Decoration {
 }
 
 impl State {
+    /// The control's current interaction state for skin resolution.
     pub fn visual_state(&self, id: NodeId) -> VisualState {
         let control = &self.tree.get(id).unwrap().context.control;
         let visual = control.visual();
@@ -36,10 +36,12 @@ impl State {
         }
     }
 
+    /// The resolved appearance of `id` in its current state.
     pub fn appearance(&self, id: NodeId) -> Result<Appearance> {
         self.appearance_for(id, self.visual_state(id))
     }
 
+    /// The resolved appearance of `id` in `state`, after skin and local overrides.
     pub fn appearance_for(&self, id: NodeId, state: VisualState) -> Result<Appearance> {
         let decoration = self.decorations.get(&id);
         let skin = decoration.and_then(|d| d.skin).unwrap_or(Appearance::new);
@@ -54,6 +56,7 @@ impl State {
         Ok(appearance)
     }
 
+    /// The text style of `id` under its resolved theme.
     pub fn text_style(&self, id: NodeId) -> TextStyle<'static> {
         self.text_style_in(id, self.theme_of(id))
     }
@@ -63,6 +66,7 @@ impl State {
         face(theme, self.decorations.get(&id))
     }
 
+    /// Drops the decoration of `id` once it holds no override.
     pub fn trim_decoration(&mut self, id: NodeId) {
         if self.decorations.get(&id).is_some_and(|d| {
             d.skin.is_none()
@@ -77,6 +81,7 @@ impl State {
         }
     }
 
+    /// Validates and sets the local style overrides of `id`.
     pub fn set_style(&mut self, id: NodeId, style: Style) -> Result {
         style.validate()?;
         let scope = StyleScope::of(self.tree.get(id).unwrap().context.control.kind());
@@ -121,6 +126,7 @@ impl State {
         self.set_style(id, style)
     }
 
+    /// Sets or clears the local font size; it must be finite and positive.
     pub fn set_font_size(&mut self, id: NodeId, size: Option<f32>) -> Result {
         if size.is_some_and(|v| !v.is_finite() || v <= 0.0) {
             return Err(UiError::InvalidValue.into());
@@ -128,6 +134,7 @@ impl State {
         self.set_typeface(id, |d| d.font_size = size)
     }
 
+    /// Sets or clears the local font.
     pub fn set_font(&mut self, id: NodeId, font: Option<Font>) -> Result {
         if font.is_some_and(|f| !f.is_valid()) {
             return Err(UiError::InvalidValue.into());
@@ -165,6 +172,7 @@ impl State {
         Ok(())
     }
 
+    /// Marks what a change of interaction state invalidates.
     pub fn dirty_visual_state(&mut self, id: NodeId) -> Result {
         let dirty = if self.decorations.get(&id).is_some_and(|d| d.skin.is_some()) {
             // A custom skin can change foreground as a function of any state.

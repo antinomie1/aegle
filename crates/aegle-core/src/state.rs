@@ -46,6 +46,7 @@ impl BitOrAssign for Dirty {
 
 /// Invalid public tree operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TreeError {
     /// The node has been removed or its ID is invalid for this tree.
     DeadNode,

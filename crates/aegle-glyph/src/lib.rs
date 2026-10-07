@@ -143,6 +143,7 @@ pub struct CacheStats {
 
 /// Invalid input, unsupported glyph representation, or a resource limit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GlyphError {
     /// The font, collection index, glyph ID, or embedded data is invalid.
     InvalidFont,

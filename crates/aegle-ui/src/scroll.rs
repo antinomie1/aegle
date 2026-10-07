@@ -1,6 +1,5 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
-#![allow(missing_docs)]
 
 use crate::{
     bar::FOOTPRINT,
@@ -13,6 +12,7 @@ use aegle_types::{Point, Rect};
 use crate::{Node, Result, state::State};
 
 impl State {
+    /// The largest scroll offset of a viewport, or zero for other nodes.
     pub fn scroll_limit(&self, id: NodeId) -> Point {
         let node = self.tree.get(id).unwrap();
         if node.context.control.viewport() {
@@ -34,6 +34,7 @@ impl State {
         }
     }
 
+    /// Scrolls a viewport to `offset`, clamped to its limit; returns whether it moved.
     pub fn scroll_to(&mut self, id: NodeId, offset: Point) -> Result<bool> {
         let limit = self.scroll_limit(id);
         let element = &mut self.tree.get_mut(id).unwrap().context;
@@ -148,6 +149,7 @@ impl State {
         Ok(())
     }
 
+    /// Scrolls the innermost viewport under `position` that can use `delta`, chaining outward.
     pub fn scroll_by_at(
         &mut self,
         position: Point,
@@ -208,6 +210,7 @@ impl State {
         Ok(changed)
     }
 
+    /// Scrolls ancestors so the node is inside their viewports.
     pub fn reveal(&mut self, id: NodeId) -> Result {
         self.update_geometry()?;
         let element = &self.tree.get(id).unwrap().context;

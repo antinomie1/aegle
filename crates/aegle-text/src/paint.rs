@@ -76,6 +76,7 @@ pub(crate) fn paint_layout(
 
 /// A paragraph cannot be completely represented by the scene text operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PaintError {
     /// Some text has no selected font; inspect [`Paragraph::diagnostics`].
     MissingFont,

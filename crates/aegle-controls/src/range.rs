@@ -132,6 +132,7 @@ fn validate_step(step: f64) -> Result<(), RangeError> {
 
 /// Invalid input at a numeric range or slider boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RangeError {
     /// Endpoints are nonfinite, unordered, or their span overflows.
     InvalidBounds,

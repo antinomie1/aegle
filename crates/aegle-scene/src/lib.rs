@@ -123,6 +123,7 @@ pub struct TextureId(pub u64);
 
 /// Invalid geometry or scope usage at the drawing-record boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SceneError {
     /// A coordinate, extent, radius or stroke width is not finite.
     NonFinite,

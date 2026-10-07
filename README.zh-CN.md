@@ -77,4 +77,4 @@ fn main() -> Result<()> {
 
 ## 许可证
 
-采用 [LGPL-3.0-only](LICENSE)；所含 GPLv3 文本见 [COPYING](COPYING)。
+可任选 [Apache License 2.0](LICENSE-APACHE) 或 [MIT 许可证](LICENSE-MIT)。

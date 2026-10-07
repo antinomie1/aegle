@@ -1,6 +1,5 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
-#![allow(missing_docs)]
 
 use std::{
     cell::RefCell,
@@ -20,23 +19,35 @@ use crate::{Result, callbacks::Handler, control::Control, style::Decoration};
 
 /// A node's engine-side data. Controls keep their own state in `control`.
 pub struct Element {
+    /// The control implementation; it keeps its own state.
     pub control: Box<dyn Control>,
+    /// The control's own painted records, in local coordinates.
     pub scene: Scene,
     /// What a viewport draws over its children, when the control is one.
     pub overlay: Option<Box<Scene>>,
+    /// Layout rectangle in the parent's space.
     pub bounds: Rect,
+    /// Clip inherited from scrolling ancestors, in window space.
     pub clip: Option<Rect>,
     /// Clips its children's painting and hit testing to its bounds.
     pub clips: bool,
+    /// Current scroll offset of a viewport.
     pub scroll: Point,
+    /// Whether the node itself is shown.
     pub visible: bool,
     /// Layout mode to restore when a hidden node is shown again.
     pub shown_display: aegle_layout::Display,
+    /// Whether the node and every ancestor are shown.
     pub effective_visible: bool,
+    /// Whether the node accepts input.
     pub enabled: bool,
+    /// Accessible label.
     pub label: String,
+    /// Scroll the caret into view on the next refresh.
     pub ensure_caret: bool,
+    /// Layout properties set on this node, preserved across theme changes.
     pub local_layout: crate::LocalLayout,
+    /// Local content padding; `None` uses the control's default.
     pub padding: Option<f32>,
     /// Presented translation after layout, inherited by the subtree.
     pub offset: Point,
@@ -56,11 +67,13 @@ pub struct Element {
     pub direction: Option<aegle_layout::LayoutDirection>,
     /// The resolved direction is right to left.
     pub rtl: bool,
+    /// Accessibility id of this node.
     #[cfg(feature = "accessibility")]
     pub access_id: aegle_access::accesskit::NodeId,
 }
 
 impl Element {
+    /// The local theme of this node, else `ui`.
     pub fn theme_or<'a>(&'a self, ui: &'a Theme) -> &'a Theme {
         self.theme.as_deref().unwrap_or(ui)
     }
@@ -76,6 +89,7 @@ impl Element {
             .content_offset(self.bounds.size, self.inset(ui), self.scroll);
         Point::new(-shift.x, -shift.y)
     }
+    /// A visible, enabled element for `control` with no local settings.
     pub fn new(control: Box<dyn Control>) -> Self {
         let overlay = control.viewport().then(Box::default);
         Self {
@@ -141,34 +155,57 @@ pub struct Hooks {
 /// libraries: fields and methods are public so a control can use the tree, focus,
 /// themes and invalidation directly. Prefer the typed handles in application code.
 pub struct State {
+    /// The retained tree of nodes with their layout.
     pub tree: Tree<LayoutNode<Element>>,
+    /// The root node.
     pub root: NodeId,
+    /// Nodes in paint order.
     pub order: Vec<NodeId>,
     /// Scroll views in post-order with the end of their subtree in `order`.
     pub overlays: Vec<(usize, NodeId)>,
+    /// The tree structure changed since the last refresh.
     pub topology_dirty: bool,
+    /// Layout must be recomputed.
     pub geometry_dirty: bool,
+    /// Node to scroll into view on the next refresh.
     pub reveal_target: Option<NodeId>,
+    /// Shared text system.
     pub fonts: Rc<RefCell<TextSystem>>,
+    /// The UI theme (fields on `Element` hold local themes).
     pub theme: Theme,
+    /// Window size in logical pixels.
     pub size: Size,
+    /// Logical focus state.
     pub focus: Focus,
+    /// Last focused node, restored when focus returns to the window.
     pub last_focus: Option<NodeId>,
+    /// Pointer route of the press in progress.
     pub route: Route,
+    /// Pointer capture: the pointer and its target.
     pub capture: Option<(PointerId, NodeId)>,
+    /// Scrollbar drag in progress.
     pub drag: Option<crate::scrollbar::Drag>,
+    /// Node under the pointer.
     pub hover: Option<NodeId>,
+    /// Last pointer and its window position.
     pub pointer: Option<(PointerId, Point)>,
+    /// The input-method state changed and must be re-reported.
     pub ime_dirty: bool,
+    /// The input method must drop its current composition.
     pub ime_reset: bool,
+    /// An input method is active for the focused editor.
     pub input_method: bool,
+    /// Pending host clipboard request.
     pub clipboard: Option<crate::ClipboardRequest>,
+    /// A repaint was requested.
     pub repaint: bool,
+    /// Event callbacks by node.
     pub callbacks: HashMap<NodeId, Handler>,
     /// Per-library data keyed by type, see [`State::ext`].
     pub ext: HashMap<std::any::TypeId, Box<dyn std::any::Any>>,
     /// Installed control-library hooks, see [`Hooks`].
     pub hooks: Vec<&'static Hooks>,
+    /// Visual decoration per node.
     pub decorations: HashMap<NodeId, Decoration>,
     /// Token overrides re-applied to the parent's theme whenever it changes.
     pub overrides: HashMap<NodeId, aegle_theme::ThemeOverride>,
@@ -178,10 +215,14 @@ pub struct State {
     pub fingers: Vec<crate::touch::Finger>,
     /// Application values living exactly as long as their control.
     pub kept: HashMap<NodeId, Vec<Box<dyn std::any::Any>>>,
+    /// Transition tracks and the animation clock.
     #[cfg(feature = "motion")]
     pub motion: crate::motion::Motion,
+    /// Callbacks queued to run outside the engine borrow.
     pub pending: VecDeque<(NodeId, u64)>,
+    /// A callback queue is being drained.
     pub dispatching: bool,
+    /// Bumped when callbacks are replaced during dispatch.
     pub callback_version: u64,
     /// Per-frame callbacks in registration order, see [`crate::Node::on_frame`].
     pub frames: Vec<crate::events::FrameHandler>,
@@ -203,6 +244,7 @@ pub struct State {
     pub wake: Option<std::time::Instant>,
     /// Accessible descriptions, see [`crate::Node::set_accessible_description`].
     pub descriptions: HashMap<NodeId, String>,
+    /// Next accessibility node id to hand out.
     #[cfg(feature = "accessibility")]
     pub next_access_id: u64,
 }
@@ -222,6 +264,7 @@ impl State {
         self.tree.get(id).unwrap().context.theme_or(&self.theme)
     }
 
+    /// Recomputes paint order after a structure change.
     pub fn rebuild_order(&mut self) {
         if !self.topology_dirty {
             return;
@@ -253,6 +296,7 @@ impl State {
         }
     }
 
+    /// Whether `node` is `root` or inside its subtree.
     pub fn contains(&self, root: NodeId, mut node: NodeId) -> bool {
         loop {
             if root == node {
@@ -265,6 +309,7 @@ impl State {
         }
     }
 
+    /// Whether the node and all its ancestors are visible and enabled.
     pub fn usable(&self, mut id: NodeId) -> bool {
         loop {
             let Some(node) = self.tree.get(id) else {
@@ -280,6 +325,7 @@ impl State {
         }
     }
 
+    /// Shows or hides a node, restoring its previous layout mode when shown.
     pub fn set_visible(&mut self, id: NodeId, visible: bool) -> Result {
         if self.tree.get(id).unwrap().context.visible == visible {
             return Ok(());
@@ -300,6 +346,7 @@ impl State {
         Ok(())
     }
 
+    /// Marks order, damage and paint stale after nodes were added, moved or removed.
     pub fn invalidate_structure(&mut self) {
         self.topology_dirty = true;
         // Drawing order changed; removed nodes no longer report their area.
@@ -431,6 +478,7 @@ impl State {
     }
 }
 
+/// Focus traversal policy: hidden or disabled nodes prune their subtree.
 pub fn focus_policy(_: NodeId, node: &LayoutNode<Element>) -> aegle_core::FocusPolicy {
     use aegle_core::FocusPolicy;
     if !node.context.visible || !node.context.enabled {

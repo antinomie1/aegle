@@ -91,6 +91,7 @@ impl TextStyle<'_> {
 
 /// Invalid input to fonts, layout or retained editing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TextError {
     /// The blob did not contain any fonts that Fontique could register.
     InvalidFont,

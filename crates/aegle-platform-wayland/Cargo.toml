@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Event-driven Wayland windows and layer surfaces, bounded software presentation, clipboard and text-input-v3"
 
 [dependencies]

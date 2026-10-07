@@ -2,6 +2,7 @@ use crate::{NodeId, Tree};
 
 /// Invalid event destination or scope.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RouteError {
     /// The root or destination is no longer alive.
     DeadNode,

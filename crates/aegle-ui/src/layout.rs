@@ -1,6 +1,5 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
-#![allow(missing_docs)]
 
 use crate::bar::FOOTPRINT;
 use crate::{Result, control::MeasureCx, state::State};
@@ -46,6 +45,7 @@ impl State {
         Ok(changed)
     }
 
+    /// Brings layout, geometry and paint records up to date; returns whether anything changed.
     pub fn refresh(&mut self) -> Result<bool> {
         #[cfg(feature = "motion")]
         self.start_offsets();

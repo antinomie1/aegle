@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Vulkan loading, capability, geometry or resource failure.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// The installed Vulkan loader could not be opened.
     Loader(ash::LoadingError),

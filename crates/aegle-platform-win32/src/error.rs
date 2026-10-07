@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Native window, input or presentation failure.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// A native OS operation failed.
     Backend(String),
@@ -51,6 +52,7 @@ impl From<windows::core::Error> for Error {
 
 /// Incomplete frames are never sent to GDI.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum PresentError<E> {
     /// Native or allocation failure.
     Platform(Error),

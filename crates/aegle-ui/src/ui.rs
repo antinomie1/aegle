@@ -24,6 +24,7 @@ pub type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 
 /// Errors specific to retained ownership and imperative operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UiError {
     /// The owning UI or node has been destroyed.
     DeadHandle,

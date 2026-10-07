@@ -29,6 +29,7 @@ pub const DEFAULT_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 /// Why an image could not be decoded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Error {
     /// The format is unknown, animated beyond a still frame, or its feature is off.
     Unsupported,

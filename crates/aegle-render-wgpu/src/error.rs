@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Adapter, device, geometry or resource failure.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// No adapter satisfies the request (for the window variant, the surface).
     Adapter(wgpu::RequestAdapterError),

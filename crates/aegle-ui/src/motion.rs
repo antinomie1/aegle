@@ -1,6 +1,5 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
-#![allow(missing_docs)]
 
 use crate::{
     Appearance, Point, Result, Transform, Transition, UiError, callbacks::Handler, state::State,
@@ -259,6 +258,7 @@ impl State {
         Ok(current)
     }
 
+    /// The appearance currently shown for `id`, including any running transition.
     pub fn presented_appearance(&self, id: NodeId) -> Result<Appearance> {
         self.motion
             .tracks
@@ -391,6 +391,7 @@ impl State {
         }
     }
 
+    /// Advances transitions to `now`; time must not run backwards.
     pub fn advance_animations(&mut self, now: Duration) -> Result {
         if now < self.motion.now {
             return Err(UiError::InvalidValue.into());

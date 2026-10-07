@@ -24,6 +24,7 @@ pub use surface::Surface;
 /// A rendering failure. Do not present a frame after any drawing call fails.
 /// Earlier operations in that frame may already have changed its pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RenderError {
     /// Invalid framebuffer dimensions or a byte slice of the wrong length.
     SurfaceSize,
