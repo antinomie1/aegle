@@ -111,10 +111,10 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     ui.dispatch_callbacks()?;
     assert_eq!(clicks.get(), 1);
     assert_eq!(label.text()?, "Done");
-    assert!(button.is_alive());
-    assert!(ui.has_pending_callbacks());
+    assert!(button.is_alive()?);
+    assert!(ui.has_pending_callbacks()?);
     ui.dispatch_callbacks()?;
-    assert!(!button.is_alive());
+    assert!(!button.is_alive()?);
     assert!(matches!(
         button.activate().unwrap_err().downcast_ref::<UiError>(),
         Some(UiError::DeadHandle)
@@ -122,8 +122,8 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     let moved = row.text("move")?;
     moved.reparent(&root)?;
     row.remove()?;
-    assert!(!label.is_alive());
-    assert!(moved.is_alive());
+    assert!(!label.is_alive()?);
+    assert!(moved.is_alive()?);
     let single = root.text_field("submit")?;
     let submits = Rc::new(Cell::new(0));
     let count = submits.clone();
@@ -214,10 +214,10 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
                 .iter()
                 .any(|(_, node)| node.value().is_some_and(|value| value.contains("sub")))
         );
-        assert!(!ui.access_dirty());
+        assert!(!ui.access_dirty()?);
     }
     drop(ui);
-    assert!(!field.is_alive());
+    assert!(!field.is_alive()?);
     assert!(matches!(
         field
             .set_text("dead")

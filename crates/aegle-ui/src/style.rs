@@ -2,6 +2,7 @@
 // libraries; the contract is described in `control` and on `State`.
 #![allow(missing_docs)]
 
+use crate::control::StyleScope;
 use crate::state::State;
 use crate::{Appearance, Result, Skin, Style, Theme, UiError, VisualState};
 use aegle_core::{Dirty, NodeId};
@@ -78,7 +79,7 @@ impl State {
 
     pub fn set_style(&mut self, id: NodeId, style: Style) -> Result {
         style.validate()?;
-        let scope = self.tree.get(id).unwrap().context.control.style_scope();
+        let scope = StyleScope::of(self.tree.get(id).unwrap().context.control.kind());
         let (button, field) = (scope.button_like, scope.editor);
         if ((style.selection.is_some() || style.caret.is_some()) && !field)
             || (style.indicator.is_some() && !scope.indicator)

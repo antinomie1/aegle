@@ -30,7 +30,7 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
     assert_eq!(evaluations, 1);
     ui.resize(Size::new(320.0, 500.0))?;
     ui.refresh()?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert!(view.check.is_checked()? && !view.switch.is_checked()?);
     assert!(view.radio.is_checked()?);
     assert_eq!(
@@ -76,15 +76,15 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
     let retained = view.editor.clone();
     let container = view.root.clone();
     drop(view);
-    assert!(retained.is_alive());
+    assert!(retained.is_alive()?);
     container.remove()?;
-    assert!(!retained.is_alive());
+    assert!(!retained.is_alive()?);
     let builder = aegle::ui!("tests/fixtures/panel.aegle");
     assert!(matches!(
         builder(&container).err().unwrap().downcast_ref::<UiError>(),
         Some(UiError::DeadHandle)
     ));
-    assert!(ui.root().is_alive());
+    assert!(ui.root().is_alive()?);
     Ok(())
 }
 

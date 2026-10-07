@@ -11,7 +11,7 @@ use aegle_theme::{Appearance, ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
     Control, Result,
-    control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx, StyleScope},
+    control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx},
 };
 
 use crate::paint::{range, slider_track};
@@ -227,13 +227,6 @@ impl Control for SliderControl {
     fn self_clipping(&self) -> bool {
         true
     }
-    fn style_scope(&self) -> StyleScope {
-        StyleScope {
-            button_like: true,
-            indicator: true,
-            ..Default::default()
-        }
-    }
     fn frame(&self) -> Frame {
         Frame {
             background: false,
@@ -316,8 +309,8 @@ impl Control for SliderControl {
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
         Ok(measure(cx.padding, self.vertical))
     }
-    fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut Style) {
-        if local & 1 == 0 {
+    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+        if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(style, theme.control_height, self.vertical);
         }
     }
@@ -384,12 +377,6 @@ impl Control for ProgressControl {
     fn self_clipping(&self) -> bool {
         true
     }
-    fn style_scope(&self) -> StyleScope {
-        StyleScope {
-            indicator: true,
-            ..Default::default()
-        }
-    }
     fn frame(&self) -> Frame {
         Frame {
             background: false,
@@ -399,8 +386,8 @@ impl Control for ProgressControl {
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
         Ok(measure(cx.padding, self.vertical))
     }
-    fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut Style) {
-        if local & 1 == 0 {
+    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+        if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(style, theme.control_height / 2.0, self.vertical);
         }
     }

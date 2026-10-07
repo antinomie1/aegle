@@ -60,7 +60,7 @@ fn geometric_properties_follow_their_own_timing() -> Result {
     ui.refresh()?;
     ui.dispatch_callbacks()?;
     assert_eq!((panel.bounds()?.origin.x, ends.get()), (100.0, 1));
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
 
     // Removing one timing jumps that property to its target, silently.
     panel.set_offset(Point::new(0.0, 0.0))?;

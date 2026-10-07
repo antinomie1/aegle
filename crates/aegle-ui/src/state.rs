@@ -34,7 +34,7 @@ pub struct Element {
     pub enabled: bool,
     pub label: String,
     pub ensure_caret: bool,
-    pub local_layout: u8,
+    pub local_layout: crate::LocalLayout,
     pub padding: Option<f32>,
     /// Presented translation after layout, inherited by the subtree.
     pub offset: Point,
@@ -89,7 +89,7 @@ impl Element {
             enabled: true,
             label: String::new(),
             ensure_caret: false,
-            local_layout: 0,
+            local_layout: crate::LocalLayout::NONE,
             padding: None,
             offset: Point::default(),
             spin: crate::Transform::default(),
@@ -310,6 +310,10 @@ impl State {
         control: Box<dyn Control>,
         mut style: aegle_layout::Style,
     ) -> Result<NodeId> {
+        let editor = control.kind() == aegle_theme::ControlKind::TextField;
+        if editor != control.editor().is_some() {
+            return Err(crate::UiError::WrongKind.into());
+        }
         // Self-clipping controls manage any text scrolling internally; their
         // intrinsic overflow must not enlarge an ancestor view.
         if control.self_clipping() {

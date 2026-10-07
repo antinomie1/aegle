@@ -62,10 +62,7 @@ impl Ui {
     /// logical window coordinates; `None` means the whole window. Hosts that
     /// keep earlier pixels redraw and present only these after a refresh.
     pub fn damage(&self) -> Result<Option<Region<Rect>>> {
-        let state = self
-            .state
-            .try_borrow()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let state = self.read()?;
         Ok(Some(state.damage).filter(|d| !state.damage_full && !d.is_empty()))
     }
 

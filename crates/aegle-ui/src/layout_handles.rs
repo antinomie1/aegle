@@ -10,11 +10,36 @@ use aegle_theme::ControlKind;
 
 use crate::{Container, LengthSlot, Node, Result, State, UiError};
 
-/// Local layout values a theme change keeps: height, padding, gap and minimum height.
-pub(crate) const HEIGHT: u8 = 1;
-pub(crate) const PADDING: u8 = 2;
-pub(crate) const GAP: u8 = 4;
-pub(crate) const MIN_HEIGHT: u8 = 8;
+/// The themed layout values an application set on a node, which a theme
+/// change keeps; see [`Control::retheme`](crate::Control::retheme).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LocalLayout(u8);
+
+impl LocalLayout {
+    /// No local values.
+    pub const NONE: Self = Self(0);
+    /// The height.
+    pub const HEIGHT: Self = Self(1);
+    /// The padding.
+    pub const PADDING: Self = Self(2);
+    /// The gap between children.
+    pub const GAP: Self = Self(4);
+    /// The minimum height.
+    pub const MIN_HEIGHT: Self = Self(8);
+
+    /// Whether `value` was set locally.
+    pub fn contains(self, value: Self) -> bool {
+        self.0 & value.0 == value.0
+    }
+
+    pub(crate) fn insert(&mut self, value: Self) {
+        self.0 |= value.0;
+    }
+
+    pub(crate) fn remove(&mut self, value: Self) {
+        self.0 &= !value.0;
+    }
+}
 
 fn check(valid: bool) -> Result {
     if valid {
@@ -31,11 +56,17 @@ fn size(length: impl Into<Length>) -> Result<Length> {
 }
 
 impl Node {
-    pub(crate) fn layout(&self, local: u8, change: impl FnOnce(&mut Style)) -> Result {
+    pub(crate) fn layout(&self, local: LocalLayout, change: impl FnOnce(&mut Style)) -> Result {
         self.change(|state, id| {
             let mut style = state.tree.get(id).unwrap().style().clone();
             change(&mut style);
-            state.tree.get_mut(id).unwrap().context.local_layout |= local;
+            state
+                .tree
+                .get_mut(id)
+                .unwrap()
+                .context
+                .local_layout
+                .insert(local);
             aegle_layout::set_style(&mut state.tree, id, style)?;
             Ok(())
         })
@@ -43,7 +74,7 @@ impl Node {
     /// Sets both dimensions; `None` or [`Length::Auto`] restores automatic sizing.
     pub fn set_size(&self, width: impl Into<Length>, height: impl Into<Length>) -> Result {
         let (width, height) = (size(width)?, size(height)?);
-        self.layout(HEIGHT, |s| {
+        self.layout(LocalLayout::HEIGHT, |s| {
             s.size.width = width.dimension();
             s.size.height = height.dimension();
         })
@@ -51,17 +82,17 @@ impl Node {
     /// Sets the width, preserving height and its theme default.
     pub fn set_width(&self, width: impl Into<Length>) -> Result {
         let width = size(width)?;
-        self.layout(0, |s| s.size.width = width.dimension())
+        self.layout(LocalLayout::NONE, |s| s.size.width = width.dimension())
     }
     /// Sets the height; automatic replaces the control's themed height.
     pub fn set_height(&self, height: impl Into<Length>) -> Result {
         let height = size(height)?;
-        self.layout(HEIGHT, |s| s.size.height = height.dimension())
+        self.layout(LocalLayout::HEIGHT, |s| s.size.height = height.dimension())
     }
     /// Sets both minimum dimensions; automatic is content-based for flex items.
     pub fn set_min_size(&self, width: impl Into<Length>, height: impl Into<Length>) -> Result {
         let (width, height) = (size(width)?, size(height)?);
-        self.layout(MIN_HEIGHT, |s| {
+        self.layout(LocalLayout::MIN_HEIGHT, |s| {
             s.min_size.width = width.auto_length();
             s.min_size.height = height.auto_length();
         })
@@ -69,19 +100,23 @@ impl Node {
     /// Sets the minimum width without changing the minimum height.
     pub fn set_min_width(&self, width: impl Into<Length>) -> Result {
         let width = size(width)?;
-        self.layout(0, |s| s.min_size.width = width.auto_length())
+        self.layout(LocalLayout::NONE, |s| {
+            s.min_size.width = width.auto_length()
+        })
     }
     /// Sets the minimum height, overriding the corresponding theme default.
     /// Zero lets a flex item shrink below its content, for example a column
     /// holding a scroll view or table.
     pub fn set_min_height(&self, height: impl Into<Length>) -> Result {
         let height = size(height)?;
-        self.layout(MIN_HEIGHT, |s| s.min_size.height = height.auto_length())
+        self.layout(LocalLayout::MIN_HEIGHT, |s| {
+            s.min_size.height = height.auto_length()
+        })
     }
     /// Sets both maximum dimensions; automatic removes the limit.
     pub fn set_max_size(&self, width: impl Into<Length>, height: impl Into<Length>) -> Result {
         let (width, height) = (size(width)?, size(height)?);
-        self.layout(0, |s| {
+        self.layout(LocalLayout::NONE, |s| {
             s.max_size.width = width.auto_length();
             s.max_size.height = height.auto_length();
         })
@@ -89,54 +124,60 @@ impl Node {
     /// Sets the maximum width; automatic removes the limit.
     pub fn set_max_width(&self, width: impl Into<Length>) -> Result {
         let width = size(width)?;
-        self.layout(0, |s| s.max_size.width = width.auto_length())
+        self.layout(LocalLayout::NONE, |s| {
+            s.max_size.width = width.auto_length()
+        })
     }
     /// Sets the maximum height; automatic removes the limit.
     pub fn set_max_height(&self, height: impl Into<Length>) -> Result {
         let height = size(height)?;
-        self.layout(0, |s| s.max_size.height = height.auto_length())
+        self.layout(LocalLayout::NONE, |s| {
+            s.max_size.height = height.auto_length()
+        })
     }
     /// Keeps width divided by height at a positive ratio when one dimension
     /// is automatic; `None` removes the constraint.
     pub fn set_aspect_ratio(&self, ratio: Option<f32>) -> Result {
         check(ratio.is_none_or(|r| r.is_finite() && r > 0.0))?;
-        self.layout(0, |s| s.aspect_ratio = ratio)
+        self.layout(LocalLayout::NONE, |s| s.aspect_ratio = ratio)
     }
     /// Sets a finite nonnegative flex grow factor; zero keeps intrinsic sizing.
     pub fn set_grow(&self, grow: f32) -> Result {
         check(grow.is_finite() && grow >= 0.0)?;
-        self.layout(0, |s| s.flex_grow = grow)
+        self.layout(LocalLayout::NONE, |s| s.flex_grow = grow)
     }
     /// Sets how much this item gives up when its line overflows; zero keeps
     /// its basis. The default is one.
     pub fn set_shrink(&self, shrink: f32) -> Result {
         check(shrink.is_finite() && shrink >= 0.0)?;
-        self.layout(0, |s| s.flex_shrink = shrink)
+        self.layout(LocalLayout::NONE, |s| s.flex_shrink = shrink)
     }
     /// Sets the main-axis size before growing and shrinking; automatic uses
     /// the size or content. Zero with a grow factor shares space by factor only.
     pub fn set_basis(&self, basis: impl Into<Length>) -> Result {
         let basis = size(basis)?;
-        self.layout(0, |s| s.flex_basis = basis.dimension())
+        self.layout(LocalLayout::NONE, |s| s.flex_basis = basis.dimension())
     }
     /// Overrides the parent's cross-axis alignment for this item; in a grid,
     /// its vertical alignment within its area. `None` follows the parent.
     pub fn set_align_self(&self, align: Option<Align>) -> Result {
-        self.layout(0, |s| s.align_self = align.map(Align::items))
+        self.layout(LocalLayout::NONE, |s| {
+            s.align_self = align.map(Align::items)
+        })
     }
     /// Sets outer spacing. Edges may be negative; `Auto` edges absorb free
     /// space, so automatic left and right margins center an item.
     pub fn set_margin(&self, margin: impl Into<Insets>) -> Result {
         let margin = margin.into();
         check(margin.is_valid(false, true))?;
-        self.layout(0, |s| s.margin = margin.auto_lengths())
+        self.layout(LocalLayout::NONE, |s| s.margin = margin.auto_lengths())
     }
     /// Takes this item out of its parent's flow and places it by `insets`
     /// from the parent's padding box, over its siblings; `None` returns it to
     /// the flow. With opposite insets set and an automatic size, it stretches between them.
     pub fn set_absolute(&self, insets: Option<Insets>) -> Result {
         check(insets.is_none_or(|i| i.is_valid(false, true)))?;
-        self.layout(0, |s| match insets {
+        self.layout(LocalLayout::NONE, |s| match insets {
             Some(insets) => {
                 s.position = Position::Absolute;
                 s.inset = insets.auto_lengths();
@@ -192,11 +233,11 @@ impl State {
             let mut style = node.style().clone();
             match padding {
                 Some(padding) => {
-                    node.context.local_layout |= PADDING;
+                    node.context.local_layout.insert(LocalLayout::PADDING);
                     style.padding = padding.definite();
                 }
                 None => {
-                    node.context.local_layout &= !PADDING;
+                    node.context.local_layout.remove(LocalLayout::PADDING);
                     style.padding = Insets::all(0.0).definite();
                     let local = node.context.local_layout;
                     node.context
@@ -229,14 +270,14 @@ impl State {
         let mut style = node.style().clone();
         match gaps {
             Some((horizontal, vertical)) => {
-                node.context.local_layout |= GAP;
+                node.context.local_layout.insert(LocalLayout::GAP);
                 style.gap = aegle_layout::Size {
                     width: horizontal.definite().unwrap(),
                     height: vertical.definite().unwrap(),
                 };
             }
             None => {
-                node.context.local_layout &= !GAP;
+                node.context.local_layout.remove(LocalLayout::GAP);
                 let zero = Length::Px(0.0).definite().unwrap();
                 style.gap = aegle_layout::Size {
                     width: zero,
@@ -256,25 +297,31 @@ impl State {
 impl Container {
     /// Sets the main axis and child order.
     pub fn set_direction(&self, direction: Direction) -> Result {
-        self.layout(0, |s| s.flex_direction = direction.flex())
+        self.layout(LocalLayout::NONE, |s| s.flex_direction = direction.flex())
     }
     /// Breaks children into several lines when they do not fit, like QML's `Flow`.
     pub fn set_wrap(&self, wrap: Wrap) -> Result {
-        self.layout(0, |s| s.flex_wrap = wrap.flex())
+        self.layout(LocalLayout::NONE, |s| s.flex_wrap = wrap.flex())
     }
     /// Aligns children on the cross axis (vertically in a row); `None`
     /// restores the default stretch. In a grid, the vertical alignment in each area.
     pub fn set_align_items(&self, align: Option<Align>) -> Result {
-        self.layout(0, |s| s.align_items = align.map(Align::items))
+        self.layout(LocalLayout::NONE, |s| {
+            s.align_items = align.map(Align::items)
+        })
     }
     /// Distributes free main-axis space between children (horizontally in a
     /// row); in a grid, between columns. `None` packs at the start.
     pub fn set_justify_content(&self, justify: Option<Justify>) -> Result {
-        self.layout(0, |s| s.justify_content = justify.map(Justify::content))
+        self.layout(LocalLayout::NONE, |s| {
+            s.justify_content = justify.map(Justify::content)
+        })
     }
     /// Distributes free cross-axis space between wrapped lines; in a grid,
     /// between rows. `None` restores the default stretch.
     pub fn set_align_content(&self, align: Option<Justify>) -> Result {
-        self.layout(0, |s| s.align_content = align.map(Justify::content))
+        self.layout(LocalLayout::NONE, |s| {
+            s.align_content = align.map(Justify::content)
+        })
     }
 }

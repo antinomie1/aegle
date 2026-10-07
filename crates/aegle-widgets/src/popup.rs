@@ -74,7 +74,7 @@ impl NodePopup for Node {
             let group = Group {
                 role: Role::Popup { list: false },
             };
-            group.retheme(&theme, 0, false, &mut style);
+            group.retheme(&theme, aegle_ui::LocalLayout::NONE, false, &mut style);
             let id = state.insert(root, usize::MAX, Box::new(group), style)?;
             state.set_visible(id, false)?;
             let anchor_element = &state.tree.get(anchor).unwrap().context;

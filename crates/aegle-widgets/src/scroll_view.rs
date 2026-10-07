@@ -46,9 +46,9 @@ impl Control for ScrollControl {
             border: false,
         }
     }
-    fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
+    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
         aegle_ui::Plain.retheme(theme, local, root, style);
-        if local & 2 == 0 {
+        if !local.contains(aegle_ui::LocalLayout::PADDING) {
             style.padding = scroll_padding(theme);
         }
     }

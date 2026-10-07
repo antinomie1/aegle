@@ -33,6 +33,6 @@ fn window_documents_build_and_reload_like_fragments() -> Result {
     let missing = Program::from_sources("main.aegle", &mut |_| Ok(source.into()))?;
     let error = loaded.reload(&missing).unwrap_err().to_string();
     assert!(error.contains("`missing` is not registered"), "{error}");
-    assert!(panel.is_alive());
+    assert!(panel.is_alive()?);
     Ok(())
 }

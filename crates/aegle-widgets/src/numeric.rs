@@ -123,7 +123,7 @@ fn orient(node: &Node, orientation: Orientation) -> Result {
             return Err(UiError::WrongKind.into());
         };
         let mut style = state.tree.get(id).unwrap().style().clone();
-        if local & 1 == 0 {
+        if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(&mut style, extent, vertical);
         }
         aegle_layout::set_style(&mut state.tree, id, style)?;

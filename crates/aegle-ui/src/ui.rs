@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use aegle_core::{Focus, Route, Tree};
+use aegle_core::{Focus, NodeId, Route, Tree};
 use aegle_layout::{Dimension, Edges, FlexDirection, LayoutNode, LengthPercentage, Style};
 use aegle_scene::{Affine, Scene};
 use aegle_text::{Selection, TextSystem};
@@ -98,6 +98,8 @@ pub enum ClipboardRequest {
 pub struct Ui {
     /// The shared engine state, for control libraries' hooks.
     pub state: Rc<RefCell<State>>,
+    /// The root column, fixed for the UI's lifetime.
+    root: NodeId,
 }
 
 impl Ui {
@@ -166,26 +168,35 @@ impl Ui {
                 #[cfg(feature = "accessibility")]
                 next_access_id: 2,
             })),
+            root,
         })
+    }
+
+    /// Borrows the state to read it: [`UiError::ReentrantAccess`] while the UI
+    /// is being changed, as when a control's paint calls back into it.
+    pub(crate) fn read(&self) -> Result<std::cell::Ref<'_, State>> {
+        self.state
+            .try_borrow()
+            .map_err(|_| UiError::ReentrantAccess.into())
     }
 
     /// The root column; all public handles remain weak.
     pub fn root(&self) -> Container {
         Container(Node {
             state: Rc::downgrade(&self.state),
-            id: self.state.borrow().root,
+            id: self.root,
         })
     }
 
     /// The theme of the UI itself, which nodes without a local theme use.
-    pub fn theme(&self) -> Theme {
-        self.state.borrow().theme
+    pub fn theme(&self) -> Result<Theme> {
+        Ok(self.read()?.theme)
     }
 
     /// Window clear color from the root's resolved theme.
-    pub fn background(&self) -> Color {
-        let state = self.state.borrow();
-        state.theme_of(state.root).background
+    pub fn background(&self) -> Result<Color> {
+        let state = self.read()?;
+        Ok(state.theme_of(state.root).background)
     }
 
     /// Changes the viewport's logical size. Zero is valid for a suspended surface.
@@ -254,12 +265,7 @@ impl Ui {
     /// Lets installed control libraries build or drop virtual content, outside any
     /// engine borrow. Returns whether anything changed.
     fn realize(&self) -> Result<bool> {
-        let hooks = self
-            .state
-            .try_borrow()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .hooks
-            .clone();
+        let hooks = self.read()?.hooks.clone();
         let mut changed = false;
         for hook in hooks {
             if let Some(realize) = hook.realize {
@@ -277,10 +283,7 @@ impl Ui {
         &self,
         mut visit: impl FnMut(&Scene, Affine, Option<Rect>) -> Result,
     ) -> Result {
-        let state = self
-            .state
-            .try_borrow()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let state = self.read()?;
         // Scroll bars overlay their viewport's entire subtree.
         let mut overlays = state.overlays.iter().peekable();
         let mut draw = |id, overlay: bool| -> Result {

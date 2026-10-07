@@ -76,9 +76,9 @@ impl Node {
 impl Ui {
     /// Whether a frame callback is registered or a control is animating; a
     /// host keeps requesting frames, calling [`Self::run_frame`], while true.
-    pub fn wants_frames(&self) -> bool {
-        let state = self.state.borrow();
-        !state.animated.is_empty() || state.frames.iter().any(|h| h.callback.is_some())
+    pub fn wants_frames(&self) -> Result<bool> {
+        let state = self.read()?;
+        Ok(!state.animated.is_empty() || state.frames.iter().any(|h| h.callback.is_some()))
     }
     /// Starts a frame at `now`: animating controls repaint at this time, then
     /// the frame callbacks registered before this call run in registration
@@ -133,8 +133,8 @@ impl Ui {
     }
     /// When delayed control-library work (a tooltip) is due; a host waits at
     /// most until then and calls [`Self::wake`].
-    pub fn next_wake(&self) -> Option<Instant> {
-        self.state.borrow().wake
+    pub fn next_wake(&self) -> Result<Option<Instant>> {
+        Ok(self.read()?.wake)
     }
     /// Runs delayed control-library work that is due at `now`.
     pub fn wake(&self, now: Instant) -> Result {
@@ -156,7 +156,8 @@ impl Ui {
     /// Installs the window key handler, replacing any previous one. It sees
     /// every key before the focused control and Tab traversal, outside the UI
     /// borrow; returning true consumes the key. Check [`KeyEvent::editing`]
-    /// before taking plain keys a text field would type.
+    /// before taking plain keys a text field would type. Like other callbacks,
+    /// a handler that returns an error is removed and the error returned.
     pub fn on_key(&self, handler: impl FnMut(KeyEvent<'_>) -> Result<bool> + 'static) -> Result {
         let mut state = self
             .state

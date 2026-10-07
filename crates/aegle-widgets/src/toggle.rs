@@ -10,7 +10,7 @@ use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
     Container, Control, Node, Result, State,
-    control::{ControlVisual, InputCx, MeasureCx, PaintCx, StyleScope},
+    control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
 
@@ -120,13 +120,6 @@ impl Control for ToggleControl {
     fn uses_gap(&self) -> bool {
         true
     }
-    fn style_scope(&self) -> StyleScope {
-        StyleScope {
-            button_like: true,
-            indicator: true,
-            ..Default::default()
-        }
-    }
     fn frame(&self) -> aegle_ui::control::Frame {
         aegle_ui::control::Frame {
             background: true,
@@ -200,8 +193,8 @@ impl Control for ToggleControl {
             self.text.size().height.max(20.0) + 2.0 * cx.padding,
         ))
     }
-    fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut Style) {
-        if local & 1 == 0 {
+    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+        if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             style.size.height = Dimension::length(theme.control_height);
         }
     }

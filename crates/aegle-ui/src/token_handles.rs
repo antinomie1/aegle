@@ -13,7 +13,7 @@ impl Ui {
     pub fn set_token<T: TokenType>(&self, token: Token<T>, value: Option<T>) -> Result {
         if check(token)? {
             let value = value.ok_or(UiError::InvalidValue)?.into_value();
-            let theme = self.theme().with_token(token.index(), value).unwrap();
+            let theme = self.theme()?.with_token(token.index(), value).unwrap();
             return self.set_theme(theme);
         }
         let mut state = self
@@ -27,10 +27,7 @@ impl Ui {
     /// theme, ignoring subtree overrides.
     pub fn token_value<T: TokenType>(&self, token: Token<T>) -> Result<T> {
         check(token)?;
-        let state = self
-            .state
-            .try_borrow()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let state = self.read()?;
         let value = match state.theme.token(token.index()) {
             Some(value) => value,
             None => state.token_value(state.root, token.index())?,

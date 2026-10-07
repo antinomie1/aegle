@@ -52,9 +52,8 @@ impl Ui {
             .map_err(|_| UiError::ReentrantAccess)?;
         if key.pressed {
             for hook in state.hooks.clone() {
-                if hook
-                    .key
-                    .is_some_and(|used| used(&mut state, &key).unwrap_or(false))
+                if let Some(used) = hook.key
+                    && used(&mut state, &key)?
                 {
                     return Ok(());
                 }

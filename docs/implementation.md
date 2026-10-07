@@ -544,6 +544,13 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 验证：facade 新增 `tests/paths.rs`：同一份覆盖所有枚举属性每个值（窗口专用的 `theme` 除外）的文档经两条路径构建，全部绘制记录（含位置与裁剪）及缓动时序相同，并检查文档覆盖 `choices` 的每个值；故意把引擎的 `end` 映射为 `Start` 或把 `ease_in` 映射为 `EaseInOut` 时测试失败。同文件的禁用父容器场景在改动前失败（引擎构建的滑块在动画中、颜色不同）。`tests/window.rs`（ignored，私有 headless Sway）覆盖 Window 主题与 token 过渡、以及缺失宿主动作的 reload 返回错误并保留旧内容，两项在改动前均失败。`aegle-markup/tests/program.rs` 增加重名诊断，以及两种检查器在 256 层通过、手工多包一层时报同一错误。workspace 测试、all-targets 检查、无默认 feature 组合检查与 Windows 交叉检查通过。
 - 已知限制：未优化构建中 `check_program` 每层约用 8 KiB 栈，在 2 MiB 的测试线程里检查 256 层文档会栈溢出（release 与 8 MiB 主线程正常，默认解析上限为 64 层）；对应测试在 8 MiB 线程中运行。窗口专用的 `theme` 映射只由原生 ignored 场景间接覆盖。
 
+## 引擎的错误处理与控件自描述
+
+- 问题：同一类错误有的返回、有的 panic 或被吞。`Ui::damage` 在借用冲突时返回 `ReentrantAccess`，而 `Node::is_alive`、`Ui::theme`/`background`/`wants_frames`/`next_wake`/`has_animations`/`reduced_motion`/`has_pending_callbacks`/`access_dirty` 与 `root` 直接 `borrow()`，在自定义控件的 `paint` 或 Canvas painter 里调用即 panic。`Hooks::key` 的错误被 `unwrap_or(false)` 当作“未处理”；控件渐变的几何换算失败时静默不画。`retheme` 的本地布局位是 crate 内常量，aegle-widgets 写了 10 处魔数；控件的 `kind()` 与 `style_scope()` 各说一套，可以互相矛盾。
+- 修改：这些查询改为返回 `Result`（借用冲突为 `ReentrantAccess`）；根节点 ID 存在 `Ui` 上，`root()` 不再借用。键盘钩子的错误传给宿主。渐变只在形状为空时跳过（此时本就无可画），其余错误返回。新增公开的 `LocalLayout`（HEIGHT/PADDING/GAP/MIN_HEIGHT），`retheme` 用它代替 `u8`。删除 `Control::style_scope`，改由 `StyleScope::of(kind)` 从种类推导（与各控件原先的声明逐一相同）；`State::insert` 要求 `TextField` 种类与 `editor()` 同时存在，否则 `WrongKind`。`on_key` 文档写明与其他回调相同的规则：出错即移除并返回错误。
+- 文档：架构文档的错误契约改为实际做法（`Box<dyn Error>` 中是可 downcast 的模块错误，标记诊断带位置，不带节点身份）；rust-api 中声称 `Control` 尚未实现的“组件库作者”一节改写为当前契约。
+- 验证：`aegle-ui/tests/reentrancy.rs` 在自定义控件的 `paint` 中调用 4 个查询都得到 `ReentrantAccess`（改动前 panic），`TextField` 种类无编辑器的控件被拒绝，失败的键盘钩子的错误由 `Ui::key` 返回（改动前按键被当作未处理）。workspace all-features 测试与 all-targets 检查通过。
+
 ## 剩余工作
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。

@@ -13,16 +13,16 @@ use aegle_types::Point;
 
 impl Ui {
     /// Whether logical semantics changed since the last exported update.
-    pub fn access_dirty(&self) -> bool {
-        let state = self.state.borrow();
-        state.topology_dirty
+    pub fn access_dirty(&self) -> Result<bool> {
+        let state = self.read()?;
+        Ok(state.topology_dirty
             || state.geometry_dirty
             || state.order.iter().any(|&id| {
                 state
                     .tree
                     .dirty(id)
                     .is_ok_and(|dirty| dirty.intersects(Dirty::SEMANTICS))
-            })
+            }))
     }
     /// Exports current semantics from the same controls used for painting and input.
     /// Refresh is performed first so geometry and text-run ranges agree.

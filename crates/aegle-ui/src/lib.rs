@@ -71,6 +71,7 @@ pub use events::KeyEvent;
 #[cfg(feature = "grid")]
 pub use grid_handles::Stack;
 pub use handles::{Container, Node, valid};
+pub use layout_handles::LocalLayout;
 #[cfg(feature = "motion")]
 pub use motion::TransitionProperty;
 pub use state::{Element, Hooks, State, focus_policy, text_style};

@@ -106,7 +106,7 @@ impl Ui {
         Ok(())
     }
     /// Whether application callbacks still need a dispatch pass before sleeping.
-    pub fn has_pending_callbacks(&self) -> bool {
-        !self.state.borrow().pending.is_empty()
+    pub fn has_pending_callbacks(&self) -> Result<bool> {
+        Ok(!self.read()?.pending.is_empty())
     }
 }

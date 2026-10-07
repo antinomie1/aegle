@@ -37,10 +37,12 @@ impl Node {
         change(&mut state, self.id)
     }
     /// Whether this node and its owning UI still exist.
-    pub fn is_alive(&self) -> bool {
-        self.state
-            .upgrade()
-            .is_some_and(|s| s.borrow().tree.get(self.id).is_some())
+    pub fn is_alive(&self) -> Result<bool> {
+        let Some(owner) = self.state.upgrade() else {
+            return Ok(false);
+        };
+        let state = owner.try_borrow().map_err(|_| UiError::ReentrantAccess)?;
+        Ok(state.tree.get(self.id).is_some())
     }
     /// Last refreshed geometry in logical window coordinates.
     pub fn bounds(&self) -> Result<Rect> {

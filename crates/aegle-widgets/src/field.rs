@@ -10,7 +10,7 @@ use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
     Container, Control, Result, bar,
-    control::{ControlVisual, InputCx, MeasureCx, PaintCx, StyleScope},
+    control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
 
@@ -104,12 +104,6 @@ impl Control for FieldControl {
     fn self_clipping(&self) -> bool {
         true
     }
-    fn style_scope(&self) -> StyleScope {
-        StyleScope {
-            editor: true,
-            ..Default::default()
-        }
-    }
     fn editor(&self) -> Option<&aegle_controls::TextField> {
         Some(&self.0)
     }
@@ -153,8 +147,8 @@ impl Control for FieldControl {
             .reflow(cx.content_width(), cx.alignment())?;
         Ok(())
     }
-    fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut Style) {
-        if local & 1 == 0 {
+    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+        if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             let lines = if self.0.editor().is_multiline() {
                 4.0
             } else {
@@ -162,7 +156,7 @@ impl Control for FieldControl {
             };
             style.size.height = Dimension::length(theme.control_height * lines);
         }
-        if local & 8 == 0 {
+        if !local.contains(aegle_ui::LocalLayout::MIN_HEIGHT) {
             style.min_size.height = LengthPercentageAuto::length(theme.control_height);
         }
     }

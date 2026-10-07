@@ -363,11 +363,15 @@ pub(crate) fn realize_rows(ui: &Ui) -> Result<bool> {
                 state: Rc::downgrade(&ui.state),
                 id: node,
             });
-            if container.is_alive() {
-                result = builder(&container, row);
-                if result.is_err() {
-                    break;
+            result = container.is_alive().and_then(|alive| {
+                if alive {
+                    builder(&container, row)
+                } else {
+                    Ok(())
                 }
+            });
+            if result.is_err() {
+                break;
             }
         }
         let mut state = ui.state.borrow_mut();

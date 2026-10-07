@@ -189,7 +189,7 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
     group.remove()?;
     ui.dispatch_callbacks()?;
     assert_eq!(changes.get(), 1); // Destroyed queued controls are never invoked.
-    assert!(!slider.is_alive());
+    assert!(!slider.is_alive()?);
     ui.refresh()?;
     Ok(())
 }

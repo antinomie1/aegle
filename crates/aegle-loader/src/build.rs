@@ -290,7 +290,7 @@ fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Resu
     let mut last = None;
     Effect::new(move |effect| {
         // A control removed directly by the application no longer updates.
-        if !handle.node().is_alive() {
+        if !handle.node().is_alive()? {
             return Ok(());
         }
         let value = eval(&expr, &env, Some(effect), None).map_err(|e| env.locate(e))?;
@@ -330,7 +330,7 @@ fn conditional(
     let env = env.clone();
     let (mut shown, mut handles, mut owned) = (None, Vec::new(), Block::new());
     block.push(Effect::new(move |effect| {
-        if !wrapper.is_alive() {
+        if !wrapper.is_alive()? {
             return Ok(());
         }
         let value = truth(eval(&condition, &env, Some(effect), None).map_err(|e| env.locate(e))?);
@@ -382,7 +382,7 @@ fn repeat(
     let env = env.clone();
     let mut rows: Vec<Row> = Vec::new();
     block.push(Effect::new(move |effect| {
-        if !wrapper.is_alive() {
+        if !wrapper.is_alive()? {
             return Ok(());
         }
         let Data::List(items) = eval(&list, &env, Some(effect), None).map_err(|e| env.locate(e))?

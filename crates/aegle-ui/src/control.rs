@@ -19,7 +19,7 @@ use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
 use aegle_types::{Point, Size};
 
-use crate::{Result, bar::Bar, state::State};
+use crate::{LocalLayout, Result, bar::Bar, state::State};
 
 /// Work a control asks the engine to run after its input is handled, with the
 /// node that handled it. It runs before the outcome's effects, so it can change
@@ -48,6 +48,30 @@ pub struct StyleScope {
     pub editor: bool,
     /// Indicator color (toggle marks, slider and progress fills).
     pub indicator: bool,
+}
+
+impl StyleScope {
+    /// The fields the skin of `kind` uses, so a control's kind alone decides
+    /// which local style it accepts.
+    pub fn of(kind: ControlKind) -> Self {
+        let (button_like, editor, indicator) = match kind {
+            ControlKind::Button => (true, false, false),
+            ControlKind::TextField => (false, true, false),
+            ControlKind::CheckBox
+            | ControlKind::Switch
+            | ControlKind::RadioButton
+            | ControlKind::Slider => (true, false, true),
+            ControlKind::Progress => (false, false, true),
+            ControlKind::Container | ControlKind::ScrollView | ControlKind::Label => {
+                (false, false, false)
+            }
+        };
+        Self {
+            button_like,
+            editor,
+            indicator,
+        }
+    }
 }
 
 /// Whether the engine paints the common background and border before the control.
@@ -183,7 +207,9 @@ pub trait Control: Any {
     /// Mutable upcast for typed handles.
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
-    /// The role a skin styles this control as.
+    /// The role a skin styles this control as; it also decides the accepted
+    /// local style ([`StyleScope::of`]). A [`ControlKind::TextField`] has an
+    /// [`Control::editor`] and no other kind does.
     fn kind(&self) -> ControlKind;
     /// Takes keyboard focus and input.
     fn interactive(&self) -> bool {
@@ -207,10 +233,6 @@ pub trait Control: Any {
     /// ancestor's scrollable area.
     fn self_clipping(&self) -> bool {
         false
-    }
-    /// Local style fields it accepts.
-    fn style_scope(&self) -> StyleScope {
-        StyleScope::default()
     }
     /// Common background and border painting.
     fn frame(&self) -> Frame {
@@ -288,7 +310,7 @@ pub trait Control: Any {
     }
     /// Adjusts the layout style that follows the theme when it changes, leaving
     /// fields in `local` (bits the application set) alone.
-    fn retheme(&self, _theme: &Theme, _local: u8, _root: bool, _style: &mut Style) {}
+    fn retheme(&self, _theme: &Theme, _local: LocalLayout, _root: bool, _style: &mut Style) {}
 
     /// Records the control's content.
     fn paint(&mut self, _cx: &mut PaintCx<'_>) -> Result {
@@ -326,16 +348,16 @@ impl Control for Plain {
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }
-    fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
+    fn retheme(&self, theme: &Theme, local: LocalLayout, root: bool, style: &mut Style) {
         use aegle_layout::{Edges, LengthPercentage, Size as LayoutSize};
-        if local & 4 == 0 {
+        if !local.contains(LocalLayout::GAP) {
             let gap = LengthPercentage::length(theme.gap);
             style.gap = LayoutSize {
                 width: gap,
                 height: gap,
             };
         }
-        if root && local & 2 == 0 {
+        if root && !local.contains(LocalLayout::PADDING) {
             let p = LengthPercentage::length(theme.padding);
             style.padding = Edges {
                 left: p,

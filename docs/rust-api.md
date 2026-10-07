@@ -120,30 +120,15 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 
 `app.batch(|| ...)` 合并失效提交，不提供事务回滚；回调内修改本来就会合并。运行模型详见[架构](architecture.md)。
 
-## 组件库作者：后续扩展目标
+## 组件库作者
 
-本节的宏、Control/Painter/Semantics 和注册接口尚未实现。当前可直接组合 Container 的现有控件，或用独立 controls/text/scene 模块编写自己的宿主；尚不能用下面的代码定义可插入 App 的任意皮肤。
+自定义控件实现 `aegle_ui::Control`，经 `Container::add(|state, theme| Ok((Box::new(control), style)))` 加入树；输入、测量、绘制与语义分别经 `InputCx`、`MeasureCx`、`PaintCx`、`SemanticsCx` 访问，段落、编辑器与视口以能力方法（`paragraph`、`editor`、`viewport` 等）暴露。需要跨节点协作的行为安装 `Hooks`，库数据放在 `State::ext`。
 
-简单皮肤通过现有行为创建，不重写输入和无障碍：
+- `kind()` 决定皮肤，也决定接受哪些局部样式（`StyleScope::of(kind)`：按钮类的悬停/按下背景、编辑器的选区与光标色、指示色），不另行声明。`ControlKind::TextField` 必须提供 `editor()`，其他种类不能提供；不一致时 `Container::add` 返回 `WrongKind`。
+- `retheme(theme, local, root, style)` 在主题变化时更新跟随主题的布局；`local: LocalLayout` 标出应用设置过、需要保留的高度、内边距、间距和最小高度。
+- `paint` 与 `Hooks` 在 Ui 借用期间运行，此时调用 Ui 或句柄的方法返回 `ReentrantAccess`；钩子返回的错误原样传给宿主。
 
-```rust
-#[aegle::component]
-pub fn QuietButton(parent: &Container, text: &str) -> Result<Button> {
-    let button = parent.control_button(text)?;
-    button.set_background(theme::SURFACE)?;
-    button.set_foreground(theme::ON_SURFACE)?;
-    button.set_radius(8.dp())?;
-    button.set_hover_background(theme::HOVER)?;
-    button.transition(Background, 120.ms(), EaseOut)?;
-    Ok(button)
-}
-```
-
-`control_button` 自带按钮语义、标签关联、焦点、键盘与指针激活及禁用规则，不带默认皮肤。组件宏生成可选的标记属性/构造描述，不将运行时反射加入不使用 loader 的构建。事件继续通过返回的 Button 句柄绑定。
-
-复杂控件通过 `Control` 接口定义状态与事件行为，通过 `Painter` 输出 scene 命令，通过 `Semantics` 定义辅助技术行为。布局使用共享的 layout 属性及文字测量服务。只有绘制自定义形状时才需要 Painter，不强制每个组件实现一组空 trait 方法。
-
-控件可通过 `register_component::<T>("package.Type")` 加入运行时注册表；编译型标记的 `use` 映射到 Rust 路径，直接调用构造器。模块内使用有类型的属性，运行时加载边界才进行 Value 类型检查。
+组件宏（`#[aegle::component]`）、`control_button` 这类无皮肤行为构造器和运行时组件注册表仍是目标，尚未实现。
 
 ## 所有权与异步
 

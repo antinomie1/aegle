@@ -95,7 +95,7 @@ fn range_variants_number_fields_and_separators() -> Result {
 
     progress.set_indeterminate(true)?;
     ui.refresh()?;
-    assert!(progress.is_indeterminate()? && ui.wants_frames());
+    assert!(progress.is_indeterminate()? && ui.wants_frames()?);
     progress.set_indeterminate(false)?;
     ui.run_frame(Instant::now())?;
     ui.refresh()?;
@@ -104,10 +104,10 @@ fn range_variants_number_fields_and_separators() -> Result {
         // A programmatic change eases in over a few frames, then frames stop.
         progress.set_value(1.0)?;
         ui.refresh()?;
-        assert!(ui.wants_frames());
+        assert!(ui.wants_frames()?);
         ui.run_frame(Instant::now() + Duration::from_secs(1))?;
         ui.refresh()?;
-        assert!(!ui.wants_frames());
+        assert!(!ui.wants_frames()?);
         // After an idle period it starts now, not at the long-past last frame.
         let idle = self::ui()?;
         let bar = idle.root().progress(0.0, 1.0, 0.0)?;
@@ -117,7 +117,7 @@ fn range_variants_number_fields_and_separators() -> Result {
         idle.refresh()?;
         idle.run_frame(Instant::now() + Duration::from_millis(16))?;
         idle.refresh()?;
-        assert!(idle.wants_frames());
+        assert!(idle.wants_frames()?);
     }
 
     let changes = Rc::new(Cell::new(0));
@@ -217,7 +217,7 @@ fn tabs_splitters_and_tooltips() -> Result {
 
     button.set_tooltip(Some("Shows a hint"))?;
     ui.pointer(id, PointerKind::Move, center(&button)?, m)?;
-    let due = ui.next_wake().expect("a pending tooltip");
+    let due = ui.next_wake()?.expect("a pending tooltip");
     let children = || {
         ui.root()
             .change(|state, id| Ok(state.tree.children(id)?.count()))

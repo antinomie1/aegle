@@ -203,7 +203,7 @@ fn layout_font_and_transition_bindings_and_atomic_rejection() -> Result {
     ui.set_theme(large)?;
     top.bind_length(LengthSlot::FontSize, small)?;
     assert!(ui.set_theme(Theme::dark()).is_err());
-    assert_eq!(ui.theme(), large);
+    assert_eq!(ui.theme()?, large);
     assert_eq!(top.token_value(small)?, 4.0);
     Ok(())
 }

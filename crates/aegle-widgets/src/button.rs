@@ -10,7 +10,7 @@ use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
     Container, Control, Result,
-    control::{ControlVisual, InputCx, MeasureCx, PaintCx, StyleScope},
+    control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
 
@@ -98,12 +98,6 @@ impl Control for ButtonControl {
     fn self_clipping(&self) -> bool {
         true
     }
-    fn style_scope(&self) -> StyleScope {
-        StyleScope {
-            button_like: true,
-            ..Default::default()
-        }
-    }
     fn paragraph(&self) -> Option<&Paragraph> {
         Some(&self.text)
     }
@@ -146,8 +140,14 @@ impl Control for ButtonControl {
             self.text.size().height + 2.0 * cx.padding,
         ))
     }
-    fn retheme(&self, theme: &Theme, local: u8, _: bool, style: &mut aegle_layout::Style) {
-        if local & 1 == 0 {
+    fn retheme(
+        &self,
+        theme: &Theme,
+        local: aegle_ui::LocalLayout,
+        _: bool,
+        style: &mut aegle_layout::Style,
+    ) {
+        if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             style.size.height = Dimension::length(theme.control_height);
         }
     }

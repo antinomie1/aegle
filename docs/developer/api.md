@@ -142,7 +142,7 @@ let panel = app.window_with_options("Panel", WindowOptions {
 
 | `Node` 方法 | 说明 |
 | --- | --- |
-| `is_alive()` | 控件是否仍存在 |
+| `is_alive()` | 控件是否仍存在（`Result<bool>`，见下文 `ReentrantAccess`） |
 | `bounds()` / `visible_bounds()` | 最近刷新后的窗口逻辑坐标 / 与祖先视口的交集 |
 | `remove()` / `reparent(&container)` | 删除子树 / 移到另一容器末尾 |
 | `set_visible(b)` / `set_enabled(b)` | 作用于整棵子树；隐藏不占布局 |
@@ -445,4 +445,4 @@ if ui.refresh()? {
 
 ## 11. 错误
 
-`UiError` 变体：`DeadHandle`（控件已删除）、`WrongKind`（操作不适用于该控件）、`ForeignUi`（父子属于不同 Ui）、`InvalidValue`（非有限或越界数值）、`RootMutation`（删除或移动根）、`ReentrantAccess`（在 scene 访问等借用期间修改 Ui）、`IdentityExhausted`。其他错误保留来源类型，例如字体缺失、平台能力缺失、`aegle::loader::RuntimeError`（标记运行时溢出等）和 `aegle::loader::markup::ProgramError`（带文件/行/列的标记诊断）。可用 `error.downcast_ref::<UiError>()` 区分。
+`UiError` 变体：`DeadHandle`（控件已删除）、`WrongKind`（操作不适用于该控件）、`ForeignUi`（父子属于不同 Ui）、`InvalidValue`（非有限或越界数值）、`RootMutation`（删除或移动根）、`ReentrantAccess`（Ui 正被修改时——自定义控件的 `paint`、Canvas 的 painter、`Hooks` 中——再读写它，或在 scene 访问期间修改它；`theme`、`background`、`wants_frames`、`has_animations`、`next_wake` 等查询与 `is_alive` 也返回 `Result`，不会 panic）、`IdentityExhausted`。其他错误保留来源类型，例如字体缺失、平台能力缺失、`aegle::loader::RuntimeError`（标记运行时溢出等）和 `aegle::loader::markup::ProgramError`（带文件/行/列的标记诊断）。可用 `error.downcast_ref::<UiError>()` 区分。

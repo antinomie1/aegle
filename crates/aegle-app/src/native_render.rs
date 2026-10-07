@@ -123,7 +123,7 @@ impl Runtime {
             #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
             let info = self.backend.window_info(entry.id)?;
             #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
-            let background = entry.ui.background();
+            let background = entry.ui.background()?;
             match self.options.renderer {
                 #[cfg(feature = "software")]
                 RendererBackend::Software => {
@@ -229,10 +229,10 @@ impl Runtime {
             }
             // Native frame pacing blocks occluded windows without an idle poll.
             #[cfg(feature = "motion")]
-            let animating = entry.ui.has_animations();
+            let animating = entry.ui.has_animations()?;
             #[cfg(not(feature = "motion"))]
             let animating = false;
-            if animating || entry.ui.wants_frames() {
+            if animating || entry.ui.wants_frames()? {
                 self.backend.request_redraw(entry.id)?;
             }
         }

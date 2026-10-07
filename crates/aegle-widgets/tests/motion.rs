@@ -24,7 +24,7 @@ fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
     field.focus()?;
     ui.resize(Size::new(320.0, 160.0))?;
     ui.refresh()?;
-    assert!(!ui.has_animations()); // Initial styling is not an entrance animation.
+    assert!(!ui.has_animations()?); // Initial styling is not an entrance animation.
     ui.take_ime_state(4000)?;
     ui.ime(ImeEdit {
         preedit: "世界",
@@ -62,22 +62,22 @@ fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
     field.cancel_transition()?;
     ui.refresh()?;
     assert_eq!(field.appearance()?, field.presented_appearance()?);
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     field.set_radius(30.0)?;
     ui.refresh()?;
     field.finish_transition()?;
     assert_eq!(field.presented_appearance()?.radius, 30.0);
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     field.set_radius(40.0)?;
     ui.refresh()?;
     ui.set_reduced_motion(true)?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert_eq!(field.presented_appearance()?.radius, 40.0);
     assert!(ui.refresh()?); // Reduced-motion setter must preserve the final repaint.
     field.set_radius(50.0)?;
     ui.refresh()?;
     assert_eq!(field.presented_appearance()?.radius, 50.0);
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert_eq!(field.text()?, "Hello");
     let error = field.select(Selection::default()).unwrap_err();
     assert_eq!(error.downcast_ref(), Some(&TextError::CompositionActive));
@@ -106,34 +106,34 @@ fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
     assert!(fading_focus);
     field.cancel_transition()?;
     ui.refresh()?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert_eq!(field.presented_appearance()?.focus_width, 0.0);
     field.set_radius(60.0)?;
     ui.refresh()?;
     parent.set_visible(false)?;
     ui.refresh()?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert_eq!(field.presented_appearance()?.radius, 60.0);
     parent.set_visible(true)?;
     ui.refresh()?;
     field.set_transition(Transition::new(Duration::ZERO, Easing::Linear))?;
     field.set_radius(70.0)?;
     ui.refresh()?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert_eq!(field.presented_appearance()?.radius, 70.0);
     field.set_transition(timing)?;
     field.set_radius(80.0)?;
     ui.refresh()?;
     ui.advance_animations(Duration::from_millis(250))?;
     ui.refresh()?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert_eq!(field.presented_appearance()?.radius, 80.0);
     assert!(!ui.refresh()?);
     field.set_radius(90.0)?;
     ui.refresh()?;
-    assert!(ui.has_animations());
+    assert!(ui.has_animations()?);
     parent.remove()?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert!(field.finish_transition().is_err());
     ui.advance_animations(Duration::from_millis(300))?;
     ui.refresh()?;
@@ -179,7 +179,7 @@ fn offsets_move_hit_testing_and_complete_once() -> Result {
     ui.refresh()?;
     ui.dispatch_callbacks()?;
     assert_eq!((button.bounds()?.origin.x, ends.get()), (150.0, 1));
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     // Cancel freezes the presented offset without completing.
     panel.set_offset(Point::new(50.0, 0.0))?;
     ui.refresh()?;
@@ -199,7 +199,7 @@ fn offsets_move_hit_testing_and_complete_once() -> Result {
     panel.remove()?;
     ui.dispatch_callbacks()?;
     assert_eq!(ends.get(), 3);
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert!(button.set_offset(Point::new(f32::NAN, 0.0)).is_err());
     Ok(())
 }
@@ -265,7 +265,7 @@ fn scale_and_rotation_move_scenes_and_hit_testing() -> Result {
     button.finish_transition()?;
     ui.refresh()?;
     assert!(
-        ui.has_animations() || hover(38.0)?,
+        ui.has_animations()? || hover(38.0)?,
         "a half turn keeps the center"
     );
     assert!(
@@ -300,7 +300,7 @@ fn flings_decay_then_stop_at_edges_input_or_reduced_motion() -> Result {
         Ok(())
     };
     ui.fling(at, Point::new(0.0, 600.0))?;
-    assert!(ui.has_animations());
+    assert!(ui.has_animations()?);
     step(1000)?; // The request starts at the host's current time.
     assert_eq!(view.offset()?.y, 0.0);
     step(1100)?;
@@ -315,24 +315,24 @@ fn flings_decay_then_stop_at_edges_input_or_reduced_motion() -> Result {
         (190.0..196.0).contains(&total),
         "travels velocity * 0.325: {total}"
     );
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     // The first edge ends the fling, whatever speed remains.
     view.scroll_to(Point::new(0.0, 0.0))?;
     ui.fling(at, Point::new(0.0, -600.0))?;
     step(12_000)?;
     step(12_100)?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     // Any new scroll or press cancels; reduced motion and slow flings never start.
     ui.fling(at, Point::new(0.0, 600.0))?;
     ui.scroll_by(at, Point::new(0.0, 1.0))?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     ui.fling(at, Point::new(0.0, 600.0))?;
     ui.stop_fling()?;
     ui.fling(at, Point::new(0.0, 5.0))?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     ui.set_reduced_motion(true)?;
     ui.fling(at, Point::new(0.0, 600.0))?;
-    assert!(!ui.has_animations());
+    assert!(!ui.has_animations()?);
     assert!(ui.fling(at, Point::new(f32::NAN, 0.0)).is_err());
     Ok(())
 }

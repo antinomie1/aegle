@@ -75,7 +75,7 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
             Some(&UiError::ReentrantAccess)
         );
         first.close()?;
-        assert!(!stale.is_alive());
+        assert!(!stale.is_alive()?);
         assert!(stale.set_text("dead").is_err());
         finish.activate()
     })?;
@@ -88,7 +88,7 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
         );
     }
     assert!(completed.get());
-    assert!(!label.is_alive());
+    assert!(!label.is_alive()?);
     Ok(())
 }
 

@@ -35,20 +35,14 @@ impl App {
         if self.runtime.borrow().windows.is_empty() {
             return Ok(false);
         }
-        let pending = self
-            .runtime
-            .borrow()
-            .windows
-            .iter()
-            .any(|entry| entry.ui.has_pending_callbacks());
         // Delayed control work (tooltips) bounds the wait without any frames.
-        let wake = self
-            .runtime
-            .borrow()
-            .windows
-            .iter()
-            .filter_map(|entry| entry.ui.next_wake())
-            .min();
+        let (mut pending, mut wake) = (false, None);
+        for entry in &self.runtime.borrow().windows {
+            pending |= entry.ui.has_pending_callbacks()?;
+            if let Some(at) = entry.ui.next_wake()? {
+                wake = Some(wake.map_or(at, |earliest: std::time::Instant| earliest.min(at)));
+            }
+        }
         let until_wake = wake.map(|wake| wake.saturating_duration_since(std::time::Instant::now()));
         self.runtime.borrow_mut().backend.dispatch(if pending {
             Some(Duration::ZERO)
@@ -124,14 +118,11 @@ impl App {
     fn wake(&self, scratch: &mut Vec<Rc<Ui>>) -> Result<()> {
         let now = std::time::Instant::now();
         scratch.clear();
-        scratch.extend(
-            self.runtime
-                .borrow()
-                .windows
-                .iter()
-                .filter(|entry| entry.ui.next_wake().is_some_and(|wake| wake <= now))
-                .map(|entry| entry.ui.clone()),
-        );
+        for entry in &self.runtime.borrow().windows {
+            if entry.ui.next_wake()?.is_some_and(|wake| wake <= now) {
+                scratch.push(entry.ui.clone());
+            }
+        }
         if scratch.is_empty() {
             return Ok(());
         }
@@ -145,14 +136,11 @@ impl App {
     /// runtime borrow so they may use the App, then applies their changes.
     fn frames(&self, scratch: &mut Vec<Rc<Ui>>) -> Result<()> {
         scratch.clear();
-        scratch.extend(
-            self.runtime
-                .borrow()
-                .windows
-                .iter()
-                .filter(|entry| entry.ready && entry.ui.wants_frames())
-                .map(|entry| entry.ui.clone()),
-        );
+        for entry in &self.runtime.borrow().windows {
+            if entry.ready && entry.ui.wants_frames()? {
+                scratch.push(entry.ui.clone());
+            }
+        }
         if scratch.is_empty() {
             return Ok(());
         }
@@ -212,12 +200,12 @@ impl Runtime {
         let reduced = self.reduced_motion();
         self.preferences = preferences;
         for entry in &self.windows {
-            let current = entry.ui.theme();
+            let current = entry.ui.theme()?;
             if current == theme {
                 entry.ui.set_theme(self.theme())?;
             }
             #[cfg(feature = "motion")]
-            if entry.ui.reduced_motion() == reduced {
+            if entry.ui.reduced_motion()? == reduced {
                 entry.ui.set_reduced_motion(self.reduced_motion())?;
             }
         }
@@ -282,7 +270,7 @@ impl Runtime {
                 all(feature = "unix-accessibility", target_os = "linux"),
                 all(feature = "windows-accessibility", target_os = "windows")
             ))]
-            if entry.initial_access || entry.ui.access_dirty() {
+            if entry.initial_access || entry.ui.access_dirty()? {
                 #[cfg(target_os = "linux")]
                 let scale = 1.0;
                 #[cfg(target_os = "windows")]

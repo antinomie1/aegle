@@ -129,7 +129,7 @@ impl Node {
             state.motion.rotating.remove(&id);
             let value = state.presented_appearance(id)?;
             let control = &state.tree.get(id).unwrap().context.control;
-            let scope = control.style_scope();
+            let scope = crate::control::StyleScope::of(control.kind());
             let (field, indicator, control) =
                 (scope.editor, scope.indicator, control.interactive());
             state.set_style(
@@ -180,13 +180,13 @@ impl Ui {
             .advance_animations(now)
     }
     /// Whether a host must request another frame. The Ui owns no timer or thread.
-    pub fn has_animations(&self) -> bool {
-        let state = self.state.borrow();
-        state.motion.any_running() || state.motion.fling.is_some()
+    pub fn has_animations(&self) -> Result<bool> {
+        let state = self.read()?;
+        Ok(state.motion.any_running() || state.motion.fling.is_some())
     }
     /// Whether reduced motion is currently in effect.
-    pub fn reduced_motion(&self) -> bool {
-        self.state.borrow().motion.reduced
+    pub fn reduced_motion(&self) -> Result<bool> {
+        Ok(self.read()?.motion.reduced)
     }
     /// Explicit reduced-motion preference. When true all transitions snap to
     /// their targets, completing, and no new animations start. Changing this

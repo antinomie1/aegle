@@ -36,11 +36,13 @@ impl Control for Group {
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }
-    fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
+    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
         use aegle_layout::{Edges, LengthPercentage, Size};
         aegle_ui::Plain.retheme(theme, local, root, style);
         let popup = matches!(self.role, Role::Popup { .. });
-        if (popup || matches!(self.role, Role::TableCell | Role::TableHeader)) && local & 2 == 0 {
+        if (popup || matches!(self.role, Role::TableCell | Role::TableHeader))
+            && !local.contains(aegle_ui::LocalLayout::PADDING)
+        {
             let p = LengthPercentage::length(theme.padding / 2.0);
             style.padding = Edges {
                 left: p,
@@ -49,7 +51,7 @@ impl Control for Group {
                 bottom: p,
             };
         }
-        if popup && local & 4 == 0 {
+        if popup && !local.contains(aegle_ui::LocalLayout::GAP) {
             let zero = LengthPercentage::length(0.0);
             style.gap = Size {
                 width: zero,
@@ -100,7 +102,7 @@ pub(crate) fn add(container: &Container, role: Role, row: bool) -> Result<Contai
             style.flex_direction = aegle_layout::FlexDirection::Row;
         }
         let group = Group { role };
-        group.retheme(theme, 0, false, &mut style);
+        group.retheme(theme, aegle_ui::LocalLayout::NONE, false, &mut style);
         Ok((Box::new(group) as Box<dyn Control>, style))
     })
     .map(Container)

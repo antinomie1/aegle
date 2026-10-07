@@ -11,7 +11,7 @@ use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
     Container, Control, Result, UiError,
-    control::{ControlVisual, InputCx, MeasureCx, PaintCx, StyleScope},
+    control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle,
 };
 
@@ -180,9 +180,6 @@ impl Control for NumberFieldControl {
     fn self_clipping(&self) -> bool {
         true
     }
-    fn style_scope(&self) -> StyleScope {
-        self.field.style_scope()
-    }
     fn editor(&self) -> Option<&aegle_controls::TextField> {
         self.field.editor()
     }
@@ -295,7 +292,7 @@ impl Control for NumberFieldControl {
             rtl: cx.rtl,
         })
     }
-    fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
+    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
         self.field.retheme(theme, local, root, style);
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {

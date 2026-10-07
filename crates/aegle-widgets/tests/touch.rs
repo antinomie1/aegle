@@ -49,7 +49,7 @@ fn taps_drags_and_pans_choose_by_what_is_under_the_finger() -> Result {
     #[cfg(feature = "motion")]
     {
         touch(TouchPhase::Up, 50.0, 30.0, 64)?;
-        assert!(ui.has_animations(), "a moving release keeps momentum");
+        assert!(ui.has_animations()?, "a moving release keeps momentum");
         ui.stop_fling()?;
     }
     #[cfg(not(feature = "motion"))]

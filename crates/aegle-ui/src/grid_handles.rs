@@ -26,7 +26,7 @@ impl Control for Stack {
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }
-    fn retheme(&self, theme: &Theme, local: u8, root: bool, style: &mut Style) {
+    fn retheme(&self, theme: &Theme, local: crate::LocalLayout, root: bool, style: &mut Style) {
         Plain.retheme(theme, local, root, style);
     }
 }
@@ -98,19 +98,21 @@ impl Container {
     /// Replaces the explicit column tracks of a grid.
     pub fn set_columns(&self, columns: &[Track]) -> Result {
         let columns = tracks(columns)?;
-        self.layout(0, |s| s.grid_template_columns = columns)
+        self.layout(crate::LocalLayout::NONE, |s| {
+            s.grid_template_columns = columns
+        })
     }
     /// Replaces the explicit row tracks of a grid; rows beyond them use
     /// [`Self::set_auto_rows`].
     pub fn set_rows(&self, rows: &[Track]) -> Result {
         let rows = tracks(rows)?;
-        self.layout(0, |s| s.grid_template_rows = rows)
+        self.layout(crate::LocalLayout::NONE, |s| s.grid_template_rows = rows)
     }
     /// Replaces the explicit columns with a track list that may name lines and
     /// repeat tracks, like CSS `grid-template-columns`; see [`TemplateItem`].
     pub fn set_column_template(&self, items: &[TemplateItem]) -> Result {
         let (columns, names) = aegle_layout::template(items).ok_or(UiError::InvalidValue)?;
-        self.layout(0, |s| {
+        self.layout(crate::LocalLayout::NONE, |s| {
             s.grid_template_columns = columns;
             s.grid_template_column_names = names;
         })
@@ -118,7 +120,7 @@ impl Container {
     /// Replaces the explicit rows with a track list, like CSS `grid-template-rows`.
     pub fn set_row_template(&self, items: &[TemplateItem]) -> Result {
         let (rows, names) = aegle_layout::template(items).ok_or(UiError::InvalidValue)?;
-        self.layout(0, |s| {
+        self.layout(crate::LocalLayout::NONE, |s| {
             s.grid_template_rows = rows;
             s.grid_template_row_names = names;
         })
@@ -132,26 +134,30 @@ impl Container {
             [] => None,
             rows => Some(aegle_layout::areas(rows).ok_or(UiError::InvalidValue)?),
         };
-        self.layout(0, |s| s.grid_template_areas = areas)
+        self.layout(crate::LocalLayout::NONE, |s| s.grid_template_areas = areas)
     }
     /// Sizes rows the grid adds beyond its explicit tracks, cycling through
     /// `rows`; empty restores automatic rows.
     pub fn set_auto_rows(&self, rows: &[Track]) -> Result {
         let rows = sizing(rows)?;
-        self.layout(0, |s| s.grid_auto_rows = rows)
+        self.layout(crate::LocalLayout::NONE, |s| s.grid_auto_rows = rows)
     }
     /// Sizes columns the grid adds beyond its explicit tracks.
     pub fn set_auto_columns(&self, columns: &[Track]) -> Result {
         let columns = sizing(columns)?;
-        self.layout(0, |s| s.grid_auto_columns = columns)
+        self.layout(crate::LocalLayout::NONE, |s| s.grid_auto_columns = columns)
     }
     /// Sets the order in which the grid places children without a position.
     pub fn set_flow(&self, flow: Flow) -> Result {
-        self.layout(0, |s| s.grid_auto_flow = flow.auto_flow())
+        self.layout(crate::LocalLayout::NONE, |s| {
+            s.grid_auto_flow = flow.auto_flow()
+        })
     }
     /// Aligns children horizontally within their grid areas; `None` stretches.
     pub fn set_justify_items(&self, align: Option<Align>) -> Result {
-        self.layout(0, |s| s.justify_items = align.map(Align::items))
+        self.layout(crate::LocalLayout::NONE, |s| {
+            s.justify_items = align.map(Align::items)
+        })
     }
 }
 
@@ -160,24 +166,26 @@ impl Node {
     /// or [`GridLines`] that may use line and area names.
     pub fn set_grid_column(&self, placement: impl Into<GridLines>) -> Result {
         let lines = placement_lines(placement.into())?;
-        self.layout(0, |s| s.grid_column = lines)
+        self.layout(crate::LocalLayout::NONE, |s| s.grid_column = lines)
     }
     /// Places this grid child on the row axis.
     pub fn set_grid_row(&self, placement: impl Into<GridLines>) -> Result {
         let lines = placement_lines(placement.into())?;
-        self.layout(0, |s| s.grid_row = lines)
+        self.layout(crate::LocalLayout::NONE, |s| s.grid_row = lines)
     }
     /// Places this grid child in the area called `name` on both axes, like
     /// CSS `grid-area: name`; see [`Container::set_areas`].
     pub fn set_grid_area(&self, name: &str) -> Result {
         let lines = placement_lines(GridLines::named(name))?;
-        self.layout(0, |s| {
+        self.layout(crate::LocalLayout::NONE, |s| {
             s.grid_row = lines.clone();
             s.grid_column = lines;
         })
     }
     /// Overrides the grid's horizontal alignment for this child; `None` follows the grid.
     pub fn set_justify_self(&self, align: Option<Align>) -> Result {
-        self.layout(0, |s| s.justify_self = align.map(Align::items))
+        self.layout(crate::LocalLayout::NONE, |s| {
+            s.justify_self = align.map(Align::items)
+        })
     }
 }

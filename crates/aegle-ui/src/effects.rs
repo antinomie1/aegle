@@ -111,9 +111,9 @@ pub(crate) fn paint_gradient(
             radius: radius * size.width.max(size.height),
         },
     };
-    // A collapsed node has no extent for the gradient to span.
-    if let Ok(sized) = gradient.with_geometry(geometry) {
-        builder.fill_gradient(shape, &sized)?;
+    // A collapsed node draws nothing, and has no extent for the gradient to span.
+    if !shape.is_empty() {
+        builder.fill_gradient(shape, &gradient.with_geometry(geometry)?)?;
     }
     Ok(true)
 }

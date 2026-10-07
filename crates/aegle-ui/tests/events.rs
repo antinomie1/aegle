@@ -17,7 +17,7 @@ fn ui() -> Result<Ui> {
 #[test]
 fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
     let ui = ui()?;
-    assert!(!ui.wants_frames());
+    assert!(!ui.wants_frames()?);
     let log = Rc::new(RefCell::new(Vec::new()));
     let (a, b) = (ui.root().column()?, ui.root().column()?);
     let start = Instant::now();
@@ -29,7 +29,7 @@ fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
             node.set_width(10.0)
         })?;
     }
-    assert!(ui.wants_frames() && ui.refresh()?);
+    assert!(ui.wants_frames()? && ui.refresh()?);
     ui.run_frame(start)?;
     ui.run_frame(start + Duration::from_millis(16))?;
     assert_eq!(
@@ -58,6 +58,6 @@ fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
     assert_eq!((replaced.get(), log.borrow().len()), (1, 0));
     a.on_frame(|_, _| Err("stop".into()))?;
     assert!(ui.run_frame(start).is_err());
-    assert!(!ui.wants_frames());
+    assert!(!ui.wants_frames()?);
     Ok(())
 }
