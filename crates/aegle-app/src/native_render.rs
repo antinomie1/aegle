@@ -96,6 +96,24 @@ fn scenes(
     })
 }
 
+/// The UI's changed area in buffer pixels of a `width` × `height` window at
+/// `scale`; `None` for all of it.
+#[cfg(any(feature = "software", feature = "vulkan"))]
+fn device_damage(
+    ui: &Ui,
+    scale: f32,
+    width: u32,
+    height: u32,
+) -> Result<Option<aegle_types::Region<aegle_types::PixelRect>>> {
+    Ok(ui.damage()?.map(|logical| {
+        let mut pixels = aegle_types::Region::default();
+        for &rect in logical.rects() {
+            pixels.add(aegle_types::PixelRect::covering(rect, scale, width, height));
+        }
+        pixels
+    }))
+}
+
 impl Runtime {
     pub(crate) fn present(&mut self) -> Result<()> {
         for entry in &mut self.windows {
@@ -113,18 +131,7 @@ impl Runtime {
                     let scale = info.scale as f32;
                     // Only the changed area is redrawn into a retained buffer.
                     let size = info.buffer_size()?;
-                    let damage = entry.ui.damage()?.map(|logical| {
-                        let mut pixels = aegle_types::Region::default();
-                        for &rect in logical.rects() {
-                            pixels.add(aegle_types::PixelRect::covering(
-                                rect,
-                                scale,
-                                size.width,
-                                size.height,
-                            ));
-                        }
-                        pixels
-                    });
+                    let damage = device_damage(&entry.ui, scale, size.width, size.height)?;
                     let presented = self
                         .backend
                         .present(entry.id, damage, |pixels, size, region| -> Result<()> {
@@ -169,7 +176,12 @@ impl Runtime {
                                     }
                                     Err(error) => return Err(error.into()),
                                 };
-                            scenes(&entry.ui, info.scale as f32, |scene, transform, clip| {
+                            let [width, height] = frame.extent();
+                            let scale = info.scale as f32;
+                            if let Some(damage) = device_damage(&entry.ui, scale, width, height)? {
+                                frame.set_damage(damage.rects());
+                            }
+                            scenes(&entry.ui, scale, |scene, transform, clip| {
                                 frame.draw_clipped(scene, transform, clip)?;
                                 Ok(())
                             })?;

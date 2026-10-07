@@ -531,6 +531,12 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 修改：根节点解析主题的背景改变时视为整窗口损伤（`Ui::set_theme`、根节点局部主题与覆盖都经同一处）。同一修正中去掉了另一处已知限制：损伤原以节点边界加阴影估计绘制范围，越界绘制（Canvas 画到自身之外、字形外伸）可能残留。`SceneBuilder` 现在记录 `Scene::bounds`：每条命令的外包框（描边按半宽、路径描边按两倍宽、阴影按三倍模糊、字形按运行中笔位的保守 em 框），经记录内变换并受记录内裁剪限制；损伤取场景与覆盖层的范围，不再单独处理阴影。builder 的内联作用域状态因保存每层裁剪框由约 1.6 KiB 增至约 2.9 KiB。
 - 验证：同一复现改后差 0 像素；`aegle-ui/tests/damage.rs` 增加根主题与根主题覆盖改变背景时为整窗口（去掉修复时失败）；`aegle-widgets/tests/canvas.rs` 检查画到边界外 150 dp 的 Canvas 被完整损伤（用旧的按节点边界估计时失败）；`aegle-scene/tests/recording.rs` 检查变换、描边、阴影、裁剪与空裁剪下的范围。滑块与分隔线真实拖动后的截图仍与整窗口重绘逐像素相同。workspace all-features 测试、私有 Sway 上 Wayland 与 App 的 ignored 原生测试通过。
 
+## GPU 呈现上报变化区域
+
+- 先测量：私有 headless Sway（GLES2，2560×1440，1.5 倍缩放）上分隔线拖动的 Vulkan 整帧（录制 + 提交 + 等待 GPU）在 RX 6800 XT 上中位数 0.39 ms（其中录制 0.13 ms），Lavapipe 为 4.9 ms。不透明窗口直接画入 swapchain 图像，Vulkan 不保证其旧内容；真正局部绘制需要常驻一张窗口大小图像（2560×1440 约 14.7 MB）并每帧整窗口拷贝，在硬件 GPU 上与重绘同量级，故按用户选择只上报变化区域。
+- 修改：设备提供 `VK_KHR_incremental_present` 时窗口渲染器启用它；`Frame::set_damage(&[PixelRect])` 声明变化矩形（裁到 swapchain 范围），present 时附上 `VkPresentRegionsKHR`，新 swapchain 的第一次呈现与未声明时上报整个 surface。App 的软件与 Vulkan 路径共用同一个把 `Ui::damage` 换算为缓冲像素的函数。wgpu 没有对应接口，保持整幅上报；Win32 软件路径仍整块上传 DIB（本次环境没有 Wine，未改动未能运行验证的 GDI 部分）。
+- 验证：`WAYLAND_DEBUG` 下滑块拖动时 Mesa WSI 发出的 `wl_surface.damage_buffer` 即这些矩形（进度条带、滑块与状态行等），只有首帧与全屏切换时为整个 surface，RADV 与 Lavapipe 相同；Vulkan 拖动后的截图与强制整窗口重绘逐像素相同（滑块与分隔线各一次，GLES2 合成器按损伤合成）。`aegle-render-vulkan/tests/native.rs` 在后续帧调用 `set_damage`（含越界矩形），在 Lavapipe（Pixman）与 RADV（GLES2）上开启 Khronos validation 1.4.363 与同步检查通过（已确认加载器插入该层），无验证消息；Vulkan 离屏 ignored 场景、wgpu ignored 场景、workspace all-features 测试与 Windows 交叉检查通过。
+
 ## 剩余工作
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。

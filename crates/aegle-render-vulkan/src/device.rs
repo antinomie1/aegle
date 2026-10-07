@@ -20,6 +20,10 @@ pub(crate) struct Device {
     /// Only while the creating window renderer takes it; surfaces belong to renderers.
     #[cfg(feature = "window")]
     surface: Option<crate::surface::Surface>,
+    /// `VK_KHR_incremental_present` is enabled: presents may name the regions
+    /// that changed.
+    #[cfg(feature = "window")]
+    pub incremental_present: bool,
     // Vulkan function pointers remain valid only while their loader is loaded.
     _entry: Entry,
 }
@@ -110,7 +114,7 @@ impl Device {
             surface.as_ref(),
         );
         match initialized {
-            Ok((raw, physical, family, properties, memory)) => {
+            Ok((raw, physical, family, properties, memory, _incremental)) => {
                 // SAFETY: initialize created one queue at index zero in family.
                 let queue = unsafe { raw.get_device_queue(family, 0) };
                 Ok(Self {
@@ -125,6 +129,8 @@ impl Device {
                     textures: Default::default(),
                     #[cfg(feature = "window")]
                     surface,
+                    #[cfg(feature = "window")]
+                    incremental_present: _incremental,
                     _entry: entry,
                 })
             }
@@ -145,6 +151,7 @@ type Initialized = (
     u32,
     vk::PhysicalDeviceProperties,
     vk::PhysicalDeviceMemoryProperties,
+    bool,
 );
 
 fn initialize(
@@ -196,11 +203,20 @@ fn initialize(
             .queue_family_index(family)
             .queue_priorities(&priorities)];
         let info = vk::DeviceCreateInfo::default().queue_create_infos(&queues);
+        // Damage hints for the compositor, where the driver offers them.
         #[cfg(feature = "window")]
-        let extensions = [ash::khr::swapchain::NAME.as_ptr()];
+        let incremental =
+            surface.is_some() && supports(instance, physical, ash::khr::incremental_present::NAME);
+        #[cfg(not(feature = "window"))]
+        let incremental = false;
+        #[cfg(feature = "window")]
+        let extensions = [
+            ash::khr::swapchain::NAME.as_ptr(),
+            ash::khr::incremental_present::NAME.as_ptr(),
+        ];
         #[cfg(feature = "window")]
         let info = if surface.is_some() {
-            info.enabled_extension_names(&extensions)
+            info.enabled_extension_names(&extensions[..1 + usize::from(incremental)])
         } else {
             info
         };
@@ -210,9 +226,21 @@ fn initialize(
             unsafe { instance.create_device(physical, &info, None) }.map_err(Error::Vulkan)?;
         // SAFETY: physical belongs to instance, which still outlives this device.
         let memory = unsafe { instance.get_physical_device_memory_properties(physical) };
-        return Ok((raw, physical, family, properties, memory));
+        return Ok((raw, physical, family, properties, memory, incremental));
     }
     Err(Error::Unsupported("no compatible Vulkan graphics device"))
+}
+
+/// Whether `physical` offers the device extension `name`.
+#[cfg(feature = "window")]
+fn supports(instance: &ash::Instance, physical: vk::PhysicalDevice, name: &std::ffi::CStr) -> bool {
+    // SAFETY: physical belongs to this live instance.
+    let extensions = unsafe { instance.enumerate_device_extension_properties(physical) };
+    extensions.is_ok_and(|extensions| {
+        extensions
+            .iter()
+            .any(|extension| extension.extension_name_as_c_str() == Ok(name))
+    })
 }
 
 fn compatible(

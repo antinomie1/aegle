@@ -24,7 +24,7 @@
 
 图像按 Image id 缓存，非预乘 sRGB 像素在线性空间预乘后以 RGBA8 sRGB 上传，着色器钳制到边缘纹素并乘以解析的边缘覆盖率，没有 mipmap。路径由 zeno 在 CPU 光栅为 R8 覆盖率 mask，键为路径 id、线性 2×2 矩阵、两轴四分之一像素相位和描边样式：整像素平移命中原条目，新的缩放/旋转再光栅一次。与字形相同的页放不下时，图像和路径 mask（含带边框超过 `atlas_size` 的）获得恰好其尺寸的专用纹理，不带边框，在最后一次使用后的下一帧仍保留、再下一帧释放，所以动画重绘不会反复上传，消失的图像会被回收。单个字形超过页尺寸，或图像/路径 mask 超过设备纹理上限，返回 `TooLarge`。上传前的像素转换缓冲超过 1 MiB 即释放；不像 Vulkan 后端那样限制 CPU 上传量，图像大小只受设备纹理上限约束。`Renderer::resident_entries` 报告当前驻留条目数。
 
-窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的设备与验证错误当作致命错误并 panic（已在其源码确认）；本后端没有安装自己的处理器，设备丢失尚未转为可恢复错误。
+窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。wgpu 没有呈现区域接口，每帧整幅绘制并上报整个 surface（Vulkan 后端可上报变化区域）。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的设备与验证错误当作致命错误并 panic（已在其源码确认）；本后端没有安装自己的处理器，设备丢失尚未转为可恢复错误。
 
 ## 应用纹理
 

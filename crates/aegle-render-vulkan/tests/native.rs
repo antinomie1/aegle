@@ -3,6 +3,7 @@
 use aegle_platform_wayland::{Event, Wayland, WindowOptions};
 use aegle_render_vulkan::{Error, Options, WindowRenderer};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
+use aegle_types::PixelRect;
 use std::time::{Duration, Instant};
 
 #[test]
@@ -60,6 +61,16 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
                     return Ok(false);
                 };
                 frame.draw(&scene, Affine::IDENTITY)?;
+                // Later frames name changed regions, partly beyond the extent.
+                if frames > 1 {
+                    let rect = |x, y, width, height| PixelRect {
+                        x,
+                        y,
+                        width,
+                        height,
+                    };
+                    frame.set_damage(&[rect(1, 2, 10, 5), rect(30, 30, 10_000, 4)]);
+                }
                 frame.finish()?;
                 Ok(true)
             })?;

@@ -67,6 +67,9 @@ pub struct Renderer {
     pub(crate) swapchain: Option<crate::swapchain::Swapchain>,
     #[cfg(feature = "window")]
     pub(crate) window_size: [u32; 2],
+    /// Regions of the next present that changed; empty means all of it.
+    #[cfg(feature = "window")]
+    pub(crate) damage: Vec<ash::vk::RectLayerKHR>,
     /// This window's surface; it outlives the swapchain and precedes the device.
     #[cfg(feature = "window")]
     pub(crate) surface: Option<crate::surface::Surface>,
@@ -121,6 +124,8 @@ impl Renderer {
             swapchain: None,
             #[cfg(feature = "window")]
             window_size: [0; 2],
+            #[cfg(feature = "window")]
+            damage: Vec::new(),
             #[cfg(feature = "window")]
             surface,
             buffers: [None, None],
@@ -387,10 +392,16 @@ impl Renderer {
         self.image_ready = true;
         #[cfg(feature = "window")]
         if let Some((index, _, suboptimal)) = acquired {
-            self.swapchain
-                .as_mut()
-                .unwrap()
-                .present(self.device.queue, index, suboptimal)?;
+            let damage = &self.damage[..];
+            let damage = (self.device.incremental_present && !damage.is_empty()).then_some(damage);
+            let presented = self.swapchain.as_mut().unwrap().present(
+                self.device.queue,
+                index,
+                suboptimal,
+                damage,
+            );
+            self.damage.clear();
+            presented?;
         }
         Ok(())
     }
@@ -409,7 +420,7 @@ impl Drop for Renderer {
 /// Dropping it discards its records without submitting. A failed draw poisons the
 /// frame so partially recorded content cannot accidentally be presented.
 pub struct Frame<'a> {
-    renderer: &'a mut Renderer,
+    pub(crate) renderer: &'a mut Renderer,
     clear: Color,
     failed: bool,
 }

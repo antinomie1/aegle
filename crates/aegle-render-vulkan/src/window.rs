@@ -222,3 +222,31 @@ impl Renderer {
         Ok(())
     }
 }
+
+impl Frame<'_> {
+    /// Names the device-pixel rectangles that changed since the previous
+    /// present of this window, so the compositor can update only them. The
+    /// whole frame is still drawn. Ignored without `VK_KHR_incremental_present`
+    /// and for a new swapchain's first present; not calling it reports the
+    /// whole surface.
+    pub fn set_damage(&mut self, rects: &[aegle_types::PixelRect]) {
+        let [width, height] = self.extent();
+        let damage = &mut self.renderer.damage;
+        damage.clear();
+        damage.extend(rects.iter().filter_map(|rect| {
+            let (x, y) = (rect.x.min(width), rect.y.min(height));
+            let extent = ash::vk::Extent2D {
+                width: (rect.x + rect.width).min(width) - x,
+                height: (rect.y + rect.height).min(height) - y,
+            };
+            (extent.width > 0 && extent.height > 0).then_some(ash::vk::RectLayerKHR {
+                offset: ash::vk::Offset2D {
+                    x: x as i32,
+                    y: y as i32,
+                },
+                extent,
+                layer: 0,
+            })
+        }));
+    }
+}

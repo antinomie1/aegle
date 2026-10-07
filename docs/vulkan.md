@@ -90,7 +90,7 @@ geometry 示例只用标准库写 PPM，不增加 PNG 运行依赖。示例能�
 
 `unsafe WindowRenderer::new(owner, options)` 接受实现 raw-window-handle 的原生租约；调用方必须保证同一 window/display 在 renderer 销毁前一直有效，并遵守平台线程规则。Wayland/Win32 的 `WindowSurface` 保留原生对象，平台逻辑关闭不提前破坏 GPU 句柄。构造窗口 renderer 不创建新事件循环。
 
-`begin_frame(width, height, clear)` 在零尺寸时释放尺寸相关目标并返回 None；同尺寸复用，否则等待设备/呈现队列后释放旧 swapchain 并重建。Frame::extent 返回实际 extent。Frame::finish 才获取图像、等待 acquire fence、提交并 present；弃帧不获取图像。SurfaceOutOfDate 保持 dirty 等待重试，DeviceLost/SurfaceLost 返回错误，不隐式切换后端。当前 graphics/present 必须为同一 queue。
+`begin_frame(width, height, clear)` 在零尺寸时释放尺寸相关目标并返回 None；同尺寸复用，否则等待设备/呈现队列后释放旧 swapchain 并重建。Frame::extent 返回实际 extent。Frame::finish 才获取图像、等待 acquire fence、提交并 present；弃帧不获取图像。SurfaceOutOfDate 保持 dirty 等待重试，DeviceLost/SurfaceLost 返回错误，不隐式切换后端。当前 graphics/present 必须为同一 queue。 `Frame::set_damage(&[PixelRect])` 声明本帧相对上一次呈现改变的设备像素矩形：设备提供 `VK_KHR_incremental_present` 时窗口渲染器启用它，并在 present 时附上 `VkPresentRegionsKHR`，合成器只需更新这些区域；帧本身仍整幅绘制。新 swapchain 的第一次呈现、没有该扩展或未调用时上报整个 surface。
 
 呈现使用 FIFO 与 SRGB_NONLINEAR。默认 `Options::transparent = false`：表面提供 BGRA8/RGBA8_SRGB 时，几何与文字直接在 sRGB swapchain 图像上由硬件线性混合，没有 RGBA16F 目标和编码 pass；优先 OPAQUE composite alpha，并要求不透明清屏色。`transparent = true` 或表面只有 UNORM 时，保留 RGBA16F 线性目标并由编码 pass 写入 UNORM swapchain，优先 PRE_MULTIPLIED，否则选择 OPAQUE 并拒绝非不透明清屏色。两条路径都不保留第二张 RGBA8 离屏目标、不经 CPU 读回或 SHM 转送。未指定设备时优先集成 GPU，其次独显、虚拟设备和 CPU 驱动。每窗口一个设备，一次 graphics submission 在途；render-finished semaphore 按 swapchain image 保存，重建等待 device idle，不能把 graphics fence 当作 presentation 完成证明。
 

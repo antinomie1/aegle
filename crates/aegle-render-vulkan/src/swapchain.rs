@@ -15,6 +15,8 @@ pub(crate) struct Swapchain {
     pub bytes: u64,
     pub dirty: bool,
     pub transparent: bool,
+    /// An image was presented: later presents may report only changed regions.
+    presented: bool,
 }
 
 impl Swapchain {
@@ -119,6 +121,7 @@ impl Swapchain {
             extent,
             bytes: 0,
             dirty: false,
+            presented: false,
             transparent: !pipeline.direct && alpha == vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
         };
         // SAFETY: The selected graphics family can present; formats/caps were queried.
@@ -190,21 +193,35 @@ impl Swapchain {
         }
         Ok((index, self.signals[index as usize], suboptimal))
     }
-    pub fn present(&mut self, queue: vk::Queue, index: u32, suboptimal: bool) -> Result {
+    /// Presents image `index`. `damage`, when the device enabled
+    /// `VK_KHR_incremental_present`, names the regions that changed since the
+    /// previous present; a new swapchain's first present reports everything.
+    pub fn present(
+        &mut self,
+        queue: vk::Queue,
+        index: u32,
+        suboptimal: bool,
+        damage: Option<&[vk::RectLayerKHR]>,
+    ) -> Result {
         let waits = [self.signals[index as usize]];
         let chains = [self.handle];
         let indices = [index];
+        let rectangles = damage.filter(|_| self.presented).unwrap_or_default();
+        let regions = [vk::PresentRegionKHR::default().rectangles(rectangles)];
+        let mut regions = vk::PresentRegionsKHR::default().regions(&regions);
+        let info = vk::PresentInfoKHR::default()
+            .wait_semaphores(&waits)
+            .swapchains(&chains)
+            .image_indices(&indices);
+        let info = match rectangles.is_empty() {
+            true => info,
+            false => info.push_next(&mut regions),
+        };
         // SAFETY: The matching image was acquired and a successful graphics submit
         // will signal its semaphore. Reacquiring this image gates semaphore reuse.
-        let result = unsafe {
-            self.loader.queue_present(
-                queue,
-                &vk::PresentInfoKHR::default()
-                    .wait_semaphores(&waits)
-                    .swapchains(&chains)
-                    .image_indices(&indices),
-            )
-        };
+        // Present regions are chained only when the device enabled the extension.
+        let result = unsafe { self.loader.queue_present(queue, &info) };
+        self.presented |= result.is_ok();
         match result {
             Ok(changed) => {
                 self.dirty = changed || suboptimal;
