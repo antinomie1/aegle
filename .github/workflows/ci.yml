@@ -2,11 +2,12 @@ name: ci
 on: [push, pull_request]
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
-  RUSTDOCFLAGS: -D warnings
 jobs:
   linux:
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+      RUSTDOCFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -22,6 +23,8 @@ jobs:
       - run: cargo doc --workspace --all-features --no-deps
   features:
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
     strategy:
       fail-fast: false
       matrix:
@@ -57,8 +60,9 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets --all-features
-      - run: cargo check -p aegle --all-targets --no-default-features --features "windows,software,markup,motion"
+      # Only the Windows crates: the Wayland crate needs libxkbcommon.
+      - run: cargo clippy -p aegle-platform-win32 --all-targets -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "windows,software,markup,motion" -- -D warnings
   deny:
     runs-on: ubuntu-latest
     steps:

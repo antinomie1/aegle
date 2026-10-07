@@ -78,3 +78,5 @@ fn main() -> Result<()> {
 ## 许可证
 
 可任选 [Apache License 2.0](LICENSE-APACHE) 或 [MIT 许可证](LICENSE-MIT)。
+
+除非你明确另行声明，你有意提交以纳入本项目的任何贡献（按 Apache-2.0 许可证的定义），均按上述双许可证授权，不附加任何其他条款或条件。

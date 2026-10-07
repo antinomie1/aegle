@@ -27,7 +27,8 @@ pub(crate) unsafe extern "system" fn procedure(
                 (*pointer).hwnd.set(hwnd);
             }
         }
-        // SAFETY: this slot contains only our pointer, cleared at WM_NCDESTROY.
+        // SAFETY: this slot contains only our pointer, cleared in `Native::drop` or at
+        // WM_NCDESTROY when the system destroys the window first.
         let pointer = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *const Native;
         if pointer.is_null() {
             // SAFETY: unhandled lifecycle message forwarded unchanged.
