@@ -64,7 +64,7 @@ pub use aegle_theme::{
     Appearance, ControlKind, Font, Skin, Style, Theme, ThemeOverride, Token, TokenKind, TokenType,
     TokenValue, VisualState,
 };
-pub use aegle_types::{Color, Cursor, Point, Preferences, Rect, Size, TouchPhase};
+pub use aegle_types::{Color, Cursor, Point, Preferences, Rect, Region, Size, TouchPhase};
 pub use control::{Control, Plain};
 pub use effects::Shadow;
 pub use events::KeyEvent;

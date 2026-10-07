@@ -29,7 +29,7 @@ use crate::{
     input::InputState,
     state::{Shell, WindowState},
 };
-use aegle_types::{Cursor, PixelRect};
+use aegle_types::{Cursor, PixelRect, Region};
 
 /// One Wayland connection and blocking event loop, shared by all its windows.
 ///
@@ -374,16 +374,17 @@ impl Wayland {
     ///
     /// `damage` is the area that changed since the last presented frame, in
     /// buffer pixels; `None` changes every pixel. `draw` must clear or
-    /// overwrite the region it is given; the rest of the buffer already holds
-    /// the previous frame, and only `damage` is reported to the compositor.
+    /// overwrite every rectangle of the region it is given; the rest of the
+    /// buffer already holds the previous frame, and only `damage` is reported
+    /// to the compositor.
     /// Returns false without invoking `draw` if not yet configured, a frame is
     /// pending, or both buffers await release. A drawing error never presents
     /// partial pixels; request a redraw to retry.
     pub fn present<E>(
         &mut self,
         id: WindowId,
-        damage: Option<PixelRect>,
-        draw: impl FnOnce(&mut [u8], PixelSize, PixelRect) -> Result<(), E>,
+        damage: Option<Region<PixelRect>>,
+        draw: impl FnOnce(&mut [u8], PixelSize, &Region<PixelRect>) -> Result<(), E>,
     ) -> Result<bool, PresentError<E>> {
         let window = self
             .state
@@ -410,13 +411,16 @@ impl Wayland {
             return Ok(false);
         };
         let surface = window.window.wl_surface();
-        let damage = damage.unwrap_or(PixelRect::full(size.width, size.height));
-        surface.damage_buffer(
-            damage.x as i32,
-            damage.y as i32,
-            damage.width as i32,
-            damage.height as i32,
-        );
+        let full = [PixelRect::full(size.width, size.height)];
+        let damage = damage.as_ref().map_or(&full[..], Region::rects);
+        for rect in damage {
+            surface.damage_buffer(
+                rect.x as i32,
+                rect.y as i32,
+                rect.width as i32,
+                rect.height as i32,
+            );
+        }
         buffer
             .attach_to(surface)
             .map_err(|e| PresentError::Platform(Error::backend(e)))?;

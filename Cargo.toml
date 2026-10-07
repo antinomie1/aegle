@@ -48,3 +48,22 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# Debug builds keep application code debuggable but optimize dependencies and
+# the crates with per-pixel loops (the software renderer and the platforms'
+# pixel conversion), so examples stay interactive.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.dev.package.aegle-render-software]
+opt-level = 2
+
+[profile.dev.package.aegle-platform-wayland]
+opt-level = 2
+
+[profile.dev.package.aegle-platform-win32]
+opt-level = 2
+
+# rustc 1.96 overflows its stack optimizing wgpu-core here; it has no pixel loops.
+[profile.dev.package.wgpu-core]
+opt-level = 0

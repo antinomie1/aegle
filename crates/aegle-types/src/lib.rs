@@ -9,9 +9,11 @@ mod color;
 pub mod color_math;
 mod cursor;
 mod geometry;
+mod region;
 mod system;
 
 pub use color::Color;
 pub use cursor::Cursor;
 pub use geometry::{PixelRect, Point, Rect, Size};
+pub use region::{Area, Region};
 pub use system::{PointerButton, Preferences, TouchPhase};

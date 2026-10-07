@@ -6,6 +6,17 @@ use aegle_ui::{
     Result, Size,
 };
 
+/// Pointer motion, which a batch may apply before a single refresh.
+pub(crate) fn is_motion(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::Pointer {
+            kind: crate::platform::PointerKind::Move,
+            ..
+        }
+    )
+}
+
 pub(crate) fn target(event: &Event) -> Option<WindowId> {
     match event {
         Event::Configure { window, .. }

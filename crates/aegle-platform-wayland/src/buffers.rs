@@ -7,7 +7,7 @@ use smithay_client_toolkit::shm::{
 use wayland_client::protocol::wl_shm;
 
 use crate::{Error, PixelSize, PresentError};
-use aegle_types::PixelRect;
+use aegle_types::{PixelRect, Region};
 
 struct Image {
     // Destroy the buffer before releasing its pool when the image is idle.
@@ -15,8 +15,8 @@ struct Image {
     pool: SlotPool,
     width: u32,
     /// Pixels changed by frames drawn into the other image since this one was
-    /// last drawn; `None` when it is current.
-    stale: Option<PixelRect>,
+    /// last drawn; empty when it is current.
+    stale: Region<PixelRect>,
 }
 
 impl Image {
@@ -73,10 +73,11 @@ impl SoftwareBuffers {
         &mut self,
         shm: &Shm,
         size: PixelSize,
-        damage: Option<PixelRect>,
-        draw: impl FnOnce(&mut [u8], PixelRect) -> Result<(), E>,
+        damage: Option<Region<PixelRect>>,
+        draw: impl FnOnce(&mut [u8], &Region<PixelRect>) -> Result<(), E>,
     ) -> Result<Option<&Buffer>, PresentError<E>> {
-        let full = PixelRect::full(size.width, size.height);
+        let mut full = Region::default();
+        full.add(PixelRect::full(size.width, size.height));
         let damage = damage.unwrap_or(full);
         let (stride, mapping_bytes) = dimensions(size).map_err(PresentError::Platform)?;
 
@@ -125,38 +126,47 @@ impl SoftwareBuffers {
                 buffer,
                 pool,
                 width: size.width,
-                stale: Some(full),
+                stale: full,
             });
         }
 
         let image = self.images[index]
             .as_mut()
             .expect("selected image is allocated");
-        let region = image.stale.map_or(damage, |stale| stale.union(damage));
+        let mut region = image.stale;
+        region.extend(&damage);
         // A failed draw may leave any pixel of the region half drawn.
-        image.stale = Some(full);
+        image.stale = full;
         let pixels = image
             .buffer
             .canvas(&mut image.pool)
             .expect("selected image is idle");
-        draw(pixels, region).map_err(PresentError::Draw)?;
-        let stride = size.width as usize * 4;
-        let columns = region.x as usize * 4..(region.x + region.width) as usize * 4;
+        draw(pixels, &region).map_err(PresentError::Draw)?;
+        to_argb(pixels, size.width, &region);
+        image.stale = Region::default();
+        if let Some(other) = &mut self.images[1 - index] {
+            other.stale.extend(&damage);
+        }
+        Ok(self.images[index].as_ref().map(|image| &image.buffer))
+    }
+}
+
+/// Converts RGBA8 to native ARGB8888 inside `region`. Not generic, so it is
+/// compiled with this crate's optimization rather than each caller's.
+fn to_argb(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) {
+    let stride = width as usize * 4;
+    for rect in region.rects() {
+        let columns = rect.x as usize * 4..(rect.x + rect.width) as usize * 4;
         let rows = pixels
             .chunks_exact_mut(stride)
-            .skip(region.y as usize)
-            .take(region.height as usize);
+            .skip(rect.y as usize)
+            .take(rect.height as usize);
         for row in rows {
             for pixel in row[columns.clone()].chunks_exact_mut(4) {
                 let argb = u32::from_be_bytes([pixel[3], pixel[0], pixel[1], pixel[2]]);
                 pixel.copy_from_slice(&argb.to_ne_bytes());
             }
         }
-        image.stale = None;
-        if let Some(other) = &mut self.images[1 - index] {
-            other.stale = Some(other.stale.map_or(damage, |stale| stale.union(damage)));
-        }
-        Ok(self.images[index].as_ref().map(|image| &image.buffer))
     }
 }
 

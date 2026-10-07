@@ -159,7 +159,7 @@ impl Ui {
                 input_time: std::time::Instant::now(),
                 frame_time: std::time::Instant::now(),
                 animated: Default::default(),
-                damage: None,
+                damage: Default::default(),
                 damage_full: true,
                 wake: None,
                 descriptions: Default::default(),
@@ -211,6 +211,7 @@ impl Ui {
             height: Dimension::length(size.height),
         };
         aegle_layout::set_style(&mut state.tree, root, style)?;
+        state.damage_full = true;
         state.repaint = true;
         state.ime_dirty = true;
         Ok(())

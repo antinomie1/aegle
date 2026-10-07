@@ -58,17 +58,27 @@ impl App {
                 (a, b) => a.or(b),
             }
         })?;
+        let mut stale = false;
         loop {
             let event = self.runtime.borrow_mut().backend.next_event();
             let Some(event) = event else { break };
+            let motion = crate::native_input::is_motion(&event);
             if matches!(event, Event::Wake) {
                 self.drain_proxies()?;
             } else {
                 self.runtime.borrow_mut().event(event)?;
             }
             self.callbacks(callbacks)?;
-            // A focus switch cancels the old protocol session before the next
-            // queued event, preventing an old IME batch from editing a new field.
+            // Queued pointer motion shares one refresh, so a fast mouse costs
+            // one layout per batch. Other events refresh at once: a focus switch
+            // cancels the old protocol session before the next queued event,
+            // preventing an old IME batch from editing a new field.
+            stale = motion;
+            if !motion {
+                self.runtime.borrow_mut().refresh()?;
+            }
+        }
+        if stale {
             self.runtime.borrow_mut().refresh()?;
         }
         #[cfg(any(

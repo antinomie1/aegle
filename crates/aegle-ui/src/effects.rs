@@ -35,8 +35,6 @@ impl Node {
             state.decorations.entry(id).or_default().shadow = shadow;
             state.trim_decoration(id);
             state.tree.mark_dirty(id, Dirty::PAINT)?;
-            // The old shadow may reach beyond the new one.
-            state.repaint = true;
             Ok(())
         })
     }

@@ -43,6 +43,8 @@ pub struct Element {
     pub spin: crate::Transform,
     /// Layout space to presented space for this node, set only inside a spun subtree.
     pub xf: Option<aegle_scene::Affine>,
+    /// Window area this node's records covered when last refreshed.
+    pub painted: Option<Rect>,
     /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
     pub theme: Option<Rc<Theme>>,
     /// Whether `theme` was set on this node rather than inherited.
@@ -92,6 +94,7 @@ impl Element {
             offset: Point::default(),
             spin: crate::Transform::default(),
             xf: None,
+            painted: None,
             theme: None,
             local_theme: false,
             direction: None,
@@ -188,7 +191,7 @@ pub struct State {
     /// Controls that asked to repaint on the next frame.
     pub animated: std::collections::HashSet<NodeId>,
     /// Changed area not yet presented, see [`crate::Ui::damage`].
-    pub damage: Option<aegle_types::Rect>,
+    pub damage: aegle_types::Region<aegle_types::Rect>,
     /// The whole window changed since the last present.
     pub damage_full: bool,
     /// When a control library wants its [`Hooks::wake`] called; see [`crate::Ui::next_wake`].
@@ -293,6 +296,8 @@ impl State {
 
     pub fn invalidate_structure(&mut self) {
         self.topology_dirty = true;
+        // Drawing order changed; removed nodes no longer report their area.
+        self.damage_full = true;
         self.repaint = true;
         self.ime_dirty = true;
     }

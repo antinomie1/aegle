@@ -1,26 +1,33 @@
-//! Paint-only changes damage just the changed node, including its shadow;
-//! geometry and shadow changes damage the whole window until presented.
+//! A node that repaints, moves or resizes damages only its old and new
+//! areas, including its shadow; structure changes damage the whole window.
 
 use std::{cell::RefCell, rc::Rc};
 
-use aegle_ui::{Color, Point, Result, Shadow, Size, TextSystem, Theme, Ui};
+use aegle_ui::{Color, Point, Rect, Result, Shadow, Size, TextSystem, Theme, Ui};
+
+/// The damaged rectangles, or `None` for the whole window.
+fn damage(ui: &Ui) -> Result<Option<Vec<Rect>>> {
+    Ok(ui.damage()?.map(|d| d.rects().to_vec()))
+}
 
 #[test]
-fn paint_changes_damage_only_their_node() -> Result {
+fn changes_damage_only_old_and_new_areas() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.resize(Size::new(200.0, 100.0))?;
     let panel = ui.root().column()?;
     panel.set_size(80.0, 40.0)?;
+    panel.set_background(Color::BLACK)?;
     ui.refresh()?;
-    assert_eq!(ui.damage()?, None, "the first frame is whole");
+    assert_eq!(damage(&ui)?, None, "the first frame is whole");
     ui.clear_damage()?;
 
-    panel.set_background(Color::BLACK)?;
+    panel.set_background(Color::WHITE)?;
     assert!(ui.refresh()?);
-    assert_eq!(ui.damage()?, Some(panel.bounds()?));
+    let b = panel.bounds()?;
+    assert_eq!(damage(&ui)?, Some(vec![b]));
     // Damage accumulates until a present clears it.
     assert!(!ui.refresh()?);
-    assert_eq!(ui.damage()?, Some(panel.bounds()?));
+    assert_eq!(damage(&ui)?, Some(vec![b]));
     ui.clear_damage()?;
 
     let shadow = Shadow {
@@ -31,23 +38,34 @@ fn paint_changes_damage_only_their_node() -> Result {
     };
     panel.set_shadow(Some(shadow))?;
     ui.refresh()?;
-    assert_eq!(ui.damage()?, None, "an old shadow may reach further");
-    ui.clear_damage()?;
-    panel.set_background(Color::WHITE)?;
-    ui.refresh()?;
-    let b = panel.bounds()?;
     let reach = 1.0 + 2.0 * 3.0;
-    let cast = aegle_ui::Rect::new(
+    let cast = Rect::new(
         b.origin.x - reach,
         b.origin.y + 4.0 - reach,
         b.size.width + reach * 2.0,
         b.size.height + reach * 2.0,
     );
-    assert_eq!(ui.damage()?, Some(cast));
+    assert_eq!(damage(&ui)?, Some(vec![cast.union(b)]));
+    ui.clear_damage()?;
+    // Removing it repaints where the old shadow reached.
+    panel.set_shadow(None)?;
+    ui.refresh()?;
+    assert_eq!(damage(&ui)?, Some(vec![cast.union(b)]));
     ui.clear_damage()?;
 
+    // An unrelated node does not repaint when another one resizes.
+    let other = ui.root().column()?;
+    other.set_size(60.0, 20.0)?;
+    other.set_background(Color::BLACK)?;
+    ui.refresh()?;
+    ui.clear_damage()?;
     panel.set_width(120.0)?;
     ui.refresh()?;
-    assert_eq!(ui.damage()?, None);
+    assert_eq!(damage(&ui)?, Some(vec![b.union(panel.bounds()?)]));
+    ui.clear_damage()?;
+
+    ui.root().column()?;
+    ui.refresh()?;
+    assert_eq!(damage(&ui)?, None, "structure changes are whole");
     Ok(())
 }

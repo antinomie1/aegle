@@ -415,7 +415,7 @@ let ui = Ui::with_fonts(fonts, Theme::light())?;
 ui.root().button("OK")?;
 ui.resize(Size::new(320.0, 200.0))?;
 if ui.refresh()? {
-    // 保留上一帧像素的宿主可只重绘 damage（None 为整窗口），成功呈现后清除
+    // 保留上一帧像素的宿主可只重绘 damage 的矩形（None 为整窗口），成功呈现后清除
     let _damage = ui.damage()?;
     ui.visit_scenes(|scene, transform, clip| {
         // 交给 renderer：transform 为窗口逻辑平移，clip 为祖先裁剪（必须应用）
@@ -432,7 +432,7 @@ if ui.refresh()? {
 | `key(KeyInput { key, text, modifiers, pressed, repeat })`、`key_at(input, Instant)` | 键盘；`text` 为已翻译文字，先交给 `on_key` 处理器 |
 | `pointer_at(id, kind, point, modifiers, Instant)` | 带平台时间的指针事件 |
 | `wants_frames()`、`run_frame(Instant)` | 有逐帧回调或动画控件时每帧调用一次，再 `refresh`；空闲后新开始的动画从当前时刻起算 |
-| `damage()`、`clear_damage()` | 自上次呈现以来变化的逻辑区域（`None` 为整窗口），软件宿主据此局部重绘 |
+| `damage()`、`clear_damage()` | 自上次呈现以来变化的逻辑区域，最多 4 个矩形的 `Region`（`None` 为整窗口），软件宿主据此局部重绘 |
 | `scroll(point, dy)` / `scroll_by(point, delta)`、`wheel(point, delta, modifiers, Instant)` | 滚轮：先给其下取用滚轮的控件（交互 Canvas），再按嵌套视口路由 |
 | `window_focus(b)` | 窗口获得/失去键盘焦点 |
 | `ime(ImeEdit { .. })`、`ime_left()`、`take_ime_state(max)` | 输入法事务与需要同步给平台的状态 |

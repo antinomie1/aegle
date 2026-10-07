@@ -66,6 +66,12 @@ impl State {
             }
         }
         if self.tree.dirty(self.root)?.intersects(Dirty::LAYOUT) {
+            // A viewport repaints its scroll bars only when its extent changes.
+            let extents: Vec<_> = (0..self.order.len())
+                .map(|index| self.order[index])
+                .filter(|&id| self.tree.get(id).unwrap().context.control.viewport())
+                .map(|id| (id, self.scroll_limit(id)))
+                .collect();
             // A viewport that overflows reserves its scrollbar's footprint, which can
             // change wrapping, so lay out once more. Narrowing never removes an
             // overflow, so one extra pass is stable.
@@ -124,8 +130,13 @@ impl State {
                 let node = self.tree.get_mut(id).unwrap();
                 // Ensure retained text geometry uses final layout constraints, even
                 // when Taffy's measurement callback last evaluated an intrinsic pass.
-                let width = node.bounds().size.width;
+                let size = node.bounds().size;
+                let width = size.width;
                 let element = &mut node.context;
+                // Records are local, so only a new size or a viewport's scroll
+                // extent changes pixels; a mere move is placed when drawing.
+                let resized = (element.bounds.size.width, element.bounds.size.height)
+                    != (size.width, size.height);
                 let cx = MeasureCx {
                     fonts: &self.fonts,
                     padding: element.inset(&self.theme),
@@ -134,7 +145,15 @@ impl State {
                     rtl: element.rtl,
                 };
                 element.control.finalize(&cx)?;
-                self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+                let scrolled = extents
+                    .iter()
+                    .any(|&(viewport, limit)| viewport == id && self.scroll_limit(id) != limit);
+                let dirty = if resized || scrolled {
+                    Dirty::PAINT | Dirty::SEMANTICS
+                } else {
+                    Dirty::SEMANTICS
+                };
+                self.tree.mark_dirty(id, dirty)?;
             }
             self.geometry_dirty = true;
             self.ime_dirty = true;
@@ -196,8 +215,6 @@ impl State {
                 self.reveal(target)?;
             }
         }
-        // Any earlier cause moved geometry, structure or clips.
-        self.damage_full |= self.repaint;
         // An animation that starts outside a frame starts now, not at the
         // last frame, which may be long past.
         if self.animated.is_empty() {
@@ -208,8 +225,10 @@ impl State {
             if self.tree.dirty(id)?.intersects(Dirty::PAINT) {
                 self.record(id)?;
                 self.tree.clear_dirty(id, Dirty::PAINT)?;
-                self.damage_node(id);
                 self.repaint = true;
+                self.damage_node(id, true);
+            } else {
+                self.damage_node(id, false);
             }
         }
         Ok(std::mem::take(&mut self.repaint))

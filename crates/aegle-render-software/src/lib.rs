@@ -11,6 +11,7 @@ mod blend;
 mod effects;
 mod path;
 mod raster;
+mod shape;
 mod surface;
 #[cfg(feature = "text")]
 mod text;

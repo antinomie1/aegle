@@ -102,13 +102,22 @@ impl Frame<'_, '_, '_> {
             corner: shape.radius(),
             sigma: blur,
         };
+        // Without rotation or skew, a device row has one local y, so the
+        // vertical part of the profile is evaluated once per row.
+        let upright =
+            inverse.map_point(Point::new(0.0, 0.0)).y == inverse.map_point(Point::new(1.0, 0.0)).y;
         let row_width = self.surface.width as usize;
         for (y, row) in (bounds.top..).zip(bounds.rows(row_width)) {
+            let start = inverse.map_point(Point::new(bounds.left as f32 + 0.5, y as f32 + 0.5));
+            let rows = shadow.rows(start.y - center.1);
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
             for ((x, i), pixel) in (bounds.left..).zip(row).zip(pixels.chunks_exact_mut(4)) {
                 let alpha = clip.map_or(255, |clip| clip[i]);
                 let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
-                let value = shadow.at(local.x - center.0, local.y - center.1);
+                let value = match upright {
+                    true => shadow.across(local.x - center.0, &rows),
+                    false => shadow.across(local.x - center.0, &shadow.rows(local.y - center.1)),
+                };
                 if alpha > 0 && value > 0.0 {
                     blend_linear(pixel, paint.map(|channel| channel * value), alpha);
                 }
@@ -161,31 +170,38 @@ struct Shadow {
 }
 
 impl Shadow {
-    fn at(&self, x: f32, y: f32) -> f32 {
+    /// The vertical part at `y`: four rows as (half width of the curved
+    /// shape there, Gaussian mass of the row).
+    fn rows(&self, y: f32) -> [(f32, f32); 4] {
         let (low, high) = (y - self.half.1, y + self.half.1);
         let start = (-4.0 * self.sigma).clamp(low, high);
         let end = (4.0 * self.sigma).clamp(low, high);
         let step = (end - start) * 0.25;
         let scale = std::f32::consts::FRAC_1_SQRT_2 / self.sigma;
-        let mut value = 0.0;
-        for index in 0..4 {
+        std::array::from_fn(|index| {
             let (from, to) = (
                 start + step * index as f32,
                 start + step * (index + 1) as f32,
             );
             let mass = 0.5 * (erf(to * scale) - erf(from * scale));
-            value += self.row(x, y - (from + to) * 0.5) * mass;
-        }
-        value.clamp(0.0, 1.0)
+            let row = y - (from + to) * 0.5;
+            let delta = (self.half.1 - self.corner - row.abs()).min(0.0);
+            let curved = self.half.0 - self.corner
+                + (self.corner * self.corner - delta * delta).max(0.0).sqrt();
+            (curved, mass)
+        })
     }
 
-    fn row(&self, x: f32, y: f32) -> f32 {
-        let delta = (self.half.1 - self.corner - y.abs()).min(0.0);
-        let curved =
-            self.half.0 - self.corner + (self.corner * self.corner - delta * delta).max(0.0).sqrt();
+    /// The value at `x` across the rows of [`Self::rows`].
+    fn across(&self, x: f32, rows: &[(f32, f32); 4]) -> f32 {
         let scale = std::f32::consts::FRAC_1_SQRT_2 / self.sigma;
-        let integral = |edge: f32| 0.5 + 0.5 * erf(edge * scale);
-        integral(x + curved) - integral(x - curved)
+        let value: f32 = rows
+            .iter()
+            .map(|&(curved, mass)| {
+                0.5 * (erf((x + curved) * scale) - erf((x - curved) * scale)) * mass
+            })
+            .sum();
+        value.clamp(0.0, 1.0)
     }
 }
 

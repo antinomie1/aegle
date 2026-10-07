@@ -304,7 +304,7 @@ impl Frame<'_, '_, '_> {
         Ok(())
     }
 
-    fn geometry(
+    pub(crate) fn geometry(
         &mut self,
         shape: RoundedRect,
         width: Option<f32>,
@@ -344,27 +344,25 @@ impl Frame<'_, '_, '_> {
         self.renderer.path = path.clear();
     }
 
-    fn paint(
-        &mut self,
-        shape: RoundedRect,
-        color: Color,
-        width: Option<f32>,
-        state: State,
-    ) -> Result<(), RenderError> {
-        if shape.is_empty() || color.to_rgba()[3] == 0 || state.bounds.is_empty() {
-            return Ok(());
-        }
-        let path = self.geometry(shape, width, state.transform)?;
-        self.fill_device(path, FillRule::EvenOdd, color, state);
-        Ok(())
-    }
-
     /// Fills a device-space path, then recycles its storage for the next draw.
     pub(crate) fn fill_device(&mut self, path: Path, rule: FillRule, color: Color, state: State) {
         let bounds = state.bounds.intersect(Bounds::path(&path, self.surface));
+        self.cover(&path, rule, color, state, bounds);
+        self.renderer.path = path.clear();
+    }
+
+    /// Fills the part of a device-space path inside `bounds`.
+    pub(crate) fn cover(
+        &mut self,
+        path: &Path,
+        rule: FillRule,
+        color: Color,
+        state: State,
+        bounds: Bounds,
+    ) {
         let (coverage, clips) = self.renderer.masks.split_at_mut(1);
         let mask = &mut coverage[0];
-        rasterize(mask, &path, bounds, rule);
+        rasterize(mask, path, bounds, rule);
         let clip = state.clips.checked_sub(1).map(|index| clips[index].data());
         let paint = Solid::new(color);
         for row in bounds.rows(self.surface.width as usize) {
@@ -376,7 +374,6 @@ impl Frame<'_, '_, '_> {
                 paint.blend(pixel, alpha);
             }
         }
-        self.renderer.path = path.clear();
     }
 }
 
@@ -454,6 +451,32 @@ impl Bounds {
     }
     pub(crate) fn is_empty(self) -> bool {
         self.left >= self.right || self.top >= self.bottom
+    }
+    /// The parts of `self` outside `inner`, which it contains: the rows above
+    /// and below, then the columns left and right of it.
+    pub(crate) fn around(self, inner: Self) -> [Self; 4] {
+        [
+            Self {
+                bottom: inner.top,
+                ..self
+            },
+            Self {
+                top: inner.bottom,
+                ..self
+            },
+            Self {
+                top: inner.top,
+                bottom: inner.bottom,
+                right: inner.left,
+                ..self
+            },
+            Self {
+                top: inner.top,
+                bottom: inner.bottom,
+                left: inner.right,
+                ..self
+            },
+        ]
     }
     pub(crate) fn rows(self, width: usize) -> impl Iterator<Item = std::ops::Range<usize>> {
         (self.top..self.bottom).map(move |y| y * width + self.left..y * width + self.right)

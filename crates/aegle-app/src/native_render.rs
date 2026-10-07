@@ -113,8 +113,17 @@ impl Runtime {
                     let scale = info.scale as f32;
                     // Only the changed area is redrawn into a retained buffer.
                     let size = info.buffer_size()?;
-                    let damage = entry.ui.damage()?.map(|rect| {
-                        aegle_types::PixelRect::covering(rect, scale, size.width, size.height)
+                    let damage = entry.ui.damage()?.map(|logical| {
+                        let mut pixels = aegle_types::Region::default();
+                        for &rect in logical.rects() {
+                            pixels.add(aegle_types::PixelRect::covering(
+                                rect,
+                                scale,
+                                size.width,
+                                size.height,
+                            ));
+                        }
+                        pixels
                     });
                     let presented = self
                         .backend
@@ -124,17 +133,21 @@ impl Runtime {
                                 size.width,
                                 size.height,
                             )?;
-                            let region = Rect::new(
-                                region.x as f32,
-                                region.y as f32,
-                                region.width as f32,
-                                region.height as f32,
-                            );
-                            let mut frame = renderer.begin_region(&mut surface, background, region);
-                            scenes(&entry.ui, scale, |scene, transform, clip| {
-                                frame.draw_clipped(scene, transform, clip)?;
-                                Ok(())
-                            })
+                            for rect in region.rects() {
+                                let rect = Rect::new(
+                                    rect.x as f32,
+                                    rect.y as f32,
+                                    rect.width as f32,
+                                    rect.height as f32,
+                                );
+                                let mut frame =
+                                    renderer.begin_region(&mut surface, background, rect);
+                                scenes(&entry.ui, scale, |scene, transform, clip| {
+                                    frame.draw_clipped(scene, transform, clip)?;
+                                    Ok(())
+                                })?;
+                            }
+                            Ok(())
                         })
                         .map_err(|error| format!("present: {error}"))?;
                     if presented {

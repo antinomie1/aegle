@@ -1,6 +1,6 @@
 #![allow(unsafe_code)]
 use crate::{Error, PixelSize, PresentError, Win32, WindowId};
-use aegle_types::PixelRect;
+use aegle_types::{PixelRect, Region};
 use windows::Win32::{
     Graphics::{Dwm::DwmFlush, Gdi::*},
     UI::WindowsAndMessaging::*,
@@ -17,8 +17,8 @@ impl Win32 {
     pub fn present<E>(
         &mut self,
         id: WindowId,
-        damage: Option<PixelRect>,
-        draw: impl FnOnce(&mut [u8], PixelSize, PixelRect) -> Result<(), E>,
+        damage: Option<Region<PixelRect>>,
+        draw: impl FnOnce(&mut [u8], PixelSize, &Region<PixelRect>) -> Result<(), E>,
     ) -> Result<bool, PresentError<E>> {
         let native = self.window(id).map_err(PresentError::Platform)?;
         native.redraw_queued.set(false);
@@ -47,31 +47,14 @@ impl Win32 {
                 .map_err(|e| PresentError::Platform(Error::Backend(e.to_string())))?;
         }
         pixels.resize(length, 0);
-        let full = PixelRect::full(size.width, size.height);
+        let mut full = Region::default();
+        full.add(PixelRect::full(size.width, size.height));
         let region = match native.drawn.take() {
             Some(drawn) if drawn == size => damage.unwrap_or(full),
             _ => full,
         };
-        draw(&mut pixels, size, region).map_err(PresentError::Draw)?;
-        let columns = region.x as usize * 4..(region.x + region.width) as usize * 4;
-        let rows = || {
-            pixels
-                .chunks_exact(size.width as usize * 4)
-                .skip(region.y as usize)
-                .take(region.height as usize)
-        };
-        if rows().any(|row| row[columns.clone()].chunks_exact(4).any(|p| p[3] != 255)) {
-            return Err(PresentError::Platform(Error::UnsupportedTransparency));
-        }
-        for row in pixels
-            .chunks_exact_mut(size.width as usize * 4)
-            .skip(region.y as usize)
-            .take(region.height as usize)
-        {
-            for pixel in row[columns.clone()].chunks_exact_mut(4) {
-                pixel.swap(0, 2);
-            }
-        }
+        draw(&mut pixels, size, &region).map_err(PresentError::Draw)?;
+        to_bgra(&mut pixels, size.width, &region).map_err(PresentError::Platform)?;
         let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -122,4 +105,27 @@ impl Win32 {
         native.drawn.set(Some(size));
         Ok(true)
     }
+}
+
+/// Converts opaque RGBA8 to BGRA inside `region`. Not generic, so it is
+/// compiled with this crate's optimization rather than each caller's.
+fn to_bgra(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) -> Result<(), Error> {
+    let stride = width as usize * 4;
+    for rect in region.rects() {
+        let columns = rect.x as usize * 4..(rect.x + rect.width) as usize * 4;
+        let rows = pixels
+            .chunks_exact_mut(stride)
+            .skip(rect.y as usize)
+            .take(rect.height as usize);
+        for row in rows {
+            let row = &mut row[columns.clone()];
+            if row.chunks_exact(4).any(|p| p[3] != 255) {
+                return Err(Error::UnsupportedTransparency);
+            }
+            for pixel in row.chunks_exact_mut(4) {
+                pixel.swap(0, 2);
+            }
+        }
+    }
+    Ok(())
 }

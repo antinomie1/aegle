@@ -21,6 +21,8 @@
 
 ## 示例与检查命令
 
+发布版本最快。调试构建也保持可交互：workspace 的 dev profile 以 opt-level 2 编译依赖、软件 renderer 和平台像素转换（wgpu-core 除外，本机 rustc 1.96 优化它时栈溢出），其余代码仍可调试。
+
 ```sh
 cargo run -p aegle --example hello --release
 cargo run -p aegle --example controls --release
