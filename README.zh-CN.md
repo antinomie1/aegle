@@ -49,7 +49,7 @@ fn main() -> Result<()> {
 
 ## Features
 
-在 `aegle` crate 上设置。默认启用 `native`、`software`、`system-fonts`、`markup` 与 `motion`。
+在 `aegle` crate 上设置。默认启用 `native`、`software`、`system-fonts`、`text-dictionary`、`markup`、`motion`、`effects` 与 `colrv1`。
 
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
@@ -57,7 +57,10 @@ fn main() -> Result<()> {
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现 |
 | `markup` | ✓ | `ui!` 宏与动态标记引擎 |
+| `text-dictionary` | ✓ | 中日及东南亚文字的词典分词 |
 | `motion` | ✓ | 外观/位移过渡 |
+| `effects` | ✓ | 图像效果（`aegle::image::effects`） |
+| `colrv1` | ✓ | COLRv1 彩色字形 |
 | `vulkan` |  | Vulkan 绘制 |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制 |
 | `accessibility` |  | 导出语义树，不接系统适配器 |

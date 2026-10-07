@@ -211,7 +211,7 @@ impl Ui {
             let result = handler(event);
             {
                 let mut state = self.state.borrow_mut();
-                if state.key_version == version && result.is_ok() {
+                if state.key_version == version {
                     state.key_handler = Some(handler);
                 }
             }

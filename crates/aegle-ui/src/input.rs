@@ -298,7 +298,7 @@ impl State {
             Some(Clipboard::Paste) => self.clipboard = Some(ClipboardRequest::Read),
             Some(request) => {
                 let Some(field) = self.tree.get(target).unwrap().context.control.editor() else {
-                    unreachable!("only editors request clipboard writes")
+                    return Err(UiError::WrongKind.into());
                 };
                 let text = field.editor().selected_text().to_owned();
                 self.clipboard = Some(ClipboardRequest::Write(text));

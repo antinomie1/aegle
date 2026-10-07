@@ -127,9 +127,12 @@ impl Drop for Native {
     fn drop(&mut self) {
         self.registered.set(false);
         // SAFETY: last Rc surface lease dropped on the UI thread. The userdata
-        // pointer remains valid throughout synchronous destruction callbacks.
+        // slot is cleared first, so destruction callbacks never form a shared
+        // reference to this value while `&mut self` is live; they reach
+        // DefWindowProcW.
         unsafe {
             if !self.hwnd.get().is_invalid() {
+                SetWindowLongPtrW(self.hwnd.get(), GWLP_USERDATA, 0);
                 ImmAssociateContext(self.hwnd.get(), HIMC::default());
                 let _ = DestroyWindow(self.hwnd.get());
             }

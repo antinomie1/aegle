@@ -34,10 +34,10 @@ impl Parser<'_, '_> {
             "string" => Type::String,
             "list" => {
                 self.expect("<", "expected '<' after list")?;
-                let item = self.ty()?;
-                if matches!(item, Type::List(_)) {
+                if matches!(self.current.kind, Kind::Identifier("list")) {
                     return Err(self.error("list items must be int, string or a record"));
                 }
+                let item = self.ty()?;
                 self.expect(">", "expected '>' to close the list type")?;
                 Type::List(Box::new(item))
             }
@@ -46,7 +46,18 @@ impl Parser<'_, '_> {
     }
 
     pub fn expr(&mut self) -> Result<Expr, Error> {
+        self.links = 0;
         self.binary(0, 0)
+    }
+
+    /// Rejects a tree whose left spine of operators and field reads, plus bracket
+    /// nesting, would exceed the depth limit.
+    fn link(&mut self, depth: usize, spine: usize) -> Result<(), Error> {
+        self.links = spine;
+        if depth + spine > self.limits.max_depth {
+            return Err(self.error("expression nesting exceeds its depth limit"));
+        }
+        Ok(())
     }
 
     fn binary(&mut self, level: usize, depth: usize) -> Result<Expr, Error> {
@@ -59,7 +70,11 @@ impl Parser<'_, '_> {
                 break;
             }
             self.advance()?;
+            // Each operator deepens the left spine of the tree by one.
+            let spine = self.links + 1;
+            self.link(depth, spine)?;
             let right = self.binary(level + 1, depth)?;
+            self.links = spine;
             let span = crate::Span {
                 start: left.span.start,
                 end: right.span.end,
@@ -109,11 +124,14 @@ impl Parser<'_, '_> {
     fn primary(&mut self, depth: usize) -> Result<Expr, Error> {
         let start = self.current.span.start;
         let token = self.advance()?;
+        let entry = self.links;
         let mut expr = self.atom(start, token, depth)?;
+        self.links = entry;
         // Postfix field reads: `task.title`.
         while matches!(self.current.kind, Kind::Punct(".")) {
             self.advance()?;
             let (field, _) = self.identifier()?;
+            self.link(depth, self.links + 1)?;
             expr = Expr {
                 kind: ExprKind::Field(Box::new(expr), field),
                 span: self.span(start),
@@ -172,8 +190,10 @@ impl Parser<'_, '_> {
     /// Parses comma-separated expressions up to and including `close`.
     pub(crate) fn list(&mut self, close: &str, depth: usize) -> Result<Vec<Expr>, Error> {
         let mut items = Vec::new();
+        let entry = self.links;
         while !matches!(self.current.kind, Kind::Punct(p) if p == close) {
             items.push(self.binary(0, depth + 1)?);
+            self.links = entry;
             if !matches!(self.current.kind, Kind::Punct(p) if p == close) {
                 self.expect(",", "expected ',' between values")?;
             }

@@ -261,8 +261,8 @@ impl State {
         if let Some(&value) = self.tokens.global.get(&index) {
             return Ok(value);
         }
-        let default = REGISTRY.with_borrow(|r| r.entries[usize::from(index)].1);
-        valid(default.unwrap().resolve(theme))
+        let default = REGISTRY.with_borrow(|r| r.entries.get(usize::from(index)).and_then(|e| e.1));
+        valid(default.ok_or(UiError::Token)?.resolve(theme))
     }
 
     /// Sets or clears a custom token for the UI (`id` is `None`) or a subtree,
@@ -331,26 +331,28 @@ impl State {
     /// Sets a bindable property, or with `None` clears it, returning it to the
     /// skin or theme. The value has the slot's kind.
     pub fn write_slot(&mut self, id: NodeId, slot: TokenSlot, value: Option<TokenValue>) -> Result {
-        fn typed<T: TokenType>(value: Option<TokenValue>) -> Option<T> {
-            value.map(|v| T::from_value(v).expect("binding kinds are checked when bound"))
+        fn typed<T: TokenType>(value: Option<TokenValue>) -> Result<Option<T>> {
+            value
+                .map(|v| T::from_value(v).ok_or_else(|| UiError::Token.into()))
+                .transpose()
         }
         match slot {
             TokenSlot::Color(slot) => {
-                let color = typed(value);
+                let color = typed(value)?;
                 self.edit_style(id, |style| *slot.field(style) = color)
             }
-            TokenSlot::Length(LengthSlot::FontSize) => self.set_font_size(id, typed(value)),
+            TokenSlot::Length(LengthSlot::FontSize) => self.set_font_size(id, typed(value)?),
             TokenSlot::Length(LengthSlot::Padding) => {
-                self.set_padding(id, typed::<f32>(value).map(Insets::all))
+                self.set_padding(id, typed::<f32>(value)?.map(Insets::all))
             }
             TokenSlot::Length(LengthSlot::Gap) => {
-                self.set_gaps(id, typed::<f32>(value).map(|g| (g.into(), g.into())))
+                self.set_gaps(id, typed::<f32>(value)?.map(|g| (g.into(), g.into())))
             }
             TokenSlot::Length(slot) => {
-                let length = typed(value);
+                let length = typed(value)?;
                 self.edit_style(id, |style| *slot.field(style) = length)
             }
-            TokenSlot::Font => self.set_font(id, typed(value)),
+            TokenSlot::Font => self.set_font(id, typed(value)?),
             #[cfg(feature = "motion")]
             TokenSlot::Transition(property) => {
                 let easing = self
@@ -359,7 +361,7 @@ impl State {
                     .get(&id)
                     .and_then(|track| track.timing(property))
                     .map_or(crate::Transition::default().easing, |timing| timing.easing);
-                let timing = typed(value).map(|duration| crate::Transition::new(duration, easing));
+                let timing = typed(value)?.map(|duration| crate::Transition::new(duration, easing));
                 self.set_property_transition(id, property, timing)
             }
         }

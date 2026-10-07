@@ -162,7 +162,11 @@ Column {
         ),
         (
             "record T { id: int }\nColumn { state ts: list<T> = [T(1)]; for t in ts { Text {} } }",
-            "needs `key`",
+            "add `key`",
+        ),
+        (
+            "Column { state xs: list<float> = [1.5]; for x in xs { Text {} } }",
+            "add `key`",
         ),
         (
             "Column { state n: int = 0; Button { on clicked { if true { let a = 1; n = a }; n = a } } }",
@@ -226,4 +230,25 @@ fn ceiling() {
         check_program(vec![deeper()]).unwrap_err().1.message,
         message
     );
+}
+
+#[test]
+fn deep_types_and_expression_chains_are_rejected_not_overflowed() {
+    let chain = |n: usize| format!("Column {{ gap: {} }}", vec!["1"; n].join(" + "));
+    assert!(parse(&chain(20)).is_ok());
+    assert!(parse(&chain(20_000)).is_err());
+    let fields = format!("Column {{ gap: a{} }}", ".b".repeat(20_000));
+    assert!(parse(&fields).is_err());
+    let lists = format!(
+        "record R {{ a: {}int{} }}",
+        "list<".repeat(100_000),
+        ">".repeat(100_000)
+    );
+    assert!(parse(&lists).is_err());
+}
+
+#[test]
+fn integer_literals_beyond_i64_are_errors_not_floats() {
+    assert!(parse("Column { gap: 9223372036854775807 }").is_ok());
+    assert!(parse("Column { gap: 9223372036854775808 }").is_err());
 }

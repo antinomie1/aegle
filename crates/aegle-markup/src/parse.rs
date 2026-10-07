@@ -36,6 +36,7 @@ pub fn parse_with_limits(source: &str, limits: &Limits) -> Result<Document, Erro
         last_end: 0,
         limits,
         nodes: 0,
+        links: 0,
     };
     let mut document = Document {
         uses: Vec::new(),
@@ -82,6 +83,8 @@ pub(crate) struct Parser<'a, 'l> {
     last_end: usize,
     pub limits: &'l Limits,
     nodes: usize,
+    /// Operators and field reads on the expression spine being parsed.
+    pub links: usize,
 }
 
 impl<'a> Parser<'a, '_> {

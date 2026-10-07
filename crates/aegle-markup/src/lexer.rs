@@ -172,12 +172,10 @@ impl<'a> Lexer<'a> {
         } else if self.source[self.cursor..].starts_with("fr") {
             self.cursor += 2;
             Ok(Kind::Fraction(number))
-        } else if let Some(integer) = literal
-            .bytes()
-            .all(|byte| byte.is_ascii_digit())
-            .then(|| literal.parse().ok())
-            .flatten()
-        {
+        } else if literal.bytes().all(|byte| byte.is_ascii_digit()) {
+            let integer = literal
+                .parse()
+                .map_err(|_| self.error(start, "integer literal must fit in i64"))?;
             Ok(Kind::Integer(integer))
         } else {
             Ok(Kind::Number(number))

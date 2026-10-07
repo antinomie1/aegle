@@ -36,7 +36,7 @@ cargo run -p aegle --example hello_markup --release
 cargo run -p aegle --example markup_controls --release
 cargo run -p aegle --example components --release
 cargo run -p aegle-render-vulkan --example geometry --release -- target/aegle-vulkan.ppm
-cargo run -p aegle-render-vulkan --features text --example text_scene --release -- target/aegle-vulkan-text.ppm
+cargo run -p aegle-render-vulkan --features text --example vulkan_text_scene --release -- target/aegle-vulkan-text.ppm
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
 cargo run -p aegle-layout --example retained --release
@@ -196,7 +196,7 @@ app 的可选 motion 维护稀疏过渡策略及活动表，Node 支持目标/�
 - 全workspace all-features仍为30个常规场景；all-targets/all-features、Vulkan无默认feature、glyph/software有/无feature场景、严格Rustdoc和格式检查通过。新增一个224行ignored文字综合场景，仅扩展既有glyph场景验证共享key/变换。
 - RX 6800 XT与Lavapipe分别通过几何和文字综合场景，并开启Khronos层和同步验证，无Vulkan验证错误/警告。文字场景验证CJK/quarterphase、透明颜色、COLRv0/PNG字形、过滤/反射/旋转/clip、几何文字穿插顺序，以及CPU缓存仅一个条目时的GPU命中、取消帧、整页淘汰、预算/超大字形错误、resize和释放重建；与软件逐通道对照容差3。当时未启用中日词典，debug下的ICU诊断不代表字形或Vulkan失败。
 - 独立复核的临时小探针发现完全裁掉的字形仍因解析几何AA外扩而占用图集，单条目配置错误返回AtlasFull。修复后轴向clip使用真实像素覆盖边界，字形只保留自身过滤支持范围；同一探针及正式文字场景都验证一条目可绘制唯一可见字形。页数上限同时为目标/clip/upload/readback预留五个Vk内存分配；上传缓冲在fence完成即释放，避免只等下一帧。
-- 800×480 release text_scene已在RX硬件运行并检查图片，包含CJK三语、裁剪、四相位和仿射文字；库不内嵌字体，示例使用有OFL许可的测试子集。未重复真人输入法、原生桌面或屏幕阅读器验收。
+- 800×480 release vulkan_text_scene已在RX硬件运行并检查图片，包含CJK三语、裁剪、四相位和仿射文字；库不内嵌字体，示例使用有OFL许可的测试子集。未重复真人输入法、原生桌面或屏幕阅读器验收。
 - 相同示例场景的临时release成本探针：scene/font准备0.220 ms、renderer初始化14.317 ms、首帧提交及wait为1.911 ms；预热20帧后300帧的begin/draw/finish/wait平均0.166 ms、P95 0.218 ms，无逐帧读回。首次末帧读回另为4.287 ms。它是单次桌面GPU主机wall-time样本，不是GPU timestamp、窗口延迟或嵌入式性能保证。
 - 该探针计时前后显式设备分配均5,791,872 B（含1张262,144 B字形页），绘制/clip容量33,792 B；127个图集条目，CPU上传capacity40,960 B、128个region槽、CPU字形像素29,004 B。等待后staging为0，首次读回后设备分配7,327,872 B。空字形及被裁掉未入图集字形仍会查CPU缓存，raster_requests在300帧中由547增至6547；未发生图集上传，不将此计数误称为重新光栅化。所有计量均不含完整driver/font/shaping/allocator成本，不能当作PSS或资源目标已达标。
 
@@ -387,7 +387,7 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 
 ## 逐帧回调、输入时间与窗口级按键
 
-- `aegle-ui/src/events.rs`：`Node::on_frame(FnMut(Node, Instant))` / `clear_on_frame`，按注册顺序存放，控件删除时移除；`Ui::run_frame(now)` 在借用之外逐个取出回调调用，回调可替换或清除自己，出错的回调被移除并返回错误；`Ui::wants_frames()` 供宿主决定是否继续请求帧，注册时置 repaint 以启动空闲窗口的帧循环。`Ui::on_key` / `clear_on_key` 与 `Window::on_key`：处理器在焦点控件与 Tab 遍历之前、借用之外运行，返回 true 消费按键，可在调用中替换自己，出错时被移除；`KeyEvent` 带 `time: Instant` 与 `editing`。`Ui::key` / `pointer` 改为以当前时间调用新的 `key_at` / `pointer_at`，`InputCx::time` 把时间交给自定义控件。
+- `aegle-ui/src/events.rs`：`Node::on_frame(FnMut(Node, Instant))` / `clear_on_frame`，按注册顺序存放，控件删除时移除；`Ui::run_frame(now)` 在借用之外逐个取出回调调用，回调可替换或清除自己，出错的回调被移除并返回错误；`Ui::wants_frames()` 供宿主决定是否继续请求帧，注册时置 repaint 以启动空闲窗口的帧循环。`Ui::on_key` / `clear_on_key` 与 `Window::on_key`：处理器在焦点控件与 Tab 遍历之前、借用之外运行，返回 true 消费按键，可在调用中替换自己，出错时错误照常返回而处理器保留；`KeyEvent` 带 `time: Instant` 与 `editing`。`Ui::key` / `pointer` 改为以当前时间调用新的 `key_at` / `pointer_at`，`InputCx::time` 把时间交给自定义控件。
 - `aegle-app`：原生循环在窗口的下一帧到期（收到 Redraw）且有逐帧回调时，于运行时借用之外调用 `run_frame`，再处理回调与刷新；呈现后只要 `has_animations()` 或 `wants_frames()` 为真就请求下一帧。`event_clock.rs` 把 Wayland 键盘/指针时间戳与 Win32 新增的 `Event::Key/Pointer::time`（`GetMessageTime`）映射到 `Instant`。
 - 验证：新增 `aegle-ui/tests/events.rs`（顺序、借用外修改控件、替换、删除控件、出错移除）与 `aegle-widgets/tests/events.rs`（处理器先于焦点控件、消费空格后复选框不切换、未消费的 Tab 仍遍历、editing 标志、自我替换、出错移除后按键恢复到控件）；`cargo test --workspace --all-features` 通过。私有 headless Sway（GLES2 compositor，60 Hz 输出）上临时探针用 `on_frame` 计数，1 秒内 66 次回调，随后清除并退出。
 - Windows 交叉检查：`windows,software,system-fonts,markup,motion,windows-accessibility,vulkan,wgpu,grid` 的 `--all-targets` 与最小 `windows,software,system-fonts` 组合均通过 `cargo check`；没有链接或运行。
@@ -564,6 +564,14 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 问题：只有默认与全部 feature 无警告。facade 只开 `markup` 不开 `motion` 时 `tests/tokens.rs` 编译失败；没有原生平台或 GPU renderer 时 `pub use aegle_app::*` 为空导入；只开平台不开 renderer 时 `Runtime::present` 有不可达语句；`aegle-image` 不开任何格式时测试有未用的导入、变量和函数。
 - 修改：tokens 测试的过渡部分只在 `motion` 下编译；空的 glob 重导出与无 renderer 时的不可达代码按条件允许并注明原因；`aegle-image` 测试按格式 feature 引入辅助函数，PNG 断言改用两种颜色。
 - 验证：workspace 每个 crate 分别在默认、无默认与全部 feature 下 `cargo check --all-targets` 无警告；facade 另检查无 feature、`markup`、`markup,wayland`、`markup,wayland,software`、`markup,motion`、`motion,wayland,software`、`grid,markup` 及 `wayland` 搭配各 GPU renderer，Windows 交叉检查 `windows`、`windows,markup`、`windows,software,markup,motion`，均无警告；facade 在默认、`markup`、`markup,motion,grid` 下测试通过，`aegle-image` 在无格式、各单一格式与全部格式下测试通过。其他组合未逐一检查。
+
+## 复审缺陷修复
+
+- 解析器：运算符链与字段读取的左脊计入同一 `max_depth`，`list<list<…>>` 在读到第二个 `list` 时即拒绝，不再递归；超出 i64 的整数字面量报错而非降为 f32。`tests/program.rs` 用 2 万项链、2 万级字段链与 10 万层 `list<` 验证返回错误而非栈溢出。
+- 加载器：`for` 无 `key` 时，列表项必须是 int 或 string（record、float、bool 要求显式 key），`list<float>` 不再在构建时 panic。
+- UI：`set_visible(true)` 恢复隐藏前的 display（grid/stack 不再被改成 flex）；非编辑器控件请求剪贴板写入返回 `WrongKind`；`on_key` 处理器出错时保留，错误照常返回；`Hooks::removed` 文档改为"节点已销毁，id 仅作库数据的键"；令牌索引在 `token_value`/`write_slot` 中按类型检查并返回 `Token` 错误。
+- Win32：窗口销毁前先清除 userdata，销毁回调不再从 `&mut self` 之外构造 `&Native`；删除无人发送的 `WM_QUIT` 分支。**此改动未在 Windows 上编译或运行。**
+- 工程：Vulkan 示例改名 `vulkan_text_scene`，不再与软件渲染示例重名；新增 `.github/workflows/ci.yml`、`clippy.toml`、`deny.toml`；README 默认 feature 列表与 vulkan.md 的设备共享描述已更正。**Clippy 与 cargo-deny 在本机未安装，尚未运行，CI 首次运行可能需要清理告警。**
 
 ## 剩余工作
 

@@ -153,11 +153,11 @@ impl Checker {
                         }
                         Some(Rc::new(key))
                     }
-                    None if matches!(*item, Type::Record(_)) => {
+                    None if !matches!(*item, Type::Int | Type::String) => {
                         scope.items.pop();
                         return Err(Error::new(
                             list.span,
-                            "a list of records needs `key` followed by an int or string expression",
+                            "only int or string items are their own key; add `key` followed by an int or string expression",
                         ));
                     }
                     None => None,

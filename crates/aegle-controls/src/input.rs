@@ -156,7 +156,7 @@ pub enum Action {
 /// Clipboard transfer performed by the host's native clipboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Clipboard {
-    /// Store the editor's selected text.
+    /// Store the editor's selected text; only controls exposing an editor may request it.
     Copy,
     /// Store the selected text, then delete it by delivering `Input::Paste("")`.
     Cut,

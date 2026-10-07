@@ -369,12 +369,6 @@ impl Win32 {
         // SAFETY: initialized writable MSG, UI thread translates/dispatches it.
         while unsafe { PeekMessageW(&mut message, None, 0, 0, PM_REMOVE) }.as_bool() {
             let queued = self.events.borrow().len();
-            if message.message == WM_QUIT {
-                for window in &self.windows {
-                    window.emit(Event::Close { window: window.id });
-                }
-                break;
-            }
             unsafe {
                 let _ = TranslateMessage(&message);
                 DispatchMessageW(&message);

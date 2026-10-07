@@ -30,6 +30,8 @@ pub struct Element {
     pub clips: bool,
     pub scroll: Point,
     pub visible: bool,
+    /// Layout mode to restore when a hidden node is shown again.
+    pub shown_display: aegle_layout::Display,
     pub effective_visible: bool,
     pub enabled: bool,
     pub label: String,
@@ -85,6 +87,7 @@ impl Element {
             clips: false,
             scroll: Point::default(),
             visible: true,
+            shown_display: aegle_layout::Display::Flex,
             effective_visible: true,
             enabled: true,
             label: String::new(),
@@ -118,7 +121,9 @@ pub struct Hooks {
     pub overlay_at: Option<fn(&State, Point) -> Option<NodeId>>,
     /// After geometry: moves overlays; returns whether anything moved.
     pub place: Option<fn(&mut State) -> bool>,
-    /// A node is being removed (called for it and each descendant).
+    /// A node was removed (called for it and each descendant, children first, after the
+    /// subtree is destroyed). The id is dead: use it only as the key of library data
+    /// and never query the tree with it.
     pub removed: Option<fn(&mut State, NodeId)>,
     /// A subtree was removed.
     pub removed_after: Option<fn(&mut State) -> Result>,
@@ -284,11 +289,12 @@ impl State {
         }
         self.tree.get_mut(id).unwrap().context.visible = visible;
         let mut style = self.tree.get(id).unwrap().style().clone();
-        style.display = if visible {
-            aegle_layout::Display::Flex
+        if visible {
+            style.display = self.tree.get(id).unwrap().context.shown_display;
         } else {
-            aegle_layout::Display::None
-        };
+            self.tree.get_mut(id).unwrap().context.shown_display = style.display;
+            style.display = aegle_layout::Display::None;
+        }
         aegle_layout::set_style(&mut self.tree, id, style)?;
         self.repaint = true;
         Ok(())

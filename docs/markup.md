@@ -112,7 +112,7 @@ ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`
 
 `transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。过渡在本次构建的全部属性设置后才安装（见上文构建顺序），首次显示没有初始样式动画。`transition` 为外观、位移、缩放和旋转统一设置时长，四个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
 
-独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、静态文档的 `check`、多文件 `compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，表达式嵌套也受层数上限约束；显式解析深度最多 `Limits::MAX_DEPTH`（256）。尺寸预算只由解析器执行；`check` 与 `check_program` 对手工构造的 AST 只施加同一 256 层上限，使构建不会递归更深。`ui!` 与 `Program::load` 使用默认上限。`choices(name)` 列出枚举属性接受的标识符：`ui!` 按 `snake_case` → `CamelCase` 生成变体，缺少变体即编译错误；运行时引擎逐项显式映射，不把未知值落到默认值。静态文档的运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
+独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、静态文档的 `check`、多文件 `compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，括号、调用实参和列表的嵌套，以及运算符与字段读取构成的左脊，合计受同一层数上限约束，`list<…>` 类型不允许嵌套；整数字面量必须在 i64 内；显式解析深度最多 `Limits::MAX_DEPTH`（256）。尺寸预算只由解析器执行；`check` 与 `check_program` 对手工构造的 AST 只施加同一 256 层上限，使构建不会递归更深。`ui!` 与 `Program::load` 使用默认上限。`choices(name)` 列出枚举属性接受的标识符：`ui!` 按 `snake_case` → `CamelCase` 生成变体，缺少变体即编译错误；运行时引擎逐项显式映射，不把未知值落到默认值。静态文档的运行时不保留 AST、schema 或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
 
 ## 当前动态标记
 

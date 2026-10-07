@@ -36,7 +36,7 @@ unsafe_code = "warn"
 missing_docs = "warn"
 
 [[example]]
-name = "text_scene"
+name = "vulkan_text_scene"
 required-features = ["text"]
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]

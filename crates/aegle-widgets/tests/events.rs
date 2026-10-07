@@ -76,7 +76,9 @@ fn window_key_handler_sees_keys_first_and_can_consume_them() -> Result {
     ui.clear_on_key()?;
     ui.on_key(|_| Err("fails".into()))?;
     assert!(ui.key(key(Key::Enter)).is_err());
-    // A failing handler is dropped; keys reach controls again.
+    // A failing handler stays installed and reports again until it is cleared.
+    assert!(ui.key(key(Key::Enter)).is_err());
+    ui.clear_on_key()?;
     toggle.focus()?;
     space(&ui)?;
     assert!(toggle.is_checked()?);

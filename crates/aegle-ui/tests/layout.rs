@@ -201,3 +201,21 @@ fn grids_place_span_and_stack_children() -> Result {
     grid.set_flow(aegle_ui::Flow::Column)?;
     Ok(())
 }
+
+#[cfg(feature = "grid")]
+#[test]
+fn hiding_and_showing_a_stack_keeps_its_layout_mode() -> Result {
+    let ui = ui()?;
+    let stack = ui.root().stack()?;
+    let first = boxed(&stack, 10.0, 10.0)?;
+    let second = boxed(&stack, 10.0, 10.0)?;
+    ui.refresh()?;
+    let (before_first, before_second) = (at(&first)?, at(&second)?);
+    assert_eq!(before_first, before_second, "stack children overlap");
+    stack.set_visible(false)?;
+    ui.refresh()?;
+    stack.set_visible(true)?;
+    ui.refresh()?;
+    assert_eq!((at(&first)?, at(&second)?), (before_first, before_second));
+    Ok(())
+}

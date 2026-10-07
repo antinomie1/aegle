@@ -101,7 +101,7 @@ scene、软件和 Vulkan 渲染的文字支持是可选的。仅几何的构建�
 
 ```sh
 cargo run -p aegle-render-vulkan --example geometry --release -- target/aegle-vulkan.ppm
-cargo run -p aegle-render-vulkan --features text --example text_scene --release -- target/aegle-vulkan-text.ppm
+cargo run -p aegle-render-vulkan --features text --example vulkan_text_scene --release -- target/aegle-vulkan-text.ppm
 ```
 
 wgpu 的对应示例与测试命令见 [wgpu](wgpu.md#验证)。
