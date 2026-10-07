@@ -1,9 +1,9 @@
 use crate::{
-    Error, Result, commands::Commands, device::Device, memory::Buffer, pipeline::Pipeline,
+    Error, Frame, Result, commands::Commands, device::Device, memory::Buffer, pipeline::Pipeline,
     target::Target,
 };
-use aegle_gpu::{Clip, Primitive, Recording, Step, Walker, viewport};
-use aegle_scene::{Affine, Color, Rect, Scene};
+use aegle_gpu::{Clip, Primitive, Recording};
+use aegle_scene::Color;
 use ash::vk;
 use std::rc::Rc;
 
@@ -16,8 +16,6 @@ pub struct Options {
     /// Bytes of explicit VkDeviceMemory allocations, including alignment and
     /// readback. Swapchain images belong to the window system and are not counted.
     pub memory_budget: u64,
-    /// Bytes of CPU draw/clip vector capacity; excludes driver command storage.
-    pub recording_budget: usize,
     /// Independent glyph raster, atlas and upload limits; enabled only by `text`.
     #[cfg(feature = "text")]
     pub text: crate::TextOptions,
@@ -32,7 +30,6 @@ impl Default for Options {
         Self {
             device_index: None,
             memory_budget: 16 * 1024 * 1024,
-            recording_budget: 1024 * 1024,
             #[cfg(feature = "text")]
             text: crate::TextOptions::default(),
             #[cfg(feature = "window")]
@@ -77,15 +74,21 @@ pub struct Renderer {
     buffers: [Option<Buffer>; 2],
     readback: Option<Buffer>,
     #[cfg(feature = "text")]
-    text: crate::text::Text,
+    pub(crate) text: crate::text::Text,
     pub(crate) pipeline: Pipeline,
     commands: Commands,
     pub(crate) device: Rc<Device>,
-    recording: Recording,
+    pub(crate) recording: Recording,
     pub(crate) options: Options,
     name: String,
     busy: bool,
     image_ready: bool,
+    /// Part of the current frame was already submitted; later passes load it.
+    pub(crate) resumed: bool,
+    /// The swapchain image this frame draws into, once its first submission
+    /// acquired it: index, render-finished semaphore and suboptimal flag.
+    #[cfg(feature = "window")]
+    acquired: Option<(u32, vk::Semaphore, bool)>,
 }
 
 impl Renderer {
@@ -135,11 +138,14 @@ impl Renderer {
             pipeline,
             commands,
             device,
-            recording: Recording::with_limit(options.recording_budget),
+            recording: Recording::default(),
             options,
             name,
             busy: false,
             image_ready: false,
+            resumed: false,
+            #[cfg(feature = "window")]
+            acquired: None,
         })
     }
 
@@ -169,6 +175,13 @@ impl Renderer {
         }
         self.wait()?;
         self.image_ready = false;
+        self.resumed = false;
+        // A failed or dropped frame that acquired an image already marked its
+        // swapchain for teardown.
+        #[cfg(feature = "window")]
+        {
+            self.acquired = None;
+        }
         self.recording.clear();
         #[cfg(feature = "text")]
         {
@@ -268,7 +281,7 @@ impl Renderer {
         self.target = None;
         self.buffers = [None, None];
         self.readback = None;
-        self.recording = Recording::with_limit(self.options.recording_budget);
+        self.recording = Recording::default();
         #[cfg(feature = "text")]
         self.text.atlas.clear();
         self.image_ready = false;
@@ -290,7 +303,7 @@ impl Renderer {
         }
     }
 
-    fn base_bytes(&self) -> u64 {
+    pub(crate) fn base_bytes(&self) -> u64 {
         self.target.as_ref().map_or(0, Target::bytes)
             + self
                 .buffers
@@ -312,7 +325,10 @@ impl Renderer {
         }
     }
 
-    fn submit(&mut self, clear: Color) -> Result {
+    /// Submits the recorded primitives. A frame that is not finished yet
+    /// waits for this part, then continues with empty primitives, unpinned
+    /// atlas pages and free texture slots; its last part is also presented.
+    pub(crate) fn submit(&mut self, clear: Color, last: bool) -> Result {
         for index in 0..2 {
             let data: &[u8] = if index == 0 {
                 bytemuck::cast_slice(&self.recording.clips)
@@ -355,16 +371,20 @@ impl Renderer {
             .record_uploads(&self.device.raw, self.commands.buffer);
         let output = target.frames[1];
         #[cfg(feature = "window")]
-        let acquired = self
-            .swapchain
-            .as_mut()
-            .map(|chain| chain.acquire())
-            .transpose()?;
+        if self.acquired.is_none()
+            && let Some(chain) = self.swapchain.as_mut()
+        {
+            self.acquired = Some(chain.acquire()?);
+        }
         #[cfg(feature = "window")]
-        let output = if let Some((index, _, _)) = acquired {
+        let output = if let Some((index, _, _)) = self.acquired {
             self.swapchain.as_ref().unwrap().frames[index as usize]
         } else {
             output
+        };
+        let split = crate::commands::Split {
+            resume: self.resumed,
+            last,
         };
         self.commands.render(
             target,
@@ -372,6 +392,7 @@ impl Renderer {
             &self.recording,
             aegle_types::color_math::linear_rgba(clear.to_rgba()),
             output,
+            split,
             #[cfg(feature = "text")]
             &self.text.pipeline,
         );
@@ -379,19 +400,31 @@ impl Renderer {
         #[cfg(feature = "window")]
         let signal;
         #[cfg(feature = "window")]
-        let signals = if let Some((_, semaphore, _)) = acquired {
-            signal = [semaphore];
-            &signal[..]
-        } else {
-            signals
+        let signals = match self.acquired {
+            Some((_, semaphore, _)) if last => {
+                signal = [semaphore];
+                &signal[..]
+            }
+            _ => signals,
         };
         self.commands.submit_signal(self.device.queue, signals)?;
         #[cfg(feature = "text")]
         self.text.atlas.commit();
         self.busy = true;
+        if !last {
+            self.resumed = true;
+            self.wait()?;
+            self.recording.primitives.clear();
+            #[cfg(feature = "text")]
+            {
+                self.text.atlas.begin_frame();
+                self.text.begin_textures();
+            }
+            return Ok(());
+        }
         self.image_ready = true;
         #[cfg(feature = "window")]
-        if let Some((index, _, suboptimal)) = acquired {
+        if let Some((index, _, suboptimal)) = self.acquired.take() {
             let damage = &self.damage[..];
             let damage = (self.device.incremental_present && !damage.is_empty()).then_some(damage);
             let presented = self.swapchain.as_mut().unwrap().present(
@@ -413,79 +446,5 @@ impl Drop for Renderer {
         let _ = self.wait();
         #[cfg(feature = "window")]
         let _ = self.release_swapchain();
-    }
-}
-
-/// A frame recorded on the CPU, borrowing its renderer exclusively.
-/// Dropping it discards its records without submitting. A failed draw poisons the
-/// frame so partially recorded content cannot accidentally be presented.
-pub struct Frame<'a> {
-    pub(crate) renderer: &'a mut Renderer,
-    clear: Color,
-    failed: bool,
-}
-impl Frame<'_> {
-    /// Actual physical extent of this frame, including native surface constraints.
-    pub fn extent(&self) -> [u32; 2] {
-        let target = self.renderer.target.as_ref().unwrap();
-        [target.width, target.height]
-    }
-    /// Appends a retained scene with a logical-to-device transform.
-    pub fn draw(&mut self, scene: &Scene, transform: Affine) -> Result {
-        self.draw_clipped(scene, transform, None)
-    }
-    /// Appends a scene intersected with an optional device-space clip. The clip
-    /// is not transformed again and consumes one of the eight available clip layers.
-    pub fn draw_clipped(&mut self, scene: &Scene, transform: Affine, clip: Option<Rect>) -> Result {
-        if self.failed {
-            return Err(Error::FrameFailed);
-        }
-        let target = self.renderer.target.as_ref().unwrap();
-        let extent = [target.width, target.height];
-        #[cfg(feature = "text")]
-        let text_budget = self.renderer.options.memory_budget - self.renderer.base_bytes();
-        let renderer = &mut *self.renderer;
-        let view = viewport(extent[0], extent[1], false);
-        let result = (|| -> Result {
-            let mut walker = Walker::new(
-                scene,
-                transform,
-                clip,
-                extent,
-                view,
-                &mut renderer.recording,
-            )?;
-            loop {
-                match walker.step(&mut renderer.recording)? {
-                    Step::Done => return Ok(()),
-                    Step::Recorded => {}
-                    #[cfg(feature = "text")]
-                    Step::Command(command, state) => renderer.text.record(
-                        &renderer.device,
-                        &mut renderer.recording,
-                        scene,
-                        command,
-                        state,
-                        crate::text::Limits {
-                            viewport: view,
-                            device: text_budget,
-                        },
-                    )?,
-                    #[cfg(not(feature = "text"))]
-                    Step::Command(..) => return Err(Error::UnsupportedCommand),
-                }
-            }
-        })();
-        self.failed |= result.is_err();
-        result
-    }
-    /// Submits graphics and color encoding without copying pixels to CPU. A native
-    /// window frame also acquires a FIFO image (which may block) and presents it.
-    /// The next frame/readback waits on the submission fence before reusing memory.
-    pub fn finish(self) -> Result {
-        if self.failed {
-            return Err(Error::FrameFailed);
-        }
-        self.renderer.submit(self.clear)
     }
 }

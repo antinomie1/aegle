@@ -118,7 +118,7 @@ impl SoftwareBuffers {
                     size.width as i32,
                     size.height as i32,
                     stride,
-                    wl_shm::Format::Argb8888,
+                    wl_shm::Format::Xrgb8888,
                 )
                 .map_err(|error| PresentError::Platform(Error::backend(error)))?;
             self.images[index] = Some(Image {
@@ -141,7 +141,7 @@ impl SoftwareBuffers {
             .canvas(&mut image.pool)
             .expect("selected image is idle");
         draw(pixels, &region).map_err(PresentError::Draw)?;
-        // Little-endian ARGB8888 is BGRA in memory, as drawn.
+        // Little-endian XRGB8888 is BGRA in memory, as drawn; alpha is ignored.
         #[cfg(target_endian = "big")]
         to_big_endian(pixels, size.width, &region);
         image.stale = Region::default();
@@ -152,7 +152,7 @@ impl SoftwareBuffers {
     }
 }
 
-/// Reorders BGRA8 into big-endian ARGB8888 inside `region`. Not generic, so
+/// Reorders BGRA8 into big-endian XRGB8888 inside `region`. Not generic, so
 /// it is compiled with this crate's optimization rather than each caller's.
 #[cfg(target_endian = "big")]
 fn to_big_endian(pixels: &mut [u8], width: u32, region: &Region<PixelRect>) {

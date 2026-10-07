@@ -32,6 +32,19 @@ GPU 路径的轴对齐裁剪用整数范围，圆角与小数裁剪由 shader �
 
 原生 GPU 呈现目标为默认 FIFO、最多两帧在途；有像素变化才请求新帧；GPU 路径每次绘制完整窗口，Vulkan 在支持 `VK_KHR_incremental_present` 时只向合成器上报变化区域；软件路径只重绘并上报变化区域（见[资源](resources.md)）。四条路径的像素结果相同，差别只在重绘与上报的范围。当前离屏 Vulkan 只保留一次在途提交。后台上传和临时资源遵守[资源预算](resources.md)。DeviceLost 停止相关提交并报告，首版不隐藏地切换后端。
 
+三个后端的能力差异如下，没有运行时能力查询：差异在编译期（feature）或创建时（所选后端）已确定，未支持的命令使帧返回错误，不静默跳过。
+
+| | 软件 | Vulkan | wgpu |
+| --- | --- | --- | --- |
+| 应用纹理（`SceneBuilder::texture`） | 不支持，帧返回 `UnsupportedCommand` | 支持（独立使用需 `text`） | 支持（独立使用需 `text`） |
+| 文字、图像、路径 | 支持 | 需 `text` feature | 需 `text` feature |
+| 窗口透明 | 不支持：原生软件窗口不透明 | `Options::transparent` 且合成器支持预乘 alpha | 同 Vulkan |
+| 重绘与上报范围 | 只重绘并上报变化区域 | 整幅重绘，有 `VK_KHR_incremental_present` 时上报变化区域 | 整幅重绘并上报整个 surface |
+| 大帧 | 不分段 | 每 16,384 个图元或图集/纹理绑定/上传用尽时分段提交 | 每 16,384 个图元或图集用尽时分段提交 |
+| 设备故障 | 无设备 | Vulkan 错误（如 `ERROR_DEVICE_LOST`）返回给调用方 | `Error::Gpu`/`Error::DeviceLost`，此后拒绝工作 |
+
+原生 App 总是为 GPU renderer 启用 `text`。应用纹理是否可用即 `App::wgpu()` 或 `App::vulkan()` 是否返回设备。原生窗口的背景（根主题的 `background`）在软件后端必须不透明，App 在交给平台前检查一次并返回错误；GPU 后端由各自的 `begin_frame` 对不透明 surface 做同样检查。渐变与阴影在 WGSL（两个 GPU 后端共用）和软件 Rust 中各有一份公式，两个 GPU 后端的 `tests/effects.rs` 逐像素对照软件结果。
+
 ## 坐标与平台差异
 
 内部使用逻辑 dp、统一二维变换；平台层转换为物理像素和平台坐标，整数边界向外取整。命中、IME 光标矩形和语义位置共享几何来源。
@@ -56,7 +69,7 @@ scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基
 
 正向、轴对齐、均匀缩放的文字在设备字号光栅化，基线取整到设备像素、水平原点按四分之一像素相位取整，排版 advance 保持原值；灰度覆盖率经与前景亮度相关的共用对比曲线，平衡线性混合下深色/浅色文字的粗细；旋转、反射、斜切和非均匀缩放通过逆变换双线性采样。彩色字形在线性预乘空间过滤，字形接口输出非预乘 sRGB，合成后仍遵守 `Surface` 的预乘 sRGB 格式。前景透明度只应用一次。灰度 glyph 与前景色分离，颜色主题更新可复用字形缓存；彩色格式范围与错误见[文字](text-input.md)。
 
-`Surface` 借用紧密排列、从上到下的 RGBA8（`Surface::new`）或 BGRA8（`Surface::new_bgra`）字节切片，要求长度准确等于宽×高×4。BGRA8 是小端 Wayland ARGB8888 与 Windows 32 位 DIB 的内存顺序，原生软件宿主直接画进平台缓冲，不再逐像素转换；renderer 在生成颜色处（纯色、渐变色标、图像与彩色字形纹素、阴影色）交换红蓝，混合按通道独立进行，两种顺序的结果只差红蓝互换。大端 Wayland 目标在呈现前把区域内像素反转为 ARGB。begin_frame 清空整帧；`begin_region(surface, clear, rect)` 只清空并绘制向外取整到整像素的矩形，其余像素保留，供保留上一帧的宿主局部重绘，矩形外的绘制不需要 mask；损伤有多个矩形时宿主逐个调用。draw 按调用次序合成保留记录；无像素变化时宿主不调用绘制。错误可能发生在部分像素已更新之后，失败帧不得呈现。
+`Surface` 借用紧密排列、从上到下的 RGBA8（`Surface::new`）或 BGRA8（`Surface::new_bgra`）字节切片，要求长度准确等于宽×高×4。BGRA8 是小端 Wayland XRGB8888 与 Windows 32 位 DIB 的内存顺序，原生软件宿主直接画进平台缓冲，不再逐像素转换；renderer 在生成颜色处（纯色、渐变色标、图像与彩色字形纹素、阴影色）交换红蓝，混合按通道独立进行，两种顺序的结果只差红蓝互换。大端 Wayland 目标在呈现前把区域内像素反转为 XRGB。begin_frame 清空整帧；`begin_region(surface, clear, rect)` 只清空并绘制向外取整到整像素的矩形，其余像素保留，供保留上一帧的宿主局部重绘，矩形外的绘制不需要 mask；损伤有多个矩形时宿主逐个调用。draw 按调用次序合成保留记录；无像素变化时宿主不调用绘制。错误可能发生在部分像素已更新之后，失败帧不得呈现。
 
 tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、按需初始化转换表，避免逐像素幂运算；每次绘制量化到 RGBA8，完全不透明覆盖直接复制。透明背景、半透明叠加与旋转已有像素级验证。裁剪 mask 的预算、复用与释放见[资源](resources.md)。
 
@@ -74,7 +87,7 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 `request_redraw` 合并变化，仅在已配置、前一 frame callback 完成且有空闲缓冲时通知宿主。每次实际提交才请求下一次 frame callback；没有变化不会持续呈现。`dispatch(None)` 使用 calloop/WaylandSource 的 FD 等待和 prepare-read 流程；已有应用事件时只做非阻塞分发。帧失败不附着，宿主显式请求重试；同时保持活动窗口的最新状态。
 
-`present` 借出紧密排列的 RGBA8 预乘缓冲，成功绘制后就地转换为 Wayland 必备 ARGB8888 的本机字节序，再 attach/commit。不使用额外完整颜色缓冲。每窗口至多两个独立 SlotPool，尺寸变化仅释放空闲旧缓冲，不改写 compositor 尚未 release 的映射；具体预算见[资源](resources.md)。
+`present` 借出紧密排列的预乘 BGRA8 缓冲，即小端 XRGB8888 的内存顺序（大端目标呈现前就地反转），再 attach/commit。XRGB8888 与 ARGB8888 都是 wl_shm 必备格式；用 XRGB 表明窗口不透明，合成器忽略 alpha，可省去混合。不使用额外完整颜色缓冲。每窗口至多两个独立 SlotPool，尺寸变化仅释放空闲旧缓冲，不改写 compositor 尚未 release 的映射；具体预算见[资源](resources.md)。
 
 `configure_ime` 使用带可选周边文字的 ImeRequest；长选区不能完整容纳时可保留组合输入而不报告 surrounding。显式禁用立即结束会话并清除该窗口已排队的 IME Update，避免焦点切换后的串写；其余序号、批次和编辑事务见[文字](text-input.md)。
 
@@ -94,4 +107,4 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 `aegle-platform-win32` 直接管理 Win32 HWND、消息循环、每显示器 DPI、鼠标/滚轮/双击、键盘和 UTF-16 字符输入。空闲以 MsgWaitForMultipleObjectsEx 等待消息与共享 wake event；重绘期间仍泵消息，避免动画饿死关闭和输入。窗口先隐藏创建，GPU/UIA 完成安装并成功绘制后才显示。逻辑关闭先停路由和隐藏，最后一个原生租约释放时才 DestroyWindow。
 
-软件呈现借用一个有界 RGBA8 CPU buffer，经 GDI DIB 上传，当前只支持不透明窗口，透明像素明确报错；Vulkan 用同一 HWND 直接呈现。平台与 renderer 的预算独立，GDI/DWM 与驱动分配不属于 CPU buffer_budget。输入法使用原生 IMM 兼容接口，完整 TSF、周边文字重转换与触屏键盘契约尚未实现。UIA 通过独立 aegle-access/windows 接入；真实 Windows 设备验收仍需单列，不能以 Wine 或交叉编译替代。
+软件呈现借用一个有界 RGBA8 CPU buffer，经 GDI DIB 上传，窗口不透明：GDI 忽略 alpha，半透明像素按预乘颜色（等同叠在黑色上）显示，与 Wayland 的 XRGB 呈现一致，不逐像素检查；Vulkan 用同一 HWND 直接呈现。平台与 renderer 的预算独立，GDI/DWM 与驱动分配不属于 CPU buffer_budget。输入法使用原生 IMM 兼容接口，完整 TSF、周边文字重转换与触屏键盘契约尚未实现。UIA 通过独立 aegle-access/windows 接入；真实 Windows 设备验收仍需单列，不能以 Wine 或交叉编译替代。

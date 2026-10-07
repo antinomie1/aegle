@@ -18,6 +18,9 @@ pub(crate) struct Text {
     pub textures: Vec<Option<aegle_scene::TextureId>>,
     /// Atlas page sets precede the reserved texture sets.
     max_pages: u32,
+    /// The first glyph of the current run still to record: a run interrupted
+    /// by a full atlas continues there after its frame's earlier part is drawn.
+    pub next_glyph: usize,
 }
 
 /// Shader viewport parameters and remaining device budget for atlas-backed draws.
@@ -45,6 +48,7 @@ impl Text {
             scratch: aegle_gpu::Scratch::new(),
             textures: vec![None; crate::external::FRAME_TEXTURES as usize],
             max_pages: options.max_pages,
+            next_glyph: 0,
         })
     }
 
@@ -108,7 +112,8 @@ impl Text {
         }
         let raster = RasterTransform::new(state.transform, run.size())?;
         let contrast = aegle_glyph::mask_contrast([r, g, b, alpha]);
-        for glyph in run.glyphs() {
+        for (index, glyph) in run.glyphs().iter().enumerate().skip(self.next_glyph) {
+            self.next_glyph = index;
             let origin = raster.origin(glyph.position)?;
             let mut geometry = None;
             let Some(image) = self.atlas.get(
@@ -164,6 +169,7 @@ impl Text {
                 state.bounds,
             )?;
         }
+        self.next_glyph = 0;
         Ok(())
     }
 }

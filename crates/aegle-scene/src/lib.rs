@@ -106,7 +106,8 @@ pub enum Command {
     Glyphs(usize),
     /// Draw a texture owned by the application and registered with the
     /// renderer, stretched over `rect` and bilinearly filtered. Renderers
-    /// without that texture fail the frame instead of skipping it.
+    /// without that texture fail the frame instead of skipping it; the
+    /// software renderer has no textures and always fails it.
     Texture {
         /// The renderer's identity for the texture.
         texture: TextureId,

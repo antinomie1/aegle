@@ -174,22 +174,43 @@ fn registered_images_draw_until_unregistered() -> Result {
     );
     assert_eq!(at(2, 2), [0, 0, 0, 255]);
 
-    // Seventeen distinct textures exceed one frame's reserved bindings.
+    // Seventeen distinct textures exceed one submission's reserved bindings:
+    // the frame is drawn in two parts.
     let mut many = SceneBuilder::new();
     let ids: Vec<_> = (0..17)
         // SAFETY: as above.
         .map(|_| unsafe { renderer.register_texture(image.view, [4, 4]) })
         .collect::<std::result::Result<_, _>>()?;
-    for &extra in &ids {
-        many.texture(extra, Rect::new(0.0, 0.0, 4.0, 4.0))?;
+    for (index, &extra) in ids.iter().enumerate() {
+        let (x, y) = ((index % 8) as f32 * 4.0, (index / 8) as f32 * 4.0);
+        many.texture(extra, Rect::new(x, y, 4.0, 4.0))?;
     }
     let many = many.finish()?;
     let mut frame = renderer.begin_frame(32, 32, Color::BLACK)?;
-    assert!(matches!(
-        frame.draw(&many, Affine::IDENTITY),
-        Err(Error::TooManyTextures)
-    ));
-    drop(frame);
+    frame.draw(&many, Affine::IDENTITY)?;
+    frame.finish()?;
+    let mut parts = vec![0; 32 * 32 * 4];
+    renderer.read_pixels(&mut parts)?;
+    for index in 0..17 {
+        let (x, y) = ((index % 8) * 4 + 2, (index / 8) * 4 + 2);
+        let pixel = &parts[(y * 32 + x) * 4..][..4];
+        assert!(
+            pixel[0] >= 253 && pixel[3] == 255,
+            "texture {index}: {pixel:?}"
+        );
+    }
+    // Textures clipped out entirely take no binding: the sixteen above the
+    // clip leave room for the seventeenth in a single submission.
+    let mut frame = renderer.begin_frame(32, 32, Color::BLACK)?;
+    frame.draw_clipped(
+        &many,
+        Affine::IDENTITY,
+        Some(Rect::new(0.0, 8.0, 32.0, 24.0)),
+    )?;
+    frame.finish()?;
+    renderer.read_pixels(&mut parts)?;
+    assert_eq!(&parts[(2 * 32 + 2) * 4..][..4], [0, 0, 0, 255]);
+    assert!(parts[(10 * 32 + 2) * 4] >= 253);
 
     assert!(renderer.unregister_texture(id) && !renderer.unregister_texture(id));
     let mut frame = renderer.begin_frame(32, 32, Color::BLACK)?;

@@ -25,13 +25,17 @@ pub enum Error {
     /// The scene draws a texture that is not registered on this device.
     #[cfg(feature = "text")]
     UnknownTexture,
-    /// A frame draws more distinct registered textures than its 16 reserved bindings.
+    /// One submission needs more than its 16 reserved texture bindings. A frame
+    /// splits into several submissions instead, so this is returned only when
+    /// nothing else was recorded since the last one.
     #[cfg(feature = "text")]
     TooManyTextures,
     /// Glyph data, raster settings or raster-cache resources failed validation.
     #[cfg(feature = "text")]
     Glyph(aegle_glyph::GlyphError),
-    /// The current frame's glyph working set cannot fit the configured atlas.
+    /// One submission's glyph working set cannot fit the configured atlas. A
+    /// frame splits into several submissions instead, so this is returned only
+    /// when a submission holding nothing else still has no room for the entry.
     #[cfg(feature = "text")]
     AtlasFull,
     /// A glyph and its transparent border exceed the configured atlas page size.
@@ -73,11 +77,13 @@ impl fmt::Display for Error {
             #[cfg(feature = "text")]
             Self::UnknownTexture => f.write_str("scene texture is not registered with this device"),
             #[cfg(feature = "text")]
-            Self::TooManyTextures => f.write_str("a frame draws more than 16 registered textures"),
+            Self::TooManyTextures => {
+                f.write_str("a submission draws more than 16 registered textures")
+            }
             #[cfg(feature = "text")]
             Self::Glyph(e) => write!(f, "Vulkan glyph: {e}"),
             #[cfg(feature = "text")]
-            Self::AtlasFull => f.write_str("Vulkan glyph working set exceeds atlas capacity"),
+            Self::AtlasFull => f.write_str("Vulkan atlas has no room for one more entry"),
             #[cfg(feature = "text")]
             Self::GlyphTooLarge => f.write_str("Vulkan glyph exceeds atlas page dimensions"),
             #[cfg(feature = "text")]
@@ -108,7 +114,6 @@ impl From<aegle_gpu::Error> for Error {
         match value {
             aegle_gpu::Error::Coordinates => Self::Coordinates,
             aegle_gpu::Error::ClipDepth => Self::ClipDepth,
-            aegle_gpu::Error::Budget { required, limit } => Self::Budget { required, limit },
             aegle_gpu::Error::Allocation => Self::Allocation,
             aegle_gpu::Error::Scene(error) => Self::Scene(error),
         }

@@ -13,9 +13,6 @@ use crate::{
     gpu::{Gpu, LINEAR},
 };
 
-/// Primitives per submission; a larger frame is split into several, bounding CPU
-/// and GPU record storage at 1.75 MiB.
-pub(crate) const MAX_PRIMITIVES: usize = 16_384;
 const OFFSCREEN: TextureFormat = TextureFormat::Rgba8Unorm;
 
 /// Fixed configuration.
@@ -167,6 +164,7 @@ impl Renderer {
         clear: Color,
         offscreen: bool,
     ) -> Result {
+        self.gpu.check()?;
         let limit = self.gpu.device.limits().max_texture_dimension_2d;
         if width == 0 || height == 0 || width > limit || height > limit {
             return Err(Error::InvalidSize);
@@ -356,6 +354,8 @@ impl Renderer {
             pass.draw(0..3, 0..1);
         }
         self.gpu.queue.submit([encoder.finish()]);
+        // wgpu validates encoding and submission synchronously.
+        self.gpu.check()?;
         self.loaded = true;
         self.rec.primitives.clear();
         #[cfg(feature = "text")]
@@ -428,7 +428,11 @@ impl Renderer {
             .map_async(wgpu::MapMode::Read, move |result| {
                 let _ = sender.send(result);
             });
-        let _ = self.gpu.device.poll(wgpu::PollType::wait_indefinitely());
+        self.gpu
+            .device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|error| Error::Gpu(error.to_string()))?;
+        self.gpu.check()?;
         receiver
             .recv()
             .map_err(|_| Error::InvalidState("readback callback dropped"))?

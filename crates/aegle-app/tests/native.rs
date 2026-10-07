@@ -135,3 +135,38 @@ fn proxy_messages_from_threads_reach_the_ui_thread_in_order() -> Result {
     );
     Ok(())
 }
+
+#[test]
+#[cfg(feature = "software")]
+#[ignore = "requires an isolated test desktop; never run on the user's desktop"]
+fn software_windows_reject_a_translucent_background() -> Result {
+    assert_eq!(
+        std::env::var("AEGLE_TEST_COMPOSITOR").as_deref(),
+        Ok("private")
+    );
+    let mut theme = aegle_ui::Theme::light();
+    theme.background = aegle_types::Color::rgba(255, 255, 255, 128);
+    let options = AppOptions {
+        theme,
+        dark_theme: None,
+        high_contrast_theme: None,
+        ..Default::default()
+    };
+    let app = App::with_fonts(test_fonts()?, options)?;
+    let _window = app.window("Translucent")?;
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let error = loop {
+        match app.dispatch(Some(Duration::from_millis(20))) {
+            Err(error) => break error,
+            Ok(_) => assert!(
+                Instant::now() < deadline,
+                "a translucent frame was presented"
+            ),
+        }
+    };
+    assert_eq!(
+        error.to_string(),
+        "software windows require an opaque background"
+    );
+    Ok(())
+}

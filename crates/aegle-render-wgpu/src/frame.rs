@@ -3,7 +3,9 @@ use aegle_gpu::{Step, Walker};
 use aegle_scene::{Affine, Scene};
 use aegle_types::Rect;
 
-use crate::{Error, Renderer, Result, renderer::MAX_PRIMITIVES};
+use aegle_gpu::MAX_PRIMITIVES;
+
+use crate::{Error, Renderer, Result};
 
 pub(crate) enum Presentation {
     Offscreen,

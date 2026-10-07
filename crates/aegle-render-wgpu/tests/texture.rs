@@ -84,6 +84,22 @@ fn registered_textures_draw_until_unregistered() -> Result {
     Ok(())
 }
 
+#[test]
+#[ignore = "requires a GPU adapter; select one with WGPU_BACKEND / WGPU_ADAPTER_NAME"]
+fn device_errors_are_returned_instead_of_panicking() -> Result {
+    let mut renderer = Renderer::new(Options::default())?;
+    drop(renderer.begin_frame(4, 4, Color::BLACK)?);
+    // Invalid work on the shared device poisons it for every later frame.
+    let mut empty = texture_descriptor();
+    empty.size.width = 0;
+    drop(renderer.device().create_texture(&empty));
+    assert!(matches!(
+        renderer.begin_frame(4, 4, Color::BLACK),
+        Err(Error::Gpu(_))
+    ));
+    Ok(())
+}
+
 fn texture_descriptor() -> wgpu::TextureDescriptor<'static> {
     wgpu::TextureDescriptor {
         label: None,

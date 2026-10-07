@@ -13,6 +13,9 @@ pub(crate) struct Pipeline {
     /// Draws into a swapchain instead of an offscreen output image.
     pub window: bool,
     pub passes: [vk::RenderPass; 2],
+    /// Pass 0 continuing a frame split into several submissions: it loads the
+    /// image the earlier submissions drew instead of clearing it.
+    pub resume: vk::RenderPass,
     pub layouts: [vk::PipelineLayout; 2],
     pub pipelines: [vk::Pipeline; 2],
     pub sets: [vk::DescriptorSet; 2],
@@ -47,6 +50,7 @@ impl Pipeline {
             direct,
             window,
             passes: [vk::RenderPass::null(); 2],
+            resume: vk::RenderPass::null(),
             layouts: [vk::PipelineLayout::null(); 2],
             pipelines: [vk::Pipeline::null(); 2],
             sets: [vk::DescriptorSet::null(); 2],
@@ -107,23 +111,29 @@ impl Pipeline {
             )?;
             this.sets.copy_from_slice(&sets);
         }
-        this.passes[0] = if direct {
-            render_pass(
-                &this.raw,
-                format,
-                vk::ImageLayout::PRESENT_SRC_KHR,
-                vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                vk::AccessFlags::empty(),
-            )?
-        } else {
-            render_pass(
-                &this.raw,
-                vk::Format::R16G16B16A16_SFLOAT,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                vk::PipelineStageFlags::FRAGMENT_SHADER,
-                vk::AccessFlags::SHADER_READ,
-            )?
+        let first = |resume| {
+            if direct {
+                render_pass(
+                    &this.raw,
+                    format,
+                    vk::ImageLayout::PRESENT_SRC_KHR,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::AccessFlags::empty(),
+                    resume,
+                )
+            } else {
+                render_pass(
+                    &this.raw,
+                    vk::Format::R16G16B16A16_SFLOAT,
+                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::AccessFlags::SHADER_READ,
+                    resume,
+                )
+            }
         };
+        this.passes[0] = first(false)?;
+        this.resume = first(true)?;
         this.pipelines[0] = graphics(
             &this.raw,
             this.passes[0],
@@ -154,6 +164,7 @@ impl Pipeline {
             } else {
                 vk::AccessFlags::TRANSFER_READ
             },
+            false,
         )?;
         this.pipelines[1] = graphics(
             &this.raw,
@@ -225,7 +236,7 @@ impl Drop for Pipeline {
             for l in self.set_layouts {
                 self.raw.destroy_descriptor_set_layout(l, None);
             }
-            for p in self.passes {
+            for p in self.passes.into_iter().chain([self.resume]) {
                 self.raw.destroy_render_pass(p, None);
             }
         }
@@ -238,15 +249,26 @@ fn render_pass(
     final_layout: vk::ImageLayout,
     stage: vk::PipelineStageFlags,
     access: vk::AccessFlags,
+    resume: bool,
 ) -> Result<vk::RenderPass> {
+    // A resumed pass loads what the frame's earlier submission left in
+    // `final_layout`. Render pass compatibility allows only load operations and
+    // layouts to differ, so both variants declare the same dependencies; the
+    // fence waited between submissions orders the earlier writes, and the
+    // dependency makes them visible to the load.
+    let (load, initial) = if resume {
+        (vk::AttachmentLoadOp::LOAD, final_layout)
+    } else {
+        (vk::AttachmentLoadOp::CLEAR, vk::ImageLayout::UNDEFINED)
+    };
     let attachments = [vk::AttachmentDescription::default()
         .format(format)
         .samples(vk::SampleCountFlags::TYPE_1)
-        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .load_op(load)
         .store_op(vk::AttachmentStoreOp::STORE)
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .initial_layout(initial)
         .final_layout(final_layout)];
     let colors = [vk::AttachmentReference {
         attachment: 0,
@@ -261,7 +283,9 @@ fn render_pass(
             .dst_subpass(0)
             .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
             .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE),
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            ),
         vk::SubpassDependency::default()
             .src_subpass(0)
             .dst_subpass(vk::SUBPASS_EXTERNAL)

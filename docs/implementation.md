@@ -551,6 +551,14 @@ App 的同一 retained Ui 复用两种 renderer，文字、滚动裁剪、输入
 - 文档：架构文档的错误契约改为实际做法（`Box<dyn Error>` 中是可 downcast 的模块错误，标记诊断带位置，不带节点身份）；rust-api 中声称 `Control` 尚未实现的“组件库作者”一节改写为当前契约。
 - 验证：`aegle-ui/tests/reentrancy.rs` 在自定义控件的 `paint` 中调用 4 个查询都得到 `ReentrantAccess`（改动前 panic），`TextField` 种类无编辑器的控件被拒绝，失败的键盘钩子的错误由 `Ui::key` 返回（改动前按键被当作未处理）。workspace all-features 测试与 all-targets 检查通过。
 
+## 渲染后端统一：分段提交、设备错误与不透明窗口
+
+- 问题：同样的场景在三个后端上行为不同。wgpu 满 16,384 个图元或图集满时分段提交，Vulkan 却在记录超过 1 MiB（约 9,362 个图元）、本帧字形超过 4,096 个条目或 8 个固定页、一帧上传超过 1 MiB 或画了 17 个以上不同纹理时整帧失败。wgpu 未安装错误处理器，验证错误与设备丢失按 wgpu 默认 panic。Win32 软件呈现每帧逐像素扫描损伤区，有半透明像素就返回 `UnsupportedTransparency`；Wayland 软件用 ARGB8888，把半透明像素原样交给合成器，未经测试；GPU 窗口则可选透明。文档没有说明各后端的能力差异。
+- 修改：`aegle_gpu::MAX_PRIMITIVES` 成为两个 GPU 后端共用的每次提交上限，`Recording` 不再带字节上限（删除 `with_limit`、`Error::Budget` 及 Vulkan 的 `Options::recording_budget`）。Vulkan `Frame` 新拆为 `frame.rs`：图元满、图集或纹理绑定在本次提交内用尽、或上传达到 `upload_bytes` 时，提交已记录部分、等待 fence、清空图元并解除页固定与纹理绑定，再从未放下的那个字形继续（`next_glyph`）；只有空提交仍放不下一个条目才返回错误。续接用的 render pass 与首个只在 load 操作和初始布局上不同（子通道依赖相同，因此兼容），只有最后一次提交运行编码通道；窗口帧在第一次提交时获取 swapchain 图像，最后一次后呈现，获取后失败或丢弃的帧使 swapchain 在下一帧重建。wgpu 在设备上安装 `on_uncaptured_error` 与设备丢失回调，第一个故障存入 `OnceLock`，`begin_frame`、每次提交后与 `read_pixels` 检查，返回新的 `Error::Gpu`/`Error::DeviceLost`；`read_pixels` 不再忽略等待失败。原生软件窗口统一为不透明：Wayland 改用 XRGB8888，Win32 删除逐像素扫描与 `UnsupportedTransparency`（GDI 本就忽略 alpha），App 在呈现前检查一次根背景不透明，GPU 后端保留各自的可选透明与清屏色检查。
+- 文档：platform-rendering 增加三个后端的能力表（纹理、文字/图像/路径的 feature、透明、上报范围、大帧、设备故障）并写明没有运行时能力查询；`SceneBuilder::texture` 与 `Command::Texture` 写明软件后端不画纹理。渐变与阴影公式的两份实现（共用 WGSL 与软件 Rust）已由两个 GPU 后端的 `tests/effects.rs` 逐像素对照软件结果。
+- 验证：Vulkan 离屏场景在 Lavapipe 与 RADV 上开启 Khronos validation 与同步检查通过，无验证消息：裁剪内 40,000 个 1×1 填充分三次提交，按绘制顺序取样的像素正确；单条目图集画 96 px 的“你好你好”与参考一致（改动前 `AtlasFull`）；一帧画 17 个纹理（改动前 `TooManyTextures`），16 个被裁掉的纹理不占绑定。`tests/native.rs` 在 swapchain 上画一帧 20,000 个填充，Lavapipe（Pixman Sway）与 RADV（GLES2 Sway）同样无验证消息。wgpu 新测试在设备上做非法操作后 `begin_frame` 返回 `Error::Gpu`（改动前 panic），Lavapipe 与 RADV 通过。App 新测试：半透明主题背景的软件窗口返回错误；App 原生场景以 Vulkan 与 wgpu 在两种驱动上通过。私有 Sway 截图确认 XRGB 窗口颜色正确。workspace all-features 测试、all-targets 检查与 Windows 交叉检查通过；Win32 呈现未在 Windows 上运行。
+- 性能：普通帧不分段，没有新增等待；只有超过上限的帧在提交间多一次 CPU 等待。删除 Win32 逐像素扫描、XRGB 让合成器可省去混合，这两项未测量。
+
 ## 剩余工作
 
 - 平台验收：Windows 真实 IME/UIA/硬件 Vulkan 与 ARM64、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰（无服务端装饰的 compositor 仍没有标题栏）与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更的实机验收。

@@ -7,13 +7,6 @@ pub enum Error {
     Coordinates,
     /// More than eight simultaneous clipping scopes, including the external clip.
     ClipDepth,
-    /// The recording would exceed its byte limit.
-    Budget {
-        /// Required bytes under the limit's accounting rules.
-        required: u64,
-        /// Configured limit in bytes.
-        limit: u64,
-    },
     /// Host memory allocation failed.
     Allocation,
     /// A transformed scene failed its shared geometry invariant.
@@ -25,9 +18,6 @@ impl fmt::Display for Error {
         match self {
             Self::Coordinates => f.write_str("geometry exceeds the coordinate range"),
             Self::ClipDepth => f.write_str("clip depth exceeds eight layers"),
-            Self::Budget { required, limit } => {
-                write!(f, "recording requires {required} bytes, limit {limit}")
-            }
             Self::Allocation => f.write_str("host allocation failed"),
             Self::Scene(e) => write!(f, "scene: {e}"),
         }

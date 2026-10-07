@@ -46,7 +46,7 @@ mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲
 
 ### 当前 Vulkan 离屏边界
 
-默认 `memory_budget` 为 16 MiB，计入实际 VkDeviceMemory allocation：RGBA16F 线性 attachment、RGBA8 输出、裁剪与图元上传缓冲（每图元 112 B）、可选字形图集/上传及按需读回缓冲，包括驱动报告的对齐要求。两张图像的未对齐像素量合计为宽×高×12，显式读回另需宽×高×4；这只是估算，实际预算按 memory requirements 检查。不透明窗口的直接 sRGB 路径没有 RGBA16F 与 RGBA8 图像。`recording_budget` 默认 1 MiB，单独限制 CPU 图元/clip Vec 的 capacity；`stats` 分别报告这两种口径。
+默认 `memory_budget` 为 16 MiB，计入实际 VkDeviceMemory allocation：RGBA16F 线性 attachment、RGBA8 输出、裁剪与图元上传缓冲（每图元 112 B）、可选字形图集/上传及按需读回缓冲，包括驱动报告的对齐要求。两张图像的未对齐像素量合计为宽×高×12，显式读回另需宽×高×4；这只是估算，实际预算按 memory requirements 检查。不透明窗口的直接 sRGB 路径没有 RGBA16F 与 RGBA8 图像。CPU 图元记录由分段提交限制在每次提交 16,384 个图元（1.75 MiB），与 wgpu 相同；裁剪行保留整帧，随场景裁剪命令数增长。`stats` 分别报告设备分配与 CPU 记录 capacity 两种口径。
 
 同尺寸帧复用图像和缓冲，最多一次在途提交；下次 begin_frame 或读回等待 fence，不另建等待帧资源。resize 等待并释放旧 attachment/读回缓冲，再申请新尺寸；失败会使旧图像失效，图集仍保留。`release_images` 等待后释放图像、缓冲、CPU 记录及字形缓存，保留 pipeline。renderer 没有自己的轮询或呈现循环。驱动 command/pipeline 等内部存储、loader、调用方 Scene 和输出 Vec 不计入上述预算；原生 swapchain 的估计与小型应用验证见本页末尾，尚无完整 GPU 应用 PSS/嵌入式验收，详见 [Vulkan 契约](vulkan.md)。
 
@@ -76,7 +76,7 @@ PlainEditor 当前在内容、宽度/对齐和样式变化时完整重建排版�
 
 每个窗口最多保留两个独立 SHM 映射，即至多 2×宽×高×4；`buffer_budget` 默认不限，小设备可设上限。每个映射为 `width × height × 4` 向上对齐至 64 B，须可由 wl_shm 的 i32 长度表示；预算不包括 mmap 页取整、协议对象、光标主题或 compositor 的复制。`buffer_bytes()` 返回此映射口径。
 
-绘制直接借用空闲映射，没有第二份颜色 framebuffer；成功后进行一次就地 RGBA→本机 ARGB 通道转换。尺寸改变先释放空闲旧映射，仍活动的旧尺寸映射继续计入预算；不得等待全部旧映射 release 才创建替换帧，因为 compositor 可以保留当前帧直到下次提交。两个映射均在使用时保留 dirty 状态，等待 release 和 frame callback，不再申请第三个缓冲。
+绘制直接借用空闲映射，没有第二份颜色 framebuffer；按 XRGB8888 的内存顺序（小端为 BGRA）直接绘制，小端目标不做通道转换，大端目标在提交前就地反转区域内像素。尺寸改变先释放空闲旧映射，仍活动的旧尺寸映射继续计入预算；不得等待全部旧映射 release 才创建替换帧，因为 compositor 可以保留当前帧直到下次提交。两个映射均在使用时保留 dirty 状态，等待 release 和 frame callback，不再申请第三个缓冲。
 
 窗口尺寸和 scale 决定物理像素，renderer 的 mask 与平台 SHM allowance 相互独立。设了上限时，过大窗口或高缩放返回明确预算错误。2560×1440 全屏的 release `showcase` 软件路径 RSS 约 52 MiB，其中两块 SHM 约 29.5 MB、两层 mask 约 7.4 MB。当前窗口示例与真实协议探针属于桌面软件路径验证，不能替代嵌入式 PSS、空闲 CPU 或 GPU 成本测量。
 

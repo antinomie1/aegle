@@ -55,7 +55,7 @@ impl Recording {
                     .map_or([0.0; 4], |stop| linear_rgba(stop.color.to_rgba()))
             };
             let offset = |index: usize| pair.get(index).map_or(1.0, |stop| stop.offset);
-            reserve(&mut self.clips, &mut self.primitives, self.limit)?;
+            reserve(&mut self.clips)?;
             self.clips.push(Clip {
                 row0: color(0),
                 row1: color(1),

@@ -102,18 +102,6 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
         .and_then(|mut r| r.begin_frame(64, 64, Color::WHITE)?.finish())
         .is_err()
     );
-    assert!(
-        Renderer::new(Options {
-            recording_budget: 1,
-            ..Options::default()
-        })
-        .and_then(|mut r| {
-            let mut frame = r.begin_frame(64, 64, Color::WHITE)?;
-            frame.draw(&scene, Affine::IDENTITY)?;
-            frame.finish()
-        })
-        .is_err()
-    );
     let mut deep = SceneBuilder::new();
     for _ in 0..9 {
         deep.push_clip(shape(0.0, 0.0, 32.0, 32.0, 2.0))?;
@@ -159,7 +147,7 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
     near(&pixels, 16, 12, [255; 4]);
     let stats = renderer.stats();
     assert!(stats.device_bytes > 0 && stats.device_bytes <= Options::default().memory_budget);
-    assert!(stats.recording_bytes <= Options::default().recording_budget);
+    assert!(stats.recording_bytes <= 2 << 20);
     renderer.begin_frame(16, 8, Color::BLACK)?.finish()?;
     let mut resized = vec![0; 16 * 8 * 4];
     renderer.read_pixels(&mut resized)?;
@@ -171,5 +159,40 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
     renderer.begin_frame(16, 8, Color::WHITE)?.finish()?;
     renderer.read_pixels(&mut resized)?;
     assert!(resized.iter().all(|&channel| channel == 255));
+    Ok(())
+}
+
+/// A scene with more records than one submission holds is drawn in parts, in
+/// painter's order, keeping clips that span the parts.
+#[test]
+#[ignore = "requires an explicitly selected Vulkan ICD/device"]
+fn large_frames_are_split_into_submissions() -> Result<(), Box<dyn std::error::Error>> {
+    let mut builder = SceneBuilder::new();
+    builder.push_clip(shape(0.0, 0.0, 56.0, 64.0, 0.0))?;
+    // 40,000 opaque pixels over 64×64: each pixel is painted about ten times,
+    // last in pass nine (blue) before pixel 3136 and in pass eight (red) after.
+    for index in 0..40_000_u32 {
+        let pixel = index % 4096;
+        let color = if (index / 4096) % 2 == 1 {
+            Color::rgb(0, 0, 255)
+        } else {
+            Color::rgb(255, 0, 0)
+        };
+        let (x, y) = ((pixel % 64) as f32, (pixel / 64) as f32);
+        builder.fill(shape(x, y, 1.0, 1.0, 0.0), color)?;
+    }
+    builder.pop()?;
+    let scene = builder.finish()?;
+    let mut renderer = Renderer::new(Options::default())?;
+    let mut frame = renderer.begin_frame(64, 64, Color::WHITE)?;
+    frame.draw(&scene, Affine::IDENTITY)?;
+    frame.finish()?;
+    let mut pixels = vec![0; 64 * 64 * 4];
+    renderer.read_pixels(&mut pixels)?;
+    near(&pixels, 0, 0, [0, 0, 255, 255]);
+    near(&pixels, 55, 48, [0, 0, 255, 255]);
+    near(&pixels, 0, 49, [255, 0, 0, 255]);
+    near(&pixels, 60, 10, [255; 4]);
+    assert!(renderer.stats().recording_bytes <= 2 << 20);
     Ok(())
 }

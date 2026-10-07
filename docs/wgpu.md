@@ -18,13 +18,13 @@
 
 `Renderer::new` 通过 `WGPU_BACKEND`、`WGPU_ADAPTER_NAME`、`WGPU_POWER_PREF` 选择适配器，无环境变量时取 wgpu 默认。`begin_frame` 返回 `Frame`；`draw_clipped` 的外部裁剪位于设备坐标。`finish` 提交并（窗口）呈现；离屏结果只经显式 `read_pixels` 读回，参数与 Vulkan 相同：紧密、自上而下的预乘 sRGB RGBA8。没有常驻线程或轮询。
 
-记录是每图元 112 B 与每裁剪 64 B 的存储行，由实例化绘制按相邻同类图元合并。每次提交最多 16,384 个图元（1.75 MiB），满了就提交并继续，不分配更大的缓冲；裁剪行保留整帧，后续提交仍可引用。存储缓冲只增不减，替换时才重建绑定组。队列顺序保证后写入的缓冲与图集内容不会被先提交的绘制看到。
+记录是每图元 112 B 与每裁剪 64 B 的存储行，由实例化绘制按相邻同类图元合并。每次提交最多 `aegle_gpu::MAX_PRIMITIVES`（16,384）个图元（1.75 MiB），满了就提交并继续，不分配更大的缓冲，Vulkan 后端用同一上限分段；裁剪行保留整帧，后续提交仍可引用，其数量随场景的裁剪命令增长。存储缓冲只增不减，替换时才重建绑定组。队列顺序保证后写入的缓冲与图集内容不会被先提交的绘制看到。
 
 字形图集有一个 R8 灰度页和一个 RGBA8 sRGB 彩色页，各为 `Options::atlas_size`²（默认 1024），首次需要才分配，每个字形带一像素透明边，货架式装入，每页最多 4096 个条目。页或条目满时先提交本帧已记录的图元，再整页清空并继续；没有按页 LRU，也没有 `AtlasFull`。字形身份、变换与对比曲线复用 `aegle-glyph`，与另两个后端一致。
 
 图像按 Image id 缓存，非预乘 sRGB 像素在线性空间预乘后以 RGBA8 sRGB 上传，着色器钳制到边缘纹素并乘以解析的边缘覆盖率，没有 mipmap。路径由 zeno 在 CPU 光栅为 R8 覆盖率 mask，键为路径 id、线性 2×2 矩阵、两轴四分之一像素相位和描边样式：整像素平移命中原条目，新的缩放/旋转再光栅一次。与字形相同的页放不下时，图像和路径 mask（含带边框超过 `atlas_size` 的）获得恰好其尺寸的专用纹理，不带边框，在最后一次使用后的下一帧仍保留、再下一帧释放，所以动画重绘不会反复上传，消失的图像会被回收。单个字形超过页尺寸，或图像/路径 mask 超过设备纹理上限，返回 `TooLarge`。上传前的像素转换缓冲超过 1 MiB 即释放；不像 Vulkan 后端那样限制 CPU 上传量，图像大小只受设备纹理上限约束。`Renderer::resident_entries` 报告当前驻留条目数。
 
-窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。wgpu 没有呈现区域接口，每帧整幅绘制并上报整个 surface（Vulkan 后端可上报变化区域）。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的设备与验证错误当作致命错误并 panic（已在其源码确认）；本后端没有安装自己的处理器，设备丢失尚未转为可恢复错误。
+窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。wgpu 没有呈现区域接口，每帧整幅绘制并上报整个 surface（Vulkan 后端可上报变化区域）。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的验证、内存与内部错误当作致命错误并 panic；本后端在设备上安装 `on_uncaptured_error` 与设备丢失回调，记下第一个故障，之后 `begin_frame`、提交与 `read_pixels` 返回 `Error::Gpu` 或 `Error::DeviceLost`，不再 panic。wgpu 在编码与提交时同步校验，所以出错的那一帧在 `finish` 即返回错误。故障不可恢复：同一设备上的渲染器（含共享设备的窗口）都拒绝后续工作，由调用方新建渲染器；Aegle 不自动重建设备或切换后端，与 Vulkan 后端一致。
 
 ## 应用纹理
 

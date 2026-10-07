@@ -6,7 +6,7 @@ use crate::RenderError;
 ///
 /// Rows run top to bottom. Construction requires exactly `width * height * 4`
 /// bytes. No window, allocation or stride padding is hidden here. BGRA8 is how
-/// little-endian Wayland ARGB8888 and Windows DIBs store pixels, so a presenter
+/// little-endian Wayland XRGB8888 and Windows DIBs store pixels, so a presenter
 /// can draw into them without converting.
 pub struct Surface<'a> {
     pub(crate) data: &'a mut [u8],

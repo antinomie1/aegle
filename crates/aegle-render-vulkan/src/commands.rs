@@ -5,6 +5,15 @@ use crate::{Result, device::Device, pipeline::Pipeline, target::Target};
 use aegle_gpu::Recording;
 use ash::vk;
 
+/// Where a submission falls in a frame split into several.
+#[derive(Clone, Copy)]
+pub(crate) struct Split {
+    /// An earlier submission already drew part of this frame.
+    pub resume: bool,
+    /// No more submissions follow for this frame.
+    pub last: bool,
+}
+
 pub(crate) struct Commands {
     raw: ash::Device,
     pub buffer: vk::CommandBuffer,
@@ -62,6 +71,7 @@ impl Commands {
         recording: &Recording,
         clear: [f32; 4],
         output: vk::Framebuffer,
+        split: Split,
         #[cfg(feature = "text")] text: &crate::text_pipeline::TextPipeline,
     ) {
         let viewport = [vk::Viewport {
@@ -78,7 +88,8 @@ impl Commands {
         // already clipped to the target. Descriptor ranges were updated.
         unsafe {
             self.raw.cmd_set_viewport(self.buffer, 0, &viewport);
-            let passes = if pipeline.direct { 1 } else { 2 };
+            // Only a frame's last submission encodes the linear image.
+            let passes = if pipeline.direct || !split.last { 1 } else { 2 };
             for pass in 0..passes {
                 let values = [vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -88,7 +99,11 @@ impl Commands {
                 self.raw.cmd_begin_render_pass(
                     self.buffer,
                     &vk::RenderPassBeginInfo::default()
-                        .render_pass(pipeline.passes[pass])
+                        .render_pass(if pass == 0 && split.resume {
+                            pipeline.resume
+                        } else {
+                            pipeline.passes[pass]
+                        })
                         .framebuffer(if pass == 0 && !pipeline.direct {
                             target.frames[0]
                         } else {

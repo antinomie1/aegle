@@ -11,7 +11,8 @@ impl Win32 {
     /// the order of a 32-bit DIB.
     /// `damage` is the area changed since the last frame (`None`: all of it);
     /// `draw` must overwrite the region it is given, which is the whole buffer
-    /// after a resize or failed frame, with an opaque background (alpha=255).
+    /// after a resize or failed frame. The window is opaque: GDI ignores alpha,
+    /// so a translucent pixel shows its premultiplied color as if over black.
     /// Drawing errors retain the last displayed frame. One CPU buffer is reused;
     /// GDI upload and compositor-owned storage are outside `buffer_budget`.
     /// Software frames wait for DWM completion, avoiding a busy animation loop.
@@ -55,7 +56,6 @@ impl Win32 {
             _ => full,
         };
         draw(&mut pixels, size, &region).map_err(PresentError::Draw)?;
-        check_opaque(&pixels, size.width, &region).map_err(PresentError::Platform)?;
         let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -106,23 +106,4 @@ impl Win32 {
         native.drawn.set(Some(size));
         Ok(true)
     }
-}
-
-/// Rejects transparent pixels inside `region`. Not generic, so it is compiled
-/// with this crate's optimization rather than each caller's.
-fn check_opaque(pixels: &[u8], width: u32, region: &Region<PixelRect>) -> Result<(), Error> {
-    let stride = width as usize * 4;
-    for rect in region.rects() {
-        let columns = rect.x as usize * 4..(rect.x + rect.width) as usize * 4;
-        let rows = pixels
-            .chunks_exact(stride)
-            .skip(rect.y as usize)
-            .take(rect.height as usize);
-        for row in rows {
-            if row[columns.clone()].chunks_exact(4).any(|p| p[3] != 255) {
-                return Err(Error::UnsupportedTransparency);
-            }
-        }
-    }
-    Ok(())
 }

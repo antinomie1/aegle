@@ -19,7 +19,7 @@ mod walk;
 
 pub use error::{Error, Result};
 pub use records::{
-    Clip, NO_CLIP, Primitive, Recording, State, Textured, bounds, viewport, visible,
+    Clip, MAX_PRIMITIVES, NO_CLIP, Primitive, Recording, State, Textured, bounds, viewport, visible,
 };
 pub use shelf::Shelf;
 #[cfg(feature = "vector")]

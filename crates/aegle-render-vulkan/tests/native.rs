@@ -30,6 +30,17 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
         Color::rgb(0, 80, 230),
     )?;
     let scene = scene.finish()?;
+    // More primitives than one submission holds: the swapchain image is
+    // acquired by the first part and presented after the last.
+    let mut large = SceneBuilder::new();
+    for index in 0..20_000_u16 {
+        let (x, y) = (f32::from(index % 128), f32::from(index / 128));
+        large.fill(
+            RoundedRect::new(Rect::new(x, y, 1.0, 1.0), 0.0)?,
+            Color::rgb(230, 40, 0),
+        )?;
+    }
+    let large = large.finish()?;
     let deadline = Instant::now() + Duration::from_secs(12);
     let mut frames = 0;
     while Instant::now() < deadline {
@@ -60,6 +71,9 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
                 else {
                     return Ok(false);
                 };
+                if frames == 2 {
+                    frame.draw(&large, Affine::IDENTITY)?;
+                }
                 frame.draw(&scene, Affine::IDENTITY)?;
                 // Later frames name changed regions, partly beyond the extent.
                 if frames > 1 {

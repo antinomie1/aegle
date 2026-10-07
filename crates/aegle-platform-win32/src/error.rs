@@ -15,9 +15,6 @@ pub enum Error {
     InvalidIme(&'static str),
     /// The native input stream contains malformed UTF-16.
     InvalidUtf16,
-    /// This backend creates opaque toplevels; translucent framebuffer pixels
-    /// require a separate transparent-window composition implementation.
-    UnsupportedTransparency,
     /// The requested pixel allocation exceeds the window's bound.
     BufferBudget {
         /// Required allocation in bytes.
@@ -37,9 +34,6 @@ impl fmt::Display for Error {
             }
             Self::InvalidIme(reason) => write!(f, "invalid IMM state: {reason}"),
             Self::InvalidUtf16 => f.write_str("native text contains malformed UTF-16"),
-            Self::UnsupportedTransparency => {
-                f.write_str("ordinary Windows software windows require opaque pixels")
-            }
             Self::BufferBudget { required, budget } => write!(
                 f,
                 "pixel buffer requires {required} bytes, budget is {budget}"

@@ -20,11 +20,11 @@ window feature 仅增加 raw-window-handle 0.6.2，复用现有平台循环、IM
 
 图集先查询自身完整身份，命中不访问 CPU 字形缓存；缺失才通过共享 GlyphCache 按需光栅化。R8_UNORM 灰度与 RGBA8_SRGB 彩色页独立使用简单 shelf 排布，每个字形保留一像素透明边。新建/重置页由 GPU 清零，CPU 只上传紧密字形补丁，不保留页大小的 CPU 镜像。彩色上传先在线性空间预乘，再编码 RGB；纹理硬件解码、插值后得到正确线性预乘值，避免透明彩色边缘出现色晕。灰度乘前景，彩色保留调色板颜色。
 
-页数或条目达到上限时淘汰最旧的未使用页；当前帧已用页固定，不能覆盖正在录制的字形。保守像素支持范围与祖先 clip 不相交的字形不入图集；任意变换/圆角的边界筛选仍为保守估计，不扫描字形像素来判断完全透明。工作集无法容纳返回 AtlasFull，单字形连透明边超过页尺寸返回 GlyphTooLarge，均不静默漏字。单页放不下的大字号需调用方显式调大页尺寸。
+页数或条目达到上限时淘汰最旧的未使用页；当前帧已用页固定，不能覆盖正在录制的字形。保守像素支持范围与祖先 clip 不相交的字形不入图集；任意变换/圆角的边界筛选仍为保守估计，不扫描字形像素来判断完全透明。本帧剩余字形装不下时先提交已记录部分、解除页固定，再从下一个字形继续（见“分段提交”）；只有空提交仍放不下一个条目才返回 AtlasFull。单字形连透明边超过页尺寸返回 GlyphTooLarge，均不静默漏字。单页放不下的大字号需调用方显式调大页尺寸。
 
 ## 图像与路径（需 text）
 
-图像和路径复用字形图集与 pipeline，不新增 descriptor 或绘制通道；未启用 text 时这两类命令返回 UnsupportedCommand。图像以 RGBA8_SRGB color 条目上传（上传前线性预乘），按 Image id 缓存，shader 钳制到边缘纹素并乘以矩形解析覆盖率。路径由 zeno 在 CPU 生成 R8 覆盖率，键为路径 id、线性 2×2 矩阵、两轴四分之一像素相位、描边样式与宽度：整像素平移命中原条目，新的缩放/旋转再光栅化一次并占用新条目，平移动画不会逐帧重建。超过页尺寸的条目获得恰好其尺寸的专用页，仍计入页数、条目和设备预算；单个条目还受 CPU `upload_bytes`（默认 1 MiB，约 512×512 RGBA）限制，超出返回 Budget，超出设备图像尺寸返回 InvalidSize，不静默跳过。没有 mipmap。
+图像和路径复用字形图集与 pipeline，不新增 descriptor 或绘制通道；未启用 text 时这两类命令返回 UnsupportedCommand。图像以 RGBA8_SRGB color 条目上传（上传前线性预乘），按 Image id 缓存，shader 钳制到边缘纹素并乘以矩形解析覆盖率。路径由 zeno 在 CPU 生成 R8 覆盖率，键为路径 id、线性 2×2 矩阵、两轴四分之一像素相位、描边样式与宽度：整像素平移命中原条目，新的缩放/旋转再光栅化一次并占用新条目，平移动画不会逐帧重建。超过页尺寸的条目获得恰好其尺寸的专用页，仍计入页数、条目和设备预算；每次提交的 CPU 上传受 `upload_bytes`（默认 1 MiB，约 512×512 RGBA）限制，一帧累计超过时分段提交，单个条目超过才返回 Budget，超出设备图像尺寸返回 InvalidSize，不静默跳过。没有 mipmap。
 
 新增字形在成功提交后才视为已上传。取消或失败帧的脏页在下一帧清掉对应条目并重置，避免命中未上传内容；此前同页的有效条目也会失效。GPU 上传缓冲在 fence 完成时释放，CPU 上传容量保留复用；页图像在安全等待后才替换。空字形无需图集页，可复用 CPU 缓存。
 
@@ -32,7 +32,7 @@ window feature 仅增加 raw-window-handle 0.6.2，复用现有平台循环、IM
 
 `Renderer::register_texture(view, extent)`（unsafe，`SharedDevice` 上同名方法供多窗口共用）把应用创建的 `vk::ImageView` 登记为 `TextureId`，场景用 `SceneBuilder::texture` 绘制，复用图像管线与采样器。`raw_device()` 返回实例、物理设备、逻辑设备、图形队列与队列族（`RawDevice`，`aegle_render_vulkan::ash` 重导出所用 ash 版本），应用在其上创建并渲染图像。调用方保证：视图属于该设备、单采样二维颜色、带 SAMPLED 用途、可过滤的浮点格式且采样值为线性预乘 RGBA；执行引用它的帧时处于 `SHADER_READ_ONLY_OPTIMAL`，并以先于该帧提交到同一队列的屏障使写入对片段着色器可见；视图在注销且使用它的帧完成（`wait`）之前保持有效。
 
-每个渲染器在描述符池中为应用图像额外保留 16 个描述符集。每帧开始（已等待上一提交的 fence）清空映射，本帧首次画某个纹理时取一个空闲集合并写入描述符，所以从不改写在途命令使用的集合；一帧画超过 16 个不同纹理返回 `TooManyTextures`，未登记的 id 返回 `UnknownTexture`，均使帧失败。
+每个渲染器在描述符池中为应用图像额外保留 16 个描述符集。每帧开始（已等待上一提交的 fence）清空映射，本帧首次画某个纹理时取一个空闲集合并写入描述符，所以从不改写在途命令使用的集合；一次提交最多绑定 16 个不同纹理，更多时分段提交（`TooManyTextures` 只在空提交仍无空位时返回，正常不会出现）；未登记的 id 返回 `UnknownTexture`，使帧失败。
 
 ## 调用与生命周期
 
@@ -55,13 +55,17 @@ Renderer 持有一个可复用离屏目标及帧资源，同时至多一个提�
 
 第一遍在 RGBA16_SFLOAT 中按预乘线性 SourceOver 混合；第二遍用 textureLoad 读取，解预乘、编码 sRGB、再次预乘，写入 RGBA8_UNORM。直接使用 sRGB attachment 不能产生约定的透明预乘 sRGB 字节，因此本阶段保留这两张目标图像。软件每次绘制量化，GPU 在输出阶段量化，两者允许少量内部颜色差异。
 
+## 分段提交
+
+一次提交最多 `aegle_gpu::MAX_PRIMITIVES`（16,384）个图元，即 1.75 MiB 图元记录；图元数到达上限、图集或纹理绑定在本次提交内用尽、或 CPU 上传达到 `upload_bytes` 时，帧在中途提交已记录部分，CPU 等待 fence 后清空图元、解除图集页固定与纹理绑定，再继续录制，与 wgpu 后端相同。第一次提交照常清屏，后续提交使用只在 load 操作与初始布局上不同的兼容 render pass 载入线性目标（直接 sRGB 窗口则载入 swapchain 图像），只有最后一次运行编码通道。窗口帧在第一次提交时获取 swapchain 图像，最后一次提交后才呈现，因此合成器只看到完整帧。裁剪行保留整帧，后续提交仍可引用；其数量随场景的裁剪命令增长，不受图元上限约束。拆分不改变像素：各段按记录顺序写入同一目标。中途失败的帧使 swapchain 重建，弃帧不呈现。
+
 非法尺寸、非有限外部裁剪、裁剪超过后端上限、未支持命令及资源预算不足均返回错误。失败或未提交的 Frame 丢弃后必须能开始新的帧；不能提交失败帧中的部分绘制作为完整结果。设备丢失须报告，不能静默切换到软件后端。
 
 ## 预算与可观察性
 
-Options 包含可选 `device_index`、`memory_budget` 和 `recording_budget`；默认分别自动选择设备、16 MiB 显式设备分配上限、1 MiB 记录上限。统计由 `stats().device_bytes` 与 `stats().recording_bytes` 提供，设备名通过 `device_name()` 查询。
+Options 包含可选 `device_index` 和 `memory_budget`；默认分别自动选择设备与 16 MiB 显式设备分配上限。CPU 图元记录由分段提交约束在 1.75 MiB 以内，不再单独配置。统计由 `stats().device_bytes` 与 `stats().recording_bytes` 提供，设备名通过 `device_name()` 查询。
 
-设备预算包含两张目标图像、clip buffer、文字图集/上传和按需读回缓冲的实际 VkMemoryRequirements 分配大小，包括驱动要求的对齐；无读回时不分配读回 buffer。记录预算计算 draw/clip 两个 Vec 的 capacity，清空帧时保留容量复用。预算不足明确报错，不靠额外在途帧扩大分配。
+设备预算包含两张目标图像、clip buffer、文字图集/上传和按需读回缓冲的实际 VkMemoryRequirements 分配大小，包括驱动要求的对齐；无读回时不分配读回 buffer。`recording_bytes` 报告图元/裁剪两个 Vec 的 capacity，清空帧时保留容量复用。预算不足明确报错，不靠额外在途帧扩大分配。
 
 启用 text 后，`Options.text` 独立配置默认512×512页、最多8页/4096字形条目、最多1 MiB CPU上传 capacity，以及原有 GlyphCache 限额。文字页按需分配，8页不是初始化时分配8张图；mask和color共用页数上限。上传 region 数量不超过字形条目上限；哈希表有空槽，变化轴最多64个i16/条目。`text_stats` 报告页/条目数、实际图像与staging分配、上传capacity、表容量、CPU缓存和raster_requests计数；它与总体stats部分重叠，不能直接相加。空白/未入图集字形可再次查询CPU缓存，raster_requests不等于实际重新光栅化次数。
 
@@ -90,7 +94,7 @@ geometry 示例只用标准库写 PPM，不增加 PNG 运行依赖。示例能�
 
 `unsafe WindowRenderer::new(owner, options)` 接受实现 raw-window-handle 的原生租约；调用方必须保证同一 window/display 在 renderer 销毁前一直有效，并遵守平台线程规则。Wayland/Win32 的 `WindowSurface` 保留原生对象，平台逻辑关闭不提前破坏 GPU 句柄。构造窗口 renderer 不创建新事件循环。
 
-`begin_frame(width, height, clear)` 在零尺寸时释放尺寸相关目标并返回 None；同尺寸复用，否则等待设备/呈现队列后释放旧 swapchain 并重建。Frame::extent 返回实际 extent。Frame::finish 才获取图像、等待 acquire fence、提交并 present；弃帧不获取图像。SurfaceOutOfDate 保持 dirty 等待重试，DeviceLost/SurfaceLost 返回错误，不隐式切换后端。当前 graphics/present 必须为同一 queue。 `Frame::set_damage(&[PixelRect])` 声明本帧相对上一次呈现改变的设备像素矩形：设备提供 `VK_KHR_incremental_present` 时窗口渲染器启用它，并在 present 时附上 `VkPresentRegionsKHR`，合成器只需更新这些区域；帧本身仍整幅绘制。新 swapchain 的第一次呈现、没有该扩展或未调用时上报整个 surface。
+`begin_frame(width, height, clear)` 在零尺寸时释放尺寸相关目标并返回 None；同尺寸复用，否则等待设备/呈现队列后释放旧 swapchain 并重建。Frame::extent 返回实际 extent。帧的第一次提交（通常是 Frame::finish，大帧为第一段）才获取图像并等待 acquire fence，最后一次提交后 present；未提交过的弃帧不获取图像，已分段提交后失败或丢弃的帧使 swapchain 在下一帧重建。SurfaceOutOfDate 保持 dirty 等待重试，DeviceLost/SurfaceLost 返回错误，不隐式切换后端。当前 graphics/present 必须为同一 queue。 `Frame::set_damage(&[PixelRect])` 声明本帧相对上一次呈现改变的设备像素矩形：设备提供 `VK_KHR_incremental_present` 时窗口渲染器启用它，并在 present 时附上 `VkPresentRegionsKHR`，合成器只需更新这些区域；帧本身仍整幅绘制。新 swapchain 的第一次呈现、没有该扩展或未调用时上报整个 surface。
 
 呈现使用 FIFO 与 SRGB_NONLINEAR。默认 `Options::transparent = false`：表面提供 BGRA8/RGBA8_SRGB 时，几何与文字直接在 sRGB swapchain 图像上由硬件线性混合，没有 RGBA16F 目标和编码 pass；优先 OPAQUE composite alpha，并要求不透明清屏色。`transparent = true` 或表面只有 UNORM 时，保留 RGBA16F 线性目标并由编码 pass 写入 UNORM swapchain，优先 PRE_MULTIPLIED，否则选择 OPAQUE 并拒绝非不透明清屏色。两条路径都不保留第二张 RGBA8 离屏目标、不经 CPU 读回或 SHM 转送。未指定设备时优先集成 GPU，其次独显、虚拟设备和 CPU 驱动。每窗口一个设备，一次 graphics submission 在途；render-finished semaphore 按 swapchain image 保存，重建等待 device idle，不能把 graphics fence 当作 presentation 完成证明。
 

@@ -9,6 +9,9 @@ use crate::{Error, Result};
 
 /// Clip index meaning "no clip scope".
 pub const NO_CLIP: u32 = u32::MAX;
+/// Primitives per submission. Both GPU renderers split a larger frame into
+/// several submissions, bounding CPU and GPU record storage at 1.75 MiB.
+pub const MAX_PRIMITIVES: usize = 16_384;
 const MAX_COORDINATE: f32 = 1_048_576.0;
 
 /// Matches `Primitive` in the shared WGSL. `bounds` is already limited to the
@@ -63,20 +66,14 @@ pub struct State {
     pub bounds: [f32; 4],
 }
 
-/// Clip and primitive rows for one frame, bounded by a byte limit.
+/// Clip and primitive rows for one frame. Renderers submit the primitives
+/// every [`MAX_PRIMITIVES`]; clips stay for the whole frame.
+#[derive(Default)]
 pub struct Recording {
     /// Draw rows in painter's order.
     pub primitives: Vec<Primitive>,
     /// Clip rows; later primitives refer to them by index.
     pub clips: Vec<Clip>,
-    /// Maximum capacity bytes of both vectors together; `usize::MAX` is unbounded.
-    pub limit: usize,
-}
-
-impl Default for Recording {
-    fn default() -> Self {
-        Self::with_limit(usize::MAX)
-    }
 }
 
 /// An atlas-backed draw: glyph, image or path mask.
@@ -146,15 +143,6 @@ pub(crate) struct LocalShape {
 }
 
 impl Recording {
-    /// An empty recording that refuses to grow past `limit` bytes.
-    pub fn with_limit(limit: usize) -> Self {
-        Self {
-            primitives: Vec::new(),
-            clips: Vec::new(),
-            limit,
-        }
-    }
-
     /// Starts a frame; keeps allocations for reuse.
     pub fn clear(&mut self) {
         self.primitives.clear();
@@ -182,7 +170,7 @@ impl Recording {
             ];
         }
         let local = local_shape(shape, transform, -1.0)?;
-        reserve(&mut self.clips, &mut self.primitives, self.limit)?;
+        reserve(&mut self.clips)?;
         let index = u32::try_from(self.clips.len()).map_err(|_| Error::Coordinates)?;
         if index == NO_CLIP {
             return Err(Error::Coordinates);
@@ -236,7 +224,7 @@ impl Recording {
             return Ok(false);
         }
         primitive.bounds = clipped;
-        reserve(&mut self.primitives, &mut self.clips, self.limit)?;
+        reserve(&mut self.primitives)?;
         self.primitives.push(primitive);
         Ok(true)
     }
@@ -342,35 +330,12 @@ pub(crate) fn intersection(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     ]
 }
 
-/// Grow only the exhausted array, keeping both retained capacities in budget.
-pub(crate) fn reserve<T, U>(values: &mut Vec<T>, other: &mut Vec<U>, limit: usize) -> Result<()> {
+/// Grows a full vector, reporting allocation failure instead of aborting.
+pub(crate) fn reserve<T>(values: &mut Vec<T>) -> Result<()> {
     if values.len() < values.capacity() {
         return Ok(());
     }
-    let next_bytes = values
-        .len()
-        .saturating_add(1)
-        .saturating_mul(size_of::<T>());
-    let mut other_bytes = other.capacity() * size_of::<U>();
-    if next_bytes.saturating_add(other_bytes) > limit {
-        // Reclaim unused growth in the other array before rejecting real work.
-        other.shrink_to_fit();
-        other_bytes = other.capacity() * size_of::<U>();
-    }
-    let required = next_bytes.saturating_add(other_bytes);
-    if required > limit {
-        return Err(Error::Budget {
-            required: required as u64,
-            limit: limit as u64,
-        });
-    }
-    let max_capacity = (limit - other_bytes) / size_of::<T>();
-    let capacity = values
-        .capacity()
-        .saturating_mul(2)
-        .max(16)
-        .min(max_capacity);
     values
-        .try_reserve_exact(capacity - values.len())
+        .try_reserve(values.capacity().max(16))
         .map_err(|_| Error::Allocation)
 }

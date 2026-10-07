@@ -65,25 +65,6 @@ fn walker_records_clips_limits_and_hands_back_commands() -> Result {
         "unclipped fills have no clip"
     );
 
-    // A byte limit smaller than one row refuses to grow instead of allocating.
-    let mut tight = Recording::with_limit(64);
-    let mut walker = Walker::new(
-        &scene,
-        Affine::IDENTITY,
-        None,
-        [16, 16],
-        [16.0, 16.0],
-        &mut tight,
-    )?;
-    let error = loop {
-        match walker.step(&mut tight) {
-            Err(error) => break error,
-            Ok(Step::Done) => panic!("limit was not enforced"),
-            Ok(_) => {}
-        }
-    };
-    assert!(matches!(error, Error::Budget { limit: 64, .. }));
-
     // Eight scene clips plus the external clip exceed the eight-layer limit.
     let mut builder = SceneBuilder::new();
     for _ in 0..8 {

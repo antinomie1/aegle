@@ -371,7 +371,9 @@ impl Wayland {
     }
 
     /// Draws directly into an idle SHM buffer as premultiplied sRGB BGRA8, the
-    /// memory order of little-endian ARGB8888 (big-endian targets reorder it).
+    /// memory order of little-endian XRGB8888 (big-endian targets reorder it).
+    /// The window is opaque: the compositor ignores alpha, so a translucent
+    /// pixel shows its premultiplied color as if over black.
     ///
     /// `damage` is the area that changed since the last presented frame, in
     /// buffer pixels; `None` changes every pixel. `draw` must clear or

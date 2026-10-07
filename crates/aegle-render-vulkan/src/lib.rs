@@ -24,6 +24,7 @@ mod device;
 mod error;
 #[cfg(feature = "text")]
 mod external;
+mod frame;
 mod memory;
 mod pipeline;
 mod renderer;
@@ -51,6 +52,7 @@ pub use atlas::{TextOptions, TextStats};
 pub use error::{Error, Result};
 #[cfg(feature = "text")]
 pub use external::RawDevice;
-pub use renderer::{Frame, Options, Renderer, Stats};
+pub use frame::Frame;
+pub use renderer::{Options, Renderer, Stats};
 #[cfg(feature = "window")]
 pub use window::{SharedDevice, WindowRenderer};

@@ -1,9 +1,7 @@
 //! Native lifecycle contract, intentionally opt-in on a test desktop.
 #![cfg(windows)]
 #![allow(unsafe_code)]
-use aegle_platform_win32::{
-    Error, Event, ImeRequest, PixelSize, PresentError, Win32, WindowOptions,
-};
+use aegle_platform_win32::{Error, Event, ImeRequest, PixelSize, Win32, WindowOptions};
 use aegle_types::Rect;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::time::Duration;
@@ -56,13 +54,11 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
     unsafe {
         assert!(IsWindowVisible(hwnd).as_bool());
     }
-    assert!(matches!(
-        backend.present(first, None, |pixels, _, _| {
-            pixels.fill(0);
-            Ok::<_, std::convert::Infallible>(())
-        }),
-        Err(PresentError::Platform(Error::UnsupportedTransparency))
-    ));
+    // The window is opaque: GDI ignores alpha instead of rejecting it.
+    assert!(backend.present(first, None, |pixels, _, _| {
+        pixels.fill(0);
+        Ok::<_, std::convert::Infallible>(())
+    })?);
     backend.configure_ime(
         first,
         Some(ImeRequest {

@@ -177,21 +177,18 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
         assert_eq!(limited.text_stats().atlas_entries, 1);
     }
     assert_eq!(limited.text_stats().raster_requests, 3);
-    let full = text(&mut fonts, "你好", 20.0)?;
+    // A run needing more entries than the atlas holds is drawn in parts,
+    // continuing at the glyph that did not fit, as wgpu does.
+    let full = text(&mut fonts, "你好你好", 20.0)?;
+    compare(&mut limited, &full, Affine::IDENTITY, None, 96)?;
+    assert_eq!(limited.text_stats().atlas_entries, 1);
+    // Only a glyph that cannot fit an empty atlas fails.
     let huge = text(&mut fonts, "你", 80.0)?;
-    for (scene, oversized) in [(&full, false), (&huge, true)] {
-        let mut frame = limited.begin_frame(64, 64, Color::TRANSPARENT)?;
-        let error = frame.draw(scene, Affine::IDENTITY).unwrap_err();
-        assert!(
-            matches!(
-                (&error, oversized),
-                (Error::AtlasFull, false) | (Error::GlyphTooLarge, true)
-            ),
-            "{error}"
-        );
-        assert!(matches!(frame.finish(), Err(Error::FrameFailed)));
-        compare(&mut limited, &a, Affine::IDENTITY, None, 64)?;
-    }
+    let mut frame = limited.begin_frame(64, 64, Color::TRANSPARENT)?;
+    let error = frame.draw(&huge, Affine::IDENTITY).unwrap_err();
+    assert!(matches!(error, Error::GlyphTooLarge), "{error}");
+    assert!(matches!(frame.finish(), Err(Error::FrameFailed)));
+    compare(&mut limited, &a, Affine::IDENTITY, None, 64)?;
     // A fully clipped glyph must not pin the single entry needed by visible text.
     let mut edge = SceneBuilder::new();
     for (size, position) in [(16.0, Point::new(0.0, 2.0)), (8.0, Point::new(3.0, 1.0))] {

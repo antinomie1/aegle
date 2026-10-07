@@ -45,6 +45,12 @@ pub enum Error {
     Readback(wgpu::BufferAsyncError),
     /// An earlier draw failed; this frame cannot be submitted.
     FrameFailed,
+    /// wgpu reported a validation, out-of-memory or internal error. The device
+    /// state is unknown, so this renderer accepts no more work.
+    Gpu(String),
+    /// The device was lost. This renderer accepts no more work; Aegle does not
+    /// recreate devices.
+    DeviceLost(String),
 }
 
 impl fmt::Display for Error {
@@ -77,6 +83,8 @@ impl fmt::Display for Error {
             Self::Readback(e) => write!(f, "wgpu readback: {e}"),
             Self::Allocation => f.write_str("wgpu host allocation failed"),
             Self::FrameFailed => f.write_str("cannot submit a failed wgpu frame"),
+            Self::Gpu(message) => write!(f, "wgpu error: {message}"),
+            Self::DeviceLost(message) => write!(f, "wgpu device lost: {message}"),
         }
     }
 }
@@ -96,8 +104,6 @@ impl From<aegle_gpu::Error> for Error {
         match value {
             aegle_gpu::Error::Coordinates => Self::Coordinates,
             aegle_gpu::Error::ClipDepth => Self::ClipDepth,
-            // The recording is unbounded here: batches flush at a fixed size.
-            aegle_gpu::Error::Budget { .. } => unreachable!("wgpu recordings have no byte limit"),
             aegle_gpu::Error::Allocation => Self::Allocation,
             aegle_gpu::Error::Scene(error) => Self::Scene(error),
         }

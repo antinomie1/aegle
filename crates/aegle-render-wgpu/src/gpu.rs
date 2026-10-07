@@ -7,7 +7,10 @@ use wgpu::{
     VertexState,
 };
 
-use std::cell::RefCell;
+use std::{
+    cell::RefCell,
+    sync::{Arc, OnceLock},
+};
 
 use crate::{Error, Result};
 
@@ -36,6 +39,14 @@ pub(crate) struct Gpu {
     resolve: RefCell<Vec<(TextureFormat, RenderPipeline)>>,
     #[cfg_attr(not(feature = "window"), allow(dead_code))]
     pub adapter: wgpu::Adapter,
+    /// The first uncaptured wgpu error or device loss, recorded by wgpu's
+    /// callbacks instead of its default panic. Once set, no work is accepted.
+    fault: Arc<OnceLock<Fault>>,
+}
+
+struct Fault {
+    lost: bool,
+    message: String,
 }
 
 fn wgsl<'a>(label: &'a str, source: &'a str) -> wgpu::ShaderModuleDescriptor<'a> {
@@ -89,6 +100,28 @@ impl Gpu {
 
     fn new(device: Device, queue: Queue, adapter: wgpu::Adapter) -> Self {
         let name = adapter.get_info().name;
+        let fault = Arc::new(OnceLock::new());
+        device.on_uncaptured_error(Arc::new({
+            let fault = fault.clone();
+            move |error: wgpu::Error| {
+                let _ = fault.set(Fault {
+                    lost: false,
+                    message: error.to_string(),
+                });
+            }
+        }));
+        device.set_device_lost_callback({
+            let fault = fault.clone();
+            move |reason, message| {
+                // Dropping the device reports `Destroyed`; nothing uses it after.
+                if reason == wgpu::DeviceLostReason::Unknown {
+                    let _ = fault.set(Fault {
+                        lost: true,
+                        message,
+                    });
+                }
+            }
+        });
         let storage = |binding| {
             layout_entry(
                 binding,
@@ -181,6 +214,20 @@ impl Gpu {
             resolve_shader,
             resolve: RefCell::new(Vec::new()),
             adapter,
+            fault,
+        }
+    }
+
+    /// Refuses work after wgpu reported an error or lost the device. Neither is
+    /// recovered: the caller creates a new renderer.
+    pub fn check(&self) -> Result {
+        match self.fault.get() {
+            None => Ok(()),
+            Some(Fault {
+                lost: true,
+                message,
+            }) => Err(Error::DeviceLost(message.clone())),
+            Some(Fault { message, .. }) => Err(Error::Gpu(message.clone())),
         }
     }
 

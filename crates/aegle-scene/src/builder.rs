@@ -248,7 +248,9 @@ impl SceneBuilder {
     }
 
     /// Draws a registered application texture stretched over `rect`. Empty
-    /// rectangles produce no command; see [`Command::Texture`].
+    /// rectangles produce no command; see [`Command::Texture`]. Only GPU
+    /// renderers draw textures: in a native app, a texture can be registered
+    /// exactly when `App::wgpu` or `App::vulkan` returns a device.
     pub fn texture(&mut self, texture: TextureId, rect: Rect) -> Result<&mut Self, SceneError> {
         let shape = RoundedRect::new(rect, 0.0)?;
         if !shape.is_empty() {

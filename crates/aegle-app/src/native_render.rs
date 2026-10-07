@@ -127,6 +127,11 @@ impl Runtime {
             match self.options.renderer {
                 #[cfg(feature = "software")]
                 RendererBackend::Software => {
+                    // Software windows are opaque on both platforms; GPU windows
+                    // check their own surface, which may be transparent.
+                    if background.to_rgba()[3] != 255 {
+                        return Err("software windows require an opaque background".into());
+                    }
                     let renderer = self.renderer.as_mut().unwrap();
                     let scale = info.scale as f32;
                     // Only the changed area is redrawn into a retained buffer.
