@@ -236,7 +236,7 @@ fn bindable(name: PropertyName) -> Option<Type> {
     match name {
         Label | Tooltip => Some(Type::String),
         Visible | Enabled => Some(Type::Bool),
-        OffsetX | OffsetY | Scale | Rotation => Some(Type::Float),
+        OffsetX | OffsetY | Scale | Rotation | Opacity => Some(Type::Float),
         _ => None,
     }
 }

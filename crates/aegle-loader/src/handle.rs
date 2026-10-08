@@ -76,6 +76,8 @@ pub(crate) fn consumed(name: PropertyName) -> bool {
             | OffsetTransition
             | ScaleTransition
             | RotationTransition
+            | ShadowTransition
+            | OpacityTransition
     )
 }
 
@@ -100,6 +102,9 @@ pub fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
         return result;
     }
     if let Some(result) = crate::motion::geometry(node, name, value) {
+        return result;
+    }
+    if let Some(result) = crate::effects::apply(node, name, value) {
         return result;
     }
     match (name, value) {
@@ -172,6 +177,7 @@ fn bind_token(node: &Node, name: PropertyName, token: &str) -> Result {
         FontSize => length(L::FontSize),
         Padding => length(L::Padding),
         Gap => length(L::Gap),
+        Shadow => node.bind_shadow(aegle_ui::token(token)?),
         _ => unreachable!("checked token property"),
     }
 }

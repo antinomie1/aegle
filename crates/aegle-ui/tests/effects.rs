@@ -75,3 +75,67 @@ fn shadows_and_gradient_backgrounds() -> Result {
     assert!(commands(&ui)?.is_empty());
     Ok(())
 }
+
+/// MD3 elevation: a shadow fades in, retargets mid-flight, and fades out
+/// until it is gone, asking for frames only while it moves.
+#[cfg(feature = "motion")]
+#[test]
+fn shadows_follow_their_transition() -> Result {
+    use aegle_ui::{Easing, Transition, TransitionProperty};
+    use std::time::Duration;
+
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(200.0, 100.0))?;
+    let card = ui.root().column()?;
+    card.set_size(40.0, 20.0)?;
+    ui.refresh()?;
+    let linear = Transition::new(Duration::from_millis(100), Easing::Linear);
+    card.set_property_transition(TransitionProperty::Shadow, Some(linear))?;
+    let raised = Shadow {
+        offset: Point::new(0.0, 4.0),
+        blur: 8.0,
+        spread: 0.0,
+        color: Color::rgba(0, 0, 0, 200),
+    };
+    card.set_shadow(Some(raised))?;
+    assert_eq!(card.shadow()?, Some(raised), "reads the target");
+    ui.refresh()?;
+    ui.advance_animations(Duration::from_millis(50))?;
+    let shadow = |ui: &Ui| -> Result<Option<(f32, u8)>> {
+        ui.refresh()?;
+        let mut found = None;
+        ui.visit_scenes(|visit| {
+            if let aegle_ui::Visit::Scene { scene, .. } = visit {
+                for command in scene.commands() {
+                    if let Command::Shadow { blur, color, .. } = command {
+                        found = Some((*blur, color.to_rgba()[3]));
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        Ok(found)
+    };
+    // Halfway: same geometry, half the alpha.
+    assert_eq!(shadow(&ui)?, Some((8.0, 100)));
+    // Retargeting starts from the shown shadow.
+    card.set_shadow(Some(Shadow {
+        blur: 16.0,
+        ..raised
+    }))?;
+    ui.refresh()?;
+    ui.advance_animations(Duration::from_millis(100))?;
+    let (blur, _) = shadow(&ui)?.unwrap();
+    assert!((blur - 12.0).abs() < 1e-3, "{blur}");
+    ui.advance_animations(Duration::from_millis(200))?;
+    assert_eq!(shadow(&ui)?, Some((16.0, 200)));
+    assert!(!ui.has_animations()? && !ui.wants_frames()?);
+    // Fading out removes it.
+    card.set_shadow(None)?;
+    assert_eq!(card.shadow()?, None);
+    ui.refresh()?;
+    ui.advance_animations(Duration::from_millis(400))?;
+    assert_eq!(shadow(&ui)?, None);
+    assert!(!ui.has_animations()?);
+    Ok(())
+}

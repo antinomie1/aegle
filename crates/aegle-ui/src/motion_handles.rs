@@ -77,6 +77,7 @@ impl Node {
             state.snap_offset(id);
             state.snap_spin(id);
             state.snap_opacity(id);
+            state.snap_shadow(id);
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             state.tokens.unbind(id, TokenSlot::is_transition);
             Ok(())
@@ -101,7 +102,7 @@ impl Node {
                 track.presented = Some(target);
             }
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            let moved = state.snap_offset(id) | state.snap_opacity(id);
+            let moved = state.snap_offset(id) | state.snap_opacity(id) | state.snap_shadow(id);
             if state.snap_spin(id) || moved || painting {
                 state.complete(id);
             }
@@ -141,6 +142,7 @@ impl Node {
             state.motion.scaling.remove(&id);
             state.motion.rotating.remove(&id);
             state.motion.fading.remove(&id);
+            state.motion.shadows.remove(&id);
             let value = state.presented_appearance(id)?;
             let control = &state.tree.get(id).unwrap().context.control;
             let accepts = control.kind().accepts;
@@ -209,7 +211,7 @@ impl Node {
             if timing.is_some() && !state.motion.tracks.contains_key(&id) {
                 // A policy-free control animates from what it shows now.
                 let presented = Some(state.appearance(id)?);
-                let timings = [None; 5];
+                let timings = [None; TransitionProperty::ALL.len()];
                 state.motion.tracks.insert(id, Track { timings, presented });
             }
             state.motion.paint_once.insert(id, timing);
@@ -344,6 +346,11 @@ impl Ui {
                 state.snap_opacity(id);
                 state.complete(id);
             }
+            let shadows: Vec<_> = state.motion.shadows.keys().copied().collect();
+            for id in shadows {
+                state.snap_shadow(id);
+                state.complete(id);
+            }
             let repaint = state.refresh()?;
             // Keep the snapped frame pending for the host's next presentation.
             state.repaint |= repaint;
@@ -362,11 +369,11 @@ impl State {
     ) -> Result {
         let current = self.presented_appearance(id)?;
         let track = self.motion.tracks.entry(id).or_insert(Track {
-            timings: [None; 5],
+            timings: [None; TransitionProperty::ALL.len()],
             presented: Some(current),
         });
         track.timings[property as usize] = timing;
-        if track.timings == [None; 5] {
+        if track.timings == [None; TransitionProperty::ALL.len()] {
             self.motion.tracks.remove(&id);
         }
         match property {
@@ -391,6 +398,9 @@ impl State {
             }
             TransitionProperty::Opacity if timing.is_none() => {
                 self.snap_opacity(id);
+            }
+            TransitionProperty::Shadow if timing.is_none() => {
+                self.snap_shadow(id);
             }
             _ => {}
         }
@@ -424,7 +434,7 @@ impl State {
                 .motion
                 .tracks
                 .get(&id)
-                .is_some_and(|t| t.timings == [None; 5])
+                .is_some_and(|t| t.timings == [None; TransitionProperty::ALL.len()])
         {
             self.motion.tracks.remove(&id);
         }

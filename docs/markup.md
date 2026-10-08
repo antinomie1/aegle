@@ -109,7 +109,11 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `focus_color`、`focus_width` | 焦点颜色与非负 `dp` 宽度 |
 | `selection_color`、`caret_color` | 编辑器的选择与 caret/预编辑颜色 |
 | `font_size` | 正 `dp` |
-| `token("包.名称")` | 上述颜色属性及 `border_width`、`radius`、`focus_width`、`font_size`、`padding`、`gap` 也可绑定已登记的 token（如 `token("theme.accent")`；padding 与 gap 取统一值）；构建时按名查找，此后随主题和 token 覆盖更新。字体与过渡时长 token 只能在 Rust 中绑定 |
+| `token("包.名称")` | 上述颜色属性及 `border_width`、`radius`、`focus_width`、`font_size`、`padding`、`gap`、`shadow` 和渐变色标也可绑定已登记的 token（如 `token("theme.accent")`；padding 与 gap 取统一值）；构建时按名查找，此后随主题和 token 覆盖更新。字体与过渡时长 token 只能在 Rust 中绑定 |
+| `shadow` | 除 Window 外任意控件：`[x, y, 模糊, 扩展, 颜色]`，四个 `dp` 长度（模糊非负）加一个颜色，如 `[0dp, 1dp, 3dp, 0dp, #0000004D]`；或整个阴影绑定 `Shadow` token，如 `token("am3.elevation.level1")` |
+| `background_gradient` | 以渐变代替背景色：`linear(角度, 色标…)` 或 `radial(色标…)`，2–16 个色标，每个是颜色、`token("包.名称")` 或 `[颜色, 百分比]`；要么全部带位置（0%–100%，不递减），要么都不带（均匀分布）。角度为度数，0 指向上方，90 指向右方，在归一化的单位盒中度量，45 总是从左下角到右上角；radial 以中心为圆心，半径为较长边的一半 |
+| `opacity` | 除 Window 外任意控件的组透明度，[0, 1] 的数，子树作为一张图像合成；可绑定 float |
+| `backdrop_blur` | 除 Window 外任意控件，非负 `dp` 标准差，先模糊其圆角边界内已绘制的内容 |
 | `tooltip` | 除 Window 外任意控件的提示字符串，同时作为无障碍描述 |
 | `indicator_color` | 标志或完成部分的颜色 |
 | `transition` | 全节点外观过渡，非负整数毫秒，如 `120ms`；零表示立即到目标 |
@@ -117,15 +121,15 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `offset_x`、`offset_y` | 除 Window 外任意控件的呈现位移，有限 `dp`；可绑定 float（按 dp）。另一轴保持当前目标 |
 | `scale` | 除 Window 外任意控件以中心缩放子树，(0, 1000] 的数，默认 1；可绑定 |
 | `rotation` | 除 Window 外任意控件以中心旋转子树，有限的度数（顺时针为正）；可绑定 |
-| `paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition` | 单独设置外观、位移、缩放、旋转的过渡：`200ms` 或 `[200ms, linear]`，未写 easing 时为 ease_out；覆盖同节点 `transition` 中的对应部分 |
+| `paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition`、`opacity_transition`、`shadow_transition` | 单独设置外观、位移、缩放、旋转、组透明度、阴影的过渡：`200ms` 或 `[200ms, linear]`，未写 easing 时为 ease_out；覆盖同节点 `transition` 中的对应部分 |
 
 Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
 
 ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`、`width` 或 flex 分配约束视口即可产生滚动溢出。它没有可选样式组，因此不接受 font_size、hover/pressed/focus 等交互状态属性。当前没有初始滚动偏移属性；通过具名 ScrollView 句柄调用 `scroll_to`，或对子控件调用 `ensure_visible`。布局刷新、裁剪、嵌套滚轮和保留状态遵守同一套 [Rust 滚动契约](rust-api.md#当前滚动契约)；完整示例为 `crates/aegle/examples/scrolling.aegle`。
 
-声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知属性、重复属性/ID、不适用属性、错误类型及未实现语法在 `ui!` 的编译期、运行时加载的挂载前拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
+声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性与 `shadow`、渐变色标。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知属性、重复属性/ID、不适用属性、错误类型及未实现语法在 `ui!` 的编译期、运行时加载的挂载前拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 
-`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。过渡在本次构建的全部属性设置后才安装（见上文构建顺序），首次显示没有初始样式动画。`transition` 为外观、位移、缩放和旋转统一设置时长，四个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
+`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。过渡在本次构建的全部属性设置后才安装（见上文构建顺序），首次显示没有初始样式动画。`transition` 为外观、位移、缩放、旋转、组透明度和阴影统一设置时长，六个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
 
 独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、元素规格 `ElementSpec`、多文件 `Sources`/`compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，括号、调用实参和列表的嵌套，以及运算符与字段读取构成的左脊，合计受同一层数上限约束，`list<…>` 类型不允许嵌套；整数字面量必须在 i64 内；显式解析深度最多 `Limits::MAX_DEPTH`（256）。尺寸预算只由解析器执行；`check_program` 对手工构造的 AST 只施加同一 256 层上限，使构建不会递归更深。`ui!` 与 `Program::load` 使用默认上限。`choices(name)` 列出节点属性接受的标识符，元素的选项写在其规格中；两条路径都把节点属性交给 loader 的同一组 setter，把元素属性交给元素自己的胶水代码，引擎逐项显式映射，不把未知值落到默认值。静态文档的运行时不保留 AST、规格或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
 

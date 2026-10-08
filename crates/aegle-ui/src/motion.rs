@@ -20,16 +20,19 @@ pub enum TransitionProperty {
     Rotation,
     /// The group opacity of `Node::set_opacity`.
     Opacity,
+    /// The shadow of `Node::set_shadow`: offset, blur, spread and color.
+    Shadow,
 }
 
 impl TransitionProperty {
     /// Every property, in slot order.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Paint,
         Self::Offset,
         Self::Scale,
         Self::Rotation,
         Self::Opacity,
+        Self::Shadow,
     ];
 }
 
@@ -45,6 +48,8 @@ pub struct Motion {
     pub scaling: HashMap<NodeId, Running<f32>>,
     pub rotating: HashMap<NodeId, Running<f32>>,
     pub fading: HashMap<NodeId, Running<f32>>,
+    /// Running shadow transitions; the presented shadow is the node's decoration.
+    pub shadows: HashMap<NodeId, Running<crate::Shadow>>,
     /// Momentum scrolling after a finished touchpad gesture.
     pub fling: Option<crate::fling::Fling>,
     /// Completion handlers, versioned in the shared callback sequence.
@@ -62,7 +67,7 @@ pub struct Motion {
 pub struct Track {
     /// Timing per property, in [`TransitionProperty::ALL`] order; `None`
     /// changes that property immediately.
-    pub timings: [Option<Transition>; 5],
+    pub timings: [Option<Transition>; TransitionProperty::ALL.len()],
     pub presented: Option<Appearance>,
 }
 
@@ -70,7 +75,7 @@ impl Track {
     /// The same timing for every property.
     pub fn uniform(timing: Transition) -> Self {
         Self {
-            timings: [Some(timing); 5],
+            timings: [Some(timing); TransitionProperty::ALL.len()],
             presented: None,
         }
     }
@@ -99,6 +104,10 @@ impl<T: Interpolate> Running<T> {
     /// The value the property rests at once this finishes.
     pub fn target(&self) -> T {
         self.curve.target()
+    }
+    /// Time since it started, once a refresh started it.
+    pub(crate) fn elapsed(&self, now: Duration) -> Option<Duration> {
+        self.start.map(|start| now - start)
     }
 }
 
@@ -201,6 +210,7 @@ impl Motion {
         self.scaling.remove(&id);
         self.rotating.remove(&id);
         self.fading.remove(&id);
+        self.shadows.remove(&id);
         self.ends.remove(&id);
         self.paint_once.remove(&id);
     }
@@ -211,6 +221,7 @@ impl Motion {
         self.scaling.clear();
         self.rotating.clear();
         self.fading.clear();
+        self.shadows.clear();
         self.fling = None;
         self.ends.clear();
         self.paint_once.clear();
@@ -222,13 +233,15 @@ impl Motion {
             || self.scaling.contains_key(&id)
             || self.rotating.contains_key(&id)
             || self.fading.contains_key(&id)
+            || self.shadows.contains_key(&id)
     }
     pub fn any_running(&self) -> bool {
         !(self.active.is_empty()
             && self.moving.is_empty()
             && self.scaling.is_empty()
             && self.rotating.is_empty()
-            && self.fading.is_empty())
+            && self.fading.is_empty()
+            && self.shadows.is_empty())
     }
 }
 
@@ -342,6 +355,9 @@ impl State {
         for running in spins.chain(self.motion.rotating.values_mut()).chain(fades) {
             running.start.get_or_insert(now);
         }
+        for running in self.motion.shadows.values_mut() {
+            running.start.get_or_insert(now);
+        }
         if let Some(fling) = &mut self.motion.fling {
             fling.last.get_or_insert(now);
         }
@@ -379,6 +395,7 @@ impl State {
             scaling,
             rotating,
             fading,
+            shadows,
             active,
             tracks,
             finished,
@@ -395,6 +412,7 @@ impl State {
         let fade = |e: &mut crate::state::Element, v: f32| e.group.opacity = v.clamp(0.0, 1.0);
         moved |= advance(fading, tree, now, finished, fade);
         self.repaint |= moved;
+        crate::effects::advance_shadows(shadows, tree, &mut self.decorations, now, finished);
         active.retain(|id, active| {
             let elapsed = now - active.start;
             let next = active.tween.sample(elapsed).0;

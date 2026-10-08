@@ -264,11 +264,12 @@ pub enum Value {
     /// A finite grid track share, written with the `fr` suffix.
     Fraction(f32),
     /// A constant list of literals and bare identifiers, such as
-    /// `[8dp, auto]`; only layout properties accept one.
+    /// `[8dp, auto]`; only layout properties, `shadow` and gradient stops
+    /// accept one.
     List(Vec<Value>),
-    /// A constant layout function: `repeat`, `minmax` or `fit_content` with
-    /// constant arguments, or `calc` folded to `[percent, length]`, such as
-    /// `calc(100% - 8dp)` as `calc(100%, -8dp)`; only layout properties accept one.
+    /// A constant function: `repeat`, `minmax`, `fit_content`, `token`,
+    /// `linear` or `radial` with constant arguments, or `calc` folded to
+    /// `[percent, length]`, such as `calc(100% - 8dp)` as `calc(100%, -8dp)`.
     Call(String, Vec<Value>),
     /// Exact nonnegative whole milliseconds, written as decimal digits and `ms`.
     Duration(u64),

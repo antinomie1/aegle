@@ -67,6 +67,12 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "offset_y" => OffsetY,
         "scale" => Scale,
         "rotation" => Rotation,
+        "shadow" => Shadow,
+        "background_gradient" => BackgroundGradient,
+        "opacity" => Opacity,
+        "backdrop_blur" => BackdropBlur,
+        "shadow_transition" => ShadowTransition,
+        "opacity_transition" => OpacityTransition,
         _ => return None,
     })
 }
@@ -149,7 +155,7 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
         }
         Tooltip | MaxWidth | MaxHeight | AspectRatio | Margin | Inset | Shrink | Basis
         | AlignSelf | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale
-        | Rotation => !window,
+        | Rotation | Shadow | Opacity | BackdropBlur => !window,
         _ => true,
     }
 }
@@ -164,6 +170,61 @@ fn timing(value: &Literal) -> bool {
         }
         _ => false,
     }
+}
+
+/// `token("package.name")`.
+fn token(value: &Literal) -> bool {
+    matches!(value, Literal::Call(function, arguments) if function == "token"
+        && matches!(&arguments[..], [Literal::String(name)] if token_name(name)))
+}
+
+/// `[x, y, blur, spread, color]` with a nonnegative blur; a shadow token
+/// replaces the whole list.
+fn shadow(value: &Literal) -> bool {
+    let Literal::List(items) = value else {
+        return false;
+    };
+    match &items[..] {
+        [x, y, Literal::Length(blur), spread, color] => {
+            [x, y, spread]
+                .iter()
+                .all(|v| matches!(v, Literal::Length(_)))
+                && *blur >= 0.0
+                && matches!(color, Literal::Color(_))
+        }
+        _ => false,
+    }
+}
+
+/// `linear(degrees, stops...)` or `radial(stops...)` with 2 to 16 stops,
+/// each a color, a color token or `[color, percent]`; either every stop has a
+/// nondecreasing position in `[0%, 100%]` or none does.
+fn gradient(value: &Literal) -> bool {
+    let stops = match value {
+        Literal::Call(function, arguments) if function == "linear" => match &arguments[..] {
+            [Literal::Number(_), stops @ ..] => stops,
+            _ => return false,
+        },
+        Literal::Call(function, stops) if function == "radial" => &stops[..],
+        _ => return false,
+    };
+    let color = |c: &Literal| matches!(c, Literal::Color(_)) || token(c);
+    let positions: Vec<_> = stops
+        .iter()
+        .map(|stop| match stop {
+            Literal::List(pair) => match &pair[..] {
+                [c, Literal::Percent(p)] if color(c) && (0.0..=100.0).contains(p) => Some(Some(*p)),
+                _ => None,
+            },
+            c => color(c).then_some(None),
+        })
+        .collect::<Option<_>>()
+        .unwrap_or_default();
+    (2..=16).contains(&stops.len())
+        && positions.len() == stops.len()
+        && (positions.iter().all(Option::is_none)
+            || positions.iter().all(Option::is_some)
+                && positions.windows(2).all(|pair| pair[0] <= pair[1]))
 }
 
 /// A registered token name: dot-separated ASCII letters, digits, `_` and `-`
@@ -225,10 +286,17 @@ pub(crate) fn validate(
             Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
             | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
             | IndicatorColor | BorderWidth | Radius | FocusWidth | FontSize | Padding | Gap,
-            Literal::Call(function, arguments),
-        ) if function == "token" => {
-            matches!(&arguments[..], [Literal::String(token)] if token_name(token))
+            Literal::Call(function, _),
+        )
+        | (Shadow, Literal::Call(function, _))
+            if function == "token" =>
+        {
+            token(value)
         }
+        (Shadow, value) => shadow(value),
+        (BackgroundGradient, value) => gradient(value),
+        (Opacity, Literal::Number(n)) => (0.0..=1.0).contains(n),
+        (BackdropBlur, Literal::Length(n)) => n.is_finite() && *n >= 0.0,
         (Padding, value) if target.container() => edges(value, true, false),
         (Margin | Inset, value) => edges(value, false, true),
         (Gap, Literal::List(items)) => {
@@ -247,9 +315,11 @@ pub(crate) fn validate(
         (Transition, Literal::Duration(_)) => true,
         (OffsetX | OffsetY, Literal::Length(n)) | (Rotation, Literal::Number(n)) => n.is_finite(),
         (Scale, Literal::Number(n)) => *n > 0.0 && *n <= 1000.0,
-        (PaintTransition | OffsetTransition | ScaleTransition | RotationTransition, value) => {
-            timing(value)
-        }
+        (
+            PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
+            | ShadowTransition | OpacityTransition,
+            value,
+        ) => timing(value),
         (
             Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
             | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
@@ -294,7 +364,17 @@ pub(crate) fn validate(
         AspectRatio => "a finite positive number".into(),
         FontSize => "a positive dp length or token(\"package.name\")".into(),
         Transition => "nonnegative whole milliseconds with the ms suffix".into(),
-        PaintTransition | OffsetTransition | ScaleTransition | RotationTransition => format!(
+        Shadow => "[x, y, blur, spread, color] with dp lengths and a nonnegative blur, or \
+            token(\"package.name\")"
+            .into(),
+        BackgroundGradient => "linear(degrees, stops...) or radial(stops...) with 2 to 16 \
+            stops, each a color, token(\"package.name\") or [color, percent], with \
+            nondecreasing positions on every stop or none"
+            .into(),
+        Opacity => "a number in [0, 1]".into(),
+        BackdropBlur => "a nonnegative dp length".into(),
+        PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
+        | ShadowTransition | OpacityTransition => format!(
             "milliseconds, or [milliseconds, easing] with easing one of {}",
             choices(Easing).join(", ")
         ),

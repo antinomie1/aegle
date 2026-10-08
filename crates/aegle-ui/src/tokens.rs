@@ -91,7 +91,8 @@ pub(crate) fn check<T: TokenType>(token: Token<T>) -> Result<bool> {
     )
 }
 
-/// A color property of [`Style`] that can follow a token.
+/// A color property that can follow a token: a [`Style`] color, or a stop of
+/// the background gradient.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
 pub enum ColorSlot {
@@ -106,6 +107,9 @@ pub enum ColorSlot {
     Selection,
     Caret,
     Indicator,
+    /// The color of stop `n` of `Node::set_background_gradient`; unbinding
+    /// keeps its last color.
+    GradientStop(u8),
 }
 
 /// A length property that can follow a token: the [`Style`] widths and
@@ -131,6 +135,8 @@ pub enum TokenSlot {
     Length(LengthSlot),
     /// The font face of a text-bearing control.
     Font,
+    /// The shadow of `Node::set_shadow`.
+    Shadow,
     /// The duration of a property transition.
     #[cfg(feature = "motion")]
     Transition(TransitionProperty),
@@ -153,10 +159,19 @@ impl TokenSlot {
     pub(crate) fn is_style(self) -> bool {
         matches!(
             self,
-            Self::Color(_)
-                | Self::Length(
-                    LengthSlot::BorderWidth | LengthSlot::Radius | LengthSlot::FocusWidth
-                )
+            Self::Color(
+                ColorSlot::Background
+                    | ColorSlot::Foreground
+                    | ColorSlot::HoverBackground
+                    | ColorSlot::PressedBackground
+                    | ColorSlot::DisabledBackground
+                    | ColorSlot::DisabledForeground
+                    | ColorSlot::BorderColor
+                    | ColorSlot::FocusColor
+                    | ColorSlot::Selection
+                    | ColorSlot::Caret
+                    | ColorSlot::Indicator
+            ) | Self::Length(LengthSlot::BorderWidth | LengthSlot::Radius | LengthSlot::FocusWidth)
         )
     }
 
@@ -181,6 +196,7 @@ impl ColorSlot {
             Self::Selection => &mut style.selection,
             Self::Caret => &mut style.caret,
             Self::Indicator => &mut style.indicator,
+            Self::GradientStop(_) => unreachable!("not a style field"),
         }
     }
 }
@@ -337,6 +353,10 @@ impl State {
                 .transpose()
         }
         match slot {
+            TokenSlot::Color(ColorSlot::GradientStop(index)) => match typed(value)? {
+                Some(color) => self.set_gradient_stop(id, index, color),
+                None => Ok(()),
+            },
             TokenSlot::Color(slot) => {
                 let color = typed(value)?;
                 self.edit_style(id, |style| *slot.field(style) = color)
@@ -353,6 +373,7 @@ impl State {
                 self.edit_style(id, |style| *slot.field(style) = length)
             }
             TokenSlot::Font => self.set_font(id, typed(value)?),
+            TokenSlot::Shadow => self.transition_shadow(id, typed(value)?),
             #[cfg(feature = "motion")]
             TokenSlot::Transition(property) => {
                 let easing = self

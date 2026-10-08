@@ -17,6 +17,7 @@
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 - aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；可选 window 已提供原生 swapchain，App 可显式选择。
 - 图层：`Node::set_opacity`（可过渡）与 `set_backdrop_blur` 让子树经 `Visit::PushLayer`/`PopLayer` 在离屏层中绘制，软件、Vulkan 与 wgpu 的 `Frame::push_layer`/`pop_layer` 实现同一合成与三次盒式模糊（见[平台与绘制](platform-rendering.md#图层)）；GPU 后端需要 `text`。组效果损伤整个子树，背景模糊在损伤触及采样区时整体重绘。原生 App 与 gallery 宿主已转发图层。
+- 阴影与渐变：`TransitionProperty::Shadow` 补间阴影的偏移、模糊、扩展与颜色（出现/消失按颜色淡入淡出），接入 `with_transition`/`snap`、减少动态效果与完成回调；`Shadow` 移到 `aegle-types` 并成为 token 类型（`bind_shadow`），渐变色标经 `ColorSlot::GradientStop(i)` 跟随颜色 token。渐变本身不补间（每帧会分配新的色标数组，见[组件契约](components-theme-animation.md#呈现变换惯性与图像特效)）。标记节点属性 `shadow`、`background_gradient`、`opacity`、`backdrop_blur`、`shadow_transition`、`opacity_transition` 在 `ui!` 与运行时引擎中都经 loader 的同一组 setter 应用，`aegle/tests/effects.rs` 以同一文档比较两条路径并检查主题切换后的 token 跟随；`aegle-ui/tests/effects.rs` 检查阴影淡入、中途改目标、结束与淡出移除。加入后 1000 控件场景不变：首帧 3.05–3.10 ms/12,253 次分配，空闲 22 µs/4 次，改值 22 µs/4 次，悬停 31 µs/7 次。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放及 wp-fractional-scale（经 wp-viewporter 映射）、事件等待、键盘/指针输入、`wl_touch` 触摸（`Event::Touch`，App 交给 `Ui::touch`）、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。外观偏好经内置最小 D-Bus 客户端读取 desktop portal 并监听变化；只请求服务端装饰，compositor 不提供时没有客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
 - aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已在 Windows 11 上运行，执行证据见本页末尾，TSF/重转换/触屏键盘及硬件 GPU、ARM64 验收未完成。
@@ -103,7 +104,7 @@ WGPU_BACKEND=dx12 cargo test -p aegle-render-wgpu --all-features -- --ignored --
 ## 剩余工作
 
 - 平台验收：Windows 硬件 Vulkan/DX12 驱动与 ARM64、日文/韩文输入法与候选窗位置、讲述人/NVDA、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更；fcitx/IBus 真人候选窗与真实屏幕阅读器验收。
-- 组件/绘制：阴影、渐变、组透明度与背景模糊的标记写法；菜单的快捷键提示；窗口中验证 swapchain 上的背景模糊。
+- 组件/绘制：菜单的快捷键提示；窗口中验证 swapchain 上的背景模糊。
 - 桌面集成：拖放（Wayland `wl_data_device`、Win32 OLE）、文件选择对话框（portal FileChooser、Win32 `IFileDialog`）、托盘、通知与全局快捷键。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制。
 - 工程：多 compositor/GPU 与嵌入式完整资源测量；在 CI 上确认 Linux MSRV 与 Wayland 作业。现有桌面样本不能替代这些证据。

@@ -19,6 +19,18 @@ pub struct Decoration {
     pub gradient: Option<aegle_scene::Gradient>,
 }
 
+impl Decoration {
+    /// Whether it holds no override.
+    pub fn is_empty(&self) -> bool {
+        self.style == Style::default()
+            && self.font_size.is_none()
+            && self.font.is_none()
+            && self.cursor.is_none()
+            && self.shadow.is_none()
+            && self.gradient.is_none()
+    }
+}
+
 impl State {
     /// The control's current interaction state for skin resolution.
     pub fn visual_state(&self, id: NodeId) -> VisualState {
@@ -68,14 +80,7 @@ impl State {
 
     /// Drops the decoration of `id` once it holds no override.
     pub fn trim_decoration(&mut self, id: NodeId) {
-        if self.decorations.get(&id).is_some_and(|d| {
-            d.style == Style::default()
-                && d.font_size.is_none()
-                && d.font.is_none()
-                && d.cursor.is_none()
-                && d.shadow.is_none()
-                && d.gradient.is_none()
-        }) {
+        if self.decorations.get(&id).is_some_and(Decoration::is_empty) {
             self.decorations.remove(&id);
         }
     }

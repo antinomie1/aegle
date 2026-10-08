@@ -70,6 +70,8 @@ pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) -> Result
             PropertyName::OffsetTransition => Property::Offset,
             PropertyName::ScaleTransition => Property::Scale,
             PropertyName::RotationTransition => Property::Rotation,
+            PropertyName::ShadowTransition => Property::Shadow,
+            PropertyName::OpacityTransition => Property::Opacity,
             _ => continue,
         };
         let (milliseconds, curve) = match value {
@@ -93,7 +95,13 @@ pub fn transitions(_: &Node, properties: &[(PropertyName, &Value)]) -> Result {
     let timed = properties.iter().any(|(name, _)| {
         matches!(
             name,
-            Transition | PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
+            Transition
+                | PaintTransition
+                | OffsetTransition
+                | ScaleTransition
+                | RotationTransition
+                | ShadowTransition
+                | OpacityTransition
         )
     });
     if timed {

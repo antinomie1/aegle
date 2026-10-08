@@ -71,10 +71,9 @@ pub use aegle_theme::{
     Accepts, Appearance, ControlKind, Font, Skin, Style, Theme, ThemeOverride, Token, TokenKind,
     TokenType, TokenValue, VisualState,
 };
-pub use aegle_types::{Color, Cursor, Point, Preferences, Rect, Region, Size, TouchPhase};
+pub use aegle_types::{Color, Cursor, Point, Preferences, Rect, Region, Shadow, Size, TouchPhase};
 pub use control::{CONTAINER, Control, Plain};
 pub use decorator::Decorator;
-pub use effects::Shadow;
 pub use events::KeyEvent;
 #[cfg(feature = "grid")]
 pub use grid_handles::Stack;

@@ -1,6 +1,6 @@
 # 默认组件、主题与动画
 
-状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；缩放/旋转动画、作用域过渡（`with_transition`/`snap`）、关键帧与弹簧动画、逐 token 的 `ThemeOverride`、系统文本缩放、惯性滚动和渐变/阴影图像已实现；第三方控件可经 `Control` trait 定义任意行为与绘制（`aegle-widgets/examples/custom_control.rs`）。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
+状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；缩放/旋转动画、作用域过渡（`with_transition`/`snap`）、关键帧与弹簧动画、逐 token 的 `ThemeOverride`、系统文本缩放、惯性滚动、渐变/阴影（阴影可补间）与组透明度/背景模糊已实现；第三方控件可经 `Control` trait 定义任意行为与绘制（`aegle-widgets/examples/custom_control.rs`）。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
 
 ## 当前行为接口
 
@@ -84,9 +84,9 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。`Node::set_theme_override(Some(ThemeOverride))` 则只替换指定字段，其余沿父级解析主题；它随父级或 `Ui::set_theme` 的变化重新解析，嵌套覆盖逐层叠加，`set_theme` 的快照会替换它。
 
-主题使用类型化 token：类型为 Color、Length（有限非负逻辑像素，圆角也用它）、Duration 与 Font（`Font { families, weight, italic }`，不含字号；families 不能为空，weight 为 1–1000）。`aegle-theme` 定义 `Token<T>`（只含 u16 索引）、`TokenKind`/`TokenValue` 与 `TokenType`（Color、f32、Duration、Font），14 个 Theme 字段即内置 token `Theme::ACCENT` 等，名为 `theme.<字段>`，占索引 0–13。`aegle-ui::register_token(name, default)` 在每线程一份、所有 Ui 共享的注册表中登记 `包.名称` 形式的组件 token（点分 ASCII 字母、数字、`_`、`-`，`theme.` 保留），默认值是纯函数 `fn(&Theme) -> T`，随主题变化；同名同类型再次登记返回原句柄，类型不同返回 `UiError::Token`。`token::<T>(name)` 按名查找。名称只在登记/查找时解析为索引，节点和绑定只存索引。
+主题使用类型化 token：类型为 Color、Length（有限非负逻辑像素，圆角也用它）、Duration、Font（`Font { families, weight, italic }`，不含字号；families 不能为空，weight 为 1–1000）与 Shadow（`aegle-types` 的 `Shadow`，几何有限、模糊非负）。`aegle-theme` 定义 `Token<T>`（只含 u16 索引）、`TokenKind`/`TokenValue` 与 `TokenType`（Color、f32、Duration、Font、Shadow），14 个 Theme 字段即内置 token `Theme::ACCENT` 等，名为 `theme.<字段>`，占索引 0–13。`aegle-ui::register_token(name, default)` 在每线程一份、所有 Ui 共享的注册表中登记 `包.名称` 形式的组件 token（点分 ASCII 字母、数字、`_`、`-`，`theme.` 保留），默认值是纯函数 `fn(&Theme) -> T`，随主题变化；同名同类型再次登记返回原句柄，类型不同返回 `UiError::Token`。`token::<T>(name)` 按名查找。名称只在登记/查找时解析为索引，节点和绑定只存索引。
 
-全局主题是共享不可变快照，局部主题只保存稀疏覆盖。查找顺序为最近局部覆盖到全局默认；作用范围沿逻辑控件树继承。`Ui::set_token` 设全局覆盖，`Node::set_token` 设子树覆盖，`None` 移除；自定义 token 依次取最近祖先的覆盖、Ui 覆盖、按节点解析主题求默认值，局部主题快照不遮蔽自定义 token。内置 token 的覆盖就是主题本身：`Ui::set_token` 替换 Ui 主题的该字段（不能为 None），`Node::set_token` 写入该节点的 `ThemeOverride`。绑定让属性跟随 token：`Node::bind_color(ColorSlot, Token<Color>)` 绑定 Style 的 11 个颜色；`bind_length(LengthSlot, Token<f32>)` 绑定边框宽度、圆角、焦点宽度、文字控件字号、统一 padding 或 gap；`bind_font(Token<Font>)` 绑定文字控件的字体（等同 `set_font`）；启用 `motion` 时 `bind_transition(TransitionProperty, Token<Duration>, Easing)` 绑定该项过渡的时长，曲线在绑定时给定。绑定时立即写入，`Ui::set_theme`、局部主题/覆盖、reparent 与 token 改变后重新解析同一子树内的绑定。任一绑定拒绝新值（例如字号为零）时，`set_token`、`Ui::set_theme`、`Node::set_theme`/`set_theme_override` 与 `reparent` 都恢复改变前的状态（含原父节点与位置）并返回错误。绑定和子树覆盖随节点删除。
+全局主题是共享不可变快照，局部主题只保存稀疏覆盖。查找顺序为最近局部覆盖到全局默认；作用范围沿逻辑控件树继承。`Ui::set_token` 设全局覆盖，`Node::set_token` 设子树覆盖，`None` 移除；自定义 token 依次取最近祖先的覆盖、Ui 覆盖、按节点解析主题求默认值，局部主题快照不遮蔽自定义 token。内置 token 的覆盖就是主题本身：`Ui::set_token` 替换 Ui 主题的该字段（不能为 None），`Node::set_token` 写入该节点的 `ThemeOverride`。绑定让属性跟随 token：`Node::bind_color(ColorSlot, Token<Color>)` 绑定 Style 的 11 个颜色或背景渐变的色标（`ColorSlot::GradientStop(i)`）；`bind_length(LengthSlot, Token<f32>)` 绑定边框宽度、圆角、焦点宽度、文字控件字号、统一 padding 或 gap；`bind_font(Token<Font>)` 绑定文字控件的字体（等同 `set_font`）；`bind_shadow(Token<Shadow>)` 绑定阴影（等同 `set_shadow`）；启用 `motion` 时 `bind_transition(TransitionProperty, Token<Duration>, Easing)` 绑定该项过渡的时长，曲线在绑定时给定。绑定时立即写入，`Ui::set_theme`、局部主题/覆盖、reparent 与 token 改变后重新解析同一子树内的绑定。任一绑定拒绝新值（例如字号为零）时，`set_token`、`Ui::set_theme`、`Node::set_theme`/`set_theme_override` 与 `reparent` 都恢复改变前的状态（含原父节点与位置）并返回错误。绑定和子树覆盖随节点删除。
 
 组件状态样式采用固定状态集合及明确优先顺序：disabled、pressed、selected/checked、hover、normal；focus 环作为独立覆盖，不被 hover 隐藏。复合组件需要不同优先级时在自己的有类型样式函数中显式定义，不引入 CSS specificity。
 
@@ -100,7 +100,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 可选 `motion` 已提供 `Node::set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))`，同时过渡背景、文字、边框、圆角、焦点环、选择和 caret 的外观值。`appearance()` 返回逻辑目标，`presented_appearance()` 返回最近采样值；失焦/禁用的焦点宽度目标为零，绘制使用相同呈现值。前景动画同步语义颜色，不重新成形文字，也不延迟焦点、文本、预编辑或命中状态。同一策略也过渡位移、缩放与旋转；布局、字号和窗口清屏背景当前不做过渡。
 
-`set_property_transition(TransitionProperty, Option<Transition>)` 单独设置外观（Paint）、位移（Offset）、缩放（Scale）或旋转（Rotation）的时长与曲线，`property_transition` 读取；`set_transition` 等同于四项相同。某项为 None 时该属性直接到目标，运行中的该项补间立即跳到目标且不单独完成；四项都为 None 时移除策略。各项独立补间，缩放与旋转共用一个 Transform 目标，但呈现值分别取样。原生 App 的默认策略在首次绘制前不补间几何。
+`set_property_transition(TransitionProperty, Option<Transition>)` 单独设置外观（Paint）、位移（Offset）、缩放（Scale）、旋转（Rotation）、组透明度（Opacity）或阴影（Shadow）的时长与曲线，`property_transition` 读取；`set_transition` 等同于六项相同。某项为 None 时该属性直接到目标，运行中的该项补间立即跳到目标且不单独完成；六项都为 None 时移除策略。各项独立补间，缩放与旋转共用一个 Transform 目标，但呈现值分别取样。原生 App 的默认策略在首次绘制前不补间几何。
 
 `Node::set_offset(Point)` 在布局后平移节点及其子树，不改变布局或滚动范围；`bounds`、命中、裁剪、IME 候选锚点和无障碍边界都使用呈现位移。没有 motion 或过渡策略时立即生效；有策略时从当前呈现位移开始补间，请求在下一次刷新时以宿主当前时钟开始，因而回调中设置也不会因旧时间戳直接结束。位移采样只更新几何，不重新录制绘制记录。`offset()` 返回逻辑目标。运行中的位移保留开始时的时长。
 
@@ -155,8 +155,10 @@ motion 提供标量、二维向量和颜色的补间、属性过渡、关键帧�
 
 - `Node::set_transform(Transform { scale, rotation })`：scale 为有限正数，rotation 为弧度，以节点边界中心为原点，子树继承。它只是呈现层变换：布局、滚动范围和 `bounds` 不变；`visit_scenes` 给出的矩阵包含它，命中与指针局部坐标做逆映射，滚动视口的裁剪取变换后的外包框（旋转时是近似），IME 锚点取外包框，AccessKit 节点变换按中心旋转/缩放。有过渡策略时与位移共用补间和完成回调，减少动态效果时直接到目标。
 - `Ui::fling(position, velocity)` 与 `stop_fling`：速度单位为逻辑像素/秒，τ=325 ms 的指数衰减，经 `advance_animations` 推进（需要 motion），低于 10 px/s、视口不能再动、新的滚动或按下时结束。
-- `Node::set_shadow(Some(Shadow { offset, blur, spread, color }))` 在背景下绘制随圆角的柔和阴影，可超出节点边界，不影响布局与命中，仍受祖先裁剪；`set_background_gradient(Some(Gradient))` 以渐变代替背景色，坐标为节点尺寸的比例（x 按宽、y 按高，圆形半径按较长边），不绘制背景的控件忽略它。两者使用 scene 的原生渐变与阴影命令，软件、Vulkan 与 wgpu 结果一致；没有过渡，也还没有标记写法。
-- `Node::set_opacity(0..=1)` 把子树作为一张图像以该不透明度绘制：重叠的后代不会互相透出，这一点与半透明颜色不同。它不改变命中、焦点与无障碍；为 0 时不绘制。有 `TransitionProperty::Opacity` 的过渡策略时（或 `Animate::Opacity` 动画）平滑变化，`opacity()` 读取目标值。`set_backdrop_blur(σ)` 先把节点圆角边界内已绘制的内容做标准差为 σ 逻辑像素的高斯模糊，再在其上绘制节点，模糊结果也按节点不透明度绘制；只模糊本窗口画出的内容，不模糊透明窗口后的桌面。两者都经离屏层实现，软件、Vulkan 与 wgpu（后两者需 `text`）结果一致，目前也没有标记写法。
+- `Node::set_shadow(Some(Shadow { offset, blur, spread, color }))` 在背景下绘制随圆角的柔和阴影，可超出节点边界，不影响布局与命中，仍受祖先裁剪；完全透明的阴影等同 None。有 `TransitionProperty::Shadow` 的过渡策略时，偏移、模糊、扩展与颜色从当前呈现值补间，出现与消失按颜色淡入淡出，`shadow()` 读取目标值；`with_transition`/`snap`、减少动态效果与完成回调与其他属性相同。`Shadow` 也是 token 类型，库可用 `register_token("库.elevation.level1", |theme| Shadow { .. })` 按主题定义 elevation，`bind_shadow` 绑定，主题切换时按过渡补间。`set_background_gradient(Some(Gradient))` 以渐变代替背景色，坐标为节点尺寸的比例（x 按宽、y 按高，圆形半径按较长边），不绘制背景的控件忽略它；`bind_color(ColorSlot::GradientStop(i), token)` 让第 i 个色标跟随颜色 token，再次 `set_background_gradient` 结束这些绑定，解绑时色标保留最后的颜色。两者使用 scene 的原生渐变与阴影命令，软件、Vulkan 与 wgpu 结果一致。
+
+  渐变不做补间：`Gradient` 的色标是共享的 `Arc<[GradientStop]>`，每帧采样一个中间渐变就要分配一次新的色标数组，违背绘制热路径不新增每帧分配的约束；若改为节点内联固定 16 个色标，每个带渐变的节点多占约 128 B，而 MD3 等目标设计里渐变很少需要动画。需要渐变动画的控件可以在 `Control::paint` 中按 `cx.time` 采样，或以两层叠加并补间上层的组透明度。
+- `Node::set_opacity(0..=1)` 把子树作为一张图像以该不透明度绘制：重叠的后代不会互相透出，这一点与半透明颜色不同。它不改变命中、焦点与无障碍；为 0 时不绘制。有 `TransitionProperty::Opacity` 的过渡策略时（或 `Animate::Opacity` 动画）平滑变化，`opacity()` 读取目标值。`set_backdrop_blur(σ)` 先把节点圆角边界内已绘制的内容做标准差为 σ 逻辑像素的高斯模糊，再在其上绘制节点，模糊结果也按节点不透明度绘制；只模糊本窗口画出的内容，不模糊透明窗口后的桌面。两者都经离屏层实现，软件、Vulkan 与 wgpu（后两者需 `text`）结果一致。
 
 <img src="developer/images/layers.png" width="450" alt="半透明颜色的重叠处互相透出；组透明度 0.5 的重叠处不透出；毛玻璃面板模糊其下的条纹">
 - `aegle-image/effects`（facade 默认启用）：`linear_gradient`、`radial_gradient`、`shadow` 生成共享 `Image`，颜色在预乘线性光中插值；用 `SceneBuilder::image` 或 `ImageView` 绘制，所有后端复用既有图像路径。

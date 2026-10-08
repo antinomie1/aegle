@@ -8,7 +8,7 @@
 
 | crate | 责任及独立用途 | Aegle 内部依赖 |
 | --- | --- | --- |
-| aegle-types | 几何、颜色、光标形状及 `Preferences`、`TouchPhase` 等两个平台共用的小词汇；无平台依赖 | 无 |
+| aegle-types | 几何、颜色、阴影值、光标形状及 `Preferences`、`TouchPhase` 等两个平台共用的小词汇；无平台依赖 | 无 |
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；经过校验的布局值（`Length`、`Insets`、`Align`、`Justify`、`Direction`、`LayoutDirection`、`Wrap`，`Length::Calc` 为“百分比 + 像素”，grid 另有 `Track`、`Placement`、`Flow`、`TemplateItem`/`Repeat`/`template`、`areas`、`GridLine`/`GridLines`）；叶节点测量回调与可选的首基线回调（`compute_with_baselines`）；透明的 contents 节点；不依赖应用 | types、core |
 | aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |

@@ -4,7 +4,7 @@
 
 use core::{fmt, hash, marker::PhantomData, time::Duration};
 
-use aegle_types::Color;
+use aegle_types::{Color, Shadow};
 
 use crate::{Theme, ThemeOverride};
 
@@ -19,6 +19,8 @@ pub enum TokenKind {
     Duration,
     /// A font face selection.
     Font,
+    /// A shadow, such as one elevation level.
+    Shadow,
 }
 
 /// A font face for text, apart from its size: ordered families and style.
@@ -63,6 +65,8 @@ pub enum TokenValue {
     Duration(Duration),
     /// A font face.
     Font(Font),
+    /// A shadow.
+    Shadow(Shadow),
 }
 
 impl TokenValue {
@@ -73,15 +77,17 @@ impl TokenValue {
             Self::Length(_) => TokenKind::Length,
             Self::Duration(_) => TokenKind::Duration,
             Self::Font(_) => TokenKind::Font,
+            Self::Shadow(_) => TokenKind::Shadow,
         }
     }
 
-    /// Whether a length is finite and a font valid; colors and durations
-    /// always are.
+    /// Whether a length is finite and a font or shadow valid; colors and
+    /// durations always are.
     pub fn is_valid(self) -> bool {
         match self {
             Self::Length(v) => v.is_finite(),
             Self::Font(font) => font.is_valid(),
+            Self::Shadow(shadow) => shadow.is_valid(),
             Self::Color(_) | Self::Duration(_) => true,
         }
     }
@@ -99,6 +105,8 @@ pub enum TokenDefault {
     Duration(fn(&Theme) -> Duration),
     /// A font face from the theme.
     Font(fn(&Theme) -> Font),
+    /// A shadow from the theme.
+    Shadow(fn(&Theme) -> Shadow),
 }
 
 impl TokenDefault {
@@ -109,6 +117,7 @@ impl TokenDefault {
             Self::Length(f) => TokenValue::Length(f(theme)),
             Self::Duration(f) => TokenValue::Duration(f(theme)),
             Self::Font(f) => TokenValue::Font(f(theme)),
+            Self::Shadow(f) => TokenValue::Shadow(f(theme)),
         }
     }
 
@@ -119,12 +128,13 @@ impl TokenDefault {
             Self::Length(_) => TokenKind::Length,
             Self::Duration(_) => TokenKind::Duration,
             Self::Font(_) => TokenKind::Font,
+            Self::Shadow(_) => TokenKind::Shadow,
         }
     }
 }
 
-/// A Rust type a token can hold: [`Color`], `f32` logical pixels, [`Duration`]
-/// or [`Font`].
+/// A Rust type a token can hold: [`Color`], `f32` logical pixels, [`Duration`],
+/// [`Font`] or [`Shadow`].
 pub trait TokenType: Copy + 'static {
     /// The kind of token holding this type.
     const KIND: TokenKind;
@@ -159,6 +169,7 @@ token_type!(Color, Color);
 token_type!(f32, Length);
 token_type!(Duration, Duration);
 token_type!(Font, Font);
+token_type!(Shadow, Shadow);
 
 /// A typed handle to a registered token: its index in the registry, which
 /// stays valid for the registry's lifetime. The first indices are the

@@ -268,7 +268,7 @@ card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
 | 层 | 来源 | 写入 | 移除 |
 | --- | --- | --- | --- |
 | 呈现 | 进行中的过渡或动画（`motion`） | `set_transition`、`with_transition`、`animate` | 到达目标；`finish_transition`、`cancel_transition`、`snap` |
-| 本地值 | 常量或 token 绑定，同一属性只能是其中之一，后写者生效 | setter、`set_style`；`bind_color`、`bind_length`、`bind_font` | `set_style(Style::default())`、`unbind_token` |
+| 本地值 | 常量或 token 绑定，同一属性只能是其中之一，后写者生效 | setter、`set_style`；`bind_color`、`bind_length`、`bind_font`、`bind_shadow` | `set_style(Style::default())`、`unbind_token` |
 | 节点皮肤 | 该控件自己的皮肤 | `set_skin(Some(skin))` | `set_skin(None)` |
 | 类型皮肤 | 最近的祖先（含自身）为该控件类型设置的皮肤 | `set_kind_skin(&kinds::BUTTON, Some(skin))` | `set_kind_skin(kind, None)` |
 | 默认皮肤 | 控件类型（`ControlKind`）自带的皮肤 | 由控件库登记类型时给出 | — |

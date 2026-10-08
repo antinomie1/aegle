@@ -1,59 +1,65 @@
 //! Node shadows and gradient backgrounds, drawn with the scene's native
 //! effect commands on every backend.
 
-use crate::{Color, Node, Point, Result, UiError, style::Decoration};
-use aegle_core::Dirty;
+use crate::{Color, Node, Point, Result, Shadow, UiError, style::Decoration};
+use crate::{ColorSlot, TokenSlot};
+use aegle_core::{Dirty, NodeId};
 use aegle_scene::{Gradient, GradientGeometry, Rect, RoundedRect, SceneBuilder};
 use aegle_types::Size;
 
-/// A soft shadow drawn beneath a node's background, following its corner
-/// radius. It extends beyond the node's bounds without affecting layout or
-/// hit testing; ancestors' clips still apply.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Shadow {
-    /// Finite logical displacement of the shadow from the node.
-    pub offset: Point,
-    /// Nonnegative Gaussian standard deviation in logical pixels; zero is a
-    /// hard-edged copy of the shape.
-    pub blur: f32,
-    /// Finite logical growth (or, when negative, shrinkage) of the shape.
-    pub spread: f32,
-    /// Unpremultiplied sRGB color.
-    pub color: Color,
+/// This shadow fully transparent, what it fades from or to.
+#[cfg(feature = "motion")]
+fn clear(shadow: Shadow) -> Shadow {
+    let [r, g, b, _] = shadow.color.to_rgba();
+    Shadow {
+        color: Color::rgba(r, g, b, 0),
+        ..shadow
+    }
 }
 
 impl Node {
-    /// Draws `shadow` beneath this node, or removes it with `None`.
+    /// Draws `shadow` beneath this node, following its corner radius, or
+    /// removes it with `None`; a fully transparent shadow is `None`. It
+    /// extends beyond the node's bounds without affecting layout or hit
+    /// testing; ancestors' clips still apply. With a
+    /// [`TransitionProperty::Shadow`] timing, offset, blur, spread and color
+    /// tween from the shown shadow, and a shadow appears or goes by fading
+    /// its color. Ends a [`Self::bind_shadow`] binding.
+    ///
+    /// [`TransitionProperty::Shadow`]: crate::TransitionProperty::Shadow
     pub fn set_shadow(&self, shadow: Option<Shadow>) -> Result {
-        if let Some(s) = shadow {
-            let finite = [s.offset.x, s.offset.y, s.blur, s.spread].map(f32::is_finite);
-            if finite.contains(&false) || s.blur < 0.0 {
-                return Err(UiError::InvalidValue.into());
-            }
+        if shadow.is_some_and(|s| !s.is_valid()) {
+            return Err(UiError::InvalidValue.into());
         }
         self.change(|state, id| {
-            state.decorations.entry(id).or_default().shadow = shadow;
-            state.trim_decoration(id);
-            state.tree.mark_dirty(id, Dirty::PAINT)?;
-            Ok(())
+            state.write_unbound(id, TokenSlot::Shadow, |state| {
+                state.transition_shadow(id, shadow)
+            })
         })
     }
 
-    /// The shadow set by [`Self::set_shadow`].
+    /// The shadow set by [`Self::set_shadow`], past any running transition.
     pub fn shadow(&self) -> Result<Option<Shadow>> {
-        self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.shadow)))
+        self.change(|state, id| {
+            #[cfg(feature = "motion")]
+            if let Some(running) = state.motion.shadows.get(&id) {
+                return Ok(Some(running.target()).filter(|s| !s.is_clear()));
+            }
+            Ok(state.decorations.get(&id).and_then(|d| d.shadow))
+        })
     }
 
     /// Fills this node's background with `gradient` instead of its background
     /// color, or restores the color with `None`. The gradient's coordinates are
     /// fractions of the node's size: x of its width and y of its height, with a
     /// radial radius in fractions of its larger side. Controls that paint no
-    /// background ignore it.
+    /// background ignore it. Ends the bindings of its stop colors.
     pub fn set_background_gradient(&self, gradient: Option<Gradient>) -> Result {
         self.change(|state, id| {
-            state.decorations.entry(id).or_default().gradient = gradient;
-            state.trim_decoration(id);
-            state.tree.mark_dirty(id, Dirty::PAINT)?;
+            state.set_gradient(id, gradient);
+            state.tokens.unbind(id, |slot| {
+                matches!(slot, TokenSlot::Color(ColorSlot::GradientStop(_)))
+            });
             Ok(())
         })
     }
@@ -62,6 +68,119 @@ impl Node {
     pub fn background_gradient(&self) -> Result<Option<Gradient>> {
         self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.gradient.clone())))
     }
+}
+
+impl crate::State {
+    fn set_gradient(&mut self, id: NodeId, gradient: Option<Gradient>) {
+        self.decorations.entry(id).or_default().gradient = gradient;
+        self.trim_decoration(id);
+        self.tree
+            .mark_dirty(id, Dirty::PAINT)
+            .expect("callers hold a live node");
+    }
+
+    /// Recolors stop `index` of the node's gradient, as a token binding does.
+    pub(crate) fn set_gradient_stop(&mut self, id: NodeId, index: u8, color: Color) -> Result {
+        let gradient = self.decorations.get(&id).and_then(|d| d.gradient.as_ref());
+        let gradient = gradient.ok_or(UiError::InvalidValue)?;
+        let mut stops = gradient.stops().to_vec();
+        let stop = stops
+            .get_mut(usize::from(index))
+            .ok_or(UiError::InvalidValue)?;
+        if stop.color == color {
+            return Ok(());
+        }
+        stop.color = color;
+        let gradient = match gradient.geometry() {
+            GradientGeometry::Linear { start, end } => Gradient::linear(start, end, &stops),
+            GradientGeometry::Radial { center, radius } => Gradient::radial(center, radius, &stops),
+        };
+        self.set_gradient(id, Some(gradient?));
+        Ok(())
+    }
+
+    /// Starts, retargets or snaps a shadow, like `transition_offset`; a fully
+    /// transparent target is none.
+    pub fn transition_shadow(&mut self, id: NodeId, target: Option<Shadow>) -> Result {
+        let target = target.filter(|s| !s.is_clear());
+        let shown = self.decorations.get(&id).and_then(|d| d.shadow);
+        #[cfg(feature = "motion")]
+        {
+            use crate::{TransitionProperty, motion::Step};
+            let (policy, timing) = self.timing(id, TransitionProperty::Shadow);
+            let (Some(from), Some(to)) = (shown.or(target.map(clear)), target.or(shown.map(clear)))
+            else {
+                return Ok(());
+            };
+            match crate::motion::plan(&mut self.motion.shadows, id, from, to, timing)? {
+                Step::Unchanged => return Ok(()),
+                Step::Started => {
+                    self.decorations.entry(id).or_default().shadow = Some(from);
+                    self.tree.mark_dirty(id, Dirty::PAINT)?;
+                    return Ok(());
+                }
+                Step::Snapped if policy => self.complete(id),
+                Step::Snapped => {}
+            }
+        }
+        if shown != target {
+            self.decorations.entry(id).or_default().shadow = target;
+            self.trim_decoration(id);
+            self.tree.mark_dirty(id, Dirty::PAINT)?;
+        }
+        Ok(())
+    }
+
+    /// Jumps a running shadow transition to its target. Returns whether one ran.
+    pub fn snap_shadow(&mut self, id: NodeId) -> bool {
+        #[cfg(feature = "motion")]
+        if let Some(running) = self.motion.shadows.remove(&id) {
+            let target = Some(running.target()).filter(|s| !s.is_clear());
+            self.decorations.entry(id).or_default().shadow = target;
+            self.trim_decoration(id);
+            self.tree
+                .mark_dirty(id, Dirty::PAINT)
+                .expect("transitions belong to live nodes");
+            return true;
+        }
+        let _ = id;
+        false
+    }
+}
+
+/// Samples running shadow transitions into the nodes' decorations; a shadow
+/// that faded out is removed.
+#[cfg(feature = "motion")]
+pub(crate) fn advance_shadows(
+    running: &mut std::collections::HashMap<aegle_core::NodeId, crate::motion::Running<Shadow>>,
+    tree: &mut aegle_core::Tree<aegle_layout::LayoutNode<crate::state::Element>>,
+    decorations: &mut std::collections::HashMap<aegle_core::NodeId, Decoration>,
+    now: std::time::Duration,
+    finished: &mut Vec<aegle_core::NodeId>,
+) {
+    running.retain(|id, run| {
+        let Some(elapsed) = run.elapsed(now) else {
+            return true;
+        };
+        // Hidden subtrees go straight to their target.
+        let visible = tree.get(*id).unwrap().context.effective_visible;
+        let done = run.curve.finished(elapsed) || !visible;
+        let value = match done {
+            true => Some(run.curve.target()).filter(|s| !s.is_clear()),
+            false => Some(run.curve.sample(elapsed)),
+        };
+        let decoration = decorations.entry(*id).or_default();
+        decoration.shadow = value;
+        if decoration.is_empty() {
+            decorations.remove(id);
+        }
+        tree.mark_dirty(*id, Dirty::PAINT)
+            .expect("transitions belong to live nodes");
+        if done {
+            finished.push(*id);
+        }
+        !done
+    });
 }
 
 /// Records a node's shadow, before its background.

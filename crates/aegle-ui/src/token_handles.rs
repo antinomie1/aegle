@@ -1,5 +1,5 @@
 use crate::{
-    Color, Node, Result, Ui, UiError,
+    Color, Node, Result, Shadow, Ui, UiError,
     tokens::{ColorSlot, LengthSlot, TokenSlot, check},
 };
 use aegle_theme::{Font, Token, TokenType};
@@ -84,6 +84,13 @@ impl Node {
     pub fn bind_font(&self, token: Token<Font>) -> Result {
         check(token)?;
         self.change(|state, id| state.bind_token(id, TokenSlot::Font, token.index()))
+    }
+
+    /// [`Self::bind_color`] for the shadow, which tweens like
+    /// [`Self::set_shadow`]; that setter ends the binding.
+    pub fn bind_shadow(&self, token: Token<Shadow>) -> Result {
+        check(token)?;
+        self.change(|state, id| state.bind_token(id, TokenSlot::Shadow, token.index()))
     }
 
     /// Animates `property` with `easing` for the duration a token gives,

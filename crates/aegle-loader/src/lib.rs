@@ -24,6 +24,7 @@ extern crate self as aegle_loader;
 
 mod actions;
 mod build;
+mod effects;
 mod element;
 pub mod elements;
 mod eval;

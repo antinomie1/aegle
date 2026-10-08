@@ -139,6 +139,18 @@ pub enum PropertyName {
     Rotation,
     /// Check mark, switch thumb, slider thumb or progress fill color.
     IndicatorColor,
+    /// `[x, y, blur, spread, color]` shadow beneath the node, or a shadow token.
+    Shadow,
+    /// `linear(degrees, stops...)` or `radial(stops...)` in place of the background color.
+    BackgroundGradient,
+    /// Opacity of the subtree composited as one group, in `[0, 1]`.
+    Opacity,
+    /// Nonnegative blur radius in dp of what lies behind the node.
+    BackdropBlur,
+    /// Shadow transition timing: a duration or `[duration, easing]`.
+    ShadowTransition,
+    /// Opacity transition timing: a duration or `[duration, easing]`.
+    OpacityTransition,
 }
 
 pub(crate) const TOO_DEEP: &str = "nesting exceeds 256 levels";

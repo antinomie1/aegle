@@ -15,7 +15,7 @@ mod easing;
 pub use animation::{Animation, Cycles, Keyframe};
 pub use easing::{CubicBezier, Easing, Spring};
 
-use aegle_types::{Color, Point, color_math};
+use aegle_types::{Color, Point, Shadow, color_math};
 use std::fmt;
 pub use std::time::Duration;
 
@@ -84,6 +84,22 @@ impl Interpolate for Point {
             self.x.interpolate(to.x, progress),
             self.y.interpolate(to.y, progress),
         )
+    }
+}
+
+impl Interpolate for Shadow {
+    fn validate(self) -> Result<(), InvalidValue> {
+        self.is_valid().then_some(()).ok_or(InvalidValue)
+    }
+
+    fn interpolate(self, to: Self, progress: f32) -> Self {
+        Self {
+            offset: self.offset.interpolate(to.offset, progress),
+            // Overshooting curves must not make the blur negative.
+            blur: self.blur.interpolate(to.blur, progress).max(0.0),
+            spread: self.spread.interpolate(to.spread, progress),
+            color: self.color.interpolate(to.color, progress),
+        }
     }
 }
 

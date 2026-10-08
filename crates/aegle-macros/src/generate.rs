@@ -288,5 +288,7 @@ fn timing(name: PropertyName) -> bool {
             | OffsetTransition
             | ScaleTransition
             | RotationTransition
+            | ShadowTransition
+            | OpacityTransition
     )
 }

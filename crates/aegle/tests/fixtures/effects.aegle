@@ -1,0 +1,11 @@
+Column {
+    id: card
+    shadow: token("studio.raised")
+    background_gradient: linear(90, [token("theme.accent"), 0%], [#FFFFFF, 100%])
+    opacity: 0.5
+    backdrop_blur: 6dp
+    shadow_transition: 200ms
+    opacity_transition: [120ms, linear]
+    Text { id: caption; text: "Card"; shadow: [0dp, -1dp, 2dp, 0dp, #00000040] }
+    Column { id: halo; background_gradient: radial(#FF000080, #FF000000) }
+}
