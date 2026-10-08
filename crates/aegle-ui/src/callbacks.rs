@@ -80,6 +80,9 @@ impl State {
         if let Some(handler) = self.clicks.handlers.get_mut(&id).filter(current) {
             return Some(handler);
         }
+        if let Some(handler) = self.drops.handlers.get_mut(&id).filter(current) {
+            return Some(handler);
+        }
         self.clicks.menus.get_mut(&id).filter(current)
     }
 }
@@ -134,6 +137,7 @@ impl Ui {
                 callbacks.append(&mut handler.callbacks);
                 handler.callbacks = callbacks;
             }
+            state.drops.finished(id, version);
             if failure.is_err() {
                 break;
             }

@@ -1,7 +1,7 @@
 //! Measures a 1000-control headless scene: default controls, a custom
 //! control kind and skins, with a counting allocator. Prints the first frame
-//! (build, layout, paint) and steady refreshes: idle, one value change and a
-//! hover move. Run in release:
+//! (build, layout, paint), steady refreshes (idle, one value change and a
+//! hover move) and a drag moving over the controls. Run in release:
 //!
 //! `cargo run -p aegle-widgets --example thousand --release`
 
@@ -204,6 +204,22 @@ fn main() -> Result {
     })?;
     println!(
         "hover refresh: {:?}, {} allocations",
+        time / RUNS,
+        allocations as f64 / f64::from(RUNS)
+    );
+
+    // A drag over the scene: the root is the drop target, found from the
+    // control under the point.
+    ui.root().on_drop(|_, _| Ok(()))?;
+    let (_, time, allocations) = counted(|| {
+        for run in 0..RUNS {
+            ui.drag_motion(targets[run as usize % targets.len()])?;
+            ui.dispatch_callbacks()?;
+        }
+        Ok(())
+    })?;
+    println!(
+        "drag motion: {:?}, {} allocations",
         time / RUNS,
         allocations as f64 / f64::from(RUNS)
     );

@@ -29,7 +29,10 @@ pub(crate) fn target(event: &Event) -> Option<WindowId> {
         | Event::Pointer { window, .. }
         | Event::Touch { window, .. }
         | Event::Ime { window, .. }
-        | Event::Clipboard { window, .. } => Some(*window),
+        | Event::Clipboard { window, .. }
+        | Event::Drag { window, .. }
+        | Event::DragLeave { window, .. }
+        | Event::Drop { window, .. } => Some(*window),
         Event::Wake | Event::Preferences(_) | Event::Error(_) => None,
     }
 }
@@ -209,6 +212,39 @@ impl Entry {
         }
         Ok(())
     }
+}
+
+/// Routes a drag over the window to its drop targets and answers the
+/// compositor; other events are returned.
+pub(crate) fn drag(
+    backend: &mut crate::platform::Wayland,
+    entry: &Entry,
+    event: Event,
+) -> Result<Option<Event>> {
+    match event {
+        Event::Drag { seat, position, .. } => {
+            let accept = entry.ui.drag_motion(position)?;
+            backend.accept_drag(&seat, accept);
+        }
+        Event::DragLeave { .. } => entry.ui.drag_leave()?,
+        Event::Drop { position, data, .. } => {
+            entry.ui.drop_data(position, data)?;
+        }
+        event => return Ok(Some(event)),
+    }
+    Ok(None)
+}
+
+/// Starts a drag a control asked for from the window's active seat.
+pub(crate) fn start_drag(
+    backend: &mut crate::platform::Wayland,
+    entry: &Entry,
+    data: aegle_ui::DragData,
+) -> Result<()> {
+    if let Some(seat) = &entry.seat {
+        backend.start_drag(entry.id, seat, &data)?;
+    }
+    Ok(())
 }
 
 /// Offers or requests the clipboard of the window's active keyboard seat.

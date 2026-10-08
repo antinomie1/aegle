@@ -7,6 +7,7 @@
 
 mod buffers;
 mod clipboard;
+mod drag;
 mod error;
 mod events;
 #[cfg(feature = "gpu")]
@@ -19,7 +20,7 @@ mod scale;
 mod state;
 mod window;
 
-pub use aegle_types::{Preferences, TouchPhase};
+pub use aegle_types::{DragData, Preferences, TouchPhase};
 pub use clipboard::CLIPBOARD_LIMIT;
 pub use error::{Error, PresentError};
 pub use events::{Event, LayerOptions, PixelSize, WindowId, WindowInfo, WindowOptions};

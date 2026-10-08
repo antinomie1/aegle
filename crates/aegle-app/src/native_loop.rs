@@ -264,7 +264,9 @@ impl Runtime {
         };
         if matches!(event, Event::Close { .. }) {
             self.close(id)?;
-        } else {
+        } else if let Some(event) =
+            crate::native_input::drag(&mut self.backend, &self.windows[index], event)?
+        {
             self.windows[index].event(event)?;
         }
         Ok(())
@@ -279,6 +281,9 @@ impl Runtime {
             // Synchronous pastes land before this refresh records them.
             if let Some(request) = entry.ui.take_clipboard()? {
                 crate::native_input::clipboard(&mut self.backend, entry, request)?;
+            }
+            if let Some(data) = entry.ui.take_drag()? {
+                crate::native_input::start_drag(&mut self.backend, entry, data)?;
             }
             if entry.ui.refresh()? {
                 self.backend.request_redraw(entry.id)?;

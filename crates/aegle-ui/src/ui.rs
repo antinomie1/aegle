@@ -168,6 +168,7 @@ impl Ui {
                 key_version: 0,
                 input_time: std::time::Instant::now(),
                 clicks: Default::default(),
+                drops: Default::default(),
                 groups: Default::default(),
                 frame_time: std::time::Instant::now(),
                 animated: Default::default(),

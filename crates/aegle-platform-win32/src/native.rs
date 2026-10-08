@@ -35,6 +35,8 @@ pub(crate) struct Native {
     /// Size of the complete frame `pixels` holds, if any.
     pub drawn: Cell<Option<crate::PixelSize>>,
     pub budget: usize,
+    /// The host's answer for the current drag, `None` before one.
+    pub drag_accept: Cell<Option<bool>>,
 }
 /// The shared system cursor closest to `cursor`; shared cursors are never destroyed.
 fn system_cursor(cursor: aegle_types::Cursor) -> HCURSOR {

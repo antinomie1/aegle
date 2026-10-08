@@ -13,6 +13,8 @@ categories.workspace = true
 [features]
 default = []
 color-math = []
+# Drag-and-drop data, which owns text and paths.
+std = []
 
 [lints]
 workspace = true

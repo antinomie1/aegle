@@ -2,7 +2,7 @@ use crate::{
     Anchor, Error, ImeEvent, KeyEvent, KeyboardInteractivity, Layer, Modifiers, PointerEventKind,
     WlSeat,
 };
-use aegle_types::{Point, Preferences, TouchPhase};
+use aegle_types::{DragData, Point, Preferences, TouchPhase};
 
 /// Stable window identity, valid only on its originating connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -196,6 +196,34 @@ pub enum Event {
         seat: WlSeat,
         /// Complete UTF-8 selection.
         text: String,
+    },
+    /// A drag entered or moved over a window, in local logical coordinates.
+    /// Answer with [`crate::Wayland::accept_drag`].
+    Drag {
+        /// Window under the drag.
+        window: WindowId,
+        /// Seat performing the drag.
+        seat: WlSeat,
+        /// Local logical position.
+        position: Point,
+    },
+    /// The drag left the window, or its drop was refused or unreadable.
+    DragLeave {
+        /// Window the drag left.
+        window: WindowId,
+        /// Seat performing the drag.
+        seat: WlSeat,
+    },
+    /// Data was dropped on a window that accepted the drag.
+    Drop {
+        /// Target window.
+        window: WindowId,
+        /// Seat performing the drag.
+        seat: WlSeat,
+        /// Local logical drop position.
+        position: Point,
+        /// Dropped text or local files.
+        data: DragData,
     },
     /// System appearance preferences changed; not tied to a window.
     Preferences(Preferences),

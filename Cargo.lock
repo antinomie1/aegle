@@ -116,6 +116,7 @@ dependencies = [
  "aegle-ui",
  "aegle-widgets",
  "wayland-client",
+ "wayland-protocols-wlr",
  "windows",
 ]
 
@@ -140,6 +141,7 @@ name = "aegle-desktop"
 version = "0.1.0"
 dependencies = [
  "aegle-dbus",
+ "aegle-types",
  "windows",
 ]
 
@@ -254,6 +256,7 @@ dependencies = [
  "aegle-types",
  "raw-window-handle",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

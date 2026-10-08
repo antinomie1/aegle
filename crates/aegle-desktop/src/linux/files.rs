@@ -1,6 +1,6 @@
 //! File dialogs through `org.freedesktop.portal.FileChooser`.
 
-use std::{ffi::OsString, io, os::unix::ffi::OsStringExt, path::PathBuf};
+use std::{io, path::PathBuf};
 
 use aegle_dbus::{Message, Value};
 
@@ -57,25 +57,7 @@ pub(super) fn request(shared: &Shared, dialog: &FileDialog<'_>, save: bool) -> i
 /// The local paths of a Response's `uris`; other schemes are dropped.
 pub(super) fn paths(results: &Value) -> Vec<PathBuf> {
     let uris = results.get("uris").map_or(&[][..], Value::items);
-    uris.iter().filter_map(|uri| path(uri.as_str()?)).collect()
-}
-
-/// `file://` URIs with an empty or `localhost` host, percent-decoded.
-fn path(uri: &str) -> Option<PathBuf> {
-    let rest = uri.strip_prefix("file://")?;
-    let rest = rest.strip_prefix("localhost").unwrap_or(rest);
-    if !rest.starts_with('/') {
-        return None;
-    }
-    let mut bytes = Vec::with_capacity(rest.len());
-    let mut input = rest.bytes();
-    while let Some(byte) = input.next() {
-        if byte == b'%' {
-            let hex = [input.next()?, input.next()?];
-            bytes.push(u8::from_str_radix(std::str::from_utf8(&hex).ok()?, 16).ok()?);
-        } else {
-            bytes.push(byte);
-        }
-    }
-    Some(OsString::from_vec(bytes).into())
+    uris.iter()
+        .filter_map(|uri| aegle_types::path_from_file_uri(uri.as_str()?))
+        .collect()
 }

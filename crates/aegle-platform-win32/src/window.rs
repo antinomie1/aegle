@@ -23,6 +23,7 @@ use windows::{
         Foundation::{HANDLE, HINSTANCE, HWND, RECT, WAIT_FAILED, WAIT_OBJECT_0},
         System::{
             LibraryLoader::GetModuleHandleW,
+            Ole::{OleInitialize, OleUninitialize, RegisterDragDrop, RevokeDragDrop},
             Threading::{CreateEventW, SetEvent},
         },
         UI::{
@@ -119,6 +120,9 @@ impl Win32 {
             }
         });
         class.as_ref().map_err(|e| Error::Backend(e.clone()))?;
+        // SAFETY: initializes OLE (an apartment-threaded COM) for drag and
+        // drop on this thread; balanced in Drop.
+        unsafe { OleInitialize(None) }?;
         // SAFETY: changes only this calling thread, original context is restored.
         let previous_dpi =
             unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
@@ -197,6 +201,7 @@ impl Win32 {
             pixels: RefCell::new(Vec::new()),
             drawn: Cell::new(None),
             budget: options.buffer_budget,
+            drag_accept: Cell::new(None),
         });
         let title: Vec<u16> = options.title.encode_utf16().chain(Some(0)).collect();
         let mut rect = RECT {
@@ -229,6 +234,7 @@ impl Win32 {
                 Some(HINSTANCE(GetModuleHandleW(None)?.0)),
                 Some(Rc::as_ptr(&native).cast()),
             )?;
+            RegisterDragDrop(hwnd, &crate::drag::target(&native))?;
             // Each window gets its own context on demand; the shared default IMM
             // context must not cause a composition to leak into another editor.
             ImmAssociateContext(hwnd, HIMC::default());
@@ -267,6 +273,7 @@ impl Win32 {
         native.cancel_ime();
         // SAFETY: live owned HWND; hiding it does not invalidate surface leases.
         unsafe {
+            let _ = RevokeDragDrop(native.hwnd.get());
             let _ = ShowWindow(native.hwnd.get(), SW_HIDE);
         }
         self.events.borrow_mut().retain(|e| e.target() != Some(id));
@@ -428,5 +435,8 @@ impl Drop for Win32 {
             SetThreadDpiAwarenessContext(self.previous_dpi);
         }
         CONNECTED.with(|value| value.set(false));
+        // SAFETY: balances OleInitialize in connect, after every window's
+        // drop target was revoked.
+        unsafe { OleUninitialize() };
     }
 }

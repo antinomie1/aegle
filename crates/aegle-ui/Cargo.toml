@@ -20,7 +20,7 @@ accessibility = ["dep:aegle-access", "aegle-text/text-a11y"]
 grid = ["aegle-layout/grid"]
 
 [dependencies]
-aegle-types.workspace = true
+aegle-types = { workspace = true, features = ["std"] }
 aegle-core.workspace = true
 aegle-layout.workspace = true
 aegle-theme.workspace = true

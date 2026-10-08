@@ -216,6 +216,8 @@ pub struct State {
     pub input_time: std::time::Instant,
     /// Press counting and double-click handlers.
     pub clicks: crate::clicks::Clicks,
+    /// Drop targets and a drag waiting for the host.
+    pub drops: crate::drag::Drops,
     /// Nodes with a group effect and what their layer last drew.
     pub groups: HashMap<NodeId, crate::group::Drawn>,
     /// The time of the frame being produced, see [`crate::Ui::run_frame`].
@@ -403,6 +405,7 @@ impl State {
             self.callbacks.remove(&node);
             self.clicks.handlers.remove(&node);
             self.clicks.menus.remove(&node);
+            self.drops.forget(node);
             self.frames.retain(|h| h.id != node);
             self.animated.remove(&node);
             self.descriptions.remove(&node);

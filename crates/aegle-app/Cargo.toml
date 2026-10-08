@@ -47,6 +47,11 @@ aegle-platform-win32 = { path = "../aegle-platform-win32", version = "0.1.0", op
 aegle-widgets.workspace = true
 aegle-text = { workspace = true, features = ["scene"] }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# Drives a virtual pointer in the private test compositor.
+wayland-client = "0.31.15"
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
+
 [target.'cfg(windows)'.dev-dependencies]
 windows = { version = "0.62.2", default-features = false, features = [
     "Win32_Foundation", "Win32_System_Threading", "Win32_UI_Input_Ime",

@@ -1,5 +1,5 @@
 use crate::{Error, ImeEvent};
-use aegle_types::{Point, PointerButton, Preferences};
+use aegle_types::{DragData, Point, PointerButton, Preferences};
 
 /// Identity scoped to its event loop; never reused by that loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -186,6 +186,28 @@ pub enum Event {
         /// Transaction.
         event: ImeEvent,
     },
+    /// A drag carrying text or files entered or moved over a window, in
+    /// logical client coordinates. Answer with `Win32::accept_drag`.
+    Drag {
+        /// Target.
+        window: WindowId,
+        /// Logical position.
+        position: Point,
+    },
+    /// The drag left the window, or its drop was refused or unreadable.
+    DragLeave {
+        /// Target.
+        window: WindowId,
+    },
+    /// Data was dropped on a window that accepted the drag.
+    Drop {
+        /// Target.
+        window: WindowId,
+        /// Logical drop position.
+        position: Point,
+        /// Dropped text or files.
+        data: DragData,
+    },
     /// System appearance preferences changed; not tied to a window.
     Preferences(Preferences),
     /// A native callback failed; no panic crosses the FFI boundary.
@@ -202,7 +224,10 @@ impl Event {
             | Self::Key { window, .. }
             | Self::Text { window, .. }
             | Self::Pointer { window, .. }
-            | Self::Ime { window, .. } => Some(*window),
+            | Self::Ime { window, .. }
+            | Self::Drag { window, .. }
+            | Self::DragLeave { window }
+            | Self::Drop { window, .. } => Some(*window),
             _ => None,
         }
     }

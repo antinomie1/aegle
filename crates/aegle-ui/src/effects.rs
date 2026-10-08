@@ -22,11 +22,9 @@ impl Node {
     /// removes it with `None`; a fully transparent shadow is `None`. It
     /// extends beyond the node's bounds without affecting layout or hit
     /// testing; ancestors' clips still apply. With a
-    /// [`TransitionProperty::Shadow`] timing, offset, blur, spread and color
+    /// `TransitionProperty::Shadow` timing (the `motion` feature), offset, blur, spread and color
     /// tween from the shown shadow, and a shadow appears or goes by fading
     /// its color. Ends a [`Self::bind_shadow`] binding.
-    ///
-    /// [`TransitionProperty::Shadow`]: crate::TransitionProperty::Shadow
     pub fn set_shadow(&self, shadow: Option<Shadow>) -> Result {
         if shadow.is_some_and(|s| !s.is_valid()) {
             return Err(UiError::InvalidValue.into());

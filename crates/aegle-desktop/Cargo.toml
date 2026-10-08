@@ -12,6 +12,7 @@ categories.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aegle-dbus.workspace = true
+aegle-types = { workspace = true, features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", default-features = false, features = [

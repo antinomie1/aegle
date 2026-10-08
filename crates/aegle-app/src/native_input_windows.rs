@@ -26,7 +26,10 @@ pub(crate) fn target(event: &Event) -> Option<WindowId> {
         | Event::Key { window, .. }
         | Event::Text { window, .. }
         | Event::Pointer { window, .. }
-        | Event::Ime { window, .. } => Some(*window),
+        | Event::Ime { window, .. }
+        | Event::Drag { window, .. }
+        | Event::DragLeave { window }
+        | Event::Drop { window, .. } => Some(*window),
         Event::Wake | Event::Preferences(_) | Event::Error(_) => None,
     }
 }
@@ -162,6 +165,37 @@ fn key_id(key: u32) -> Key {
         0x30..=0x39 | 0x41..=0x5a => Key::Character(char::from_u32(key).unwrap()),
         _ => Key::Unidentified,
     }
+}
+
+/// Routes a drag over the window to its drop targets and answers OLE;
+/// other events are returned.
+pub(crate) fn drag(
+    backend: &mut crate::platform::Win32,
+    entry: &Entry,
+    event: Event,
+) -> Result<Option<Event>> {
+    match event {
+        Event::Drag { position, .. } => {
+            let accept = entry.ui.drag_motion(position)?;
+            backend.accept_drag(entry.id, accept)?;
+        }
+        Event::DragLeave { .. } => entry.ui.drag_leave()?,
+        Event::Drop { position, data, .. } => {
+            entry.ui.drop_data(position, data)?;
+        }
+        event => return Ok(Some(event)),
+    }
+    Ok(None)
+}
+
+/// Runs a drag a control asked for; it returns when the drag ends.
+pub(crate) fn start_drag(
+    backend: &mut crate::platform::Win32,
+    entry: &Entry,
+    data: aegle_ui::DragData,
+) -> Result<()> {
+    backend.start_drag(entry.id, &data)?;
+    Ok(())
 }
 
 /// Applies a clipboard request synchronously; a paste lands before refresh.

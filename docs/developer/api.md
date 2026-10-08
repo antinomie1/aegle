@@ -342,6 +342,7 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 | `Canvas` | `on_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) | `clear_on_input()` |
 | 任意控件 | `on_double_click(FnMut(Node) -> Result)`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 | `clear_on_double_click()` |
 | 任意控件 | `on_context_menu(FnMut(Node, Point) -> Result)`：在该控件或没有自己处理器的后代上请求上下文菜单——右键按下（得到按下点），或焦点在其中时按 Menu 键、Shift+F10，或辅助技术的 ShowContextMenu（得到该控件左上角）；点为窗口逻辑坐标，可直接交给 `Popup::show_at` | `clear_on_context_menu()` |
+| 任意控件 | `on_drop(FnMut(Node, DropEvent) -> Result)`：成为该控件及没有自己处理器的后代的放置目标。每次拖动经过先得到 `DropEvent::Enter`，再得到一次 `Leave` 或 `Drop { data, position }`（`data` 为 `DragData::Text` 或 `DragData::Files`，`position` 为窗口逻辑坐标）；有处理器即接受文字与文件，不用的数据忽略即可 | `clear_on_drop()` |
 | `MenuItem` | `on_click(FnMut(MenuItem) -> Result)`：菜单关闭、勾选项切换之后执行 | `clear_on_click()` |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
@@ -372,6 +373,25 @@ window.on_key(move |key| {
 - `Node::on_frame(FnMut(Node, Instant) -> Result)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外；同一控件可注册多个，`clear_on_frame` 全部移除。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部清除后不再唤醒。控件删除时其回调随之移除；逐帧回调出错时被移除（否则每帧都会报同一个错误），错误交给 `on_error`。
 - `Window::on_key` / `Ui::on_key` 在焦点控件和 Tab 遍历之前收到每个按键，返回 `true` 表示已处理。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。处理器出错时错误照常返回，处理器保留，由调用方决定是否清除。
 - 按键与指针事件带有平台时间：Wayland 的毫秒时间戳与 Win32 的 `GetMessageTime` 被映射到 `Instant`（锚定到最小投递延迟，处理 32 位回绕）。窗口按键处理器从 `KeyEvent::time` 读取，自定义控件从 `InputCx::time` 读取；嵌入宿主用 `key_at`、`pointer_at` 传入。
+
+### 拖放
+
+```rust
+// 放置目标：悬停时高亮，放下时读取文件或文字。
+zone.on_drop(move |zone, event| match event {
+    DropEvent::Enter => zone.set_background(Color::rgb(220, 232, 255)),
+    DropEvent::Leave => zone.set_background(Color::WHITE),
+    DropEvent::Drop { data: DragData::Files(files), .. } => { zone.set_background(Color::WHITE)?; open(files) }
+    DropEvent::Drop { .. } => zone.set_background(Color::WHITE),
+})?;
+// 拖动源：在按下后的移动中发起；控件的按下随即取消，指针交给系统拖动。
+canvas.on_input(move |canvas, event| match event {
+    CanvasEvent::Move { pressed: true, .. } => canvas.start_drag(DragData::Text("片段".into())),
+    _ => Ok(()),
+})?;
+```
+
+拖放只有复制语义，数据为文字或本地文件列表。外部程序拖入的数据与本应用其他窗口拖出的数据走同一路径（Wayland 经 compositor 的 `wl_data_device`，Windows 经 OLE）。Windows 上 `start_drag` 在系统拖动循环中阻塞到放下或取消。
 
 ### 后台线程
 
@@ -531,6 +551,7 @@ if ui.refresh()? {
 | `window_focus(b)` | 窗口获得/失去键盘焦点 |
 | `ime(ImeEdit { .. })`、`ime_left()`、`take_ime_state(max)` | 输入法事务与需要同步给平台的状态 |
 | `take_clipboard()` / `paste(text)` | 编辑器发出的复制/粘贴请求 |
+| `drag_motion(point)` / `drag_leave()` / `drop_data(point, data)` / `take_drag()` | 原生拖动经过、离开、放下（前者返回该点是否有放置目标，用于接受或拒绝）；控件 `start_drag` 发起的拖动 |
 | `dispatch_callbacks()` | 执行排队的回调 |
 | `advance_animations(now)`、`has_animations()` | 宿主时钟驱动动画 |
 | `accessibility(initial, title)`、`access_action(req)` | 语义树导出与动作（需 `accessibility`） |

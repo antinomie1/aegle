@@ -43,7 +43,7 @@ button.on_click(move |_| {
 
 | 类型 | 已有接口 |
 | --- | --- |
-| Node / 所有控件句柄 | `decorate`、`on_double_click`、`clear_on_double_click`、`on_context_menu`、`clear_on_context_menu`、`is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
+| Node / 所有控件句柄 | `decorate`、`on_double_click`、`clear_on_double_click`、`on_context_menu`、`clear_on_context_menu`、`on_drop`、`clear_on_drop`、`start_drag`、`is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
 | 布局（Node） | `set_size`、`set_width`、`set_height`、`set_min_*`、`set_max_*`、`set_aspect_ratio`、`set_grow`、`set_shrink`、`set_basis`、`set_align_self`、`set_margin`、`set_absolute`、`set_padding`、`set_gap`、`set_gaps`、`set_layout_direction`、`layout_direction`、`baseline`；`grid` 另有 `set_grid_column`、`set_grid_row`（`Placement` 或可用线名/区域名的 `GridLines`）、`set_grid_area`、`set_justify_self` |
 | 布局（Container） | `row`、`column`、`contents`、`set_direction`、`set_wrap`、`set_align_items`、`set_justify_content`、`set_align_content`；`grid` 另有 `grid`、`stack`、`set_columns`、`set_rows`、`set_column_template`、`set_row_template`（`TemplateItem`：轨道、线名、`Repeat`）、`set_areas`、`set_auto_columns`、`set_auto_rows`、`set_flow`、`set_justify_items` |
 | 外观（Node） | `set_style`、`style`、`set_skin`（本节点）、`set_kind_skin`（子树中某类型的全部控件）、`appearance`、`visual_state`；所有控件都接受的 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground` |
@@ -64,7 +64,7 @@ button.on_click(move |_| {
 | loader::Program / View | `load`、`load_with(path, &Elements)`、`from_sources(entry, &Elements, read)`、`build(&Container)`、`open(&App)`（`from_checked` 仅供 `ui!` 生成的代码，文档隐藏）；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`，`Handle::typed::<T>()` 取得有类型句柄；`State<T>` 有 `get`、`set` |
 | loader::Element / Elements / element! | 标记元素契约：`element!` 声明规格与胶水并实现 `Element`；`Elements::new()` 为内置元素，`with::<E>()` 登记第三方元素 |
 | Node（生命周期） | `keep_alive(value)`：值随控件删除或窗口关闭释放 |
-| Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果 |
+| Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果；拖放用 `drag_motion`/`drag_leave`/`drop_data` 报告原生拖动、`take_drag` 取控件发起的拖动 |
 
 `bounds` 返回最近刷新后的窗口逻辑坐标，包含呈现位移。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。`Node::set_theme` 给子树一份局部主题，`theme` 读取解析结果；`set_offset` 在布局后平移子树，`set_transform(Transform { scale, rotation })` 以节点中心缩放/旋转子树（呈现层，可补间）；`set_theme_override(ThemeOverride)` 只替换指定 token 并随父主题更新；`Ui::fling`/`touch` 提供惯性滚动与手指输入。启用 motion 后用 `set_transition(Transition::default())` 安装外观与几何过渡，`set_property_transition(TransitionProperty::Scale, ..)` 逐项设置，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期，`on_transition_end` 接收完成；详见[主题契约](components-theme-animation.md#主题契约)与[过渡契约](components-theme-animation.md#当前外观过渡)。`register_token("pkg.name", |theme| ..)` 登记类型化组件 token，`Ui::set_token`/`Node::set_token` 设全局或子树覆盖，`bind_color`/`bind_length`/`bind_shadow` 让 Style 颜色、渐变色标、宽度、圆角、字号或阴影跟随 token，直接 setter 结束绑定；详见[主题契约](components-theme-animation.md#主题契约)。当前没有通用属性表。
 
@@ -115,7 +115,7 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 | 事件 | 指针、键盘、焦点、控件动作、值变化；停止传播与阻止默认动作 |
 | 语义 | role、label、description、关系、范围和动作；自定义语义合并 |
 | 主题与动画 | 选择主题、局部覆盖、类型化 token、过渡、显式动画和取消 |
-| 平台 | 窗口属性、可用能力、显示输出、剪贴板、关闭；可选 layer-shell |
+| 平台 | 窗口属性、可用能力、显示输出、剪贴板、拖放、关闭；可选 layer-shell |
 
 `get_*` 返回逻辑目标值；动画呈现值通过 `presented_*` 查询。几何默认是最近提交的布局结果；需要立即读取新布局时使用显式 `flush_layout()`，该调用可有较高成本且禁止在布局/绘制回调内重入。
 
