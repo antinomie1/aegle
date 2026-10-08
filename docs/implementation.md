@@ -69,7 +69,7 @@ AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-platform-wayland --tests -- --
 
   需自行设定隔离的 `XDG_RUNTIME_DIR` 与 `WAYLAND_DISPLAY`，compositor 须提供 input-method-v2、virtual-keyboard-v1；不得使用用户正在使用的输入法会话。
 - Vulkan：离屏几何与文字场景在 RX 硬件上运行并与软件像素比较（允许 3 级通道量化误差），窗口渲染器与共享设备由 native 集成测试覆盖。
-- 图层：`aegle-render-software/tests/layers.rs` 以像素检查组透明度、嵌套与背景模糊；Vulkan 与 wgpu 的 `tests/layers.rs` 在 RX 6800 XT（RADV）上与软件结果比较，平均通道差 0.128，Vulkan 另在 lavapipe 上为 0.104，并在 Khronos 验证层（含同步验证）下无报告；`aegle-ui/tests/layers.rs` 覆盖访问顺序、不透明度过渡与损伤。这些都是离屏执行：直接写 swapchain 的背景模糊（复制 swapchain 图像）、Windows 上的图层均未在窗口中运行过。
+- 图层：`aegle-render-software/tests/layers.rs` 以像素检查组透明度、嵌套与背景模糊；Vulkan 与 wgpu 的 `tests/layers.rs` 在 RX 6800 XT（RADV）上与软件结果比较，平均通道差 0.128，Vulkan 另在 lavapipe 上为 0.104，并在 Khronos 验证层（含同步验证）下无报告；`aegle-ui/tests/layers.rs` 覆盖访问顺序、不透明度过渡与损伤。窗口路径由 `aegle-app/tests/native.rs` 的 `layers_draw_into_native_windows` 在私有 headless Sway 中以软件、Vulkan（直接写 swapchain，复制其图像做背景模糊）与 wgpu 运行，grim 截图与软件窗口的平均通道差 RX 6800 XT 上为 0.055/0.040、lavapipe 上为 0.071/0.034，差异只在圆角抗锯齿；Windows 上的图层未在窗口中运行过。三个后端的 `layer_cost` 示例实测了层与模糊的帧时间（数字见[平台与绘制](platform-rendering.md#图层)）；软件合成改用按 8 通道向量化的同一混合后，480×320 组透明度层从 6.2 ms 降到 5.2 ms，像素结果不变（`tests/layers.rs`）。
 - 标记：编译型与运行时加载由 facade 的 `tests/paths.rs` 用同一文档对照绘制记录与过渡时序；`tests/elements.rs` 在测试 crate 中用 `element!` 声明第三方 Chip 元素，静态文档经 `ui!` 与 `Program::load_with` 构建出相同绘制记录（字面量与 token 属性），动态文档覆盖绑定、事件与 `self` 字段、有类型 id、`for`/`if` 与组件 slot，未登记时运行时加载报 unknown component；内置元素规格的拒绝用例在 `aegle-loader/tests/checking.rs`。解析器对超深表达式、字段链与 `list<` 嵌套返回错误而不溢出栈。
 - 1000 控件场景（`cargo run -p aegle-widgets --release --example thousand`，无窗口、CJK 测试字体，计数全局分配器）：125 行，每行 Label、Button、CheckBox、Slider 与 4 个自定义类型 Meter，Meter 的外观由根上一次 `set_kind_skin` 继承。控件类型与继承皮肤改造前（f4d5bde，Meter 逐节点 `set_skin`）首帧 3.4–4.0 ms、12,260 次分配，空闲 refresh 约 23 µs/4 次，改一个值约 23 µs/4 次，悬停约 33 µs/7 次；改造与装饰器、元素契约之后首帧 3.0–4.3 ms（首次运行偶有 6–9 ms 冷启动）、12,253 次分配，空闲 22–24 µs/4 次，改值 22–24 µs/4 次，悬停 31–33 µs/7 次。稳态分配次数不变，绘制与输入热路径没有新增每帧分配；没有动画、过渡或活动装饰器时 `wants_frames` 为 false（`aegle-widgets/tests/decorators.rs` 检查涟漪结束后不再请求帧）。
 - Windows（2026-10-08，Windows 11 Pro for Workstations 26100，rustc 1.99.0 `x86_64-pc-windows-gnu`，无 GPU 的 Microsoft Basic Display Adapter 虚拟机）：工作区（不含 Wayland crate）`cargo fmt --check`、默认与 `--all-features` 的 `cargo clippy --all-targets -D warnings`、`cargo test` 及 `cargo doc -D warnings` 均通过；facade 的 Windows 组合（含 vulkan、wgpu、windows-accessibility 与全部可选格式）clippy 无告警。下列 opt-in 测试在真实桌面会话中执行通过：
@@ -104,7 +104,6 @@ WGPU_BACKEND=dx12 cargo test -p aegle-render-wgpu --all-features -- --ignored --
 ## 剩余工作
 
 - 平台验收：Windows 硬件 Vulkan/DX12 驱动与 ARM64、日文/韩文输入法与候选窗位置、讲述人/NVDA、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更；fcitx/IBus 真人候选窗与真实屏幕阅读器验收。
-- 组件/绘制：窗口中验证 swapchain 上的背景模糊。
 - 桌面集成：拖放（Wayland `wl_data_device`、Win32 OLE）、文件选择对话框（portal FileChooser、Win32 `IFileDialog`）、托盘、通知与全局快捷键。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制。
 - 工程：多 compositor/GPU 与嵌入式完整资源测量；在 CI 上确认 Linux MSRV 与 Wayland 作业。现有桌面样本不能替代这些证据。

@@ -9,7 +9,7 @@ use tiny_skia::{FillRule, Mask};
 
 use crate::{
     RenderError, Renderer, Surface,
-    blend::{blend_linear, premultiplied_linear},
+    blend::{blend_linear, blend_linear_span, premultiplied_linear},
     raster::{Bounds, Frame, rasterize},
 };
 
@@ -163,19 +163,17 @@ impl Frame<'_, '_, '_> {
                 let source = (row - open.bounds.top) * width + area.left - open.bounds.left;
                 let target = (row - y) * stride + area.left - x;
                 let count = area.right - area.left;
-                let from = &open.pixels[source * 4..(source + count) * 4];
+                let from = open.pixels[source * 4..(source + count) * 4].as_chunks().0;
                 let to = &mut frame.surface.data[target * 4..(target + count) * 4];
-                for (dst, src) in to.as_chunks_mut::<4>().0.iter_mut().zip(from.as_chunks().0) {
-                    if src[3] == 0 {
-                        continue;
+                blend_linear_span(to, 0, |index, pixel| {
+                    let source: [u8; 4] = from[index];
+                    if source[3] == 255 && opacity == 1.0 {
+                        pixel.copy_from_slice(&source);
+                        return ([0.0; 4], 0);
                     }
-                    if src[3] == 255 && opacity == 1.0 {
-                        dst.copy_from_slice(src);
-                        continue;
-                    }
-                    let source = premultiplied_linear(*src).map(|c| c * opacity);
-                    blend_linear(dst, source, 255);
-                }
+                    let linear = premultiplied_linear(source).map(|c| c * opacity);
+                    (linear, 255)
+                });
             }
             Ok(())
         });

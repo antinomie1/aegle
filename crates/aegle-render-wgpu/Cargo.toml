@@ -42,3 +42,7 @@ required-features = ["text"]
 [[test]]
 name = "layers"
 required-features = ["text"]
+
+[[example]]
+name = "layer_cost"
+required-features = ["text"]

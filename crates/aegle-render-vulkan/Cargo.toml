@@ -49,3 +49,7 @@ aegle-platform-wayland = { workspace = true, features = ["gpu"] }
 [[test]]
 name = "layers"
 required-features = ["text"]
+
+[[example]]
+name = "layer_cost"
+required-features = ["text"]

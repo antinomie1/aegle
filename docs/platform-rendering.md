@@ -79,7 +79,18 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 背景模糊为正时，push 先对已绘制内容做模糊，按层形状和裁剪、以层不透明度画回，再开始绘制层内容。模糊采用 W3C 三次盒式近似：`d = floor(σ·3√(2π)/4 + 0.5)`，上限 4095。d 为奇数时用三个居中的盒；为偶数时用 (左 d/2, 宽 d)、(左 d/2−1, 宽 d)、(左 d/2, 宽 d+1)。先横向三遍再纵向三遍，边缘夹取。σ 先乘层变换的 √|det|。软件后端在线性光预乘下计算；GPU 端按 `aegle-gpu` 的计划，把采样区复制到暂存图像后跑六遍 `blur.wgsl`，参数编码在实例索引中。
 
-GPU 合成复用 text 的图像管线，因此 wgpu 与 Vulkan 的图层需要 `text` feature，未启用时 `push_layer` 返回 `UnsupportedCommand`。Vulkan 在每个层边界提交一次并等待。直接写 swapchain 的路径需要 `TRANSFER_SRC` 才能复制背景，因此创建 swapchain 时只要表面支持就请求该用法；表面不支持时，该路径上的背景模糊返回 `Unsupported` 错误。三个后端的离屏层测试（`tests/layers.rs`）比较同一场景：GPU 与软件结果仅在抗锯齿边缘处不同，平均通道差 RX 6800 XT 为 0.128，lavapipe 为 0.104。
+GPU 合成复用 text 的图像管线，因此 wgpu 与 Vulkan 的图层需要 `text` feature，未启用时 `push_layer` 返回 `UnsupportedCommand`。Vulkan 在每个层边界提交一次并等待。直接写 swapchain 的路径需要 `TRANSFER_SRC` 才能复制背景，因此创建 swapchain 时只要表面支持就请求该用法；表面不支持时，该路径上的背景模糊返回 `Unsupported` 错误。三个后端的离屏层测试（`tests/layers.rs`）比较同一场景：GPU 与软件结果仅在抗锯齿边缘处不同，平均通道差 RX 6800 XT 为 0.128，lavapipe 为 0.104。窗口路径由 `aegle-app/tests/native.rs` 的 `layers_draw_into_native_windows`（私有 headless Sway，`AEGLE_TEST_COMPOSITOR=private`）覆盖：条纹上一块半透明、σ=4 背景模糊的圆角面板，内含组透明度 0.5 的子树，分别以软件、Vulkan（直接写 sRGB swapchain，复制 swapchain 图像做模糊）与 wgpu 呈现；grim 截图与软件窗口相比，RX 6800 XT 上 Vulkan/wgpu 的平均通道差为 0.055/0.040，lavapipe 上为 0.071/0.034，超过 8 级的像素只有面板圆角上的 21–27 个。
+
+每个后端的代价由 `layer_cost` 示例实测（`cargo run --release -p aegle-render-{software,vulkan,wgpu} [--features text] --example layer_cost`）：1280×800 帧铺满条纹，再加一个 480×320 圆角卡片的组透明度层，或在其下加 σ=8 背景模糊。i5-13600KF 与 RX 6800 XT（RADV）上的中位数：
+
+| 后端 | 无层 | 组透明度层 | 加背景模糊 | 说明 |
+|---|---|---|---|---|
+| 软件 | 0.46 ms | 5.2 ms | 10.8 ms | 层内半透明填充走非不透明目标的逐像素路径，合成按 8 通道向量化；直接把同一卡片画到窗口约 2.7 ms，层约为其两倍。模糊在线性光 f32 中做六遍盒式 |
+| Vulkan | 9.1 ms | +0.11 ms | +0.37 ms | 含读回；基线主要是不带 HOST_CACHED 的读回内存，窗口路径没有这一步。每个层边界提交一次并等待 |
+| wgpu | 0.50 ms | +0.04 ms | +0.17 ms | 含读回 |
+| Vulkan / wgpu（lavapipe） | 3.2 / 3.5 ms | 5.2 / 5.5 ms | 12.7 / 13.4 ms | CPU 实现，与软件后端同一量级 |
+
+因此软件后端上的大面积模糊会明显占用帧时间，默认组件不使用它；GPU 后端上层的代价可以忽略。
 
 Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该子树以层绘制。`visit_scenes` 依次给出 `Visit::Scene`、`Visit::PushLayer(Layer)` 与 `Visit::PopLayer`，层坐标是窗口逻辑坐标，宿主像处理 scene 变换那样缩放它们（`layer.then(scale)`、裁剪对齐到整像素）。不透明度为 0 的子树不再访问。
 

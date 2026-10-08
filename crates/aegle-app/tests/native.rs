@@ -92,6 +92,62 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
     Ok(())
 }
 
+/// Stripes under a translucent panel that blurs them and a half-opaque
+/// group, presented for `AEGLE_TEST_HOLD_MS` (default 600) so a screenshot
+/// can compare backends. A backend that cannot blur its swapchain fails the
+/// frame instead of skipping the blur.
+#[test]
+#[ignore = "requires an isolated test desktop; never run on the user's desktop"]
+fn layers_draw_into_native_windows() -> Result {
+    use aegle_ui::{Color, Point};
+    assert_eq!(
+        std::env::var("AEGLE_TEST_COMPOSITOR").as_deref(),
+        Ok("private")
+    );
+    let mut settings = AppOptions::default();
+    if std::env::var_os("AEGLE_TEST_VULKAN").is_some() {
+        settings.renderer = aegle_app::RendererBackend::Vulkan;
+    }
+    if std::env::var_os("AEGLE_TEST_WGPU").is_some() {
+        settings.renderer = aegle_app::RendererBackend::Wgpu;
+    }
+    let app = App::with_fonts(test_fonts()?, settings)?;
+    let options = WindowOptions {
+        width: 240,
+        height: 160,
+        ..Default::default()
+    };
+    let window = app.window_with_options("Layers", options)?;
+    window.set_background(Color::WHITE)?;
+    let stripes = window.row()?;
+    stripes.set_gap(6.0)?;
+    for _ in 0..12 {
+        let stripe = stripes.column()?;
+        stripe.set_size(8.0, 120.0)?;
+        stripe.set_background(Color::rgb(40, 80, 220))?;
+    }
+    let panel = window.column()?;
+    panel.set_size(120.0, 60.0)?;
+    panel.set_radius(10.0)?;
+    panel.set_offset(Point::new(40.0, -110.0))?;
+    panel.set_background(Color::rgba(255, 255, 255, 90))?;
+    panel.set_backdrop_blur(4.0)?;
+    let group = panel.column()?;
+    group.set_opacity(0.5)?;
+    for color in [Color::rgb(220, 40, 40), Color::rgb(40, 160, 60)] {
+        let square = group.column()?;
+        square.set_size(24.0, 24.0)?;
+        square.set_background(color)?;
+    }
+    let hold = std::env::var("AEGLE_TEST_HOLD_MS").map_or(600, |ms| ms.parse().unwrap());
+    let deadline = Instant::now() + Duration::from_millis(hold);
+    while Instant::now() < deadline {
+        app.dispatch(Some(Duration::from_millis(20)))?;
+    }
+    assert!(panel.bounds()?.size.width > 0.0);
+    Ok(())
+}
+
 #[test]
 #[ignore = "requires an isolated test desktop; never run on the user's desktop"]
 fn proxy_messages_from_threads_reach_the_ui_thread_in_order() -> Result {
