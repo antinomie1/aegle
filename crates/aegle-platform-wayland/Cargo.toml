@@ -11,6 +11,7 @@ categories.workspace = true
 description = "Event-driven Wayland windows and layer surfaces, bounded software presentation, clipboard and text-input-v3"
 
 [dependencies]
+aegle-dbus.workspace = true
 aegle-types.workspace = true
 smithay-client-toolkit = "0.21.1"
 xkbcommon = { version = "0.8.0", default-features = false }
@@ -23,6 +24,7 @@ gpu = ["dep:raw-window-handle", "wayland-client/system", "wayland-client/dlopen"
 example-accessibility = ["aegle-access/unix", "aegle-text/text-a11y"]
 
 [dev-dependencies]
+aegle-dbus.workspace = true
 aegle-access.workspace = true
 aegle-controls = { workspace = true, features = ["text"] }
 aegle-core.workspace = true

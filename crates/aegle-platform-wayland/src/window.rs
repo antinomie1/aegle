@@ -98,9 +98,9 @@ impl Wayland {
             let source = Generic::new(stream, Interest::READ, Mode::Level);
             event_loop
                 .handle()
-                .insert_source(source, move |_, stream, state: &mut State| {
+                .insert_source(source, move |_, _, state: &mut State| {
                     let old = state.preferences;
-                    let open = portal.read(stream, &mut state.preferences);
+                    let open = portal.read(&mut state.preferences);
                     if state.preferences != old {
                         state
                             .events

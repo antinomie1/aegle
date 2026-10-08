@@ -131,6 +131,10 @@ name = "aegle-core"
 version = "0.1.0"
 
 [[package]]
+name = "aegle-dbus"
+version = "0.1.0"
+
+[[package]]
 name = "aegle-glyph"
 version = "0.1.0"
 dependencies = [
@@ -220,6 +224,7 @@ dependencies = [
  "aegle-access",
  "aegle-controls",
  "aegle-core",
+ "aegle-dbus",
  "aegle-layout",
  "aegle-render-software",
  "aegle-scene",

@@ -49,6 +49,7 @@ cargo doc --workspace --all-features --no-deps
 ## 独立 crate
 
 - `aegle-types`：no_std 的几何与颜色。
+- `aegle-dbus`：无依赖的阻塞式 D-Bus 客户端（仅 Linux）：会话总线认证、调用/返回/错误/信号与常用值类型，可从任意线程发送；Wayland 平台读设置 portal 与桌面集成共用它。
 - `aegle-core`：保留状态，无第三方依赖。
 - `aegle-layout`：该树上的 Taffy 布局，经过校验的布局值词汇、透明 contents 节点，`grid` feature 增加网格。
 - `aegle-scene`：经过校验的绘制记录。

@@ -18,7 +18,8 @@
 | aegle-render-vulkan | 几何、可选字形图集、裁剪、离屏读回与可选原生 swapchain | types、scene；glyph 按 text feature 接入 |
 | aegle-render-software | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene；glyph 按 text feature 接入 |
 | aegle-render-wgpu | 可选的最小跨平台 GPU 后端：几何、字形图集、裁剪、离屏读回与原生 surface 呈现 | types、scene；glyph 按 text feature 接入 |
-| aegle-platform-wayland | Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板、输出与平台偏好 | types |
+| aegle-dbus | Linux 会话总线：认证、Hello、消息编解码（无 Unix fd 与 16 位整数），任意线程发送，阻塞或非阻塞读取 | 无 |
+| aegle-platform-wayland | Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板、输出与平台偏好 | types、dbus |
 | aegle-platform-win32 | Win32 窗口、IMM 兼容输入、DPI、GDI 软件与 GPU 句柄、外观偏好；TSF 待实现 | types |
 | aegle-platform-appkit | 计划中，**尚未实现**：AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
@@ -54,7 +55,7 @@
 
 该模块公开共用的借用/拥有字形缓存身份；可选 `scene` feature 依赖 `aegle-scene/text`，提供 renderer 共用的字体缩放、整像素基线与水平四相位、灰度对比曲线和 bitmap 仿射策略。默认字形缓存仍不依赖 scene。
 
-`aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。gpu feature 提供带生命周期的原生 surface 租约，启用 libwayland system backend。layer-shell 表面与 xdg 窗口共用窗口表、输入、IME 和呈现路径，由 `WindowOptions::layer` 选择，不另设 crate 或 feature；剪贴板按 seat 使用 data device 与非阻塞管道。托盘、通知和全局快捷键不在该模块内。
+`aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types 与 dbus（读设置 portal）；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。gpu feature 提供带生命周期的原生 surface 租约，启用 libwayland system backend。layer-shell 表面与 xdg 窗口共用窗口表、输入、IME 和呈现路径，由 `WindowOptions::layer` 选择，不另设 crate 或 feature；剪贴板按 seat 使用 data device 与非阻塞管道。托盘、通知和全局快捷键不在该模块内。
 
 `aegle-controls` 默认提供无分配的 Button/Toggle/Slider、共享 Range 状态及借用 Input/Outcome；`text` 增加复用 Editor 的 TextField。它不依赖 core、布局、主题、renderer 或窗口。宿主在自己的树中保存行为状态，负责命中、焦点和 capture；键盘、指针及语义激活经过同一默认行为。Wayland editor 示例使用 core 的 Route/Focus 连接这套行为，不再另写编辑快捷键与 IME 文本替换。可选 aegle-access/unix 已在示例接通 AT-SPI 的查询、焦点、按钮及文字选择，完整系统无障碍仍未完成。
 
