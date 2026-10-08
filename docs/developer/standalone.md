@@ -80,4 +80,4 @@ cargo run -p aegle-widgets --features motion --example standalone
 cargo run -p aegle-widgets --example custom_control
 ```
 
-需要跨节点协作的行为（弹出层、单选组、虚拟列表）安装 `Hooks`，库自己的数据放在 `State::ext`；契约见 [Rust API · 组件库作者](../rust-api.md#组件库作者)。
+只想给已有控件加绘制（如按下涟漪）而不改行为时，实现 `Decorator` 并 `node.decorate(..)`，不必重写控件。需要跨节点协作的行为（弹出层、单选组、虚拟列表）安装 `Hooks`，库自己的数据放在 `State::ext`；契约见 [Rust API · 组件库作者](../rust-api.md#组件库作者)。

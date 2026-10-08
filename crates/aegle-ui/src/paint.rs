@@ -36,21 +36,10 @@ impl State {
                 Rect::new(0.0, 0.0, size.width, size.height),
                 appearance.radius,
             )?;
-            effects::paint_shadow(decoration, &mut builder, size, appearance.radius)?;
-            let gradient =
-                frame.background && effects::paint_gradient(decoration, &mut builder, shape)?;
-            if frame.background && !gradient && appearance.background.to_rgba()[3] != 0 {
-                builder.fill(shape, appearance.background)?;
-            }
-            if frame.border {
-                outline(
-                    &mut builder,
-                    size,
-                    appearance.radius,
-                    appearance.border_width,
-                    appearance.border_color,
-                )?;
-            }
+            let mut decorators = match self.decorators.is_empty() {
+                true => None,
+                false => self.decorators.get_mut(&id),
+            };
             let mut cx = PaintCx {
                 builder: &mut builder,
                 size,
@@ -67,10 +56,31 @@ impl State {
                 rtl,
                 next_frame: false,
             };
+            for decorator in decorators.iter_mut().flat_map(|list| list.iter_mut()) {
+                decorator.under(&mut cx)?;
+            }
+            effects::paint_shadow(decoration, cx.builder, size, appearance.radius)?;
+            let gradient =
+                frame.background && effects::paint_gradient(decoration, cx.builder, shape)?;
+            if frame.background && !gradient && appearance.background.to_rgba()[3] != 0 {
+                cx.builder.fill(shape, appearance.background)?;
+            }
+            if frame.border {
+                outline(
+                    cx.builder,
+                    size,
+                    appearance.radius,
+                    appearance.border_width,
+                    appearance.border_color,
+                )?;
+            }
             element.control.paint(&mut cx)?;
+            for decorator in decorators.iter_mut().flat_map(|list| list.iter_mut()) {
+                decorator.over(&mut cx)?;
+            }
             next_frame = cx.next_frame;
             outline(
-                &mut builder,
+                cx.builder,
                 size,
                 appearance.radius,
                 appearance.focus_width,

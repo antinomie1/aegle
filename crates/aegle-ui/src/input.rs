@@ -292,6 +292,7 @@ impl State {
         for work in deferred {
             work(self, target)?;
         }
+        self.observe(target, input)?;
         Ok(outcome)
     }
     /// Applies a control outcome: invalidation, IME, focus, capture and clipboard requests.

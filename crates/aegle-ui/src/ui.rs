@@ -153,6 +153,7 @@ impl Ui {
                 hooks: Vec::new(),
                 decorations: HashMap::new(),
                 skins: HashMap::new(),
+                decorators: HashMap::new(),
                 overrides: HashMap::new(),
                 tokens: Default::default(),
                 fingers: Vec::new(),

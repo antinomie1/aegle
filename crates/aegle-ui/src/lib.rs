@@ -20,6 +20,7 @@ mod clicks;
 pub mod control;
 mod cursor;
 mod damage;
+mod decorator;
 mod direction;
 mod effects;
 mod events;
@@ -72,6 +73,7 @@ pub use aegle_theme::{
 };
 pub use aegle_types::{Color, Cursor, Point, Preferences, Rect, Region, Size, TouchPhase};
 pub use control::{CONTAINER, Control, Plain};
+pub use decorator::Decorator;
 pub use effects::Shadow;
 pub use events::KeyEvent;
 #[cfg(feature = "grid")]

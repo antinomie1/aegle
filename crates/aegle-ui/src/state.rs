@@ -185,6 +185,8 @@ pub struct State {
     pub hooks: Vec<&'static crate::Hooks>,
     /// Visual decoration per node.
     pub decorations: HashMap<NodeId, Decoration>,
+    /// Decorators per node, see [`crate::Decorator`].
+    pub decorators: HashMap<NodeId, Vec<Box<dyn crate::Decorator>>>,
     /// Skins set on nodes, for the node itself or a kind in its subtree.
     pub skins: HashMap<NodeId, Vec<(Option<&'static aegle_theme::ControlKind>, aegle_theme::Skin)>>,
     /// Token overrides re-applied to the parent's theme whenever it changes.
@@ -405,6 +407,7 @@ impl State {
             self.animated.remove(&node);
             self.descriptions.remove(&node);
             self.decorations.remove(&node);
+            self.decorators.remove(&node);
             self.skins.remove(&node);
             self.overrides.remove(&node);
             self.tokens.forget(node);
