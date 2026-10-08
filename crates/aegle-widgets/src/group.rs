@@ -13,6 +13,9 @@ pub(crate) enum Role {
     Popup {
         list: bool,
     },
+    /// A popup of menu items.
+    Menu,
+    MenuBar,
     Table,
     TableRow,
     TableCell,
@@ -39,7 +42,7 @@ impl Control for Group {
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
         use aegle_layout::{Edges, LengthPercentage, Size};
         aegle_ui::Plain.retheme(theme, local, root, style);
-        let popup = matches!(self.role, Role::Popup { .. });
+        let popup = matches!(self.role, Role::Popup { .. } | Role::Menu);
         if (popup || matches!(self.role, Role::TableCell | Role::TableHeader))
             && !local.contains(aegle_ui::LocalLayout::PADDING)
         {
@@ -51,7 +54,7 @@ impl Control for Group {
                 bottom: p,
             };
         }
-        if popup && !local.contains(aegle_ui::LocalLayout::GAP) {
+        if (popup || self.role == Role::MenuBar) && !local.contains(aegle_ui::LocalLayout::GAP) {
             let zero = LengthPercentage::length(0.0);
             style.gap = Size {
                 width: zero,
@@ -65,6 +68,8 @@ impl Control for Group {
         match self.role {
             Role::Popup { list: true } => cx.node.set_role(Access::ListBox),
             Role::Popup { list: false } => {}
+            Role::Menu => cx.node.set_role(Access::Menu),
+            Role::MenuBar => cx.node.set_role(Access::MenuBar),
             Role::Table => cx.node.set_role(Access::Table),
             Role::TableRow => cx.node.set_role(Access::Row),
             Role::TableCell => cx.node.set_role(Access::Cell),
@@ -82,6 +87,14 @@ pub(crate) fn panel(theme: &Theme, state: VisualState) -> Appearance {
         background: theme.surface,
         border_color: theme.border,
         border_width: 1.0,
+        ..Appearance::new(theme, state)
+    }
+}
+
+/// A menu bar: a strip of the surface its entries sit on, without a border.
+pub(crate) fn strip(theme: &Theme, state: VisualState) -> Appearance {
+    Appearance {
+        background: theme.surface,
         ..Appearance::new(theme, state)
     }
 }

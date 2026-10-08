@@ -83,6 +83,10 @@ impl Ui {
         if let Some(handled) = state.access_scroll(target, request.action, request.data.as_ref())? {
             return Ok(handled);
         }
+        if request.action == Action::ShowContextMenu {
+            let at = state.tree.get(target).unwrap().context.bounds.origin;
+            return Ok(state.context_menu(target, at));
+        }
         if focus_policy(target, state.tree.get(target).unwrap())
             != aegle_core::FocusPolicy::Focusable
         {
@@ -252,6 +256,9 @@ impl State {
             ]));
             if enabled && self.has_scroll_ancestor(id) {
                 node.add_action(Action::ScrollIntoView);
+            }
+            if enabled && self.clicks.menus.contains_key(&id) {
+                node.add_action(Action::ShowContextMenu);
             }
             node.set_children(
                 self.tree

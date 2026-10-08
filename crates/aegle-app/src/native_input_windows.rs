@@ -157,6 +157,8 @@ fn key_id(key: u32) -> Key {
         0x21 => Key::PageUp,
         0x22 => Key::PageDown,
         0x20 => Key::Character(' '),
+        0x5d => Key::ContextMenu,
+        0x70..=0x87 => Key::Function((key - 0x6f) as u8),
         0x30..=0x39 | 0x41..=0x5a => Key::Character(char::from_u32(key).unwrap()),
         _ => Key::Unidentified,
     }

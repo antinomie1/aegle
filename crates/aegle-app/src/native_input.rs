@@ -251,6 +251,10 @@ fn key_id(value: Keysym) -> Key {
         Keysym::End => Key::End,
         Keysym::Page_Up => Key::PageUp,
         Keysym::Page_Down => Key::PageDown,
+        Keysym::Menu => Key::ContextMenu,
+        value if (Keysym::F1.raw()..=Keysym::F24.raw()).contains(&value.raw()) => {
+            Key::Function((value.raw() - Keysym::F1.raw() + 1) as u8)
+        }
         value => value
             .key_char()
             .map(Key::Character)

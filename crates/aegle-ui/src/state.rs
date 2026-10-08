@@ -414,6 +414,7 @@ impl State {
             removed.push(node);
             self.callbacks.remove(&node);
             self.clicks.handlers.remove(&node);
+            self.clicks.menus.remove(&node);
             self.frames.retain(|h| h.id != node);
             self.animated.remove(&node);
             self.descriptions.remove(&node);

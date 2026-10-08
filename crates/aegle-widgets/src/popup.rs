@@ -20,6 +20,10 @@ pub(crate) struct PopupEntry {
     pub shown: bool,
     /// Focus to restore when the popup closes with focus inside it.
     pub restore: Option<NodeId>,
+    /// Placed beside the anchor (a submenu) rather than below it.
+    pub side: bool,
+    /// The window point it was shown at, overriding the anchor placement.
+    pub at: Option<Point>,
 }
 
 /// Popups and dropdowns of one UI, kept in the engine's per-library storage.
@@ -29,6 +33,8 @@ pub(crate) struct Popups {
     pub entries: Vec<PopupEntry>,
     /// Dropdown anchors and their choices.
     pub dropdowns: HashMap<NodeId, DropdownData>,
+    /// Menu bars in creation order.
+    pub bars: Vec<NodeId>,
 }
 
 pub(crate) fn popups(state: &mut State) -> &mut Popups {
@@ -88,6 +94,8 @@ impl NodePopup for Node {
                 anchor,
                 shown: false,
                 restore: None,
+                side: false,
+                at: None,
             });
             Ok(id)
         })?;
@@ -102,11 +110,38 @@ impl Popup {
     /// Shows the popup above all controls, at least as wide as its anchor,
     /// and focuses its first enabled control.
     pub fn show(&self) -> Result {
-        self.change(show_popup)
+        self.change(|state, id| {
+            entry(state, id).at = None;
+            show_popup(state, id, true)
+        })
     }
-    /// Hides the popup, returning focus to where it was when shown.
+    /// Shows the popup with its top start corner at a logical window point,
+    /// moved or flipped to fit the window, and focuses its first enabled
+    /// control; a shown popup moves there. Used for context menus: a press
+    /// on the anchor then hides it too.
+    pub fn show_at(&self, at: Point) -> Result {
+        if !(at.x.is_finite() && at.y.is_finite()) {
+            return Err(aegle_ui::UiError::InvalidValue.into());
+        }
+        self.change(|state, id| {
+            entry(state, id).at = Some(at);
+            state.geometry_dirty = true;
+            show_popup(state, id, true)
+        })
+    }
+    /// Hides the popup and every popup anchored inside it, returning focus
+    /// to where it was when shown.
     pub fn hide(&self) -> Result {
         self.change(hide_popup)
+    }
+    /// The control the popup is anchored to: for a submenu its item, for a
+    /// menu bar's menu its entry.
+    pub fn anchor(&self) -> Result<Node> {
+        self.change(|state, id| Ok(entry(state, id).anchor))
+            .map(|id| Node {
+                state: self.state.clone(),
+                id,
+            })
     }
     /// Whether the popup is currently shown.
     pub fn is_shown(&self) -> Result<bool> {
@@ -119,7 +154,7 @@ impl Popup {
     }
 }
 
-fn entry(state: &mut State, popup: NodeId) -> &mut PopupEntry {
+pub(crate) fn entry(state: &mut State, popup: NodeId) -> &mut PopupEntry {
     popups(state)
         .entries
         .iter_mut()
@@ -133,9 +168,13 @@ fn set_expanded(state: &mut State, anchor: NodeId, expanded: bool) {
     {
         *old = expanded;
     }
+    if let Some(item) = state.control_as::<crate::MenuItemControl>(anchor) {
+        item.expanded = expanded;
+    }
 }
 
-pub(crate) fn show_popup(state: &mut State, id: NodeId) -> Result {
+/// Shows a popup, focusing its first enabled control if `focus`.
+pub(crate) fn show_popup(state: &mut State, id: NodeId, focus: bool) -> Result {
     if entry(state, id).shown {
         return Ok(());
     }
@@ -143,10 +182,16 @@ pub(crate) fn show_popup(state: &mut State, id: NodeId) -> Result {
     let root = state.root;
     state.tree.reparent(id, Some(root))?;
     state.invalidate_structure();
-    let anchor = entry(state, id).anchor;
-    let width = state.tree.get(anchor).unwrap().context.bounds.size.width;
+    let PopupEntry {
+        anchor, side, at, ..
+    } = *entry(state, id);
     let mut style = state.tree.get(id).unwrap().style().clone();
-    style.min_size.width = LengthPercentageAuto::length(width);
+    style.min_size.width = if side || at.is_some() {
+        LengthPercentageAuto::auto()
+    } else {
+        let width = state.tree.get(anchor).unwrap().context.bounds.size.width;
+        LengthPercentageAuto::length(width)
+    };
     aegle_layout::set_style(&mut state.tree, id, style)?;
     // It lives under the root but reads in its anchor's direction.
     let direction = state.tree.get(anchor).unwrap().style().direction;
@@ -160,20 +205,53 @@ pub(crate) fn show_popup(state: &mut State, id: NodeId) -> Result {
     set_expanded(state, anchor, true);
     state.tree.mark_dirty(anchor, Dirty::SEMANTICS)?;
     state.rebuild_order();
-    let first = state.order.iter().copied().find(|&n| {
-        n != id && state.contains(id, n) && state.tree.get(n).unwrap().context.control.interactive()
-    });
-    if let Some(first) = first {
-        state.set_focus(Some(first))?;
+    if focus {
+        focus_first(state, id)?;
     }
     Ok(())
 }
 
+/// Focuses the first enabled control of a popup, if any.
+pub(crate) fn focus_first(state: &mut State, popup: NodeId) -> Result {
+    let first = controls(state, popup).first().copied();
+    if first.is_some() {
+        state.set_focus(first)?;
+    }
+    Ok(())
+}
+
+/// The usable interactive controls of a popup in focus order.
+pub(crate) fn controls(state: &mut State, popup: NodeId) -> Vec<NodeId> {
+    state.rebuild_order();
+    state
+        .order
+        .iter()
+        .copied()
+        .filter(|&n| {
+            n != popup
+                && state.contains(popup, n)
+                && state.tree.get(n).unwrap().context.control.interactive()
+                && state.usable(n)
+        })
+        .collect()
+}
+
 pub(crate) fn hide_popup(state: &mut State, id: NodeId) -> Result {
-    let e = entry(state, id);
-    if !e.shown {
+    if !entry(state, id).shown {
         return Ok(());
     }
+    let nested: Vec<_> = popups(state)
+        .entries
+        .iter()
+        .filter(|e| e.shown)
+        .map(|e| (e.popup, e.anchor))
+        .collect();
+    for (popup, anchor) in nested.into_iter().rev() {
+        if state.contains(id, anchor) {
+            hide_popup(state, popup)?;
+        }
+    }
+    let e = entry(state, id);
     e.shown = false;
     let (anchor, restore) = (e.anchor, e.restore.take());
     let inside = state
@@ -197,27 +275,63 @@ pub(crate) fn place_popups(state: &mut State) -> bool {
             .entries
             .iter()
             .filter(|e| e.shown)
-            .map(|e| (e.popup, e.anchor))
+            .map(|e| (e.popup, e.anchor, e.side, e.at))
             .collect(),
         None => return false,
     };
-    for (popup, anchor) in shown {
+    // Prefers `preferred` for a span `size` within `0..limit`, else
+    // `fallback`, then clamps into the window.
+    let fit = |preferred: f32, fallback: f32, size: f32, limit: f32| {
+        let fits = |start: f32| start >= 0.0 && start + size <= limit;
+        let start = if fits(preferred) || !fits(fallback) {
+            preferred
+        } else {
+            fallback
+        };
+        start.min(limit - size).max(0.0)
+    };
+    let window = state.size;
+    for (popup, anchor, side, at) in shown {
         let rtl = state.rtl(anchor);
         let anchor = state.tree.get(anchor).unwrap().context.bounds;
         let size = state.tree.get(popup).unwrap().bounds().size;
-        // Aligned with the anchor's start edge: its right edge right to left.
-        let start = if rtl {
-            anchor.origin.x + anchor.size.width - size.width
+        let (x, y) = if let Some(at) = at {
+            // The start corner at the point, else the end corner.
+            let (start, end) = (at.x, at.x - size.width);
+            let (first, second) = if rtl { (end, start) } else { (start, end) };
+            let x = fit(first, second, size.width, window.width);
+            let y = fit(at.y, at.y - size.height, size.height, window.height);
+            (x, y)
+        } else if side {
+            // Beside the anchor on its end side, else its start side; level
+            // with its top, else with its bottom.
+            let after = anchor.origin.x + anchor.size.width;
+            let before = anchor.origin.x - size.width;
+            let (first, second) = if rtl {
+                (before, after)
+            } else {
+                (after, before)
+            };
+            let x = fit(first, second, size.width, window.width);
+            let bottom = anchor.origin.y + anchor.size.height - size.height;
+            let y = fit(anchor.origin.y, bottom, size.height, window.height);
+            (x, y)
         } else {
-            anchor.origin.x
-        };
-        let x = start.min(state.size.width - size.width).max(0.0);
-        let below = anchor.origin.y + anchor.size.height;
-        let above = anchor.origin.y - size.height;
-        let y = if below + size.height <= state.size.height || above < 0.0 {
-            below
-        } else {
-            above
+            // Aligned with the anchor's start edge: its right edge right to left.
+            let start = if rtl {
+                anchor.origin.x + anchor.size.width - size.width
+            } else {
+                anchor.origin.x
+            };
+            let x = start.min(window.width - size.width).max(0.0);
+            let below = anchor.origin.y + anchor.size.height;
+            let above = anchor.origin.y - size.height;
+            let y = if below + size.height <= window.height || above < 0.0 {
+                below
+            } else {
+                above
+            };
+            (x, y)
         };
         let element = &mut state.tree.get_mut(popup).unwrap().context;
         if element.offset != Point::new(x, y) {
@@ -246,7 +360,7 @@ pub(crate) fn dismiss_popups(state: &mut State, position: Point) -> Result {
         p.entries
             .iter()
             .filter(|e| e.shown)
-            .map(|e| (e.popup, e.anchor))
+            .map(|e| (e.popup, e.anchor, e.at))
             .collect::<Vec<_>>()
     }) else {
         return Ok(());
@@ -257,7 +371,7 @@ pub(crate) fn dismiss_popups(state: &mut State, position: Point) -> Result {
     };
     let hit = popup_at(state, position);
     let mut keep = Vec::new();
-    for &(popup, anchor) in &shown {
+    for &(popup, anchor, at) in &shown {
         let nested = hit.is_some_and(|hit| {
             let hit_anchor = state
                 .ext_ref::<Popups>()
@@ -266,9 +380,11 @@ pub(crate) fn dismiss_popups(state: &mut State, position: Point) -> Result {
                 .anchor;
             state.contains(popup, hit_anchor)
         });
-        keep.push(hit == Some(popup) || nested || inside(state, anchor));
+        // A popup shown at a point is not attached to its anchor's area.
+        let on_anchor = at.is_none() && inside(state, anchor);
+        keep.push(hit == Some(popup) || nested || on_anchor);
     }
-    for ((popup, _), keep) in shown.into_iter().zip(keep) {
+    for ((popup, ..), keep) in shown.into_iter().zip(keep) {
         if !keep {
             hide_popup(state, popup)?;
         }
@@ -295,17 +411,7 @@ pub(crate) fn popup_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
         Key::Up => false,
         _ => return Ok(false),
     };
-    state.rebuild_order();
-    let controls: Vec<_> = state
-        .order
-        .iter()
-        .copied()
-        .filter(|&n| {
-            state.contains(popup, n)
-                && state.tree.get(n).unwrap().context.control.interactive()
-                && state.usable(n)
-        })
-        .collect();
+    let controls = controls(state, popup);
     if controls.is_empty() {
         return Ok(false);
     }
@@ -324,7 +430,9 @@ pub(crate) fn popup_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
 /// Forgets data of removed nodes.
 pub(crate) fn removed(state: &mut State, node: NodeId) {
     if state.ext_ref::<Popups>().is_some() {
-        popups(state).dropdowns.remove(&node);
+        let popups = popups(state);
+        popups.dropdowns.remove(&node);
+        popups.bars.retain(|&bar| bar != node);
     }
 }
 

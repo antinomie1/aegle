@@ -4,9 +4,9 @@
 //! Content controls: [`Label`], [`Button`], [`TextField`] (single line and
 //! multiline), [`CheckBox`], [`Switch`], [`Radio`], [`Slider`], [`Progress`],
 //! [`ImageView`], [`Canvas`]. Containers and composites: [`ScrollView`],
-//! [`ListView`] (virtual, equal or content-sized rows), [`Table`], [`Popup`] and
-//! [`Dropdown`]. Create them through the [`Widgets`] trait on `Container`, or
-//! [`NodePopup::popup`]. Each control owns its behavior (through `aegle-controls`),
+//! [`ListView`] (virtual, equal or content-sized rows), [`Table`], [`Popup`],
+//! [`Dropdown`], [`Menu`] and [`MenuBar`]. Create them through the [`Widgets`]
+//! trait on `Container`, [`NodePopup::popup`], or [`NodeMenu`]. Each control owns its behavior (through `aegle-controls`),
 //! default skin (the pure painters in this crate), layout defaults and semantics;
 //! the engine owns the tree, input routing, focus, scrolling, motion and themes.
 //! Virtual lists, popups and radio groups plug into the engine with [`HOOKS`].
@@ -26,6 +26,9 @@ mod field;
 mod group;
 mod label;
 mod list;
+mod menu;
+mod menu_item;
+mod menu_nav;
 mod number_field;
 mod numeric;
 mod paint;
@@ -52,6 +55,8 @@ pub use field::{FieldControl, TextField};
 pub use group::Group;
 pub use label::{Label, LabelControl};
 pub use list::ListView;
+pub use menu::{Menu, MenuBar, NodeMenu};
+pub use menu_item::{MenuItem, MenuItemControl};
 pub use number_field::{NumberField, NumberFieldControl};
 pub use numeric::{Progress, Slider};
 pub use paint::{CHEVRON, Mark, ToggleSpec, check_mark, chevron, range, slider_track, toggle};
@@ -88,15 +93,21 @@ pub static HOOKS: Hooks = Hooks {
     removed_after: Some(pruned),
     measure: Some(list::measure_rows),
     realize: Some(list::realize_rows),
-    hover: Some(tooltip::hovered),
+    hover: Some(hover),
     wake: Some(tooltip::wake),
 };
 
 fn keys(state: &mut State, key: &aegle_ui::KeyInput<'_>) -> Result<bool> {
     Ok(tooltip::tooltip_key(state, key)?
+        || menu_nav::menu_key(state, key)?
         || popup::popup_key(state, key)?
         || toggle::radio_key(state, key)?
         || tabs::tab_key(state, key)?)
+}
+
+fn hover(state: &mut State, hit: Option<aegle_core::NodeId>) -> Result {
+    tooltip::hovered(state, hit)?;
+    menu_nav::hovered(state, hit)
 }
 
 fn press(state: &mut State, position: aegle_types::Point) -> Result {
@@ -225,6 +236,8 @@ pub trait Widgets {
     fn separator(&self) -> Result<Separator>;
     /// Appends a tab list with one shown page per tab; see [`Tabs::add`].
     fn tabs(&self) -> Result<Tabs>;
+    /// Appends a menu bar; add its menus with [`MenuBar::menu`].
+    fn menu_bar(&self) -> Result<MenuBar>;
     /// Appends two panes divided by a draggable, keyboard-adjustable handle:
     /// side by side when horizontal, stacked when vertical. It grows to fill.
     fn splitter(&self, orientation: Orientation) -> Result<Splitter>;
@@ -306,6 +319,9 @@ impl Widgets for Container {
     }
     fn tabs(&self) -> Result<Tabs> {
         tabs::tabs(self)
+    }
+    fn menu_bar(&self) -> Result<MenuBar> {
+        menu::menu_bar(self)
     }
     fn splitter(&self, orientation: Orientation) -> Result<Splitter> {
         separator::splitter(self, orientation)

@@ -16,6 +16,7 @@
 | [Radio](#radio) | `radio(s, checked) -> Radio` | `RadioButton` |
 | [Dropdown](#dropdown) | `dropdown(items, selected) -> Dropdown` | — |
 | [Popup](#popup) | `node.popup() -> Popup` | — |
+| [Menu / MenuBar](#menu--menubar) | `node.menu()` / `node.context_menu() -> Menu`，`menu_bar() -> MenuBar` | — |
 | [Slider](#slider) | `slider(min, max, value) -> Slider` | `Slider` |
 | [Progress](#progress) | `progress(min, max, value) -> Progress` | `Progress` |
 | [Column / Row](#column--row) | `column()` / `row() -> Container` | `Column` / `Row` |
@@ -326,8 +327,34 @@ menu.on_click(move |_| if shown.is_shown()? { shown.hide() } else { shown.show()
 ```
 
 - 任意控件可用 `popup()` 创建锚定于自己的弹出层：一个可添加任意子控件的列，默认隐藏。
-- `show()` 时显示在锚点下方（空间不足时在上方）、至少与锚点同宽，绘制在窗口全部内容之上并优先命中，焦点移到其第一个可用控件；不占布局空间，只在当前窗口内显示。
-- Escape 或按下其外部（锚点除外）时隐藏，焦点回到打开前的位置；Up/Down 在其中移动焦点。删除锚点会一并删除弹出层。
+- `show()` 时显示在锚点下方（空间不足时在上方）、至少与锚点同宽，绘制在窗口全部内容之上并优先命中，焦点移到其第一个可用控件；不占布局空间，只在当前窗口内显示。`show_at(point)` 把起始角放在窗口逻辑坐标点上，放不下时翻到另一侧再夹在窗口内；这样显示时按下锚点区域也会关闭它。`anchor()` 返回锚点控件。
+- Escape 或按下其外部（锚点除外）时隐藏，焦点回到打开前的位置；Up/Down 在其中移动焦点。隐藏时一并隐藏锚定在其内部的弹出层。删除锚点会一并删除弹出层。
+
+## Menu / MenuBar
+
+<img src="images/menu.png" width="600" alt="Menu：菜单栏展开带子菜单；在某点打开的右键菜单">
+
+```rust
+let bar = window.menu_bar()?;
+let file = bar.menu("File")?;
+file.item("Open")?.on_click(|_| open())?;
+let recent = file.submenu("Open recent")?;
+recent.item("notes.txt")?;
+file.separator()?;
+let autosave = file.check_item("Autosave", true)?;
+autosave.on_click(|item| set_autosave(item.is_checked()?))?;
+
+let editor = window.text_area("")?;
+let context = editor.context_menu()?;      // 右键、Menu 键、Shift+F10
+context.item("Paste")?;
+```
+
+- `Menu` 是角色为菜单的 Popup：`item(text)`、`check_item(text, checked)`、`submenu(text) -> Menu`、`separator()`，也可以放任意控件。`node.menu()` 显示在锚点下方，由应用调用 `show()`（如在按钮的 `on_click` 中）；`node.context_menu()` 在该控件或其后代请求上下文菜单时于请求点 `show_at`。
+- `MenuItem`：`on_click` / `clear_on_click`、`set_text`、`is_checked` / `set_checked`、`activate`，以及 `set_enabled` 等通用方法。选择一项会先关闭所有菜单、切换勾选项，再按注册顺序运行处理器；打开子菜单的项不运行处理器。子菜单的打开项是 `submenu.anchor()`。
+- 键盘：Up/Down 在项间移动并跳过分隔线和禁用项，Home/End 到两端，Right 打开子菜单并聚焦其第一项（从右到左时为 Left），Left 或 Escape 关闭子菜单回到打开项，Enter/Space 选择。指针停在项上即聚焦它并打开其子菜单，同时关闭同级的子菜单。子菜单显示在打开项的结束一侧并与其顶端对齐，放不下时换到另一侧。
+- `MenuBar` 是一行入口，`menu(text)` 添加入口并返回其菜单。点击入口打开或关闭菜单；某个菜单打开时指针移到另一个入口即切换；焦点在入口上时 Left/Right 移动、Down 打开；菜单内 Left/Right 移到相邻菜单。F10 聚焦第一个菜单栏的第一个入口。
+- 每项预留勾选列，没有快捷键提示文字和单选组项。
+- 无障碍角色 Menu、MenuBar、MenuItem 与 MenuItemCheckBox（带勾选状态）；打开子菜单的项报告有菜单弹出及展开状态。有上下文菜单的控件导出 ShowContextMenu 动作。
 
 ## ImageView
 

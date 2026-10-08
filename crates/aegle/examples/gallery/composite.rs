@@ -1,6 +1,9 @@
 //! Choice, popup, table and content-sized list screenshots.
 use crate::{Setup, hover};
-use aegle::{Container, Key, KeyInput, Modifiers, NodePopup, Result, TableColumn, Ui, Widgets};
+use aegle::{
+    Container, Key, KeyInput, Modifiers, NodeMenu, NodePopup, Point, Result, TableColumn, Ui,
+    Widgets,
+};
 
 fn enter(ui: &Ui) -> Result {
     for pressed in [true, false] {
@@ -92,6 +95,34 @@ pub(crate) fn shots(shot: Shot) -> Result {
                 popup.button("Action")?;
                 ui.refresh()?;
                 popup.show()
+            }),
+        ],
+    )?;
+    shot(
+        "menu",
+        (300.0, 200.0),
+        &[
+            ("menu bar with a submenu", |ui, h| {
+                let bar = h.menu_bar()?;
+                let file = bar.menu("File")?;
+                bar.menu("Edit")?;
+                file.item("New")?;
+                let recent = file.submenu("Open recent")?;
+                recent.item("notes.txt")?;
+                file.separator()?;
+                file.check_item("Autosave", true)?;
+                ui.refresh()?;
+                file.show()?;
+                ui.refresh()?;
+                recent.show()
+            }),
+            ("context menu at a point", |ui, h| {
+                let menu = h.context_menu()?;
+                menu.item("Cut")?;
+                menu.item("Copy")?.set_enabled(false)?;
+                menu.item("Paste")?;
+                ui.refresh()?;
+                menu.show_at(Point::new(40.0, 30.0))
             }),
         ],
     )?;

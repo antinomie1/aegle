@@ -1,4 +1,5 @@
-//! Multi-click counting for every host, and double-click handlers on any node.
+//! Multi-click counting for every host, and double-click and context-menu
+//! handlers on any node.
 
 use std::{collections::HashMap, time::Duration, time::Instant};
 
@@ -14,6 +15,10 @@ pub struct Clicks {
     distance: f32,
     /// Double-click handlers, versioned in the shared callback sequence.
     pub handlers: HashMap<NodeId, Handler>,
+    /// Context-menu handlers, versioned the same way.
+    pub menus: HashMap<NodeId, Handler>,
+    /// Window point of the latest context-menu request.
+    pub menu_at: Point,
 }
 
 impl Default for Clicks {
@@ -23,6 +28,8 @@ impl Default for Clicks {
             interval: Duration::from_millis(400),
             distance: 4.0,
             handlers: HashMap::new(),
+            menus: HashMap::new(),
+            menu_at: Point::new(0.0, 0.0),
         }
     }
 }
@@ -50,14 +57,44 @@ impl State {
 
     /// Queues the double-click handler of `hit` or its nearest ancestor that has one.
     pub(crate) fn double_click(&mut self, hit: NodeId) {
-        let mut node = Some(hit);
+        if let Some(id) = self.handling(hit, |clicks| &clicks.handlers) {
+            self.pending
+                .push_back((id, self.clicks.handlers[&id].version));
+        }
+    }
+
+    /// Queues the context-menu handler of `target` or its nearest ancestor
+    /// that has one, to show at window point `at`; returns whether one exists.
+    pub(crate) fn context_menu(&mut self, target: NodeId, at: Point) -> bool {
+        let Some(id) = self.handling(target, |clicks| &clicks.menus) else {
+            return false;
+        };
+        self.clicks.menu_at = at;
+        self.pending.push_back((id, self.clicks.menus[&id].version));
+        true
+    }
+
+    /// Asks for the context menu of the focused control, or of the root
+    /// without focus, at the control's top-left corner.
+    pub(crate) fn keyboard_context_menu(&mut self) -> bool {
+        let target = self.focus.current(&self.tree).unwrap_or(self.root);
+        let at = self.tree.get(target).unwrap().context.bounds.origin;
+        self.context_menu(target, at)
+    }
+
+    fn handling(
+        &self,
+        from: NodeId,
+        handlers: impl Fn(&Clicks) -> &HashMap<NodeId, Handler>,
+    ) -> Option<NodeId> {
+        let mut node = Some(from);
         while let Some(id) = node {
-            if let Some(handler) = self.clicks.handlers.get(&id) {
-                self.pending.push_back((id, handler.version));
-                return;
+            if handlers(&self.clicks).contains_key(&id) {
+                return Some(id);
             }
             node = self.tree.parent(id).ok().flatten();
         }
+        None
     }
 }
 
@@ -93,6 +130,37 @@ impl Node {
     pub fn clear_on_double_click(&self) -> Result {
         self.change(|state, id| {
             state.clicks.handlers.remove(&id);
+            Ok(())
+        })
+    }
+    /// Adds a handler run when a context menu is requested over this control
+    /// or a descendant without its own handler: a secondary-button press
+    /// (receiving the press point), or the Menu key, Shift+F10 or the
+    /// accessibility ShowContextMenu action while it or a descendant has
+    /// focus (receiving the focused control's top-left corner). The point is
+    /// in logical window coordinates, ready for `Menu::show_at` in
+    /// `aegle-widgets`. Handlers run like click handlers.
+    pub fn on_context_menu(
+        &self,
+        mut callback: impl FnMut(Node, Point) -> Result + 'static,
+    ) -> Result {
+        self.change(|state, id| {
+            let callback = Box::new(move |node: Node| {
+                let at = node.change(|state, _| Ok(state.clicks.menu_at))?;
+                callback(node, at)
+            });
+            let version = &mut state.callback_version;
+            crate::callbacks::add(&mut state.clicks.menus, version, id, callback)?;
+            state.tree.mark_dirty(id, aegle_core::Dirty::SEMANTICS)?;
+            Ok(())
+        })
+    }
+    /// Removes the context-menu handlers.
+    pub fn clear_on_context_menu(&self) -> Result {
+        self.change(|state, id| {
+            if state.clicks.menus.remove(&id).is_some() {
+                state.tree.mark_dirty(id, aegle_core::Dirty::SEMANTICS)?;
+            }
             Ok(())
         })
     }

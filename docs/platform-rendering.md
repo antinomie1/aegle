@@ -101,7 +101,7 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 启用 motion 时，App 共享一个 Instant 时钟；每次刷新先采样活动过渡，实际呈现后仍有活动动画才请求下一帧。平台的 frame callback 与缓冲门控继续生效；无活动动画或 compositor 暂停回调时不加入轮询定时器。外观动画不改变几何，绘制和语义前景共用呈现值。
 
-窗口、输入和辅助技术动作使用同一个 Ui。每个相关事件后刷新布局并取消旧 IME 会话，再处理下一条排队输入；不存在 text-input-v3 时，请求编辑会话返回能力错误。每窗口由活动键盘 seat 管理一个逻辑焦点域；失焦取消组合/手势，返回时恢复仍可用的原控件。编辑器的剪贴板请求在刷新前交给活动键盘 seat；异步读取在该 seat 仍持有焦点时粘贴，失焦后丢弃。连击由 Ui 按时间与距离统一计数（1、2、3 循环，编辑器据此选词/选行，`Node::on_double_click` 与 Canvas 的 `Press { clicks }` 读取它），App 把系统双击间隔交给它：Windows 为 `GetDoubleClickTime`，Linux 读 portal 的 GNOME `org.gnome.desktop.peripherals.mouse double-click`，都没有时 400 ms；动态窗口属性尚未接入应用 API；触摸经 `Ui::touch` 接入：点击与控件拖动成为指针事件，非拖动内容上超过 10 px 的拖动取消点击并平移滚动视图，抬起时带速度惯性滚动。
+窗口、输入和辅助技术动作使用同一个 Ui。每个相关事件后刷新布局并取消旧 IME 会话，再处理下一条排队输入；不存在 text-input-v3 时，请求编辑会话返回能力错误。每窗口由活动键盘 seat 管理一个逻辑焦点域；失焦取消组合/手势，返回时恢复仍可用的原控件。编辑器的剪贴板请求在刷新前交给活动键盘 seat；异步读取在该 seat 仍持有焦点时粘贴，失焦后丢弃。连击由 Ui 按时间与距离统一计数（1、2、3 循环，编辑器据此选词/选行，`Node::on_double_click` 与 Canvas 的 `Press { clicks }` 读取它），App 把系统双击间隔交给它：Windows 为 `GetDoubleClickTime`，Linux 读 portal 的 GNOME `org.gnome.desktop.peripherals.mouse double-click`，都没有时 400 ms；右键按下、Menu 键与 Shift+F10 由 Ui 转成上下文菜单请求（`Node::on_context_menu`），不读取 Win32 `WM_CONTEXTMENU`；动态窗口属性尚未接入应用 API；触摸经 `Ui::touch` 接入：点击与控件拖动成为指针事件，非拖动内容上超过 10 px 的拖动取消点击并平移滚动视图，抬起时带速度惯性滚动。
 
 ## 当前 Windows 原生路径
 

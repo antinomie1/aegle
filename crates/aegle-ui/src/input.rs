@@ -12,7 +12,7 @@ use aegle_controls::{
 };
 use aegle_core::{Dirty, EventPhase, FocusChange, FocusDirection, NodeId};
 use aegle_text::ImeEdit;
-use aegle_types::Point;
+use aegle_types::{Point, PointerButton};
 
 impl Ui {
     /// Updates native window activation. Losing activation cancels capture and IME.
@@ -56,6 +56,10 @@ impl Ui {
                 {
                     return Ok(());
                 }
+            }
+            let shift_f10 = key.key == Key::Function(10) && key.modifiers.shift;
+            if (key.key == Key::ContextMenu || shift_f10) && state.keyboard_context_menu() {
+                return Ok(());
             }
         }
         if key.key == Key::Tab
@@ -137,10 +141,12 @@ impl Ui {
         if target != hit {
             state.sync_hover(id, position)?;
         }
-        if let PointerKind::Down { clicks: 2 } = kind
-            && let Some(node) = state.node_at(position, false)
-        {
-            state.double_click(node);
+        match (kind, state.node_at(position, false)) {
+            (PointerKind::Down { clicks: 2 }, Some(node)) => state.double_click(node),
+            (PointerKind::ButtonDown(PointerButton::Secondary), Some(node)) => {
+                state.context_menu(node, position);
+            }
+            _ => {}
         }
         Ok(())
     }

@@ -150,7 +150,8 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `set_cursor(Option<Cursor>)` / `cursor()` | 设置/读取该控件及其后代上的鼠标指针形状，`None` 恢复默认 |
 | `set_accessible_label(s)` | 无障碍名称 |
 | `keep_alive(value)` | 让任意值与控件同生命周期 |
-| `popup()` | 创建锚定于该控件的弹出层 `Popup`（`show` / `hide` / `is_shown`） |
+| `popup()` | 创建锚定于该控件的弹出层 `Popup`（`show` / `show_at` / `hide` / `is_shown`） |
+| `menu()` / `context_menu()` | 创建锚定于该控件的菜单；后者在上下文菜单请求处显示，见[控件参考](controls.md#menu--menubar) |
 
 **鼠标指针形状**：原生窗口会自动跟随。可用形状见 `Cursor`（`Default`、`Text`、`Pointer`、`Crosshair`、`Move`、`Grab`、`Grabbing`、`NotAllowed`、`ResizeHorizontal`、`ResizeVertical`）。规则按优先级：按下后捕获指针的控件（拖选文字时指针移出字段仍是 I-beam）；鼠标下最上层可见控件上的显式 `set_cursor`；可用的文本字段（含只读，因为文字可选）显示 I-beam，禁用的字段不显示；最近祖先的显式形状；箭头。滚动条条带与拖动滚动条始终是箭头；已显示的弹出层遮住其下方的控件。按钮默认不变手形，这是桌面惯例，需要时对按钮或链接式标签 `set_cursor(Some(Cursor::Pointer))`。Windows 没有抓手光标，`Grab` 用手形、`Grabbing` 用四向箭头。
 
@@ -336,6 +337,8 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 | 任意控件（`motion`） | `on_transition_end(FnMut(Node) -> Result)` | `clear_on_transition_end()` |
 | `Canvas` | `on_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) | `clear_on_input()` |
 | 任意控件 | `on_double_click(FnMut(Node) -> Result)`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 | `clear_on_double_click()` |
+| 任意控件 | `on_context_menu(FnMut(Node, Point) -> Result)`：在该控件或没有自己处理器的后代上请求上下文菜单——右键按下（得到按下点），或焦点在其中时按 Menu 键、Shift+F10，或辅助技术的 ShowContextMenu（得到该控件左上角）；点为窗口逻辑坐标，可直接交给 `Popup::show_at` | `clear_on_context_menu()` |
+| `MenuItem` | `on_click(FnMut(MenuItem) -> Result)`：菜单关闭、勾选项切换之后执行 | `clear_on_click()` |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
 - 同一事件可以注册多个处理器，按注册顺序执行；`clear_on_*` 移除该事件的全部处理器。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。

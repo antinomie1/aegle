@@ -60,7 +60,7 @@ cargo doc --workspace --all-features --no-deps
 - `aegle-render-vulkan`：几何与文字、原生 swapchain、有界分配、显式离屏读回。
 - `aegle-render-wgpu`：可选的全平台几何、文字、图像与路径，离屏或原生 surface。
 - `aegle-controls`：无皮肤的 Button/Toggle/Slider 行为、共享数值 Range 与可选 TextField。
-- `aegle-widgets`：默认控件库，包含全部默认控件（标签、按钮、单/多行编辑、复选/开关/单选、滑块、进度、图像/画布、滚动视图、虚拟列表、表格、弹出层、下拉框）及其纯函数皮肤。
+- `aegle-widgets`：默认控件库，包含全部默认控件（标签、按钮、单/多行编辑、复选/开关/单选、滑块、进度、图像/画布、滚动视图、虚拟列表、表格、弹出层、下拉框、菜单与菜单栏）及其纯函数皮肤。
 - `aegle-access`：UI 线程回调邮箱与可选的 Unix/Windows 无障碍。
 - `aegle-platform-wayland`、`aegle-platform-win32`：窗口与原生输入，不依赖绘制。
 - `aegle-theme`：无分配的调色板、基于状态的皮肤与局部样式值。

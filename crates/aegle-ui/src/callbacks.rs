@@ -77,7 +77,10 @@ impl State {
         if let Some(handler) = self.motion.ends.get_mut(&id).filter(current) {
             return Some(handler);
         }
-        self.clicks.handlers.get_mut(&id).filter(current)
+        if let Some(handler) = self.clicks.handlers.get_mut(&id).filter(current) {
+            return Some(handler);
+        }
+        self.clicks.menus.get_mut(&id).filter(current)
     }
 }
 

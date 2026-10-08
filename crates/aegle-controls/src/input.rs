@@ -49,6 +49,10 @@ pub enum Key {
     PageUp,
     /// Move one page toward the end, or decrease a range by a large step.
     PageDown,
+    /// The Menu (Application) key, which requests a context menu.
+    ContextMenu,
+    /// Function key F1 through F24.
+    Function(u8),
     /// Key without a default control action.
     Unidentified,
 }

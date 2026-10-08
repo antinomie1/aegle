@@ -52,9 +52,9 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 默认组件范围
 
-默认皮肤采用跨平台一致的中性极简外观。首版包含 Box/Row/Column、Text、Button、CheckBox（含部分选中）、RadioButton、Switch、Slider 与 Progress（含竖直与不确定进度）、NumberField、Separator、Tabs、Splitter、Tooltip、TextField、TextArea、ScrollView、等高与按内容变高的虚拟 ListView、基础 Table、Dropdown，以及窗口内 Popup；Menu 可由 Popup 组合，尚无专用控件。Grid、图像格式、路径图标和高级特效按 feature 提供。
+默认皮肤采用跨平台一致的中性极简外观。首版包含 Box/Row/Column、Text、Button、CheckBox（含部分选中）、RadioButton、Switch、Slider 与 Progress（含竖直与不确定进度）、NumberField、Separator、Tabs、Splitter、Tooltip、TextField、TextArea、ScrollView、等高与按内容变高的虚拟 ListView、基础 Table、Dropdown，以及窗口内 Popup、建立在 Popup 上的 Menu（右键菜单、子菜单、勾选项）与 MenuBar。Grid、图像格式、路径图标和高级特效按 feature 提供。
 
-默认 Popup/Menu/Tooltip 在当前窗口的 overlay 层内显示，不承诺越过宿主窗口边缘；需要独立原生 popup 的 shell/应用通过平台扩展显式创建，走相同焦点及语义契约。当前 Popup 与 Dropdown 列表即在此层：显示于锚点下方（空间不足时上方），Escape 或按下外部关闭并归还焦点。首版的表格只有固定行高、表头与虚拟行，没有排序或列宽拖动；没有富文档编辑器或完整 MD3 套件，第三方可用公开接口实现。
+默认 Popup/Menu/Tooltip 在当前窗口的 overlay 层内显示，不承诺越过宿主窗口边缘；需要独立原生 popup 的 shell/应用通过平台扩展显式创建，走相同焦点及语义契约。当前 Popup、Dropdown 列表与菜单即在此层：显示于锚点下方（空间不足时上方）、子菜单在打开项旁、上下文菜单在请求点，放不下时翻转并夹在窗口内；Escape 或按下外部关闭并归还焦点，关闭时连带其内部锚定的弹出层。首版的表格只有固定行高、表头与虚拟行，没有排序或列宽拖动；没有富文档编辑器或完整 MD3 套件，第三方可用公开接口实现。
 
 行为与皮肤分离：controls 负责激活、切换、调整、编辑、滚动等行为及语义，widgets 负责默认外观。第三方 MD3 库应复用 controls，并增加自己的 token、图标与绘制；不重写平台输入、CJK 或无障碍。
 
