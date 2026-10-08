@@ -33,6 +33,8 @@ cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
 cargo run -p aegle --example showcase --release
 cargo run -p aegle --features grid --example layout --release
+cargo run -p aegle-widgets --features motion --example standalone --release
+cargo run -p aegle-widgets --example custom_control --release
 cargo test --workspace --all-features
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
@@ -89,7 +91,7 @@ cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,m
 
 ## 嵌入已有宿主
 
-已有绘制/窗口宿主可以只使用 `aegle-ui` 与 `aegle-widgets`，并用 `Ui::with_fonts` 与显式共享的字体集合构造界面。同样的控件暴露 scene 访问、规范化输入、有界 IME 状态和可选的语义更新。控件句柄是弱引用：丢弃句柄保留控件，删除子树或关闭窗口则使其句柄失效。
+已有绘制/窗口宿主可以只使用 `aegle-ui` 与 `aegle-widgets`，并用 `Ui::with_fonts` 与显式共享的字体集合构造界面；依赖、feature 组合、宿主职责与两个可执行示例见[不经 facade 使用控件库](developer/standalone.md)。同样的控件暴露 scene 访问、规范化输入、有界 IME 状态和可选的语义更新。控件句柄是弱引用：丢弃句柄保留控件，删除子树或关闭窗口则使其句柄失效。
 
 ## 文字支持与示例输出
 

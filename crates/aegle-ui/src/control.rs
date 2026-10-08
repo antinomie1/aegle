@@ -7,11 +7,14 @@
 //! `aegle-widgets`, and any crate can add its own by implementing this trait.
 //! Three capabilities are first-class because the engine's own machinery needs
 //! them: a [`Paragraph`] (font size, themes, labels), a [`TextField`] editor
-//! (native IME, caret scrolling, clipboard) and a scroll viewport.
+//! (native IME, caret scrolling, clipboard) and a scroll viewport. The input
+//! and outcome types a control handles are re-exported here, so a control
+//! library needs no direct `aegle-controls` dependency.
 
 use std::{any::Any, cell::RefCell};
 
-use aegle_controls::{Input, Outcome, TextField};
+use aegle_controls::TextField;
+pub use aegle_controls::{Action, Capture, Input, Outcome, PointerInput};
 use aegle_core::NodeId;
 use aegle_layout::Style;
 use aegle_scene::{Color, RoundedRect, SceneBuilder};

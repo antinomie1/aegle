@@ -343,6 +343,8 @@ dependencies = [
  "aegle-controls",
  "aegle-core",
  "aegle-layout",
+ "aegle-motion",
+ "aegle-render-software",
  "aegle-scene",
  "aegle-text",
  "aegle-theme",

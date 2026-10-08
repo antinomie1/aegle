@@ -72,6 +72,8 @@ ScrollView 的偏移、嵌套滚轮传递和焦点显露由 ui 协调现有树�
 
 `aegle-motion` 提供无时钟所有权的 Tween/Transition 与关键帧 Animation（延迟、循环、往返），支持 f32、Point、Color 与二次、Bézier、弹簧曲线；只有多关键帧动画分配一次共享帧数组；仅依赖 types 的可选 `color-math`。该 feature 需要 std，将软件合成与动画共用的 sRGB 转换表放在一个 OnceLock 中，types 默认仍为 no_std。app 的可选 `motion` 维护节点外观目标/呈现值并驱动失效；无需 motion 时不会编译其映射表或调度代码。
 
+`aegle-theme` 与 `aegle-motion` 公开函数不多，仍各自成 crate：两者是只依赖 types、不接触控件树的值库。theme 为 no_std 且不分配，widgets 的纯函数皮肤、第三方控件库或 renderer 可只依赖它取得同一套配色、`Style` 与 `Appearance`，不必编译需要 std、Taffy 与 Parley 的引擎；motion 的 Tween/Animation 由调用者给时间，可在不用引擎的宿主中单独采样，引擎也只在 `motion` feature 下链接它。并入 aegle-ui 会让只要这些值的使用者编译整个引擎；再细分则没有对应的消费者。aegle-ui 重导出两者的类型，经引擎使用时无需另加依赖；独立使用的方式见[不经 facade 使用控件库](developer/standalone.md)。
+
 没有独立的“每个控件 crate”或“每个颜色类型 crate”。当一个模块的多种选择只影响内部小函数时使用 feature，不为包装一个转发函数增加新的包。
 
 ## 依赖方向

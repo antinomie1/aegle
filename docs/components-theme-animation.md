@@ -1,6 +1,6 @@
 # 默认组件、主题与动画
 
-状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；缩放/旋转动画、作用域过渡（`with_transition`/`snap`）、关键帧与弹簧动画、逐 token 的 `ThemeOverride`、系统文本缩放、惯性滚动和渐变/阴影图像已实现；任意行为组件扩展仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
+状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；缩放/旋转动画、作用域过渡（`with_transition`/`snap`）、关键帧与弹簧动画、逐 token 的 `ThemeOverride`、系统文本缩放、惯性滚动和渐变/阴影图像已实现；第三方控件可经 `Control` trait 定义任意行为与绘制（`aegle-widgets/examples/custom_control.rs`）。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
 
 ## 当前行为接口
 
@@ -8,7 +8,7 @@
 
 可选 `text` 的 `TextField` 直接拥有 Editor，复用选择、按词/行移动、grapheme 删除、撤销、单行提交和原子 IME 事务。宿主提供当前文字局部坐标，应用 `Outcome` 的焦点/capture/重绘/IME 重置请求，并消费 Editor 的失效标记。`Outcome::semantics` 独立表达焦点/启用状态变化，普通 hover/pressed 绘制不会因此重新导出语义。只读仍可选择；失焦或禁用取消组合且恢复已提交值。复制/剪切/粘贴经 `Outcome::clipboard` 交给宿主，`Input::Paste` 回送文字；密码模式遮盖显示、拒绝复制与组合。更多平台差异快捷键尚未接入。
 
-这些行为可由不同皮肤共享；当前 `aegle-widgets` 已将它们与 row/column、标签及单行/多行编辑器组合，使用统一 Theme 绘制中性基础外观，并同步布局、命中、IME 和可选 Unix 系统语义。`set_skin` 可替换现有控件的配色、边框、圆角和文字装饰，不重写行为。尚无独立 widgets crate、任意绘制/新行为注册接口或完整跨平台组件集成。控件行为层不创建窗口或定时器。
+这些行为可由不同皮肤共享；当前 `aegle-widgets` 已将它们与 row/column、标签及单行/多行编辑器组合，使用统一 Theme 绘制中性基础外观，并同步布局、命中、IME 和可选 Unix 系统语义。`set_skin` 可替换现有控件的配色、边框、圆角和文字装饰，不重写行为；新行为与绘制通过实现 `aegle_ui::Control` 加入，见[不经 facade 使用控件库](developer/standalone.md#自定义控件)。控件行为层不创建窗口或定时器。
 
 ## 当前切换与数值控件
 
@@ -149,7 +149,7 @@ motion 提供标量、二维向量和颜色的补间、属性过渡、关键帧�
 | 风格 | 自定义 token、局部主题、状态颜色和系统偏好 |
 | 动效 | 过渡、显式动画、取消/完成与可选弹簧 |
 
-组件宏和小型示例见 [Rust API](rust-api.md)。一次 MD3 风格 Button/TextField/Switch 示例必须共同覆盖主题、动效、键盘、CJK、IME 和语义，不能只验证静态外观。
+组件库接口见 [Rust API](rust-api.md#组件库作者)，可执行的自定义控件见 `aegle-widgets/examples/custom_control.rs`。一次 MD3 风格 Button/TextField/Switch 示例必须共同覆盖主题、动效、键盘、CJK、IME 和语义，不能只验证静态外观。
 
 ## 呈现变换、惯性与图像特效
 

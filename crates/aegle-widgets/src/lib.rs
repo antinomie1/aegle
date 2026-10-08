@@ -10,6 +10,14 @@
 //! default skin (the pure painters in this crate), layout defaults and semantics;
 //! the engine owns the tree, input routing, focus, scrolling, motion and themes.
 //! Virtual lists, popups and radio groups plug into the engine with [`HOOKS`].
+//!
+//! Kind-specific style setters (hover, pressed, indicator, caret, font) exist
+//! only on the handles whose control accepts them. Features: `motion` forwards
+//! to `aegle-ui/motion` and adds the slider and progress value glide;
+//! `accessibility` forwards to `aegle-ui/accessibility` and adds the
+//! controls' roles and actions. The `standalone` example drives these controls
+//! without the `aegle` facade or a window; `custom_control` adds a control
+//! with its own behavior through the same `Control` trait.
 
 mod button;
 mod canvas;

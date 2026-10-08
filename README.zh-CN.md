@@ -73,6 +73,7 @@ fn main() -> Result<()> {
 
 - [API 指南](docs/developer/api.md)：依赖与 feature、应用与窗口、布局、样式、事件、动画、标记与嵌入宿主。
 - [控件参考](docs/developer/controls.md)：每个默认控件的用法与各状态截图。
+- [不经 facade 使用控件库](docs/developer/standalone.md)：只用 aegle-ui、aegle-widgets、aegle-theme、aegle-motion 接入自己的宿主，以及编写自定义控件。
 - [Crate、示例与构建组合](docs/crates-and-examples.md)、[设计索引](docs/README.md)、[实现状态](docs/implementation.md)。
 
 ## 许可证

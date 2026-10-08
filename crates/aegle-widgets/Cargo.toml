@@ -29,6 +29,12 @@ aegle-access = { workspace = true, optional = true }
 
 [dev-dependencies]
 aegle-text.workspace = true
+aegle-motion.workspace = true
+aegle-render-software = { workspace = true, features = ["text"] }
+
+[[example]]
+name = "standalone"
+required-features = ["motion"]
 
 [lints.rust]
 unsafe_code = "warn"

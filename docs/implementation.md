@@ -39,6 +39,8 @@ cargo run -p aegle-render-vulkan --example geometry --release -- target/aegle-vu
 cargo run -p aegle-render-vulkan --features text --example vulkan_text_scene --release -- target/aegle-vulkan-text.ppm
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
+cargo run -p aegle-widgets --features motion --example standalone --release
+cargo run -p aegle-widgets --example custom_control --release
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
@@ -49,6 +51,8 @@ cargo run -p aegle-platform-wayland --example editor --release
 hello 是 7 行 Rust 加 1 行文档注释的完整应用；hello_markup 为 3 行 Rust、4 行标记加 1 行文档注释。controls 与 markup_controls 用相同界面演示跨控件回调、CJK 编辑、主题和关闭窗口，均使用系统字体。layout 与三个 renderer 示例没有窗口。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
 
 文字示例将 Paragraph 保留在同一棵树的节点中，以 Taffy 测量回调换行，并按最终布局宽度录制字形。真实显示拉丁文字、中文、日文、韩文及裁剪，输出 `target/aegle-text.png`；不是可交互控件或 GUI Hello world。测试字体共约 21 KiB，仅供测试/示例，附 OFL 原始声明和重建脚本。
+
+`aegle-widgets` 的 standalone 示例不经 facade 和原生窗口，只用 aegle-ui、aegle-widgets、aegle-theme、aegle-motion 与软件 renderer：模拟点击、按 16 ms 推进弹簧动画到结束（约 1 s），写出 `target/aegle-standalone.ppm`，已目视检查焦点环、禁用按钮与位移后的 CJK 标签。custom_control 示例只依赖 aegle-ui 实现评分控件，指针与方向键的变化依次报告为 `[5, 4, 3, 1]`。
 
 编辑示例输出 `target/aegle-editor.png`：同一 Editor 先录制选区、预编辑和光标，再提交中文、录制结果，最后撤销/重做并检查已提交值。它以程序调用模拟输入，不代表已经连接真实输入法。
 

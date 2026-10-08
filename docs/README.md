@@ -8,6 +8,7 @@ Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示
 
 - [API 指南](developer/api.md)：依赖与 feature、应用与窗口、布局、样式、事件、动画、标记与嵌入宿主
 - [控件参考](developer/controls.md)：每个默认控件的用法与各状态截图
+- [不经 facade 使用控件库](developer/standalone.md)：只用 aegle-ui、aegle-widgets、aegle-theme、aegle-motion 的依赖、feature、宿主职责与自定义控件
 
 ## 阅读入口
 

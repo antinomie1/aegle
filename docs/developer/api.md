@@ -1,6 +1,6 @@
 # Aegle 开发者 API 指南
 
-本文面向用 Aegle 编写应用的开发者，按任务介绍当前已实现的接口。各控件的外观、状态和专属方法见[控件参考](controls.md)；设计契约与验证记录分别见 [Rust API 契约](../rust-api.md)、[标记语言](../markup.md)和[实现状态](../implementation.md)。
+本文面向用 Aegle 编写应用的开发者，按任务介绍当前已实现的接口；不使用 `aegle` facade、只用控件库时见[不经 facade 使用控件库](standalone.md)。各控件的外观、状态和专属方法见[控件参考](controls.md)；设计契约与验证记录分别见 [Rust API 契约](../rust-api.md)、[标记语言](../markup.md)和[实现状态](../implementation.md)。
 
 Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。几乎所有调用都返回 `aegle::Result<T>`（`Result<T, Box<dyn Error>>`）：句柄是弱引用，所指控件可能已被删除，此时操作返回 `DeadHandle` 而不是 panic。在回调里直接用 `?`，错误交给 `App::on_error`（见第 7 节），默认不会结束程序。
 
@@ -464,7 +464,7 @@ view.reload(&Program::load("ui/panel.aegle")?)?;   // 失败时保留旧界面
 
 ## 10. 嵌入自有宿主
 
-不使用 `App` 时，可以把无窗口 `Ui` 接到自己的窗口系统和 renderer（`default-features = false` 即可）：
+不使用 `App` 时，可以把无窗口 `Ui` 接到自己的窗口系统和 renderer（`default-features = false` 即可；也可以完全不依赖 facade，见[不经 facade 使用控件库](standalone.md)）：
 
 ```rust
 use aegle::{Theme, TextSystem, Ui, Size};

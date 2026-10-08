@@ -1,6 +1,6 @@
 # Rust 命令式 API
 
-状态：v0.1。基础 Ui/App、弱句柄、命令式控件、静态与动态标记编译及运行时加载已有源码；组件宏和完整扩展接口仍是设计目标，下文分别标注。验证记录见[实现状态](implementation.md)。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
+状态：v0.1。基础 Ui/App、弱句柄、命令式控件、静态与动态标记编译及运行时加载已有源码；第三方控件经 `Control` trait 接入；组件宏仍是设计目标，下文分别标注。验证记录见[实现状态](implementation.md)。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
 
 ## 完整 Hello world
 
@@ -33,7 +33,7 @@ button.on_click(move |_| {
 })?;
 ```
 
-控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。`parent.add(component)` 和生成的第三方组件函数仍是后续扩展目标。
+控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。第三方控件用 `Container::add` 加入，见[组件库作者](#组件库作者)。
 
 `on_click`、`on_change`、`on_submit`、`on_transition_end` 与 `on_frame` 追加处理器，同一事件按注册顺序执行；`clear_on_*` 移除该事件的全部处理器，并使已排队的调用失效。`Canvas::on_input` 与 `Window::on_key` 是唯一的行为/策略入口，再次设置会替换。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
 
@@ -98,7 +98,7 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 }
 ```
 
-需要随主题、禁用、按压和焦点改变外观时使用 `set_skin` 纯函数入口；可执行示例为 `cargo run -p aegle --example components`，规则见[组件样式](components-theme-animation.md)。当前仅修改已有控件外观，下文任意绘制/行为扩展仍为目标。
+需要随主题、禁用、按压和焦点改变外观时使用 `set_skin` 纯函数入口；可执行示例为 `cargo run -p aegle --example components`，规则见[组件样式](components-theme-animation.md)。需要新的行为或绘制时实现 `Control`，见[组件库作者](#组件库作者)。
 
 ## 目标接口族
 
@@ -128,7 +128,7 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 - `retheme(theme, local, root, style)` 在主题变化时更新跟随主题的布局；`local: LocalLayout` 标出应用设置过、需要保留的高度、内边距、间距和最小高度。
 - `paint` 与 `Hooks` 在 Ui 借用期间运行，只能使用传入的 `State`/上下文；此时调用 Ui 或句柄的方法返回 `ReentrantAccess`；钩子返回的错误原样传给宿主。
 
-组件宏（`#[aegle::component]`）、`control_button` 这类无皮肤行为构造器和运行时组件注册表仍是目标，尚未实现。
+可执行示例 `cargo run -p aegle-widgets --example custom_control` 只依赖 `aegle-ui` 实现一个带指针、键盘、语义动作与共享外观的评分控件；`aegle_ui::control` 重导出 `Input`、`Outcome`、`Action` 等类型，控件库无需直接依赖 `aegle-controls`。组件宏（`#[aegle::component]`）与运行时组件注册表仍是目标，尚未实现。
 
 ## 所有权与异步
 
