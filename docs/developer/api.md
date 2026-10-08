@@ -471,7 +471,7 @@ view.reload(&Program::load("ui/panel.aegle")?)?;   // 失败时保留旧界面
 不使用 `App` 时，可以把无窗口 `Ui` 接到自己的窗口系统和 renderer（`default-features = false` 即可；也可以完全不依赖 facade，见[不经 facade 使用控件库](standalone.md)）：
 
 ```rust
-use aegle::{Theme, TextSystem, Ui, Size};
+use aegle::{Size, TextSystem, Theme, Ui, Visit};
 use std::{cell::RefCell, rc::Rc};
 
 let fonts = Rc::new(RefCell::new(TextSystem::new()));   // 注册应用字体
@@ -481,8 +481,14 @@ ui.resize(Size::new(320.0, 200.0))?;
 if ui.refresh()? {
     // 保留上一帧像素的宿主可只重绘 damage 的矩形（None 为整窗口），成功呈现后清除
     let _damage = ui.damage()?;
-    ui.visit_scenes(|scene, transform, clip| {
-        // 交给 renderer：transform 为窗口逻辑平移，clip 为祖先裁剪（必须应用）
+    ui.visit_scenes(|visit| {
+        match visit {
+            // transform 为窗口逻辑平移，clip 为祖先裁剪（必须应用）
+            Visit::Scene { scene, transform, clip } => {}
+            // 组透明度/背景模糊的子树：交给 renderer 的 push_layer / pop_layer
+            Visit::PushLayer(layer) => {}
+            Visit::PopLayer => {}
+        }
         Ok(())
     })?;
     ui.clear_damage()?;

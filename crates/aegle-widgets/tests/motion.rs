@@ -96,7 +96,10 @@ fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
     assert_eq!(field.appearance()?.focus_width, 0.0);
     assert_eq!(field.presented_appearance()?.focus_width, 1.0);
     let mut fading_focus = false;
-    ui.visit_scenes(|scene, _, _| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene { scene, .. } = visit else {
+            return Ok(());
+        };
         fading_focus |= scene.commands().iter().any(|command| {
             matches!(command, aegle_scene::Command::Stroke { color, width, .. }
                 if *color == Theme::light().accent && *width == 1.0)
@@ -247,7 +250,10 @@ fn scale_and_rotation_move_scenes_and_hit_testing() -> Result {
     assert_eq!(ends.get(), 1);
     assert!(hover(58.0)?);
     let mut origin = None;
-    ui.visit_scenes(|_, transform, _| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene { transform, .. } = visit else {
+            return Ok(());
+        };
         let [a, _, _, d, e, _] = transform.coefficients();
         origin.get_or_insert((a, d, e));
         Ok(())

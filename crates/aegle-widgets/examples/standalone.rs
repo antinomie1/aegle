@@ -12,7 +12,7 @@ use aegle_motion::{Spring, Transition};
 use aegle_render_software::{Renderer, Surface};
 use aegle_text::{Blob, GenericFamily, TextSystem};
 use aegle_theme::Theme;
-use aegle_ui::{Modifiers, Point, PointerId, PointerKind, Result, Size, Ui};
+use aegle_ui::{Modifiers, Point, PointerId, PointerKind, Result, Size, Ui, Visit};
 use aegle_widgets::Widgets;
 
 fn main() -> Result {
@@ -79,7 +79,19 @@ fn draw(ui: &Ui, theme: Theme, path: &str) -> Result {
     let mut renderer = Renderer::default();
     {
         let mut frame = renderer.begin_frame(&mut surface, theme.background);
-        ui.visit_scenes(|scene, transform, clip| Ok(frame.draw_clipped(scene, transform, clip)?))?;
+        // Records, and the layers of translucent or blurring subtrees.
+        ui.visit_scenes(|visit| {
+            match visit {
+                Visit::Scene {
+                    scene,
+                    transform,
+                    clip,
+                } => frame.draw_clipped(scene, transform, clip)?,
+                Visit::PushLayer(layer) => frame.push_layer(&layer)?,
+                Visit::PopLayer => frame.pop_layer()?,
+            }
+            Ok(())
+        })?;
     }
     let mut ppm = format!("P6 {width} {height} 255\n").into_bytes();
     ppm.extend(surface.data().chunks(4).flat_map(|p| [p[0], p[1], p[2]]));

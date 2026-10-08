@@ -46,6 +46,8 @@ pub enum Error {
     Readback(wgpu::BufferAsyncError),
     /// An earlier draw failed; this frame cannot be submitted.
     FrameFailed,
+    /// A layer was popped without a matching push.
+    UnbalancedLayer,
     /// wgpu reported a validation, out-of-memory or internal error. The device
     /// state is unknown, so this renderer accepts no more work.
     Gpu(String),
@@ -84,6 +86,7 @@ impl fmt::Display for Error {
             Self::Readback(e) => write!(f, "wgpu readback: {e}"),
             Self::Allocation => f.write_str("wgpu host allocation failed"),
             Self::FrameFailed => f.write_str("cannot submit a failed wgpu frame"),
+            Self::UnbalancedLayer => f.write_str("wgpu layer pop has no matching push"),
             Self::Gpu(message) => write!(f, "wgpu error: {message}"),
             Self::DeviceLost(message) => write!(f, "wgpu device lost: {message}"),
         }

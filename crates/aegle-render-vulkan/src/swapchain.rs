@@ -8,6 +8,11 @@ pub(crate) struct Swapchain {
     loader: ash::khr::swapchain::Device,
     handle: vk::SwapchainKHR,
     views: Vec<vk::ImageView>,
+    /// The images, copied from by a backdrop blur when `readable`.
+    #[cfg_attr(not(feature = "text"), allow(dead_code))]
+    pub images: Vec<vk::Image>,
+    #[cfg_attr(not(feature = "text"), allow(dead_code))]
+    pub readable: bool,
     pub frames: Vec<vk::Framebuffer>,
     signals: Vec<vk::Semaphore>,
     acquire_fence: vk::Fence,
@@ -97,6 +102,15 @@ impl Swapchain {
                 "surface color format changed; recreate window renderer",
             ));
         }
+        // Backdrop blur copies from a direct swapchain image when it may.
+        let readable = caps
+            .supported_usage_flags
+            .contains(vk::ImageUsageFlags::TRANSFER_SRC);
+        let usage = if readable {
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC
+        } else {
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+        };
         let info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.handle)
             .min_image_count(count)
@@ -104,7 +118,7 @@ impl Swapchain {
             .image_color_space(format.color_space)
             .image_extent(extent)
             .image_array_layers(1)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_usage(usage)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(caps.current_transform)
             .composite_alpha(alpha)
@@ -115,6 +129,8 @@ impl Swapchain {
             loader: ash::khr::swapchain::Device::new(&device.instance, &device.raw),
             handle: vk::SwapchainKHR::null(),
             views: Vec::new(),
+            images: Vec::new(),
+            readable,
             frames: Vec::new(),
             signals: Vec::new(),
             acquire_fence: vk::Fence::null(),
@@ -133,6 +149,7 @@ impl Swapchain {
             this.acquire_fence = this
                 .raw
                 .create_fence(&vk::FenceCreateInfo::default(), None)?;
+            this.images.clone_from(&images);
             for image in images {
                 let view = this.raw.create_image_view(
                     &vk::ImageViewCreateInfo::default()

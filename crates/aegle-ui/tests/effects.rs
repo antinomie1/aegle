@@ -39,7 +39,10 @@ fn shadows_and_gradient_backgrounds() -> Result {
     let commands = |ui: &Ui| -> Result<Vec<Command>> {
         ui.refresh()?;
         let mut found = Vec::new();
-        ui.visit_scenes(|scene, _, _| {
+        ui.visit_scenes(|visit| {
+            let aegle_ui::Visit::Scene { scene, .. } = visit else {
+                return Ok(());
+            };
             if let [Command::Shadow { .. }, ..] = scene.commands() {
                 found = scene.commands().to_vec();
                 let gradients = scene.gradients();

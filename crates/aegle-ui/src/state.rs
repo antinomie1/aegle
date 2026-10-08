@@ -58,6 +58,8 @@ pub struct Element {
     pub xf: Option<aegle_scene::Affine>,
     /// Window area this node's records covered when last refreshed.
     pub painted: Option<Rect>,
+    /// Presented group opacity and backdrop blur of the subtree.
+    pub group: crate::group::Group,
     /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
     pub theme: Option<Rc<Theme>>,
     /// Whether `theme` was set on this node rather than inherited.
@@ -112,6 +114,7 @@ impl Element {
             spin: crate::Transform::default(),
             xf: None,
             painted: None,
+            group: crate::group::Group::NONE,
             theme: None,
             local_theme: false,
             direction: None,
@@ -120,35 +123,6 @@ impl Element {
             access_id: aegle_access::accesskit::NodeId(0),
         }
     }
-}
-
-/// Tree-wide behavior a control library adds to the engine, as plain function
-/// pointers so a hook can run while the engine is borrowed and call back into it.
-/// Install with [`State::install`]; every field is optional.
-#[derive(Default)]
-pub struct Hooks {
-    /// A key press before focus traversal; returns whether it was used.
-    pub key: Option<fn(&mut State, &aegle_controls::KeyInput<'_>) -> Result<bool>>,
-    /// A primary press at a window point, before it is routed.
-    pub press: Option<fn(&mut State, Point) -> Result>,
-    /// The overlay node covering a window point, which blocks hits below it.
-    pub overlay_at: Option<fn(&State, Point) -> Option<NodeId>>,
-    /// After geometry: moves overlays; returns whether anything moved.
-    pub place: Option<fn(&mut State) -> bool>,
-    /// A node was removed (called for it and each descendant, children first, after the
-    /// subtree is destroyed). The id is dead: use it only as the key of library data
-    /// and never query the tree with it.
-    pub removed: Option<fn(&mut State, NodeId)>,
-    /// A subtree was removed.
-    pub removed_after: Option<fn(&mut State) -> Result>,
-    /// After layout: measures realized content; returns whether anything moved.
-    pub measure: Option<fn(&mut State) -> Result<bool>>,
-    /// Before refresh, outside any engine borrow: builds or drops virtual content.
-    pub realize: Option<fn(&crate::Ui) -> Result<bool>>,
-    /// The hovered control changed (to `None` when the pointer left).
-    pub hover: Option<fn(&mut State, Option<NodeId>) -> Result>,
-    /// [`State::wake`] passed: delayed work such as showing a tooltip.
-    pub wake: Option<fn(&mut State, std::time::Instant) -> Result>,
 }
 
 /// The engine state behind a [`crate::Ui`], also the authoring surface for control
@@ -203,8 +177,8 @@ pub struct State {
     pub callbacks: HashMap<NodeId, Handler>,
     /// Per-library data keyed by type, see [`State::ext`].
     pub ext: HashMap<std::any::TypeId, Box<dyn std::any::Any>>,
-    /// Installed control-library hooks, see [`Hooks`].
-    pub hooks: Vec<&'static Hooks>,
+    /// Installed control-library hooks, see [`crate::Hooks`].
+    pub hooks: Vec<&'static crate::Hooks>,
     /// Visual decoration per node.
     pub decorations: HashMap<NodeId, Decoration>,
     /// Token overrides re-applied to the parent's theme whenever it changes.
@@ -234,6 +208,8 @@ pub struct State {
     pub input_time: std::time::Instant,
     /// Press counting and double-click handlers.
     pub clicks: crate::clicks::Clicks,
+    /// Nodes with a group effect and what their layer last drew.
+    pub groups: HashMap<NodeId, crate::group::Drawn>,
     /// The time of the frame being produced, see [`crate::Ui::run_frame`].
     pub frame_time: std::time::Instant,
     /// Controls that asked to repaint on the next frame.
@@ -242,7 +218,7 @@ pub struct State {
     pub damage: aegle_types::Region<aegle_types::Rect>,
     /// The whole window changed since the last present.
     pub damage_full: bool,
-    /// When a control library wants its [`Hooks::wake`] called; see [`crate::Ui::next_wake`].
+    /// When a control library wants its [`crate::Hooks::wake`] called; see [`crate::Ui::next_wake`].
     pub wake: Option<std::time::Instant>,
     /// Accessible descriptions, see [`crate::Node::set_accessible_description`].
     pub descriptions: HashMap<NodeId, String>,
@@ -424,6 +400,7 @@ impl State {
             self.kept.remove(&node);
             #[cfg(feature = "motion")]
             self.motion.forget(node);
+            self.groups.remove(&node);
         })?;
         self.pending.retain(|(id, _)| self.tree.get(*id).is_some());
         self.invalidate_structure();
@@ -442,7 +419,7 @@ impl State {
     }
 
     /// Installs a control library's hooks once; later calls with the same set do nothing.
-    pub fn install(&mut self, hooks: &'static Hooks) {
+    pub fn install(&mut self, hooks: &'static crate::Hooks) {
         if !self.hooks.iter().any(|h| std::ptr::eq(*h, hooks)) {
             self.hooks.push(hooks);
         }

@@ -156,4 +156,7 @@ motion 提供标量、二维向量和颜色的补间、属性过渡、关键帧�
 - `Node::set_transform(Transform { scale, rotation })`：scale 为有限正数，rotation 为弧度，以节点边界中心为原点，子树继承。它只是呈现层变换：布局、滚动范围和 `bounds` 不变；`visit_scenes` 给出的矩阵包含它，命中与指针局部坐标做逆映射，滚动视口的裁剪取变换后的外包框（旋转时是近似），IME 锚点取外包框，AccessKit 节点变换按中心旋转/缩放。有过渡策略时与位移共用补间和完成回调，减少动态效果时直接到目标。
 - `Ui::fling(position, velocity)` 与 `stop_fling`：速度单位为逻辑像素/秒，τ=325 ms 的指数衰减，经 `advance_animations` 推进（需要 motion），低于 10 px/s、视口不能再动、新的滚动或按下时结束。
 - `Node::set_shadow(Some(Shadow { offset, blur, spread, color }))` 在背景下绘制随圆角的柔和阴影，可超出节点边界，不影响布局与命中，仍受祖先裁剪；`set_background_gradient(Some(Gradient))` 以渐变代替背景色，坐标为节点尺寸的比例（x 按宽、y 按高，圆形半径按较长边），不绘制背景的控件忽略它。两者使用 scene 的原生渐变与阴影命令，软件、Vulkan 与 wgpu 结果一致；没有过渡，也还没有标记写法。
+- `Node::set_opacity(0..=1)` 把子树作为一张图像以该不透明度绘制：重叠的后代不会互相透出，这一点与半透明颜色不同。它不改变命中、焦点与无障碍；为 0 时不绘制。有 `TransitionProperty::Opacity` 的过渡策略时（或 `Animate::Opacity` 动画）平滑变化，`opacity()` 读取目标值。`set_backdrop_blur(σ)` 先把节点圆角边界内已绘制的内容做标准差为 σ 逻辑像素的高斯模糊，再在其上绘制节点，模糊结果也按节点不透明度绘制；只模糊本窗口画出的内容，不模糊透明窗口后的桌面。两者都经离屏层实现，软件、Vulkan 与 wgpu（后两者需 `text`）结果一致，目前也没有标记写法。
+
+<img src="developer/images/layers.png" width="450" alt="半透明颜色的重叠处互相透出；组透明度 0.5 的重叠处不透出；毛玻璃面板模糊其下的条纹">
 - `aegle-image/effects`（facade 默认启用）：`linear_gradient`、`radial_gradient`、`shadow` 生成共享 `Image`，颜色在预乘线性光中插值；用 `SceneBuilder::image` 或 `ImageView` 绘制，所有后端复用既有图像路径。

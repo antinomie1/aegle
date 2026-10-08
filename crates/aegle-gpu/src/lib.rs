@@ -11,6 +11,7 @@
 //! are tested once and behave identically on every backend.
 mod effects;
 mod error;
+mod layer;
 mod records;
 mod shelf;
 #[cfg(feature = "vector")]
@@ -18,6 +19,10 @@ mod vector;
 mod walk;
 
 pub use error::{Error, Result};
+pub use layer::{
+    BLUR_WGSL, BlurPlan, LayerPlan, Pixels, composite, empty, pixels, plan_blur, plan_layer,
+    shifted,
+};
 pub use records::{
     Clip, MAX_PRIMITIVES, NO_CLIP, Primitive, Recording, State, Textured, bounds, viewport, visible,
 };

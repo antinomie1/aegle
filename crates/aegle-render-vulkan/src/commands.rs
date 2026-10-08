@@ -135,53 +135,143 @@ impl Commands {
                     self.raw.cmd_end_render_pass(self.buffer);
                     continue;
                 }
-                // Adjacent records sharing a pipeline and atlas page form one draw.
-                let key = |primitive: &aegle_gpu::Primitive| {
-                    (primitive.header[1] != 0, primitive.header[2])
-                };
-                let primitives = &recording.primitives;
-                let mut first = 0;
-                #[cfg(feature = "text")]
-                let mut current = (false, u32::MAX);
-                while first < primitives.len() {
-                    let batch = key(&primitives[first]);
-                    let count = primitives[first..]
-                        .iter()
-                        .take_while(|primitive| key(primitive) == batch)
-                        .count();
+                self.records(
+                    pipeline,
+                    recording,
                     #[cfg(feature = "text")]
-                    {
-                        if current.0 != batch.0 {
-                            self.raw.cmd_bind_pipeline(
-                                self.buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
-                                if batch.0 {
-                                    text.pipeline
-                                } else {
-                                    pipeline.pipelines[0]
-                                },
-                            );
-                            current.0 = batch.0;
-                        }
-                        if batch.0 && current.1 != batch.1 {
-                            self.raw.cmd_bind_descriptor_sets(
-                                self.buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
-                                text.layout,
-                                1,
-                                &[text.set(batch.1)],
-                                &[],
-                            );
-                            current.1 = batch.1;
-                        }
-                    }
-                    self.raw
-                        .cmd_draw(self.buffer, 6, count as u32, 0, first as u32);
-                    first += count;
-                }
+                    text,
+                );
                 self.raw.cmd_end_render_pass(self.buffer);
             }
         }
+    }
+
+    /// Draws the records as instanced batches into the render pass begun on
+    /// this command buffer, with the geometry pipeline bound.
+    fn records(
+        &self,
+        pipeline: &Pipeline,
+        recording: &Recording,
+        #[cfg(feature = "text")] text: &crate::text_pipeline::TextPipeline,
+    ) {
+        #[cfg(not(feature = "text"))]
+        let _ = pipeline;
+        // SAFETY: as for `render`: the command buffer records inside a render
+        // pass whose pipelines and descriptor sets are bound and current.
+        unsafe {
+            // Adjacent records sharing a pipeline and atlas page form one draw.
+            let key =
+                |primitive: &aegle_gpu::Primitive| (primitive.header[1] != 0, primitive.header[2]);
+            let primitives = &recording.primitives;
+            let mut first = 0;
+            #[cfg(feature = "text")]
+            let mut current = (false, u32::MAX);
+            while first < primitives.len() {
+                let batch = key(&primitives[first]);
+                let count = primitives[first..]
+                    .iter()
+                    .take_while(|primitive| key(primitive) == batch)
+                    .count();
+                #[cfg(feature = "text")]
+                {
+                    if current.0 != batch.0 {
+                        self.raw.cmd_bind_pipeline(
+                            self.buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            if batch.0 {
+                                text.pipeline
+                            } else {
+                                pipeline.pipelines[0]
+                            },
+                        );
+                        current.0 = batch.0;
+                    }
+                    if batch.0 && current.1 != batch.1 {
+                        self.raw.cmd_bind_descriptor_sets(
+                            self.buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            text.layout,
+                            1,
+                            &[text.set(batch.1)],
+                            &[],
+                        );
+                        current.1 = batch.1;
+                    }
+                }
+                self.raw
+                    .cmd_draw(self.buffer, 6, count as u32, 0, first as u32);
+                first += count;
+            }
+        }
+    }
+
+    #[cfg(feature = "text")]
+    /// Draws the records into a layer image's framebuffer of `extent`,
+    /// clearing it to transparent unless `resume`.
+    pub fn render_layer(
+        &self,
+        pipeline: &Pipeline,
+        recording: &Recording,
+        framebuffer: vk::Framebuffer,
+        extent: [u32; 2],
+        resume: bool,
+        #[cfg(feature = "text")] text: &crate::text_pipeline::TextPipeline,
+    ) {
+        let area = vk::Rect2D {
+            offset: vk::Offset2D::default(),
+            extent: vk::Extent2D {
+                width: extent[0],
+                height: extent[1],
+            },
+        };
+        let viewport = [vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: extent[0] as f32,
+            height: extent[1] as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        }];
+        let values = [vk::ClearValue {
+            color: vk::ClearColorValue { float32: [0.0; 4] },
+        }];
+        // SAFETY: the framebuffer was made for the layer passes, which are
+        // compatible with the geometry and text pipelines; all objects stay
+        // alive until this command buffer's fence signals.
+        unsafe {
+            self.raw.cmd_set_viewport(self.buffer, 0, &viewport);
+            self.raw.cmd_begin_render_pass(
+                self.buffer,
+                &vk::RenderPassBeginInfo::default()
+                    .render_pass(pipeline.layer_passes[usize::from(resume)])
+                    .framebuffer(framebuffer)
+                    .render_area(area)
+                    .clear_values(&values),
+                vk::SubpassContents::INLINE,
+            );
+            self.raw.cmd_bind_pipeline(
+                self.buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline.pipelines[0],
+            );
+            self.raw.cmd_bind_descriptor_sets(
+                self.buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline.layouts[0],
+                0,
+                &[pipeline.sets[0]],
+                &[],
+            );
+            self.raw.cmd_set_scissor(self.buffer, 0, &[area]);
+        }
+        self.records(
+            pipeline,
+            recording,
+            #[cfg(feature = "text")]
+            text,
+        );
+        // SAFETY: ends the pass begun above.
+        unsafe { self.raw.cmd_end_render_pass(self.buffer) };
     }
 
     pub fn copy(&self, target: &Target, buffer: vk::Buffer, bytes: u64) {

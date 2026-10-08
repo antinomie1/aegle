@@ -16,6 +16,8 @@ pub enum Animate {
     Scale(Animation<f32>),
     /// The rotation of `Node::set_transform`, in radians.
     Rotation(Animation<f32>),
+    /// The group opacity of `Node::set_opacity`, clamped to `0..=1`.
+    Opacity(Animation<f32>),
 }
 
 impl Node {
@@ -74,6 +76,7 @@ impl Node {
             state.motion.tracks.remove(&id);
             state.snap_offset(id);
             state.snap_spin(id);
+            state.snap_opacity(id);
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             state.tokens.unbind(id, TokenSlot::is_transition);
             Ok(())
@@ -98,7 +101,7 @@ impl Node {
                 track.presented = Some(target);
             }
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            let moved = state.snap_offset(id);
+            let moved = state.snap_offset(id) | state.snap_opacity(id);
             if state.snap_spin(id) || moved || painting {
                 state.complete(id);
             }
@@ -137,6 +140,7 @@ impl Node {
             state.motion.moving.remove(&id);
             state.motion.scaling.remove(&id);
             state.motion.rotating.remove(&id);
+            state.motion.fading.remove(&id);
             let value = state.presented_appearance(id)?;
             let control = &state.tree.get(id).unwrap().context.control;
             let scope = crate::control::StyleScope::of(control.kind());
@@ -202,7 +206,7 @@ impl Node {
             if timing.is_some() && !state.motion.tracks.contains_key(&id) {
                 // A policy-free control animates from what it shows now.
                 let presented = Some(state.appearance(id)?);
-                let timings = [None; 4];
+                let timings = [None; 5];
                 state.motion.tracks.insert(id, Track { timings, presented });
             }
             state.motion.paint_once.insert(id, timing);
@@ -219,7 +223,7 @@ impl Node {
     /// Starts an explicit animation of one property from its first
     /// keyframe, replacing a running transition or animation of it. When it
     /// finishes the property rests at its [`Animation::target`], which also
-    /// becomes the logical value (`offset`, `transform`). It shares the
+    /// becomes the logical value (`offset`, `transform`, `opacity`). It shares the
     /// transition lifecycle: [`Self::is_animating`], [`Self::finish_transition`],
     /// [`Self::cancel_transition`] and [`Self::on_transition_end`]. Reduced
     /// motion and hidden controls go straight to the target; a
@@ -249,12 +253,18 @@ impl Node {
                     state.set_spin(id, spin);
                     state.motion.rotating.insert(id, Running::new(curve));
                 }
+                Animate::Opacity(curve) => {
+                    element.group.opacity = curve.sample(Duration::ZERO).clamp(0.0, 1.0);
+                    state.groups.entry(id).or_default();
+                    state.motion.fading.insert(id, Running::new(curve));
+                }
             }
             state.geometry_dirty = true;
             state.repaint = true;
             if state.motion.reduced {
                 state.snap_offset(id);
                 state.snap_spin(id);
+                state.snap_opacity(id);
                 state.complete(id);
             }
             Ok(())
@@ -326,6 +336,11 @@ impl Ui {
                 state.snap_spin(id);
                 state.complete(id);
             }
+            let fading: Vec<_> = state.motion.fading.keys().copied().collect();
+            for id in fading {
+                state.snap_opacity(id);
+                state.complete(id);
+            }
             let repaint = state.refresh()?;
             // Keep the snapped frame pending for the host's next presentation.
             state.repaint |= repaint;
@@ -344,11 +359,11 @@ impl State {
     ) -> Result {
         let current = self.presented_appearance(id)?;
         let track = self.motion.tracks.entry(id).or_insert(Track {
-            timings: [None; 4],
+            timings: [None; 5],
             presented: Some(current),
         });
         track.timings[property as usize] = timing;
-        if track.timings == [None; 4] {
+        if track.timings == [None; 5] {
             self.motion.tracks.remove(&id);
         }
         match property {
@@ -370,6 +385,9 @@ impl State {
                     spin.rotation = target.rotation;
                 }
                 self.set_spin(id, spin);
+            }
+            TransitionProperty::Opacity if timing.is_none() => {
+                self.snap_opacity(id);
             }
             _ => {}
         }
@@ -403,7 +421,7 @@ impl State {
                 .motion
                 .tracks
                 .get(&id)
-                .is_some_and(|t| t.timings == [None; 4])
+                .is_some_and(|t| t.timings == [None; 5])
         {
             self.motion.tracks.remove(&id);
         }

@@ -10,7 +10,7 @@ mod composite;
 
 use aegle::{
     Container, Modifiers, Point, PointerId, PointerKind, Result, Selection, Size, TextSystem,
-    Theme, Transition, Ui, Widgets,
+    Theme, Transition, Ui, Visit, Widgets,
     scene::{Affine, Color, FillRule, Image, PathBuilder, Rect, Stroke},
 };
 use aegle_render_software::{Renderer, Surface};
@@ -90,23 +90,37 @@ fn gallery(
     for (index, ui) in uis.iter().enumerate() {
         let x = index as f32 * cell.width;
         let place = Affine::translation(x, 0.0)?.then(Affine::scale(SCALE, SCALE)?)?;
-        ui.visit_scenes(|scene, transform, clip| {
-            // Keep each state inside its own cell, together with any scroll clip.
+        // Keep each state inside its own cell, together with any scroll clip.
+        let cell_clip = |clip: Option<Rect>| {
             let clip = clip.unwrap_or(Rect::new(0.0, 0.0, cell.width, cell.height));
             let left = clip.origin.x.max(0.0);
             let right = (clip.origin.x + clip.size.width).min(cell.width);
             let top = clip.origin.y.max(0.0);
             let bottom = (clip.origin.y + clip.size.height).min(cell.height);
-            let clip = Rect::new(
+            Rect::new(
                 (x + left) * SCALE,
                 top * SCALE,
                 (right - left).max(0.0) * SCALE,
                 (bottom - top).max(0.0) * SCALE,
-            );
-            frame.draw_clipped(scene, transform.then(place)?, Some(clip))?;
+            )
+        };
+        ui.visit_scenes(|visit| {
+            match visit {
+                Visit::Scene {
+                    scene,
+                    transform,
+                    clip,
+                } => frame.draw_clipped(scene, transform.then(place)?, Some(cell_clip(clip)))?,
+                Visit::PushLayer(layer) => {
+                    let clip = cell_clip(layer.clip());
+                    frame.push_layer(&layer.then(place)?.with_clip(Some(clip))?)?
+                }
+                Visit::PopLayer => frame.pop_layer()?,
+            }
             Ok(())
         })?;
     }
+    drop(frame);
     let mut encoder = png::Encoder::new(BufWriter::new(File::create(path)?), width, height);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);

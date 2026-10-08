@@ -20,6 +20,8 @@ mod error;
 mod external;
 mod frame;
 mod gpu;
+#[cfg(feature = "text")]
+mod layer;
 mod renderer;
 #[cfg(feature = "text")]
 mod text;

@@ -38,3 +38,7 @@ missing_docs = "warn"
 [[example]]
 name = "scene"
 required-features = ["text"]
+
+[[test]]
+name = "layers"
+required-features = ["text"]

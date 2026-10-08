@@ -10,6 +10,7 @@
 mod blend;
 mod bounds;
 mod effects;
+mod layer;
 mod path;
 mod raster;
 mod shape;
@@ -43,6 +44,15 @@ pub enum RenderError {
     Coordinates,
     /// The scene requests a capability not enabled in this renderer build.
     UnsupportedCommand,
+    /// Open layers exceed the effect budget.
+    EffectBudget {
+        /// Bytes the open layers would hold.
+        required: usize,
+        /// Configured effect limit in bytes.
+        limit: usize,
+    },
+    /// A layer was popped without a matching push.
+    UnbalancedLayer,
     /// Glyph generation or its resource budget failed.
     #[cfg(feature = "text")]
     Glyph(aegle_glyph::GlyphError),
@@ -61,6 +71,13 @@ impl std::fmt::Display for RenderError {
             Self::UnsupportedCommand => {
                 f.write_str("scene capability is not enabled in this renderer")
             }
+            Self::EffectBudget { required, limit } => {
+                write!(
+                    f,
+                    "layers require {required} bytes; effect limit is {limit}"
+                )
+            }
+            Self::UnbalancedLayer => f.write_str("layer pop has no matching push"),
             #[cfg(feature = "text")]
             Self::Glyph(error) => error.fmt(f),
         }

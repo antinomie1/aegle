@@ -163,6 +163,16 @@ impl crate::text::Text {
         Ok(())
     }
 
+    /// Binds an internal image (a layer or a blurred backdrop) to a free
+    /// reserved set, or `None` when every set is taken this submission.
+    pub(crate) fn bind_internal(&mut self, view: vk::ImageView) -> Option<u32> {
+        let slot = self.textures.iter().position(Option::is_none)?;
+        // Registered ids count up from zero and never reach this marker.
+        self.textures[slot] = Some(TextureId(u64::MAX));
+        self.pipeline.update(self.external_set(slot), view);
+        Some(self.external_set(slot))
+    }
+
     /// Releases this frame's texture bindings; called after the frame's fence.
     pub(crate) fn begin_textures(&mut self) {
         self.textures.fill(None);

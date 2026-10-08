@@ -63,7 +63,13 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
         paints,
         "scroll rebuilt a child's record"
     );
-    ui.visit_scenes(|_, transform, clip| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene {
+            transform, clip, ..
+        } = visit
+        else {
+            return Ok(());
+        };
         if let Some(clip) = clip {
             assert!(clip.origin.y >= 0.0 && clip.origin.y + clip.size.height <= 100.0);
             assert!(transform.coefficients().iter().all(|n| n.is_finite()));
@@ -194,7 +200,10 @@ fn overlay_scrollbar_drags_above_children_without_activating_them() -> Result {
     ui.resize(Size::new(240.0, 240.0))?;
     ui.refresh()?;
     let mut last = 0;
-    ui.visit_scenes(|scene, _, _| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene { scene, .. } = visit else {
+            return Ok(());
+        };
         last = scene.commands().len();
         Ok(())
     })?;
@@ -251,7 +260,10 @@ fn overflowing_viewports_reserve_the_bar_and_draw_their_border_last() -> Result 
     // The border is the first record of the viewport's overlay, drawn after every
     // child, so content scrolled under the edge cannot cover it.
     let mut last = None;
-    ui.visit_scenes(|scene, _, _| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene { scene, .. } = visit else {
+            return Ok(());
+        };
         last = scene.commands().first().copied();
         Ok(())
     })?;

@@ -15,6 +15,7 @@ extern crate alloc;
 
 mod builder;
 mod geometry;
+mod layer;
 mod paint;
 mod resource;
 #[cfg(feature = "text")]
@@ -23,6 +24,7 @@ mod text;
 pub use aegle_types::{Color, Point, Rect};
 pub use builder::{Scene, SceneBuilder};
 pub use geometry::{Affine, RoundedRect};
+pub use layer::{BlurBox, Layer, blur_boxes, blur_reach};
 pub use paint::{Gradient, GradientGeometry, GradientStop};
 pub use resource::{FillRule, Image, LineCap, LineJoin, Path, PathBuilder, Stroke, Verb};
 #[cfg(feature = "text")]

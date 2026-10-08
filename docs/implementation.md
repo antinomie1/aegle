@@ -8,7 +8,7 @@
 - aegle-types：no_std 几何与紧凑 RGBA 颜色，无第三方依赖。
 - aegle-core：代数 ID、可复用槽位、保留树、索引子节点、结构变更与三通道失效，另有路由快照、默认动作控制及策略化焦点遍历；无第三方依赖。叶节点不分配子节点数组，删除不递归。
 - aegle-layout：Taffy 0.14.0 直接适配同一棵保留树，无第二份拓扑；共享默认样式、测量缓存、Flex/Block、可选 Grid。它不依赖字体、窗口或 renderer。
-- aegle-scene：no_std + alloc 的局部绘制记录；实色矩形、圆角、居中边框、共享 RGBA 图像、填充/描边路径、仿射变换、嵌套裁剪。可选 text 保存定位字形、变体坐标与共享字体句柄，不依赖排版器或栅格器。
+- aegle-scene：no_std + alloc 的局部绘制记录；实色矩形、圆角、居中边框、共享 RGBA 图像、填充/描边路径、仿射变换、嵌套裁剪，以及供 renderer 使用的图层描述 `Layer` 与模糊盒计划。可选 text 保存定位字形、变体坐标与共享字体句柄，不依赖排版器或栅格器。
 - aegle-text：复用 Parley/Fontique 的 Unicode shaping、字体选择、回退、换行与定位；Paragraph 保留文字和排版结果，宽度变化只重排，颜色覆盖无需重新 shaping。显式字体为默认，system-fonts、text-dictionary、text-a11y、scene 独立选用；缺字与无可用字体分别报告。
 - Editor：复用同一 TextSystem 的 Parley PlainEditor，提供单/多行、选择/命中、视觉移动、grapheme 删除、精确 UTF-8 替换、只读、组合输入模型及有界差量撤销/重做。预编辑只保留被替换片段，提交值不随预编辑改变；取消恢复原选区。文字、装饰和候选区域来自同一布局。密码模式只排版等量 `•`，明文另存且不记录历史、拒绝 IME 组合。apply_ime 在完整验证后应用删除/提交/预编辑事务，删除与提交合成一次撤销；surrounding 无分配地借出有界周边文字。编辑、宽度和样式改变目前仍会重新 shaping，不宣称增量编辑引擎。
 - aegle-controls：共享无分配 Range、Toggle、Slider 和无皮肤 Button 的键盘/指针/语义激活、capture 和取消状态；可选 text 提供复用 Editor 的 TextField。宿主拥有树、命中和焦点；controls 默认只依赖 types，不依赖窗口或 renderer。
@@ -16,6 +16,7 @@
 - aegle-glyph：复用 Swash/Skrifa，按需生成灰度字形与 COLRv0/嵌入位图，LRU 同时约束图像字节和条目数；缓存不持有字体文件。PNG 位图使用有解码预算的 png crate；库不内嵌字体。
 - aegle-render-software：借用 RGBA8 缓冲，tiny-skia 负责抗锯齿覆盖率，线性光 SourceOver 合成器处理透明颜色。默认仅几何；可选 text 接同一 Scene 的字形、变换和裁剪。支持均匀缩放的四分之一像素定位及任意可逆仿射变换的双线性采样，无裁剪文字无需面大小的 mask。
 - aegle-render-vulkan：独立 Vulkan 1.1 离屏绘制，复用 Scene；GPU 绘制矩形/圆角/居中边框、仿射变换及最多八层裁剪，可选 text 接有界按需灰度/彩色字形图集。RGBA16F 线性混合后由第二遍 GPU 编码预乘 sRGB RGBA8；显式读回、有界设备/记录分配和单次在途提交。已验证硬件与软件 ICD；可选 window 已提供原生 swapchain，App 可显式选择。
+- 图层：`Node::set_opacity`（可过渡）与 `set_backdrop_blur` 让子树经 `Visit::PushLayer`/`PopLayer` 在离屏层中绘制，软件、Vulkan 与 wgpu 的 `Frame::push_layer`/`pop_layer` 实现同一合成与三次盒式模糊（见[平台与绘制](platform-rendering.md#图层)）；GPU 后端需要 `text`。组效果损伤整个子树，背景模糊在损伤触及采样区时整体重绘。原生 App 与 gallery 宿主已转发图层。
 
 - aegle-platform-wayland：一个连接上的多个 xdg-shell 窗口与可选 wlr layer-shell 表面、整数缩放及 wp-fractional-scale（经 wp-viewporter 映射）、事件等待、键盘/指针输入、`wl_touch` 触摸（`Event::Touch`，App 交给 `Ui::touch`）、光标、text-input-v3 与按 seat 的非阻塞剪贴板；软件绘制直接借用最多两块有界 SHM 映射。平台不依赖文字/scene/renderer，原生示例把这些模块接到同一控件树和 Editor。外观偏好经内置最小 D-Bus 客户端读取 desktop portal 并监听变化；只请求服务端装饰，compositor 不提供时没有客户端装饰；gpu feature 提供原生句柄租约与共享帧门控。
 - aegle-platform-win32：原生多窗口、消息等待、Unicode/指针输入、DPI、IMM 兼容组合、`CF_UNICODETEXT` 剪贴板、注册表/SPI 外观偏好与 `WM_SETTINGCHANGE` 更新、GDI 软件与 GPU HWND 租约；已在 Windows 11 上运行，执行证据见本页末尾，TSF/重转换/触屏键盘及硬件 GPU、ARM64 验收未完成。
@@ -67,6 +68,7 @@ AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-platform-wayland --tests -- --
 
   需自行设定隔离的 `XDG_RUNTIME_DIR` 与 `WAYLAND_DISPLAY`，compositor 须提供 input-method-v2、virtual-keyboard-v1；不得使用用户正在使用的输入法会话。
 - Vulkan：离屏几何与文字场景在 RX 硬件上运行并与软件像素比较（允许 3 级通道量化误差），窗口渲染器与共享设备由 native 集成测试覆盖。
+- 图层：`aegle-render-software/tests/layers.rs` 以像素检查组透明度、嵌套与背景模糊；Vulkan 与 wgpu 的 `tests/layers.rs` 在 RX 6800 XT（RADV）上与软件结果比较，平均通道差 0.128，Vulkan 另在 lavapipe 上为 0.104，并在 Khronos 验证层（含同步验证）下无报告；`aegle-ui/tests/layers.rs` 覆盖访问顺序、不透明度过渡与损伤。这些都是离屏执行：直接写 swapchain 的背景模糊（复制 swapchain 图像）、Windows 上的图层均未在窗口中运行过。
 - 标记：编译型与运行时加载由 facade 的 `tests/paths.rs` 用同一文档对照绘制记录与过渡时序；解析器对超深表达式、字段链与 `list<` 嵌套返回错误而不溢出栈。
 - Windows（2026-10-08，Windows 11 Pro for Workstations 26100，rustc 1.99.0 `x86_64-pc-windows-gnu`，无 GPU 的 Microsoft Basic Display Adapter 虚拟机）：工作区（不含 Wayland crate）`cargo fmt --check`、默认与 `--all-features` 的 `cargo clippy --all-targets -D warnings`、`cargo test` 及 `cargo doc -D warnings` 均通过；facade 的 Windows 组合（含 vulkan、wgpu、windows-accessibility 与全部可选格式）clippy 无告警。下列 opt-in 测试在真实桌面会话中执行通过：
   - `aegle-platform-win32` `native`：窗口创建/隐藏到显示、GDI 呈现、UTF-16 surrogate 文字、IMM 上下文、已发布输入不被动画饿死、WM_SIZE 几何、逻辑关闭到最后租约释放时 DestroyWindow、`CF_UNICODETEXT` 往返与跨线程唤醒。
@@ -100,7 +102,7 @@ WGPU_BACKEND=dx12 cargo test -p aegle-render-wgpu --all-features -- --ignored --
 ## 剩余工作
 
 - 平台验收：Windows 硬件 Vulkan/DX12 驱动与 ARM64、日文/韩文输入法与候选窗位置、讲述人/NVDA、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更；fcitx/IBus 真人候选窗与真实屏幕阅读器验收。
-- 组件/绘制：组透明度与区域模糊（需要离屏层）；阴影与渐变的标记写法；菜单的快捷键提示。
+- 组件/绘制：阴影、渐变、组透明度与背景模糊的标记写法；菜单的快捷键提示；窗口中验证 swapchain 上的背景模糊。
 - 桌面集成：拖放（Wayland `wl_data_device`、Win32 OLE）、文件选择对话框（portal FileChooser、Win32 `IFileDialog`）、托盘、通知与全局快捷键。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制。
 - 工程：多 compositor/GPU 与嵌入式完整资源测量；在 CI 上确认 Linux MSRV 与 Wayland 作业。现有桌面样本不能替代这些证据。

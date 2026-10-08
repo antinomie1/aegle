@@ -43,7 +43,7 @@ fn main() -> Result {
     ui.root().button("Save")?.on_click(move |_| status.set_text("Saved"))?;
     ui.resize(Size::new(240.0, 100.0))?;
     ui.refresh()?;
-    ui.visit_scenes(|_scene, _transform, _clip| Ok(()))?; // 交给 renderer
+    ui.visit_scenes(|_visit| Ok(()))?; // Scene / PushLayer / PopLayer 交给 renderer
     Ok(())
 }
 ```
@@ -64,7 +64,7 @@ cargo run -p aegle-widgets --features motion --example standalone
 | 平台输入 | `pointer`/`pointer_at`、`key`/`key_at`、`wheel`、`touch`、`ime`、`window_focus`；完整列表见 [API 指南 §10](api.md#10-嵌入自有宿主) |
 | 每批输入之后 | `ui.dispatch_callbacks()`：运行控件事件处理器；出错时返回第一个错误，处理器保留 |
 | 每帧 | 若 `ui.wants_frames()`，`ui.run_frame(Instant)`；若 `ui.has_animations()`，`ui.advance_animations(单调时间)` |
-| 绘制前 | `ui.refresh()` 返回是否有像素变化；变化时用 `visit_scenes` 绘制（可只重绘 `damage()`，呈现后 `clear_damage()`） |
+| 绘制前 | `ui.refresh()` 返回是否有像素变化；变化时用 `visit_scenes` 绘制（`Visit::Scene` 画记录，`PushLayer`/`PopLayer` 对应 renderer 的图层）（可只重绘 `damage()`，呈现后 `clear_damage()`） |
 | 平台协作 | `take_ime_state` 同步输入法，`take_clipboard`/`paste` 处理剪贴板，`cursor()` 设置指针形状 |
 | 等待 | 没有 `has_animations`、`wants_frames`、`has_pending_callbacks` 时睡眠，最迟在 `next_wake()` 醒来调用 `ui.wake(now)` |
 

@@ -82,7 +82,10 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
     slider.set_height(Some(1.0))?;
     ui.refresh()?;
     let mut tiny_focus = false;
-    ui.visit_scenes(|scene, _, _| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene { scene, .. } = visit else {
+            return Ok(());
+        };
         tiny_focus |= scene.commands().iter().any(|command| matches!(command,
             aegle_scene::Command::Stroke { shape, color, width }
                 if *color == Theme::light().accent && *width == 0.5 && shape.rect().size.height == 0.5));

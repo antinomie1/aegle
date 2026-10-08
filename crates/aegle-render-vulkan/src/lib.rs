@@ -25,6 +25,8 @@ mod error;
 #[cfg(feature = "text")]
 mod external;
 mod frame;
+#[cfg(feature = "text")]
+mod layer;
 mod memory;
 mod pipeline;
 mod renderer;

@@ -42,7 +42,45 @@ impl<'a> Frame<'a> {
         if self.failed {
             return Err(Error::FrameFailed);
         }
+        #[cfg(feature = "text")]
+        let result = self.renderer.walk_layered(scene, transform, clip);
+        #[cfg(not(feature = "text"))]
         let result = self.renderer.walk(scene, transform, clip);
+        self.failed = result.is_err();
+        result
+    }
+
+    /// Opens a layer: until the matching [`Self::pop_layer`], draws render into
+    /// a linear image covering the layer's extent, composited on pop at its
+    /// opacity. A positive backdrop blur first draws the blur of what is
+    /// already drawn under the layer's shape over it. Needs `text`, whose
+    /// image pipeline composites layers; without it this fails with
+    /// [`Error::UnsupportedCommand`]. Layers still open when the frame
+    /// finishes are composited first.
+    pub fn push_layer(&mut self, layer: &aegle_scene::Layer) -> Result {
+        if self.failed {
+            return Err(Error::FrameFailed);
+        }
+        #[cfg(feature = "text")]
+        let result = self.renderer.push_layer(layer);
+        #[cfg(not(feature = "text"))]
+        let result = {
+            let _ = layer;
+            Err(Error::UnsupportedCommand)
+        };
+        self.failed = result.is_err();
+        result
+    }
+
+    /// Composites the innermost open layer.
+    pub fn pop_layer(&mut self) -> Result {
+        if self.failed {
+            return Err(Error::FrameFailed);
+        }
+        #[cfg(feature = "text")]
+        let result = self.renderer.pop_layer();
+        #[cfg(not(feature = "text"))]
+        let result = Err(Error::UnbalancedLayer);
         self.failed = result.is_err();
         result
     }
@@ -53,6 +91,8 @@ impl<'a> Frame<'a> {
         if self.failed {
             return Err(Error::FrameFailed);
         }
+        #[cfg(feature = "text")]
+        self.renderer.close_layers()?;
         match self.presentation {
             Presentation::Offscreen => self.renderer.finish(None),
             #[cfg(feature = "window")]
@@ -74,7 +114,7 @@ impl Renderer {
         Ok(())
     }
 
-    fn walk(&mut self, scene: &Scene, transform: Affine, clip: Option<Rect>) -> Result {
+    pub(crate) fn walk(&mut self, scene: &Scene, transform: Affine, clip: Option<Rect>) -> Result {
         let mut walker = Walker::new(
             scene,
             transform,

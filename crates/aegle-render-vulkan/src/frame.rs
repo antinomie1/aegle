@@ -38,10 +38,22 @@ impl Frame<'_> {
         if self.failed {
             return Err(Error::FrameFailed);
         }
-        let extent = self.extent();
         let (renderer, clear) = (&mut *self.renderer, self.clear);
-        let view = viewport(extent[0], extent[1], false);
         let result = (|| -> Result {
+            #[cfg(feature = "text")]
+            let (transform, clip, extent) = {
+                let (transform, clip, extent, hidden) = renderer.placement(transform, clip)?;
+                if hidden {
+                    return Ok(());
+                }
+                (transform, clip, extent)
+            };
+            #[cfg(not(feature = "text"))]
+            let extent = {
+                let target = renderer.target.as_ref().unwrap();
+                [target.width, target.height]
+            };
+            let view = viewport(extent[0], extent[1], false);
             let mut walker = Walker::new(
                 scene,
                 transform,
@@ -63,7 +75,7 @@ impl Frame<'_> {
                             Err(
                                 Error::AtlasFull | Error::TooManyTextures | Error::Budget { .. },
                             ) if !renderer.recording.primitives.is_empty() => {
-                                renderer.submit(clear, false)?;
+                                renderer.flush_current(clear)?;
                             }
                             result => break result?,
                         }
@@ -72,7 +84,7 @@ impl Frame<'_> {
                     Step::Command(..) => return Err(Error::UnsupportedCommand),
                 }
                 if renderer.recording.primitives.len() >= MAX_PRIMITIVES {
-                    renderer.submit(clear, false)?;
+                    renderer.flush_current(clear)?;
                 }
             }
         })();
@@ -93,7 +105,46 @@ impl Frame<'_> {
         if self.failed {
             return Err(Error::FrameFailed);
         }
+        #[cfg(feature = "text")]
+        self.renderer.close_layers(self.clear)?;
         self.renderer.submit(self.clear, true)
+    }
+
+    /// Opens a layer: until the matching [`Self::pop_layer`], draws render into
+    /// an image covering the layer's extent in the working format, composited
+    /// on pop at its opacity. A positive backdrop blur first draws the blur of
+    /// what is already drawn under the layer's shape over it; a blur whose
+    /// scratch images exceed the memory budget is skipped and counted by
+    /// [`Renderer::skipped_blurs`]. Each layer boundary is a submission the
+    /// frame waits for. Needs `text`, whose image pipeline composites layers;
+    /// without it this fails with [`Error::UnsupportedCommand`]. Layers still
+    /// open when the frame finishes are composited first.
+    pub fn push_layer(&mut self, layer: &aegle_scene::Layer) -> Result {
+        if self.failed {
+            return Err(Error::FrameFailed);
+        }
+        #[cfg(feature = "text")]
+        let result = self.renderer.push_layer(layer, self.clear);
+        #[cfg(not(feature = "text"))]
+        let result = {
+            let _ = layer;
+            Err(Error::UnsupportedCommand)
+        };
+        self.failed = result.is_err();
+        result
+    }
+
+    /// Composites the innermost open layer.
+    pub fn pop_layer(&mut self) -> Result {
+        if self.failed {
+            return Err(Error::FrameFailed);
+        }
+        #[cfg(feature = "text")]
+        let result = self.renderer.pop_layer(self.clear);
+        #[cfg(not(feature = "text"))]
+        let result = Err(Error::UnbalancedLayer);
+        self.failed = result.is_err();
+        result
     }
 }
 

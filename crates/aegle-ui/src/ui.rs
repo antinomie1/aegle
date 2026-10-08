@@ -8,7 +8,7 @@ use std::{
 
 use aegle_core::{Focus, NodeId, Route, Tree};
 use aegle_layout::{Dimension, Edges, FlexDirection, LayoutNode, LengthPercentage, Style};
-use aegle_scene::{Affine, Scene};
+use aegle_scene::Affine;
 use aegle_text::{Selection, TextSystem};
 use aegle_theme::Theme;
 use aegle_types::{Color, Rect, Size};
@@ -16,6 +16,7 @@ use aegle_types::{Color, Rect, Size};
 use crate::{
     Container, Node,
     control::Plain,
+    group::Visit,
     state::{Element, State},
 };
 
@@ -165,6 +166,7 @@ impl Ui {
                 key_version: 0,
                 input_time: std::time::Instant::now(),
                 clicks: Default::default(),
+                groups: Default::default(),
                 frame_time: std::time::Instant::now(),
                 animated: Default::default(),
                 damage: Default::default(),
@@ -281,18 +283,17 @@ impl Ui {
         Ok(changed)
     }
 
-    /// Visits visible records with their window-space translation and ancestor clip.
-    /// The optional clip is in logical window coordinates, outside the translation.
-    /// Hosts must apply it (and their device scale) to preserve scroll clipping.
-    /// Call after refresh; the callback must not mutate this UI.
-    pub fn visit_scenes(
-        &self,
-        mut visit: impl FnMut(&Scene, Affine, Option<Rect>) -> Result,
-    ) -> Result {
+    /// Visits what to draw in order: visible records with their window-space
+    /// placement and ancestor clip, and the layers of subtrees with a group
+    /// opacity or backdrop blur around their records. Hosts must apply every
+    /// clip and layer, mapped by their device scale; a renderer that cannot
+    /// draw a layer must fail rather than skip it. Call after refresh; the
+    /// callback must not mutate this UI.
+    pub fn visit_scenes(&self, mut visit: impl FnMut(Visit<'_>) -> Result) -> Result {
         let state = self.read()?;
         // Scroll bars overlay their viewport's entire subtree.
         let mut overlays = state.overlays.iter().peekable();
-        let mut draw = |id, overlay: bool| -> Result {
+        let draw = |id, overlay: bool, visit: &mut dyn FnMut(Visit<'_>) -> Result| -> Result {
             let element = &state.tree.get(id).unwrap().context;
             let scene = match &element.overlay {
                 Some(scene) if overlay => scene,
@@ -308,22 +309,60 @@ impl Ui {
                 && !scene.commands().is_empty()
             {
                 let place = Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?;
-                visit(
+                visit(Visit::Scene {
                     scene,
-                    element.xf.map_or(Ok(place), |xf| place.then(xf))?,
-                    element.clip,
-                )?;
+                    transform: element.xf.map_or(Ok(place), |xf| place.then(xf))?,
+                    clip: element.clip,
+                })?;
             }
             Ok(())
         };
+        // Open layers by node; a node's layer closes when the order leaves
+        // its subtree. A transparent subtree is skipped entirely.
+        let mut open: Vec<NodeId> = Vec::new();
+        let mut hidden: Option<NodeId> = None;
+        let close = |open: &mut Vec<NodeId>, node, visit: &mut dyn FnMut(Visit<'_>) -> Result| {
+            while let Some(&layer) = open.last()
+                && !state.contains(layer, node)
+            {
+                open.pop();
+                visit(Visit::PopLayer)?;
+            }
+            Ok::<_, Box<dyn Error>>(())
+        };
         for (index, &id) in state.order.iter().enumerate() {
             while let Some(&(_, view)) = overlays.next_if(|&&(end, _)| end <= index) {
-                draw(view, true)?;
+                close(&mut open, view, &mut visit)?;
+                if hidden.is_none_or(|h| !state.contains(h, view)) {
+                    draw(view, true, &mut visit)?;
+                }
             }
-            draw(id, false)?;
+            close(&mut open, id, &mut visit)?;
+            if let Some(h) = hidden {
+                if state.contains(h, id) {
+                    continue;
+                }
+                hidden = None;
+            }
+            let group = state.tree.get(id).unwrap().context.group;
+            if group.layered() && group.opacity == 0.0 {
+                hidden = Some(id);
+                continue;
+            }
+            if let Some(layer) = state.layer(id)? {
+                visit(Visit::PushLayer(layer))?;
+                open.push(id);
+            }
+            draw(id, false, &mut visit)?;
         }
         for &(_, view) in overlays {
-            draw(view, true)?;
+            close(&mut open, view, &mut visit)?;
+            if hidden.is_none_or(|h| !state.contains(h, view)) {
+                draw(view, true, &mut visit)?;
+            }
+        }
+        for _ in open {
+            visit(Visit::PopLayer)?;
         }
         Ok(())
     }

@@ -1,9 +1,7 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
 
-use crate::{
-    Appearance, Point, Result, Transform, Transition, UiError, callbacks::Handler, state::State,
-};
+use crate::{Appearance, Point, Result, Transition, UiError, callbacks::Handler, state::State};
 use aegle_core::{Dirty, NodeId};
 use aegle_motion::{Animation, Interpolate, InvalidValue, Tween};
 use std::{collections::HashMap, time::Duration};
@@ -20,11 +18,19 @@ pub enum TransitionProperty {
     Scale,
     /// The rotation of `Node::set_transform`.
     Rotation,
+    /// The group opacity of `Node::set_opacity`.
+    Opacity,
 }
 
 impl TransitionProperty {
     /// Every property, in slot order.
-    pub const ALL: [Self; 4] = [Self::Paint, Self::Offset, Self::Scale, Self::Rotation];
+    pub const ALL: [Self; 5] = [
+        Self::Paint,
+        Self::Offset,
+        Self::Scale,
+        Self::Rotation,
+        Self::Opacity,
+    ];
 }
 
 #[derive(Default)]
@@ -38,6 +44,7 @@ pub struct Motion {
     pub moving: HashMap<NodeId, Running<Point>>,
     pub scaling: HashMap<NodeId, Running<f32>>,
     pub rotating: HashMap<NodeId, Running<f32>>,
+    pub fading: HashMap<NodeId, Running<f32>>,
     /// Momentum scrolling after a finished touchpad gesture.
     pub fling: Option<crate::fling::Fling>,
     /// Completion handlers, versioned in the shared callback sequence.
@@ -55,7 +62,7 @@ pub struct Motion {
 pub struct Track {
     /// Timing per property, in [`TransitionProperty::ALL`] order; `None`
     /// changes that property immediately.
-    pub timings: [Option<Transition>; 4],
+    pub timings: [Option<Transition>; 5],
     pub presented: Option<Appearance>,
 }
 
@@ -63,7 +70,7 @@ impl Track {
     /// The same timing for every property.
     pub fn uniform(timing: Transition) -> Self {
         Self {
-            timings: [Some(timing); 4],
+            timings: [Some(timing); 5],
             presented: None,
         }
     }
@@ -126,7 +133,7 @@ impl Interpolate for Paint {
 
 /// What a geometric request did.
 #[derive(PartialEq)]
-enum Step {
+pub(crate) enum Step {
     Unchanged,
     Started,
     Snapped,
@@ -134,7 +141,7 @@ enum Step {
 
 /// Starts or retargets a tween when `timing` animates, otherwise drops any
 /// running one so the caller snaps.
-fn plan<T: Interpolate + PartialEq>(
+pub(crate) fn plan<T: Interpolate + PartialEq>(
     running: &mut HashMap<NodeId, Running<T>>,
     id: NodeId,
     current: T,
@@ -193,6 +200,7 @@ impl Motion {
         self.moving.remove(&id);
         self.scaling.remove(&id);
         self.rotating.remove(&id);
+        self.fading.remove(&id);
         self.ends.remove(&id);
         self.paint_once.remove(&id);
     }
@@ -202,6 +210,7 @@ impl Motion {
         self.moving.clear();
         self.scaling.clear();
         self.rotating.clear();
+        self.fading.clear();
         self.fling = None;
         self.ends.clear();
         self.paint_once.clear();
@@ -212,12 +221,14 @@ impl Motion {
             || self.moving.contains_key(&id)
             || self.scaling.contains_key(&id)
             || self.rotating.contains_key(&id)
+            || self.fading.contains_key(&id)
     }
     pub fn any_running(&self) -> bool {
         !(self.active.is_empty()
             && self.moving.is_empty()
             && self.scaling.is_empty()
-            && self.rotating.is_empty())
+            && self.rotating.is_empty()
+            && self.fading.is_empty())
     }
 }
 
@@ -226,7 +237,11 @@ impl State {
     /// it animates now (motion allowed, nonzero, visible). A control not yet
     /// painted has nothing to animate from, so its geometry is set directly.
     /// A `with_transition` or `snap` closure overrides the policy's timing.
-    fn timing(&self, id: NodeId, property: TransitionProperty) -> (bool, Option<Transition>) {
+    pub(crate) fn timing(
+        &self,
+        id: NodeId,
+        property: TransitionProperty,
+    ) -> (bool, Option<Transition>) {
         let tracked = self.motion.tracks.get(&id).and_then(|t| {
             (property == TransitionProperty::Paint || t.presented.is_some())
                 .then(|| t.timing(property))
@@ -316,73 +331,6 @@ impl State {
         Ok(())
     }
 
-    /// Starts, retargets or snaps scale and rotation, each with its own timing,
-    /// like [`Self::transition_offset`].
-    pub fn transition_spin(&mut self, id: NodeId, target: Transform) -> Result {
-        let (scale_policy, scale_timing) = self.timing(id, TransitionProperty::Scale);
-        let (turn_policy, turn_timing) = self.timing(id, TransitionProperty::Rotation);
-        let mut spin = self.tree.get(id).unwrap().context.spin;
-        let motion = &mut self.motion;
-        let scale = plan(
-            &mut motion.scaling,
-            id,
-            spin.scale,
-            target.scale,
-            scale_timing,
-        )?;
-        let turn = plan(
-            &mut motion.rotating,
-            id,
-            spin.rotation,
-            target.rotation,
-            turn_timing,
-        )?;
-        if scale == Step::Started || turn == Step::Started {
-            self.repaint = true;
-        }
-        if scale == Step::Snapped {
-            spin.scale = target.scale;
-        }
-        if turn == Step::Snapped {
-            spin.rotation = target.rotation;
-        }
-        if scale == Step::Snapped || turn == Step::Snapped {
-            self.set_spin(id, spin);
-        }
-        if (scale == Step::Snapped && scale_policy) || (turn == Step::Snapped && turn_policy) {
-            self.complete(id);
-        }
-        Ok(())
-    }
-
-    /// The logical target scale and rotation.
-    pub fn target_spin(&self, id: NodeId) -> Transform {
-        let spin = self.tree.get(id).unwrap().context.spin;
-        Transform {
-            scale: self
-                .motion
-                .scaling
-                .get(&id)
-                .map_or(spin.scale, Running::target),
-            rotation: self
-                .motion
-                .rotating
-                .get(&id)
-                .map_or(spin.rotation, Running::target),
-        }
-    }
-
-    /// Jumps a running scale/rotation to its target. Returns whether one was running.
-    pub fn snap_spin(&mut self, id: NodeId) -> bool {
-        let target = self.target_spin(id);
-        let scaled = self.motion.scaling.remove(&id).is_some();
-        let turned = self.motion.rotating.remove(&id).is_some();
-        if scaled || turned {
-            self.set_spin(id, target);
-        }
-        scaled || turned
-    }
-
     /// Starts geometric transitions requested since the last refresh.
     pub fn start_offsets(&mut self) {
         let now = self.motion.now;
@@ -390,7 +338,8 @@ impl State {
             moving.start.get_or_insert(now);
         }
         let spins = self.motion.scaling.values_mut();
-        for running in spins.chain(self.motion.rotating.values_mut()) {
+        let fades = self.motion.fading.values_mut();
+        for running in spins.chain(self.motion.rotating.values_mut()).chain(fades) {
             running.start.get_or_insert(now);
         }
         if let Some(fling) = &mut self.motion.fling {
@@ -429,6 +378,7 @@ impl State {
             moving,
             scaling,
             rotating,
+            fading,
             active,
             tracks,
             finished,
@@ -441,6 +391,9 @@ impl State {
         moved |= advance(scaling, tree, now, finished, scale);
         moved |= advance(rotating, tree, now, finished, |e, v| e.spin.rotation = v);
         self.geometry_dirty |= moved;
+        // Opacity only repaints; refresh damages the group's area.
+        let fade = |e: &mut crate::state::Element, v: f32| e.group.opacity = v.clamp(0.0, 1.0);
+        moved |= advance(fading, tree, now, finished, fade);
         self.repaint |= moved;
         active.retain(|id, active| {
             let elapsed = now - active.start;

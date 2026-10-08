@@ -1,9 +1,40 @@
-//! Choice, popup, table and content-sized list screenshots.
+//! Choice, popup, table, content-sized list and group effect screenshots.
 use crate::{Setup, hover};
 use aegle::{
-    Container, Key, KeyInput, Modifiers, NodeMenu, NodePopup, Point, Result, TableColumn, Ui,
-    Widgets,
+    Color, Container, Key, KeyInput, Modifiers, NodeMenu, NodePopup, Point, Result, TableColumn,
+    Ui, Widgets,
 };
+
+/// Two overlapping squares, red then blue, at `alpha`.
+fn squares(h: &Container, alpha: u8) -> Result<Container> {
+    let pair = h.row()?;
+    pair.set_gap(0.0)?;
+    for (color, offset) in [((220, 40, 40), 0.0), ((40, 80, 220), -24.0)] {
+        let square = pair.column()?;
+        square.set_size(48.0, 48.0)?;
+        square.set_radius(6.0)?;
+        square.set_offset(Point::new(offset, 12.0 + offset / 2.0))?;
+        square.set_background(Color::rgba(color.0, color.1, color.2, alpha))?;
+    }
+    Ok(pair)
+}
+
+/// Stripes under a frosted panel that blurs them.
+fn frosted(h: &Container) -> Result {
+    let stripes = h.row()?;
+    stripes.set_gap(6.0)?;
+    for _ in 0..8 {
+        let stripe = stripes.column()?;
+        stripe.set_size(8.0, 72.0)?;
+        stripe.set_background(Color::rgb(40, 80, 220))?;
+    }
+    let panel = h.column()?;
+    panel.set_size(80.0, 40.0)?;
+    panel.set_radius(8.0)?;
+    panel.set_offset(Point::new(20.0, -64.0))?;
+    panel.set_background(Color::rgba(255, 255, 255, 90))?;
+    panel.set_backdrop_blur(4.0)
+}
 
 fn enter(ui: &Ui) -> Result {
     for pressed in [true, false] {
@@ -55,6 +86,17 @@ fn table(h: &Container) -> Result {
 type Shot<'a> = &'a dyn Fn(&str, (f32, f32), &[(&str, Setup)]) -> Result;
 
 pub(crate) fn shots(shot: Shot) -> Result {
+    shot(
+        "layers",
+        (150.0, 130.0),
+        &[
+            ("translucent colors", |_, h| squares(h, 128).map(drop)),
+            ("group opacity 0.5", |_, h| {
+                squares(h, 255)?.set_opacity(0.5)
+            }),
+            ("backdrop blur", |_, h| frosted(h)),
+        ],
+    )?;
     shot(
         "radio",
         (150.0, 176.0),

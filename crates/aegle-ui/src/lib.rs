@@ -27,7 +27,9 @@ mod events;
 mod fling;
 #[cfg(feature = "grid")]
 mod grid_handles;
+mod group;
 mod handles;
+mod hooks;
 mod hover;
 mod input;
 mod layout;
@@ -72,13 +74,15 @@ pub use effects::Shadow;
 pub use events::KeyEvent;
 #[cfg(feature = "grid")]
 pub use grid_handles::Stack;
+pub use group::Visit;
 pub use handles::{Container, Node, valid};
+pub use hooks::Hooks;
 pub use layout_handles::LocalLayout;
 #[cfg(feature = "motion")]
 pub use motion::TransitionProperty;
 #[cfg(feature = "motion")]
 pub use motion_handles::Animate;
-pub use state::{Element, Hooks, State, focus_policy, text_style};
+pub use state::{Element, State, focus_policy, text_style};
 pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token};
 
 pub use transform::Transform;

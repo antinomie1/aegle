@@ -62,8 +62,11 @@ impl Kind {
     }
 }
 
-struct Target {
-    size: [u32; 2],
+pub(crate) struct Target {
+    pub(crate) size: [u32; 2],
+    /// The working image, also copied from by backdrop blurs.
+    #[cfg_attr(not(feature = "text"), allow(dead_code))]
+    pub(crate) image: Texture,
     linear: TextureView,
     resolve: BindGroup,
     /// Offscreen renderers resolve into this texture for explicit readback.
@@ -85,7 +88,7 @@ struct Buffers {
 /// records and glyph patches are uploaded. Nothing runs between frames.
 pub struct Renderer {
     pub(crate) gpu: Rc<Gpu>,
-    target: Option<Target>,
+    pub(crate) target: Option<Target>,
     buffers: Buffers,
     pub(crate) rec: Recording,
     /// Adjacent primitives sharing a pipeline and texture: kind and instance range.
@@ -101,6 +104,9 @@ pub struct Renderer {
     clear: [f64; 4],
     /// True once a pass has cleared the linear image this frame.
     loaded: bool,
+    /// Open layers, innermost last, and images kept for reuse.
+    #[cfg(feature = "text")]
+    pub(crate) layers: crate::layer::Layers,
 }
 
 impl Renderer {
@@ -136,6 +142,8 @@ impl Renderer {
             viewport: [0.0; 2],
             clear: [0.0; 4],
             loaded: false,
+            #[cfg(feature = "text")]
+            layers: Default::default(),
         })
     }
 
@@ -186,7 +194,10 @@ impl Renderer {
             self.target = Some(self.create_target(width, height, offscreen));
         }
         #[cfg(feature = "text")]
-        self.atlas.begin_frame();
+        {
+            self.atlas.begin_frame();
+            self.begin_layers();
+        }
         self.size = [width, height];
         self.viewport = aegle_gpu::viewport(width, height, true);
         self.clear = linear_rgba(clear.to_rgba()).map(f64::from);
@@ -212,11 +223,13 @@ impl Renderer {
                 view_formats: &[],
             })
         };
-        let linear = texture(
+        let image = texture(
             LINEAR,
-            TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-        )
-        .create_view(&Default::default());
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_SRC,
+        );
+        let linear = image.create_view(&Default::default());
         let resolve = self.gpu.device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: self.gpu.resolve_layout(),
@@ -227,6 +240,7 @@ impl Renderer {
         });
         Target {
             size: [width, height],
+            image,
             linear,
             resolve,
             output: offscreen.then(|| {
@@ -314,17 +328,21 @@ impl Renderer {
         let resolve = output.map(|texture| self.gpu.resolve(texture.format()));
         let target = self.target.as_ref().unwrap();
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        // An open layer draws into its own image, cleared to transparent.
+        let [r, g, b, a] = self.clear;
+        let (view, load) = match self.layer_target() {
+            Some((view, loaded)) => (view, (!loaded).then_some(wgpu::Color::TRANSPARENT)),
+            None => (
+                &target.linear,
+                (!self.loaded).then_some(wgpu::Color { r, g, b, a }),
+            ),
+        };
         {
-            let [r, g, b, a] = self.clear;
-            let load = if self.loaded {
-                LoadOp::Load
-            } else {
-                LoadOp::Clear(wgpu::Color { r, g, b, a })
-            };
+            let load = load.map_or(LoadOp::Load, LoadOp::Clear);
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("aegle scene"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &target.linear,
+                    view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: Operations {
@@ -364,7 +382,9 @@ impl Renderer {
         self.gpu.queue.submit([encoder.finish()]);
         // wgpu validates encoding and submission synchronously.
         self.gpu.check()?;
-        self.loaded = true;
+        if !self.mark_layer_loaded() {
+            self.loaded = true;
+        }
         self.rec.primitives.clear();
         #[cfg(feature = "text")]
         self.frame_textures.clear();
@@ -453,5 +473,15 @@ impl Renderer {
             dest.copy_from_slice(&source[..row]);
         }
         Ok(())
+    }
+}
+
+#[cfg(not(feature = "text"))]
+impl Renderer {
+    pub(crate) fn layer_target(&self) -> Option<(&TextureView, bool)> {
+        None
+    }
+    pub(crate) fn mark_layer_loaded(&mut self) -> bool {
+        false
     }
 }

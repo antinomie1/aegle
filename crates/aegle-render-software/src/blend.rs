@@ -53,6 +53,32 @@ impl Solid {
     }
 }
 
+/// A premultiplied sRGB pixel as premultiplied linear light, channel order kept.
+#[inline]
+pub(crate) fn premultiplied_linear(pixel: [u8; 4]) -> [f32; 4] {
+    if pixel[3] == 0 {
+        return [0.0; 4];
+    }
+    let alpha = pixel[3] as f32 / 255.0;
+    if pixel[3] == 255 {
+        let decoded = opaque_decode();
+        return [
+            decoded[pixel[0] as usize],
+            decoded[pixel[1] as usize],
+            decoded[pixel[2] as usize],
+            1.0,
+        ];
+    }
+    let (transfer, unpremultiply) = (SrgbTransfer::get(), 1.0 / pixel[3] as f32);
+    let channel = |c: u8| transfer.decode((c as f32 * unpremultiply).min(1.0)) * alpha;
+    [
+        channel(pixel[0]),
+        channel(pixel[1]),
+        channel(pixel[2]),
+        alpha,
+    ]
+}
+
 /// Source-over of premultiplied linear `source` scaled by `coverage`.
 #[inline]
 pub(crate) fn blend_linear(dst: &mut [u8], source: [f32; 4], coverage: u8) {

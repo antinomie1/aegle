@@ -35,6 +35,9 @@ pub(crate) struct Gpu {
     pub external: crate::external::Registry,
     resolve_layout: BindGroupLayout,
     resolve_shader: ShaderModule,
+    /// One box pass of a backdrop blur, into a linear scratch image.
+    #[cfg(feature = "text")]
+    pub blur: RenderPipeline,
     /// Encoding pipelines by output format; a shared device serves several surfaces.
     resolve: RefCell<Vec<(TextureFormat, RenderPipeline)>>,
     #[cfg_attr(not(feature = "window"), allow(dead_code))]
@@ -196,6 +199,15 @@ impl Gpu {
             )],
         });
         let resolve_shader = device.create_shader_module(wgsl("resolve", aegle_gpu::RESOLVE_WGSL));
+        #[cfg(feature = "text")]
+        let blur = pipeline(
+            &device,
+            &device.create_shader_module(wgsl("blur", aegle_gpu::BLUR_WGSL)),
+            "fs_main",
+            &[Some(&resolve_layout)],
+            LINEAR,
+            BlendState::REPLACE,
+        );
         Self {
             device,
             queue,
@@ -212,6 +224,8 @@ impl Gpu {
             external: Default::default(),
             resolve_layout,
             resolve_shader,
+            #[cfg(feature = "text")]
+            blur,
             resolve: RefCell::new(Vec::new()),
             adapter,
             fault,

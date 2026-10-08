@@ -17,6 +17,14 @@ use crate::{RenderError, Surface, blend::Solid, path};
 /// Devices without a GPU can use this crate without any platform library.
 pub struct Renderer {
     mask_budget: usize,
+    /// Byte limit of layer images and blur scratch.
+    pub(crate) effect_budget: usize,
+    /// Pixel storage of finished layers, reused by later ones.
+    pub(crate) spare: Vec<Vec<u8>>,
+    /// Blur scratch: two premultiplied linear buffers of the sampled area.
+    pub(crate) blur: [Vec<[f32; 4]>; 2],
+    /// Backdrop blurs skipped for exceeding the effect budget.
+    pub(crate) skipped_blurs: u64,
     pub(crate) masks: Vec<Mask>,
     #[cfg(feature = "text")]
     pub(crate) glyphs: aegle_glyph::GlyphCache,
@@ -36,6 +44,10 @@ impl Renderer {
     pub fn new(mask_budget: usize) -> Self {
         Self {
             mask_budget,
+            effect_budget: usize::MAX,
+            spare: Vec::new(),
+            blur: [Vec::new(), Vec::new()],
+            skipped_blurs: 0,
             masks: Vec::new(),
             #[cfg(feature = "text")]
             glyphs: aegle_glyph::GlyphCache::default(),
@@ -92,6 +104,7 @@ impl Renderer {
             renderer: self,
             surface,
             region,
+            layers: Vec::new(),
         }
     }
 
@@ -118,6 +131,8 @@ impl Renderer {
     /// clear them separately through `glyph_cache_mut().clear()` with `text`.
     pub fn release_scratch(&mut self) {
         self.masks = Vec::new();
+        self.spare = Vec::new();
+        self.blur = [Vec::new(), Vec::new()];
         self.stack = Vec::new();
         self.path = PathBuilder::new();
         #[cfg(feature = "text")]
@@ -145,7 +160,18 @@ impl Renderer {
                         | Command::StrokePath { .. }
                 )
             });
-        let count = if needs_masks { depth + 1 } else { 0 };
+        self.reserve_masks(if needs_masks { depth + 1 } else { 0 }, surface)?;
+        self.stack.clear();
+        self.stack.reserve(scene.max_depth());
+        Ok(())
+    }
+
+    /// Ensures `count` surface-sized masks within the mask budget.
+    pub(crate) fn reserve_masks(
+        &mut self,
+        count: usize,
+        surface: &Surface<'_>,
+    ) -> Result<(), RenderError> {
         let pixels = surface.data.len() / 4;
         let required = pixels.saturating_mul(count);
         if required > self.mask_budget {
@@ -162,8 +188,6 @@ impl Renderer {
             let size = IntSize::from_wh(surface.width, surface.height).unwrap();
             self.masks.push(Mask::from_vec(data, size).unwrap());
         }
-        self.stack.clear();
-        self.stack.reserve(scene.max_depth());
         Ok(())
     }
 }
@@ -178,7 +202,9 @@ pub struct Frame<'r, 's, 'p> {
     pub(crate) renderer: &'r mut Renderer,
     pub(crate) surface: &'s mut Surface<'p>,
     /// Whole device pixels this frame may change.
-    region: Rect,
+    pub(crate) region: Rect,
+    /// Open layers, innermost last; draws go to the innermost.
+    pub(crate) layers: Vec<crate::layer::Open>,
 }
 
 impl Frame<'_, '_, '_> {
@@ -202,6 +228,22 @@ impl Frame<'_, '_, '_> {
     /// only narrows the raster bounds; any other clip adds one mask layer to the
     /// draw's budget, plus the ordinary coverage mask when none was yet needed.
     pub fn draw_clipped(
+        &mut self,
+        scene: &Scene,
+        transform: Affine,
+        clip: Option<Rect>,
+    ) -> Result<(), RenderError> {
+        self.in_target(|frame, shift| {
+            let transform = transform
+                .then(shift)
+                .map_err(|_| RenderError::Coordinates)?;
+            let clip = clip.map(|rect| crate::layer::moved(rect, shift));
+            frame.draw_target(scene, transform, clip)
+        })
+    }
+
+    /// [`Self::draw_clipped`] into the current target.
+    fn draw_target(
         &mut self,
         scene: &Scene,
         transform: Affine,

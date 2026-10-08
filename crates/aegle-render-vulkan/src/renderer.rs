@@ -60,6 +60,9 @@ pub struct Stats {
 pub struct Renderer {
     // Declaration order destroys children before their render passes and device.
     pub(crate) target: Option<Target>,
+    /// Open layers and the images layers and blurs reuse.
+    #[cfg(feature = "text")]
+    pub(crate) layers: crate::layer::Layers,
     #[cfg(feature = "window")]
     pub(crate) swapchain: Option<crate::swapchain::Swapchain>,
     #[cfg(feature = "window")]
@@ -76,12 +79,12 @@ pub struct Renderer {
     #[cfg(feature = "text")]
     pub(crate) text: crate::text::Text,
     pub(crate) pipeline: Pipeline,
-    commands: Commands,
+    pub(crate) commands: Commands,
     pub(crate) device: Rc<Device>,
     pub(crate) recording: Recording,
     pub(crate) options: Options,
     name: String,
-    busy: bool,
+    pub(crate) busy: bool,
     image_ready: bool,
     /// Part of the current frame was already submitted; later passes load it.
     pub(crate) resumed: bool,
@@ -123,6 +126,8 @@ impl Renderer {
         let text = crate::text::Text::new(&device, &pipeline, options.text)?;
         Ok(Self {
             target: None,
+            #[cfg(feature = "text")]
+            layers: Default::default(),
             #[cfg(feature = "window")]
             swapchain: None,
             #[cfg(feature = "window")]
@@ -187,6 +192,7 @@ impl Renderer {
         {
             self.text.atlas.begin_frame();
             self.text.begin_textures();
+            self.begin_layers();
         }
         if self
             .target
@@ -279,6 +285,8 @@ impl Renderer {
         #[cfg(feature = "window")]
         self.release_swapchain()?;
         self.target = None;
+        #[cfg(feature = "text")]
+        self.layers.clear();
         self.buffers = [None, None];
         self.readback = None;
         self.recording = Recording::default();
@@ -312,6 +320,24 @@ impl Renderer {
                 .map(|b| b.allocation)
                 .sum::<u64>()
             + self.readback.as_ref().map_or(0, |b| b.allocation)
+            + self.layer_bytes()
+    }
+
+    fn layer_bytes(&self) -> u64 {
+        #[cfg(feature = "text")]
+        {
+            self.layers.bytes()
+        }
+        #[cfg(not(feature = "text"))]
+        {
+            0
+        }
+    }
+
+    /// The swapchain image this frame draws into, once acquired.
+    #[cfg(all(feature = "window", feature = "text"))]
+    pub(crate) fn acquired_index(&self) -> Option<u32> {
+        self.acquired.map(|(index, _, _)| index)
     }
 
     fn text_bytes(&self) -> u64 {
@@ -325,10 +351,9 @@ impl Renderer {
         }
     }
 
-    /// Submits the recorded primitives. A frame that is not finished yet
-    /// waits for this part, then continues with empty primitives, unpinned
-    /// atlas pages and free texture slots; its last part is also presented.
-    pub(crate) fn submit(&mut self, clear: Color, last: bool) -> Result {
+    /// Uploads the records and begins a command buffer drawing them, after
+    /// its atlas uploads.
+    pub(crate) fn begin_submission(&mut self) -> Result {
         for index in 0..2 {
             let data: &[u8] = if index == 0 {
                 bytemuck::cast_slice(&self.recording.clips)
@@ -369,6 +394,28 @@ impl Renderer {
         self.text
             .atlas
             .record_uploads(&self.device.raw, self.commands.buffer);
+        Ok(())
+    }
+
+    /// After a submission that is not the frame's last: waits for it and
+    /// continues with empty records, unpinned atlas pages and free texture slots.
+    pub(crate) fn continue_frame(&mut self) -> Result {
+        self.wait()?;
+        self.recording.primitives.clear();
+        #[cfg(feature = "text")]
+        {
+            self.text.atlas.begin_frame();
+            self.text.begin_textures();
+        }
+        Ok(())
+    }
+
+    /// Submits the recorded primitives. A frame that is not finished yet
+    /// waits for this part, then continues with empty primitives, unpinned
+    /// atlas pages and free texture slots; its last part is also presented.
+    pub(crate) fn submit(&mut self, clear: Color, last: bool) -> Result {
+        self.begin_submission()?;
+        let target = self.target.as_ref().unwrap();
         let output = target.frames[1];
         #[cfg(feature = "window")]
         if self.acquired.is_none()
@@ -413,14 +460,7 @@ impl Renderer {
         self.busy = true;
         if !last {
             self.resumed = true;
-            self.wait()?;
-            self.recording.primitives.clear();
-            #[cfg(feature = "text")]
-            {
-                self.text.atlas.begin_frame();
-                self.text.begin_textures();
-            }
-            return Ok(());
+            return self.continue_frame();
         }
         self.image_ready = true;
         #[cfg(feature = "window")]
@@ -446,5 +486,13 @@ impl Drop for Renderer {
         let _ = self.wait();
         #[cfg(feature = "window")]
         let _ = self.release_swapchain();
+    }
+}
+
+#[cfg(not(feature = "text"))]
+impl Renderer {
+    /// Draws the records into the frame's target and continues the frame.
+    pub(crate) fn flush_current(&mut self, clear: Color) -> Result {
+        self.submit(clear, false)
     }
 }

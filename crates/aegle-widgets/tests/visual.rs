@@ -91,7 +91,10 @@ fn images_and_canvases_record_retained_scenes() -> Result {
     assert_eq!(view.image()?.id(), image.id());
     assert_eq!(paints.get(), 1);
     let mut images = 0;
-    ui.visit_scenes(|scene, _, _| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene { scene, .. } = visit else {
+            return Ok(());
+        };
         images += scene
             .commands()
             .iter()

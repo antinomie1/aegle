@@ -45,3 +45,7 @@ required-features = ["text"]
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 aegle-platform-wayland = { workspace = true, features = ["gpu"] }
+
+[[test]]
+name = "layers"
+required-features = ["text"]

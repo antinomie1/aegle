@@ -73,26 +73,72 @@ pub(crate) fn create_wgpu(
     Ok(Some(renderer))
 }
 
+/// A renderer frame the UI's records and layers are drawn into.
 #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
-fn scenes(
-    ui: &Ui,
-    factor: f32,
-    mut draw: impl FnMut(&aegle_scene::Scene, Affine, Option<Rect>) -> Result<()>,
-) -> Result<()> {
+trait Target {
+    fn scene(
+        &mut self,
+        scene: &aegle_scene::Scene,
+        transform: Affine,
+        clip: Option<Rect>,
+    ) -> Result<()>;
+    fn push(&mut self, layer: &aegle_scene::Layer) -> Result<()>;
+    fn pop(&mut self) -> Result<()>;
+}
+
+#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+macro_rules! target {
+    ($frame:ty) => {
+        impl Target for $frame {
+            fn scene(
+                &mut self,
+                scene: &aegle_scene::Scene,
+                transform: Affine,
+                clip: Option<Rect>,
+            ) -> Result<()> {
+                Ok(self.draw_clipped(scene, transform, clip)?)
+            }
+            fn push(&mut self, layer: &aegle_scene::Layer) -> Result<()> {
+                Ok(self.push_layer(layer)?)
+            }
+            fn pop(&mut self) -> Result<()> {
+                Ok(self.pop_layer()?)
+            }
+        }
+    };
+}
+#[cfg(feature = "software")]
+target!(aegle_render_software::Frame<'_, '_, '_>);
+#[cfg(feature = "vulkan")]
+target!(aegle_render_vulkan::Frame<'_>);
+#[cfg(feature = "wgpu")]
+target!(aegle_render_wgpu::Frame<'_>);
+
+#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
     let scale = Affine::scale(factor, factor)?;
-    ui.visit_scenes(|scene, transform, clip| {
-        // Node clips snap to whole device pixels, like a scissor rectangle; the
-        // software renderer then clips without a surface-sized mask.
-        let clip = clip.map(|rect| {
-            let (left, top) = (
-                (rect.origin.x * factor).round(),
-                (rect.origin.y * factor).round(),
-            );
-            let right = ((rect.origin.x + rect.size.width) * factor).round();
-            let bottom = ((rect.origin.y + rect.size.height) * factor).round();
-            Rect::new(left, top, right - left, bottom - top)
-        });
-        draw(scene, transform.then(scale)?, clip)
+    // Node clips snap to whole device pixels, like a scissor rectangle; the
+    // software renderer then clips without a surface-sized mask.
+    let snap = |rect: Rect| {
+        let (left, top) = (
+            (rect.origin.x * factor).round(),
+            (rect.origin.y * factor).round(),
+        );
+        let right = ((rect.origin.x + rect.size.width) * factor).round();
+        let bottom = ((rect.origin.y + rect.size.height) * factor).round();
+        Rect::new(left, top, right - left, bottom - top)
+    };
+    ui.visit_scenes(|visit| match visit {
+        aegle_ui::Visit::Scene {
+            scene,
+            transform,
+            clip,
+        } => target.scene(scene, transform.then(scale)?, clip.map(snap)),
+        aegle_ui::Visit::PushLayer(layer) => {
+            let clip = layer.clip().map(snap);
+            target.push(&layer.then(scale)?.with_clip(clip)?)
+        }
+        aegle_ui::Visit::PopLayer => target.pop(),
     })
 }
 
@@ -160,10 +206,7 @@ impl Runtime {
                                 );
                                 let mut frame =
                                     renderer.begin_region(&mut surface, background, rect);
-                                scenes(&entry.ui, scale, |scene, transform, clip| {
-                                    frame.draw_clipped(scene, transform, clip)?;
-                                    Ok(())
-                                })?;
+                                scenes(&entry.ui, scale, &mut frame)?;
                             }
                             Ok(())
                         })
@@ -192,10 +235,7 @@ impl Runtime {
                             if let Some(damage) = device_damage(&entry.ui, scale, width, height)? {
                                 frame.set_damage(damage.rects());
                             }
-                            scenes(&entry.ui, scale, |scene, transform, clip| {
-                                frame.draw_clipped(scene, transform, clip)?;
-                                Ok(())
-                            })?;
+                            scenes(&entry.ui, scale, &mut frame)?;
                             match frame.finish() {
                                 Ok(()) => Ok(true),
                                 Err(aegle_render_vulkan::Error::SurfaceOutOfDate) => Ok(false),
@@ -222,10 +262,7 @@ impl Runtime {
                                     }
                                     Err(error) => return Err(error.into()),
                                 };
-                            scenes(&entry.ui, info.scale, |scene, transform, clip| {
-                                frame.draw_clipped(scene, transform, clip)?;
-                                Ok(())
-                            })?;
+                            scenes(&entry.ui, info.scale, &mut frame)?;
                             frame.finish()?;
                             Ok(true)
                         });

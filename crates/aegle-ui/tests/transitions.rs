@@ -12,7 +12,10 @@ use aegle_ui::{
 /// The presented scale and rotation of the first visible scene.
 fn presented(ui: &Ui) -> Result<(f32, f32)> {
     let mut spin = None;
-    ui.visit_scenes(|_, transform, _| {
+    ui.visit_scenes(|visit| {
+        let aegle_ui::Visit::Scene { transform, .. } = visit else {
+            return Ok(());
+        };
         let [a, b, ..] = transform.coefficients();
         spin.get_or_insert(((a * a + b * b).sqrt(), b.atan2(a)));
         Ok(())

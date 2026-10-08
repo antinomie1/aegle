@@ -18,6 +18,14 @@ pub(crate) struct Pipeline {
     pub resume: vk::RenderPass,
     pub layouts: [vk::PipelineLayout; 2],
     pub pipelines: [vk::Pipeline; 2],
+    /// The format pass 0 draws in, which layer images share so the geometry
+    /// and text pipelines draw into them too.
+    pub working: vk::Format,
+    /// A layer image's first and resumed passes, ending readable by shaders.
+    pub layer_passes: [vk::RenderPass; 2],
+    /// A box pass of a backdrop blur into an RGBA16F scratch image.
+    pub blur_pass: vk::RenderPass,
+    pub blur: vk::Pipeline,
     pub sets: [vk::DescriptorSet; 2],
     set_layouts: [vk::DescriptorSetLayout; 2],
     pool: vk::DescriptorPool,
@@ -53,6 +61,14 @@ impl Pipeline {
             resume: vk::RenderPass::null(),
             layouts: [vk::PipelineLayout::null(); 2],
             pipelines: [vk::Pipeline::null(); 2],
+            working: if direct {
+                format
+            } else {
+                vk::Format::R16G16B16A16_SFLOAT
+            },
+            layer_passes: [vk::RenderPass::null(); 2],
+            blur_pass: vk::RenderPass::null(),
+            blur: vk::Pipeline::null(),
             sets: [vk::DescriptorSet::null(); 2],
             set_layouts: [vk::DescriptorSetLayout::null(); 2],
             pool: vk::DescriptorPool::null(),
@@ -143,6 +159,33 @@ impl Pipeline {
             include_bytes!(concat!(env!("OUT_DIR"), "/geometry.frag.spv")),
             c"fs_main",
         )?;
+        for (index, resume) in [false, true].into_iter().enumerate() {
+            this.layer_passes[index] = render_pass(
+                &this.raw,
+                this.working,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                vk::AccessFlags::SHADER_READ,
+                resume,
+            )?;
+        }
+        this.blur_pass = render_pass(
+            &this.raw,
+            vk::Format::R16G16B16A16_SFLOAT,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::AccessFlags::SHADER_READ,
+            false,
+        )?;
+        this.blur = graphics(
+            &this.raw,
+            this.blur_pass,
+            this.layouts[1],
+            false,
+            include_bytes!(concat!(env!("OUT_DIR"), "/blur.vert.spv")),
+            include_bytes!(concat!(env!("OUT_DIR"), "/blur.frag.spv")),
+            c"fs_main",
+        )?;
         if direct {
             return Ok(this);
         }
@@ -181,6 +224,12 @@ impl Pipeline {
     #[cfg(feature = "text")]
     pub fn clip_layout(&self) -> vk::DescriptorSetLayout {
         self.set_layouts[0]
+    }
+
+    /// The layout of a set holding one sampled image, as the blur pass reads.
+    #[cfg(feature = "text")]
+    pub fn image_layout(&self) -> vk::DescriptorSetLayout {
+        self.set_layouts[1]
     }
 
     /// Binds whole clip and primitive buffers plus any resolve input.
@@ -226,7 +275,7 @@ impl Drop for Pipeline {
         // SAFETY: Renderer waits before drop and drops target framebuffers first.
         // Vulkan destroy accepts null handles for incomplete initialization.
         unsafe {
-            for p in self.pipelines {
+            for p in self.pipelines.into_iter().chain([self.blur]) {
                 self.raw.destroy_pipeline(p, None);
             }
             for l in self.layouts {
@@ -236,7 +285,11 @@ impl Drop for Pipeline {
             for l in self.set_layouts {
                 self.raw.destroy_descriptor_set_layout(l, None);
             }
-            for p in self.passes.into_iter().chain([self.resume]) {
+            let extra = self
+                .layer_passes
+                .into_iter()
+                .chain([self.resume, self.blur_pass]);
+            for p in self.passes.into_iter().chain(extra) {
                 self.raw.destroy_render_pass(p, None);
             }
         }

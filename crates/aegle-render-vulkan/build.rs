@@ -14,6 +14,7 @@ fn main() {
     for (name, source) in [
         ("geometry", aegle_gpu::GEOMETRY_WGSL),
         ("resolve", aegle_gpu::RESOLVE_WGSL),
+        ("blur", aegle_gpu::BLUR_WGSL),
     ] {
         let path = format!("aegle-gpu {name}.wgsl");
         let module = naga::front::wgsl::parse_str(source)

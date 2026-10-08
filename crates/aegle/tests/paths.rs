@@ -24,12 +24,12 @@ fn load(ui: &Ui, fixture: &str) -> Result<aegle::loader::View> {
     Program::load(path)?.build(&ui.root())
 }
 
-/// Every painted record with its placement and clip, in paint order.
+/// Every painted record with its placement and clip, and every layer, in paint order.
 fn scenes(ui: &Ui) -> Result<Vec<String>> {
     ui.refresh()?;
     let mut scenes = Vec::new();
-    ui.visit_scenes(|scene, transform, clip| {
-        scenes.push(format!("{transform:?} {clip:?} {scene:?}"));
+    ui.visit_scenes(|visit| {
+        scenes.push(format!("{visit:?}"));
         Ok(())
     })?;
     Ok(scenes)
