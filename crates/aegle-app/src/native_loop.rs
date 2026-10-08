@@ -214,6 +214,12 @@ impl Runtime {
         theme
     }
 
+    /// The system double-click time, or the engine's 400 ms default.
+    pub fn double_click(&self) -> Duration {
+        let fallback = Duration::from_millis(400);
+        self.preferences.double_click.unwrap_or(fallback)
+    }
+
     #[cfg(feature = "motion")]
     pub fn reduced_motion(&self) -> bool {
         self.options
@@ -229,6 +235,7 @@ impl Runtime {
         let reduced = self.reduced_motion();
         self.preferences = preferences;
         for entry in &self.windows {
+            entry.ui.set_double_click(self.double_click(), 4.0)?;
             let current = entry.ui.theme()?;
             if current == theme {
                 entry.ui.set_theme(self.theme())?;

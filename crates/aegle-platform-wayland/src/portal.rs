@@ -1,7 +1,8 @@
 //! Minimal session-bus client for the XDG desktop portal appearance settings.
 //!
 //! It authenticates with EXTERNAL credentials, reads `color-scheme`, `contrast`,
-//! `reduced-motion` and GNOME's `text-scaling-factor` with a short bounded wait,
+//! `reduced-motion` and GNOME's `text-scaling-factor` and `double-click` with a
+//! short bounded wait,
 //! then follows `SettingChanged`
 //! signals from the event loop. Only the few message shapes involved are
 //! encoded or decoded; anything else is ignored. A missing bus or portal leaves
@@ -21,12 +22,17 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMESPACES: [&str; 2] = ["org.freedesktop.appearance", "org.gnome.desktop.interface"];
-const KEYS: [(&str, &str); 4] = [
+const NAMESPACES: [&str; 3] = [
+    "org.freedesktop.appearance",
+    "org.gnome.desktop.interface",
+    "org.gnome.desktop.peripherals.mouse",
+];
+const KEYS: [(&str, &str); 5] = [
     (NAMESPACES[0], "color-scheme"),
     (NAMESPACES[0], "contrast"),
     (NAMESPACES[0], "reduced-motion"),
     (NAMESPACES[1], "text-scaling-factor"),
+    (NAMESPACES[2], "double-click"),
 ];
 /// Serial of the first ReadOne request; the others follow in `KEYS` order.
 const FIRST_READ: u32 = 4;
@@ -191,13 +197,19 @@ fn apply(message: &[u8], pending: &mut u8, preferences: &mut Preferences) -> Opt
         _ => return None,
     };
     // Portal values: color-scheme 1 dark, 2 light, 0 no preference;
-    // contrast and reduced-motion 1 means requested; the scaling factor is a double.
+    // contrast and reduced-motion 1 means requested; the scaling factor is a
+    // double and the double-click time an int32 of milliseconds.
     match KEYS[index].1 {
         "color-scheme" => {
             preferences.dark = value.and_then(|v| (v == 1.0 || v == 2.0).then_some(v == 1.0))
         }
         "contrast" => preferences.high_contrast = value.map(|v| v == 1.0),
         "reduced-motion" => preferences.reduced_motion = value.map(|v| v == 1.0),
+        "double-click" => {
+            preferences.double_click = value
+                .filter(|v| (100.0..=5000.0).contains(v))
+                .map(|v| Duration::from_millis(v as u64))
+        }
         _ => {
             preferences.text_scale = value
                 .filter(|v| (0.5..=4.0).contains(v))
@@ -331,10 +343,11 @@ impl<'a> Reader<'a> {
         let len = self.byte()? as usize;
         self.text(len)
     }
-    /// Reads a `u` or `d` variant as a number.
+    /// Reads a `u`, `i` or `d` variant as a number.
     fn variant_number(&mut self) -> Option<f64> {
         match self.signature()? {
             "u" => self.u32().map(f64::from),
+            "i" => self.u32().map(|v| f64::from(v as i32)),
             "d" => {
                 self.align(8);
                 let bytes = self.take(8)?.try_into().ok()?;

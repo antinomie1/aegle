@@ -115,6 +115,12 @@ impl Ui {
         state.pointer =
             (!matches!(kind, PointerKind::Leave | PointerKind::Cancel)).then_some((id, position));
         let hit = state.pointer.and_then(|_| state.hit(position));
+        let kind = match kind {
+            PointerKind::Down { clicks } => PointerKind::Down {
+                clicks: state.count_click(position, clicks),
+            },
+            kind => kind,
+        };
         if state.scrollbar_pointer(id, kind, position, hit)? {
             return Ok(());
         }
@@ -130,6 +136,11 @@ impl Ui {
         }
         if target != hit {
             state.sync_hover(id, position)?;
+        }
+        if let PointerKind::Down { clicks: 2 } = kind
+            && let Some(node) = state.node_at(position, false)
+        {
+            state.double_click(node);
         }
         Ok(())
     }
@@ -436,6 +447,11 @@ impl State {
         })
     }
     pub(crate) fn hit(&self, position: Point) -> Option<NodeId> {
+        self.node_at(position, true)
+    }
+    /// The topmost visible, usable node under `position`, of any kind or
+    /// only interactive controls.
+    pub(crate) fn node_at(&self, position: Point, interactive: bool) -> Option<NodeId> {
         // A shown overlay covers everything below it, including its padding.
         let popup = self.overlay_at(position);
         if popup.is_none()
@@ -450,7 +466,7 @@ impl State {
                 && self.usable(id)
                 && element.bounds.contains(self.untransform(id, position))
                 && element.clip.is_none_or(|clip| clip.contains(position))
-                && element.control.interactive()
+                && (!interactive || element.control.interactive())
         })
     }
 }

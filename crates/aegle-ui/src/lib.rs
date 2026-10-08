@@ -16,6 +16,7 @@ mod access_scroll;
 mod accessibility;
 pub mod bar;
 mod callbacks;
+mod clicks;
 pub mod control;
 mod cursor;
 mod damage;

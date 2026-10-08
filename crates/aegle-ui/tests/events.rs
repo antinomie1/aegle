@@ -64,3 +64,44 @@ fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
     assert!(!ui.wants_frames()?);
     Ok(())
 }
+
+#[test]
+fn presses_count_into_double_and_triple_clicks() -> Result {
+    use aegle_ui::{Modifiers, Point, PointerId, PointerKind};
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(200.0, 200.0))?;
+    let row = ui.root().row()?;
+    row.set_size(100.0, 40.0)?;
+    let inner = row.column()?;
+    inner.set_size(40.0, 40.0)?;
+    ui.refresh()?;
+    let hits = Rc::new(Cell::new(0));
+    let count = hits.clone();
+    // The inner column has no handler, so the row's runs for it.
+    row.on_double_click(move |_| {
+        count.set(count.get() + 1);
+        Ok(())
+    })?;
+    let at = inner.bounds()?.origin;
+    let press = |offset: f32, ms: u64| -> Result {
+        let time = Instant::now() + Duration::from_millis(ms);
+        let point = Point::new(at.x + 10.0 + offset, at.y + 10.0);
+        let (id, none) = (PointerId(1), Modifiers::default());
+        ui.pointer_at(id, PointerKind::Down { clicks: 1 }, point, none, time)?;
+        ui.pointer_at(id, PointerKind::Up, point, none, time)?;
+        ui.dispatch_callbacks()
+    };
+    press(0.0, 0)?;
+    press(1.0, 200)?;
+    assert_eq!(hits.get(), 1, "a second close press is a double click");
+    press(1.0, 400)?;
+    assert_eq!(hits.get(), 1, "a third is a triple click");
+    press(1.0, 2000)?;
+    press(20.0, 2100)?;
+    assert_eq!(hits.get(), 1, "late or distant presses start over");
+    ui.set_double_click(Duration::from_millis(50), 4.0)?;
+    press(0.0, 3000)?;
+    press(0.0, 3100)?;
+    assert_eq!(hits.get(), 1, "the interval follows the system setting");
+    Ok(())
+}

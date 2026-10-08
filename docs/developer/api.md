@@ -335,6 +335,7 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 | `CheckBox` / `Switch` / `Radio` / `Slider` / `Dropdown` | `on_change(FnMut(Self) -> Result)` | `clear_on_change()` |
 | 任意控件（`motion`） | `on_transition_end(FnMut(Node) -> Result)` | `clear_on_transition_end()` |
 | `Canvas` | `on_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) | `clear_on_input()` |
+| 任意控件 | `on_double_click(FnMut(Node) -> Result)`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 | `clear_on_double_click()` |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
 - 同一事件可以注册多个处理器，按注册顺序执行；`clear_on_*` 移除该事件的全部处理器。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。
@@ -487,7 +488,7 @@ if ui.refresh()? {
 
 | 输入与同步 | 说明 |
 | --- | --- |
-| `pointer(id, kind, point, modifiers)`、`pointer_leave()` | 指针移动/按下/释放/离开；`Down`/`Up` 是主键，`ButtonDown`/`ButtonUp(PointerButton)` 是右键、中键与侧键，只交给自定义控件 |
+| `pointer(id, kind, point, modifiers)`、`pointer_leave()` | 指针移动/按下/释放/离开；`Down`/`Up` 是主键，`ButtonDown`/`ButtonUp(PointerButton)` 是右键、中键与侧键，只交给自定义控件。`Down { clicks }` 由 Ui 按时间与距离计为 1、2、3 后循环（宿主给出的计数是下限），`set_double_click(interval, distance)` 传入系统设置，默认 400 ms、4 px |
 | `cursor()` | 指针当前位置应显示的 `Cursor`；在 `pointer` 与 `refresh` 之后读取，布局变化也会改变它 |
 | `key(KeyInput { key, text, modifiers, pressed, repeat })`、`key_at(input, Instant)` | 键盘；`text` 为已翻译文字，先交给 `on_key` 处理器 |
 | `pointer_at(id, kind, point, modifiers, Instant)` | 带平台时间的指针事件 |

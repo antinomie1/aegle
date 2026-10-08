@@ -69,12 +69,15 @@ impl State {
     }
     /// The current handler with a queued version; versions are unique across kinds.
     fn handler(&mut self, id: NodeId, version: u64) -> Option<&mut Handler> {
-        let handler = self.callbacks.get_mut(&id);
+        let current = |h: &&mut Handler| h.version == version;
+        if let Some(handler) = self.callbacks.get_mut(&id).filter(current) {
+            return Some(handler);
+        }
         #[cfg(feature = "motion")]
-        let handler = handler
-            .filter(|h| h.version == version)
-            .or(self.motion.ends.get_mut(&id));
-        handler.filter(|h| h.version == version)
+        if let Some(handler) = self.motion.ends.get_mut(&id).filter(current) {
+            return Some(handler);
+        }
+        self.clicks.handlers.get_mut(&id).filter(current)
     }
 }
 

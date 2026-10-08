@@ -316,6 +316,7 @@ impl App {
             ui.set_default_transition(runtime.options.transition)?;
             ui.set_reduced_motion(runtime.reduced_motion())?;
         }
+        ui.set_double_click(runtime.double_click(), 4.0)?;
         ui.resize(Size::new(options.width as f32, options.height as f32))?;
         let app_id = runtime.options.app_id.clone();
         let id = runtime

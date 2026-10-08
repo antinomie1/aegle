@@ -9,6 +9,8 @@ pub struct Preferences {
     pub reduced_motion: Option<bool>,
     /// Text size as a percentage of the default (100), within 50–400.
     pub text_scale: Option<u16>,
+    /// The longest gap between the presses of a double click.
+    pub double_click: Option<core::time::Duration>,
 }
 
 /// A mouse button other than the primary one, which custom controls may use

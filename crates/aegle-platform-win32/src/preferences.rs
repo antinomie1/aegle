@@ -5,6 +5,7 @@ use windows::{
         System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW},
         UI::{
             Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
+            Input::KeyboardAndMouse::GetDoubleClickTime,
             WindowsAndMessaging::{
                 SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, SystemParametersInfoW,
             },
@@ -13,7 +14,8 @@ use windows::{
     core::{BOOL, w},
 };
 
-/// Reads the app color scheme, high contrast and client-area animation settings.
+/// Reads the app color scheme, high contrast, client-area animation, text
+/// scale and double-click time settings.
 /// A setting the system cannot report stays `None`.
 pub(crate) fn read() -> Preferences {
     let mut light = 0u32;
@@ -78,10 +80,13 @@ pub(crate) fn read() -> Preferences {
     .then_some(percent)
     .filter(|p| (50..=400).contains(p))
     .map(|p| p as u16);
+    // SAFETY: GetDoubleClickTime takes no arguments and cannot fail.
+    let double_click = unsafe { GetDoubleClickTime() };
     Preferences {
         dark,
         high_contrast,
         reduced_motion,
         text_scale,
+        double_click: Some(std::time::Duration::from_millis(double_click.into())),
     }
 }

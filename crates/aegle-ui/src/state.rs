@@ -232,6 +232,8 @@ pub struct State {
     pub key_version: u64,
     /// When the input being dispatched was reported.
     pub input_time: std::time::Instant,
+    /// Press counting and double-click handlers.
+    pub clicks: crate::clicks::Clicks,
     /// The time of the frame being produced, see [`crate::Ui::run_frame`].
     pub frame_time: std::time::Instant,
     /// Controls that asked to repaint on the next frame.
@@ -411,6 +413,7 @@ impl State {
         self.tree.remove_with(id, |node, _| {
             removed.push(node);
             self.callbacks.remove(&node);
+            self.clicks.handlers.remove(&node);
             self.frames.retain(|h| h.id != node);
             self.animated.remove(&node);
             self.descriptions.remove(&node);
