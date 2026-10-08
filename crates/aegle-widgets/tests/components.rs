@@ -108,6 +108,10 @@ fn range_variants_number_fields_and_separators() -> Result {
         ui.run_frame(Instant::now() + Duration::from_secs(1))?;
         ui.refresh()?;
         assert!(!ui.wants_frames()?);
+        // Inside snap the value shows at once.
+        progress.snap(|| progress.set_value(0.0))?;
+        ui.refresh()?;
+        assert!(!ui.wants_frames()?);
         // After an idle period it starts now, not at the long-past last frame.
         let idle = self::ui()?;
         let bar = idle.root().progress(0.0, 1.0, 0.0)?;

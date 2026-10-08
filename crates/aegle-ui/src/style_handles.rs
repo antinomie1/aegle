@@ -85,7 +85,7 @@ impl Node {
         self.change(|state, id| {
             #[cfg(feature = "motion")]
             if let Some(active) = state.motion.moving.get(&id) {
-                return Ok(active.tween.target());
+                return Ok(active.target());
             }
             Ok(state.tree.get(id).unwrap().context.offset)
         })

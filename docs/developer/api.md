@@ -266,7 +266,7 @@ card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
 
 | 层 | 来源 | 写入 | 移除 |
 | --- | --- | --- | --- |
-| 呈现 | 进行中的过渡（`motion`） | `set_transition` | 到达目标；`finish_transition`、`cancel_transition` |
+| 呈现 | 进行中的过渡或动画（`motion`） | `set_transition`、`with_transition`、`animate` | 到达目标；`finish_transition`、`cancel_transition`、`snap` |
 | 本地值 | 常量或 token 绑定，同一属性只能是其中之一，后写者生效 | setter、`set_style`；`bind_color`、`bind_length`、`bind_font` | `set_style(Style::default())`、`unbind_token` |
 | 皮肤 | `set_skin` 的纯函数，否则默认皮肤 | `set_skin` | `clear_skin` |
 | 主题 | 最近的局部主题与覆盖，再到窗口主题 | `set_theme`、`set_theme_override`、`set_token` | 传 `None` |
@@ -380,13 +380,44 @@ card.set_offset(Point::new(0.0, 480.0))?;               // 布局后平移，命
 card.on_transition_end(move |_| window.close())?;       // 全部过渡完成后执行
 ```
 
-- 外观过渡覆盖背景、文字、边框、圆角、焦点环、选择、caret 和标志颜色；`presented_appearance()` 返回当前呈现值。
+- 外观过渡覆盖背景、文字、边框、圆角、焦点环、选择、caret 和标志颜色；`presented_appearance()` 返回当前呈现值。`set_property_transition(TransitionProperty::Offset, Some(t))` 只给某一项设置时长与曲线。
 - `finish_transition()` 立即到终点并完成；`cancel_transition()` 停在当前呈现值；`clear_transition()` 移除策略并回到目标。
 - `set_offset` 不改变布局；没有过渡策略时立即生效。
 - `card.set_transform(Transform { scale: 1.2, rotation: 0.1 })` 以节点中心缩放/旋转子树（弧度，呈现层变换，布局不变），同样可补间；命中、滚动视口裁剪（外包框）、IME 锚点与无障碍变换跟随。
 - `ui.fling(position, velocity)` 在触摸板/触摸抬起后继续滚动（逻辑像素/秒，指数衰减），任何新的滚动、按下或 `ui.stop_fling()` 都会停止。
 - 手指输入用 `ui.touch(PointerId(..), TouchPhase::Down/Move/Up/Cancel, position, time_ms)`：点击与控件拖动成为指针事件，在非拖动内容上拖动超过 10 px 会平移滚动视图并在抬起时惯性滚动；Wayland 的 `wl_touch` 已接到它。
-- 原生 App 为新建的交互控件默认安装 120 ms 过渡；`AppOptions.transition = None` 关闭。减少动态效果时所有过渡直接到终点（仍会触发完成回调）。
+- 原生 App 为新建的交互控件默认安装 120 ms 过渡，所以 hover/按下/焦点反馈和对它们的 setter 都会补间；`AppOptions.transition = None` 关闭。无窗口 `Ui` 默认不安装，`ui.set_default_transition(Some(Transition::default()))` 得到与原生 App 相同的行为。减少动态效果时所有过渡与动画直接到终点（仍会触发完成回调）。
+
+**只针对一次变化**，不改控件的过渡策略：
+
+```rust
+button.snap(|| button.set_background(Color::WHITE))?;           // 这次不补间
+card.with_transition(Transition::spring(Spring::new(300.0, 12.0)?), || {
+    card.set_offset(Point::new(0.0, 24.0))                        // 这次按弹簧补间，即使 card 没有策略
+})?;
+```
+
+闭包只作用于调用它的控件；闭包结束后，该控件的修改恢复按策略处理。
+
+**显式动画**：`node.animate(Animate::Offset | Scale | Rotation(animation))` 启动一个关键帧动画，从第一帧开始、停在最后一帧，并共用 `is_animating`、`finish_transition`、`cancel_transition` 与 `on_transition_end`：
+
+```rust
+let shake = Animation::new(Duration::from_millis(300), [
+    Keyframe::new(0.0, Point::new(0.0, 0.0)),
+    Keyframe::new(0.25, Point::new(-8.0, 0.0)),
+    Keyframe::new(0.75, Point::new(8.0, 0.0)).easing(Easing::EaseInOut),
+    Keyframe::new(1.0, Point::new(0.0, 0.0)),
+])?;
+field.animate(Animate::Offset(shake))?;
+
+let pulse = Animation::tween(1.0, 1.08, Transition::default())?
+    .delay(Duration::from_millis(500))
+    .cycles(Cycles::Forever)
+    .alternate(true);
+badge.animate(Animate::Scale(pulse))?;                         // 一直运行，直到 finish/cancel_transition
+```
+
+曲线：`Easing::{Linear, EaseIn, EaseOut, EaseInOut}`、`Easing::cubic_bezier(x1, y1, x2, y2)?`（同 CSS `cubic-bezier`）与 `Easing::Spring(Spring::new(stiffness, damping)?)`；`Transition::spring(spring)` 使用弹簧自然的稳定时间。回弹曲线会让位移、旋转短暂越过目标。`aegle-motion` 的 `Tween` 与 `Animation` 不依赖窗口，也可在自己的宿主里按时间采样。
 - 没有活动动画时不请求帧、不唤醒 CPU。
 
 ## 9. 标记语言

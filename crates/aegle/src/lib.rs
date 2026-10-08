@@ -37,7 +37,10 @@ pub mod prelude {
         Style, Theme, Token, TokenSlot, Ui, VisualState, Wrap, register_token,
     };
     #[cfg(feature = "motion")]
-    pub use aegle_ui::{Easing, Transition, TransitionProperty};
+    pub use aegle_ui::{
+        Animate, Animation, CubicBezier, Cycles, Easing, Keyframe, Spring, Transition,
+        TransitionProperty,
+    };
     #[cfg(feature = "grid")]
     pub use aegle_ui::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
     pub use aegle_widgets::{

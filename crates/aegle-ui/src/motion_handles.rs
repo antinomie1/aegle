@@ -1,9 +1,22 @@
 use crate::{
-    Node, Result, State, Style, Transition, TransitionProperty, Ui, UiError, motion::Track,
+    Node, Point, Result, State, Style, Transform, Transition, TransitionProperty, Ui, UiError,
+    motion::{Running, Track},
     tokens::TokenSlot,
 };
 use aegle_core::{Dirty, NodeId};
+use aegle_motion::Animation;
 use std::time::Duration;
+
+/// An explicit animation of one presented property, see [`Node::animate`].
+#[derive(Clone, Debug)]
+pub enum Animate {
+    /// The translation `Node::set_offset` sets.
+    Offset(Animation<Point>),
+    /// The scale of `Node::set_transform`; overshoot stays positive.
+    Scale(Animation<f32>),
+    /// The rotation of `Node::set_transform`, in radians.
+    Rotation(Animation<f32>),
+}
 
 impl Node {
     /// Animates future changes to this control's paint values, offset, scale
@@ -156,6 +169,99 @@ impl Node {
     }
 }
 
+impl Node {
+    /// Runs `change`, animating the paint, offset, scale and rotation changes
+    /// it makes to this control with `timing` instead of the control's
+    /// transition policy, which stays unchanged. Changes to other controls
+    /// follow their own policy. Reduced motion still snaps.
+    ///
+    /// ```ignore
+    /// card.with_transition(Transition::spring(Spring::new(300.0, 12.0)?), || {
+    ///     card.set_offset(Point::new(0.0, 24.0))
+    /// })?;
+    /// ```
+    pub fn with_transition<R>(
+        &self,
+        timing: Transition,
+        change: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        self.scoped(Some(timing), change)
+    }
+    /// Runs `change` with the changes it makes to this control applied at
+    /// once, without a transition, whatever the policy. A transition already
+    /// running for a changed property jumps to the new value and completes.
+    pub fn snap<R>(&self, change: impl FnOnce() -> Result<R>) -> Result<R> {
+        self.scoped(None, change)
+    }
+    fn scoped<R>(
+        &self,
+        timing: Option<Transition>,
+        change: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        let outer = self.change(|state, id| {
+            if timing.is_some() && !state.motion.tracks.contains_key(&id) {
+                // A policy-free control animates from what it shows now.
+                let presented = Some(state.appearance(id)?);
+                let timings = [None; 4];
+                state.motion.tracks.insert(id, Track { timings, presented });
+            }
+            state.motion.paint_once.insert(id, timing);
+            Ok(state.motion.scoped.replace((id, timing)))
+        })?;
+        let result = change();
+        // The closure returned, so nothing borrows the UI; it may have
+        // removed this control or dropped the UI.
+        if let Some(owner) = self.state.upgrade() {
+            owner.borrow_mut().motion.scoped = outer;
+        }
+        result
+    }
+    /// Starts an explicit animation of one property from its first
+    /// keyframe, replacing a running transition or animation of it. When it
+    /// finishes the property rests at its [`Animation::target`], which also
+    /// becomes the logical value (`offset`, `transform`). It shares the
+    /// transition lifecycle: [`Self::is_animating`], [`Self::finish_transition`],
+    /// [`Self::cancel_transition`] and [`Self::on_transition_end`]. Reduced
+    /// motion and hidden controls go straight to the target; a
+    /// [`Cycles::Forever`](aegle_motion::Cycles::Forever) animation runs, and
+    /// requests frames, until stopped.
+    pub fn animate(&self, animation: Animate) -> Result {
+        self.change(|state, id| {
+            let element = &mut state.tree.get_mut(id).unwrap().context;
+            match animation {
+                Animate::Offset(curve) => {
+                    element.offset = curve.sample(Duration::ZERO);
+                    state.motion.moving.insert(id, Running::new(curve));
+                }
+                Animate::Scale(curve) => {
+                    let spin = Transform {
+                        scale: curve.sample(Duration::ZERO).max(f32::EPSILON),
+                        ..element.spin
+                    };
+                    state.set_spin(id, spin);
+                    state.motion.scaling.insert(id, Running::new(curve));
+                }
+                Animate::Rotation(curve) => {
+                    let spin = Transform {
+                        rotation: curve.sample(Duration::ZERO),
+                        ..element.spin
+                    };
+                    state.set_spin(id, spin);
+                    state.motion.rotating.insert(id, Running::new(curve));
+                }
+            }
+            state.geometry_dirty = true;
+            state.repaint = true;
+            if state.motion.reduced {
+                state.snap_offset(id);
+                state.snap_spin(id);
+                state.complete(id);
+            }
+            Ok(())
+        })
+    }
+}
+
 impl Ui {
     /// Sets timing for subsequently created interactive controls. Existing policies
     /// are unchanged. Headless UIs default to None; native App opts into 120 ms.
@@ -268,5 +374,38 @@ impl State {
             _ => {}
         }
         Ok(())
+    }
+}
+
+impl State {
+    /// Whether a `Node::snap` closure is changing `id`, for control
+    /// libraries' own value animations.
+    pub fn snapping(&self, id: NodeId) -> bool {
+        self.motion.scoped == Some((id, None))
+    }
+    /// Ends the paint timing of `with_transition` and `snap` closures once
+    /// their changes were recorded.
+    pub(crate) fn settle_scoped(&mut self) {
+        if self.motion.paint_once.is_empty() {
+            return;
+        }
+        let scoped: Vec<_> = self.motion.paint_once.drain().map(|(id, _)| id).collect();
+        for id in scoped {
+            self.release_track(id);
+        }
+    }
+    /// Drops the policy-free track a `with_transition` closure created once
+    /// its paint transition is over.
+    pub(crate) fn release_track(&mut self, id: NodeId) {
+        let idle = !self.motion.active.contains_key(&id);
+        if idle
+            && self
+                .motion
+                .tracks
+                .get(&id)
+                .is_some_and(|t| t.timings == [None; 4])
+        {
+            self.motion.tracks.remove(&id);
+        }
     }
 }

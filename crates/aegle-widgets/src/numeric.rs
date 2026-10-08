@@ -79,21 +79,26 @@ fn read_range<T>(node: &Node, read: impl FnOnce(&Range) -> T) -> Result<T> {
     })
 }
 
-/// Applies a programmatic range change; a changed value eases into place.
+/// Applies a programmatic range change; a changed value eases into place
+/// unless changed inside `Node::snap`.
 fn update_range(
     node: &Node,
     update: impl FnOnce(&mut Range) -> std::result::Result<bool, RangeError>,
 ) -> Result {
     node.change(|state, id| {
+        #[cfg(feature = "motion")]
+        let jump = state.snapping(id);
+        #[cfg(not(feature = "motion"))]
+        let jump = true;
         let control = &mut state.tree.get_mut(id).unwrap().context.control;
         let changed = if let Some(slider) = control.as_any_mut().downcast_mut::<SliderControl>() {
             let changed = update(slider.behavior.range_mut())?;
             let fraction = slider.behavior.range().fraction();
-            slider.glide.retarget(fraction, false);
+            slider.glide.retarget(fraction, jump);
             changed
         } else if let Some(progress) = control.as_any_mut().downcast_mut::<ProgressControl>() {
             let changed = update(&mut progress.range)?;
-            progress.glide.retarget(progress.range.fraction(), false);
+            progress.glide.retarget(progress.range.fraction(), jump);
             changed
         } else {
             return Err(UiError::WrongKind.into());

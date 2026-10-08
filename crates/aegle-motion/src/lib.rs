@@ -1,43 +1,26 @@
-//! Allocation-free tween sampling, independent of a window, timer or runtime.
+//! Tween and keyframe sampling, independent of a window, timer or runtime.
 //!
-//! The caller supplies elapsed time. To retarget, construct a new [`Tween`] from
-//! the old tween's current sample and restart the caller's elapsed time. A host
-//! stores only active tweens and stops scheduling frames once they finish.
+//! The caller supplies elapsed time. [`Tween`] interpolates between two values
+//! with an [`Easing`]: a quadratic preset, a cubic Bézier curve or a damped
+//! [`Spring`]. [`Animation`] adds keyframes, a start delay and repeated cycles. To
+//! retarget, construct a new tween from the old one's current sample and restart
+//! the caller's elapsed time. A host stores only active animations and stops
+//! scheduling frames once they finish. Only multi-keyframe animations allocate.
 //! Color interpolation uses premultiplied linear light and the same shared sRGB
 //! transfer tables as software rendering. This crate requires `std`.
+
+mod animation;
+mod easing;
+
+pub use animation::{Animation, Cycles, Keyframe};
+pub use easing::{CubicBezier, Easing, Spring};
 
 use aegle_types::{Color, Point, color_math};
 use std::fmt;
 pub use std::time::Duration;
 
-/// A finite interpolation curve over normalized elapsed time.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Easing {
-    /// Constant interpolation speed.
-    #[default]
-    Linear,
-    /// Quadratic acceleration from rest.
-    EaseIn,
-    /// Quadratic deceleration to rest.
-    EaseOut,
-    /// Symmetric quadratic acceleration and deceleration.
-    EaseInOut,
-}
-
-impl Easing {
-    fn sample(self, t: f32) -> f32 {
-        match self {
-            Self::Linear => t,
-            Self::EaseIn => t * t,
-            Self::EaseOut => t * (2.0 - t),
-            Self::EaseInOut if t < 0.5 => 2.0 * t * t,
-            Self::EaseInOut => 1.0 - 2.0 * (1.0 - t) * (1.0 - t),
-        }
-    }
-}
-
 /// Timing shared by a host's automatic property transitions.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Transition {
     /// Time to reach a new target; zero snaps directly to the target.
     pub duration: Duration,
@@ -50,6 +33,10 @@ impl Transition {
     pub const fn new(duration: Duration, easing: Easing) -> Self {
         Self { duration, easing }
     }
+    /// Timing that follows `spring` for its natural settling time.
+    pub fn spring(spring: Spring) -> Self {
+        Self::new(spring.duration(), Easing::Spring(spring))
+    }
 }
 
 impl Default for Transition {
@@ -60,13 +47,14 @@ impl Default for Transition {
 
 /// A value that can be validated and interpolated by a [`Tween`].
 ///
-/// Implementations must return finite, valid values between validated endpoints
-/// for every finite progress in `0..=1`. Sampling is a pure computation: it must
+/// Implementations must return finite, valid values for every finite
+/// progress, which overshooting curves take slightly outside `0..=1`; values
+/// with a limited range clamp it. Sampling is a pure computation: it must
 /// not mutate controls or dispatch callbacks while a host advances its state.
 pub trait Interpolate: Copy {
     /// Validates an endpoint before the tween accepts it.
     fn validate(self) -> Result<(), InvalidValue>;
-    /// Interpolates validated endpoints at finite progress in `0..=1`.
+    /// Interpolates validated endpoints at finite progress.
     fn interpolate(self, to: Self, progress: f32) -> Self;
 }
 
@@ -105,10 +93,10 @@ impl Interpolate for Color {
     }
 
     fn interpolate(self, to: Self, progress: f32) -> Self {
-        if progress == 0.0 || self == to {
+        if progress <= 0.0 || self == to {
             return self;
         }
-        if progress == 1.0 {
+        if progress >= 1.0 {
             return to;
         }
         let from = color_math::linear_rgba(self.to_rgba());

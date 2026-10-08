@@ -1,6 +1,6 @@
 # 默认组件、主题与动画
 
-状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；缩放/旋转动画、逐 token 的 `ThemeOverride`、系统文本缩放、惯性滚动和渐变/阴影图像已实现；任意行为组件扩展仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
+状态：v0.1。当前已有基础行为、中性皮肤、局部样式、可替换纯函数皮肤、小型 Theme 及其子树继承；外观与位移过渡、完成回调和原生 App 的系统深浅色/高对比/减少动态效果跟随已接入；缩放/旋转动画、作用域过渡（`with_transition`/`snap`）、关键帧与弹簧动画、逐 token 的 `ThemeOverride`、系统文本缩放、惯性滚动和渐变/阴影图像已实现；任意行为组件扩展仍是目标。三者共用属性、状态、生命周期和失效规则，不建立第二套运行时。对应 R12、R17–R21。
 
 ## 当前行为接口
 
@@ -106,15 +106,27 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `clear_transition()` 移除策略并立即回到目标；`finish_transition()` 立即到达当前目标；`cancel_transition()` 将最近呈现写为本地外观覆盖和位移目标，替换状态颜色覆盖，保留后续设置的过渡策略。焦点轮廓的可见性仍受真实行为约束。
 
-`on_transition_end(callback)` 在节点所有活动过渡（外观、位移、缩放和旋转中最晚的一项）到达目标后排队一次，与点击回调共用版本化队列，在借用外执行。正常结束、`finish_transition()`，以及有策略时因减少动态效果、隐藏或零时长而直接跳到目标的变化都会完成；取消、`clear_transition()`、删除节点或关闭窗口不完成，已排队的通知随节点删除丢弃。尚无关键帧、弹簧或循环 API。
+`on_transition_end(callback)` 在节点所有活动过渡（外观、位移、缩放和旋转中最晚的一项）到达目标后排队一次，与点击回调共用版本化队列，在借用外执行。正常结束、`finish_transition()`，以及有策略时因减少动态效果、隐藏或零时长而直接跳到目标的变化都会完成；取消、`clear_transition()`、删除节点或关闭窗口不完成，已排队的通知随节点删除丢弃。
+
+## 显式动画入口
+
+过渡策略是“属性变化时怎样到达新值”的长期设置；需要只针对某一次变化时使用作用域入口，不改动策略：
+
+- `node.with_transition(timing, || ...)`：闭包内对该控件的外观、位移、缩放与旋转修改按 `timing` 补间，无论它有无策略；没有策略的控件从当前显示值开始。闭包结束后的修改恢复按策略处理，已开始的补间跑完。对其他控件的修改仍按各自策略。
+- `node.snap(|| ...)`：闭包内对该控件的修改立即生效，不补间；同一属性正在进行的过渡跳到新值并完成。Slider/Progress 的程序化数值滑动也遵守它（经 `State::snapping` 供控件库查询）。
+- `node.animate(Animate::Offset(..) | Scale(..) | Rotation(..))`：启动一个 `aegle_motion::Animation`，从其第一个关键帧开始，替换该属性正在进行的过渡或动画；结束时停在 `Animation::target`，它也是 `offset()`/`transform()` 读到的逻辑值。它与过渡共用 `is_animating`、`finish_transition`、`cancel_transition` 和 `on_transition_end`。
+
+`Animation` 由关键帧（`Keyframe::new(at, value).easing(..)`，`at` 从 0.0 到 1.0 不倒退，同位置的后一帧表示跳变）、一个周期时长、`delay`、`cycles(Cycles::Times(n) | Cycles::Forever)` 与 `alternate` 组成；`Animation::tween(from, to, timing)` 是不分配内存的两帧特例，自动过渡内部也用它。序列即多个关键帧；不同属性或控件之间的先后由 `on_transition_end` 串联。`Cycles::Forever` 不会自行完成，运行期间宿主持续出帧，需要 `finish_transition`/`cancel_transition` 停止。外观（颜色）没有显式关键帧入口，由过渡与作用域入口覆盖。
+
+曲线：`Easing` 除四种二次曲线外有 `Easing::cubic_bezier(x1, y1, x2, y2)`（同 CSS，x 须在 0..=1，y 可越界）与 `Easing::Spring(Spring::new(stiffness, damping)?)`（单位质量阻尼弹簧，阻尼低于 2√stiffness 时回弹）。`Transition::spring(spring)` 以弹簧稳定到 0.1% 以内的时间作为时长。越界曲线让进度暂时超出 0..=1：位移、旋转随之越过目标，颜色在端点截断，边框/焦点宽度与圆角不小于 0，缩放保持为正。
 
 无窗口 Ui 默认不安装过渡。`set_default_transition` 只影响随后创建的交互控件；首次刷新直接建立呈现值，不做入场动画。原生 App 在启用 motion 时为交互控件默认安装120ms EaseOut，`AppOptions.transition=None` 可关闭自动安装。各 App 共用一个单调时钟，通过 Wayland frame callback 推进；没有活动动画时不请求动画帧，无轮询定时器。隐藏子树刷新时直接到目标；compositor 暂停窗口帧回调时不主动唤醒，恢复时采样当前时刻。
 
-`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观或位移过渡是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui/Window::set_reduced_motion(true)` 立即到目标并完成，保留最后一帧重绘；期间不启动新过渡。原生 App 默认跟随系统减少动态效果偏好，`AppOptions.reduced_motion` 可显式覆盖。
+`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观、几何过渡或显式动画是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui/Window::set_reduced_motion(true)` 立即到目标并完成，保留最后一帧重绘；期间不启动新过渡，`with_transition` 与 `animate` 也直接到目标。原生 App 默认跟随系统减少动态效果偏好，`AppOptions.reduced_motion` 可显式覆盖。
 
 ## 后续动画契约
 
-默认 motion 只提供标量、二维向量和颜色的补间及属性过渡：linear、ease_in、ease_out、ease_in_out。颜色在预乘线性空间插值。关键帧和阻尼弹簧为可选模块能力；无通用时间线编辑器或动画脚本。
+motion 提供标量、二维向量和颜色的补间、属性过渡、关键帧动画与弹簧/Bézier 曲线（见上节）。颜色在预乘线性空间插值。没有通用时间线编辑器或动画脚本。
 
 默认 hover/焦点过渡 120 ms，开关/选择 160 ms，面板出现 180 ms。几何动画可以修改 transform，命中与候选窗跟随呈现变换（当前已实现平移）；width/height 动画明确触发布局，不伪装成免费合成动画。
 

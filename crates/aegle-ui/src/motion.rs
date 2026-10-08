@@ -5,7 +5,7 @@ use crate::{
     Appearance, Point, Result, Transform, Transition, UiError, callbacks::Handler, state::State,
 };
 use aegle_core::{Dirty, NodeId};
-use aegle_motion::{Interpolate, InvalidValue, Tween};
+use aegle_motion::{Animation, Interpolate, InvalidValue, Tween};
 use std::{collections::HashMap, time::Duration};
 
 /// A presented value whose transition timing can be set on its own.
@@ -42,6 +42,11 @@ pub struct Motion {
     pub fling: Option<crate::fling::Fling>,
     /// Completion handlers, versioned in the shared callback sequence.
     pub ends: HashMap<NodeId, Handler>,
+    /// The node and timing of a running `Node::with_transition` or
+    /// `Node::snap` closure; geometric changes inside it use the timing.
+    pub scoped: Option<(NodeId, Option<Transition>)>,
+    /// Paint timing set by such a closure for the next refresh only.
+    pub paint_once: HashMap<NodeId, Option<Transition>>,
     /// Nodes whose transition finished during the current advance.
     finished: Vec<NodeId>,
 }
@@ -73,10 +78,21 @@ pub struct Active {
 }
 
 pub struct Running<T: Interpolate> {
-    pub tween: Tween<T>,
+    /// A transition's two-value tween or an explicit animation.
+    pub curve: Animation<T>,
     /// Set by the next refresh, as for paint, so a request made from a callback
     /// starts at the host's current time rather than the last sampled one.
     start: Option<Duration>,
+}
+
+impl<T: Interpolate> Running<T> {
+    pub fn new(curve: Animation<T>) -> Self {
+        Self { curve, start: None }
+    }
+    /// The value the property rests at once this finishes.
+    pub fn target(&self) -> T {
+        self.curve.target()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -93,10 +109,14 @@ impl Interpolate for Paint {
             background: a.background.interpolate(b.background, progress),
             foreground: a.foreground.interpolate(b.foreground, progress),
             border_color: a.border_color.interpolate(b.border_color, progress),
-            border_width: a.border_width.interpolate(b.border_width, progress),
-            radius: a.radius.interpolate(b.radius, progress),
+            // Overshooting curves must not make widths negative.
+            border_width: a
+                .border_width
+                .interpolate(b.border_width, progress)
+                .max(0.0),
+            radius: a.radius.interpolate(b.radius, progress).max(0.0),
             focus_color: a.focus_color.interpolate(b.focus_color, progress),
-            focus_width: a.focus_width.interpolate(b.focus_width, progress),
+            focus_width: a.focus_width.interpolate(b.focus_width, progress).max(0.0),
             selection: a.selection.interpolate(b.selection, progress),
             caret: a.caret.interpolate(b.caret, progress),
             indicator: a.indicator.interpolate(b.indicator, progress),
@@ -121,7 +141,7 @@ fn plan<T: Interpolate + PartialEq>(
     target: T,
     timing: Option<Transition>,
 ) -> Result<Step> {
-    let goal = running.get(&id).map(|r| r.tween.target());
+    let goal = running.get(&id).map(Running::target);
     if goal == Some(target) || (goal.is_none() && current == target) {
         return Ok(Step::Unchanged);
     }
@@ -129,8 +149,8 @@ fn plan<T: Interpolate + PartialEq>(
         running.remove(&id);
         return Ok(Step::Snapped);
     };
-    let tween = Tween::new(current, target, timing.duration, timing.easing)?;
-    running.insert(id, Running { tween, start: None });
+    let curve = Animation::tween(current, target, timing)?;
+    running.insert(id, Running::new(curve));
     Ok(Step::Started)
 }
 
@@ -150,11 +170,10 @@ fn advance<T: Interpolate>(
         let element = &mut state.get_mut(*id).unwrap().context;
         let elapsed = now - start;
         // Hidden subtrees go straight to their target.
-        let done = run.tween.finished(elapsed) || !element.effective_visible;
-        let value = if done {
-            run.tween.target()
-        } else {
-            run.tween.sample(elapsed)
+        let done = run.curve.finished(elapsed) || !element.effective_visible;
+        let value = match done {
+            true => run.curve.target(),
+            false => run.curve.sample(elapsed),
         };
         apply(element, value);
         moved = true;
@@ -175,6 +194,7 @@ impl Motion {
         self.scaling.remove(&id);
         self.rotating.remove(&id);
         self.ends.remove(&id);
+        self.paint_once.remove(&id);
     }
     pub fn clear(&mut self) {
         self.tracks.clear();
@@ -184,6 +204,7 @@ impl Motion {
         self.rotating.clear();
         self.fling = None;
         self.ends.clear();
+        self.paint_once.clear();
     }
     /// Whether any transition of `id` runs.
     pub fn running(&self, id: NodeId) -> bool {
@@ -204,20 +225,34 @@ impl State {
     /// Whether the policy has a timing for one property, and that timing when
     /// it animates now (motion allowed, nonzero, visible). A control not yet
     /// painted has nothing to animate from, so its geometry is set directly.
+    /// A `with_transition` or `snap` closure overrides the policy's timing.
     fn timing(&self, id: NodeId, property: TransitionProperty) -> (bool, Option<Transition>) {
-        let timing = self.motion.tracks.get(&id).and_then(|t| {
+        let tracked = self.motion.tracks.get(&id).and_then(|t| {
             (property == TransitionProperty::Paint || t.presented.is_some())
                 .then(|| t.timing(property))
                 .flatten()
         });
+        let scoped = match property {
+            TransitionProperty::Paint => self.motion.paint_once.get(&id).copied(),
+            _ => self.motion.scoped.filter(|s| s.0 == id).map(|s| s.1),
+        };
+        let timing = scoped.unwrap_or(tracked);
         let visible = self.tree.get(id).unwrap().context.effective_visible;
         let animates = timing.filter(|t| !self.motion.reduced && !t.duration.is_zero() && visible);
-        (timing.is_some(), animates)
+        (tracked.is_some(), animates)
     }
 
     /// Called only for invalidated records, after the new skin target is validated.
     pub fn transition_appearance(&mut self, id: NodeId, target: Appearance) -> Result<Appearance> {
         let (policy, animates) = self.timing(id, TransitionProperty::Paint);
+        // A running tween toward this target keeps going, even when its timing
+        // came from a closed `with_transition` scope, unless motion stopped.
+        let visible = self.tree.get(id).unwrap().context.effective_visible;
+        let running = self.motion.active.get(&id);
+        if running.is_some_and(|a| a.tween.target().0 == target) && visible && !self.motion.reduced
+        {
+            return Ok(self.motion.tracks[&id].presented.unwrap());
+        }
         let Some(track) = self.motion.tracks.get_mut(&id) else {
             return Ok(target);
         };
@@ -233,14 +268,6 @@ impl State {
             }
             return Ok(target);
         };
-        if self
-            .motion
-            .active
-            .get(&id)
-            .is_some_and(|active| active.tween.target().0 == target)
-        {
-            return Ok(current);
-        }
         if current == target {
             if self.motion.active.remove(&id).is_some() {
                 self.complete(id);
@@ -336,12 +363,12 @@ impl State {
                 .motion
                 .scaling
                 .get(&id)
-                .map_or(spin.scale, |r| r.tween.target()),
+                .map_or(spin.scale, Running::target),
             rotation: self
                 .motion
                 .rotating
                 .get(&id)
-                .map_or(spin.rotation, |r| r.tween.target()),
+                .map_or(spin.rotation, Running::target),
         }
     }
 
@@ -376,7 +403,7 @@ impl State {
         let Some(active) = self.motion.moving.remove(&id) else {
             return false;
         };
-        self.tree.get_mut(id).unwrap().context.offset = active.tween.target();
+        self.tree.get_mut(id).unwrap().context.offset = active.target();
         self.geometry_dirty = true;
         self.repaint = true;
         true
@@ -409,7 +436,9 @@ impl State {
         } = &mut self.motion;
         let tree = &mut self.tree;
         let mut moved = advance(moving, tree, now, finished, |e, v| e.offset = v);
-        moved |= advance(scaling, tree, now, finished, |e, v| e.spin.scale = v);
+        // Overshooting curves must keep the scale positive.
+        let scale = |e: &mut crate::state::Element, v: f32| e.spin.scale = v.max(f32::EPSILON);
+        moved |= advance(scaling, tree, now, finished, scale);
         moved |= advance(rotating, tree, now, finished, |e, v| e.spin.rotation = v);
         self.geometry_dirty |= moved;
         self.repaint |= moved;
@@ -440,6 +469,7 @@ impl State {
             // A node finishing several properties at once completes once.
             if !finished[..index].contains(&id) {
                 self.complete(id);
+                self.release_track(id);
             }
         }
         finished.clear();

@@ -232,6 +232,8 @@ impl State {
                 self.damage_node(id, false);
             }
         }
+        #[cfg(feature = "motion")]
+        self.settle_scoped();
         Ok(std::mem::take(&mut self.repaint))
     }
 }

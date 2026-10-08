@@ -58,7 +58,7 @@ pub use aegle_layout::{Align, Direction, Insets, Justify, LayoutDirection, Lengt
 #[cfg(feature = "grid")]
 pub use aegle_layout::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
 #[cfg(feature = "motion")]
-pub use aegle_motion::{Easing, Transition};
+pub use aegle_motion::{Animation, CubicBezier, Cycles, Easing, Keyframe, Spring, Transition};
 pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{
@@ -75,6 +75,8 @@ pub use handles::{Container, Node, valid};
 pub use layout_handles::LocalLayout;
 #[cfg(feature = "motion")]
 pub use motion::TransitionProperty;
+#[cfg(feature = "motion")]
+pub use motion_handles::Animate;
 pub use state::{Element, Hooks, State, focus_policy, text_style};
 pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token};
 
