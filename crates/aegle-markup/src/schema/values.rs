@@ -1,11 +1,10 @@
-use super::{Kind, PropertyName, grid};
-use crate::{Error, Span, Value as Literal};
+use super::{PropertyName, grid};
+use crate::{ElementSpec, Layout, Styles, Value as Literal};
 
 pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
     use PropertyName::*;
     Some(match name {
         "title" => Title,
-        "text" => Text,
         "width" => Width,
         "height" => Height,
         "min_width" => MinWidth,
@@ -41,8 +40,6 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "visible" => Visible,
         "enabled" => Enabled,
         "label" => Label,
-        "read_only" => ReadOnly,
-        "password" => Password,
         "theme" => Theme,
         "background" => Background,
         "foreground" => Foreground,
@@ -60,18 +57,8 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "font_size" => FontSize,
         "transition" => Transition,
         "easing" => Easing,
-        "checked" => Checked,
-        "mixed" => Mixed,
-        "min" => Min,
-        "max" => Max,
-        "value" => Value,
-        "step" => Step,
         "indicator_color" => IndicatorColor,
-        "orientation" => Orientation,
-        "indeterminate" => Indeterminate,
         "tooltip" => Tooltip,
-        "decimals" => Decimals,
-        "ratio" => Ratio,
         "paint_transition" => PaintTransition,
         "offset_transition" => OffsetTransition,
         "scale_transition" => ScaleTransition,
@@ -108,69 +95,61 @@ pub fn choices(name: PropertyName) -> &'static [&'static str] {
         Flow => &["row", "column", "row_dense", "column_dense"],
         Easing => &["linear", "ease_in", "ease_out", "ease_in_out"],
         Theme => &["light", "dark", "high_contrast"],
-        Orientation => &["horizontal", "vertical"],
         _ => &[],
     }
 }
 
-/// Whether a property applies to a component kind, regardless of its value.
-pub(crate) fn allowed(kind: Kind, name: PropertyName) -> bool {
+/// What a node property is checked against: the document's window or an element.
+#[derive(Clone, Copy)]
+pub(crate) enum Target<'s> {
+    Window,
+    Element(&'s ElementSpec<'s>),
+}
+
+impl<'s> Target<'s> {
+    fn layout(self) -> Layout {
+        match self {
+            Target::Window => Layout::Flex,
+            Target::Element(spec) => spec.layout,
+        }
+    }
+    fn styles(self) -> Styles {
+        match self {
+            Target::Window => Styles::NONE,
+            Target::Element(spec) => spec.styles,
+        }
+    }
+    pub(crate) fn name(self) -> &'s str {
+        match self {
+            Target::Window => "Window",
+            Target::Element(spec) => spec.name,
+        }
+    }
+    fn container(self) -> bool {
+        self.layout() != Layout::Leaf
+    }
+}
+
+/// Whether a node property applies to a target, regardless of its value.
+pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
     use PropertyName::*;
-    let flex = matches!(
-        kind,
-        Kind::Window | Kind::Column | Kind::Row | Kind::ScrollView
-    );
+    let window = matches!(target, Target::Window);
+    let styles = target.styles();
     match name {
-        Title => matches!(kind, Kind::Window | Kind::Tab),
-        Theme => kind == Kind::Window,
-        Text | FontSize => matches!(
-            kind,
-            Kind::Text
-                | Kind::Button
-                | Kind::TextField
-                | Kind::TextArea
-                | Kind::CheckBox
-                | Kind::Switch
-                | Kind::RadioButton
-        ),
-        ReadOnly | SelectionColor | CaretColor => matches!(kind, Kind::TextField | Kind::TextArea),
-        Password => kind == Kind::TextField,
-        HoverBackground | FocusColor | FocusWidth => {
-            matches!(
-                kind,
-                Kind::Button
-                    | Kind::TextField
-                    | Kind::TextArea
-                    | Kind::CheckBox
-                    | Kind::Switch
-                    | Kind::RadioButton
-                    | Kind::Slider
-            )
+        Title | Theme => window,
+        FontSize => styles.contains(Styles::TEXT),
+        SelectionColor | CaretColor => styles.contains(Styles::EDITOR),
+        HoverBackground | FocusColor | FocusWidth => styles.contains(Styles::INTERACTIVE),
+        PressedBackground => styles.contains(Styles::PRESSED),
+        IndicatorColor => styles.contains(Styles::INDICATOR),
+        Gap | Align | Justify | AlignContent => target.container(),
+        Direction | Wrap => target.layout() == Layout::Flex,
+        Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems | Areas => {
+            target.layout() == Layout::Grid
         }
-        PressedBackground => matches!(
-            kind,
-            Kind::Button | Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider
-        ),
-        Checked => matches!(kind, Kind::CheckBox | Kind::Switch | Kind::RadioButton),
-        Mixed => kind == Kind::CheckBox,
-        Min | Max | Value => matches!(kind, Kind::Slider | Kind::Progress | Kind::NumberField),
-        Step => matches!(kind, Kind::Slider | Kind::NumberField),
-        Orientation => matches!(kind, Kind::Slider | Kind::Progress | Kind::Splitter),
-        Indeterminate => kind == Kind::Progress,
-        Decimals => kind == Kind::NumberField,
-        Ratio => kind == Kind::Splitter,
-        Tooltip => kind != Kind::Window,
-        IndicatorColor => matches!(
-            kind,
-            Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::Slider | Kind::Progress
-        ),
-        Gap | Align | Justify | AlignContent => kind.is_container(),
-        Direction | Wrap => flex,
-        Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems | Areas => kind == Kind::Grid,
-        MaxWidth | MaxHeight | AspectRatio | Margin | Inset | Shrink | Basis | AlignSelf
-        | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale | Rotation => {
-            kind != Kind::Window
-        }
+        Tooltip | MaxWidth | MaxHeight | AspectRatio | Margin | Inset | Shrink | Basis
+        | AlignSelf | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale
+        | Rotation => !window,
         _ => true,
     }
 }
@@ -222,24 +201,23 @@ fn edges(value: &Literal, nonnegative: bool, auto: bool) -> bool {
     }
 }
 
-pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Result<(), String> {
+pub(crate) fn validate(
+    target: Target<'_>,
+    name: PropertyName,
+    value: &Literal,
+) -> Result<(), String> {
     use PropertyName::*;
-    if !allowed(kind, name) {
-        return Err(format!("{name:?} is not supported on {kind:?}"));
+    if !allowed(target, name) {
+        return Err(format!("{name:?} is not supported on {}", target.name()));
     }
+    let window = matches!(target, Target::Window);
     let valid = match (name, value) {
         (Title, Literal::String(text)) => text.len() <= 4000 && !text.contains('\0'),
-        (Text, Literal::String(text)) if kind == Kind::TextField => !text.contains([
-            '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
-        ]),
-        (Text | Label | Tooltip, Literal::String(_)) => true,
-        (Decimals, Literal::Number(n)) => n.fract() == 0.0 && (0.0..=9.0).contains(n),
-        (Ratio, Literal::Number(n)) => (0.0..=1.0).contains(n),
-        (Ratio, Literal::Percent(n)) => (0.0..=100.0).contains(n),
-        (Width | Height, Literal::Length(n)) if kind == Kind::Window => {
+        (Label | Tooltip, Literal::String(_)) => true,
+        (Width | Height, Literal::Length(n)) if window => {
             n.is_finite() && *n > 0.0 && n.fract() == 0.0 && f64::from(*n) <= f64::from(u32::MAX)
         }
-        (Width | Height, _) if kind == Kind::Window => false,
+        (Width | Height, _) if window => false,
         (Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis, value) => {
             length(value, true, true)
         }
@@ -251,7 +229,7 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         ) if function == "token" => {
             matches!(&arguments[..], [Literal::String(token)] if token_name(token))
         }
-        (Padding, value) if kind.is_container() => edges(value, true, false),
+        (Padding, value) if target.container() => edges(value, true, false),
         (Margin | Inset, value) => edges(value, false, true),
         (Gap, Literal::List(items)) => {
             items.len() == 2 && items.iter().all(|i| length(i, true, false))
@@ -263,9 +241,8 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         (Areas, value) => grid::areas(value),
         (GridArea, value) => grid::name(value),
         (Padding | BorderWidth | Radius | FocusWidth, Literal::Length(n))
-        | (Grow | Shrink | Step, Literal::Number(n)) => n.is_finite() && *n >= 0.0,
+        | (Grow | Shrink, Literal::Number(n)) => n.is_finite() && *n >= 0.0,
         (AspectRatio, Literal::Number(n)) => n.is_finite() && *n > 0.0,
-        (Min | Max | Value, Literal::Number(n)) => n.is_finite(),
         (FontSize, Literal::Length(n)) => n.is_finite() && *n > 0.0,
         (Transition, Literal::Duration(_)) => true,
         (OffsetX | OffsetY, Literal::Length(n)) | (Rotation, Literal::Number(n)) => n.is_finite(),
@@ -279,10 +256,7 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
             | IndicatorColor,
             Literal::Color(_),
         ) => true,
-        (
-            Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate,
-            Literal::Bool(_),
-        ) => true,
+        (Visible | Enabled, Literal::Bool(_)) => true,
         (_, Literal::Identifier(value)) => choices(name).contains(&value.as_str()),
         _ => false,
     };
@@ -291,15 +265,12 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
     }
     let expected = match name {
         Title => "a string of at most 4000 bytes without NUL".into(),
-        Text if kind == Kind::TextField => "a string without hard line separators".into(),
-        Text | Label | Tooltip => "a string".into(),
-        Decimals => "a whole number from 0 to 9".into(),
-        Ratio => "a number from 0 to 1 or a percentage".into(),
-        Width | Height if kind == Kind::Window => "a positive whole dp length fitting u32".into(),
+        Label | Tooltip => "a string".into(),
+        Width | Height if window => "a positive whole dp length fitting u32".into(),
         Width | Height | MinWidth | MinHeight | MaxWidth | MaxHeight | Basis => {
             "a nonnegative dp length, a percentage, calc(...) or auto".into()
         }
-        Padding if kind.is_container() => "a nonnegative dp length or percentage, a list of two \
+        Padding if target.container() => "a nonnegative dp length or percentage, a list of two \
             or four, or token(\"package.name\")"
             .into(),
         Margin | Inset => "a dp length, percentage or auto, or a list of two or four".into(),
@@ -333,44 +304,12 @@ pub(crate) fn validate(kind: Kind, name: PropertyName, value: &Literal) -> Resul
         Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
         | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
         | IndicatorColor => "a #RRGGBB or #RRGGBBAA color or token(\"package.name\")".into(),
-        Grow | Shrink | Step => "a finite nonnegative number".into(),
-        Min | Max | Value => "a finite number".into(),
-        Visible | Enabled | ReadOnly | Password | Checked | Mixed | Indeterminate => {
-            "true or false".into()
-        }
+        Grow | Shrink => "a finite nonnegative number".into(),
+        Visible | Enabled => "true or false".into(),
         Direction | LayoutDirection | Wrap | Align | Justify | AlignContent | AlignSelf
-        | JustifySelf | JustifyItems | Flow | Easing | Theme | Orientation => {
-            choices(name).join(", ")
-        }
+        | JustifySelf | JustifyItems | Flow | Easing | Theme => choices(name).join(", "),
     };
     Err(format!("{name:?} requires {expected}"))
-}
-
-/// Checks literal min/max of validated range properties.
-pub(crate) fn validate_range<'a>(
-    kind: Kind,
-    properties: impl Iterator<Item = (PropertyName, &'a Literal)>,
-    span: Span,
-) -> Result<(), Error> {
-    if !matches!(kind, Kind::Slider | Kind::Progress | Kind::NumberField) {
-        return Ok(());
-    }
-    let mut bounds = [0.0, 1.0];
-    for (name, value) in properties {
-        let index = match name {
-            PropertyName::Min => 0,
-            PropertyName::Max => 1,
-            _ => continue,
-        };
-        let Literal::Number(value) = value else {
-            unreachable!()
-        };
-        bounds[index] = f64::from(*value);
-    }
-    if bounds[0] >= bounds[1] {
-        return Err(Error::new(span, "numeric range requires min < max"));
-    }
-    Ok(())
 }
 
 pub(crate) fn valid_id(id: &str) -> bool {

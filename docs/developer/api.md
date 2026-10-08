@@ -430,7 +430,7 @@ badge.animate(Animate::Scale(pulse))?;                         // 一直运行�
 
 ## 9. 标记语言
 
-`ui!("path.aegle")` 在编译期解析并检查文件，返回构造闭包；`ui!(&parent, "path.aegle")` 立即构造。返回的 View 有 `root` 和每个 `id` 的类型化字段：
+`ui!("path.aegle")` 在编译期解析并检查文件，返回构造闭包；`ui!(&parent, "path.aegle")` 立即构造。元素名在调用处按 Rust 作用域解析：`use aegle::prelude::*` 引入内置元素，控件库的元素随其句柄类型导入（见[编写控件库](library.md#6-标记元素)）。返回的 View 有 `root` 和每个 `id` 的类型化字段：
 
 ```text
 Column {
@@ -463,7 +463,7 @@ View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view
 ```rust
 use aegle::loader::Program;
 
-let mut view = Program::load("ui/panel.aegle")?.build(&window)?;
+let mut view = Program::load("ui/panel.aegle")?.build(&window)?; // 第三方元素用 load_with(path, &Elements::new().with::<E>())
 view.set("count", aegle::loader::Data::Int(2))?;
 view.reload(&Program::load("ui/panel.aegle")?)?;   // 失败时保留旧界面
 ```

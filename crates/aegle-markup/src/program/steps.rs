@@ -5,7 +5,7 @@ use crate::checked::{HostCall, Step};
 use crate::schema::valid_id;
 use crate::{Error, Statement, Type};
 
-impl Checker {
+impl Checker<'_> {
     pub(super) fn steps(
         &mut self,
         statements: Vec<Statement>,

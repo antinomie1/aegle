@@ -1,0 +1,13 @@
+component Group(title: string) {
+    Column { Text { text: title }; slot }
+}
+Column {
+    state on: bool = false
+    state names: list<string> = ["a", "b"]
+    Chip { id: toggle; label: "toggle"; selected: on; on toggled { on = !self.selected } }
+    Group {
+        title: "chips"
+        for name in names { Chip { label: name; selected: on } }
+        if on { Chip { label: "shown" } }
+    }
+}

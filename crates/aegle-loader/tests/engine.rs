@@ -1,7 +1,7 @@
 //! Dynamic markup keeps bindings, blocks, keyed rows and components current.
 
 use aegle_access::accesskit::NodeId;
-use aegle_loader::{Data, FromHandle, Program};
+use aegle_loader::{Data, Program};
 use aegle_text::{Blob, GenericFamily};
 use aegle_ui::{Result, Size, TextSystem, Theme, Ui};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
@@ -25,11 +25,15 @@ Column {
 }"#;
 
 fn program(main: &str) -> Result<Program> {
-    Program::from_sources("main.aegle", &mut |path| match path {
-        "main.aegle" => Ok(main.into()),
-        "item.aegle" => Ok(ITEM.into()),
-        _ => Err("missing".into()),
-    })
+    Program::from_sources(
+        "main.aegle",
+        &aegle_loader::Elements::new(),
+        &mut |path| match path {
+            "main.aegle" => Ok(main.into()),
+            "item.aegle" => Ok(ITEM.into()),
+            _ => Err("missing".into()),
+        },
+    )
 }
 
 #[test]
@@ -70,10 +74,14 @@ fn bindings_blocks_rows_and_components_follow_state() -> Result {
     )?;
     assert!(view.set("count", Data::Float(1.0)).is_err());
     view.set("count", Data::Int(i64::MAX))?;
-    let add = aegle_widgets::Button::from_handle(view.handle("add").unwrap()).unwrap();
+    let add = view
+        .handle("add")
+        .unwrap()
+        .typed::<aegle_widgets::Button>()
+        .unwrap();
     add.activate()?;
     assert!(ui.dispatch_callbacks().is_err()); // Overflow stops the handler.
-    let status = aegle_widgets::Label::from_handle(view.id(0)).unwrap();
+    let status = view.id(0).typed::<aegle_widgets::Label>().unwrap();
     assert_eq!(status.text()?, format!("count {}", i64::MAX));
 
     // A reload keeps compatible states and replaces the controls atomically.

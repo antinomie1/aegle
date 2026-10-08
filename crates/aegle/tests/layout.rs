@@ -3,6 +3,8 @@
 //! generated `for` rows take part in their grid like ordinary children.
 #![cfg(all(feature = "markup", feature = "grid"))]
 
+#[allow(unused_imports)]
+use aegle::prelude::*;
 use aegle::{
     Result, Size, TextSystem, Theme, Ui,
     loader::{Data, Program},
@@ -106,7 +108,10 @@ fn generated_rows_fill_grid_cells() -> Result {
             for name in names { Column { height: 20dp } }
         }
     "#;
-    let program = Program::from_sources("grid.aegle", &mut |_| Ok(source.to_owned()))?;
+    let program =
+        Program::from_sources("grid.aegle", &aegle::loader::Elements::new(), &mut |_| {
+            Ok(source.to_owned())
+        })?;
     let view = program.build(&ui.root())?;
     ui.refresh()?;
     // Header row plus two rows of two cells; one wrapper cell would stack them instead.

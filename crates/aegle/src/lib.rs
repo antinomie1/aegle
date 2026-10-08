@@ -16,6 +16,12 @@ pub use aegle_ui::*;
 pub use aegle_widgets::*;
 extern crate self as aegle;
 
+/// Declare markup elements for a control library.
+#[cfg(feature = "markup")]
+pub use aegle_loader::element;
+#[doc(hidden)]
+#[cfg(feature = "markup")]
+pub use aegle_macros::__ui_resume;
 /// Compile a `.aegle` file to ordinary retained control construction.
 #[cfg(feature = "markup")]
 pub use aegle_macros::ui;
@@ -31,6 +37,13 @@ pub mod prelude {
         all(feature = "windows", target_os = "windows")
     ))]
     pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
+    /// The built-in markup elements: the specs `ui!` reads under the handle
+    /// type names, and marker types for the other element names.
+    #[cfg(feature = "markup")]
+    pub use aegle_loader::{
+        Button, CheckBox, Column, Grid, NumberField, Progress, RadioButton, Row, ScrollView,
+        Separator, Slider, Splitter, Stack, Switch, Tab, Tabs, Text, TextArea, TextField,
+    };
     pub use aegle_ui::{
         Align, Appearance, Color, ColorSlot, Container, ControlKind, Cursor, Direction, Font,
         Insets, Justify, LayoutDirection, Length, LengthSlot, Node, Point, Result, Shadow, Skin,

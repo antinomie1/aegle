@@ -1,6 +1,8 @@
 //! Compiled markup shares the imperative tree, callbacks and weak lifetimes.
 #![cfg(all(feature = "markup", feature = "motion"))]
 
+#[allow(unused_imports)]
+use aegle::prelude::*;
 use aegle::{Point, Result, Size, TextSystem, Theme, Ui, UiError};
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};

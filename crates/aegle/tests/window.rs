@@ -10,6 +10,8 @@
     )
 ))]
 
+#[allow(unused_imports)]
+use aegle::prelude::*;
 use aegle::{App, AppOptions, Result, TextSystem, loader::Program};
 use std::time::Duration;
 
@@ -30,7 +32,10 @@ fn window_documents_build_and_reload_like_fragments() -> Result {
     assert!(!panel.is_animating()?);
 
     let source = "Window { Button { on clicked { host.missing() } } }";
-    let missing = Program::from_sources("main.aegle", &mut |_| Ok(source.into()))?;
+    let missing =
+        Program::from_sources("main.aegle", &aegle::loader::Elements::new(), &mut |_| {
+            Ok(source.into())
+        })?;
     let error = loaded.reload(&missing).unwrap_err().to_string();
     assert!(error.contains("`missing` is not registered"), "{error}");
     assert!(panel.is_alive()?);

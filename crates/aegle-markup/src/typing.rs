@@ -1,9 +1,9 @@
 //! Expression name resolution and typing.
 
 use crate::program::{Checker, Scope};
-use crate::{Error, Expr, ExprKind, Kind, Ref, Type, Value};
+use crate::{Error, Expr, ExprKind, Ref, Type, Value};
 
-impl Checker {
+impl Checker<'_> {
     /// Resolves names in place and returns the type, coerced to `expected`.
     /// Only an integer literal converts implicitly, and only to float.
     pub(crate) fn expr(
@@ -52,17 +52,17 @@ impl Checker {
                 expr.kind = ExprKind::Ref(reference);
                 ty
             }
-            ExprKind::SelfField(field) => match (scope.source, field.as_str()) {
-                (Some(Kind::CheckBox | Kind::Switch | Kind::RadioButton), "checked") => Type::Bool,
-                (
-                    Some(Kind::CheckBox | Kind::Switch | Kind::RadioButton | Kind::TextField),
-                    "text",
-                ) => Type::String,
-                (Some(Kind::Slider | Kind::NumberField), "value") => Type::Float,
-                (Some(Kind::Tabs), "selected") => Type::Int,
-                (None, _) => return error("self is only available in event handlers".into()),
-                (Some(kind), field) => return error(format!("{kind:?} has no field `{field}`")),
-            },
+            ExprKind::SelfField(field) => {
+                let Some(source) = scope.source else {
+                    return error("self is only available in event handlers".into());
+                };
+                let spec = &self.specs[source];
+                let found = spec.fields.iter().find(|(name, _)| name == field);
+                match found.and_then(|(_, ty)| ty.binding()) {
+                    Some(ty) => ty,
+                    None => return error(format!("{} has no field `{field}`", spec.name)),
+                }
+            }
             ExprKind::Unary(operator, operand) => {
                 if *operator == "!" {
                     self.expr(operand, scope, Some(&Type::Bool))?

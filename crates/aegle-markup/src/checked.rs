@@ -2,15 +2,18 @@
 
 use std::rc::Rc;
 
-use crate::{Expr, Kind, PropertyName, Record, Span, Type, Value};
+use crate::{Expr, PropertyName, Record, Span, Type, Value};
 
 /// A checked program: the entry root and every declared component.
 #[derive(Debug)]
 pub struct Program {
     /// `templates[0]` is the entry root; components follow in file order.
     pub templates: Vec<Template>,
-    /// Entry IDs with their component kinds, in handle order.
-    pub ids: Vec<(String, Kind)>,
+    /// Names of the elements the program creates; [`ElementKind::Control`]
+    /// indexes this.
+    pub elements: Vec<String>,
+    /// Entry IDs with what they name, in handle order.
+    pub ids: Vec<(String, ElementKind)>,
     /// Declared records, in file order; `ExprKind::Record` indexes this.
     pub records: Vec<Record>,
     /// Every `host.name(...)` call, for validation against the host's actions.
@@ -52,19 +55,19 @@ pub struct Template {
     pub root: Element,
 }
 
-/// One built-in control or component instance.
+/// The document window, one element or a component instance.
 #[derive(Debug)]
 pub struct Element {
-    /// Built-in kind or component template.
+    /// What it creates.
     pub kind: ElementKind,
     /// Index into [`Program::ids`] for an entry-level named control.
     pub id: Option<usize>,
-    /// Built-in properties: literals are validated, expressions are typed.
-    pub properties: Vec<(PropertyName, Bound)>,
+    /// Node and element properties: literals are validated, expressions are typed.
+    pub properties: Vec<(Prop, Bound)>,
     /// Component arguments by parameter; `None` uses the default.
     pub arguments: Vec<Option<Rc<Expr>>>,
-    /// Event handlers of a built-in control.
-    pub events: Vec<(EventKind, Rc<[Step]>)>,
+    /// Event handlers of an element, by index into its spec's events.
+    pub events: Vec<(usize, Rc<[Step]>)>,
     /// Handlers of a component instance's declared events.
     pub handlers: Vec<Handler>,
     /// Children in source order.
@@ -89,10 +92,21 @@ pub struct Handler {
 /// What an element creates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ElementKind {
-    /// A built-in control.
-    Builtin(Kind),
+    /// The native window of a document root.
+    Window,
+    /// A control of the element named `Program::elements[index]`.
+    Control(usize),
     /// An instance of `Program::templates[index]`.
     Component(usize),
+}
+
+/// A property of a window or element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Prop {
+    /// A property every node has.
+    Node(PropertyName),
+    /// The element property with this index in its spec.
+    Element(usize),
 }
 
 /// A property value.
@@ -116,17 +130,6 @@ pub enum Child {
     For(Rc<Expr>, Option<Rc<Expr>>, Rc<[Child]>),
     /// The children of the component instance being built.
     Slot,
-}
-
-/// Events of built-in controls.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EventKind {
-    /// Button activation: `on clicked`.
-    Clicked,
-    /// A user change of a check box, switch or slider: `on changed`.
-    Changed,
-    /// Enter in a single-line text field: `on submitted`.
-    Submitted,
 }
 
 /// A checked event statement.

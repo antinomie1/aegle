@@ -7,6 +7,10 @@
 //! it, then updates their controls; nothing is evaluated per frame. Bindings
 //! live exactly as long as the controls they update.
 //!
+//! Elements are described once, with [`element!`]: the built-in ones in
+//! [`elements`] and a control library's alike. A program checks against the
+//! [`Elements`] it is given; `ui!` reads the same specs while compiling.
+//!
 //! `ui!` compiles static documents to direct construction. Documents with
 //! dynamic features are checked at build time and compiled to code that
 //! constructs the checked program for this engine, so those binaries carry the
@@ -16,8 +20,12 @@
 //! `if` and `for` children live in an internal row or column that follows the
 //! parent's direction and literal `gap`, and is hidden while empty.
 
+extern crate self as aegle_loader;
+
 mod actions;
 mod build;
+mod element;
+pub mod elements;
 mod eval;
 mod handle;
 mod layout;
@@ -31,8 +39,13 @@ use aegle_markup::Span;
 use aegle_ui::{Container, Result};
 
 pub use actions::{Limits, register_shared as action};
+pub use aegle_macros::element;
 pub use aegle_markup as markup;
-pub use handle::{FromHandle, Handle};
+#[doc(hidden)]
+pub use element::__private;
+pub use element::{Arg, Element, Elements};
+pub use elements::{Column, Grid, RadioButton, Row, Stack, Tab, Text, TextArea};
+pub use handle::Handle;
 pub use view::{State, StateValue, View};
 
 /// A runtime value of a state, parameter or expression.
@@ -95,6 +108,8 @@ pub struct Program(pub(crate) Rc<Shared>);
 
 pub(crate) struct Shared {
     pub checked: aegle_markup::Program,
+    /// The elements of `checked.elements`, in order.
+    pub glue: Vec<&'static dyn element::Glue>,
     pub actions: actions::Actions,
     pub limits: std::cell::Cell<Limits>,
 }
@@ -108,19 +123,31 @@ impl std::fmt::Debug for Program {
 }
 
 impl Program {
-    fn new(checked: aegle_markup::Program) -> Self {
+    fn new(checked: aegle_markup::Program, elements: &Elements) -> Self {
+        let glue = checked
+            .elements
+            .iter()
+            .map(|name| elements.get(name))
+            .collect();
         Self(Rc::new(Shared {
             checked,
+            glue,
             actions: Default::default(),
             limits: Default::default(),
         }))
     }
 
-    /// Reads and checks a UTF-8 file and its imports. Import paths resolve
-    /// against the importing file's directory; each file may be at most 1 MiB.
+    /// Reads and checks a UTF-8 file and its imports against the built-in
+    /// elements. Import paths resolve against the importing file's directory;
+    /// each file may be at most 1 MiB.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        Self::load_with(path, &Elements::new())
+    }
+
+    /// Like [`load`](Self::load), against `elements`.
+    pub fn load_with(path: impl AsRef<Path>, elements: &Elements) -> Result<Self> {
         let path = path.as_ref().to_str().ok_or("markup path is not UTF-8")?;
-        Self::from_sources(path, &mut |path| {
+        Self::from_sources(path, elements, &mut |path| {
             let limit = aegle_markup::Limits::default().max_source_bytes as u64;
             let mut source = String::new();
             File::open(path)
@@ -130,14 +157,16 @@ impl Program {
         })
     }
 
-    /// Checks `entry` and its imports, read through `read` by normalized path.
-    /// See [`aegle_markup::compile`] for path rules and diagnostics.
+    /// Checks `entry` and its imports against `elements`, read through
+    /// `read` by normalized path. See [`aegle_markup::compile`] for path
+    /// rules and diagnostics.
     pub fn from_sources(
         entry: &str,
+        elements: &Elements,
         read: &mut dyn FnMut(&str) -> std::result::Result<String, String>,
     ) -> Result<Self> {
-        let (program, _) = aegle_markup::compile(entry, read)?;
-        Ok(Self::new(program))
+        let (program, _) = aegle_markup::compile(entry, &elements.specs(), read)?;
+        Ok(Self::new(program, elements))
     }
 
     /// Wraps a program produced by [`markup::check_program`]; only code that
@@ -145,8 +174,8 @@ impl Program {
     /// It is not an entry point: the engine relies on the checker's
     /// invariants and panics on a program that skipped it.
     #[doc(hidden)]
-    pub fn from_checked(program: markup::Program) -> Self {
-        Self::new(program)
+    pub fn from_checked(program: markup::Program, elements: &Elements) -> Self {
+        Self::new(program, elements)
     }
 
     /// Registers a host action that `host.name(...)` statements call, with the

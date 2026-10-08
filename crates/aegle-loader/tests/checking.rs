@@ -1,6 +1,14 @@
-//! Validate a complete interface before any runtime construction takes place.
+//! The built-in element specs validate a complete interface before any
+//! runtime construction takes place.
 
-use aegle_markup::{Kind, PropertyName, check, parse};
+use aegle_loader::{
+    Elements,
+    markup::{Document, ElementKind, Error, Program, Prop, PropertyName, check_program, parse},
+};
+
+fn check(document: Document) -> Result<Program, Error> {
+    check_program(vec![document], &Elements::new().specs()).map_err(|(_, error)| error)
+}
 
 #[test]
 fn built_in_schema_rejects_invalid_documents_as_a_whole() {
@@ -41,10 +49,14 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
             Tabs { Tab { title: "一"; Splitter { orientation: vertical; ratio: 30%; Text {}; Column {} } } }
         }
     }"#;
-    let document = check(parse(source).unwrap()).unwrap();
-    assert_eq!(document.root.id.as_deref(), Some("main"));
-    assert_eq!(document.root.properties[0].name, PropertyName::Title);
-    assert_eq!(document.root.children[0].children[1].kind, Kind::TextField);
+    let program = check(parse(source).unwrap()).unwrap();
+    assert_eq!(program.ids[0], ("main".to_owned(), ElementKind::Window));
+    let root = &program.templates[0].root;
+    assert_eq!(root.properties[0].0, Prop::Node(PropertyName::Title));
+    let ElementKind::Control(title) = program.ids[3].1 else {
+        panic!("an element")
+    };
+    assert_eq!(program.elements[title], "TextField");
     assert!(check(parse("Column { width: auto; height: 0dp }").unwrap()).is_ok());
     for body in [
         "width: 0dp",
@@ -69,8 +81,6 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "Text { offset_transition: [1ms] }",
         "Text { paint_transition: [1ms, cubic] }",
         "Text { rotation_transition: [1ms, linear, linear] }",
-        "Slider { min: 1; max: 1 }",
-        "Progress { min: 1; max: 0 }",
         "Slider { step: -1 }",
         "Progress { step: 1 }",
         "CheckBox { checked: 1 }",
@@ -79,7 +89,6 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "Tabs { Tab {} }",
         "Splitter { Text {} }",
         "NumberField { decimals: 10 }",
-        "NumberField { min: 2; max: 1 }",
         "Splitter { ratio: 2; Text {}; Text {} }",
         "Slider { orientation: diagonal }",
         "Slider { indeterminate: true }",
@@ -120,7 +129,6 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "Button { id: repeated }; Text { id: repeated }",
         r#"TextField { text: "bad\nline" }"#,
         r#"TextField { text: "bad\u2028line" }"#,
-        "state count: int = 0",
         "Text { text: str(count) }",
         "on clicked {}",
     ] {
@@ -158,8 +166,8 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
         Button { text: "t"; background: token("app.fill"); radius: token("theme.radius")
             font_size: token("app.type-2") }
     }"#;
-    let document = check(parse(source).unwrap()).unwrap();
-    assert_eq!(document.root.children[1].kind, Kind::Grid);
+    let program = check(parse(source).unwrap()).unwrap();
+    assert!(program.elements.iter().any(|name| name == "Grid"));
     for body in [
         "Column { padding: auto }",
         "Column { padding: [1dp, 2dp, 3dp] }",

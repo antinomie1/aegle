@@ -36,10 +36,14 @@ Column {
 type Notes = Rc<RefCell<Vec<(String, i64)>>>;
 
 fn compile(main: &str) -> Result<(Program, Notes)> {
-    let program = Program::from_sources("main.aegle", &mut |path| match path {
-        "main.aegle" => Ok(main.into()),
-        _ => Err("missing".into()),
-    })?;
+    let program = Program::from_sources(
+        "main.aegle",
+        &aegle_loader::Elements::new(),
+        &mut |path| match path {
+            "main.aegle" => Ok(main.into()),
+            _ => Err("missing".into()),
+        },
+    )?;
     let notes = Notes::default();
     let sink = notes.clone();
     program.action("note", &[Type::String, Type::Int], move |arguments| {
@@ -120,7 +124,7 @@ fn records_slots_events_locals_and_host_actions_drive_the_interface() -> Result 
 fn programs_check_actions_limits_and_name_the_failing_file() -> Result {
     let ui = ui()?;
     // An unregistered or mistyped action stops the build before anything mounts.
-    let bare = Program::from_sources("main.aegle", &mut |_| {
+    let bare = Program::from_sources("main.aegle", &aegle_loader::Elements::new(), &mut |_| {
         Ok(r#"Column { Button { text: "go"; on clicked { host.go(1) } } }"#.into())
     })?;
     let error = bare

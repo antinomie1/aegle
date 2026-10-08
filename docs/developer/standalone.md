@@ -72,12 +72,8 @@ cargo run -p aegle-widgets --features motion --example standalone
 
 ## 自定义控件
 
-控件库只依赖 `aegle-ui`。实现 `aegle_ui::Control`（`kind`、`measure`、`handle`、`hover`、`paint`、可选 `semantics`/`action_input`），用 `Container::add` 插入，再用 `handle! { pub Rating(RatingControl): interactive, pressed, indicator }` 定义类型化句柄：句柄方法用 `self.read(|c| c.value)` 读、`self.update(|c| c.value = v)` 写（自动重绘并更新语义），列出的样式组生成与 `kind` 相符的样式 setter。`state.on_action(id, ..)` 注册事件处理器，`Outcome::action = Some(Action::Change)` 触发它们。`kind` 返回控件库自己声明的 `static ControlKind`（默认皮肤、接受的样式组 `Accepts`、是否为布局容器），所以自定义控件同样适用 `Style`、节点与类型皮肤、主题、token 与过渡，应用可用 `set_kind_skin(&RATING, ..)` 为整个子树换皮肤。
-
-`crates/aegle-widgets/examples/custom_control.rs` 实现一个五级评分控件：指针悬停预览、按下选择并获得焦点、方向键与语义增减、使用共享外观绘制、语义角色为 Slider。
+控件库只依赖 `aegle-ui`（要出现在标记中时再依赖 `aegle` 的 `markup`）。登记控件类型、实现 `Control`、定义句柄、皮肤与 token、装饰、标记元素和动画的完整顺序见[编写控件库](library.md)。`crates/aegle-widgets/examples/custom_control.rs` 实现一个五级评分控件：指针悬停预览、按下选择并获得焦点、方向键与语义增减、使用共享外观绘制、语义角色为 Slider。
 
 ```sh
 cargo run -p aegle-widgets --example custom_control
 ```
-
-只想给已有控件加绘制（如按下涟漪）而不改行为时，实现 `Decorator` 并 `node.decorate(..)`，不必重写控件。需要跨节点协作的行为（弹出层、单选组、虚拟列表）安装 `Hooks`，库自己的数据放在 `State::ext`；契约见 [Rust API · 组件库作者](../rust-api.md#组件库作者)。

@@ -74,17 +74,10 @@ pub(crate) fn number(value: &Literal) -> f32 {
 }
 
 /// Applies a layout property, or returns `None` for other properties.
-/// Container properties are only checked on containers, so `container` is
-/// present whenever one of them arrives.
-pub(crate) fn apply(
-    node: &Node,
-    container: Option<&Container>,
-    name: PropertyName,
-    value: &Literal,
-) -> Option<Result> {
+/// Container properties are only checked on containers.
+pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Option<Result> {
     use PropertyName::*;
-    let parent = container;
-    let container = || parent.expect("checked container property");
+    let container = || Container(node.clone());
     Some(match name {
         Width => node.set_width(length(value)),
         Height => node.set_height(length(value)),
@@ -125,7 +118,7 @@ pub(crate) fn apply(
         Justify => container().set_justify_content(justify(value)),
         AlignContent => container().set_align_content(justify(value)),
         JustifySelf | JustifyItems | Columns | Rows | AutoColumns | AutoRows | Flow
-        | GridColumn | GridRow | Areas | GridArea => grid::apply(node, parent, name, value),
+        | GridColumn | GridRow | Areas | GridArea => grid::apply(node, name, value),
         _ => return None,
     })
 }
@@ -134,12 +127,7 @@ pub(crate) fn apply(
 mod grid {
     use super::*;
 
-    pub(crate) fn apply(
-        _: &Node,
-        _: Option<&Container>,
-        name: PropertyName,
-        _: &Literal,
-    ) -> Result {
+    pub(crate) fn apply(_: &Node, name: PropertyName, _: &Literal) -> Result {
         Err(format!("markup {name:?} requires the grid feature").into())
     }
 }

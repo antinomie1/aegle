@@ -1,9 +1,23 @@
 //! Imports, components, states, bindings, events and blocks are resolved and typed.
 
-use aegle_markup::{
-    Bound, Child, ElementKind, ExprKind, Item, Kind, Limits, Ref, check, check_program, compile,
-    parse, parse_with_limits,
+use aegle_loader::{
+    Elements,
+    markup::{
+        Bound, Child, ElementKind, ElementSpec, ExprKind, File, Item, Limits, Program,
+        ProgramError, Ref, check_program, parse, parse_with_limits,
+    },
 };
+
+fn specs() -> Vec<ElementSpec<'static>> {
+    Elements::new().specs()
+}
+
+fn compile(
+    entry: &str,
+    read: &mut dyn FnMut(&str) -> Result<String, String>,
+) -> Result<(Program, Vec<File>), ProgramError> {
+    aegle_loader::markup::compile(entry, &specs(), read)
+}
 
 fn files(entry: &str, library: &'static str) -> impl FnMut(&str) -> Result<String, String> {
     let entry = entry.to_owned();
@@ -42,7 +56,11 @@ Window {
     let (program, files) = compile("app/main.aegle", &mut self::files(entry, LIBRARY)).unwrap();
     assert_eq!(files[1].path, "lib/counter.aegle");
     assert_eq!(program.templates.len(), 2);
-    assert_eq!(program.ids, [("status".to_owned(), Kind::Text)]);
+    assert_eq!(
+        program.ids,
+        [("status".to_owned(), ElementKind::Control(0))]
+    );
+    assert_eq!(program.elements[0], "Text");
     let root = &program.templates[0].root;
     let Child::Element(status) = &root.children[0] else {
         panic!()
@@ -99,7 +117,7 @@ Window {
     for (library, message) in [
         ("component Counter() { Counter {} }", "recursively"),
         ("use \"../app/main.aegle\"", "import cycle"),
-        ("component Text() { Column {} }", "built-in name"),
+        ("component Text() { Column {} }", "element name"),
         ("Column {}", "only declare components"),
         ("component Counter(a: int = a) { Column {} }", "literals"),
     ] {
@@ -211,8 +229,7 @@ fn ceiling() {
         };
         parse_with_limits(&source, &limits).unwrap()
     };
-    assert!(check(deepest(Limits::MAX_DEPTH)).is_ok());
-    assert!(check_program(vec![deepest(Limits::MAX_DEPTH)]).is_ok());
+    assert!(check_program(vec![deepest(Limits::MAX_DEPTH)], &specs()).is_ok());
     let deeper = || {
         let mut document = parse("Column {}").unwrap();
         let inner = deepest(Limits::MAX_DEPTH).root.unwrap();
@@ -225,9 +242,11 @@ fn ceiling() {
         document
     };
     let message = "nesting exceeds 256 levels";
-    assert_eq!(check(deeper()).unwrap_err().message, message);
     assert_eq!(
-        check_program(vec![deeper()]).unwrap_err().1.message,
+        check_program(vec![deeper()], &specs())
+            .unwrap_err()
+            .1
+            .message,
         message
     );
 }

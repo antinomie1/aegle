@@ -3,11 +3,13 @@
 //! the same order, so an ancestor's initial value never starts a transition.
 #![cfg(all(feature = "markup", feature = "grid", feature = "motion"))]
 
+#[allow(unused_imports)]
+use aegle::prelude::*;
 use aegle::{
     Node, Result, Size, TextSystem, Theme, TransitionProperty, Ui,
     loader::{
         Program,
-        markup::{CheckedNode, PropertyName, Value as Literal, check, choices, parse},
+        markup::{Item, Node as Markup, PropertyName, Value as Literal, choices, parse},
     },
 };
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
@@ -45,20 +47,27 @@ fn timings(node: &Node) -> Result<[Option<aegle::Transition>; 2]> {
 #[test]
 fn every_choice_builds_alike() -> Result {
     let source = include_str!("fixtures/choices.aegle");
-    let document = check(parse(source)?)?;
+    let document = parse(source)?;
     let mut used = BTreeSet::new();
-    fn visit(node: &CheckedNode, used: &mut BTreeSet<(String, String)>) {
+    fn visit(node: &Markup, used: &mut BTreeSet<(String, String)>) {
         for property in &node.properties {
-            if let Literal::Identifier(value) = &property.value
-                && !choices(property.name).is_empty()
-            {
-                used.insert((format!("{:?}", property.name), value.clone()));
+            if let Literal::Identifier(value) = &property.value {
+                let name = property
+                    .name
+                    .split('_')
+                    .map(|word| word[..1].to_uppercase() + &word[1..]);
+                used.insert((name.collect(), value.clone()));
             }
         }
-        node.children.iter().for_each(|child| visit(child, used));
+        for child in &node.children {
+            if let Item::Node(child) = child {
+                visit(child, used);
+            }
+        }
     }
-    visit(&document.root, &mut used);
-    // `theme` applies only to windows, which need a native host.
+    visit(document.root.as_ref().unwrap(), &mut used);
+    // `theme` applies only to windows, which need a native host. Element
+    // choices, such as `orientation`, reach the same glue on both paths.
     use PropertyName::*;
     for name in [
         Direction,
@@ -72,7 +81,6 @@ fn every_choice_builds_alike() -> Result {
         JustifyItems,
         Flow,
         Easing,
-        Orientation,
     ] {
         for choice in choices(name) {
             let key = (format!("{name:?}"), choice.to_string());

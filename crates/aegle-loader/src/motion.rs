@@ -1,6 +1,6 @@
 //! Presented geometry and transition timing properties.
 
-use aegle_markup::{Element, PropertyName, Value};
+use aegle_markup::{PropertyName, Value};
 use aegle_ui::{Node, Point, Result, Transform};
 
 /// Applies an offset, scale or rotation, literal or bound, keeping the other
@@ -48,28 +48,23 @@ fn easing(value: Option<&Value>) -> aegle_ui::Easing {
     }
 }
 
-/// Installs the node-wide `transition`, then each per-property timing over it.
+/// Installs a node's literal node-wide `transition`, then each per-property
+/// timing over it; other properties are ignored.
 #[cfg(feature = "motion")]
-pub(crate) fn transitions(element: &Element, handle: &crate::Handle) -> Result {
-    use aegle_markup::Bound;
+pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) -> Result {
     use aegle_ui::{Transition, TransitionProperty as Property};
     use std::time::Duration;
     let literal = |name| {
-        element
-            .properties
+        properties
             .iter()
-            .find_map(|(n, bound)| match bound {
-                Bound::Literal(value) if *n == name => Some(value),
-                _ => None,
-            })
+            .find_map(|(n, value)| (*n == name).then_some(*value))
     };
-    let node = handle.node();
     if let Some(Value::Duration(milliseconds)) = literal(PropertyName::Transition) {
         let duration = Duration::from_millis(*milliseconds);
         let curve = easing(literal(PropertyName::Easing));
         node.set_transition(Transition::new(duration, curve))?;
     }
-    for (name, bound) in &element.properties {
+    for (name, value) in properties {
         let property = match name {
             PropertyName::PaintTransition => Property::Paint,
             PropertyName::OffsetTransition => Property::Offset,
@@ -77,9 +72,9 @@ pub(crate) fn transitions(element: &Element, handle: &crate::Handle) -> Result {
             PropertyName::RotationTransition => Property::Rotation,
             _ => continue,
         };
-        let (milliseconds, curve) = match bound {
-            Bound::Literal(Value::Duration(milliseconds)) => (*milliseconds, easing(None)),
-            Bound::Literal(Value::List(items)) => match &items[..] {
+        let (milliseconds, curve) = match value {
+            Value::Duration(milliseconds) => (*milliseconds, easing(None)),
+            Value::List(items) => match &items[..] {
                 [Value::Duration(milliseconds), curve] => (*milliseconds, easing(Some(curve))),
                 _ => unreachable!("checked timing"),
             },
@@ -91,10 +86,11 @@ pub(crate) fn transitions(element: &Element, handle: &crate::Handle) -> Result {
     Ok(())
 }
 
+/// Installs timing properties; they require the `motion` feature.
 #[cfg(not(feature = "motion"))]
-pub(crate) fn transitions(element: &Element, _: &crate::Handle) -> Result {
+pub fn transitions(_: &Node, properties: &[(PropertyName, &Value)]) -> Result {
     use PropertyName::*;
-    let timed = element.properties.iter().any(|(name, _)| {
+    let timed = properties.iter().any(|(name, _)| {
         matches!(
             name,
             Transition | PaintTransition | OffsetTransition | ScaleTransition | RotationTransition

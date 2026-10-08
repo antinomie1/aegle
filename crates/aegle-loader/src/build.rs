@@ -5,13 +5,13 @@ use std::{
     rc::Rc,
 };
 
-use aegle_markup::{Bound, Child, Element, ElementKind, Expr, PropertyName, Value};
+use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Prop, Value};
 use aegle_ui::{Container, Result};
 
 use crate::{
-    Data, RuntimeError,
-    eval::{Emit, Env, Param, Slot, eval, truth},
-    handle::{Handle, apply, consumed, create, listen},
+    Arg, Data, RuntimeError,
+    eval::{Emit, Env, Param, Slot, eval, handle as run, truth},
+    handle::{Handle, apply, consumed},
     reactive::Effect,
 };
 
@@ -135,7 +135,7 @@ impl<'r> Region<'r> {
                         // A transparent group keeps the block in the parent's layout.
                         let wrapper = parent.contents()?;
                         if top {
-                            region.created.push(Handle::Container(wrapper.clone()));
+                            region.created.push(Handle::group(wrapper.clone()));
                         }
                         Ok(Made::Block(wrapper))
                     })?
@@ -173,8 +173,9 @@ impl<'r> Region<'r> {
 
     /// Visits one element or component instance.
     fn element(&mut self, element: &Element, parent: &Container, env: &Env, top: bool) -> Result {
-        let kind = match element.kind {
-            ElementKind::Builtin(kind) => kind,
+        let glue = match element.kind {
+            ElementKind::Control(index) => env.shared.glue[index],
+            ElementKind::Window => unreachable!("windows are opened from the App"),
             ElementKind::Component(template) => {
                 let Made::Instance(inner) =
                     self.made(|_| instance(element, template, env).map(Made::Instance))?
@@ -186,7 +187,18 @@ impl<'r> Region<'r> {
             }
         };
         let Made::Control(handle) = self.made(|region| {
-            let handle = create(kind, element, parent)?;
+            let spec = glue.spec();
+            let args: Vec<_> = (element.properties.iter())
+                .filter_map(|(prop, bound)| match (prop, bound) {
+                    (Prop::Element(index), Bound::Literal(value))
+                        if spec.properties[*index].new =>
+                    {
+                        Some((*index, Arg::literal(spec.properties[*index].ty, value)))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let handle = glue.create(parent, &args)?;
             if top {
                 region.created.push(handle.clone());
             }
@@ -208,23 +220,30 @@ impl<'r> Region<'r> {
             Pass::Create => {}
             Pass::Apply => properties(element, handle, env, self.block)?,
             Pass::Finish => {
-                crate::motion::transitions(element, handle)?;
+                let timed: Vec<_> = (element.properties.iter())
+                    .filter_map(|(prop, bound)| match (prop, bound) {
+                        (Prop::Node(name), Bound::Literal(value)) if consumed(*name) => {
+                            Some((*name, value))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                if !timed.is_empty() {
+                    crate::motion::transitions(handle.node(), &timed)?;
+                }
                 for (event, steps) in &element.events {
-                    listen(handle, *event, steps.clone(), env.clone())?;
+                    let (steps, env, source) = (steps.clone(), env.clone(), handle.clone());
+                    let handler = Box::new(move || run(&steps, &env, &source));
+                    handle.glue().listen(handle, *event, handler)?;
                 }
             }
         }
-        if let Handle::Splitter(splitter) = handle {
-            // Its two checked children fill the two panes.
-            for (child, pane) in element
-                .children
-                .iter()
-                .zip([splitter.first(), splitter.second()])
-            {
-                self.children(std::slice::from_ref(child), pane, env, top)?;
-            }
-        } else if !element.children.is_empty() {
-            self.children(&element.children, handle.container(), env, top)?;
+        for (index, child) in element.children.iter().enumerate() {
+            let parent = match handle.glue {
+                Some(glue) => glue.parent(handle, index),
+                None => Container(handle.node().clone()),
+            };
+            self.children(std::slice::from_ref(child), &parent, env, top)?;
         }
         Ok(())
     }
@@ -269,24 +288,32 @@ fn instance(element: &Element, template: usize, env: &Env) -> Result<Env> {
     Ok(inner)
 }
 
-/// Applies an element's own literal properties and bindings.
+/// Applies an element's or window's literal properties and bindings, except
+/// the ones its constructor or the finishing pass consumes.
 fn properties(element: &Element, handle: &Handle, env: &Env, block: &mut Block) -> Result {
-    let ElementKind::Builtin(kind) = element.kind else {
-        unreachable!("component instances are expanded")
-    };
-    for (name, bound) in &element.properties {
-        match bound {
-            Bound::Literal(value) if !consumed(kind, *name) => apply(handle, *name, value)?,
-            Bound::Literal(_) => {}
-            Bound::Expr(expr) => {
-                block.push(binding(handle.clone(), *name, expr.clone(), env.clone())?)
+    for (prop, bound) in &element.properties {
+        match (prop, bound) {
+            (Prop::Node(name), Bound::Literal(value)) if !consumed(*name) => {
+                apply(handle.node(), *name, value)?
+            }
+            (Prop::Element(index), Bound::Literal(value)) => {
+                let property = handle.glue().spec().properties[*index];
+                if !property.new {
+                    handle
+                        .glue()
+                        .set(handle, *index, Arg::literal(property.ty, value))?;
+                }
+            }
+            (_, Bound::Literal(_)) => {}
+            (prop, Bound::Expr(expr)) => {
+                block.push(binding(handle.clone(), *prop, expr.clone(), env.clone())?)
             }
         }
     }
     Ok(())
 }
 
-fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Result<Rc<Effect>> {
+fn binding(handle: Handle, prop: Prop, expr: Rc<Expr>, env: Env) -> Result<Rc<Effect>> {
     let mut last = None;
     Effect::new(move |effect| {
         // A control removed directly by the application no longer updates.
@@ -295,19 +322,24 @@ fn binding(handle: Handle, name: PropertyName, expr: Rc<Expr>, env: Env) -> Resu
         }
         let value = eval(&expr, &env, Some(effect), None).map_err(|e| env.locate(e))?;
         if last.as_ref() != Some(&value) {
-            let literal = match &value {
-                Data::Bool(value) => Value::Bool(*value),
-                Data::Float(value) => Value::Number(*value),
-                Data::String(text) => Value::String(text.to_string()),
-                Data::Int(_) | Data::List(_) | Data::Record(_) => {
-                    unreachable!("checked binding types")
-                }
-            };
-            apply(&handle, name, &literal)?;
+            match prop {
+                Prop::Node(name) => apply(handle.node(), name, &node_value(&value))?,
+                Prop::Element(index) => handle.glue().set(&handle, index, Arg::data(&value))?,
+            }
             last = Some(value);
         }
         Ok(())
     })
+}
+
+/// The literal a bound node property takes.
+fn node_value(value: &Data) -> Value {
+    match value {
+        Data::Bool(value) => Value::Bool(*value),
+        Data::Float(value) => Value::Number(*value),
+        Data::String(text) => Value::String(text.to_string()),
+        Data::Int(_) | Data::List(_) | Data::Record(_) => unreachable!("checked binding types"),
+    }
 }
 
 /// Removes built controls and drops the effects that updated them.

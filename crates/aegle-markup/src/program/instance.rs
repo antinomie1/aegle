@@ -6,7 +6,7 @@ use super::{Checker, Scope};
 use crate::checked::{Child, Element, ElementKind, Handler};
 use crate::{Error, Expr, ExprKind, Item, Limits, Node, Span, Type, Value};
 
-impl Checker {
+impl Checker<'_> {
     pub(super) fn instance(
         &mut self,
         node: Node,
@@ -187,7 +187,10 @@ impl Checker {
         let previous = std::mem::replace(&mut self.in_block, true);
         let children: Result<Vec<_>, _> = items
             .into_iter()
-            .map(|item| self.child(item, scope))
+            .map(|item| {
+                self.parent = None;
+                self.child(item, scope)
+            })
             .collect();
         self.in_block = previous;
         Ok(children?.into())

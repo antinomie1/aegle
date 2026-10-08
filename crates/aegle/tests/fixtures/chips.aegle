@@ -1,0 +1,5 @@
+Row {
+    gap: 4dp
+    Chip { id: plain; label: "plain"; selected: true; background: token("app.chip") }
+    Chip { id: other; label: "other" }
+}

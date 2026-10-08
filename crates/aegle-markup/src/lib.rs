@@ -5,16 +5,19 @@
 //! lengths use `dp`. Colors use six or eight hexadecimal digits: `#RRGGBB` or
 //! `#RRGGBBAA`. Durations use exact whole milliseconds, such as `120ms`.
 //!
-//! Static documents hold only nodes and literal properties; [`check`] validates
-//! them for direct construction. Dynamic documents add typed `state`, property
-//! expressions, `on` event blocks, `if`/`for` blocks, `component` declarations
-//! and `use` imports; [`compile`] loads imports and [`check_program`] resolves
-//! and types them for a runtime engine.
+//! Elements are described by [`ElementSpec`]s, which control libraries
+//! declare; the checker knows no element by itself, only the document root
+//! `Window`. Documents may add typed `state`, property expressions, `on`
+//! event blocks, `if`/`for` blocks, `component` declarations and `use`
+//! imports; [`compile`] loads imports and [`check_program`] resolves and types
+//! them against the specs. A document without those features is static
+//! ([`Document::is_static`]) and can be built without a runtime engine.
 //!
 //! Parsing and checking never create controls or perform I/O themselves.
 
 mod ast;
 mod checked;
+mod element;
 mod error;
 mod expr;
 mod files;
@@ -29,12 +32,11 @@ pub use ast::{
     Record, Ref, Span, State, Statement, Type, Use, Value,
 };
 pub use checked::{
-    Bound, Child, Element, ElementKind, EventKind, Handler, HostCall, Program, Step, Template,
+    Bound, Child, Element, ElementKind, Handler, HostCall, Program, Prop, Step, Template,
 };
+pub use element::{Children, ElementSpec, Layout, PropertySpec, Styles, ValueType};
 pub use error::Error;
-pub use files::{File, ProgramError, compile};
+pub use files::{File, ProgramError, Sources, compile};
 pub use parse::{parse, parse_with_limits};
 pub use program::check_program;
-pub use schema::{
-    CheckedDocument, CheckedNode, CheckedProperty, Kind, PropertyName, check, choices,
-};
+pub use schema::{PropertyName, choices};

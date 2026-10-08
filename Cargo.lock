@@ -184,6 +184,7 @@ version = "0.1.0"
 dependencies = [
  "aegle-access",
  "aegle-app",
+ "aegle-macros",
  "aegle-markup",
  "aegle-text",
  "aegle-ui",

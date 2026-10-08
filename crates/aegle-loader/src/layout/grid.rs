@@ -74,14 +74,9 @@ fn placement(value: &Literal) -> GridLines {
     }
 }
 
-pub(crate) fn apply(
-    node: &Node,
-    parent: Option<&Container>,
-    name: PropertyName,
-    value: &Literal,
-) -> Result {
+pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
     use PropertyName::*;
-    let container = || parent.expect("checked container property");
+    let container = || Container(node.clone());
     let template = || items(value).iter().map(template_item).collect::<Vec<_>>();
     let tracks = || items(value).iter().map(track).collect::<Vec<_>>();
     match name {

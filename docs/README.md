@@ -8,7 +8,8 @@ Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示
 
 - [API 指南](developer/api.md)：依赖与 feature、应用与窗口、布局、样式、事件、动画、标记与嵌入宿主
 - [控件参考](developer/controls.md)：每个默认控件的用法与各状态截图
-- [不经 facade 使用控件库](developer/standalone.md)：只用 aegle-ui、aegle-widgets、aegle-theme、aegle-motion 的依赖、feature、宿主职责与自定义控件
+- [不经 facade 使用控件库](developer/standalone.md)：只用 aegle-ui、aegle-widgets、aegle-theme、aegle-motion 的依赖、feature 与宿主职责
+- [编写控件库](developer/library.md)：控件类型、控件、句柄、皮肤与 token、装饰、标记元素与动画
 
 ## 阅读入口
 
@@ -21,6 +22,6 @@ Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示
 - [平台与绘制](platform-rendering.md)、[Vulkan 绘制与呈现](vulkan.md)、[wgpu 后端](wgpu.md)、[依赖版本](dependencies.md)
 - [资源目标](resources.md)、[验收与交付边界](quality.md)
 
-重要决策：[无障碍与自绘](adr/0001-accessibility-and-custom-controls.md)、[标记双执行路径](adr/0002-dual-markup-execution.md)、[独立模块和显式更新](adr/0003-independent-modules-and-imperative-ui.md)。
+重要决策：[无障碍与自绘](adr/0001-accessibility-and-custom-controls.md)、[标记双执行路径](adr/0002-dual-markup-execution.md)、[独立模块和显式更新](adr/0003-independent-modules-and-imperative-ui.md)、[标记元素契约](adr/0004-element-contract.md)。
 
 本文档的 API 是设计规范，预算是待测工程目标。具体实现的编译验证见状态文档；不能将“设计已完成”解读为“整个库已实现或达标”。

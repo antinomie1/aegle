@@ -2,8 +2,8 @@
 //! no markup parser or checker.
 
 use aegle_markup::{
-    Bound, Child, Element, ElementKind, Expr, ExprKind, Program, Ref, Span, Step, Template, Type,
-    Value,
+    Bound, Child, Element, ElementKind, Expr, ExprKind, Program, Prop, Ref, Span, Step, Template,
+    Type, Value,
 };
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -12,9 +12,10 @@ use quote::{format_ident, quote};
 pub(super) fn program(program: &Program, m: &TokenStream) -> TokenStream {
     let templates = program.templates.iter().map(|t| template(t, m));
     let ids = program.ids.iter().map(|(name, kind)| {
-        let kind = variant(kind);
-        quote! { (::std::string::String::from(#name), #m::Kind::#kind) }
+        let kind = element_kind(*kind, m);
+        quote! { (::std::string::String::from(#name), #kind) }
     });
+    let elements = program.elements.iter();
     let records = program.records.iter().map(|record| {
         let name = &record.name;
         let fields = record.fields.iter().map(|(field, ty)| {
@@ -50,6 +51,7 @@ pub(super) fn program(program: &Program, m: &TokenStream) -> TokenStream {
     quote! {
         #m::Program {
             templates: vec![#(#templates),*],
+            elements: vec![#(::std::string::String::from(#elements)),*],
             ids: vec![#(#ids),*],
             records: vec![#(#records),*],
             host_calls: vec![#(#host_calls),*],
@@ -90,17 +92,25 @@ fn template(template: &Template, m: &TokenStream) -> TokenStream {
     }
 }
 
-fn element(element: &Element, m: &TokenStream) -> TokenStream {
-    let kind = match element.kind {
-        ElementKind::Builtin(kind) => {
-            let kind = variant(&kind);
-            quote! { #m::ElementKind::Builtin(#m::Kind::#kind) }
-        }
+fn element_kind(kind: ElementKind, m: &TokenStream) -> TokenStream {
+    match kind {
+        ElementKind::Window => quote! { #m::ElementKind::Window },
+        ElementKind::Control(index) => quote! { #m::ElementKind::Control(#index) },
         ElementKind::Component(index) => quote! { #m::ElementKind::Component(#index) },
-    };
+    }
+}
+
+fn element(element: &Element, m: &TokenStream) -> TokenStream {
+    let kind = element_kind(element.kind, m);
     let id = option(element.id.map(|id| quote! { #id }));
-    let properties = element.properties.iter().map(|(name, bound)| {
-        let name = variant(name);
+    let properties = element.properties.iter().map(|(prop, bound)| {
+        let prop = match prop {
+            Prop::Node(name) => {
+                let name = variant(name);
+                quote! { #m::Prop::Node(#m::PropertyName::#name) }
+            }
+            Prop::Element(index) => quote! { #m::Prop::Element(#index) },
+        };
         let bound = match bound {
             Bound::Literal(v) => {
                 let v = value(v, m);
@@ -111,7 +121,7 @@ fn element(element: &Element, m: &TokenStream) -> TokenStream {
                 quote! { #m::Bound::Expr(::std::rc::Rc::new(#e)) }
             }
         };
-        quote! { (#m::PropertyName::#name, #bound) }
+        quote! { (#prop, #bound) }
     });
     let arguments = element.arguments.iter().map(|argument| {
         option(argument.as_ref().map(|e| {
@@ -120,8 +130,8 @@ fn element(element: &Element, m: &TokenStream) -> TokenStream {
         }))
     });
     let events = element.events.iter().map(|(event, body)| {
-        let (event, body) = (variant(event), body.iter().map(|s| step(s, m)));
-        quote! { (#m::EventKind::#event, ::std::rc::Rc::from(vec![#(#body),*])) }
+        let body = body.iter().map(|s| step(s, m));
+        quote! { (#event, ::std::rc::Rc::from(vec![#(#body),*])) }
     });
     let handlers = element.handlers.iter().map(|handler| {
         let (event, binds_value) = (handler.event, handler.binds_value);
@@ -265,7 +275,7 @@ fn expr(expr: &Expr, m: &TokenStream) -> TokenStream {
     quote! { #m::Expr { kind: #kind, span: #span } }
 }
 
-fn value(literal: &Value, m: &TokenStream) -> TokenStream {
+pub(crate) fn value(literal: &Value, m: &TokenStream) -> TokenStream {
     match literal {
         Value::String(v) => quote! { #m::Value::String(::std::string::String::from(#v)) },
         Value::Bool(v) => quote! { #m::Value::Bool(#v) },
@@ -318,6 +328,6 @@ fn option(value: Option<TokenStream>) -> TokenStream {
 }
 
 /// Enum variants share their Debug names.
-fn variant(value: &impl std::fmt::Debug) -> Ident {
+pub(crate) fn variant(value: &impl std::fmt::Debug) -> Ident {
     format_ident!("{}", format!("{value:?}"))
 }

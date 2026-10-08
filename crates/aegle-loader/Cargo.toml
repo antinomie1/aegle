@@ -21,6 +21,7 @@ aegle-ui.workspace = true
 aegle-widgets.workspace = true
 aegle-app = { workspace = true, optional = true }
 aegle-markup.workspace = true
+aegle-macros.workspace = true
 
 [dev-dependencies]
 aegle-access.workspace = true

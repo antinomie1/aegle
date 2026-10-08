@@ -3,9 +3,11 @@
 //! change events reach markup state.
 #![cfg(feature = "markup")]
 
+#[allow(unused_imports)]
+use aegle::prelude::*;
 use aegle::{
     Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui,
-    loader::{Data, Handle, Program},
+    loader::{Data, Program},
 };
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
@@ -59,9 +61,7 @@ fn compiled_and_loaded_components_match() -> Result {
         let handle = runtime.handle(id).unwrap();
         assert_eq!(handle.node().bounds()?, node.bounds()?, "{id}");
     }
-    let Some(Handle::Splitter(split)) = runtime.handle("split") else {
-        panic!("a splitter handle");
-    };
+    let split: Splitter = runtime.handle("split").unwrap().typed().unwrap();
     assert_eq!(split.ratio(), 0.25);
     Ok(())
 }
@@ -81,14 +81,14 @@ fn change_events_update_markup_state() -> Result {
             }
         }
     "#;
-    let program = Program::from_sources("events.aegle", &mut |_| Ok(source.to_owned()))?;
+    let program =
+        Program::from_sources("events.aegle", &aegle::loader::Elements::new(), &mut |_| {
+            Ok(source.to_owned())
+        })?;
     let view = program.build(&ui.root())?;
     ui.refresh()?;
-    let (Some(Handle::Tabs(tabs)), Some(Handle::NumberField(number))) =
-        (view.handle("tabs"), view.handle("number"))
-    else {
-        panic!("typed handles");
-    };
+    let tabs: Tabs = view.handle("tabs").unwrap().typed().unwrap();
+    let number: NumberField = view.handle("number").unwrap().typed().unwrap();
     let enter = || -> Result {
         for pressed in [true, false] {
             ui.key(KeyInput {

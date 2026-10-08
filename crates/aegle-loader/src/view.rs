@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
-use aegle_markup::{ElementKind, Kind, Span, Type};
+use aegle_markup::{ElementKind, Span, Type};
 use aegle_ui::{Container, Result};
 
 use crate::{
@@ -35,7 +35,7 @@ type Carried<'a> = &'a dyn Fn(&str, &Type) -> Option<Data>;
 
 pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) -> Result<View> {
     let root = &program.0.checked.templates[0].root;
-    if root.kind == ElementKind::Builtin(Kind::Window) {
+    if root.kind == ElementKind::Window {
         return Err("a Window document is opened with Program::open".into());
     }
     program.0.actions.validate(&program.0.checked)?;
@@ -68,15 +68,15 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
     all(feature = "windows", target_os = "windows")
 ))]
 pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
-    use aegle_markup::{Bound, PropertyName, Value};
+    use aegle_markup::{Bound, Prop, PropertyName, Value};
     let root = &program.0.checked.templates[0].root;
-    if root.kind != ElementKind::Builtin(Kind::Window) {
+    if root.kind != ElementKind::Window {
         return Err("Program::open requires a Window document root".into());
     }
     program.0.actions.validate(&program.0.checked)?;
     let literal = |name| {
         root.properties.iter().find_map(|(n, bound)| match bound {
-            Bound::Literal(value) if *n == name => Some(value),
+            Bound::Literal(value) if *n == Prop::Node(name) => Some(value),
             _ => None,
         })
     };
@@ -92,7 +92,7 @@ pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
         options.height = *height as u32;
     }
     let window = app.window_with_options(title, options)?;
-    let handle = Handle::Window(window.clone());
+    let handle = Handle::window(window.clone());
     let effects = Rc::new(RefCell::new(Block::new()));
     let mut view = View {
         program: program.clone(),
@@ -187,9 +187,8 @@ impl View {
             let index = states.iter().position(|(n, t, _)| n == name && t == ty)?;
             Some(self.env.scope.states[index].get(None))
         };
-        let window =
-            self.program.0.checked.templates[0].root.kind == ElementKind::Builtin(Kind::Window);
-        let fresh = program.0.checked.templates[0].root.kind == ElementKind::Builtin(Kind::Window);
+        let window = self.program.0.checked.templates[0].root.kind == ElementKind::Window;
+        let fresh = program.0.checked.templates[0].root.kind == ElementKind::Window;
         if window != fresh {
             return Err("a reload cannot change whether the root is a Window".into());
         }
@@ -223,6 +222,24 @@ impl View {
         let mut ids = vec![None; program.0.checked.ids.len()];
         if let Some(index) = root.id {
             ids[index] = Some(self.root.clone());
+        }
+        #[cfg(any(
+            all(feature = "wayland", target_os = "linux"),
+            all(feature = "windows", target_os = "windows")
+        ))]
+        for (prop, bound) in &root.properties {
+            use aegle_markup::{Bound, Prop, PropertyName, Value};
+            if let (Prop::Node(PropertyName::Theme), Bound::Literal(Value::Identifier(theme))) =
+                (prop, bound)
+            {
+                let window = self.root.typed::<aegle_app::Window>().unwrap();
+                window.set_theme(match theme.as_str() {
+                    "light" => aegle_ui::Theme::light(),
+                    "dark" => aegle_ui::Theme::dark(),
+                    "high_contrast" => aegle_ui::Theme::high_contrast(),
+                    other => unreachable!("checked theme `{other}`"),
+                })?;
+            }
         }
         let mut block = Block::new();
         build::window(

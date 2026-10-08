@@ -2,6 +2,8 @@
 //! defaults, and bound properties follow them in Rust and in markup.
 #![cfg(feature = "markup")]
 
+#[allow(unused_imports)]
+use aegle::prelude::*;
 use aegle::{
     Color, ColorSlot, Font, LengthSlot, Node, Result, Size, TextSystem, Theme, ThemeOverride,
     TokenSlot, Ui, UiError, Widgets, loader::Program, register_token, token,

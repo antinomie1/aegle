@@ -93,13 +93,15 @@ flowchart TD
   Ui --> Text[text + glyph]
   Ui --> Visual[theme / motion / scene]
   Ui --> Access[可选 access]
+  Facade --> Loader
   Loader[可选 loader] --> Ui
   Loader --> Widgets
   Loader --> Markup[markup]
+  Loader --> Macros
   Macros[构建期 macros] --> Markup
 ```
 
-这是一张依赖图，不是每次更新必须经过的多层调用链。core 不依赖 ui、app、widgets、loader、GPU 或操作系统库；renderer 不依赖控件或标记语言。
+这是一张依赖图，不是每次更新必须经过的多层调用链。markup 只定义语言、节点属性和元素规格 `ElementSpec`，不认识任何具体元素；loader 定义元素契约 `Element` 并用 macros 的 `element!` 声明内置元素，第三方控件库以同样方式声明自己的元素。core 不依赖 ui、app、widgets、loader、GPU 或操作系统库；renderer 不依赖控件或标记语言。
 
 ## 目标默认组合与可裁剪组合
 

@@ -10,7 +10,7 @@
 
 不引入 ECS、虚拟 DOM、通用插件 ABI、后台常驻调试服务器、全局异步运行时或通用脚本 VM。独立模块不等于每个结构体一个 crate；实际打包与依赖见[模块](modules.md)。
 
-当前便捷入口已提供命令式 Ui/App、row/column、ScrollView、等高虚拟 ListView、图像、Canvas 绘制扩展、标签、按钮、复选框、开关、滑块、进度条和单行/多行文本编辑，连接已有 Taffy、scene、输入、IME、主题及可选无障碍。`ui!` 将静态标记结构直接编译成相同构造器和 setter，通过具名弱句柄绑定普通 Rust 回调；含 state、绑定、事件块、if/for 或组件的标记由 `aegle-loader` 引擎执行，运行时加载与重载共用该引擎。原生 App 已接入 Linux Wayland / Windows Win32，软件与 Vulkan 可独立选择；可选 motion 已连接外观与平移过渡、完成回调和平台帧回调；主题可按子树局部覆盖。独立 [Vulkan 后端](vulkan.md) 消费相同 Scene 完成几何/文字/图像/路径绘制，原生 swapchain 直接呈现；离屏路径仍支持显式读回。Windows 实机 IME/UIA、标记宿主动作与 slot、macOS、完整组件库与缩放/旋转动画仍是后续目标。
+当前便捷入口已提供命令式 Ui/App、row/column、ScrollView、等高虚拟 ListView、图像、Canvas 绘制扩展、标签、按钮、复选框、开关、滑块、进度条和单行/多行文本编辑，连接已有 Taffy、scene、输入、IME、主题及可选无障碍。`ui!` 将静态标记结构直接编译成对各元素胶水与共享节点 setter 的调用，通过具名弱句柄绑定普通 Rust 回调；含 state、绑定、事件块、if/for 或组件的标记由 `aegle-loader` 引擎执行，运行时加载与重载共用该引擎。原生 App 已接入 Linux Wayland / Windows Win32，软件与 Vulkan 可独立选择；可选 motion 已连接外观与平移过渡、完成回调和平台帧回调；主题可按子树局部覆盖。独立 [Vulkan 后端](vulkan.md) 消费相同 Scene 完成几何/文字/图像/路径绘制，原生 swapchain 直接呈现；离屏路径仍支持显式读回。Windows 实机 IME/UIA、标记宿主动作与 slot、macOS、完整组件库与缩放/旋转动画仍是后续目标。
 
 ## 状态、身份与存储
 

@@ -61,7 +61,8 @@ button.on_click(move |_| {
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |
 | ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter` |
 | ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
-| loader::Program / View | `load`、`from_sources`、`build(&Container)`、`open(&App)`（`from_checked` 仅供 `ui!` 生成的代码，文档隐藏）；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`；`State<T>` 有 `get`、`set` |
+| loader::Program / View | `load`、`load_with(path, &Elements)`、`from_sources(entry, &Elements, read)`、`build(&Container)`、`open(&App)`（`from_checked` 仅供 `ui!` 生成的代码，文档隐藏）；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`，`Handle::typed::<T>()` 取得有类型句柄；`State<T>` 有 `get`、`set` |
+| loader::Element / Elements / element! | 标记元素契约：`element!` 声明规格与胶水并实现 `Element`；`Elements::new()` 为内置元素，`with::<E>()` 登记第三方元素 |
 | Node（生命周期） | `keep_alive(value)`：值随控件删除或窗口关闭释放 |
 | Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果 |
 
@@ -129,7 +130,9 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 - `retheme(theme, local, root, style)` 在主题变化时更新跟随主题的布局；`local: LocalLayout` 标出应用设置过、需要保留的高度、内边距、间距和最小高度。
 - `paint` 与 `Hooks` 在 Ui 借用期间运行，只能使用传入的 `State`/上下文；此时调用 Ui 或句柄的方法返回 `ReentrantAccess`；钩子返回的错误原样传给宿主。
 
-可执行示例 `cargo run -p aegle-widgets --example custom_control` 只依赖 `aegle-ui` 实现一个带指针、键盘、语义动作与共享外观的评分控件；`aegle_ui::control` 重导出 `Input`、`Outcome`、`Action` 等类型，控件库无需直接依赖 `aegle-controls`。组件宏（`#[aegle::component]`）与运行时组件注册表仍是目标，尚未实现。
+- 控件出现在标记中用 `aegle::element!` 声明元素：构造参数、可绑定属性、事件与 `self` 字段，与内置元素走同一条检查与构建路径（[ADR 0004](adr/0004-element-contract.md)，写法见[编写控件库 §6](developer/library.md#6-标记元素)）。
+
+可执行示例 `cargo run -p aegle-widgets --example custom_control` 只依赖 `aegle-ui` 实现一个带指针、键盘、语义动作与共享外观的评分控件；`aegle_ui::control` 重导出 `Input`、`Outcome`、`Action` 等类型，控件库无需直接依赖 `aegle-controls`。完整顺序见[编写控件库](developer/library.md)。
 
 ## 所有权与异步
 

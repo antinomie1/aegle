@@ -1,270 +1,92 @@
-//! Typed control handles and the mapping from markup properties to setters.
+//! Handles to controls built from markup, and node properties applied
+//! through the imperative setters.
 
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
-use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
-use aegle_ui::{Color, ColorSlot, Container, LengthSlot, Node, Result, Style, TokenSlot};
-use aegle_widgets::{
-    Button, CheckBox, Label, NodeTooltip, NumberField, Orientation, Progress, Radio, ScrollView,
-    Separator, Slider, Splitter, Switch, Tabs, TextField, Widgets,
-};
+use aegle_markup::{PropertyName, Value as Literal};
+use aegle_ui::{Color, ColorSlot, LengthSlot, Node, Result, Style, TokenSlot};
+use aegle_widgets::NodeTooltip;
 
-use crate::{Data, eval::Env, eval::handle as run};
+use crate::element::Glue;
 
-/// A typed handle to a control created from markup.
+/// A control created from markup, or the window of a `Window` document.
 #[derive(Clone)]
-pub enum Handle {
-    /// The native window of a Window document root.
-    #[cfg(any(
-        all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows")
-    ))]
-    Window(aegle_app::Window),
-    /// Column or Row.
-    Container(Container),
-    /// ScrollView.
-    ScrollView(ScrollView),
-    /// Text.
-    Label(Label),
-    /// Button.
-    Button(Button),
-    /// TextField or TextArea.
-    TextField(TextField),
-    /// CheckBox.
-    CheckBox(CheckBox),
-    /// Switch.
-    Switch(Switch),
-    /// RadioButton.
-    Radio(Radio),
-    /// Slider.
-    Slider(Slider),
-    /// Progress.
-    Progress(Progress),
-    /// Separator.
-    Separator(Separator),
-    /// NumberField.
-    NumberField(NumberField),
-    /// Tabs; each Tab page is a [`Handle::Container`].
-    Tabs(Tabs),
-    /// Splitter.
-    Splitter(Splitter),
+pub struct Handle {
+    pub(crate) node: Node,
+    pub(crate) typed: Rc<dyn Any>,
+    pub(crate) glue: Option<&'static dyn Glue>,
 }
-
-/// Converts a [`Handle`] to the typed handle of its control, as generated views do.
-pub trait FromHandle: Sized {
-    /// The typed handle, or `None` for another control kind.
-    fn from_handle(handle: &Handle) -> Option<Self>;
-}
-
-macro_rules! from_handle {
-    ($($variant:ident($ty:ty)),*) => {$(
-        impl FromHandle for $ty {
-            fn from_handle(handle: &Handle) -> Option<Self> {
-                match handle {
-                    Handle::$variant(handle) => Some(handle.clone()),
-                    #[allow(unreachable_patterns)]
-                    _ => None,
-                }
-            }
-        }
-    )*};
-}
-
-from_handle!(
-    Container(Container),
-    ScrollView(ScrollView),
-    Label(Label),
-    Button(Button),
-    TextField(TextField),
-    CheckBox(CheckBox),
-    Switch(Switch),
-    Radio(Radio),
-    Slider(Slider),
-    Progress(Progress),
-    Separator(Separator),
-    NumberField(NumberField),
-    Tabs(Tabs),
-    Splitter(Splitter)
-);
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
-from_handle!(Window(aegle_app::Window));
 
 impl Handle {
     /// The control's node; a window's node is its root column.
     pub fn node(&self) -> &Node {
-        match self {
-            #[cfg(any(
-                all(feature = "wayland", target_os = "linux"),
-                all(feature = "windows", target_os = "windows")
-            ))]
-            Self::Window(window) => window,
-            Self::Container(handle) => handle,
-            Self::ScrollView(handle) => handle,
-            Self::Label(handle) => handle,
-            Self::Button(handle) => handle,
-            Self::TextField(handle) => handle,
-            Self::CheckBox(handle) => handle,
-            Self::Switch(handle) => handle,
-            Self::Radio(handle) => handle,
-            Self::Slider(handle) => handle,
-            Self::Progress(handle) => handle,
-            Self::Separator(handle) => handle,
-            Self::NumberField(handle) => handle,
-            Self::Tabs(handle) => handle,
-            Self::Splitter(handle) => handle,
+        &self.node
+    }
+
+    /// The typed handle: the element's [`Element::Handle`](crate::Element::Handle),
+    /// or the window of a `Window` document root. `None` for another type.
+    pub fn typed<T: Clone + 'static>(&self) -> Option<T> {
+        self.typed.downcast_ref::<T>().cloned()
+    }
+
+    #[cfg(any(
+        all(feature = "wayland", target_os = "linux"),
+        all(feature = "windows", target_os = "windows")
+    ))]
+    pub(crate) fn window(window: aegle_app::Window) -> Self {
+        Self {
+            node: Node::clone(&window),
+            typed: Rc::new(window),
+            glue: None,
         }
     }
 
-    pub(crate) fn container(&self) -> &Container {
-        match self {
-            #[cfg(any(
-                all(feature = "wayland", target_os = "linux"),
-                all(feature = "windows", target_os = "windows")
-            ))]
-            Self::Window(window) => window,
-            Self::Container(handle) => handle,
-            Self::ScrollView(handle) => handle,
-            Self::Tabs(handle) => handle,
-            Self::Splitter(handle) => handle,
-            _ => unreachable!("checked: only containers have children"),
+    /// A block's transparent group.
+    pub(crate) fn group(group: aegle_ui::Container) -> Self {
+        Self {
+            node: group.0.clone(),
+            typed: Rc::new(group),
+            glue: None,
         }
     }
 
     /// Reads a checked `self` field inside an event handler.
-    pub(crate) fn field(&self, field: &str) -> Result<Data> {
-        Ok(match (self, field) {
-            (Self::CheckBox(handle), "checked") => Data::Bool(handle.is_checked()?),
-            (Self::Switch(handle), "checked") => Data::Bool(handle.is_checked()?),
-            (Self::Radio(handle), "checked") => Data::Bool(handle.is_checked()?),
-            (Self::Radio(handle), _) => Data::String(handle.text()?.into()),
-            (Self::CheckBox(handle), _) => Data::String(handle.text()?.into()),
-            (Self::Switch(handle), _) => Data::String(handle.text()?.into()),
-            (Self::TextField(handle), _) => Data::String(handle.text()?.into()),
-            (Self::Slider(handle), _) => Data::Float(handle.value()? as f32),
-            (Self::NumberField(handle), _) => Data::Float(handle.value()? as f32),
-            (Self::Tabs(handle), _) => Data::Int(handle.selected()? as i64),
-            _ => unreachable!("checked self fields"),
-        })
+    pub(crate) fn field(&self, name: &str) -> Result<crate::Data> {
+        let glue = self.glue();
+        let index = glue.spec().fields.iter().position(|(n, _)| *n == name);
+        glue.get(self, index.expect("checked self field"))
+    }
+
+    pub(crate) fn glue(&self) -> &'static dyn Glue {
+        self.glue.expect("an element's control")
     }
 }
 
-/// Literal properties consumed by a constructor or by the transition step.
-pub(crate) fn consumed(kind: Kind, name: PropertyName) -> bool {
+/// Node properties a window consumes when it opens, and timing properties
+/// installed after every other property.
+pub(crate) fn consumed(name: PropertyName) -> bool {
     use PropertyName::*;
     matches!(
         name,
         Title
-            | Text
-            | Checked
-            | Min
-            | Max
-            | Value
+            | Theme
             | Transition
             | Easing
             | PaintTransition
             | OffsetTransition
             | ScaleTransition
             | RotationTransition
-    ) || (kind == Kind::Window && matches!(name, Width | Height))
-        || (kind == Kind::Splitter && name == Orientation)
+    )
 }
 
-fn literal(element: &Element, name: PropertyName) -> Option<&Literal> {
-    element
-        .properties
-        .iter()
-        .find_map(|(n, bound)| match bound {
-            Bound::Literal(value) if *n == name => Some(value),
-            _ => None,
-        })
-}
-
-fn orientation(element: &Element) -> Orientation {
-    literal(element, PropertyName::Orientation).map_or(Orientation::Horizontal, orientation_of)
-}
-
-fn orientation_of(value: &Literal) -> Orientation {
-    match crate::layout::identifier(value) {
-        "horizontal" => Orientation::Horizontal,
-        "vertical" => Orientation::Vertical,
-        other => unreachable!("checked orientation `{other}`"),
-    }
-}
-
-/// Creates a non-window control with its literal constructor arguments.
-pub(crate) fn create(kind: Kind, element: &Element, parent: &Container) -> Result<Handle> {
-    let text = match literal(element, PropertyName::Text)
-        .or_else(|| literal(element, PropertyName::Title))
-    {
-        Some(Literal::String(text)) => text.as_str(),
-        _ => "",
-    };
-    let checked = matches!(
-        literal(element, PropertyName::Checked),
-        Some(Literal::Bool(true))
-    );
-    let number = |name, default| match literal(element, name) {
-        Some(Literal::Number(value)) => f64::from(*value),
-        _ => default,
-    };
-    let range = (
-        number(PropertyName::Min, 0.0),
-        number(PropertyName::Max, 1.0),
-        number(PropertyName::Value, 0.0),
-    );
-    Ok(match kind {
-        Kind::Column => Handle::Container(parent.column()?),
-        Kind::Row => Handle::Container(parent.row()?),
-        #[cfg(feature = "grid")]
-        Kind::Grid => Handle::Container(parent.grid(&[])?),
-        #[cfg(feature = "grid")]
-        Kind::Stack => Handle::Container(parent.stack()?),
-        #[cfg(not(feature = "grid"))]
-        Kind::Grid | Kind::Stack => {
-            return Err("markup Grid and Stack require the grid feature".into());
-        }
-        Kind::ScrollView => Handle::ScrollView(parent.scroll_view()?),
-        Kind::Text => Handle::Label(parent.text(text)?),
-        Kind::Button => Handle::Button(parent.button(text)?),
-        Kind::TextField => Handle::TextField(parent.text_field(text)?),
-        Kind::TextArea => Handle::TextField(parent.text_area(text)?),
-        Kind::CheckBox => Handle::CheckBox(parent.check_box(text, checked)?),
-        Kind::Switch => Handle::Switch(parent.switch(text, checked)?),
-        Kind::RadioButton => Handle::Radio(parent.radio(text, checked)?),
-        Kind::Slider => Handle::Slider(parent.slider(range.0, range.1, range.2)?),
-        Kind::Progress => Handle::Progress(parent.progress(range.0, range.1, range.2)?),
-        Kind::NumberField => Handle::NumberField(parent.number_field(range.0, range.1, range.2)?),
-        Kind::Separator => Handle::Separator(parent.separator()?),
-        Kind::Tabs => Handle::Tabs(parent.tabs()?),
-        Kind::Tab => Handle::Container(Tabs(parent.clone()).add(text)?),
-        Kind::Splitter => Handle::Splitter(parent.splitter(orientation(element))?),
-        Kind::Window => unreachable!("windows are opened from the App"),
-    })
-}
-
-/// Applies one checked property value through the imperative setters.
-pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Result {
+/// Applies one checked node property other than a window's or timing one.
+pub fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
     use PropertyName::*;
-    let node = handle.node();
     let color = |value: &Literal| {
         let Literal::Color([r, g, b, a]) = *value else {
             unreachable!("checked color")
         };
         Color::rgba(r, g, b, a)
-    };
-    let container = match handle {
-        Handle::Container(_) | Handle::ScrollView(_) | Handle::Tabs(_) | Handle::Splitter(_) => {
-            Some(handle.container())
-        }
-        #[cfg(any(
-            all(feature = "wayland", target_os = "linux"),
-            all(feature = "windows", target_os = "windows")
-        ))]
-        Handle::Window(_) => Some(handle.container()),
-        _ => None,
     };
     if let Literal::Call(function, arguments) = value
         && function == "token"
@@ -274,7 +96,7 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         };
         return bind_token(node, name, token);
     }
-    if let Some(result) = crate::layout::apply(node, container, name, value) {
+    if let Some(result) = crate::layout::apply(node, name, value) {
         return result;
     }
     if let Some(result) = crate::motion::geometry(node, name, value) {
@@ -317,118 +139,13 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         (IndicatorColor, value) => style(node, ColorSlot::Indicator, |s| {
             s.indicator = Some(color(value))
         }),
-        (Text, Literal::String(text)) => match handle {
-            Handle::Label(handle) => handle.set_text(text),
-            Handle::Button(handle) => handle.set_text(text),
-            Handle::TextField(handle) => handle.set_text(text),
-            Handle::CheckBox(handle) => handle.set_text(text),
-            Handle::Switch(handle) => handle.set_text(text),
-            Handle::Radio(handle) => handle.set_text(text),
-            _ => unreachable!("checked text property"),
-        },
-        (Checked, Literal::Bool(v)) => match handle {
-            Handle::CheckBox(handle) => handle.set_checked(*v),
-            Handle::Switch(handle) => handle.set_checked(*v),
-            Handle::Radio(handle) => handle.set_checked(*v),
-            _ => unreachable!("checked toggle property"),
-        },
-        (Value, Literal::Number(n)) => match handle {
-            Handle::Slider(handle) => handle.set_value(f64::from(*n)),
-            Handle::Progress(handle) => handle.set_value(f64::from(*n)),
-            Handle::NumberField(handle) => handle.set_value(f64::from(*n)),
-            _ => unreachable!("checked range property"),
-        },
-        (Orientation, Literal::Identifier(_)) => {
-            let orientation = orientation_of(value);
-            match handle {
-                Handle::Slider(handle) => handle.set_orientation(orientation),
-                Handle::Progress(handle) => handle.set_orientation(orientation),
-                _ => unreachable!("checked orientation property"),
-            }
-        }
-        (Indeterminate, Literal::Bool(v)) => match handle {
-            Handle::Progress(handle) => handle.set_indeterminate(*v),
-            _ => unreachable!("checked indeterminate property"),
-        },
-        (Decimals, Literal::Number(n)) => match handle {
-            Handle::NumberField(handle) => handle.set_decimals(*n as u8),
-            _ => unreachable!("checked decimals property"),
-        },
-        (Ratio, Literal::Number(n) | Literal::Percent(n)) => match handle {
-            Handle::Splitter(handle) => handle.set_ratio(if matches!(value, Literal::Percent(_)) {
-                n / 100.0
-            } else {
-                *n
-            }),
-            _ => unreachable!("checked ratio property"),
-        },
-        (Mixed, Literal::Bool(v)) => match handle {
-            Handle::CheckBox(handle) => handle.set_mixed(*v),
-            _ => unreachable!("checked mixed property"),
-        },
-        (Step, Literal::Number(n)) => match handle {
-            Handle::Slider(handle) => handle.set_step(f64::from(*n)),
-            Handle::NumberField(handle) => handle.set_step(f64::from(*n)),
-            _ => unreachable!("checked step property"),
-        },
-        (ReadOnly | Password, Literal::Bool(v)) => match handle {
-            Handle::TextField(handle) if name == ReadOnly => handle.set_read_only(*v),
-            Handle::TextField(handle) => handle.set_password(*v),
-            _ => unreachable!("checked editor property"),
-        },
-        #[cfg(any(
-            all(feature = "wayland", target_os = "linux"),
-            all(feature = "windows", target_os = "windows")
-        ))]
-        (Theme, Literal::Identifier(theme)) => {
-            let Handle::Window(window) = handle else {
-                unreachable!("checked: themes apply to windows")
-            };
-            window.set_theme(match theme.as_str() {
-                "light" => aegle_ui::Theme::light(),
-                "dark" => aegle_ui::Theme::dark(),
-                "high_contrast" => aegle_ui::Theme::high_contrast(),
-                other => unreachable!("checked theme `{other}`"),
-            })
-        }
         _ => unreachable!("checked property {name:?}"),
     }
 }
 
-/// Sets the kind-specific style field the markup checker accepted on `node`.
+/// Sets the style field the markup checker accepted on `node`.
 fn style(node: &Node, slot: impl Into<TokenSlot>, edit: impl FnOnce(&mut Style)) -> Result {
     node.change(|state, id| state.set_style_field(id, slot.into(), edit))
-}
-
-/// Installs an event block; it runs outside the UI borrow like any handler.
-pub(crate) fn listen(handle: &Handle, event: EventKind, steps: Rc<[Step]>, env: Env) -> Result {
-    match (event, handle) {
-        (EventKind::Clicked, Handle::Button(button)) => {
-            button.on_click(move |button| run(&steps, &env, &Handle::Button(button)))
-        }
-        (EventKind::Changed, Handle::CheckBox(control)) => {
-            control.on_change(move |control| run(&steps, &env, &Handle::CheckBox(control)))
-        }
-        (EventKind::Changed, Handle::Switch(control)) => {
-            control.on_change(move |control| run(&steps, &env, &Handle::Switch(control)))
-        }
-        (EventKind::Changed, Handle::Radio(control)) => {
-            control.on_change(move |control| run(&steps, &env, &Handle::Radio(control)))
-        }
-        (EventKind::Changed, Handle::Slider(control)) => {
-            control.on_change(move |control| run(&steps, &env, &Handle::Slider(control)))
-        }
-        (EventKind::Changed, Handle::NumberField(control)) => {
-            control.on_change(move |control| run(&steps, &env, &Handle::NumberField(control)))
-        }
-        (EventKind::Changed, Handle::Tabs(control)) => {
-            control.on_change(move |control| run(&steps, &env, &Handle::Tabs(control)))
-        }
-        (EventKind::Submitted, Handle::TextField(field)) => {
-            field.on_submit(move |field| run(&steps, &env, &Handle::TextField(field)))
-        }
-        _ => unreachable!("checked event kinds"),
-    }
 }
 
 /// Binds a checked property to a token looked up by name.
@@ -458,3 +175,5 @@ fn bind_token(node: &Node, name: PropertyName, token: &str) -> Result {
         _ => unreachable!("checked token property"),
     }
 }
+
+pub use crate::motion::transitions;
