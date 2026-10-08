@@ -224,8 +224,8 @@ impl Message {
                 6 => message.destination = text()?,
                 7 => message.sender = text()?,
                 8 => signature = text()?,
-                // Unix descriptors are not supported.
-                9 => return None,
+                // Unix descriptors are not supported; GLib sends a zero count.
+                9 if value.as_u64() != Some(0) => return None,
                 _ => {}
             }
         }

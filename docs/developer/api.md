@@ -377,6 +377,26 @@ window.on_key(move |key| {
 
 UI 句柄只能留在 UI 线程。`let proxy = app.proxy(move |message: Job| { label.set_text(&message.text)?; Ok(()) })?;` 返回可克隆、可发送的 `UiProxy<Job>`；任意线程 `proxy.send(job)`（队列上限 1024，满或应用退出时把消息退回）并唤醒事件循环，handler 在 UI 线程于所有借用之外按序运行，可以自由使用其中捕获的控件句柄。
 
+### 桌面服务（`desktop-services`，默认 `desktop` 组合包含）
+
+```rust
+use aegle::desktop::{Event, FileDialog, Icon, MenuItem, Notification, Shortcut, Tray};
+
+let desktop = app.desktop("org.example.Notes", move |event| match event {
+    Event::Files { paths: Some(paths), .. } => status.set_text(&format!("{paths:?}")),
+    Event::Unavailable(why) => status.set_text(&why),   // 没有对应的桌面服务
+    _ => Ok(()),
+})?;
+let filters: &[(&str, &[&str])] = &[("Text", &["*.txt"])];
+desktop.open_file(&FileDialog { title: "Open", filters, ..Default::default() })?;
+desktop.notify(&Notification { summary: "Saved", body: "notes.txt", actions: &[("open", "Open")] })?;
+desktop.bind_shortcuts(&[Shortcut { id: "toggle", description: "Show", trigger: "Ctrl+Alt+K".parse()? }])?;
+let icon = Icon { width: 32, height: 32, rgba: &pixels };     // 非预乘 RGBA8
+desktop.set_tray(Some(&Tray { icon, tooltip: "Notes", menu: &[MenuItem::Item { id: 1, label: "Quit", enabled: true, checked: None }] }))?;
+```
+
+`App::desktop(app_id, handler)` 建立 `aegle_desktop::Desktop` 并把它的事件经 `UiProxy` 交给 UI 线程上的 handler。请求方法立即返回请求编号（`open_file`/`save_file`/`notify`），结果以 `Event::Files { request, paths }`（取消为 `None`）、`NotificationAction`/`NotificationClosed`、`TrayActivated`/`TrayMenu { item }`、`Shortcut { id }` 送达；系统没有相应服务时得到 `Event::Unavailable`。`set_tray(None)` 移除托盘；再次调用 `set_tray` 原地更新。Linux 上全局快捷键由用户在 portal 对话框中确认，触发键只是首选值。`Desktop` 不依赖窗口，也可脱离 aegle-app 单独使用（`aegle-desktop` crate）。
+
 ## 8. 过渡与动画（`motion`）
 
 ```rust

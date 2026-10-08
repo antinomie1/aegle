@@ -114,3 +114,24 @@ impl App {
             .try_for_each(|proxy| proxy.borrow_mut().drain(&mut |result| self.report(result)))
     }
 }
+
+#[cfg(feature = "desktop-services")]
+impl App {
+    /// Connects to the desktop's services as `app_id`, a reverse-DNS name
+    /// such as `org.example.Editor`, for file dialogs, notifications, a tray
+    /// icon and global shortcuts. `handler` receives their events on the UI
+    /// thread, like a [`Self::proxy`] handler. Fails without a desktop
+    /// session, such as a Linux session without a bus.
+    pub fn desktop(
+        &self,
+        app_id: &str,
+        handler: impl FnMut(aegle_desktop::Event) -> Result + 'static,
+    ) -> Result<aegle_desktop::Desktop> {
+        let proxy = self.proxy(handler)?;
+        let desktop = aegle_desktop::Desktop::new(app_id, move |event| {
+            // Past 1024 waiting events the UI thread is stalled; drop the rest.
+            let _ = proxy.send(event);
+        })?;
+        Ok(desktop)
+    }
+}

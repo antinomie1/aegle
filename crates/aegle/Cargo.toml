@@ -15,7 +15,10 @@ default = ["desktop"]
 # System accessibility adapters are opt-in: `unix-accessibility` (AT-SPI over
 # zbus) and `windows-accessibility` (UI Automation); `accessibility` alone
 # exports the semantic tree without a platform adapter.
-desktop = ["native", "software", "system-fonts", "text-dictionary", "markup", "motion", "effects", "colrv1"]
+desktop = ["native", "software", "system-fonts", "text-dictionary", "markup", "motion", "effects", "colrv1", "desktop-services"]
+# File dialogs, notifications, a tray icon and global shortcuts: `App::desktop`
+# and `aegle::desktop`.
+desktop-services = ["aegle-app/desktop-services"]
 native = ["wayland", "windows"]
 motion = ["aegle-ui/motion", "aegle-widgets/motion", "aegle-app/motion", "aegle-loader?/motion"]
 effects = ["aegle-image/effects"]
@@ -113,3 +116,7 @@ required-features = ["native", "system-fonts", "markup", "grid"]
 [[example]]
 name = "gpu_texture"
 required-features = ["native", "wgpu", "system-fonts"]
+
+[[example]]
+name = "desktop"
+required-features = ["native", "system-fonts", "desktop-services"]

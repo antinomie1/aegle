@@ -104,6 +104,7 @@ name = "aegle-app"
 version = "0.1.0"
 dependencies = [
  "aegle-access",
+ "aegle-desktop",
  "aegle-platform-wayland",
  "aegle-platform-win32",
  "aegle-render-software",
@@ -133,6 +134,14 @@ version = "0.1.0"
 [[package]]
 name = "aegle-dbus"
 version = "0.1.0"
+
+[[package]]
+name = "aegle-desktop"
+version = "0.1.0"
+dependencies = [
+ "aegle-dbus",
+ "windows",
+]
 
 [[package]]
 name = "aegle-glyph"

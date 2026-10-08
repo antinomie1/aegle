@@ -136,7 +136,7 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 
 ## 所有权与异步
 
-Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 ID。处理器可以捕获其他控件或窗口句柄而不形成强拥有环。UI 句柄不能发送到后台线程；`App::proxy(handler)` 返回可克隆、可发送的 `UiProxy<T>`，`send` 的消息由 UI 线程上的 handler 处理，handler 里持有的弱句柄在目标已销毁时报告 DeadHandle。
+Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 ID。处理器可以捕获其他控件或窗口句柄而不形成强拥有环。UI 句柄不能发送到后台线程；`App::proxy(handler)` 返回可克隆、可发送的 `UiProxy<T>`，`send` 的消息由 UI 线程上的 handler 处理，handler 里持有的弱句柄在目标已销毁时报告 DeadHandle。`App::desktop(app_id, handler)`（`desktop-services` feature）在此之上接入文件对话框、通知、托盘与全局快捷键的事件。
 
 第三方任务系统的 post/取消句柄也是后续目标。框架不要求应用把所有函数变成 async，不让文本输入处理等待任意网络任务。
 

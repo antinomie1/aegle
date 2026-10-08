@@ -51,6 +51,8 @@ mod native_proxy;
 ))]
 mod native_render;
 
+#[cfg(feature = "desktop-services")]
+pub use aegle_desktop as desktop;
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::{Options as VulkanOptions, RawDevice, SharedDevice, ash};
 #[cfg(feature = "wgpu")]

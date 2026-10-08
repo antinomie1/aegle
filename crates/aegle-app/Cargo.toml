@@ -22,9 +22,12 @@ vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
 wgpu = ["dep:aegle-render-wgpu", "aegle-platform-wayland?/gpu"]
 windows-accessibility = ["windows", "accessibility", "aegle-access/windows"]
 unix-accessibility = ["wayland", "accessibility", "aegle-access/unix"]
+# File dialogs, notifications, a tray icon and global shortcuts (`App::desktop`).
+desktop-services = ["dep:aegle-desktop"]
 
 [dependencies]
 aegle-ui.workspace = true
+aegle-desktop = { workspace = true, optional = true }
 aegle-types.workspace = true
 aegle-scene.workspace = true
 aegle-text.workspace = true

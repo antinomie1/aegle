@@ -16,6 +16,7 @@ categories = ["gui", "graphics"]
 aegle-types = { path = "crates/aegle-types", version = "0.1.0" }
 aegle-core = { path = "crates/aegle-core", version = "0.1.0" }
 aegle-dbus = { path = "crates/aegle-dbus", version = "0.1.0" }
+aegle-desktop = { path = "crates/aegle-desktop", version = "0.1.0" }
 aegle-layout = { path = "crates/aegle-layout", version = "0.1.0" }
 aegle-scene = { path = "crates/aegle-scene", version = "0.1.0" }
 aegle-render-software = { path = "crates/aegle-render-software", version = "0.1.0" }

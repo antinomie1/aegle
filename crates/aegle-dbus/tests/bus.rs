@@ -112,6 +112,44 @@ fn messages_cross_a_bus() -> std::io::Result<()> {
     });
     assert_eq!(seen.body[0].as_i64(), Some(-5));
     assert_eq!(seen.body, signal.body);
+    // GLib marks calls with a zero Unix descriptor count; they still decode.
+    // A read timeout turns a skipped call into a failure instead of a hang.
+    served.stream().set_read_timeout(Some(timeout))?;
+    if let Ok(gdbus) = Command::new("gdbus")
+        .args([
+            "call",
+            "-t",
+            "2",
+            "--address",
+            &address,
+            "--dest",
+            service.name(),
+        ])
+        .args([
+            "--object-path",
+            "/org/example",
+            "--method",
+            "org.example.Test.Ping",
+            "x",
+        ])
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        // gdbus introspects the object to type the arguments first.
+        let introspect = wait(&mut served, |m| m.member == "Introspect");
+        service.send(&introspect.error("org.freedesktop.DBus.Error.UnknownMethod", ""))?;
+        let ping = wait(&mut served, |m| m.is_call("org.example.Test", "Ping"));
+        assert_eq!(ping.body, [Value::str("x")]);
+        service.send(&ping.reply(vec![Value::U32(7)]))?;
+        let output = gdbus.wait_with_output()?;
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "(uint32 7,)"
+        );
+    }
     child.kill()?;
+    let _ = std::fs::remove_dir_all(
+        std::env::temp_dir().join(format!("aegle-dbus-{}", std::process::id())),
+    );
     Ok(())
 }
