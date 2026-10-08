@@ -1,4 +1,4 @@
-//! Context menus, submenus, check items and menu bars.
+//! Context menus, submenus, check and radio items, shortcut hints and menu bars.
 use aegle_text::{Blob, GenericFamily};
 use aegle_ui::{
     Key, KeyInput, Modifiers, Point, PointerButton, PointerId, PointerKind, Rect, Result, Size,
@@ -242,5 +242,74 @@ fn menu_bars_switch_between_open_menus() -> Result {
     assert!(edit.is_shown()?);
     key(&ui, Key::Escape)?;
     assert!(!edit.is_shown()?);
+    Ok(())
+}
+
+#[test]
+fn radio_items_are_exclusive_within_their_run() -> Result {
+    let ui = ui()?;
+    let button = ui.root().row()?.button("View")?;
+    let menu = button.menu()?;
+    let small = menu.radio_item("Small", true)?;
+    let large = menu.radio_item("Large", false)?;
+    menu.separator()?;
+    let light = menu.radio_item("Light", true)?;
+    let save = menu.item("Save")?;
+    menu.show()?;
+    // The hint at the end of the item widens the menu, and follows the
+    // theme's font size like the item's text.
+    let share = |ui: &Ui| -> Result<f32> {
+        ui.refresh()?;
+        let width = menu.bounds()?.size.width;
+        save.set_shortcut(Some("Ctrl+S"))?;
+        ui.refresh()?;
+        Ok(menu.bounds()?.size.width - width)
+    };
+    let normal = share(&ui)?;
+    assert!(normal > 20.0);
+    let theme = Theme::light();
+    save.set_shortcut(None)?;
+    ui.set_theme(Theme {
+        font_size: theme.font_size * 2.0,
+        ..theme
+    })?;
+    let doubled = share(&ui)?;
+    assert!(doubled > normal * 1.5, "{normal} → {doubled}");
+    ui.set_theme(theme)?;
+    ui.refresh()?;
+
+    // Choosing a radio item unchecks only its own run; choosing it again
+    // keeps it checked.
+    click(&ui, center(large.bounds()?))?;
+    assert!(large.is_checked()? && !small.is_checked()? && light.is_checked()?);
+    menu.show()?;
+    ui.refresh()?;
+    click(&ui, center(large.bounds()?))?;
+    assert!(large.is_checked()?);
+    small.set_checked(true)?;
+    assert!(small.is_checked()? && !large.is_checked()? && light.is_checked()?);
+
+    #[cfg(feature = "accessibility")]
+    {
+        use aegle_access::accesskit::{Role, Toggled};
+        let tree = ui.accessibility(true, "Menus")?;
+        let radios: Vec<_> = (tree.nodes.iter())
+            .filter(|(_, node)| node.role() == Role::MenuItemRadio)
+            .map(|(_, node)| node.toggled())
+            .collect();
+        assert_eq!(
+            radios,
+            [
+                Some(Toggled::True),
+                Some(Toggled::False),
+                Some(Toggled::True)
+            ]
+        );
+        let hint = tree
+            .nodes
+            .iter()
+            .find_map(|(_, node)| node.keyboard_shortcut());
+        assert_eq!(hint, Some("Ctrl+S"));
+    }
     Ok(())
 }

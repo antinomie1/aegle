@@ -343,18 +343,22 @@ recent.item("notes.txt")?;
 file.separator()?;
 let autosave = file.check_item("Autosave", true)?;
 autosave.on_click(|item| set_autosave(item.is_checked()?))?;
+file.item("Save")?.set_shortcut(Some("Ctrl+S"))?; // 只是提示，按键由应用绑定
+file.separator()?;
+let small = file.radio_item("Small icons", true)?;   // 相邻的单选项为一组
+file.radio_item("Large icons", false)?;
 
 let editor = window.text_area("")?;
 let context = editor.context_menu()?;      // 右键、Menu 键、Shift+F10
 context.item("Paste")?;
 ```
 
-- `Menu` 是角色为菜单的 Popup：`item(text)`、`check_item(text, checked)`、`submenu(text) -> Menu`、`separator()`，也可以放任意控件。`node.menu()` 显示在锚点下方，由应用调用 `show()`（如在按钮的 `on_click` 中）；`node.context_menu()` 在该控件或其后代请求上下文菜单时于请求点 `show_at`。
-- `MenuItem`：`on_click` / `clear_on_click`、`set_text`、`is_checked` / `set_checked`、`activate`，以及 `set_enabled` 等通用方法。选择一项会先关闭所有菜单、切换勾选项，再按注册顺序运行处理器；打开子菜单的项不运行处理器。子菜单的打开项是 `submenu.anchor()`。
+- `Menu` 是角色为菜单的 Popup：`item(text)`、`check_item(text, checked)`、`radio_item(text, checked)`、`submenu(text) -> Menu`、`separator()`，也可以放任意控件。相邻的单选项构成一组，分隔线或其他种类的项开始新组；选择单选项会勾选它并取消同组其他项，再次选择已勾选的项保持勾选。`node.menu()` 显示在锚点下方，由应用调用 `show()`（如在按钮的 `on_click` 中）；`node.context_menu()` 在该控件或其后代请求上下文菜单时于请求点 `show_at`。
+- `MenuItem`：`on_click` / `clear_on_click`、`set_text`、`set_shortcut`、`is_checked` / `set_checked`（单选项勾选时取消同组其他项）、`activate`，以及 `set_enabled` 等通用方法。选择一项会先关闭所有菜单、切换勾选或单选项，再按注册顺序运行处理器；打开子菜单的项不运行处理器。子菜单的打开项是 `submenu.anchor()`。
 - 键盘：Up/Down 在项间移动并跳过分隔线和禁用项，Home/End 到两端，Right 打开子菜单并聚焦其第一项（从右到左时为 Left），Left 或 Escape 关闭子菜单回到打开项，Enter/Space 选择。指针停在项上即聚焦它并打开其子菜单，同时关闭同级的子菜单。子菜单显示在打开项的结束一侧并与其顶端对齐，放不下时换到另一侧。
 - `MenuBar` 是一行入口，`menu(text)` 添加入口并返回其菜单。点击入口打开或关闭菜单；某个菜单打开时指针移到另一个入口即切换；焦点在入口上时 Left/Right 移动、Down 打开；菜单内 Left/Right 移到相邻菜单。F10 聚焦第一个菜单栏的第一个入口。
-- 每项预留勾选列，没有快捷键提示文字和单选组项。
-- 无障碍角色 Menu、MenuBar、MenuItem 与 MenuItemCheckBox（带勾选状态）；打开子菜单的项报告有菜单弹出及展开状态。有上下文菜单的控件导出 ShowContextMenu 动作。
+- 每项预留勾选列（单选项画圆点）。`set_shortcut(Some("Ctrl+S"))` 在项尾以次要文字色显示快捷键提示，随主题字号与字体变化，并作为无障碍键盘快捷键导出；它不注册按键，应用自己处理快捷键。
+- 无障碍角色 Menu、MenuBar、MenuItem、MenuItemCheckBox 与 MenuItemRadio（后两者带勾选状态）；打开子菜单的项报告有菜单弹出及展开状态。有上下文菜单的控件导出 ShowContextMenu 动作。
 
 ## ImageView
 

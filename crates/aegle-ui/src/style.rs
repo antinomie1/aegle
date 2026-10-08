@@ -161,14 +161,7 @@ impl State {
         }
         let style = face(self.theme_of(id), Some(&decoration));
         let control = &mut self.tree.get_mut(id).unwrap().context.control;
-        if let Some(text) = control.paragraph_mut() {
-            self.fonts.borrow_mut().restyle(text, &style)?;
-        } else if let Some(field) = control.editor_mut() {
-            self.fonts
-                .borrow_mut()
-                .edit(field.editor_mut())
-                .restyle(&style)?;
-        }
+        control.restyle(&mut self.fonts.borrow_mut(), &style)?;
         self.decorations.insert(id, decoration);
         self.trim_decoration(id);
         self.tree.mark_dirty(id, Dirty::ALL)?;

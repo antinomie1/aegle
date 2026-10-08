@@ -1,12 +1,13 @@
-//! Menu items: commands, check items, submenu openers and menu bar entries.
+//! Menu items: commands, check and radio items, submenu openers and menu
+//! bar entries.
 
 use std::{cell::RefCell, rc::Rc};
 
 use aegle_controls::{Input, Outcome};
 use aegle_core::{Dirty, NodeId};
 use aegle_layout::Dimension;
-use aegle_scene::Affine;
-use aegle_text::{Paragraph, TextSystem};
+use aegle_scene::{Affine, Rect, RoundedRect};
+use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
@@ -26,8 +27,12 @@ pub(crate) type Handlers = Rc<RefCell<Vec<Box<dyn FnMut(MenuItem) -> Result>>>>;
 pub struct MenuItemControl {
     pub(crate) button: aegle_controls::Button,
     pub(crate) text: Paragraph,
-    /// Whether a check item is checked; `None` for other items.
+    /// Whether a check or radio item is checked; `None` for other items.
     pub(crate) checked: Option<bool>,
+    /// Whether the item is exclusive among the radio items next to it.
+    pub(crate) radio: bool,
+    /// The shortcut hint shown at the end of the item.
+    pub(crate) shortcut: Option<Paragraph>,
     /// The submenu or, on a menu bar, the menu this item opens.
     pub(crate) submenu: Option<NodeId>,
     /// Whether that menu is shown.
@@ -51,6 +56,13 @@ impl Control for MenuItemControl {
     }
     fn paragraph_mut(&mut self) -> Option<&mut Paragraph> {
         Some(&mut self.text)
+    }
+    fn restyle(&mut self, fonts: &mut TextSystem, style: &TextStyle<'_>) -> Result {
+        fonts.restyle(&mut self.text, style)?;
+        if let Some(shortcut) = &mut self.shortcut {
+            fonts.restyle(shortcut, style)?;
+        }
+        Ok(())
     }
     fn visual(&self) -> ControlVisual {
         ControlVisual {
@@ -83,6 +95,9 @@ impl Control for MenuItemControl {
             if self.submenu.is_some() {
                 width += cx.gap + CHEVRON;
             }
+            if let Some(shortcut) = &self.shortcut {
+                width += 2.0 * cx.gap + shortcut.size().width;
+            }
         }
         Ok(Size::new(width, self.text.size().height + 2.0 * cx.padding))
     }
@@ -113,15 +128,28 @@ impl Control for MenuItemControl {
         cx.builder.push_transform(Affine::translation(x, y)?)?;
         self.text.paint_with_color(cx.builder, color)?;
         cx.builder.pop()?;
+        if let Some(shortcut) = &self.shortcut {
+            let width = shortcut.size().width;
+            let x = mirror(size.width - padding - width, width);
+            let y = (size.height - shortcut.size().height) / 2.0;
+            let color = match cx.visual.enabled {
+                true => cx.theme.muted,
+                false => color,
+            };
+            cx.builder.push_transform(Affine::translation(x, y)?)?;
+            shortcut.paint_with_color(cx.builder, color)?;
+            cx.builder.pop()?;
+        }
         if self.checked == Some(true) {
-            let y = (size.height - MARK) * 0.5;
-            check_mark(
-                cx.builder,
-                mirror(padding, MARK),
-                y,
-                MARK,
-                cx.appearance.indicator,
-            )?;
+            let (x, y) = (mirror(padding, MARK), (size.height - MARK) * 0.5);
+            let indicator = cx.appearance.indicator;
+            if self.radio {
+                let dot = Rect::new(x + MARK * 0.25, y + MARK * 0.25, MARK * 0.5, MARK * 0.5);
+                cx.builder
+                    .fill(RoundedRect::new(dot, MARK * 0.25)?, indicator)?;
+            } else {
+                check_mark(cx.builder, x, y, MARK, indicator)?;
+            }
         }
         if !self.bar && self.submenu.is_some() {
             // The dropdown chevron turned toward the side the submenu opens on.
@@ -140,7 +168,10 @@ impl Control for MenuItemControl {
         use aegle_ui::accesskit::{Action, HasPopup, Role, Toggled};
         match self.checked {
             Some(checked) => {
-                cx.node.set_role(Role::MenuItemCheckBox);
+                cx.node.set_role(match self.radio {
+                    true => Role::MenuItemRadio,
+                    false => Role::MenuItemCheckBox,
+                });
                 cx.node.set_toggled(if checked {
                     Toggled::True
                 } else {
@@ -155,6 +186,9 @@ impl Control for MenuItemControl {
         }
         if !cx.labelled {
             cx.node.set_label(self.text.text());
+        }
+        if let Some(shortcut) = &self.shortcut {
+            cx.node.set_keyboard_shortcut(shortcut.text());
         }
         if cx.enabled {
             cx.node.add_action(Action::Focus);
@@ -172,7 +206,8 @@ impl Control for MenuItemControl {
 }
 
 handle! {
-    /// A menu entry: a command, a check item, or the opener of a submenu.
+    /// A menu entry: a command, a check or radio item, or the opener of a
+    /// submenu.
     pub MenuItem(MenuItemControl)
 }
 
@@ -181,18 +216,32 @@ impl MenuItem {
     pub fn set_text(&self, text: &str) -> Result {
         self.change(|state, id| state.set_text(id, text))
     }
-    /// Whether a check item is checked; always false for other items.
+    /// Shows `shortcut`, such as `"Ctrl+S"`, at the end of the item, or
+    /// removes it with `None`. It is a hint, also the accessible keyboard
+    /// shortcut; the application binds the keys itself.
+    pub fn set_shortcut(&self, shortcut: Option<&str>) -> Result {
+        self.change(|state, id| {
+            let shortcut = match shortcut {
+                Some(text) => {
+                    let style = state.text_style(id);
+                    Some(state.fonts.borrow_mut().paragraph(text, &style)?)
+                }
+                None => None,
+            };
+            item(state, id).shortcut = shortcut;
+            state.tree.mark_dirty(id, Dirty::ALL)?;
+            Ok(())
+        })
+    }
+    /// Whether a check or radio item is checked; always false for other items.
     pub fn is_checked(&self) -> Result<bool> {
         self.change(|state, id| Ok(item(state, id).checked == Some(true)))
     }
-    /// Checks or unchecks a check item without calling the click handlers;
-    /// an item created by [`crate::Menu::item`] becomes a check item.
+    /// Checks or unchecks a check or radio item without calling the click
+    /// handlers; checking a radio item unchecks the rest of its group. An item
+    /// created by [`crate::Menu::item`] becomes a check item.
     pub fn set_checked(&self, checked: bool) -> Result {
-        self.change(|state, id| {
-            item(state, id).checked = Some(checked);
-            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            Ok(())
-        })
+        self.change(|state, id| check(state, id, checked))
     }
     /// Activates the item as a click or Enter would.
     pub fn activate(&self) -> Result {
@@ -216,4 +265,37 @@ impl MenuItem {
 
 pub(crate) fn item(state: &mut State, id: NodeId) -> &mut MenuItemControl {
     state.control_as::<MenuItemControl>(id).unwrap()
+}
+
+/// Checks or unchecks an item; checking a radio item unchecks the radio
+/// items next to it, up to the nearest item or separator of another kind.
+pub(crate) fn check(state: &mut State, id: NodeId, checked: bool) -> Result {
+    let control = item(state, id);
+    control.checked = Some(checked);
+    let radio = control.radio;
+    state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+    if !(radio && checked) {
+        return Ok(());
+    }
+    let parent = state.tree.parent(id)?.expect("menu items live in menus");
+    let siblings: Vec<_> = state.tree.children(parent)?.collect();
+    let at = siblings.iter().position(|&n| n == id).unwrap();
+    let mut radio = |n: &&NodeId| {
+        state
+            .control_as::<MenuItemControl>(**n)
+            .is_some_and(|c| c.radio)
+    };
+    let before = siblings[..at].iter().rev().take_while(&mut radio).count();
+    let after = siblings[at + 1..].iter().take_while(&mut radio).count();
+    for &sibling in siblings[at - before..=at + after]
+        .iter()
+        .filter(|&&n| n != id)
+    {
+        if item(state, sibling).checked.replace(false) == Some(true) {
+            state
+                .tree
+                .mark_dirty(sibling, Dirty::PAINT | Dirty::SEMANTICS)?;
+        }
+    }
+    Ok(())
 }

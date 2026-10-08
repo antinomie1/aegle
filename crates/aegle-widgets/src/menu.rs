@@ -9,7 +9,7 @@ use aegle_ui::{Container, Control, Node, Result, State, text_style};
 use crate::{
     NodePopup, Popup, Separator, Widgets,
     group::{Group, Role},
-    menu_item::{MenuItem, MenuItemControl, item},
+    menu_item::{self, MenuItem, MenuItemControl, item},
     popup::{entry, focus_first, hide_popup, popups, show_popup},
 };
 
@@ -47,6 +47,17 @@ impl Menu {
     pub fn check_item(&self, text: &str, checked: bool) -> Result<MenuItem> {
         add_item(self, text, Some(checked), false)
     }
+    /// Appends a radio item, exclusive among the radio items next to it: a
+    /// separator or another kind of item starts a new group. Choosing it
+    /// checks it and unchecks the rest of its group before its handlers run.
+    pub fn radio_item(&self, text: &str, checked: bool) -> Result<MenuItem> {
+        let item = add_item(self, text, Some(false), false)?;
+        item.change(|state, id| {
+            self::item(state, id).radio = true;
+            menu_item::check(state, id, checked)
+        })?;
+        Ok(item)
+    }
     /// Appends an item that opens a submenu beside it, and returns the
     /// submenu to fill.
     pub fn submenu(&self, text: &str) -> Result<Menu> {
@@ -74,6 +85,8 @@ fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) ->
                 .borrow_mut()
                 .paragraph(text, &text_style(theme))?,
             checked,
+            radio: false,
+            shortcut: None,
             submenu: None,
             expanded: false,
             bar,
@@ -110,9 +123,10 @@ fn chosen(item: MenuItem) -> Result {
             return Ok(None);
         }
         let handlers = control.handlers.clone();
-        if let Some(checked) = &mut control.checked {
-            *checked = !*checked;
-            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+        if let Some(checked) = control.checked {
+            // Choosing the checked radio item keeps it checked.
+            let checked = !checked || control.radio;
+            menu_item::check(state, id, checked)?;
         }
         close_menus(state)?;
         Ok(Some(handlers))

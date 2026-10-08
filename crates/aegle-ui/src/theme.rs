@@ -169,14 +169,8 @@ impl State {
         let node = self.tree.get_mut(id).unwrap();
         let mut style = node.style().clone();
         if font_changed {
-            if let Some(text) = node.context.control.paragraph_mut() {
-                self.fonts.borrow_mut().restyle(text, &text_style)?;
-            } else if let Some(field) = node.context.control.editor_mut() {
-                self.fonts
-                    .borrow_mut()
-                    .edit(field.editor_mut())
-                    .restyle(&text_style)?;
-            }
+            let fonts = &mut self.fonts.borrow_mut();
+            node.context.control.restyle(fonts, &text_style)?;
         }
         node.context
             .control

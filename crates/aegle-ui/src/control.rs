@@ -18,7 +18,7 @@ pub use aegle_controls::{Action, Capture, Input, Outcome, PointerInput};
 use aegle_core::NodeId;
 use aegle_layout::Style;
 use aegle_scene::{Color, RoundedRect, SceneBuilder};
-use aegle_text::{Paragraph, TextSystem};
+use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{Accepts, Appearance, ControlKind, Theme, VisualState};
 use aegle_types::{Point, Size};
 
@@ -237,6 +237,17 @@ pub trait Control: Any {
     /// Mutable [`Control::editor`].
     fn editor_mut(&mut self) -> Option<&mut TextField> {
         None
+    }
+    /// Reshapes its text in a new font size or face, from the theme or a
+    /// local font; by default its paragraph or editor. A control showing more
+    /// text, such as a menu item's shortcut hint, reshapes that too.
+    fn restyle(&mut self, fonts: &mut TextSystem, style: &TextStyle<'_>) -> Result {
+        if let Some(text) = self.paragraph_mut() {
+            fonts.restyle(text, style)?;
+        } else if let Some(field) = self.editor_mut() {
+            fonts.edit(field.editor_mut()).restyle(style)?;
+        }
+        Ok(())
     }
 
     /// Interaction state for skins.
