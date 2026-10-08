@@ -157,6 +157,9 @@ pub struct State {
     pub focus: Focus,
     /// Last focused node, restored when focus returns to the window.
     pub last_focus: Option<NodeId>,
+    /// Whether focus shows its indicator: a key press turns it on, a pointer
+    /// press off. Editors show their focus either way.
+    pub focus_visible: bool,
     /// Pointer route of the press in progress.
     pub route: Route,
     /// Pointer capture: the pointer and its target.

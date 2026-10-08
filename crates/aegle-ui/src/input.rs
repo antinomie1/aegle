@@ -50,6 +50,7 @@ impl Ui {
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?;
         if key.pressed {
+            state.show_focus(true)?;
             for hook in state.hooks.clone() {
                 if let Some(used) = hook.key
                     && used(&mut state, &key)?
@@ -106,6 +107,7 @@ impl Ui {
             .map_err(|_| UiError::ReentrantAccess)?;
         state.rebuild_order();
         if matches!(kind, PointerKind::Down { .. } | PointerKind::ButtonDown(_)) {
+            state.show_focus(false)?;
             #[cfg(feature = "motion")]
             {
                 state.motion.fling = None;
@@ -334,6 +336,16 @@ impl State {
         ) && let Some(handler) = self.callbacks.get(&target)
         {
             self.pending.push_back((target, handler.version));
+        }
+        Ok(())
+    }
+    /// Shows or hides the focus indicator, repainting the focused control.
+    fn show_focus(&mut self, visible: bool) -> Result {
+        if self.focus_visible != visible {
+            self.focus_visible = visible;
+            if let Some(id) = self.focus.current(&self.tree) {
+                self.dirty_visual_state(id)?;
+            }
         }
         Ok(())
     }

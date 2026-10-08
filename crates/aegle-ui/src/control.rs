@@ -238,6 +238,10 @@ pub trait Control: Any {
     fn editor_mut(&mut self) -> Option<&mut TextField> {
         None
     }
+    /// Adjusts the node's text style for this control's text, as a type
+    /// role scaling the size and weight. The engine applies it wherever it
+    /// shapes the control's text: set text, font changes and theme changes.
+    fn text_role(&self, _style: &mut TextStyle<'_>) {}
     /// Reshapes its text in a new font size or face, from the theme or a
     /// local font; by default its paragraph or editor. A control showing more
     /// text, such as a menu item's shortcut hint, reshapes that too.

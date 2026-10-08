@@ -147,6 +147,11 @@ impl Node {
     pub fn focus(&self) -> Result {
         self.change(|state, id| state.set_focus(Some(id)))
     }
+    /// Whether this control has logical focus, whether or not it shows it
+    /// (see `VisualState::focused`).
+    pub fn is_focused(&self) -> Result<bool> {
+        self.change(|state, id| Ok(state.focus.current(&state.tree) == Some(id)))
+    }
     /// Supplementary text for assistive technology, such as a tooltip's;
     /// `None` removes it.
     pub fn set_accessible_description(&self, description: Option<&str>) -> Result {

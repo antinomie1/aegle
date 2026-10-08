@@ -92,6 +92,7 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     ));
     assert!(matches!(&events[6], CanvasEvent::Key { text, .. } if text == "n"));
     assert_eq!(view.offset()?, revealed);
+    // The key press after the pointer press shows focus.
     assert!(canvas.visual_state()?.focused);
     assert!(canvas.appearance()?.focus_width > 0.0);
     drop(events);
@@ -183,7 +184,9 @@ fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
             "cancel"
         ]
     );
-    assert!(canvas.visual_state()?.focused);
+    assert!(canvas.is_focused()?);
+    // A pointer press focuses without showing focus.
+    assert!(!canvas.visual_state()?.focused);
     Ok(())
 }
 

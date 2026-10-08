@@ -138,6 +138,7 @@ impl Ui {
                 size: Size::default(),
                 focus: Focus::new(),
                 last_focus: None,
+                focus_visible: true,
                 route: Route::new(),
                 capture: None,
                 drag: None,

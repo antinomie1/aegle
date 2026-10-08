@@ -16,7 +16,8 @@ pub struct VisualState {
     pub hovered: bool,
     /// Whether its behavior is currently pressed.
     pub pressed: bool,
-    /// Whether the control has keyboard focus.
+    /// Whether the control shows keyboard focus: it has focus, and the last
+    /// input was a key or it is an editor (focus-visible).
     pub focused: bool,
     /// Whether an editor allows selection but disallows content changes.
     pub read_only: bool,
