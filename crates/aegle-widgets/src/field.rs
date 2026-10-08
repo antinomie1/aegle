@@ -54,7 +54,10 @@ impl TextField {
     }
     /// Removes the submit handlers and any queued invocation.
     pub fn clear_on_submit(&self) -> Result {
-        self.change(|state, id| Ok(state.clear_actions(id)))
+        self.change(|state, id| {
+            state.clear_actions(id);
+            Ok(())
+        })
     }
     /// Applies an editor change, then restarts a focused native IME session.
     fn edit(

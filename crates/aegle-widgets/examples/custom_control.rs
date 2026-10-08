@@ -201,7 +201,10 @@ fn main() -> Result {
     rating.set_indicator_color(aegle_ui::Color::rgb(230, 160, 0))?;
     let log = Rc::new(RefCell::new(Vec::new()));
     let seen = log.clone();
-    rating.on_change(move |rating| Ok(seen.borrow_mut().push(rating.value()?)))?;
+    rating.on_change(move |rating| {
+        seen.borrow_mut().push(rating.value()?);
+        Ok(())
+    })?;
 
     ui.resize(Size::new(200.0, 60.0))?;
     ui.refresh()?;

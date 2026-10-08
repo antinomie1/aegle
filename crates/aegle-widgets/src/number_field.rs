@@ -141,7 +141,10 @@ impl NumberField {
     }
     /// Removes the handlers and invalidates their queued invocations.
     pub fn clear_on_change(&self) -> Result {
-        self.change(|state, id| Ok(state.clear_actions(id)))
+        self.change(|state, id| {
+            state.clear_actions(id);
+            Ok(())
+        })
     }
     fn read<T>(&self, read: impl FnOnce(&NumberFieldControl) -> T) -> Result<T> {
         self.change(|state, id| Ok(read(state.control_as::<NumberFieldControl>(id).unwrap())))

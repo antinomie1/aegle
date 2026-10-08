@@ -38,7 +38,10 @@ impl Button {
     }
     /// Removes the click handlers and invalidates any already queued invocation.
     pub fn clear_on_click(&self) -> Result {
-        self.change(|state, id| Ok(state.clear_actions(id)))
+        self.change(|state, id| {
+            state.clear_actions(id);
+            Ok(())
+        })
     }
 }
 

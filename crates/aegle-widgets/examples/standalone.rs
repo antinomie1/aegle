@@ -77,9 +77,10 @@ fn draw(ui: &Ui, theme: Theme, path: &str) -> Result {
     let mut pixels = vec![0; width * height * 4];
     let mut surface = Surface::new(&mut pixels, width as u32, height as u32)?;
     let mut renderer = Renderer::default();
-    let mut frame = renderer.begin_frame(&mut surface, theme.background);
-    ui.visit_scenes(|scene, transform, clip| Ok(frame.draw_clipped(scene, transform, clip)?))?;
-    drop(frame);
+    {
+        let mut frame = renderer.begin_frame(&mut surface, theme.background);
+        ui.visit_scenes(|scene, transform, clip| Ok(frame.draw_clipped(scene, transform, clip)?))?;
+    }
     let mut ppm = format!("P6 {width} {height} 255\n").into_bytes();
     ppm.extend(surface.data().chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
     fs::create_dir_all("target")?;

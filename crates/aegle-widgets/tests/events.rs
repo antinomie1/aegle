@@ -102,7 +102,10 @@ fn event_handlers_accumulate_and_survive_errors() -> Result {
         second.borrow_mut().push("second");
         // Added during dispatch: runs from the next click on.
         let late = second.clone();
-        button.on_click(move |_| Ok(late.borrow_mut().push("late")))
+        button.on_click(move |_| {
+            late.borrow_mut().push("late");
+            Ok(())
+        })
     })?;
     button.activate()?;
     // Every handler of the event runs; the first error is reported.

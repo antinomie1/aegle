@@ -61,7 +61,10 @@ impl Slider {
     }
     /// Removes the handlers and invalidates their queued invocations.
     pub fn clear_on_change(&self) -> Result {
-        self.change(|state, id| Ok(state.clear_actions(id)))
+        self.change(|state, id| {
+            state.clear_actions(id);
+            Ok(())
+        })
     }
 }
 

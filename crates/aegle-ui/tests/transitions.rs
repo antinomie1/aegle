@@ -123,7 +123,10 @@ fn scoped_timing_and_explicit_animations_override_the_policy() -> Result {
     // An explicit keyframe animation completes like a transition.
     let ends = Rc::new(Cell::new(0));
     let count = ends.clone();
-    panel.on_transition_end(move |_| Ok(count.set(count.get() + 1)))?;
+    panel.on_transition_end(move |_| {
+        count.set(count.get() + 1);
+        Ok(())
+    })?;
     let frames = [
         Keyframe::new(0.0, Point::new(0.0, 0.0)),
         Keyframe::new(0.5, Point::new(80.0, 0.0)),
