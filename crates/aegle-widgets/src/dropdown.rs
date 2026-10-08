@@ -12,7 +12,7 @@ use crate::{
     popup::{hide_popup, popups},
 };
 
-type ChangeHandler = Rc<RefCell<Option<Box<dyn FnMut(Dropdown) -> Result>>>>;
+type ChangeHandler = Rc<RefCell<Vec<Box<dyn FnMut(Dropdown) -> Result>>>>;
 
 pub(crate) struct DropdownData {
     pub items: Vec<String>,
@@ -32,7 +32,7 @@ pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -
     }
     let button = container.button(items[selected])?;
     let popup = button.popup()?;
-    let handler: ChangeHandler = Rc::new(RefCell::new(None));
+    let handler: ChangeHandler = Rc::default();
     button.change(|state, id| {
         if let Some(control) = state.control_as::<crate::button::ButtonControl>(id) {
             control.variant = Variant::Dropdown { expanded: false };
@@ -119,17 +119,14 @@ impl Dropdown {
             hide_popup(state, popup)?;
             Ok(result)
         })?;
-        self.0.set_text(&text)?;
+        self.change(|state, id| state.set_text(id, &text))?;
         if notify && changed {
-            let callback = handler.borrow_mut().take();
-            if let Some(mut callback) = callback {
-                let result = callback(self.clone());
-                let mut slot = handler.borrow_mut();
-                if slot.is_none() {
-                    *slot = Some(callback);
-                }
-                result?;
-            }
+            let mut callbacks = std::mem::take(&mut *handler.borrow_mut());
+            let result = crate::run_all(&mut callbacks, self);
+            let mut slot = handler.borrow_mut();
+            callbacks.append(&mut slot);
+            *slot = callbacks;
+            result?;
         }
         Ok(())
     }
@@ -171,17 +168,17 @@ impl Dropdown {
         self.options(&popup, items, selected)?;
         self.select(selected, false)
     }
-    /// Replaces the handler run when the user chooses a different item. It runs
-    /// outside UI borrows; programmatic selection does not invoke it.
+    /// Adds a handler run when the user chooses a different item. Handlers
+    /// run in registration order outside UI borrows; programmatic selection does not invoke it.
     pub fn on_change(&self, callback: impl FnMut(Dropdown) -> Result + 'static) -> Result {
         let handler = self.change(|state, id| Ok(popups(state).dropdowns[&id].handler.clone()))?;
-        *handler.borrow_mut() = Some(Box::new(callback));
+        handler.borrow_mut().push(Box::new(callback));
         Ok(())
     }
-    /// Removes the change handler.
+    /// Removes the change handlers.
     pub fn clear_on_change(&self) -> Result {
         let handler = self.change(|state, id| Ok(popups(state).dropdowns[&id].handler.clone()))?;
-        handler.borrow_mut().take();
+        handler.borrow_mut().clear();
         Ok(())
     }
 }

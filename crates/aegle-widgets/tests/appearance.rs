@@ -23,8 +23,18 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let field = ui.root().text_field("Hello")?;
     let button = ui.root().button("Apply")?;
-    assert!(ui.root().set_hover_background(Color::BLACK).is_err());
-    assert!(field.set_pressed_background(Color::BLACK).is_err());
+    // Kind-specific setters exist only on matching handles; a Style value
+    // is still checked against the control kind.
+    let pressed = Style {
+        pressed_background: Some(Color::BLACK),
+        ..Default::default()
+    };
+    assert!(field.set_style(pressed).is_err());
+    let hover = Style {
+        hover_background: Some(Color::BLACK),
+        ..Default::default()
+    };
+    assert!(ui.root().set_style(hover).is_err());
     ui.resize(Size::new(320.0, 160.0))?;
     field.focus()?;
     field.select(Selection {

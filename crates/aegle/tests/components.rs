@@ -102,7 +102,7 @@ fn change_events_update_markup_state() -> Result {
         ui.dispatch_callbacks()
     };
     number.focus()?;
-    number.set_text("4")?;
+    number.change(|state, id| state.set_text(id, "4"))?;
     enter()?;
     assert_eq!(view.get("amount"), Some(Data::Float(4.0)));
     tabs.tab(1)?.focus()?;

@@ -22,11 +22,11 @@ handle!(
 impl TextField {
     /// Replaces the committed text, clears history and explicitly ends native preedit.
     pub fn set_text(&self, text: &str) -> Result {
-        self.0.set_text(text)
+        self.change(|state, id| state.set_text(id, text))
     }
     /// Copies committed text, never substituting transient preedit.
     pub fn text(&self) -> Result<String> {
-        self.0.text()
+        self.change(|state, id| state.text(id))
     }
     /// Allows selection but rejects user edits when true.
     pub fn set_read_only(&self, read_only: bool) -> Result {
@@ -48,13 +48,13 @@ impl TextField {
     pub fn select(&self, selection: Selection) -> Result {
         self.edit(|editor| editor.select(selection))
     }
-    /// Replaces the single-line Enter handler, dispatched outside the tree borrow.
+    /// Adds a single-line Enter handler, dispatched outside the tree borrow.
     pub fn on_submit(&self, mut callback: impl FnMut(TextField) -> Result + 'static) -> Result {
-        self.0.on_action(move |node| callback(TextField(node)))
+        self.change(|state, id| state.on_action(id, move |node| callback(TextField(node))))
     }
-    /// Removes the submit handler and any queued invocation.
+    /// Removes the submit handlers and any queued invocation.
     pub fn clear_on_submit(&self) -> Result {
-        self.0.clear_on_action()
+        self.change(|state, id| Ok(state.clear_actions(id)))
     }
     /// Applies an editor change, then restarts a focused native IME session.
     fn edit(

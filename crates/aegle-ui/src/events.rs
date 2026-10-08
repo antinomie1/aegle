@@ -39,8 +39,8 @@ pub struct KeyEvent<'a> {
 pub(crate) type KeyHandler = Box<dyn FnMut(KeyEvent<'_>) -> Result<bool>>;
 
 impl Node {
-    /// Runs `callback` once per presented frame, with the frame's time, until
-    /// it is cleared or this control is removed. While any frame callback is
+    /// Adds `callback`, run once per presented frame with the frame's time
+    /// until cleared or this control is removed. While any frame callback is
     /// registered the host keeps producing frames, paced by the display, so
     /// use it for playheads and other continuously moving content and clear it
     /// when idle. It runs before layout and painting, outside every UI borrow.
@@ -55,16 +55,13 @@ impl Node {
                 version: state.callback_version,
                 callback: Some(Box::new(callback)),
             };
-            match state.frames.iter_mut().find(|h| h.id == id) {
-                Some(slot) => *slot = handler,
-                None => state.frames.push(handler),
-            }
+            state.frames.push(handler);
             // Starts the frame cycle on an otherwise idle window.
             state.repaint = true;
             Ok(())
         })
     }
-    /// Stops this control's frame callback.
+    /// Stops this control's frame callbacks.
     pub fn clear_on_frame(&self) -> Result {
         self.change(|state, id| {
             state.frames.retain(|h| h.id != id);

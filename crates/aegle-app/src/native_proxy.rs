@@ -68,25 +68,26 @@ impl<T> Drop for Receiver<T> {
 
 /// Type-erased drain for the runtime's proxy list.
 pub(crate) trait Drain {
-    fn drain(&mut self) -> Result;
+    /// Handles queued messages, passing each handler result to `report`.
+    fn drain(&mut self, report: &mut dyn FnMut(Result) -> Result) -> Result;
 }
 
 impl<T> Drain for Receiver<T> {
-    fn drain(&mut self) -> Result {
+    fn drain(&mut self, report: &mut dyn FnMut(Result) -> Result) -> Result {
         // Snapshot the queue so a handler that sends to itself runs next wake.
         let batch =
             std::mem::take(&mut *self.shared.queue.lock().unwrap_or_else(|e| e.into_inner()));
         batch
             .into_iter()
-            .try_for_each(|message| (self.handler)(message))
+            .try_for_each(|message| report((self.handler)(message)))
     }
 }
 
 impl App {
     /// Creates a thread-safe sender whose messages `handler` receives on the UI
     /// thread, in order, while the event loop runs. The handler may keep control
-    /// handles, which stay on this thread. A failing handler stops the loop with
-    /// its error, like a click callback.
+    /// handles, which stay on this thread. Handler errors go to
+    /// [`App::on_error`], like a click callback's.
     pub fn proxy<T: Send + 'static>(
         &self,
         handler: impl FnMut(T) -> Result + 'static,
@@ -104,11 +105,12 @@ impl App {
         Ok(UiProxy { shared })
     }
 
-    /// Runs every proxy handler once, outside the runtime borrow.
+    /// Runs every proxy handler once, outside the runtime borrow, reporting
+    /// handler errors to [`App::on_error`].
     pub(crate) fn drain_proxies(&self) -> Result {
         let proxies = self.runtime.borrow().proxies.clone();
         proxies
             .iter()
-            .try_for_each(|proxy| proxy.borrow_mut().drain())
+            .try_for_each(|proxy| proxy.borrow_mut().drain(&mut |result| self.report(result)))
     }
 }

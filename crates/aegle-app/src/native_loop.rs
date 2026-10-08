@@ -10,7 +10,35 @@ impl Drop for DispatchGuard<'_> {
     }
 }
 
+/// See [`App::on_error`].
+pub(crate) type ErrorHandler = Box<dyn FnMut(Box<dyn std::error::Error>) -> Result<()>>;
+
 impl App {
+    /// Receives each error an application callback returns (click, change,
+    /// submit, transition end, frame, key and proxy handlers) or input
+    /// handling reports. Returning `Ok` keeps the app running; returning an
+    /// error ends [`Self::run`] with it. Without a handler the error is
+    /// printed to stderr and the app keeps running. The failing handler stays
+    /// installed either way. Rendering and platform failures always end the run.
+    pub fn on_error(
+        &self,
+        handler: impl FnMut(Box<dyn std::error::Error>) -> Result<()> + 'static,
+    ) {
+        *self.on_error.borrow_mut() = Some(Box::new(handler));
+    }
+
+    /// Passes an application error to the error handler.
+    pub(crate) fn report(&self, result: Result<()>) -> Result<()> {
+        let Err(error) = result else { return Ok(()) };
+        match self.on_error.borrow_mut().as_mut() {
+            Some(handler) => handler(error),
+            None => {
+                eprintln!("aegle: {error}");
+                Ok(())
+            }
+        }
+    }
+
     pub(crate) fn run_loop(self) -> Result<()> {
         let mut callbacks = Vec::new();
         while self.pump(None, &mut callbacks)? {}
@@ -60,7 +88,8 @@ impl App {
             if matches!(event, Event::Wake) {
                 self.drain_proxies()?;
             } else {
-                self.runtime.borrow_mut().event(event)?;
+                let result = self.runtime.borrow_mut().event(event);
+                self.report(result)?;
             }
             self.callbacks(callbacks)?;
             // Queued pointer motion shares one refresh, so a fast mouse costs
@@ -146,7 +175,7 @@ impl App {
         }
         let now = std::time::Instant::now();
         for ui in scratch.drain(..) {
-            ui.run_frame(now)?;
+            self.report(ui.run_frame(now))?;
         }
         self.callbacks(scratch)?;
         self.runtime.borrow_mut().refresh()
@@ -162,7 +191,7 @@ impl App {
                 .map(|entry| entry.ui.clone()),
         );
         for ui in scratch.drain(..) {
-            ui.dispatch_callbacks()?;
+            self.report(ui.dispatch_callbacks())?;
         }
         Ok(())
     }

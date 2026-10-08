@@ -41,11 +41,13 @@ fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
             ("b", start + Duration::from_millis(16))
         ]
     );
-    // A callback that replaces itself keeps only the replacement.
+    // Callbacks accumulate; one that clears and replaces them keeps only the
+    // replacement, which first runs on the next frame.
     let replaced = Rc::new(Cell::new(0));
     let count = replaced.clone();
     a.on_frame(move |node, _| {
         let count = count.clone();
+        node.clear_on_frame()?;
         node.on_frame(move |_, _| {
             count.set(count.get() + 1);
             Ok(())
@@ -55,7 +57,8 @@ fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
     log.borrow_mut().clear();
     ui.run_frame(start)?;
     ui.run_frame(start)?;
-    assert_eq!((replaced.get(), log.borrow().len()), (1, 0));
+    assert_eq!((replaced.get(), log.borrow().len()), (1, 1));
+    a.clear_on_frame()?;
     a.on_frame(|_, _| Err("stop".into()))?;
     assert!(ui.run_frame(start).is_err());
     assert!(!ui.wants_frames()?);

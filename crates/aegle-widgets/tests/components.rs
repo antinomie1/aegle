@@ -130,10 +130,10 @@ fn range_variants_number_fields_and_separators() -> Result {
     assert_eq!(number.text()?, "2.0");
     key(&ui, Key::Up)?;
     assert_eq!((number.value()?, number.text()?.as_str()), (2.5, "2.5"));
-    number.set_text("42")?;
+    number.change(|state, id| state.set_text(id, "42"))?;
     key(&ui, Key::Enter)?;
     assert_eq!((number.value()?, changes.get()), (10.0, 2));
-    number.set_text("not a number")?;
+    number.change(|state, id| state.set_text(id, "not a number"))?;
     key(&ui, Key::Enter)?;
     assert_eq!((number.value()?, number.text()?.as_str()), (10.0, "10.0"));
     // The lower stepper sits in the bottom right corner.

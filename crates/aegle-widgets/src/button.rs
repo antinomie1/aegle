@@ -24,20 +24,21 @@ handle!(
 impl Button {
     /// Replaces the button label.
     pub fn set_text(&self, text: &str) -> Result {
-        self.0.set_text(text)
+        self.change(|state, id| state.set_text(id, text))
     }
     /// Queues semantic activation using the normal enabled/visible behavior.
     pub fn activate(&self) -> Result {
         self.change(|state, id| state.dispatch(id, Input::Activate))
     }
-    /// Replaces the click handler. Invocation occurs after the input batch,
-    /// outside every UI/tree borrow, so handles may safely create or remove controls.
+    /// Adds a click handler; handlers run in registration order after the
+    /// input batch, outside every UI/tree borrow, so they may safely create or
+    /// remove controls.
     pub fn on_click(&self, mut callback: impl FnMut(Button) -> Result + 'static) -> Result {
-        self.0.on_action(move |node| callback(Button(node)))
+        self.change(|state, id| state.on_action(id, move |node| callback(Button(node))))
     }
-    /// Removes the click handler and invalidates any already queued invocation.
+    /// Removes the click handlers and invalidates any already queued invocation.
     pub fn clear_on_click(&self) -> Result {
-        self.0.clear_on_action()
+        self.change(|state, id| Ok(state.clear_actions(id)))
     }
 }
 

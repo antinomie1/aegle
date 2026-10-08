@@ -44,7 +44,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `Node::set_style(Style)` 设置稀疏本地覆盖；`set_background`、`set_foreground`、`set_radius` 等是简短命令式入口。`style()` 读取覆盖，`appearance()` 读取当前解析结果。`None` 恢复皮肤值；`set_style(Style::default())` 清除覆盖，`clear_skin()` 单独恢复默认皮肤。局部字号通过 `set_font_size` / `clear_font_size` 控制，仅适用于文字控件，不向子节点继承。
 
-解析顺序为默认/自定义皮肤 → 本地基础覆盖 → 本地 disabled、pressed 或 hover 覆盖。高优先状态没有指定覆盖时保留基础值，不回落到其他状态；focus 环最后独立绘制；有效启用且聚焦时才有非零目标宽度，失焦过渡可短暂保留渐隐的呈现轮廓。边框与 focus 宽度为零可关闭，相对于自身矩形向内绘制，不侵入相邻控件；容器圆角不隐含对子树的裁剪。hover/focus 覆盖限交互控件，pressed 覆盖限按钮/切换控件/滑块，selection/caret 限编辑器，indicator 限复选框/开关/滑块/进度条，不适用时 setter 返回 WrongKind，标记属性在编译期拒绝。
+解析顺序为默认/自定义皮肤 → 本地基础覆盖 → 本地 disabled、pressed 或 hover 覆盖。高优先状态没有指定覆盖时保留基础值，不回落到其他状态；focus 环最后独立绘制；有效启用且聚焦时才有非零目标宽度，失焦过渡可短暂保留渐隐的呈现轮廓。边框与 focus 宽度为零可关闭，相对于自身矩形向内绘制，不侵入相邻控件；容器圆角不隐含对子树的裁剪。hover/focus 覆盖限交互控件，pressed 覆盖限按钮/切换控件/滑块，selection/caret 限编辑器，indicator 限复选框/开关/滑块/进度条；对应 setter 只定义在这些控件的类型化句柄上（`style_methods!`），误用在编译期报错，标记属性也在编译期拒绝；只有整体传入的 `Style` 值在运行时检查并返回 WrongKind。
 
 局部视觉数据按 NodeId 放在 Ui 的稀疏表中，无样式节点不保存一份完整 Style。纯配色/边框变化只失效绘制，前景色同时失效语义；自定义皮肤可随交互状态改变前景，相关状态变化会同时刷新语义。字号改变才重排文字及布局，保持编辑器、组合输入、选择和控件身份。
 
@@ -90,7 +90,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 组件状态样式采用固定状态集合及明确优先顺序：disabled、pressed、selected/checked、hover、normal；focus 环作为独立覆盖，不被 hover 隐藏。复合组件需要不同优先级时在自己的有类型样式函数中显式定义，不引入 CSS specificity。
 
-控件默认值 → 主题/状态值 → 本地常量或绑定，构成逻辑目标。动画覆盖呈现值；直接 setter 替换该属性的绑定：`set_background` 等单项 setter 结束该项绑定，`set_style` 与 `cancel_transition` 结束全部 Style 绑定，`set_font_size`/`clear_font_size`、`set_font`/`clear_font`、`set_padding`、`set_gap`/`set_gaps` 结束各自的绑定，`set_transition`/`clear_transition` 结束全部时长绑定，`set_property_transition` 结束该项的时长绑定；`unbind_token` 结束绑定并清除该属性（字体回到 `Font::DEFAULT`，padding/gap 回到控件的主题默认值，过渡变为立即）。颜色变化只刷新绘制，字体/尺寸变化才使布局失效，语义无关的 token 变化不广播语义值更新。
+控件默认值 → 主题/状态值 → 本地常量或绑定，构成逻辑目标；优先级总表见[API 指南](developer/api.md#6-外观主题样式与皮肤)。动画覆盖呈现值。一个属性的本地值要么是常量要么跟随 token，后写者生效：`set_background` 等单项 setter 写该字段并结束该项绑定，`set_style` 写全部字段因而结束全部 Style 绑定，`cancel_transition` 同样写入全部 Style，`set_font_size`/`clear_font_size`、`set_font`/`clear_font`、`set_padding`、`set_gap`/`set_gaps` 结束各自的绑定，`set_transition`/`clear_transition` 结束全部时长绑定，`set_property_transition` 结束该项的时长绑定；`unbind_token` 结束绑定并清除该属性（字体回到 `Font::DEFAULT`，padding/gap 回到控件的主题默认值，过渡变为立即）。颜色变化只刷新绘制，字体/尺寸变化才使布局失效，语义无关的 token 变化不广播语义值更新。
 
 默认跟随系统深浅色、对比度、文本缩放与减少动态效果；应用可显式选 Light/Dark/System。系统没有提供某项偏好时用默认值并允许应用配置。系统字体缩放与设备像素缩放各应用一次，不能重复放大。
 

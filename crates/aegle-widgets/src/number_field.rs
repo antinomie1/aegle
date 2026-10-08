@@ -131,13 +131,17 @@ impl NumberField {
             control.show(fonts)
         })
     }
-    /// Replaces the user-change handler, called outside tree borrows.
-    pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
-        self.0.on_action(move |node| callback(Self(node)))
+    /// The displayed text, which may hold uncommitted typing.
+    pub fn text(&self) -> Result<String> {
+        self.change(|state, id| state.text(id))
     }
-    /// Removes the handler and invalidates its queued invocations.
+    /// Adds a user-change handler; handlers run in registration order outside tree borrows.
+    pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
+        self.change(|state, id| state.on_action(id, move |node| callback(Self(node))))
+    }
+    /// Removes the handlers and invalidates their queued invocations.
     pub fn clear_on_change(&self) -> Result {
-        self.0.clear_on_action()
+        self.change(|state, id| Ok(state.clear_actions(id)))
     }
     fn read<T>(&self, read: impl FnOnce(&NumberFieldControl) -> T) -> Result<T> {
         self.change(|state, id| Ok(read(state.control_as::<NumberFieldControl>(id).unwrap())))

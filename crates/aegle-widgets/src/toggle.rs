@@ -48,16 +48,23 @@ macro_rules! toggles {
             self.change(|state, id| state.dispatch(id, Input::Activate))
         }
         /// Replaces the visible label and its default accessible name.
-        pub fn set_text(&self, text: &str) -> Result { self.0.set_text(text) }
-        /// Copies the visible label.
-        pub fn text(&self) -> Result<String> { self.0.text() }
-        /// Replaces the user-change handler. It runs outside tree borrows and can
-        /// query the latest value; programmatic setters do not invoke it.
-        pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
-            self.0.on_action(move |node| callback(Self(node)))
+        pub fn set_text(&self, text: &str) -> Result {
+            self.change(|state, id| state.set_text(id, text))
         }
-        /// Removes the change handler and invalidates its queued invocations.
-        pub fn clear_on_change(&self) -> Result { self.0.clear_on_action() }
+        /// Copies the visible label.
+        pub fn text(&self) -> Result<String> {
+            self.change(|state, id| state.text(id))
+        }
+        /// Adds a user-change handler. Handlers run in registration order
+        /// outside tree borrows and can query the latest value; programmatic
+        /// setters do not invoke them.
+        pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
+            self.change(|state, id| state.on_action(id, move |node| callback(Self(node))))
+        }
+        /// Removes the change handlers and invalidates their queued invocations.
+        pub fn clear_on_change(&self) -> Result {
+            self.change(|state, id| Ok(state.clear_actions(id)))
+        }
     })* };
 }
 toggles!(CheckBox, Switch, Radio);

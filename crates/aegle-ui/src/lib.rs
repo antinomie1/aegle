@@ -42,6 +42,7 @@ mod scrollbar;
 mod state;
 mod style;
 mod style_handles;
+mod style_methods;
 mod text;
 mod theme;
 mod token_handles;

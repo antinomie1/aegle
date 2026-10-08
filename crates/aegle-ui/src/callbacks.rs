@@ -1,10 +1,36 @@
 use crate::{Node, Result, Ui, UiError, state::State};
 use aegle_core::NodeId;
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
+/// A boxed application callback taking the control it was registered on.
+pub type Callback = Box<dyn FnMut(Node) -> Result>;
+
+/// One event's handlers on one node, in registration order, with the version
+/// queued invocations must match.
 pub struct Handler {
     pub version: u64,
-    pub callback: Option<Box<dyn FnMut(Node) -> Result>>,
+    pub callbacks: Vec<Callback>,
+}
+
+/// Appends `callback` to the handlers of `id`, giving a first handler a new
+/// version so invocations queued before a clear never reach it.
+pub(crate) fn add(
+    handlers: &mut HashMap<NodeId, Handler>,
+    next_version: &mut u64,
+    id: NodeId,
+    callback: Callback,
+) -> Result {
+    if let Some(handler) = handlers.get_mut(&id) {
+        handler.callbacks.push(callback);
+        return Ok(());
+    }
+    *next_version = next_version
+        .checked_add(1)
+        .ok_or(UiError::IdentityExhausted)?;
+    let version = *next_version;
+    let callbacks = vec![callback];
+    handlers.insert(id, Handler { version, callbacks });
+    Ok(())
 }
 
 impl Node {
@@ -18,35 +44,29 @@ impl Node {
             Ok(())
         })
     }
-    /// Replaces this control's action handler (click, change, submit...). It runs
-    /// after the input batch, outside every UI borrow, so it may create or remove
-    /// controls. Typed handles wrap it with their own callback types.
-    pub fn on_action(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
-        self.change(|state, id| {
-            state.callback_version = state
-                .callback_version
-                .checked_add(1)
-                .ok_or(UiError::IdentityExhausted)?;
-            state.callbacks.insert(
-                id,
-                Handler {
-                    version: state.callback_version,
-                    callback: Some(Box::new(callback)),
-                },
-            );
-            Ok(())
-        })
-    }
-    /// Removes the action handler and invalidates any already queued invocation.
-    pub fn clear_on_action(&self) -> Result {
-        self.change(|state, id| {
-            state.callbacks.remove(&id);
-            Ok(())
-        })
-    }
 }
 
 impl State {
+    /// Adds an action handler (click, change, submit...) to `id`; typed
+    /// handles wrap it with their own callback types. Handlers run in
+    /// registration order after the input batch, outside every UI borrow, so
+    /// they may create or remove controls.
+    pub fn on_action(
+        &mut self,
+        id: NodeId,
+        callback: impl FnMut(Node) -> Result + 'static,
+    ) -> Result {
+        add(
+            &mut self.callbacks,
+            &mut self.callback_version,
+            id,
+            Box::new(callback),
+        )
+    }
+    /// Removes every action handler of `id` and invalidates queued invocations.
+    pub fn clear_actions(&mut self, id: NodeId) {
+        self.callbacks.remove(&id);
+    }
     /// The current handler with a queued version; versions are unique across kinds.
     fn handler(&mut self, id: NodeId, version: u64) -> Option<&mut Handler> {
         let handler = self.callbacks.get_mut(&id);
@@ -61,7 +81,9 @@ impl State {
 impl Ui {
     /// Invokes queued actions without holding the tree borrow. A callback queued
     /// by another callback waits until the next call, preventing recursive dispatch.
-    /// On failure the failing handler is removed; earlier valid changes remain.
+    /// A failing handler stays installed; the other handlers of its event still
+    /// run, then the first error is returned and later invocations stay queued
+    /// for the next call. Earlier valid changes remain.
     pub fn dispatch_callbacks(&self) -> Result {
         let count = {
             let mut state = self
@@ -74,6 +96,7 @@ impl Ui {
             state.dispatching = true;
             state.pending.len()
         };
+        let mut failure = Ok(());
         for _ in 0..count {
             let next = {
                 let mut state = self.state.borrow_mut();
@@ -82,28 +105,35 @@ impl Ui {
                 };
                 state
                     .handler(id, version)
-                    .and_then(|h| h.callback.take())
-                    .map(|callback| (id, version, callback))
+                    .map(|h| std::mem::take(&mut h.callbacks))
+                    .map(|callbacks| (id, version, callbacks))
             };
-            let Some((id, version, mut callback)) = next else {
+            let Some((id, version, mut callbacks)) = next else {
                 continue;
             };
-            let result = callback(Node {
-                id,
-                state: Rc::downgrade(&self.state),
-            });
-            let mut state = self.state.borrow_mut();
-            // A failing handler stays disabled until replaced.
-            if let Some(handler) = state.handler(id, version) {
-                handler.callback = result.is_ok().then_some(callback);
+            for callback in &mut callbacks {
+                let node = Node {
+                    id,
+                    state: Rc::downgrade(&self.state),
+                };
+                if let Err(error) = callback(node)
+                    && failure.is_ok()
+                {
+                    failure = Err(error);
+                }
             }
-            if let Err(error) = result {
-                state.dispatching = false;
-                return Err(error);
+            let mut state = self.state.borrow_mut();
+            // Handlers added while these ran follow them.
+            if let Some(handler) = state.handler(id, version) {
+                callbacks.append(&mut handler.callbacks);
+                handler.callbacks = callbacks;
+            }
+            if failure.is_err() {
+                break;
             }
         }
         self.state.borrow_mut().dispatching = false;
-        Ok(())
+        failure
     }
     /// Whether application callbacks still need a dispatch pass before sleeping.
     pub fn has_pending_callbacks(&self) -> Result<bool> {

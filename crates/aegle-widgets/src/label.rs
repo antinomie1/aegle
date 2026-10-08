@@ -19,11 +19,11 @@ handle!(Label, "A retained display paragraph.");
 impl Label {
     /// Replaces text and invalidates its shared layout, scene and semantic state.
     pub fn set_text(&self, text: &str) -> Result {
-        self.0.set_text(text)
+        self.change(|state, id| state.set_text(id, text))
     }
     /// Copies the current display text.
     pub fn text(&self) -> Result<String> {
-        self.0.text()
+        self.change(|state, id| state.text(id))
     }
 }
 

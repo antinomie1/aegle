@@ -138,11 +138,12 @@ impl Default for WindowOptions {
 /// Each window owns an independent retained tree. Callbacks run without a
 /// native-runtime or tree borrow, and may modify or close any window. A single
 /// active keyboard seat owns each window's logical focus domain. There is no
-/// polling timer. Native failures and callback errors terminate [`Self::run`]
-/// and are returned to the caller.
+/// polling timer. Native failures terminate [`Self::run`] and are returned to
+/// the caller; callback errors go to [`Self::on_error`].
 pub struct App {
     pub(crate) runtime: Rc<RefCell<Runtime>>,
     pub(crate) dispatching: Cell<bool>,
+    pub(crate) on_error: RefCell<Option<crate::native_loop::ErrorHandler>>,
 }
 
 pub(crate) struct Runtime {
@@ -288,6 +289,7 @@ impl App {
         Ok(Self {
             runtime: Rc::new(RefCell::new(runtime)),
             dispatching: Cell::new(false),
+            on_error: RefCell::new(None),
         })
     }
 

@@ -36,7 +36,9 @@ pub enum UiError {
     InvalidValue,
     /// The UI root cannot be removed or reparented.
     RootMutation,
-    /// A scene visitor tried to modify its currently borrowed UI.
+    /// A handle or UI method was used while the UI was busy painting or
+    /// running a hook: inside a `Control::paint`, a canvas painter, a `Hooks`
+    /// function or a scene visitor. Do that work in a callback instead.
     ReentrantAccess,
     /// A monotonically increasing identity counter exhausted its range.
     IdentityExhausted,
@@ -52,7 +54,9 @@ impl fmt::Display for UiError {
             Self::ForeignUi => "nodes belong to different UIs",
             Self::InvalidValue => "UI value must be finite and within its documented range",
             Self::RootMutation => "UI root cannot be removed or reparented",
-            Self::ReentrantAccess => "UI state is already borrowed by a visitor",
+            Self::ReentrantAccess => {
+                "UI handles cannot be used from a painter, hook or scene visitor; use a callback"
+            }
             Self::IdentityExhausted => "UI identity counter exhausted",
             Self::Token => "token is unregistered or has another type",
         })

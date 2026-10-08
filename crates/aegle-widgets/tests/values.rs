@@ -35,12 +35,11 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
     progress.set_accessible_label("Progress")?;
     let field = ui.root().text_field("Hello")?;
     assert!(progress.focus().is_err());
-    assert!(progress.set_font_size(20.0).is_err());
-    assert!(
-        progress
-            .set_hover_background(aegle_ui::Color::BLACK)
-            .is_err()
-    );
+    let hover = aegle_ui::Style {
+        hover_background: Some(aegle_ui::Color::BLACK),
+        ..Default::default()
+    };
+    assert!(progress.set_style(hover).is_err());
     let changes = Rc::new(Cell::new(0));
     let count = changes.clone();
     let target = switch.clone();

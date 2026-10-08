@@ -35,9 +35,9 @@ button.on_click(move |_| {
 
 控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。`parent.add(component)` 和生成的第三方组件函数仍是后续扩展目标。
 
-同一个 `on_click` 再次设置时替换前一处理器，`clear_on_click` 删除处理器；单行编辑器的 `on_submit` 使用相同规则。排队的动作携带注册版本，旧动作不会误调用替换后的处理器。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。通用 `listen` 多订阅接口尚未实现。
+`on_click`、`on_change`、`on_submit`、`on_transition_end` 与 `on_frame` 追加处理器，同一事件按注册顺序执行；`clear_on_*` 移除该事件的全部处理器，并使已排队的调用失效。`Canvas::on_input` 与 `Window::on_key` 是唯一的行为/策略入口，再次设置会替换。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
 
-公开创建和修改操作返回 `Result`；当前错误保留底层来源，包括 `DeadHandle`、跨 Ui 父节点、不合法数值、字体/呈现预算及平台能力错误。回调出错时删除失败处理器，保留此前合法修改；`App::run` 返回错误并结束。可配置 `App::on_error` 尚未实现。
+公开创建和修改操作返回 `Result`；当前错误保留底层来源，包括 `DeadHandle`、跨 Ui 父节点、不合法数值、字体/呈现预算及平台能力错误。弱句柄的操作因此不能不返回结果；保留单一的 `Result` 形态，而不是再提供一套 panic 版本。回调出错时处理器保留，同一事件的其他处理器照常执行，此前合法修改保留；无窗口 `Ui::dispatch_callbacks` 返回第一个错误。原生 App 把回调、代理与输入处理的错误交给 `App::on_error`，返回错误才结束 `run`，未设置时打印到 stderr 并继续；绘制与平台失败仍结束 `run`。逐帧回调出错时被移除，避免每帧重复报告。
 
 当前公共操作包括：
 
@@ -46,16 +46,16 @@ button.on_click(move |_| {
 | Node / 所有控件句柄 | `is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
 | 布局（Node） | `set_size`、`set_width`、`set_height`、`set_min_*`、`set_max_*`、`set_aspect_ratio`、`set_grow`、`set_shrink`、`set_basis`、`set_align_self`、`set_margin`、`set_absolute`、`set_padding`、`set_gap`、`set_gaps`、`set_layout_direction`、`layout_direction`、`baseline`；`grid` 另有 `set_grid_column`、`set_grid_row`（`Placement` 或可用线名/区域名的 `GridLines`）、`set_grid_area`、`set_justify_self` |
 | 布局（Container） | `row`、`column`、`contents`、`set_direction`、`set_wrap`、`set_align_items`、`set_justify_content`、`set_align_content`；`grid` 另有 `grid`、`stack`、`set_columns`、`set_rows`、`set_column_template`、`set_row_template`（`TemplateItem`：轨道、线名、`Repeat`）、`set_areas`、`set_auto_columns`、`set_auto_rows`、`set_flow`、`set_justify_items` |
-| 外观 | `set_style`、`style`、`set_skin`、`clear_skin`、`appearance`、`visual_state`；背景/前景、状态背景、边框、圆角、焦点环和编辑器颜色 setter |
+| 外观（Node） | `set_style`、`style`、`set_skin`、`clear_skin`、`appearance`、`visual_state`；所有控件都接受的 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground` |
+| 外观（按控件） | `aegle_ui::style_methods!` 生成在相应句柄上：文字控件的 `set_font_size`/`clear_font_size`/`set_font`/`clear_font`/`font`，交互控件的 `set_hover_background`/`set_focus_color`/`set_focus_width`，按钮/切换/滑块的 `set_pressed_background`，切换/滑块/进度条的 `set_indicator_color`，编辑器的 `set_selection_color`/`set_caret_color`；分布见[API 指南](developer/api.md#6-外观主题样式与皮肤) |
 | 局部主题与位移 | `set_theme(Option<Theme>)`、`theme`；`set_offset(Point)`、`offset` |
 | 过渡（motion） | `set_transition`、`set_property_transition`、`property_transition`、`clear_transition`、`presented_appearance`、`is_animating`、`finish_transition`、`cancel_transition`、`on_transition_end`、`clear_on_transition_end` |
-| 字号 | `set_font_size`、`clear_font_size`，限文字控件，保留输入/组合状态 |
 | Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`set_password`、`on_submit`、`clear_on_submit` |
 | Button | `set_text`、`activate`、`on_click`、`clear_on_click` |
 | Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
 | CheckBox / Switch / Radio | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`、`clear_on_change`；CheckBox 另有 `is_mixed`、`set_mixed` |
 | Container（选择/表格） | `radio(text, checked)`、`dropdown(items, selected)`、`table(columns, row_height, rows, cell)`、`variable_list_view(estimate, count, row)` |
-| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`hide`、`is_shown`）；Table 有 `rows()` |
+| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`、`clear_on_change`；`Node::popup()` 返回 Popup（`show`、`hide`、`is_shown`）；Table 有 `rows()` |
 | Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change`、`clear_on_change` |
 | ScrollView | `offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；解引用到 Container |
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |
@@ -124,9 +124,9 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 
 自定义控件实现 `aegle_ui::Control`，经 `Container::add(|state, theme| Ok((Box::new(control), style)))` 加入树；输入、测量、绘制与语义分别经 `InputCx`、`MeasureCx`、`PaintCx`、`SemanticsCx` 访问，段落、编辑器与视口以能力方法（`paragraph`、`editor`、`viewport` 等）暴露。需要跨节点协作的行为安装 `Hooks`，库数据放在 `State::ext`。
 
-- `kind()` 决定皮肤，也决定接受哪些局部样式（`StyleScope::of(kind)`：按钮类的悬停/按下背景、编辑器的选区与光标色、指示色），不另行声明。`ControlKind::TextField` 必须提供 `editor()`，其他种类不能提供；不一致时 `Container::add` 返回 `WrongKind`。
+- `kind()` 决定皮肤，也决定接受哪些局部样式（`StyleScope::of(kind)`：按钮类的悬停/按下背景、编辑器的选区与光标色、指示色），不另行声明。类型化句柄用 `aegle_ui::handle!(Name, "doc")` 定义，再用 `aegle_ui::style_methods!(Name: text, interactive, pressed, indicator, editor)` 中与 kind 相符的组生成对应 setter；文字读写用 `State::text`/`State::set_text`，事件处理器用 `State::on_action`/`State::clear_actions`。`ControlKind::TextField` 必须提供 `editor()`，其他种类不能提供；不一致时 `Container::add` 返回 `WrongKind`。
 - `retheme(theme, local, root, style)` 在主题变化时更新跟随主题的布局；`local: LocalLayout` 标出应用设置过、需要保留的高度、内边距、间距和最小高度。
-- `paint` 与 `Hooks` 在 Ui 借用期间运行，此时调用 Ui 或句柄的方法返回 `ReentrantAccess`；钩子返回的错误原样传给宿主。
+- `paint` 与 `Hooks` 在 Ui 借用期间运行，只能使用传入的 `State`/上下文；此时调用 Ui 或句柄的方法返回 `ReentrantAccess`；钩子返回的错误原样传给宿主。
 
 组件宏（`#[aegle::component]`）、`control_button` 这类无皮肤行为构造器和运行时组件注册表仍是目标，尚未实现。
 

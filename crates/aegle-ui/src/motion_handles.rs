@@ -1,6 +1,6 @@
 use crate::{
-    Node, Result, State, Style, Transition, TransitionProperty, Ui, UiError, callbacks::Handler,
-    motion::Track, tokens::TokenSlot,
+    Node, Result, State, Style, Transition, TransitionProperty, Ui, UiError, motion::Track,
+    tokens::TokenSlot,
 };
 use aegle_core::{Dirty, NodeId};
 use std::time::Duration;
@@ -92,26 +92,23 @@ impl Node {
             Ok(())
         })
     }
-    /// Runs after this control's transitions all reach their targets, by normal
-    /// completion, [`Self::finish_transition`], or a policy change that snaps
-    /// (reduced motion, hidden, zero duration). Cancelling, clearing the policy
-    /// and removal do not complete. Dispatched like click handlers, outside
-    /// every UI borrow; replaces the previous handler.
+    /// Adds a handler run after this control's transitions all reach their
+    /// targets, by normal completion, [`Self::finish_transition`], or a
+    /// policy change that snaps (reduced motion, hidden, zero duration).
+    /// Cancelling, clearing the policy and removal do not complete. Dispatched
+    /// like click handlers, outside every UI borrow, in registration order.
     pub fn on_transition_end(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
         self.change(|state, id| {
-            state.callback_version = state
-                .callback_version
-                .checked_add(1)
-                .ok_or(UiError::IdentityExhausted)?;
-            let handler = Handler {
-                version: state.callback_version,
-                callback: Some(Box::new(callback)),
-            };
-            state.motion.ends.insert(id, handler);
-            Ok(())
+            let callback = Box::new(callback);
+            crate::callbacks::add(
+                &mut state.motion.ends,
+                &mut state.callback_version,
+                id,
+                callback,
+            )
         })
     }
-    /// Removes the completion handler and any queued invocation.
+    /// Removes the completion handlers and any queued invocation.
     pub fn clear_on_transition_end(&self) -> Result {
         self.change(|state, id| {
             state.motion.ends.remove(&id);

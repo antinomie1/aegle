@@ -1,26 +1,17 @@
 use crate::{
-    Appearance, Color, Node, Point, Result, Skin, Style, UiError, VisualState,
+    Appearance, Color, Node, Point, Result, Skin, State, Style, UiError, VisualState,
     tokens::{ColorSlot, LengthSlot, TokenSlot},
 };
-use aegle_core::Dirty;
-use aegle_theme::Font;
-
-macro_rules! setters {
-    ($(#[$doc:meta] $name:ident($value:ident: $ty:ty) => $field:ident, $slot:expr;)*) => {
-        $(#[$doc]
-        /// Ends a token binding of the property.
-        pub fn $name(&self, $value: $ty) -> Result {
-            self.update_style($slot.into(), |style| style.$field = Some($value))
-        })*
-    };
-}
+use aegle_core::{Dirty, NodeId};
 
 impl Node {
-    /// Replaces local paint overrides, preserving the skin and typography.
-    /// `Style::default()` removes all paint overrides. Values do not inherit.
-    /// Token bindings of style properties end; font and layout bindings remain.
-    /// Hover/focus overrides require an interactive control, pressed requires a
-    /// button/toggle/slider, and selection/caret require an editor; otherwise returns WrongKind.
+    /// Replaces every local paint override at once, preserving the skin and
+    /// typography; the one-field setters are shorthands for its fields.
+    /// `Style::default()` removes all overrides. Values do not inherit.
+    /// Writing every field, it ends every style token binding; font and
+    /// layout bindings remain. Hover/focus fields require an interactive
+    /// control, pressed a button/toggle/slider, indicator a toggle, slider or
+    /// progress bar, and selection/caret an editor; otherwise returns WrongKind.
     pub fn set_style(&self, style: Style) -> Result {
         self.change(|state, id| {
             state.set_style(id, style)?;
@@ -35,21 +26,6 @@ impl Node {
                 .decorations
                 .get(&id)
                 .map_or(Style::default(), |d| d.style))
-        })
-    }
-    fn update_style(&self, slot: TokenSlot, update: impl FnOnce(&mut Style)) -> Result {
-        self.write_unbound(slot, |state, id| state.edit_style(id, update))
-    }
-    /// Sets a bindable property through `write`, then ends its binding.
-    fn write_unbound(
-        &self,
-        slot: TokenSlot,
-        write: impl FnOnce(&mut crate::State, aegle_core::NodeId) -> Result,
-    ) -> Result {
-        self.change(|state, id| {
-            write(state, id)?;
-            state.tokens.unbind(id, |s| s == slot);
-            Ok(())
         })
     }
     /// Installs a pure theme/state skin without changing control behavior.
@@ -84,35 +60,6 @@ impl Node {
     pub fn visual_state(&self) -> Result<VisualState> {
         self.change(|state, id| Ok(state.visual_state(id)))
     }
-    /// Sets a positive finite local text size, retaining text, selection and preedit.
-    /// Available on labels, buttons, toggles and editors; it does not inherit to
-    /// children. Ends a font size token binding.
-    pub fn set_font_size(&self, size: f32) -> Result {
-        let slot = LengthSlot::FontSize.into();
-        self.write_unbound(slot, |state, id| state.set_font_size(id, Some(size)))
-    }
-    /// Returns this text-bearing control to the current theme's font size,
-    /// ending a font size token binding.
-    pub fn clear_font_size(&self) -> Result {
-        let slot = LengthSlot::FontSize.into();
-        self.write_unbound(slot, |state, id| state.set_font_size(id, None))
-    }
-    /// Sets the font face of a label, button, toggle or editor, reshaping
-    /// its text and keeping selection and preedit; it does not inherit to
-    /// children. Ends a font token binding. Fails with InvalidValue for blank
-    /// families or a weight outside 1–1000.
-    pub fn set_font(&self, font: Font) -> Result {
-        self.write_unbound(TokenSlot::Font, |state, id| state.set_font(id, Some(font)))
-    }
-    /// Returns this text-bearing control to [`Font::DEFAULT`], ending a font
-    /// token binding.
-    pub fn clear_font(&self) -> Result {
-        self.write_unbound(TokenSlot::Font, |state, id| state.set_font(id, None))
-    }
-    /// The local font face; `None` uses [`Font::DEFAULT`].
-    pub fn font(&self) -> Result<Option<Font>> {
-        self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.font)))
-    }
     /// Translates this subtree by a finite logical offset after layout, without
     /// changing layout or scroll extents. Bounds, hit testing, clipping, the IME
     /// anchor and accessibility follow it. With `motion`, a control with a
@@ -143,34 +90,45 @@ impl Node {
             Ok(state.tree.get(id).unwrap().context.offset)
         })
     }
-    setters! {
+    crate::style_setters! {
         /// Sets the base background, taking precedence over the skin.
         set_background(color: Color) => background, ColorSlot::Background;
         /// Sets the text foreground without reshaping or changing layout.
         set_foreground(color: Color) => foreground, ColorSlot::Foreground;
-        /// Sets the background while enabled, hovered and not pressed.
-        set_hover_background(color: Color) => hover_background, ColorSlot::HoverBackground;
-        /// Sets the background while enabled and pressed.
-        set_pressed_background(color: Color) => pressed_background, ColorSlot::PressedBackground;
         /// Sets the background while effectively disabled.
         set_disabled_background(color: Color) => disabled_background, ColorSlot::DisabledBackground;
         /// Sets the text foreground while effectively disabled.
         set_disabled_foreground(color: Color) => disabled_foreground, ColorSlot::DisabledForeground;
-        /// Sets the independent resting border color.
+        /// Sets the resting border color.
         set_border_color(color: Color) => border_color, ColorSlot::BorderColor;
         /// Sets a nonnegative logical border width; zero removes the border.
         set_border_width(width: f32) => border_width, LengthSlot::BorderWidth;
         /// Sets a nonnegative logical corner radius.
         set_radius(radius: f32) => radius, LengthSlot::Radius;
-        /// Sets the independent focus outline color.
-        set_focus_color(color: Color) => focus_color, ColorSlot::FocusColor;
-        /// Sets nonnegative focus width; its target is zero when disabled or unfocused.
-        set_focus_width(width: f32) => focus_width, LengthSlot::FocusWidth;
-        /// Sets an editor's selection fill, paired with its text foreground.
-        set_selection_color(color: Color) => selection, ColorSlot::Selection;
-        /// Sets an editor's caret and preedit indicator color.
-        set_caret_color(color: Color) => caret, ColorSlot::Caret;
-        /// Sets checkbox/switch marks or slider/progress indicator colors.
-        set_indicator_color(color: Color) => indicator, ColorSlot::Indicator;
+    }
+}
+
+impl State {
+    /// Edits local style fields like [`Node::set_style`], ending the token
+    /// binding of `slot` only; the body of every one-field style setter.
+    pub fn set_style_field(
+        &mut self,
+        id: NodeId,
+        slot: TokenSlot,
+        edit: impl FnOnce(&mut Style),
+    ) -> Result {
+        self.write_unbound(id, slot, |state| state.edit_style(id, edit))
+    }
+    /// Writes a bindable property of `id` through `write`, then ends the
+    /// binding of `slot`: a direct write replaces a token binding.
+    pub fn write_unbound(
+        &mut self,
+        id: NodeId,
+        slot: TokenSlot,
+        write: impl FnOnce(&mut Self) -> Result,
+    ) -> Result {
+        write(self)?;
+        self.tokens.unbind(id, |s| s == slot);
+        Ok(())
     }
 }

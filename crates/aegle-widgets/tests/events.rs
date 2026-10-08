@@ -1,5 +1,6 @@
 //! The window key handler sees keys before the focused control, knows when
-//! a text editor has focus, and may consume or replace itself.
+//! a text editor has focus, and may consume or replace itself; control event
+//! handlers accumulate and stay installed after an error.
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -82,5 +83,38 @@ fn window_key_handler_sees_keys_first_and_can_consume_them() -> Result {
     toggle.focus()?;
     space(&ui)?;
     assert!(toggle.is_checked()?);
+    Ok(())
+}
+
+#[test]
+fn event_handlers_accumulate_and_survive_errors() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(200.0, 200.0))?;
+    let button = ui.root().button("Go")?;
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let first = log.clone();
+    button.on_click(move |_| {
+        first.borrow_mut().push("first");
+        Err("first fails".into())
+    })?;
+    let second = log.clone();
+    button.on_click(move |button| {
+        second.borrow_mut().push("second");
+        // Added during dispatch: runs from the next click on.
+        let late = second.clone();
+        button.on_click(move |_| Ok(late.borrow_mut().push("late")))
+    })?;
+    button.activate()?;
+    // Every handler of the event runs; the first error is reported.
+    assert!(ui.dispatch_callbacks().is_err());
+    assert_eq!(*log.borrow(), ["first", "second"]);
+    // The failing handler stays installed.
+    button.activate()?;
+    assert!(ui.dispatch_callbacks().is_err());
+    assert_eq!(log.borrow()[2..], ["first", "second", "late"]);
+    button.clear_on_click()?;
+    button.activate()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(log.borrow().len(), 5);
     Ok(())
 }

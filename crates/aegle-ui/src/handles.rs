@@ -170,22 +170,7 @@ impl Node {
     }
 }
 
-/// Defines a typed handle: a clonable wrapper around a [`Node`] that dereferences to it.
-#[macro_export]
-macro_rules! handle {
-    ($name:ident, $doc:literal) => {
-        #[doc = $doc]
-        #[derive(Clone)]
-        pub struct $name(pub $crate::Node);
-        impl ::std::ops::Deref for $name {
-            type Target = $crate::Node;
-            fn deref(&self) -> &$crate::Node {
-                &self.0
-            }
-        }
-    };
-}
-handle!(
+crate::handle!(
     Container,
     "A retained row or column. Creation methods append children once."
 );

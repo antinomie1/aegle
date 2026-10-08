@@ -2,7 +2,7 @@
 
 本文面向用 Aegle 编写应用的开发者，按任务介绍当前已实现的接口。各控件的外观、状态和专属方法见[控件参考](controls.md)；设计契约与验证记录分别见 [Rust API 契约](../rust-api.md)、[标记语言](../markup.md)和[实现状态](../implementation.md)。
 
-Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。几乎所有调用都返回 `aegle::Result<T>`（`Result<T, Box<dyn Error>>`），用 `?` 传递即可。
+Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。几乎所有调用都返回 `aegle::Result<T>`（`Result<T, Box<dyn Error>>`）：句柄是弱引用，所指控件可能已被删除，此时操作返回 `DeadHandle` 而不是 panic。在回调里直接用 `?`，错误交给 `App::on_error`（见第 7 节），默认不会结束程序。
 
 ## 1. 依赖与 feature
 
@@ -243,7 +243,35 @@ panel.set_theme_override(Some(ThemeOverride { accent: Some(Color::rgb(200, 40, 4
 
 原生 `App` 把系统文本缩放（Windows 的文本大小、GNOME 的 `text-scaling-factor`，百分比）应用到解析后主题的 `font_size` 与 `control_height`；`AppOptions.text_scale = Some(125)` 可显式指定，`None`（默认）跟随系统。
 
-**局部样式** 覆盖单个控件，优先于主题和皮肤：`set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_focus_color`、`set_focus_width`、`set_hover_background`、`set_pressed_background`、`set_disabled_background`、`set_disabled_foreground`、`set_selection_color`、`set_caret_color`、`set_indicator_color`，以及字号 `set_font_size` / `clear_font_size`。也可以用 `set_style(Style { .. })` 一次设置，`style()` 读取，`appearance()` 返回当前解析结果。不适用的属性返回 `UiError::WrongKind`。
+**局部样式** 覆盖单个控件，优先于皮肤和主题。`set_style(Style { .. })` 一次写入全部字段（未给出的字段回到皮肤值），`style()` 读取，`appearance()` 返回当前解析结果；逐项 setter 是它的单字段简写，只写自己那一项：
+
+```rust
+card.set_style(Style { background: Some(Color::WHITE), radius: Some(8.0), ..card.style()? })?;
+card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
+```
+
+所有控件都有 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground`。只对部分控件有意义的 setter 只出现在对应句柄上，用错控件在编译期报错：
+
+| 方法 | 所在句柄 |
+| --- | --- |
+| `set_font_size`、`clear_font_size`、`set_font`、`clear_font`、`font` | Label、Button、Dropdown、TextField、NumberField、CheckBox、Switch、Radio |
+| `set_hover_background`、`set_focus_color`、`set_focus_width` | Button、Dropdown、TextField、NumberField、CheckBox、Switch、Radio、Slider |
+| `set_pressed_background` | Button、Dropdown、CheckBox、Switch、Radio、Slider |
+| `set_indicator_color` | CheckBox、Switch、Radio、Slider、Progress |
+| `set_selection_color`、`set_caret_color` | TextField、NumberField |
+
+`Style` 是值，其中不适用于该控件的字段仍在运行时返回 `UiError::WrongKind`。
+
+**优先级**：一个外观属性的显示值按下表自上而下取第一个存在的来源。
+
+| 层 | 来源 | 写入 | 移除 |
+| --- | --- | --- | --- |
+| 呈现 | 进行中的过渡（`motion`） | `set_transition` | 到达目标；`finish_transition`、`cancel_transition` |
+| 本地值 | 常量或 token 绑定，同一属性只能是其中之一，后写者生效 | setter、`set_style`；`bind_color`、`bind_length`、`bind_font` | `set_style(Style::default())`、`unbind_token` |
+| 皮肤 | `set_skin` 的纯函数，否则默认皮肤 | `set_skin` | `clear_skin` |
+| 主题 | 最近的局部主题与覆盖，再到窗口主题 | `set_theme`、`set_theme_override`、`set_token` | 传 `None` |
+
+本地值和皮肤内部再按控件状态取值：disabled → pressed → hover → 基础值，某状态没有指定时用基础值；焦点环单独绘制。“后写者生效”意味着：setter 写一个字段并结束该字段的 token 绑定；`set_style` 写全部字段，因此结束全部样式绑定；`bind_*` 让该字段改为跟随 token。
 
 **Token** 是登记过名称的类型化值（`Color`、`f32` 长度、`Duration` 或 `Font`），默认值随主题变化；14 个 Theme 字段即内置 token（`Theme::ACCENT` 等，名为 `theme.accent`）。属性绑定 token 后随主题、覆盖与 reparent 自动更新：
 
@@ -263,7 +291,7 @@ play.bind_transition(TransitionProperty::Paint, speed, Easing::EaseOut)?;
 
 panel.set_token(fill, Some(Color::rgb(200, 40, 40)))?; // 只覆盖 panel 子树
 window.set_token(space, Some(4.0))?;                    // 整个窗口
-play.set_background(Color::WHITE)?;                     // 直接 setter 结束该项绑定
+play.set_background(Color::WHITE)?;                     // 后写者生效：改为常量，结束该项绑定
 ```
 
 若某个绑定拒绝新值（例如字号变为 0），`set_token`、`set_theme`、`set_theme_override` 与 `reparent` 返回错误且不做任何改变。标记中写 `background: token("studio.lane")`，见[标记语言](../markup.md)。
@@ -309,9 +337,10 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 | `Canvas` | `on_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) | `clear_on_input()` |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
-- 回调返回错误时，该处理器被移除，`App::run` 返回此错误并结束。
+- 同一事件可以注册多个处理器，按注册顺序执行；`clear_on_*` 移除该事件的全部处理器。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。
+- 回调返回错误时处理器保留，同一事件的其他处理器照常执行。原生 App 把错误交给 `app.on_error(|error| ...)`：返回 `Ok(())` 继续运行，返回错误则结束 `App::run`；没有设置时打印到 stderr 并继续。无窗口 `Ui::dispatch_callbacks` 把第一个错误返回给宿主，后续排队的回调留到下次调用。
 - 程序 setter（`set_checked`、`set_value`、`set_text` 等）不触发回调，可安全地相互同步；`activate()`、`toggle()`、`increment()`/`decrement()` 模拟用户操作并触发回调。
-- 每个控件每种事件只有一个处理器，再次设置会替换。
+- `Canvas::on_input` 是画布的行为本身，再次设置会替换；`Window::on_key` 是窗口唯一的按键策略，同样替换。
 
 ### 逐帧回调与窗口级按键
 
@@ -332,7 +361,7 @@ window.on_key(move |key| {
 })?;
 ```
 
-- `Node::on_frame(FnMut(Node, Instant) -> Result)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部清除后不再唤醒。控件删除时其回调随之移除；回调出错时被移除并返回错误。
+- `Node::on_frame(FnMut(Node, Instant) -> Result)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外；同一控件可注册多个，`clear_on_frame` 全部移除。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部清除后不再唤醒。控件删除时其回调随之移除；逐帧回调出错时被移除（否则每帧都会报同一个错误），错误交给 `on_error`。
 - `Window::on_key` / `Ui::on_key` 在焦点控件和 Tab 遍历之前收到每个按键，返回 `true` 表示已处理。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。处理器出错时错误照常返回，处理器保留，由调用方决定是否清除。
 - 按键与指针事件带有平台时间：Wayland 的毫秒时间戳与 Win32 的 `GetMessageTime` 被映射到 `Instant`（锚定到最小投递延迟，处理 32 位回绕）。窗口按键处理器从 `KeyEvent::time` 读取，自定义控件从 `InputCx::time` 读取；嵌入宿主用 `key_at`、`pointer_at` 传入。
 
@@ -445,4 +474,4 @@ if ui.refresh()? {
 
 ## 11. 错误
 
-`UiError` 变体：`DeadHandle`（控件已删除）、`WrongKind`（操作不适用于该控件）、`ForeignUi`（父子属于不同 Ui）、`InvalidValue`（非有限或越界数值）、`RootMutation`（删除或移动根）、`ReentrantAccess`（Ui 正被修改时——自定义控件的 `paint`、Canvas 的 painter、`Hooks` 中——再读写它，或在 scene 访问期间修改它；`theme`、`background`、`wants_frames`、`has_animations`、`next_wake` 等查询与 `is_alive` 也返回 `Result`，不会 panic）、`IdentityExhausted`。其他错误保留来源类型，例如字体缺失、平台能力缺失、`aegle::loader::RuntimeError`（标记运行时溢出等）和 `aegle::loader::markup::ProgramError`（带文件/行/列的标记诊断）。可用 `error.downcast_ref::<UiError>()` 区分。
+`UiError` 变体：`DeadHandle`（控件已删除）、`WrongKind`（操作不适用于该控件）、`ForeignUi`（父子属于不同 Ui）、`InvalidValue`（非有限或越界数值）、`RootMutation`（删除或移动根）、`ReentrantAccess`（在自定义控件的 `paint`、Canvas 的 painter、`Hooks` 或 scene 访问中使用句柄或 Ui；这些代码只能绘制或读取传入的数据，改动放到回调里做。`theme`、`wants_frames`、`has_animations` 等查询与 `is_alive` 因此也返回 `Result`，不会 panic）、`IdentityExhausted`。其他错误保留来源类型，例如字体缺失、平台能力缺失、`aegle::loader::RuntimeError`（标记运行时溢出等）和 `aegle::loader::markup::ProgramError`（带文件/行/列的标记诊断）。可用 `error.downcast_ref::<UiError>()` 区分。

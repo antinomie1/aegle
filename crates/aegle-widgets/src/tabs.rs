@@ -19,7 +19,7 @@ pub struct TabsControl {
     bar: Option<NodeId>,
     entries: Vec<(NodeId, NodeId)>,
     selected: usize,
-    callback: Option<Box<dyn FnMut(Tabs) -> Result>>,
+    callbacks: Vec<Box<dyn FnMut(Tabs) -> Result>>,
 }
 
 impl Control for TabsControl {
@@ -148,28 +148,33 @@ impl Tabs {
             id: tab,
         }))
     }
-    /// Replaces the handler called after the user selects another tab.
+    /// Adds a handler called after the user selects another tab; handlers
+    /// run in registration order.
     pub fn on_change(&self, callback: impl FnMut(Tabs) -> Result + 'static) -> Result {
         self.change(|state, id| {
-            data(state, id).callback = Some(Box::new(callback));
+            data(state, id).callbacks.push(Box::new(callback));
             Ok(())
         })
     }
-    /// Runs the change handler outside the UI borrow.
+    /// Removes the change handlers.
+    pub fn clear_on_change(&self) -> Result {
+        self.change(|state, id| {
+            data(state, id).callbacks.clear();
+            Ok(())
+        })
+    }
+    /// Runs the change handlers outside the UI borrow.
     fn notify(&self) -> Result {
-        let callback = self.change(|state, id| Ok(data(state, id).callback.take()))?;
-        if let Some(mut callback) = callback {
-            let result = callback(self.clone());
-            self.change(|state, id| {
-                let slot = &mut data(state, id).callback;
-                if slot.is_none() && result.is_ok() {
-                    *slot = Some(callback);
-                }
-                Ok(())
-            })?;
-            result?;
-        }
-        Ok(())
+        let mut callbacks =
+            self.change(|state, id| Ok(std::mem::take(&mut data(state, id).callbacks)))?;
+        let result = crate::run_all(&mut callbacks, self);
+        self.change(|state, id| {
+            let slot = &mut data(state, id).callbacks;
+            callbacks.append(slot);
+            *slot = callbacks;
+            Ok(())
+        })?;
+        result
     }
 }
 
@@ -214,7 +219,7 @@ pub(crate) fn tabs(container: &Container) -> Result<Tabs> {
                 bar: None,
                 entries: Vec::new(),
                 selected: 0,
-                callback: None,
+                callbacks: Vec::new(),
             }) as Box<dyn Control>,
             aegle_ui::container_style(theme, false),
         ))

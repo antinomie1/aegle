@@ -57,6 +57,17 @@ pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
 pub use tooltip::{NodeTooltip, TOOLTIP_DELAY};
 pub use visual::{ImageControl, ImageView};
 
+aegle_ui::style_methods!(Label: text);
+aegle_ui::style_methods!(Button: text, interactive, pressed);
+aegle_ui::style_methods!(Dropdown: text, interactive, pressed);
+aegle_ui::style_methods!(TextField: text, interactive, editor);
+aegle_ui::style_methods!(NumberField: text, interactive, editor);
+aegle_ui::style_methods!(CheckBox: text, interactive, pressed, indicator);
+aegle_ui::style_methods!(Switch: text, interactive, pressed, indicator);
+aegle_ui::style_methods!(Radio: text, interactive, pressed, indicator);
+aegle_ui::style_methods!(Slider: interactive, pressed, indicator);
+aegle_ui::style_methods!(Progress: indicator);
+
 /// The engine hooks the controls need: popups (overlay placement, dismissal and
 /// Escape/arrow keys), radio groups (arrow keys), and virtual lists (row
 /// realization and measurement). Every constructor installs them on first use.
@@ -110,6 +121,23 @@ pub(crate) fn add(
         state.install(&HOOKS);
         create(state, theme)
     })
+}
+
+/// Runs every handler of one event in registration order, returning the
+/// first error after all have run.
+pub(crate) fn run_all<T: Clone>(
+    callbacks: &mut [Box<dyn FnMut(T) -> Result>],
+    control: &T,
+) -> Result {
+    let mut result = Ok(());
+    for callback in callbacks {
+        if let Err(error) = callback(control.clone())
+            && result.is_ok()
+        {
+            result = Err(error);
+        }
+    }
+    result
 }
 
 /// Creates the default controls inside a container.

@@ -54,14 +54,14 @@ impl Slider {
     pub fn decrement(&self) -> Result {
         self.change(|state, id| state.dispatch(id, Input::Decrement))
     }
-    /// Replaces the user-change handler, called outside tree borrows. The handle
+    /// Adds a user-change handler; handlers run in registration order outside tree borrows. The handle
     /// exposes the latest value; pending notifications are not value snapshots.
     pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
-        self.0.on_action(move |node| callback(Self(node)))
+        self.change(|state, id| state.on_action(id, move |node| callback(Self(node))))
     }
-    /// Removes the handler and invalidates its queued invocations.
+    /// Removes the handlers and invalidates their queued invocations.
     pub fn clear_on_change(&self) -> Result {
-        self.0.clear_on_action()
+        self.change(|state, id| Ok(state.clear_actions(id)))
     }
 }
 

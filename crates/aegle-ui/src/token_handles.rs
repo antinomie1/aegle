@@ -80,7 +80,7 @@ impl Node {
     }
 
     /// [`Self::bind_color`] for the font face of a text-bearing control;
-    /// [`Self::set_font`] and [`Self::clear_font`] end it.
+    /// a handle's `set_font` and `clear_font` end it.
     pub fn bind_font(&self, token: Token<Font>) -> Result {
         check(token)?;
         self.change(|state, id| state.bind_token(id, TokenSlot::Font, token.index()))

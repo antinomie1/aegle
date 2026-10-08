@@ -165,7 +165,8 @@ impl Canvas {
     /// outline, captures the pointer from a press until release, consumes
     /// wheel input over it and receives keys while focused. Events of one
     /// input batch are delivered in order after it, outside every UI borrow,
-    /// like other callbacks. Replaces any previous input callback.
+    /// like other callbacks. Unlike event handlers, the input callback is the
+    /// canvas's behavior, so it replaces any previous one.
     pub fn on_input(
         &self,
         mut callback: impl FnMut(Canvas, CanvasEvent) -> Result + 'static,
@@ -174,24 +175,24 @@ impl Canvas {
             state.control_as::<CanvasControl>(id).unwrap().interactive = true;
             state.decorations.entry(id).or_default().skin = Some(focusable);
             state.tree.mark_dirty(id, Dirty::ALL)?;
-            Ok(())
-        })?;
-        self.on_action(move |node| {
-            let events = node.change(|state, id| {
-                Ok(std::mem::take(
-                    &mut state.control_as::<CanvasControl>(id).unwrap().events,
-                ))
-            })?;
-            for event in events {
-                callback(Canvas(node.clone()), event)?;
-            }
-            Ok(())
+            state.clear_actions(id);
+            state.on_action(id, move |node| {
+                let events = node.change(|state, id| {
+                    Ok(std::mem::take(
+                        &mut state.control_as::<CanvasControl>(id).unwrap().events,
+                    ))
+                })?;
+                for event in events {
+                    callback(Canvas(node.clone()), event)?;
+                }
+                Ok(())
+            })
         })
     }
     /// Stops input: the canvas leaves Tab order and drops queued events.
     pub fn clear_on_input(&self) -> Result {
-        self.clear_on_action()?;
         self.change(|state, id| {
+            state.clear_actions(id);
             let canvas = state.control_as::<CanvasControl>(id).unwrap();
             canvas.interactive = false;
             canvas.events.clear();

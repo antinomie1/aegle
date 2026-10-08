@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use aegle_markup::{Bound, Element, EventKind, Kind, PropertyName, Step, Value as Literal};
-use aegle_ui::{Color, Container, Node, Result};
+use aegle_ui::{Color, ColorSlot, Container, LengthSlot, Node, Result, Style, TokenSlot};
 use aegle_widgets::{
     Button, CheckBox, Label, NodeTooltip, NumberField, Orientation, Progress, Radio, ScrollView,
     Separator, Slider, Splitter, Switch, Tabs, TextField, Widgets,
@@ -284,8 +284,14 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         (Grow, Literal::Number(n)) => node.set_grow(*n),
         (BorderWidth, Literal::Length(n)) => node.set_border_width(*n),
         (Radius, Literal::Length(n)) => node.set_radius(*n),
-        (FocusWidth, Literal::Length(n)) => node.set_focus_width(*n),
-        (FontSize, Literal::Length(n)) => node.set_font_size(*n),
+        (FocusWidth, Literal::Length(n)) => {
+            style(node, LengthSlot::FocusWidth, |s| s.focus_width = Some(*n))
+        }
+        (FontSize, Literal::Length(n)) => node.change(|state, id| {
+            state.write_unbound(id, LengthSlot::FontSize.into(), |state| {
+                state.set_font_size(id, Some(*n))
+            })
+        }),
         (Visible, Literal::Bool(v)) => node.set_visible(*v),
         (Enabled, Literal::Bool(v)) => node.set_enabled(*v),
         (Label, Literal::String(text)) => node.set_accessible_label(text),
@@ -293,14 +299,24 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         (Background, value) => node.set_background(color(value)),
         (Foreground, value) => node.set_foreground(color(value)),
         (BorderColor, value) => node.set_border_color(color(value)),
-        (FocusColor, value) => node.set_focus_color(color(value)),
-        (SelectionColor, value) => node.set_selection_color(color(value)),
-        (CaretColor, value) => node.set_caret_color(color(value)),
-        (HoverBackground, value) => node.set_hover_background(color(value)),
-        (PressedBackground, value) => node.set_pressed_background(color(value)),
+        (FocusColor, value) => style(node, ColorSlot::FocusColor, |s| {
+            s.focus_color = Some(color(value))
+        }),
+        (SelectionColor, value) => style(node, ColorSlot::Selection, |s| {
+            s.selection = Some(color(value))
+        }),
+        (CaretColor, value) => style(node, ColorSlot::Caret, |s| s.caret = Some(color(value))),
+        (HoverBackground, value) => style(node, ColorSlot::HoverBackground, |s| {
+            s.hover_background = Some(color(value))
+        }),
+        (PressedBackground, value) => style(node, ColorSlot::PressedBackground, |s| {
+            s.pressed_background = Some(color(value))
+        }),
         (DisabledBackground, value) => node.set_disabled_background(color(value)),
         (DisabledForeground, value) => node.set_disabled_foreground(color(value)),
-        (IndicatorColor, value) => node.set_indicator_color(color(value)),
+        (IndicatorColor, value) => style(node, ColorSlot::Indicator, |s| {
+            s.indicator = Some(color(value))
+        }),
         (Text, Literal::String(text)) => match handle {
             Handle::Label(handle) => handle.set_text(text),
             Handle::Button(handle) => handle.set_text(text),
@@ -377,6 +393,11 @@ pub(crate) fn apply(handle: &Handle, name: PropertyName, value: &Literal) -> Res
         }
         _ => unreachable!("checked property {name:?}"),
     }
+}
+
+/// Sets the kind-specific style field the markup checker accepted on `node`.
+fn style(node: &Node, slot: impl Into<TokenSlot>, edit: impl FnOnce(&mut Style)) -> Result {
+    node.change(|state, id| state.set_style_field(id, slot.into(), edit))
 }
 
 /// Installs an event block; it runs outside the UI borrow like any handler.
