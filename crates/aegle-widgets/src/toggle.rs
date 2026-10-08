@@ -89,11 +89,11 @@ pub struct ToggleControl {
 }
 
 impl Control for ToggleControl {
-    fn kind(&self) -> ControlKind {
+    fn kind(&self) -> &'static ControlKind {
         match self.mark {
-            Mark::Check => ControlKind::CheckBox,
-            Mark::Switch => ControlKind::Switch,
-            Mark::Radio => ControlKind::RadioButton,
+            Mark::Check => &crate::kinds::CHECK_BOX,
+            Mark::Switch => &crate::kinds::SWITCH,
+            Mark::Radio => &crate::kinds::RADIO_BUTTON,
         }
     }
     fn interactive(&self) -> bool {

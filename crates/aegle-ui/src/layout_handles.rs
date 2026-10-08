@@ -6,7 +6,6 @@
 
 use aegle_core::{Dirty, NodeId};
 use aegle_layout::{Align, Direction, Insets, Justify, Length, Position, Style, Wrap};
-use aegle_theme::ControlKind;
 
 use crate::{Container, LengthSlot, Node, Result, State, UiError};
 
@@ -226,10 +225,7 @@ impl State {
         let is_root = id == self.root;
         let theme = *self.theme_of(id);
         let node = self.tree.get_mut(id).unwrap();
-        if matches!(
-            node.context.control.kind(),
-            ControlKind::Container | ControlKind::ScrollView
-        ) {
+        if node.context.control.kind().container {
             let mut style = node.style().clone();
             match padding {
                 Some(padding) => {

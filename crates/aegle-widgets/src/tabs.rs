@@ -2,7 +2,7 @@
 
 use aegle_controls::{Input, Key, KeyInput};
 use aegle_core::{Dirty, NodeId};
-use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
+use aegle_theme::ControlKind;
 use aegle_ui::{Container, Control, Node, Result, State, UiError, control::Frame};
 
 use crate::{
@@ -21,8 +21,8 @@ pub struct TabsControl {
 }
 
 impl Control for TabsControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Container
+    fn kind(&self) -> &'static ControlKind {
+        &aegle_ui::CONTAINER
     }
     fn frame(&self) -> Frame {
         Frame {
@@ -41,20 +41,6 @@ impl std::ops::Deref for Tabs {
     type Target = Container;
     fn deref(&self) -> &Container {
         &self.0
-    }
-}
-
-/// Tabs draw no box: hover and press tint, the selection is an underline.
-fn tab_skin(theme: &Theme, state: VisualState) -> Appearance {
-    let base = Appearance::new(theme, state);
-    Appearance {
-        background: if state.enabled && (state.hovered || state.pressed) {
-            base.background
-        } else {
-            aegle_types::Color::TRANSPARENT
-        },
-        border_width: 0.0,
-        ..base
     }
 }
 
@@ -91,8 +77,8 @@ impl Tabs {
             state: self.state.clone(),
             id: bar,
         });
-        let tab = crate::button::create(&bar, title)?;
-        tab.set_skin(tab_skin)?;
+        let selected = Variant::Tab { selected: false };
+        let tab = crate::button::create_as(&bar, title, selected)?;
         let page = group::add(&self.0, Role::TabPanel, false)?;
         page.set_grow(1.0)?;
         page.set_min_size(0.0, 0.0)?;

@@ -11,8 +11,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use aegle_ui::{
-    Container, Control, ControlKind, Key, KeyInput, Modifiers, Point, PointerId, PointerKind,
-    Result, Size, TextSystem, Theme, Ui, container_style,
+    Accepts, Appearance, Container, Control, ControlKind, Key, KeyInput, Modifiers, Point,
+    PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui, container_style,
     control::{Action, Frame, Input, InputCx, MeasureCx, Outcome, PaintCx},
     handle,
     scene::{Rect, RoundedRect},
@@ -21,6 +21,17 @@ use aegle_ui::{
 const STEPS: u8 = 5;
 const CELL: f32 = 18.0;
 const GAP: f32 = 4.0;
+
+/// The rating's kind: no box of its own, the focus outline and the indicator
+/// color for chosen steps; it accepts interactive, pressed and indicator style.
+static RATING: ControlKind = ControlKind {
+    name: "Rating",
+    skin: Appearance::base,
+    accepts: Accepts::INTERACTIVE
+        .with(Accepts::PRESSED)
+        .with(Accepts::INDICATOR),
+    container: false,
+};
 
 /// The behavior and state stored in the node.
 struct RatingControl {
@@ -48,9 +59,8 @@ impl RatingControl {
 }
 
 impl Control for RatingControl {
-    /// Styled like a slider: focus ring, hover, pressed and indicator color.
-    fn kind(&self) -> ControlKind {
-        ControlKind::Slider
+    fn kind(&self) -> &'static ControlKind {
+        &RATING
     }
     fn interactive(&self) -> bool {
         true

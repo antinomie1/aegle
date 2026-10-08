@@ -46,7 +46,7 @@ button.on_click(move |_| {
 | Node / 所有控件句柄 | `on_double_click`、`clear_on_double_click`、`on_context_menu`、`clear_on_context_menu`、`is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
 | 布局（Node） | `set_size`、`set_width`、`set_height`、`set_min_*`、`set_max_*`、`set_aspect_ratio`、`set_grow`、`set_shrink`、`set_basis`、`set_align_self`、`set_margin`、`set_absolute`、`set_padding`、`set_gap`、`set_gaps`、`set_layout_direction`、`layout_direction`、`baseline`；`grid` 另有 `set_grid_column`、`set_grid_row`（`Placement` 或可用线名/区域名的 `GridLines`）、`set_grid_area`、`set_justify_self` |
 | 布局（Container） | `row`、`column`、`contents`、`set_direction`、`set_wrap`、`set_align_items`、`set_justify_content`、`set_align_content`；`grid` 另有 `grid`、`stack`、`set_columns`、`set_rows`、`set_column_template`、`set_row_template`（`TemplateItem`：轨道、线名、`Repeat`）、`set_areas`、`set_auto_columns`、`set_auto_rows`、`set_flow`、`set_justify_items` |
-| 外观（Node） | `set_style`、`style`、`set_skin`、`clear_skin`、`appearance`、`visual_state`；所有控件都接受的 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground` |
+| 外观（Node） | `set_style`、`style`、`set_skin`（本节点）、`set_kind_skin`（子树中某类型的全部控件）、`appearance`、`visual_state`；所有控件都接受的 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground` |
 | 外观（按控件） | 由 `aegle_ui::handle!` 的样式组生成在相应句柄上：文字控件的 `set_font_size`/`clear_font_size`/`set_font`/`clear_font`/`font`，交互控件的 `set_hover_background`/`set_focus_color`/`set_focus_width`，按钮/切换/滑块的 `set_pressed_background`，切换/滑块/进度条的 `set_indicator_color`，编辑器的 `set_selection_color`/`set_caret_color`；分布见[API 指南](developer/api.md#6-外观主题样式与皮肤) |
 | 局部主题与位移 | `set_theme(Option<Theme>)`、`theme`；`set_offset(Point)`、`offset` |
 | 过渡与动画（motion） | `set_transition`、`set_property_transition`、`property_transition`、`clear_transition`、`with_transition`、`snap`、`animate(Animate)`、`presented_appearance`、`is_animating`、`finish_transition`、`cancel_transition`、`on_transition_end`、`clear_on_transition_end`；曲线与关键帧见 `aegle-motion` 的 `Easing`、`Spring`、`Animation`、`Keyframe`、`Cycles` |
@@ -98,7 +98,7 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 }
 ```
 
-需要随主题、禁用、按压和焦点改变外观时使用 `set_skin` 纯函数入口；可执行示例为 `cargo run -p aegle --example components`，规则见[组件样式](components-theme-animation.md)。需要新的行为或绘制时实现 `Control`，见[组件库作者](#组件库作者)。
+需要随主题、禁用、按压和焦点改变外观时使用皮肤纯函数：`set_skin` 给一个控件，`set_kind_skin` 给一个子树里某类型的全部控件；可执行示例为 `cargo run -p aegle --example components`，规则见[组件样式](components-theme-animation.md)。需要新的行为或绘制时实现 `Control`，见[组件库作者](#组件库作者)。
 
 ## 目标接口族
 
@@ -124,7 +124,7 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 
 自定义控件实现 `aegle_ui::Control`，经 `Container::add(|state, theme| Ok((Box::new(control), style)))` 加入树；输入、测量、绘制与语义分别经 `InputCx`、`MeasureCx`、`PaintCx`、`SemanticsCx` 访问，段落、编辑器与视口以能力方法（`paragraph`、`editor`、`viewport` 等）暴露。需要跨节点协作的行为安装 `Hooks`，库数据放在 `State::ext`。
 
-- `kind()` 决定皮肤，也决定接受哪些局部样式（`StyleScope::of(kind)`：按钮类的悬停/按下背景、编辑器的选区与光标色、指示色），不另行声明。类型化句柄用 `aegle_ui::handle! { pub Name(NameControl): text, interactive, pressed, indicator, editor }` 定义：声明控件类型后句柄得到 `read(|c| ..)` 与 `update(|c| ..)`（修改后自动请求重绘并更新语义；尺寸变化走布局），列出的样式组（与 kind 相符）生成对应 setter；Rust 1.86 起 trait 对象可直接向上转型为 `dyn Any`，`Control` 不需要 `as_any`；文字读写用 `State::text`/`State::set_text`，事件处理器用 `State::on_action`/`State::clear_actions`。`ControlKind::TextField` 必须提供 `editor()`，其他种类不能提供；不一致时 `Container::add` 返回 `WrongKind`。
+- `kind()` 返回控件类型 `&'static ControlKind`：控件库为自己的每种控件声明一个 `static`（名称、默认皮肤、接受的样式组 `Accepts`、是否为布局容器），与 `aegle_widgets::kinds` 中的内置类型完全同一形式；类型在节点存活期间不变。默认皮肤即该类型的第一方皮肤，`set_kind_skin` 与 `set_skin` 在子树或单个节点上替换它（优先级见[API 指南](developer/api.md#6-外观主题样式与皮肤)）。类型化句柄用 `aegle_ui::handle! { pub Name(NameControl): text, interactive, pressed, indicator, editor }` 定义：声明控件类型后句柄得到 `read(|c| ..)` 与 `update(|c| ..)`（修改后自动请求重绘并更新语义；尺寸变化走布局），列出的样式组（与类型的 `accepts` 相符）生成对应 setter；Rust 1.86 起 trait 对象可直接向上转型为 `dyn Any`，`Control` 不需要 `as_any`；文字读写用 `State::text`/`State::set_text`，事件处理器用 `State::on_action`/`State::clear_actions`。接受 `Accepts::EDITOR` 的类型必须提供 `editor()`，其他类型不能提供；不一致时 `Container::add` 返回 `WrongKind`。
 - `retheme(theme, local, root, style)` 在主题变化时更新跟随主题的布局；`local: LocalLayout` 标出应用设置过、需要保留的高度、内边距、间距和最小高度。
 - `paint` 与 `Hooks` 在 Ui 借用期间运行，只能使用传入的 `State`/上下文；此时调用 Ui 或句柄的方法返回 `ReentrantAccess`；钩子返回的错误原样传给宿主。
 

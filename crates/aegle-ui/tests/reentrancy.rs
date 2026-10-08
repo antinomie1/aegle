@@ -16,11 +16,19 @@ struct Probe {
     ui: Weak<Ui>,
     node: Rc<RefCell<Option<Node>>>,
     refused: Rc<Cell<u32>>,
-    kind: ControlKind,
+    kind: &'static ControlKind,
 }
 
+/// A kind that claims an editor.
+static EDITOR: ControlKind = ControlKind {
+    name: "Editor",
+    skin: aegle_ui::Appearance::base,
+    accepts: aegle_ui::Accepts::EDITOR,
+    container: false,
+};
+
 impl Control for Probe {
-    fn kind(&self) -> ControlKind {
+    fn kind(&self) -> &'static ControlKind {
         self.kind
     }
     fn paint(&mut self, _: &mut PaintCx<'_>) -> Result {
@@ -73,7 +81,7 @@ fn reentrant_calls_and_hook_failures_are_errors() -> Result {
     };
     let added = ui.root().add(|_, theme| {
         Ok((
-            Box::new(probe(ControlKind::Container)),
+            Box::new(probe(&aegle_ui::CONTAINER)),
             aegle_ui::container_style(theme, false),
         ))
     })?;
@@ -81,10 +89,10 @@ fn reentrant_calls_and_hook_failures_are_errors() -> Result {
     ui.refresh()?;
     assert_eq!(refused.get(), 4);
 
-    // A text field kind without an editor would be styled as one but take no text.
+    // A kind claiming an editor without one would be styled as one but take no text.
     let Err(error) = ui.root().add(|_, theme| {
         Ok((
-            Box::new(probe(ControlKind::TextField)),
+            Box::new(probe(&EDITOR)),
             aegle_ui::container_style(theme, false),
         ))
     }) else {

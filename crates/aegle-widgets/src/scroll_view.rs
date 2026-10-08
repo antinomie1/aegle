@@ -27,8 +27,8 @@ impl Deref for ScrollView {
 pub struct ScrollControl;
 
 impl Control for ScrollControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::ScrollView
+    fn kind(&self) -> &'static ControlKind {
+        &crate::kinds::SCROLL_VIEW
     }
     fn viewport(&self) -> bool {
         true

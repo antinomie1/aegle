@@ -58,6 +58,9 @@ pub struct Element {
     pub xf: Option<aegle_scene::Affine>,
     /// Window area this node's records covered when last refreshed.
     pub painted: Option<Rect>,
+    /// The skin set on this node or inherited for its kind; `None` uses the
+    /// kind's default.
+    pub skin: Option<aegle_theme::Skin>,
     /// Presented group opacity and backdrop blur of the subtree.
     pub group: crate::group::Group,
     /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
@@ -114,6 +117,7 @@ impl Element {
             spin: crate::Transform::default(),
             xf: None,
             painted: None,
+            skin: None,
             group: crate::group::Group::NONE,
             theme: None,
             local_theme: false,
@@ -181,6 +185,8 @@ pub struct State {
     pub hooks: Vec<&'static crate::Hooks>,
     /// Visual decoration per node.
     pub decorations: HashMap<NodeId, Decoration>,
+    /// Skins set on nodes, for the node itself or a kind in its subtree.
+    pub skins: HashMap<NodeId, Vec<(Option<&'static aegle_theme::ControlKind>, aegle_theme::Skin)>>,
     /// Token overrides re-applied to the parent's theme whenever it changes.
     pub overrides: HashMap<NodeId, aegle_theme::ThemeOverride>,
     /// Custom token overrides and token bindings.
@@ -341,7 +347,10 @@ impl State {
         control: Box<dyn Control>,
         mut style: aegle_layout::Style,
     ) -> Result<NodeId> {
-        let editor = control.kind() == aegle_theme::ControlKind::TextField;
+        let editor = control
+            .kind()
+            .accepts
+            .contains(aegle_theme::Accepts::EDITOR);
         if editor != control.editor().is_some() {
             return Err(crate::UiError::WrongKind.into());
         }
@@ -377,6 +386,7 @@ impl State {
                 .insert(id, crate::motion::Track::uniform(timing));
         }
         self.invalidate_structure();
+        self.resolve_skin(id)?;
         Ok(id)
     }
 }
@@ -395,6 +405,7 @@ impl State {
             self.animated.remove(&node);
             self.descriptions.remove(&node);
             self.decorations.remove(&node);
+            self.skins.remove(&node);
             self.overrides.remove(&node);
             self.tokens.forget(node);
             self.kept.remove(&node);

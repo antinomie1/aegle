@@ -1,8 +1,7 @@
 //! Nested scroll boundaries share paint clips, capture, focus and composition.
 use aegle_text::{Blob, GenericFamily, Selection, TextError};
 use aegle_ui::{
-    Appearance, ImeEdit, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme,
-    Ui,
+    ImeEdit, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui,
 };
 use aegle_widgets::*;
 use std::{
@@ -41,10 +40,10 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
     for button in [&first, &second, &third] {
         button.set_height(Some(40.0))?;
     }
-    first.set_skin(|theme, state| {
+    first.set_skin(Some(|theme, state| {
         PAINTS.fetch_add(1, Ordering::Relaxed);
-        Appearance::new(theme, state)
-    })?;
+        (state.kind.skin)(theme, state)
+    }))?;
     let field = outer.text_area("你好\nsecond\nthird\nfourth\nfifth")?;
     field.set_height(Some(80.0))?;
     field.set_min_height(0.0)?;

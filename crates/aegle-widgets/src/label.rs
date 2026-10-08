@@ -30,48 +30,53 @@ impl Label {
 }
 
 /// The control inside a [`Label`] node.
-pub struct LabelControl(Paragraph);
+pub struct LabelControl {
+    text: Paragraph,
+    /// [`crate::kinds::LABEL`], or the kind of a label-like part such as a tooltip.
+    pub(crate) kind: &'static ControlKind,
+}
 
 impl LabelControl {
     /// A label showing `text`, styled by `theme`.
     pub fn new(fonts: &RefCell<TextSystem>, text: &str, theme: &Theme) -> Result<Self> {
-        Ok(Self(
-            fonts.borrow_mut().paragraph(text, &text_style(theme))?,
-        ))
+        Ok(Self {
+            text: fonts.borrow_mut().paragraph(text, &text_style(theme))?,
+            kind: &crate::kinds::LABEL,
+        })
     }
 }
 
 impl Control for LabelControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Label
+    fn kind(&self) -> &'static ControlKind {
+        self.kind
     }
     fn default_padding(&self, _: &Theme) -> f32 {
         0.0
     }
     fn paragraph(&self) -> Option<&Paragraph> {
-        Some(&self.0)
+        Some(&self.text)
     }
     fn paragraph_mut(&mut self) -> Option<&mut Paragraph> {
-        Some(&mut self.0)
+        Some(&mut self.text)
     }
     fn baseline(&self, _: Size, padding: f32) -> Option<f32> {
-        Some(padding + self.0.first_baseline()?)
+        Some(padding + self.text.first_baseline()?)
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        let size = self.0.reflow(cx.content_width(), cx.alignment())?;
+        let size = self.text.reflow(cx.content_width(), cx.alignment())?;
         Ok(Size::new(
             size.width + 2.0 * cx.padding,
             size.height + 2.0 * cx.padding,
         ))
     }
     fn finalize(&mut self, cx: &MeasureCx<'_>) -> Result {
-        self.0.reflow(cx.content_width(), cx.alignment())?;
+        self.text.reflow(cx.content_width(), cx.alignment())?;
         Ok(())
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
         cx.builder
             .push_transform(Affine::translation(cx.padding, cx.padding)?)?;
-        self.0
+        self.text
             .paint_with_color(cx.builder, cx.appearance.foreground)?;
         cx.builder.pop()?;
         Ok(())
@@ -79,7 +84,7 @@ impl Control for LabelControl {
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
         cx.node.set_role(aegle_ui::accesskit::Role::Label);
-        cx.node.set_value(self.0.text());
+        cx.node.set_value(self.text.text());
     }
 }
 

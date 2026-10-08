@@ -269,10 +269,12 @@ card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
 | --- | --- | --- | --- |
 | 呈现 | 进行中的过渡或动画（`motion`） | `set_transition`、`with_transition`、`animate` | 到达目标；`finish_transition`、`cancel_transition`、`snap` |
 | 本地值 | 常量或 token 绑定，同一属性只能是其中之一，后写者生效 | setter、`set_style`；`bind_color`、`bind_length`、`bind_font` | `set_style(Style::default())`、`unbind_token` |
-| 皮肤 | `set_skin` 的纯函数，否则默认皮肤 | `set_skin` | `clear_skin` |
+| 节点皮肤 | 该控件自己的皮肤 | `set_skin(Some(skin))` | `set_skin(None)` |
+| 类型皮肤 | 最近的祖先（含自身）为该控件类型设置的皮肤 | `set_kind_skin(&kinds::BUTTON, Some(skin))` | `set_kind_skin(kind, None)` |
+| 默认皮肤 | 控件类型（`ControlKind`）自带的皮肤 | 由控件库登记类型时给出 | — |
 | 主题 | 最近的局部主题与覆盖，再到窗口主题 | `set_theme`、`set_theme_override`、`set_token` | 传 `None` |
 
-本地值和皮肤内部再按控件状态取值：disabled → pressed → hover → 基础值，某状态没有指定时用基础值；焦点环单独绘制。“后写者生效”意味着：setter 写一个字段并结束该字段的 token 绑定；`set_style` 写全部字段，因此结束全部样式绑定；`bind_*` 让该字段改为跟随 token。
+三层皮肤是同一机制的不同作用范围：每个节点只缓存解析出的那一个皮肤，设置、reparent 或新建控件时只重新解析受影响的子树，绘制时不查找祖先。本地值和皮肤内部再按控件状态取值：disabled → pressed → hover → 基础值，某状态没有指定时用基础值；焦点环单独绘制。“后写者生效”意味着：setter 写一个字段并结束该字段的 token 绑定；`set_style` 写全部字段，因此结束全部样式绑定；`bind_*` 让该字段改为跟随 token。
 
 **Token** 是登记过名称的类型化值（`Color`、`f32` 长度、`Duration` 或 `Font`），默认值随主题变化；14 个 Theme 字段即内置 token（`Theme::ACCENT` 等，名为 `theme.accent`）。属性绑定 token 后随主题、覆盖与 reparent 自动更新：
 
@@ -297,21 +299,23 @@ play.set_background(Color::WHITE)?;                     // 后写者生效：改
 
 若某个绑定拒绝新值（例如字号变为 0），`set_token`、`set_theme`、`set_theme_override` 与 `reparent` 返回错误且不做任何改变。标记中写 `background: token("studio.lane")`，见[标记语言](../markup.md)。
 
-**皮肤** 是纯函数 `fn(&Theme, VisualState) -> Appearance`，可替换默认外观而不改行为，适合组件库：
+**皮肤** 是纯函数 `fn(&Theme, VisualState) -> Appearance`，可替换外观而不改行为。每个控件有一个类型（`ControlKind`，内置类型在 `aegle_widgets::kinds`：`BUTTON`、`TAB`、`MENU_ITEM`、`TEXT_FIELD`、`CHECK_BOX`、`SWITCH`、`RADIO_BUTTON`、`SLIDER`、`PROGRESS`、`LABEL`、`SCROLL_VIEW`、`PANEL`、`MENU_BAR`、`TOOLTIP`，布局容器为 `aegle_ui::CONTAINER`），类型自带默认皮肤；皮肤可以只给一个控件，也可以给一个子树里某类型的全部控件：
 
 ```rust
 fn primary(theme: &Theme, state: VisualState) -> Appearance {
-    let mut look = Appearance::new(theme, state);
-    look.radius = 18.0;
-    look.border_width = 0.0;
-    look.background = if state.pressed { Color::rgb(66, 45, 103) } else { Color::rgb(103, 80, 164) };
-    look.foreground = Color::WHITE;
-    look
+    Appearance {
+        background: if state.pressed { Color::rgb(66, 45, 103) } else { Color::rgb(103, 80, 164) },
+        foreground: Color::WHITE,
+        radius: 18.0,
+        ..Appearance::base(theme, state)   // 透明、无边框、主题前景色与焦点环
+    }
 }
-button.set_skin(primary)?;
+window.set_kind_skin(&kinds::BUTTON, Some(primary))?;  // 窗口里所有按钮，含之后新建的
+dialog.set_kind_skin(&kinds::BUTTON, None)?;          // 移除该子树上的规则
+save.set_skin(Some(primary))?;                        // 只给这一个控件
 ```
 
-`VisualState` 含 `kind`、`enabled`、`hovered`、`pressed`、`focused`、`read_only`、`checked`。
+`VisualState` 含 `kind`、`enabled`、`hovered`、`pressed`、`focused`、`read_only`、`checked`；`(state.kind.skin)(theme, state)` 得到类型的默认外观，可在其上修改。
 
 <img src="images/styles.png" width="600" alt="默认、圆角、自定义颜色与局部深色主题">
 

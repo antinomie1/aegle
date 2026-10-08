@@ -19,7 +19,7 @@ use aegle_core::NodeId;
 use aegle_layout::Style;
 use aegle_scene::{Color, RoundedRect, SceneBuilder};
 use aegle_text::{Paragraph, TextSystem};
-use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
+use aegle_theme::{Accepts, Appearance, ControlKind, Theme, VisualState};
 use aegle_types::{Point, Size};
 
 use crate::{LocalLayout, Result, bar::Bar, state::State};
@@ -42,40 +42,14 @@ pub struct ControlVisual {
     pub checked: bool,
 }
 
-/// Which local style fields a control accepts; others are rejected as `WrongKind`.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct StyleScope {
-    /// Hover/pressed backgrounds and focus colors (buttons, toggles, sliders).
-    pub button_like: bool,
-    /// Selection and caret colors, and hover/focus (editors).
-    pub editor: bool,
-    /// Indicator color (toggle marks, slider and progress fills).
-    pub indicator: bool,
-}
-
-impl StyleScope {
-    /// The fields the skin of `kind` uses, so a control's kind alone decides
-    /// which local style it accepts.
-    pub fn of(kind: ControlKind) -> Self {
-        let (button_like, editor, indicator) = match kind {
-            ControlKind::Button => (true, false, false),
-            ControlKind::TextField => (false, true, false),
-            ControlKind::CheckBox
-            | ControlKind::Switch
-            | ControlKind::RadioButton
-            | ControlKind::Slider => (true, false, true),
-            ControlKind::Progress => (false, false, true),
-            ControlKind::Container | ControlKind::ScrollView | ControlKind::Label => {
-                (false, false, false)
-            }
-        };
-        Self {
-            button_like,
-            editor,
-            indicator,
-        }
-    }
-}
+/// The kind of plain rows, columns and other layout-only containers:
+/// transparent, accepting no kind-specific style.
+pub static CONTAINER: ControlKind = ControlKind {
+    name: "Container",
+    skin: Appearance::base,
+    accepts: Accepts::NONE,
+    container: true,
+};
 
 /// Whether the engine paints the common background and border before the control.
 #[derive(Clone, Copy, Debug)]
@@ -205,10 +179,10 @@ pub struct SemanticsCx<'a> {
 
 /// One control inside a node. See the [module docs](self).
 pub trait Control: Any {
-    /// The role a skin styles this control as; it also decides the accepted
-    /// local style ([`StyleScope::of`]). A [`ControlKind::TextField`] has an
-    /// [`Control::editor`] and no other kind does.
-    fn kind(&self) -> ControlKind;
+    /// The control's kind: its default skin and the local style it accepts.
+    /// A kind accepting [`Accepts::EDITOR`] has an [`Control::editor`] and no
+    /// other kind does.
+    fn kind(&self) -> &'static ControlKind;
     /// Takes keyboard focus and input.
     fn interactive(&self) -> bool {
         false
@@ -337,8 +311,8 @@ pub trait Control: Any {
 pub struct Plain;
 
 impl Control for Plain {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Container
+    fn kind(&self) -> &'static ControlKind {
+        &CONTAINER
     }
     fn retheme(&self, theme: &Theme, local: LocalLayout, root: bool, style: &mut Style) {
         use aegle_layout::{Edges, LengthPercentage, Size as LayoutSize};

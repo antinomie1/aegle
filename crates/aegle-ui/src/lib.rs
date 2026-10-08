@@ -42,6 +42,7 @@ pub mod paint;
 mod scroll;
 pub mod scroll_geometry;
 mod scrollbar;
+mod skins;
 mod state;
 mod style;
 mod style_handles;
@@ -66,11 +67,11 @@ pub use aegle_motion::{Animation, CubicBezier, Cycles, Easing, Keyframe, Spring,
 pub use aegle_scene as scene;
 pub use aegle_text::{ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{
-    Appearance, ControlKind, Font, Skin, Style, Theme, ThemeOverride, Token, TokenKind, TokenType,
-    TokenValue, VisualState,
+    Accepts, Appearance, ControlKind, Font, Skin, Style, Theme, ThemeOverride, Token, TokenKind,
+    TokenType, TokenValue, VisualState,
 };
 pub use aegle_types::{Color, Cursor, Point, Preferences, Rect, Region, Size, TouchPhase};
-pub use control::{Control, Plain};
+pub use control::{CONTAINER, Control, Plain};
 pub use effects::Shadow;
 pub use events::KeyEvent;
 #[cfg(feature = "grid")]

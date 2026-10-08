@@ -89,7 +89,6 @@ fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) ->
         };
         Ok((Box::new(control) as Box<dyn Control>, style))
     })?;
-    node.set_border_width(0.0)?;
     node.change(|state, id| state.on_action(id, |node| chosen(MenuItem(node))))?;
     Ok(MenuItem(node))
 }
@@ -199,7 +198,6 @@ pub(crate) fn menu_bar(container: &Container) -> Result<MenuBar> {
     let bar = crate::group::add(container, Role::MenuBar, true)?;
     bar.change(|state, id| {
         popups(state).bars.push(id);
-        state.decorations.entry(id).or_default().skin = Some(crate::group::strip);
         let mut style = state.tree.get(id).unwrap().style().clone();
         style.flex_direction = FlexDirection::Row;
         style.flex_shrink = 0.0;

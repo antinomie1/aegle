@@ -162,8 +162,8 @@ impl NumberField {
 }
 
 impl Control for NumberFieldControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::TextField
+    fn kind(&self) -> &'static ControlKind {
+        &crate::kinds::TEXT_FIELD
     }
     fn interactive(&self) -> bool {
         true

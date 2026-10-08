@@ -22,10 +22,10 @@
 | aegle-platform-win32 | Win32 窗口、IMM 兼容输入、DPI、GDI 软件与 GPU 句柄、外观偏好；TSF 待实现 | types |
 | aegle-platform-appkit | 计划中，**尚未实现**：AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
-| aegle-theme | 无分配的 Theme、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；类型化 `Token<T>` 与内置 token（注册表与绑定在 aegle-ui） | types |
+| aegle-theme | 无分配的 Theme、控件类型 `ControlKind`（默认皮肤与可接受样式组）、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；类型化 `Token<T>` 与内置 token（注册表与绑定在 aegle-ui） | types |
 | aegle-motion | 补间、过渡、关键帧动画与 Bézier/弹簧曲线；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
-| aegle-widgets | 默认控件库，包含全部默认控件：Label、Button、TextField（单/多行）、CheckBox、Switch、Radio、Slider、Progress、ImageView、Canvas、ScrollView、ListView、Table、Popup、Dropdown、Menu、MenuBar，以及它们的纯函数皮肤（`paint`）；通过 `Control` trait 与 `Hooks` 接入 aegle-ui，创建入口是 `Widgets` trait | ui、controls、text、scene、theme、core、layout、types；access 按 feature |
+| aegle-widgets | 默认控件库，包含全部默认控件：Label、Button、TextField（单/多行）、CheckBox、Switch、Radio、Slider、Progress、ImageView、Canvas、ScrollView、ListView、Table、Popup、Dropdown、Menu、MenuBar，以及它们的类型与中性皮肤（`kinds`）和纯函数绘制（`paint`）；通过 `Control` trait 与 `Hooks` 接入 aegle-ui，创建入口是 `Widgets` trait | ui、controls、text、scene、theme、core、layout、types；access 按 feature |
 | aegle-image | 有界图像解码：PNG（始终可用，字体位图用 `decode_into`）与可选 JPEG、WebP、GIF 首帧、静态 SVG 栅格化，以及可选的渐变/阴影图像（`effects`）；不依赖任何 UI | scene；解码器按 feature |
 | aegle-markup | 有界解析、跨度、内建控件 schema、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |

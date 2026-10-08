@@ -4,7 +4,7 @@ use std::time::Duration;
 
 fn action_button(parent: &Container, text: &str) -> Result<Button> {
     let button = parent.button(text)?;
-    button.set_skin(primary)?;
+    button.set_skin(Some(primary))?;
     button.set_padding(18.0)?;
     button.set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))?;
     Ok(button)
@@ -13,7 +13,7 @@ fn action_button(parent: &Container, text: &str) -> Result<Button> {
 fn primary(theme: &Theme, state: VisualState) -> Appearance {
     // A component library owns its palette; input, focus, IME and accessibility
     // remain in Aegle. A complete MD3 library would also provide more behaviors.
-    let mut look = Appearance::new(theme, state);
+    let mut look = Appearance::base(theme, state);
     look.radius = 18.0;
     look.border_width = 0.0;
     if state.enabled {
@@ -32,14 +32,14 @@ fn primary(theme: &Theme, state: VisualState) -> Appearance {
 fn card(theme: &Theme, state: VisualState) -> Appearance {
     Appearance {
         background: theme.surface,
-        ..Appearance::new(theme, state)
+        ..Appearance::base(theme, state)
     }
 }
 
 fn main() -> Result<()> {
     let app = App::new()?;
     let view = aegle::ui!(&app, "examples/components.aegle")?;
-    view.card.set_skin(card)?;
+    view.card.set_skin(Some(card))?;
     action_button(&view.actions, "Clear text")?.on_click(move |_| view.editor.set_text(""))?;
     // A local theme restyles only the card's subtree.
     let panel = view.card.clone();

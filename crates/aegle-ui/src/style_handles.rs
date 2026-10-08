@@ -1,8 +1,8 @@
 use crate::{
-    Appearance, Color, Node, Point, Result, Skin, State, Style, UiError, VisualState,
+    Appearance, Color, Node, Point, Result, State, Style, UiError, VisualState,
     tokens::{ColorSlot, LengthSlot, TokenSlot},
 };
-use aegle_core::{Dirty, NodeId};
+use aegle_core::NodeId;
 
 impl Node {
     /// Replaces every local paint override at once, preserving the skin and
@@ -26,28 +26,6 @@ impl Node {
                 .decorations
                 .get(&id)
                 .map_or(Style::default(), |d| d.style))
-        })
-    }
-    /// Installs a pure theme/state skin without changing control behavior.
-    /// The current result is validated before storing it; later states are
-    /// validated during refresh. Local paint overrides keep their precedence.
-    pub fn set_skin(&self, skin: Skin) -> Result {
-        self.change(|state, id| {
-            skin(state.theme_of(id), state.visual_state(id)).validate()?;
-            state.decorations.entry(id).or_default().skin = Some(skin);
-            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            Ok(())
-        })
-    }
-    /// Restores the neutral skin, retaining explicit local overrides.
-    pub fn clear_skin(&self) -> Result {
-        self.change(|state, id| {
-            if let Some(decoration) = state.decorations.get_mut(&id) {
-                decoration.skin = None;
-                state.trim_decoration(id);
-                state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            }
-            Ok(())
         })
     }
     /// Resolves and validates the visible skin and local overrides in the current state.

@@ -28,8 +28,12 @@ pub struct Group {
 }
 
 impl Control for Group {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Container
+    fn kind(&self) -> &'static ControlKind {
+        match self.role {
+            Role::Popup { .. } | Role::Menu | Role::Table => &crate::kinds::PANEL,
+            Role::MenuBar => &crate::kinds::MENU_BAR,
+            _ => &aegle_ui::CONTAINER,
+        }
     }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
         use aegle_layout::{Edges, LengthPercentage, Size};
@@ -72,30 +76,11 @@ impl Control for Group {
     }
 }
 
-/// A bordered surface for tables and popups, resolved from the current theme
-/// so a theme change repaints it rather than keeping the creation-time colors.
-pub(crate) fn panel(theme: &Theme, state: VisualState) -> Appearance {
-    Appearance {
-        background: theme.surface,
-        border_color: theme.border,
-        border_width: 1.0,
-        ..Appearance::new(theme, state)
-    }
-}
-
-/// A menu bar: a strip of the surface its entries sit on, without a border.
-pub(crate) fn strip(theme: &Theme, state: VisualState) -> Appearance {
-    Appearance {
-        background: theme.surface,
-        ..Appearance::new(theme, state)
-    }
-}
-
 /// A table header row: the window background inside the table's surface.
 pub(crate) fn header(theme: &Theme, state: VisualState) -> Appearance {
     Appearance {
         background: theme.background,
-        ..Appearance::new(theme, state)
+        ..Appearance::base(theme, state)
     }
 }
 

@@ -37,8 +37,8 @@ pub struct MenuItemControl {
 }
 
 impl Control for MenuItemControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Button
+    fn kind(&self) -> &'static ControlKind {
+        &crate::kinds::MENU_ITEM
     }
     fn interactive(&self) -> bool {
         true

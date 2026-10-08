@@ -73,17 +73,8 @@ pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -
 impl Dropdown {
     fn options(&self, popup: &Popup, items: &[&str], selected: usize) -> Result {
         for (index, &item) in items.iter().enumerate() {
-            let option = popup.button(item)?;
-            option.set_border_width(0.0)?;
-            option.change(|state, id| {
-                if let Some(control) = state.control_as::<crate::button::ButtonControl>(id) {
-                    control.variant = Variant::Option {
-                        chosen: index == selected,
-                    };
-                }
-                state.tree.mark_dirty(id, Dirty::ALL)?;
-                Ok(())
-            })?;
+            let chosen = index == selected;
+            let option = crate::button::create_as(popup, item, Variant::Option { chosen })?;
             let dropdown = self.clone();
             option.on_click(move |_| dropdown.select(index, true))?;
         }

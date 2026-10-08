@@ -28,8 +28,8 @@ pub struct SeparatorControl {
 }
 
 impl Control for SeparatorControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Container
+    fn kind(&self) -> &'static ControlKind {
+        &aegle_ui::CONTAINER
     }
     fn frame(&self) -> Frame {
         Frame {

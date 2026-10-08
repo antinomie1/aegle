@@ -143,9 +143,12 @@ impl Node {
             state.motion.fading.remove(&id);
             let value = state.presented_appearance(id)?;
             let control = &state.tree.get(id).unwrap().context.control;
-            let scope = crate::control::StyleScope::of(control.kind());
-            let (field, indicator, control) =
-                (scope.editor, scope.indicator, control.interactive());
+            let accepts = control.kind().accepts;
+            let (field, indicator, control) = (
+                accepts.contains(aegle_theme::Accepts::EDITOR),
+                accepts.contains(aegle_theme::Accepts::INDICATOR),
+                accepts.contains(aegle_theme::Accepts::INTERACTIVE),
+            );
             state.set_style(
                 id,
                 Style {

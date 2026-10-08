@@ -21,8 +21,8 @@ use std::{
 
 use aegle_text::{Blob, GenericFamily, TextSystem};
 use aegle_ui::{
-    Appearance, Color, Container, Control, ControlKind, Modifiers, Point, PointerId, PointerKind,
-    Result, Size, Theme, Ui, VisualState, container_style,
+    Accepts, Appearance, Color, Container, Control, ControlKind, Modifiers, Point, PointerId,
+    PointerKind, Result, Size, Theme, Ui, VisualState, container_style,
     control::{Frame, MeasureCx, PaintCx},
     handle,
     scene::{Rect, RoundedRect},
@@ -53,14 +53,21 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static GLOBAL: Counting = Counting;
 
+static METER: ControlKind = ControlKind {
+    name: "Meter",
+    skin: Appearance::base,
+    accepts: Accepts::INDICATOR,
+    container: false,
+};
+
 /// Five cells, the custom control kind of the scene.
 struct Meter {
     value: u8,
 }
 
 impl Control for Meter {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Slider
+    fn kind(&self) -> &'static ControlKind {
+        &METER
     }
     fn frame(&self) -> Frame {
         Frame {
@@ -104,7 +111,7 @@ impl MeterHandle {
 fn meter_skin(theme: &Theme, state: VisualState) -> Appearance {
     Appearance {
         indicator: Color::rgb(230, 160, 0),
-        ..Appearance::new(theme, state)
+        ..Appearance::base(theme, state)
     }
 }
 
@@ -133,6 +140,8 @@ fn main() -> Result {
     let (ui, meters, buttons) = {
         let (built, time, allocations) = counted(|| {
             let ui = Ui::with_fonts(fonts.clone(), Theme::light())?;
+            // Every meter takes the inherited skin of its kind.
+            ui.root().set_kind_skin(&METER, Some(meter_skin))?;
             let list = ui.root().scroll_view()?;
             let (mut meters, mut buttons) = (Vec::new(), Vec::new());
             for row in 0..125 {
@@ -142,9 +151,7 @@ fn main() -> Result {
                 line.check_box("Done", row % 2 == 0)?;
                 line.slider(0.0, 1.0, 0.5)?;
                 for value in 0..4 {
-                    let meter = MeterHandle::new(&line, value)?;
-                    meter.set_skin(meter_skin)?;
-                    meters.push(meter);
+                    meters.push(MeterHandle::new(&line, value)?);
                 }
             }
             ui.resize(Size::new(1280.0, 800.0))?;

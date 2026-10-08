@@ -152,6 +152,7 @@ impl Ui {
                 ext: HashMap::new(),
                 hooks: Vec::new(),
                 decorations: HashMap::new(),
+                skins: HashMap::new(),
                 overrides: HashMap::new(),
                 tokens: Default::default(),
                 fingers: Vec::new(),

@@ -15,8 +15,8 @@ use crate::{
 pub struct Stack;
 
 impl Control for Stack {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Container
+    fn kind(&self) -> &'static ControlKind {
+        &crate::control::CONTAINER
     }
     fn retheme(&self, theme: &Theme, local: crate::LocalLayout, root: bool, style: &mut Style) {
         Plain.retheme(theme, local, root, style);

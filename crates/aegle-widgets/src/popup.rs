@@ -88,7 +88,6 @@ impl NodePopup for Node {
                 let local = anchor_element.theme.clone();
                 state.propagate_theme(id, local)?;
             }
-            state.decorations.entry(id).or_default().skin = Some(crate::group::panel);
             popups(state).entries.push(PopupEntry {
                 popup: id,
                 anchor,

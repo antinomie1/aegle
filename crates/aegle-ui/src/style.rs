@@ -1,17 +1,16 @@
 // The engine state's fields and methods are the authoring surface for control
 // libraries; the contract is described in `control` and on `State`.
 
-use crate::control::StyleScope;
 use crate::state::State;
-use crate::{Appearance, Result, Skin, Style, Theme, UiError, VisualState};
+use crate::{Appearance, Result, Style, Theme, UiError, VisualState};
 use aegle_core::{Dirty, NodeId};
 use aegle_text::{FontStyle, FontWeight, TextStyle};
+use aegle_theme::Accepts;
 use aegle_theme::Font;
 
 /// Stored only for nodes with an explicit visual or typography override.
 #[derive(Clone, Default)]
 pub struct Decoration {
-    pub skin: Option<Skin>,
     pub style: Style,
     pub font_size: Option<f32>,
     pub font: Option<Font>,
@@ -44,7 +43,8 @@ impl State {
     /// The resolved appearance of `id` in `state`, after skin and local overrides.
     pub fn appearance_for(&self, id: NodeId, state: VisualState) -> Result<Appearance> {
         let decoration = self.decorations.get(&id);
-        let skin = decoration.and_then(|d| d.skin).unwrap_or(Appearance::new);
+        let element = &self.tree.get(id).unwrap().context;
+        let skin = element.skin.unwrap_or(state.kind.skin);
         let mut appearance = skin(self.theme_of(id), state);
         if let Some(decoration) = decoration {
             decoration.style.apply(&mut appearance, state);
@@ -69,8 +69,7 @@ impl State {
     /// Drops the decoration of `id` once it holds no override.
     pub fn trim_decoration(&mut self, id: NodeId) {
         if self.decorations.get(&id).is_some_and(|d| {
-            d.skin.is_none()
-                && d.style == Style::default()
+            d.style == Style::default()
                 && d.font_size.is_none()
                 && d.font.is_none()
                 && d.cursor.is_none()
@@ -84,15 +83,15 @@ impl State {
     /// Validates and sets the local style overrides of `id`.
     pub fn set_style(&mut self, id: NodeId, style: Style) -> Result {
         style.validate()?;
-        let scope = StyleScope::of(self.tree.get(id).unwrap().context.control.kind());
-        let (button, field) = (scope.button_like, scope.editor);
-        if ((style.selection.is_some() || style.caret.is_some()) && !field)
-            || (style.indicator.is_some() && !scope.indicator)
-            || (style.pressed_background.is_some() && !button)
+        let accepts = self.tree.get(id).unwrap().context.control.kind().accepts;
+        if ((style.selection.is_some() || style.caret.is_some())
+            && !accepts.contains(Accepts::EDITOR))
+            || (style.indicator.is_some() && !accepts.contains(Accepts::INDICATOR))
+            || (style.pressed_background.is_some() && !accepts.contains(Accepts::PRESSED))
             || ((style.hover_background.is_some()
                 || style.focus_color.is_some()
                 || style.focus_width.is_some())
-                && !(button || field))
+                && !accepts.contains(Accepts::INTERACTIVE))
         {
             return Err(UiError::WrongKind.into());
         }
@@ -174,7 +173,7 @@ impl State {
 
     /// Marks what a change of interaction state invalidates.
     pub fn dirty_visual_state(&mut self, id: NodeId) -> Result {
-        let dirty = if self.decorations.get(&id).is_some_and(|d| d.skin.is_some()) {
+        let dirty = if self.tree.get(id).unwrap().context.skin.is_some() {
             // A custom skin can change foreground as a function of any state.
             Dirty::PAINT | Dirty::SEMANTICS
         } else {

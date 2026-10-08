@@ -87,8 +87,8 @@ impl TextField {
 pub struct FieldControl(pub(crate) Box<aegle_controls::TextField>);
 
 impl Control for FieldControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::TextField
+    fn kind(&self) -> &'static ControlKind {
+        &crate::kinds::TEXT_FIELD
     }
     fn interactive(&self) -> bool {
         true

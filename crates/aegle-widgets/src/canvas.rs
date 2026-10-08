@@ -8,7 +8,7 @@ use aegle_controls::{
 use aegle_core::Dirty;
 use aegle_layout::Style;
 use aegle_scene::SceneBuilder;
-use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
+use aegle_theme::ControlKind;
 use aegle_types::{Point, Size};
 use aegle_ui::{
     Container, Control, Result,
@@ -134,14 +134,6 @@ pub struct CanvasControl {
     pub(crate) splitter: Option<(bool, f32)>,
 }
 
-/// A focus outline for interactive canvases, which have no frame of their own.
-fn focusable(theme: &Theme, state: VisualState) -> Appearance {
-    Appearance {
-        focus_width: 2.0,
-        ..Appearance::new(theme, state)
-    }
-}
-
 impl Canvas {
     /// Re-records the painter on the next refresh, for example after its data changed.
     pub fn invalidate(&self) -> Result {
@@ -169,7 +161,6 @@ impl Canvas {
     ) -> Result {
         self.change(|state, id| {
             state.control_as::<CanvasControl>(id).unwrap().interactive = true;
-            state.decorations.entry(id).or_default().skin = Some(focusable);
             state.tree.mark_dirty(id, Dirty::ALL)?;
             state.clear_actions(id);
             state.on_action(id, move |node| {
@@ -194,10 +185,6 @@ impl Canvas {
             canvas.events.clear();
             if state.focus.current(&state.tree) == Some(id) {
                 state.set_focus(None)?;
-            }
-            if let Some(decoration) = state.decorations.get_mut(&id) {
-                decoration.skin = None;
-                state.trim_decoration(id);
             }
             state.tree.mark_dirty(id, Dirty::ALL)?;
             Ok(())
@@ -228,8 +215,8 @@ impl CanvasControl {
 }
 
 impl Control for CanvasControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Container
+    fn kind(&self) -> &'static ControlKind {
+        &aegle_ui::CONTAINER
     }
     fn interactive(&self) -> bool {
         self.interactive

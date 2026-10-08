@@ -184,7 +184,7 @@ impl State {
         if style != *node.style() {
             aegle_layout::set_style(&mut self.tree, id, style)?;
         }
-        let custom_skin = self.decorations.get(&id).is_some_and(|d| d.skin.is_some());
+        let custom_skin = self.tree.get(id).unwrap().context.skin.is_some();
         let toggle_gap_changed =
             theme.gap != old.gap && self.tree.get(id).unwrap().context.control.uses_gap();
         let dirty = if font_changed || theme.padding != old.padding || toggle_gap_changed {

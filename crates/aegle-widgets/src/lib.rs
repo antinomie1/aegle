@@ -24,6 +24,7 @@ mod canvas;
 mod dropdown;
 mod field;
 mod group;
+pub mod kinds;
 mod label;
 mod list;
 mod menu;

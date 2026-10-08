@@ -5,10 +5,11 @@ use aegle_types::Size;
 use aegle_widgets::{Mark, ToggleSpec, slider_track, toggle};
 
 fn appearance() -> aegle_theme::Appearance {
-    aegle_theme::Appearance::new(
+    let kind = &aegle_widgets::kinds::CHECK_BOX;
+    (kind.skin)(
         &Theme::default(),
         aegle_theme::VisualState {
-            kind: aegle_theme::ControlKind::CheckBox,
+            kind,
             enabled: true,
             hovered: false,
             pressed: false,

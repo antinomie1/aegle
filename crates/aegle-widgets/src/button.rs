@@ -85,8 +85,12 @@ impl ButtonControl {
 }
 
 impl Control for ButtonControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Button
+    fn kind(&self) -> &'static ControlKind {
+        match self.variant {
+            Variant::Plain | Variant::Dropdown { .. } => &crate::kinds::BUTTON,
+            Variant::Option { .. } => &crate::kinds::MENU_ITEM,
+            Variant::Tab { .. } => &crate::kinds::TAB,
+        }
     }
     fn interactive(&self) -> bool {
         true
@@ -233,9 +237,16 @@ impl Control for ButtonControl {
 }
 
 pub(crate) fn create(container: &Container, text: &str) -> Result<Button> {
+    create_as(container, text, Variant::Plain)
+}
+
+/// Appends a button reading as `variant`, which fixes its kind.
+pub(crate) fn create_as(container: &Container, text: &str, variant: Variant) -> Result<Button> {
     crate::add(container, |state, theme| {
+        let mut control = ButtonControl::new(&state.fonts, text, theme)?;
+        control.variant = variant;
         Ok((
-            Box::new(ButtonControl::new(&state.fonts, text, theme)?),
+            Box::new(control),
             Style {
                 size: aegle_layout::Size {
                     width: Dimension::auto(),

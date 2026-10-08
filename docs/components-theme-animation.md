@@ -8,7 +8,7 @@
 
 可选 `text` 的 `TextField` 直接拥有 Editor，复用选择、按词/行移动、grapheme 删除、撤销、单行提交和原子 IME 事务。宿主提供当前文字局部坐标，应用 `Outcome` 的焦点/capture/重绘/IME 重置请求，并消费 Editor 的失效标记。`Outcome::semantics` 独立表达焦点/启用状态变化，普通 hover/pressed 绘制不会因此重新导出语义。只读仍可选择；失焦或禁用取消组合且恢复已提交值。复制/剪切/粘贴经 `Outcome::clipboard` 交给宿主，`Input::Paste` 回送文字；密码模式遮盖显示、拒绝复制与组合。更多平台差异快捷键尚未接入。
 
-这些行为可由不同皮肤共享；当前 `aegle-widgets` 已将它们与 row/column、标签及单行/多行编辑器组合，使用统一 Theme 绘制中性基础外观，并同步布局、命中、IME 和可选 Unix 系统语义。`set_skin` 可替换现有控件的配色、边框、圆角和文字装饰，不重写行为；新行为与绘制通过实现 `aegle_ui::Control` 加入，见[不经 facade 使用控件库](developer/standalone.md#自定义控件)。控件行为层不创建窗口或定时器。
+这些行为可由不同皮肤共享；当前 `aegle-widgets` 已将它们与 row/column、标签及单行/多行编辑器组合，使用统一 Theme 绘制中性基础外观，并同步布局、命中、IME 和可选 Unix 系统语义。皮肤（`set_skin`、`set_kind_skin`）可替换现有控件的配色、边框、圆角和文字装饰，不重写行为；新行为与绘制通过实现 `aegle_ui::Control` 加入，见[不经 facade 使用控件库](developer/standalone.md#自定义控件)。控件行为层不创建窗口或定时器。
 
 ## 当前切换与数值控件
 
@@ -38,11 +38,11 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 当前局部样式与组件复用
 
-`aegle-theme` 提供无分配的 `VisualState`、`Appearance`、`Style` 和 `Skin`，可独立于 app 使用。VisualState 包含控件种类、有效 enabled、hovered、pressed、focused 和编辑器 read_only；祖先禁用反映在有效 enabled 中。当前 app 的按钮/编辑器提供 hover 和 focus，pressed 由按钮、切换控件和滑块行为提供；其他种类的相应状态为 false。
+`aegle-theme` 提供无分配的 `ControlKind`、`VisualState`、`Appearance`、`Style` 和 `Skin`，可独立于 app 使用。`ControlKind` 是控件库声明的 `static`：名称、默认皮肤、可接受的样式组与是否为布局容器，按地址比较；内置控件的类型与中性皮肤在 `aegle_widgets::kinds`，第三方类型与它们同一形式。VisualState 包含控件类型、有效 enabled、hovered、pressed、focused 和编辑器 read_only；祖先禁用反映在有效 enabled 中。当前 app 的按钮/编辑器提供 hover 和 focus，pressed 由按钮、切换控件和滑块行为提供；其他种类的相应状态为 false。
 
-`Node::set_skin(fn(&Theme, VisualState) -> Appearance)` 以纯函数替换默认外观。皮肤只能根据传入数据计算，不能重入 UI 或执行应用回调；不捕获环境、不创建注册表或虚函数对象。当前结果在安装前验证，以后状态在刷新时验证；非有限或负几何返回错误，不静默回退。皮肤不决定布局或字号。
+皮肤是纯函数 `fn(&Theme, VisualState) -> Appearance`，有三个作用范围：类型的默认皮肤、`Node::set_kind_skin(kind, Some(skin))` 给该子树（含自身）中这一类型的全部控件（最近的子树规则生效，之后新建或移入的控件同样跟随）、`Node::set_skin(Some(skin))` 只给该控件；`None` 移除对应规则。每个节点缓存解析出的皮肤指针，设置、reparent 与插入时只重新解析受影响的子树，绘制时不查找祖先。皮肤只能根据传入数据计算，不能重入 UI 或执行应用回调；不捕获环境、不创建注册表或虚函数对象。当前结果在安装前验证，以后状态在刷新时验证；非有限或负几何返回错误，不静默回退。皮肤不决定布局或字号。
 
-`Node::set_style(Style)` 设置稀疏本地覆盖；`set_background`、`set_foreground`、`set_radius` 等是简短命令式入口。`style()` 读取覆盖，`appearance()` 读取当前解析结果。`None` 恢复皮肤值；`set_style(Style::default())` 清除覆盖，`clear_skin()` 单独恢复默认皮肤。局部字号通过 `set_font_size` / `clear_font_size` 控制，仅适用于文字控件，不向子节点继承。
+`Node::set_style(Style)` 设置稀疏本地覆盖；`set_background`、`set_foreground`、`set_radius` 等是简短命令式入口。`style()` 读取覆盖，`appearance()` 读取当前解析结果。`None` 恢复皮肤值；`set_style(Style::default())` 清除覆盖，`set_skin(None)` 单独移除节点皮肤。完整优先级表见[API 指南](developer/api.md#6-外观主题样式与皮肤)。局部字号通过 `set_font_size` / `clear_font_size` 控制，仅适用于文字控件，不向子节点继承。
 
 解析顺序为默认/自定义皮肤 → 本地基础覆盖 → 本地 disabled、pressed 或 hover 覆盖。高优先状态没有指定覆盖时保留基础值，不回落到其他状态；focus 环最后独立绘制；有效启用且聚焦时才有非零目标宽度，失焦过渡可短暂保留渐隐的呈现轮廓。边框与 focus 宽度为零可关闭，相对于自身矩形向内绘制，不侵入相邻控件；容器圆角不隐含对子树的裁剪。hover/focus 覆盖限交互控件，pressed 覆盖限按钮/切换控件/滑块，selection/caret 限编辑器，indicator 限复选框/开关/滑块/进度条；对应 setter 只定义在这些控件的类型化句柄上（`handle!` 的样式组），误用在编译期报错，标记属性也在编译期拒绝；只有整体传入的 `Style` 值在运行时检查并返回 WrongKind。
 

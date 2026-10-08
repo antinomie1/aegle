@@ -11,7 +11,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
     let skin: Skin = |theme, state| Appearance {
         background: Color::BLACK,
-        ..Appearance::new(theme, state)
+        ..Appearance::base(theme, state)
     };
     let mut fonts = TextSystem::new();
     let families = fonts.register_fonts(Blob::new(Arc::new(
@@ -48,7 +48,7 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
         ..Default::default()
     })?;
     let foreground = Color::rgb(9, 90, 40);
-    field.set_skin(skin)?;
+    field.set_skin(Some(skin))?;
     field.set_style(Style {
         background: Some(Color::WHITE),
         foreground: Some(foreground),
@@ -92,7 +92,7 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
         ..Default::default()
     })?;
     assert_eq!(field.text()?, "Hello你好");
-    button.set_skin(skin)?;
+    button.set_skin(Some(skin))?;
     button.set_style(Style {
         hover_background: Some(Color::WHITE),
         pressed_background: Some(foreground),
@@ -135,7 +135,7 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
     field.clear_font_size()?;
     field.set_style(Style::default())?;
     assert_eq!(field.appearance()?.background, Color::BLACK);
-    field.clear_skin()?;
+    field.set_skin(None)?;
     assert_eq!(field.appearance()?.background, theme.surface);
     ui.refresh()?;
     ui.visit_scenes(|visit| {
@@ -236,5 +236,64 @@ fn token_overrides_follow_the_parent_theme() -> Result {
     );
     panel.set_theme(None)?;
     assert_eq!(button.theme()?.background, Theme::light().background);
+    Ok(())
+}
+
+/// Skins for a kind cascade through subtrees like themes: the nearest
+/// subtree's skin for the kind applies, a control's own skin wins, and
+/// created or moved controls follow their new subtree.
+#[test]
+fn kind_skins_cascade_through_subtrees() -> Result {
+    let outer: Skin = |theme, state| Appearance {
+        background: theme.accent,
+        ..Appearance::base(theme, state)
+    };
+    let inner: Skin = |_, state| Appearance {
+        background: Color::BLACK,
+        ..Appearance::base(&Theme::light(), state)
+    };
+    let own: Skin = |_, state| Appearance {
+        background: Color::WHITE,
+        ..Appearance::base(&Theme::light(), state)
+    };
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    let root = ui.root();
+    let panel = root.column()?;
+    let nested = panel.column()?;
+    let first = panel.button("first")?;
+    let deep = nested.button("deep")?;
+    let label = panel.text("label")?;
+    let background = |node: &aegle_ui::Node| node.appearance().map(|a| a.background);
+    let neutral = Theme::light().surface;
+    assert_eq!(background(&first)?, neutral);
+
+    root.set_kind_skin(&kinds::BUTTON, Some(outer))?;
+    nested.set_kind_skin(&kinds::BUTTON, Some(inner))?;
+    assert_eq!(background(&first)?, Theme::light().accent);
+    assert_eq!(background(&deep)?, Color::BLACK);
+    // Another kind is untouched; a skin follows the theme it is given.
+    assert_eq!(background(&label)?, Color::TRANSPARENT);
+    ui.set_theme(Theme::dark())?;
+    assert_eq!(background(&first)?, Theme::dark().accent);
+
+    // A control's own skin wins; without it the kind's skin applies again.
+    first.set_skin(Some(own))?;
+    assert_eq!(background(&first)?, Color::WHITE);
+    first.set_skin(None)?;
+    assert_eq!(background(&first)?, Theme::dark().accent);
+
+    // Created and moved controls follow their subtree.
+    let created = nested.button("created")?;
+    assert_eq!(background(&created)?, Color::BLACK);
+    first.reparent(&nested)?;
+    assert_eq!(background(&first)?, Color::BLACK);
+    deep.reparent(&panel)?;
+    assert_eq!(background(&deep)?, Theme::dark().accent);
+
+    // Removing a rule returns its subtree to the next one out.
+    nested.set_kind_skin(&kinds::BUTTON, None)?;
+    assert_eq!(background(&created)?, Theme::dark().accent);
+    root.set_kind_skin(&kinds::BUTTON, None)?;
+    assert_eq!(background(&created)?, Theme::dark().surface);
     Ok(())
 }

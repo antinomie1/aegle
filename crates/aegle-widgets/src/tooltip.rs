@@ -9,7 +9,6 @@ use std::{
 use aegle_controls::{Key, KeyInput};
 use aegle_core::NodeId;
 use aegle_layout::{Edges, LengthPercentageAuto, Position, Style};
-use aegle_theme::{Appearance, Theme, VisualState};
 use aegle_types::Point;
 use aegle_ui::{Control, Node, Result, State};
 
@@ -60,16 +59,6 @@ impl NodeTooltip for Node {
             }
             Ok(())
         })
-    }
-}
-
-/// Inverted colors keep the hint distinct from the controls below it.
-fn skin(theme: &Theme, state: VisualState) -> Appearance {
-    Appearance {
-        background: theme.foreground,
-        foreground: theme.background,
-        border_width: 0.0,
-        ..Appearance::new(theme, state)
     }
 }
 
@@ -139,7 +128,8 @@ pub(crate) fn wake(state: &mut State, _: Instant) -> Result {
         },
         ..Default::default()
     };
-    let control = LabelControl::new(&state.fonts, &text, &theme)?;
+    let mut control = LabelControl::new(&state.fonts, &text, &theme)?;
+    control.kind = &crate::kinds::TOOLTIP;
     let root = state.root;
     let label = state.insert(
         root,
@@ -150,7 +140,6 @@ pub(crate) fn wake(state: &mut State, _: Instant) -> Result {
     let element = &mut state.tree.get_mut(label).unwrap().context;
     element.padding = Some(theme.padding / 2.0);
     element.offset = at;
-    state.decorations.entry(label).or_default().skin = Some(skin);
     let tooltips = state.ext::<Tooltips>();
     tooltips.pending = None;
     tooltips.shown = Some((target, label, at));

@@ -107,6 +107,7 @@ impl Node {
             if !state.usable(id) {
                 state.cancel_subtree(id)?;
             }
+            state.resolve_skins(id)?;
             state.propagate_direction(id)
         })
     }

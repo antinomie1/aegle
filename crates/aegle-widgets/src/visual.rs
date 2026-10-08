@@ -38,8 +38,8 @@ impl ImageView {
 pub struct ImageControl(Image);
 
 impl Control for ImageControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Container
+    fn kind(&self) -> &'static ControlKind {
+        &aegle_ui::CONTAINER
     }
     fn measure(&mut self, _: &MeasureCx<'_>) -> Result<Size> {
         Ok(Size::new(self.0.width() as f32, self.0.height() as f32))

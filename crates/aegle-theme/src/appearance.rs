@@ -1,31 +1,6 @@
-use crate::Theme;
+use crate::{ControlKind, Theme};
 use aegle_types::Color;
 use core::fmt;
-
-/// The shared visual role of an existing control.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ControlKind {
-    /// A layout container, transparent by default.
-    Container,
-    /// A scrollable container, transparent with a theme border by default.
-    ScrollView,
-    /// Noninteractive text, transparent by default.
-    Label,
-    /// An action button.
-    Button,
-    /// A single-line or multiline text editor.
-    TextField,
-    /// A labeled binary choice with a check mark.
-    CheckBox,
-    /// A labeled binary choice with a moving thumb.
-    Switch,
-    /// A labeled choice that is exclusive among its sibling radio buttons.
-    RadioButton,
-    /// An interactive bounded numeric value.
-    Slider,
-    /// A noninteractive bounded progress value.
-    Progress,
-}
 
 /// A snapshot of retained behavior used to compute a control's appearance.
 ///
@@ -33,8 +8,8 @@ pub enum ControlKind {
 /// Resolving this value never changes focus, input capture or editor state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VisualState {
-    /// The control's visual role.
-    pub kind: ControlKind,
+    /// The control's kind.
+    pub kind: &'static ControlKind,
     /// Whether the control can accept input.
     pub enabled: bool,
     /// Whether the pointer is over the control.
@@ -81,67 +56,23 @@ pub struct Appearance {
 }
 
 impl Appearance {
-    /// Resolves the neutral default skin from a validated theme.
-    ///
-    /// Every interactive and range control shares the theme radius, so the
-    /// default palettes draw square controls and marks.
-    /// Disabled state suppresses pressed and hover feedback. Buttons and toggles
-    /// use these background states. Enabled, focused interactive roles gain a
-    /// separate 2 dp outline; their normal border remains unchanged.
-    pub fn new(theme: &Theme, state: VisualState) -> Self {
-        let toggle = matches!(
-            state.kind,
-            ControlKind::CheckBox | ControlKind::Switch | ControlKind::RadioButton
-        );
-        let framed = toggle || matches!(state.kind, ControlKind::Button | ControlKind::TextField);
-        let bordered = framed || state.kind == ControlKind::ScrollView;
-        let interactive = framed || state.kind == ControlKind::Slider;
-        let background = match state.kind {
-            ControlKind::Container | ControlKind::ScrollView | ControlKind::Label => {
-                Color::TRANSPARENT
-            }
-            ControlKind::Button
-            | ControlKind::CheckBox
-            | ControlKind::Switch
-            | ControlKind::RadioButton
-                if state.enabled && state.pressed =>
-            {
-                theme.pressed
-            }
-            ControlKind::Button
-            | ControlKind::CheckBox
-            | ControlKind::Switch
-            | ControlKind::RadioButton
-                if state.enabled && state.hovered =>
-            {
-                theme.hover
-            }
-            ControlKind::CheckBox | ControlKind::Switch | ControlKind::RadioButton => {
-                Color::TRANSPARENT
-            }
-            ControlKind::Slider | ControlKind::Progress => theme.border,
-            _ => theme.surface,
-        };
+    /// The common starting point of skins: transparent and borderless, with
+    /// the theme foreground (muted while disabled), the 2 dp accent focus
+    /// outline while enabled and focused, the theme selection, an accent
+    /// caret, and an accent indicator (muted while disabled).
+    pub fn base(theme: &Theme, state: VisualState) -> Self {
         Self {
-            background,
+            background: Color::TRANSPARENT,
             foreground: if state.enabled {
                 theme.foreground
             } else {
                 theme.muted
             },
-            border_color: if bordered {
-                theme.border
-            } else {
-                Color::TRANSPARENT
-            },
-            border_width: if bordered { 1.0 } else { 0.0 },
-            radius: if matches!(state.kind, ControlKind::Container | ControlKind::Label) {
-                0.0
-            } else {
-                theme.radius
-            },
+            border_color: Color::TRANSPARENT,
+            border_width: 0.0,
+            radius: 0.0,
             focus_color: theme.accent,
-            focus_width: if interactive && state.enabled && state.focused {
+            focus_width: if state.enabled && state.focused {
                 2.0
             } else {
                 0.0

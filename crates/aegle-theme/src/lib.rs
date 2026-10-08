@@ -11,9 +11,11 @@
 #![no_std]
 
 mod appearance;
+mod kind;
 mod token;
 
-pub use appearance::{Appearance, ControlKind, InvalidStyle, Skin, Style, VisualState};
+pub use appearance::{Appearance, InvalidStyle, Skin, Style, VisualState};
+pub use kind::{Accepts, ControlKind};
 pub use token::{BUILTIN_TOKENS, Font, Token, TokenDefault, TokenKind, TokenType, TokenValue};
 
 use aegle_types::Color;

@@ -206,8 +206,8 @@ fn measure(padding: f32, vertical: bool) -> Size {
 }
 
 impl Control for SliderControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Slider
+    fn kind(&self) -> &'static ControlKind {
+        &crate::kinds::SLIDER
     }
     fn interactive(&self) -> bool {
         true
@@ -359,8 +359,8 @@ impl Control for SliderControl {
 }
 
 impl Control for ProgressControl {
-    fn kind(&self) -> ControlKind {
-        ControlKind::Progress
+    fn kind(&self) -> &'static ControlKind {
+        &crate::kinds::PROGRESS
     }
     fn self_clipping(&self) -> bool {
         true

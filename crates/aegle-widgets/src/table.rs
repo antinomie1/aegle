@@ -68,7 +68,6 @@ pub(crate) fn table(
     table.set_gap(0.0)?;
     // Keeps the header fill inside the border.
     table.set_padding(1.0)?;
-    table.set_skin(group::panel)?;
     // A clipping box has no content-based minimum size, so the virtual rows'
     // full extent never stops the table from shrinking to the space it is given.
     table.change(|state, id| {
@@ -79,7 +78,7 @@ pub(crate) fn table(
     })?;
     let header = group::add(&table, Role::TableRow, true)?;
     header.set_gap(0.0)?;
-    header.set_skin(group::header)?;
+    header.set_skin(Some(group::header))?;
     for column in columns {
         let cell = cell(&header, column, Role::TableHeader)?;
         cell.text(column.title)?;
