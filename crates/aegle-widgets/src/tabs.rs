@@ -1,7 +1,5 @@
 //! A tab list over pages, one page shown at a time.
 
-use std::any::Any;
-
 use aegle_controls::{Input, Key, KeyInput};
 use aegle_core::{Dirty, NodeId};
 use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
@@ -23,12 +21,6 @@ pub struct TabsControl {
 }
 
 impl Control for TabsControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }

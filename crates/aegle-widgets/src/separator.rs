@@ -1,6 +1,6 @@
 //! Thin dividers and resizable two-pane splitters.
 
-use std::{any::Any, cell::Cell, rc::Rc};
+use std::{cell::Cell, rc::Rc};
 
 use aegle_controls::Key;
 use aegle_layout::{AlignItems, Dimension, FlexDirection, Style};
@@ -15,10 +15,10 @@ use aegle_ui::{
 
 use crate::{Canvas, CanvasEvent, Orientation, Widgets};
 
-handle!(
-    Separator,
-    "A one-pixel divider across its row (vertical) or column (horizontal); it is not focusable."
-);
+handle! {
+    /// A one-pixel divider across its row (vertical) or column (horizontal); it is not focusable.
+    pub Separator(SeparatorControl)
+}
 
 /// The control inside a [`Separator`] node.
 pub struct SeparatorControl {
@@ -28,12 +28,6 @@ pub struct SeparatorControl {
 }
 
 impl Control for SeparatorControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }
@@ -144,15 +138,10 @@ impl Splitter {
         }
         self.ratio.set(ratio);
         self.first.set_basis(Length::Percent(ratio * 100.0))?;
-        self.handle.change(|state, id| {
-            let grip = state.control_as::<crate::CanvasControl>(id).unwrap();
+        self.handle.update(|grip| {
             if let Some((_, share)) = &mut grip.splitter {
                 *share = ratio;
             }
-            state
-                .tree
-                .mark_dirty(id, aegle_core::Dirty::PAINT | aegle_core::Dirty::SEMANTICS)?;
-            Ok(())
         })
     }
 }
@@ -199,13 +188,7 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
         Cursor::ResizeHorizontal
     }))?;
     grip.set_accessible_label("Resize panes")?;
-    grip.change(|state, id| {
-        state
-            .control_as::<crate::CanvasControl>(id)
-            .unwrap()
-            .splitter = Some((vertical, 0.5));
-        Ok(())
-    })?;
+    grip.update(|grip| grip.splitter = Some((vertical, 0.5)))?;
     let ratio = Rc::new(Cell::new(0.5));
     let splitter = Splitter {
         root,

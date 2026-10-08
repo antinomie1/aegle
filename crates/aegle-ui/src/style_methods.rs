@@ -4,18 +4,63 @@
 
 /// Defines a typed handle: a clonable wrapper around a [`Node`](crate::Node)
 /// that dereferences to it.
+///
+/// With a control type, the handle also gets `read` and `update`, the typed
+/// access its methods use, and the style setters of the listed groups: `text`
+/// (font size and face), `interactive` (hover background and focus outline),
+/// `pressed` (pressed background), `indicator` (marks and fills) and `editor`
+/// (selection and caret). [`Node`](crate::Node) itself has the setters every
+/// kind accepts, so a setter that does not apply is a compile error.
+///
+/// ```ignore
+/// aegle_ui::handle! {
+///     /// A toggleable chip.
+///     pub Chip(ChipControl): text, interactive, pressed
+/// }
+/// impl Chip {
+///     pub fn is_selected(&self) -> aegle_ui::Result<bool> {
+///         self.read(|chip| chip.selected)
+///     }
+///     pub fn set_selected(&self, selected: bool) -> aegle_ui::Result {
+///         self.update(|chip| chip.selected = selected)
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! handle {
-    ($name:ident, $doc:literal) => {
-        #[doc = $doc]
+    ($(#[$meta:meta])* $vis:vis $name:ident) => {
+        $(#[$meta])*
         #[derive(Clone)]
-        pub struct $name(pub $crate::Node);
+        $vis struct $name(pub $crate::Node);
         impl ::std::ops::Deref for $name {
             type Target = $crate::Node;
             fn deref(&self) -> &$crate::Node {
                 &self.0
             }
         }
+    };
+    ($(#[$meta:meta])* $vis:vis $name:ident($control:ty) $(: $($group:ident),+)? $(,)?) => {
+        $crate::handle!($(#[$meta])* $vis $name);
+        impl $name {
+            /// Reads the control's state.
+            pub fn read<R>(&self, read: impl FnOnce(&$control) -> R) -> $crate::Result<R> {
+                self.change(|state, id| {
+                    let control = state.control_as::<$control>(id).ok_or($crate::UiError::WrongKind)?;
+                    Ok(read(control))
+                })
+            }
+            /// Changes the control's state and repaints it, updating its
+            /// semantics; changes of its size go through the node's layout.
+            pub fn update<R>(&self, update: impl FnOnce(&mut $control) -> R) -> $crate::Result<R> {
+                self.change(|state, id| {
+                    let control = state.control_as::<$control>(id).ok_or($crate::UiError::WrongKind)?;
+                    let value = update(control);
+                    state.tree.mark_dirty(id, $crate::Dirty::PAINT | $crate::Dirty::SEMANTICS)?;
+                    Ok(value)
+                })
+            }
+        }
+        $($($crate::style_methods!(@$group $name);)+)?
     };
 }
 
@@ -35,23 +80,9 @@ macro_rules! style_setters {
     };
 }
 
-/// Adds the style and typography methods only some control kinds accept to
-/// typed handles. Groups: `text` (font size and face), `interactive` (hover
-/// background and focus outline), `pressed` (pressed background), `indicator`
-/// (marks and fills) and `editor` (selection and caret). The handle's control
-/// kind must accept each listed group, see
-/// [`StyleScope`](crate::control::StyleScope); [`Node`](crate::Node) itself
-/// has the setters every kind accepts.
-///
-/// ```ignore
-/// aegle_ui::handle!(Chip, "A toggleable chip.");
-/// aegle_ui::style_methods!(Chip: text, interactive, pressed);
-/// ```
+#[doc(hidden)]
 #[macro_export]
 macro_rules! style_methods {
-    ($handle:ty: $($group:ident),+ $(,)?) => {
-        $($crate::style_methods!(@$group $handle);)+
-    };
     (@text $handle:ty) => {
         impl $handle {
             /// Sets a positive finite local text size, keeping text, selection

@@ -1,7 +1,5 @@
 //! Buttons, and the dropdown and option variants the popup module builds on them.
 
-use std::any::Any;
-
 use aegle_controls::{Input, Outcome};
 use aegle_layout::{Dimension, Style};
 use aegle_scene::Affine;
@@ -16,10 +14,10 @@ use aegle_ui::{
 
 use crate::paint::{CHEVRON, check_mark, chevron};
 
-handle!(
-    Button,
-    "A retained button with shared pointer, keyboard and semantic activation."
-);
+handle! {
+    /// A retained button with shared pointer, keyboard and semantic activation.
+    pub Button(ButtonControl): text, interactive, pressed
+}
 
 impl Button {
     /// Replaces the button label.
@@ -87,12 +85,6 @@ impl ButtonControl {
 }
 
 impl Control for ButtonControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Button
     }

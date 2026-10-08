@@ -170,10 +170,10 @@ impl Node {
     }
 }
 
-crate::handle!(
-    Container,
-    "A retained row or column. Creation methods append children once."
-);
+crate::handle! {
+    /// A retained row or column. Creation methods append children once.
+    pub Container
+}
 
 impl Container {
     /// Appends a node whose control and layout style `create` provides, inheriting

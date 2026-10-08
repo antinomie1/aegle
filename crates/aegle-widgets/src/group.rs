@@ -1,7 +1,5 @@
 //! Containers that carry a semantic role for tables and popup lists.
 
-use std::any::Any;
-
 use aegle_layout::Style;
 use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
 use aegle_ui::{Container, Control, Result, container_style};
@@ -30,12 +28,6 @@ pub struct Group {
 }
 
 impl Control for Group {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }

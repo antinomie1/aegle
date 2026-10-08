@@ -205,11 +205,6 @@ pub struct SemanticsCx<'a> {
 
 /// One control inside a node. See the [module docs](self).
 pub trait Control: Any {
-    /// Upcast for typed handles.
-    fn as_any(&self) -> &dyn Any;
-    /// Mutable upcast for typed handles.
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-
     /// The role a skin styles this control as; it also decides the accepted
     /// local style ([`StyleScope::of`]). A [`ControlKind::TextField`] has an
     /// [`Control::editor`] and no other kind does.
@@ -342,12 +337,6 @@ pub trait Control: Any {
 pub struct Plain;
 
 impl Control for Plain {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }

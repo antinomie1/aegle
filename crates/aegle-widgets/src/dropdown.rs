@@ -21,10 +21,10 @@ pub(crate) struct DropdownData {
     pub handler: ChangeHandler,
 }
 
-handle!(
-    Dropdown,
-    "A button showing the selected choice; activating it opens a popup list of all choices."
-);
+handle! {
+    /// A button showing the selected choice; activating it opens a popup list of all choices.
+    pub Dropdown(crate::button::ButtonControl): text, interactive, pressed
+}
 
 pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -> Result<Dropdown> {
     if selected >= items.len() {

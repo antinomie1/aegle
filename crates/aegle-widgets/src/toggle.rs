@@ -1,9 +1,7 @@
 //! Check boxes, switches and radio buttons.
 
-use std::any::Any;
-
 use aegle_controls::{Action, Input, Key, KeyInput, Outcome};
-use aegle_core::{Dirty, NodeId};
+use aegle_core::NodeId;
 use aegle_layout::{Dimension, Style};
 use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
@@ -16,27 +14,24 @@ use aegle_ui::{
 
 use crate::paint::{Mark, ToggleSpec, toggle};
 
-handle!(
-    CheckBox,
-    "A retained binary checkbox with a text label and shared activation."
-);
-handle!(
-    Switch,
-    "A retained binary switch with a text label and shared activation."
-);
-handle!(
-    Radio,
-    "A labeled choice that is exclusive among the radio buttons sharing its parent."
-);
+handle! {
+    /// A retained binary checkbox with a text label and shared activation.
+    pub CheckBox(ToggleControl): text, interactive, pressed, indicator
+}
+handle! {
+    /// A retained binary switch with a text label and shared activation.
+    pub Switch(ToggleControl): text, interactive, pressed, indicator
+}
+handle! {
+    /// A labeled choice that is exclusive among the radio buttons sharing its parent.
+    pub Radio(ToggleControl): text, interactive, pressed, indicator
+}
 
 macro_rules! toggles {
     ($($ty:ident),*) => { $(impl $ty {
         /// Returns the retained binary value.
         pub fn is_checked(&self) -> Result<bool> {
-            self.change(|state, id| {
-                let toggle = state.control_as::<ToggleControl>(id).expect("a toggle node");
-                Ok(toggle.control.is_checked())
-            })
+            self.read(|toggle| toggle.control.is_checked())
         }
         /// Sets the value without invoking the user-change callback. A check
         /// box leaves the mixed state; checking a radio button unchecks its siblings.
@@ -75,26 +70,12 @@ toggles!(CheckBox, Switch, Radio);
 impl CheckBox {
     /// Whether the box shows the mixed (partially checked) state.
     pub fn is_mixed(&self) -> Result<bool> {
-        self.change(|state, id| {
-            Ok(state
-                .control_as::<ToggleControl>(id)
-                .expect("a toggle node")
-                .mixed)
-        })
+        self.read(|toggle| toggle.mixed)
     }
     /// Shows or leaves the mixed state without invoking the change handler.
     /// A user change from the mixed state checks the box.
     pub fn set_mixed(&self, mixed: bool) -> Result {
-        self.change(|state, id| {
-            let toggle = state
-                .control_as::<ToggleControl>(id)
-                .expect("a toggle node");
-            if toggle.mixed != mixed {
-                toggle.mixed = mixed;
-                state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            }
-            Ok(())
-        })
+        self.update(|toggle| toggle.mixed = mixed)
     }
 }
 
@@ -108,12 +89,6 @@ pub struct ToggleControl {
 }
 
 impl Control for ToggleControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         match self.mark {
             Mark::Check => ControlKind::CheckBox,

@@ -1,7 +1,5 @@
 //! A single-line numeric editor with steppers, arrow keys and wheel steps.
 
-use std::any::Any;
-
 use aegle_controls::{Action, Input, Key, Outcome, PointerKind, Range};
 use aegle_core::Dirty;
 use aegle_layout::Style;
@@ -17,10 +15,10 @@ use aegle_ui::{
 
 use crate::field::FieldControl;
 
-handle!(
-    NumberField,
-    "A numeric text field: typing, steppers, Up/Down/PageUp/PageDown and the wheel (while focused) change one clamped value."
-);
+handle! {
+    /// A numeric text field: typing, steppers, Up/Down/PageUp/PageDown and the wheel (while focused) change one clamped value.
+    pub NumberField(NumberFieldControl): text, interactive, editor
+}
 
 /// Width of the stepper strip at the field's end edge (left right to left).
 const STRIP: f32 = 20.0;
@@ -98,7 +96,7 @@ impl NumberField {
     }
     /// Sets a finite value, clamped to the range, without a change callback.
     pub fn set_value(&self, value: f64) -> Result {
-        self.update(|control, fonts| {
+        self.edit(|control, fonts| {
             control.range.set_value(value)?;
             control.show(fonts)
         })
@@ -109,14 +107,14 @@ impl NumberField {
     }
     /// Replaces finite increasing bounds, clamping the value.
     pub fn set_range(&self, min: f64, max: f64) -> Result {
-        self.update(|control, fonts| {
+        self.edit(|control, fonts| {
             control.range.set_bounds(min, max)?;
             control.show(fonts)
         })
     }
     /// Sets a finite nonnegative step; zero steps by 1% of the range.
     pub fn set_step(&self, step: f64) -> Result {
-        self.update(|control, fonts| {
+        self.edit(|control, fonts| {
             control.range.set_step(step)?;
             control.show(fonts)
         })
@@ -126,7 +124,7 @@ impl NumberField {
         if decimals > 9 {
             return Err(UiError::InvalidValue.into());
         }
-        self.update(|control, fonts| {
+        self.edit(|control, fonts| {
             control.decimals = decimals;
             control.show(fonts)
         })
@@ -146,10 +144,8 @@ impl NumberField {
             Ok(())
         })
     }
-    fn read<T>(&self, read: impl FnOnce(&NumberFieldControl) -> T) -> Result<T> {
-        self.change(|state, id| Ok(read(state.control_as::<NumberFieldControl>(id).unwrap())))
-    }
-    fn update(
+    /// Changes the control and its shown text.
+    fn edit(
         &self,
         update: impl FnOnce(&mut NumberFieldControl, &mut TextSystem) -> Result,
     ) -> Result {
@@ -166,12 +162,6 @@ impl NumberField {
 }
 
 impl Control for NumberFieldControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::TextField
     }

@@ -1,7 +1,5 @@
 //! Single-line and multiline plain text editors.
 
-use std::any::Any;
-
 use aegle_controls::{Input, Outcome};
 use aegle_layout::{Dimension, LengthPercentageAuto, Style};
 use aegle_scene::Affine;
@@ -14,10 +12,10 @@ use aegle_ui::{
     handle, text_style,
 };
 
-handle!(
-    TextField,
-    "A retained plain text editor, including native IME composition state."
-);
+handle! {
+    /// A retained plain text editor, including native IME composition state.
+    pub TextField(FieldControl): text, interactive, editor
+}
 
 impl TextField {
     /// Replaces the committed text, clears history and explicitly ends native preedit.
@@ -89,12 +87,6 @@ impl TextField {
 pub struct FieldControl(pub(crate) Box<aegle_controls::TextField>);
 
 impl Control for FieldControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::TextField
     }

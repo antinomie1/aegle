@@ -2,7 +2,6 @@
 //! hook) gets errors back instead of panics, and a control's self-description
 //! is checked where it joins the tree.
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     rc::{Rc, Weak},
 };
@@ -21,12 +20,6 @@ struct Probe {
 }
 
 impl Control for Probe {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         self.kind
     }

@@ -1,6 +1,5 @@
 //! Display text.
 
-use std::any::Any;
 use std::cell::RefCell;
 
 use aegle_layout::Style;
@@ -14,7 +13,10 @@ use aegle_ui::{
     handle, text_style,
 };
 
-handle!(Label, "A retained display paragraph.");
+handle! {
+    /// A retained display paragraph.
+    pub Label(LabelControl): text
+}
 
 impl Label {
     /// Replaces text and invalidates its shared layout, scene and semantic state.
@@ -40,12 +42,6 @@ impl LabelControl {
 }
 
 impl Control for LabelControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Label
     }

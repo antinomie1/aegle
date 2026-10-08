@@ -1,7 +1,5 @@
 //! Images.
 
-use std::any::Any;
-
 use aegle_core::Dirty;
 use aegle_layout::{AlignItems, Style};
 use aegle_scene::{Image, Rect};
@@ -13,21 +11,15 @@ use aegle_ui::{
     handle,
 };
 
-handle!(
-    ImageView,
-    "A retained image stretched over its bounds; it is not focusable."
-);
+handle! {
+    /// A retained image stretched over its bounds; it is not focusable.
+    pub ImageView(ImageControl)
+}
 
 impl ImageView {
     /// Returns the shared image.
     pub fn image(&self) -> Result<Image> {
-        self.change(|state, id| {
-            Ok(state
-                .control_as::<ImageControl>(id)
-                .expect("an image node")
-                .0
-                .clone())
-        })
+        self.read(|image| image.0.clone())
     }
     /// Replaces the image and its intrinsic size.
     pub fn set_image(&self, image: &Image) -> Result {
@@ -46,12 +38,6 @@ impl ImageView {
 pub struct ImageControl(Image);
 
 impl Control for ImageControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }

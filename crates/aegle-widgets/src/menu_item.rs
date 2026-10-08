@@ -1,6 +1,6 @@
 //! Menu items: commands, check items, submenu openers and menu bar entries.
 
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use aegle_controls::{Input, Outcome};
 use aegle_core::{Dirty, NodeId};
@@ -37,12 +37,6 @@ pub struct MenuItemControl {
 }
 
 impl Control for MenuItemControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Button
     }
@@ -177,10 +171,10 @@ impl Control for MenuItemControl {
     }
 }
 
-handle!(
-    MenuItem,
-    "A menu entry: a command, a check item, or the opener of a submenu."
-);
+handle! {
+    /// A menu entry: a command, a check item, or the opener of a submenu.
+    pub MenuItem(MenuItemControl)
+}
 
 impl MenuItem {
     /// Replaces the item text.

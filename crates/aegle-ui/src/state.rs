@@ -450,12 +450,8 @@ impl State {
 
     /// The control of a live node as `C`, or `None` for another kind.
     pub fn control_as<C: Control>(&mut self, id: NodeId) -> Option<&mut C> {
-        self.tree
-            .get_mut(id)?
-            .context
-            .control
-            .as_any_mut()
-            .downcast_mut()
+        let control: &mut dyn std::any::Any = &mut *self.tree.get_mut(id)?.context.control;
+        control.downcast_mut()
     }
 }
 

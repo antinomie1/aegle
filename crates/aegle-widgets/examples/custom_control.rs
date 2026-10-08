@@ -8,7 +8,7 @@
 //!
 //! `cargo run -p aegle-widgets --example custom_control`
 
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use aegle_ui::{
     Container, Control, ControlKind, Key, KeyInput, Modifiers, Point, PointerId, PointerKind,
@@ -16,7 +16,6 @@ use aegle_ui::{
     control::{Action, Frame, Input, InputCx, MeasureCx, Outcome, PaintCx},
     handle,
     scene::{Rect, RoundedRect},
-    style_methods,
 };
 
 const STEPS: u8 = 5;
@@ -49,12 +48,6 @@ impl RatingControl {
 }
 
 impl Control for RatingControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     /// Styled like a slider: focus ring, hover, pressed and indicator color.
     fn kind(&self) -> ControlKind {
         ControlKind::Slider
@@ -164,12 +157,10 @@ impl Control for RatingControl {
     }
 }
 
-handle!(
-    Rating,
-    "A five-step rating chosen by pointer or arrow keys."
-);
-// The style setters a slider-kind control accepts, checked at compile time.
-style_methods!(Rating: interactive, pressed, indicator);
+handle! {
+    /// A five-step rating chosen by pointer or arrow keys.
+    Rating(RatingControl): interactive, pressed, indicator
+}
 
 impl Rating {
     /// Appends a rating to `parent`.
@@ -180,14 +171,11 @@ impl Rating {
         Ok(Self(node))
     }
     fn value(&self) -> Result<u8> {
-        self.change(|state, id| Ok(state.control_as::<RatingControl>(id).unwrap().value))
+        self.read(|rating| rating.value)
     }
     /// Sets the value without calling the change handlers.
     fn set_value(&self, value: u8) -> Result {
-        self.change(|state, id| {
-            state.control_as::<RatingControl>(id).unwrap().value = value.clamp(1, STEPS);
-            state.dirty_visual_state(id)
-        })
+        self.update(|rating| rating.value = value.clamp(1, STEPS))
     }
     /// Adds a handler run after the user changes the value.
     fn on_change(&self, mut callback: impl FnMut(Rating) -> Result + 'static) -> Result {

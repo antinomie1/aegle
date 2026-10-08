@@ -1,7 +1,7 @@
 //! The controls inside sliders and progress bars: orientation, wheel steps,
 //! eased value changes and indeterminate progress.
 
-use std::{any::Any, time::Instant};
+use std::time::Instant;
 
 use aegle_controls::{Input, Outcome, Range};
 use aegle_layout::{Dimension, Style};
@@ -206,12 +206,6 @@ fn measure(padding: f32, vertical: bool) -> Size {
 }
 
 impl Control for SliderControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Slider
     }
@@ -365,12 +359,6 @@ impl Control for SliderControl {
 }
 
 impl Control for ProgressControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Progress
     }

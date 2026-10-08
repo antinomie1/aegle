@@ -1,7 +1,5 @@
 //! Grid and stack containers and grid item placement (the `grid` feature).
 
-use std::any::Any;
-
 use aegle_layout::{Align, Display, Flow, GridLines, Placement, Style, TemplateItem, Track};
 use aegle_theme::{ControlKind, Theme};
 
@@ -17,12 +15,6 @@ use crate::{
 pub struct Stack;
 
 impl Control for Stack {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }
@@ -38,7 +30,7 @@ pub(crate) fn stack_child(state: &State, mut parent: NodeId, style: &mut Style) 
         parent = state.tree.parent(parent).unwrap().unwrap();
     }
     let control = &state.tree.get(parent).unwrap().context.control;
-    if control.as_any().is::<Stack>() {
+    if (&**control as &dyn std::any::Any).is::<Stack>() {
         style.grid_row = Placement::at(1).lines();
         style.grid_column = Placement::at(1).lines();
     }

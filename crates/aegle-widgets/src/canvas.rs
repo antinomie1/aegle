@@ -1,6 +1,6 @@
 //! Custom drawing, optionally with its own pointer, wheel and keyboard input.
 
-use std::{any::Any, time::Instant};
+use std::time::Instant;
 
 use aegle_controls::{
     Capture, Input, Key, Modifiers, Outcome, PointerButton, PointerId, PointerKind,
@@ -19,10 +19,10 @@ use aegle_ui::{
 /// Records custom scene commands in local coordinates for a canvas of `Size`.
 pub type Painter = dyn FnMut(&mut SceneBuilder, Size) -> Result;
 
-handle!(
-    Canvas,
-    "A retained custom drawing whose painter re-records only after invalidation or resize."
-);
+handle! {
+    /// A retained custom drawing whose painter re-records only after invalidation or resize.
+    pub Canvas(CanvasControl)
+}
 
 /// Input received by an interactive canvas, in its local logical coordinates.
 #[derive(Clone, Debug, PartialEq)]
@@ -155,11 +155,7 @@ impl Canvas {
         &self,
         painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
     ) -> Result {
-        self.change(|state, id| {
-            state.control_as::<CanvasControl>(id).unwrap().painter = Box::new(painter);
-            state.tree.mark_dirty(id, Dirty::PAINT)?;
-            Ok(())
-        })
+        self.update(|canvas| canvas.painter = Box::new(painter))
     }
     /// Makes the canvas interactive: it joins Tab order, shows a focus
     /// outline, captures the pointer from a press until release, consumes
@@ -232,12 +228,6 @@ impl CanvasControl {
 }
 
 impl Control for CanvasControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::Container
     }

@@ -7,14 +7,14 @@ use aegle_ui::{Container, Control, Node, Result, UiError, handle};
 
 use crate::range_control::{Orientation, ProgressControl, SliderControl, sized};
 
-handle!(
-    Slider,
-    "A numeric slider with pointer, keyboard, wheel (while focused) and semantic adjustment."
-);
-handle!(
-    Progress,
-    "A determinate or indeterminate progress indicator; it is not focusable."
-);
+handle! {
+    /// A numeric slider with pointer, keyboard, wheel (while focused) and semantic adjustment.
+    pub Slider(SliderControl): interactive, pressed, indicator
+}
+handle! {
+    /// A determinate or indeterminate progress indicator; it is not focusable.
+    pub Progress(ProgressControl): indicator
+}
 
 macro_rules! ranges {
     ($($ty:ident),*) => { $(impl $ty {
@@ -71,9 +71,13 @@ impl Slider {
 fn read_range<T>(node: &Node, read: impl FnOnce(&Range) -> T) -> Result<T> {
     node.change(|state, id| {
         let control = &mut state.tree.get_mut(id).unwrap().context.control;
-        let range = if let Some(slider) = control.as_any_mut().downcast_mut::<SliderControl>() {
+        let range = if let Some(slider) =
+            (&mut **control as &mut dyn std::any::Any).downcast_mut::<SliderControl>()
+        {
             slider.behavior.range()
-        } else if let Some(progress) = control.as_any_mut().downcast_mut::<ProgressControl>() {
+        } else if let Some(progress) =
+            (&mut **control as &mut dyn std::any::Any).downcast_mut::<ProgressControl>()
+        {
             &progress.range
         } else {
             return Err(UiError::WrongKind.into());
@@ -94,12 +98,16 @@ fn update_range(
         #[cfg(not(feature = "motion"))]
         let jump = true;
         let control = &mut state.tree.get_mut(id).unwrap().context.control;
-        let changed = if let Some(slider) = control.as_any_mut().downcast_mut::<SliderControl>() {
+        let changed = if let Some(slider) =
+            (&mut **control as &mut dyn std::any::Any).downcast_mut::<SliderControl>()
+        {
             let changed = update(slider.behavior.range_mut())?;
             let fraction = slider.behavior.range().fraction();
             slider.glide.retarget(fraction, jump);
             changed
-        } else if let Some(progress) = control.as_any_mut().downcast_mut::<ProgressControl>() {
+        } else if let Some(progress) =
+            (&mut **control as &mut dyn std::any::Any).downcast_mut::<ProgressControl>()
+        {
             let changed = update(&mut progress.range)?;
             progress.glide.retarget(progress.range.fraction(), jump);
             changed
@@ -120,7 +128,7 @@ fn orient(node: &Node, orientation: Orientation) -> Result {
         let theme = *state.theme_of(id);
         let element = &mut state.tree.get_mut(id).unwrap().context;
         let local = element.local_layout;
-        let control = element.control.as_any_mut();
+        let control: &mut dyn std::any::Any = &mut *element.control;
         let extent = if let Some(slider) = control.downcast_mut::<SliderControl>() {
             slider.vertical = vertical;
             theme.control_height
@@ -147,22 +155,14 @@ impl Progress {
     /// Shows ongoing work of unknown length: a sweeping segment (a still one
     /// with reduced motion) and no numeric value for assistive technology.
     pub fn set_indeterminate(&self, indeterminate: bool) -> Result {
-        self.change(|state, id| {
-            let progress = state.control_as::<ProgressControl>(id).unwrap();
+        self.update(|progress| {
             progress.indeterminate = indeterminate;
             progress.sweep = None;
-            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            Ok(())
         })
     }
     /// Whether the bar shows indeterminate progress.
     pub fn is_indeterminate(&self) -> Result<bool> {
-        self.change(|state, id| {
-            Ok(state
-                .control_as::<ProgressControl>(id)
-                .unwrap()
-                .indeterminate)
-        })
+        self.read(|progress| progress.indeterminate)
     }
 }
 

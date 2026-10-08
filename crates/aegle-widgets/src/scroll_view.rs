@@ -1,4 +1,4 @@
-use std::{any::Any, ops::Deref};
+use std::ops::Deref;
 
 use aegle_layout::{Overflow, Style};
 use aegle_theme::{ControlKind, Theme};
@@ -27,12 +27,6 @@ impl Deref for ScrollView {
 pub struct ScrollControl;
 
 impl Control for ScrollControl {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn kind(&self) -> ControlKind {
         ControlKind::ScrollView
     }
