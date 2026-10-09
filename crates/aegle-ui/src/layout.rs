@@ -176,12 +176,9 @@ impl State {
             let focused = self.focus.current(&self.tree) == Some(id);
             let element = &mut self.tree.get_mut(id).unwrap().context;
             let padding = element.inset(&self.theme);
+            let viewport = element.control.text_viewport(element.bounds.size, padding);
             if let Some(field) = element.control.editor_mut() {
                 let changes = field.editor_mut().take_changes();
-                let viewport = aegle_types::Size::new(
-                    (element.bounds.size.width - padding * 2.0).max(0.0),
-                    (element.bounds.size.height - padding * 2.0).max(0.0),
-                );
                 let caret = field.editor().ime_rect();
                 let size = field.editor().size();
                 if std::mem::take(&mut element.ensure_caret) || changes.layout || changes.selection

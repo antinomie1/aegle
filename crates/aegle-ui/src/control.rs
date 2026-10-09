@@ -267,6 +267,15 @@ pub trait Control: Any {
     fn content_offset(&self, _size: Size, _padding: f32, _scroll: Point) -> Point {
         Point::default()
     }
+    /// The visible size of an editor's text inside a control of `size`,
+    /// which scrolling keeps the caret within; by default inside `padding`.
+    /// A control drawing labels or icons around its editor narrows it.
+    fn text_viewport(&self, size: Size, padding: f32) -> Size {
+        Size::new(
+            (size.width - padding * 2.0).max(0.0),
+            (size.height - padding * 2.0).max(0.0),
+        )
+    }
     /// The pointer moved over the control while no other control holds it.
     fn hover(
         &mut self,

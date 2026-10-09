@@ -210,6 +210,12 @@ impl Editor {
     pub fn diagnostics(&self) -> TextDiagnostics {
         self.diagnostics
     }
+    /// The changes accumulated since the last [`Self::take_changes`],
+    /// without draining them: a control compares them around one input to
+    /// report an edit.
+    pub fn changes(&self) -> EditChanges {
+        self.changes
+    }
     /// Drain accumulated invalidation flags without allocating.
     pub fn take_changes(&mut self) -> EditChanges {
         std::mem::take(&mut self.changes)

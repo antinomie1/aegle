@@ -71,7 +71,10 @@ fn composition_and_history_share_one_retained_editor() {
     system.edit(&mut editor).set_preedit("中文", None).unwrap();
     system.edit(&mut editor).commit("世界").unwrap();
     assert_eq!(editor.text(), "A世界B");
+    // Peeking leaves the changes for the host to drain.
+    assert!(editor.changes().value);
     assert!(editor.take_changes().value);
+    assert!(!editor.changes().value);
     assert_eq!(editor.history_stats().undo_steps, 1);
     assert!(system.edit(&mut editor).undo().unwrap());
     assert_eq!(editor.text(), "A你好B");
