@@ -2,6 +2,8 @@
 
 本指南按唯一推荐的顺序讲第三方控件库：登记控件类型 → 定义控件 → 句柄 → 皮肤与 token → 装饰 → 标记元素 → 动画。内置控件（`aegle-widgets`）与内置标记元素（`aegle_loader::elements`）用的就是同一组公开机制。贯穿示例是一个五级评分控件 Rating，完整可运行代码见 `crates/aegle-widgets/examples/custom_control.rs`。只用控件、不经 facade 时的依赖选择见[不经 facade 使用控件库](standalone.md)。
 
+完整的真实例子是同级目录的 [am3](../../../am3/README.md)：一个单 crate 的 Material 3 Expressive 控件库，覆盖按钮、选择、纸片、指示器、卡片与浮层、导航、文本框与日期/时间选择器等全部组件，只用本指南的公开机制实现。它展示了几处本指南只点到的做法：皮肤从 `Scheme::of(theme)` 取色，使主题切换与子树局部主题无需库自己的状态；模态层、Tab 循环与提示条超时经 `Hooks` 实现；标签页指示器在 `place` 钩子里读取布局；文本框包住内置编辑器，只用 `text_viewport` 与 `Editor::changes` 接入；全部控件以 `Md*` 元素进入标记，子元素经 `State::ext` 中按节点登记的父组件句柄创建。性能数据（1000 控件场景与 Aegle 默认控件对照）见 am3 的 `docs/implementation.md`。
+
 ## 1. 登记控件类型
 
 每种控件声明一个 `static ControlKind`：名称、默认皮肤、接受的样式组和是否为布局容器。类型按地址比较，节点存活期间不变。
