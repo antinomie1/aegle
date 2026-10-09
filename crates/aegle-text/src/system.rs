@@ -91,6 +91,7 @@ impl TextSystem {
             alignment: Alignment::Start,
             diagnostics: TextDiagnostics::default(),
             content_widths: ContentWidths { min: 0.0, max: 0.0 },
+            weight: style.weight.value(),
         };
         self.build(&mut paragraph, style);
         Ok(paragraph)
@@ -143,6 +144,7 @@ impl TextSystem {
             builder.push_default(property);
         }
         builder.build_into(&mut paragraph.layout, &paragraph.text);
+        paragraph.weight = style.weight.value();
         paragraph.content_widths = paragraph.layout.calculate_content_widths();
         paragraph.break_lines();
         paragraph.update_diagnostics();

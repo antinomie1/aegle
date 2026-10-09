@@ -103,8 +103,21 @@ fn cjk_reflow_reuses_font_and_reports_missing_glyphs() {
             weight: aegle_text::FontWeight::BOLD,
             ..style
         };
-        system.restyle(&mut paragraph, &bold).unwrap();
-        let mut builder = aegle_scene::SceneBuilder::new();
-        paragraph.paint(&mut builder).unwrap();
+        // The fixture has only a regular face: bold is synthesized, while a
+        // medium weight keeps the regular outlines, as in browsers.
+        let mut emboldened = |style: &TextStyle<'_>| {
+            system.restyle(&mut paragraph, style).unwrap();
+            let mut builder = aegle_scene::SceneBuilder::new();
+            paragraph.paint(&mut builder).unwrap();
+            let scene = builder.finish().unwrap();
+            assert!(!scene.glyph_runs().is_empty());
+            scene.glyph_runs().iter().all(|run| run.embolden())
+        };
+        assert!(emboldened(&bold));
+        let medium = TextStyle {
+            weight: aegle_text::FontWeight::new(500.0),
+            ..style
+        };
+        assert!(!emboldened(&medium));
     }
 }

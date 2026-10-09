@@ -64,7 +64,13 @@ impl Editor {
             });
             result?;
         }
-        paint_layout(self.layout(), self.diagnostics(), builder, paint.foreground)?;
+        paint_layout(
+            self.layout(),
+            self.diagnostics(),
+            builder,
+            paint.foreground,
+            self.weight,
+        )?;
 
         if let (Some(range), Some(color)) = (self.composition_range(), paint.preedit) {
             let layout = self.layout();

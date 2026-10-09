@@ -27,6 +27,8 @@ pub struct Paragraph {
     pub(crate) alignment: Alignment,
     pub(crate) diagnostics: TextDiagnostics,
     pub(crate) content_widths: ContentWidths,
+    /// Requested CSS weight, which decides synthetic bold when painting.
+    pub(crate) weight: f32,
 }
 
 impl Paragraph {

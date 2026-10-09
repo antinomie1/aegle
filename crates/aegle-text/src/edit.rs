@@ -69,6 +69,7 @@ impl EditorDriver<'_> {
     }
 
     pub(crate) fn apply_style(&mut self, style: &TextStyle<'_>) {
+        self.editor.weight = style.weight.value();
         let styles = self.editor.inner.edit_styles();
         styles.insert(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(
             style.families.to_owned(),

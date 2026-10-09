@@ -15,7 +15,7 @@ impl Paragraph {
     /// styles are errors. A scene-geometry error can leave earlier runs appended;
     /// discard that record if the host requires the entire paragraph to be atomic.
     pub fn paint(&self, builder: &mut SceneBuilder) -> Result<(), PaintError> {
-        paint_layout(&self.layout, self.diagnostics, builder, None)
+        paint_layout(&self.layout, self.diagnostics, builder, None, self.weight)
     }
 
     /// Appends text using one foreground color without reshaping the paragraph.
@@ -28,7 +28,13 @@ impl Paragraph {
         builder: &mut SceneBuilder,
         color: Color,
     ) -> Result<(), PaintError> {
-        paint_layout(&self.layout, self.diagnostics, builder, Some(color))
+        paint_layout(
+            &self.layout,
+            self.diagnostics,
+            builder,
+            Some(color),
+            self.weight,
+        )
     }
 }
 
@@ -37,10 +43,16 @@ pub(crate) fn paint_layout(
     diagnostics: TextDiagnostics,
     builder: &mut SceneBuilder,
     color: Option<Color>,
+    weight: f32,
 ) -> Result<(), PaintError> {
     if diagnostics.unshaped_bytes != 0 {
         return Err(PaintError::MissingFont);
     }
+    // Fontique suggests emboldening whenever the matched face is lighter than
+    // requested, as for a 500 request on a family with only 400 and 700.
+    // Like browsers, synthesize only bold (600 and up); a medium request
+    // keeps the regular outlines instead of thickened ones.
+    let bold = weight >= 600.0;
     for line in layout.lines() {
         for item in line.items() {
             let PositionedLayoutItem::GlyphRun(positioned) = item else {
@@ -65,7 +77,7 @@ pub(crate) fn paint_layout(
                     glyphs,
                 )?
                 .synthesized(
-                    run.synthesis().embolden(),
+                    bold && run.synthesis().embolden(),
                     run.synthesis().skew().map_or(0, |a| a.round() as i8),
                 )?,
             )?;

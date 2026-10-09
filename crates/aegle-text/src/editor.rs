@@ -127,6 +127,8 @@ pub struct Editor {
     pub(crate) secret: Option<String>,
     pub(crate) width: Option<f32>,
     pub(crate) alignment: Alignment,
+    /// Requested CSS weight, which decides synthetic bold when painting.
+    pub(crate) weight: f32,
 }
 
 impl Editor {
@@ -307,6 +309,7 @@ impl TextSystem {
             secret: None,
             width: None,
             alignment: Alignment::Start,
+            weight: style.weight.value(),
         };
         editor.inner.set_quantize(false);
         editor.inner.set_text(text);
