@@ -136,6 +136,9 @@ impl Interpolate for Paint {
             selection: a.selection.interpolate(b.selection, progress),
             caret: a.caret.interpolate(b.caret, progress),
             indicator: a.indicator.interpolate(b.indicator, progress),
+            scrollbar: core::array::from_fn(|i| {
+                a.scrollbar[i].interpolate(b.scrollbar[i], progress)
+            }),
         })
     }
 }

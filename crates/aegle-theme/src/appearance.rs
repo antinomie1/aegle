@@ -54,13 +54,17 @@ pub struct Appearance {
     pub caret: Color,
     /// Check mark, selected switch thumb, range fill and slider thumb color.
     pub indicator: Color,
+    /// Overlay scrollbar colors of a viewport or editor: the track, the thumb
+    /// at rest, and the thumb while the viewport is hovered or the thumb dragged.
+    pub scrollbar: [Color; 3],
 }
 
 impl Appearance {
     /// The common starting point of skins: transparent and borderless, with
     /// the theme foreground (muted while disabled), the 2 dp accent focus
     /// outline while enabled and focused, the theme selection, an accent
-    /// caret, and an accent indicator (muted while disabled).
+    /// caret, an accent indicator (muted while disabled), and scrollbars with
+    /// a pressed-fill track and a border thumb that turns muted when active.
     pub fn base(theme: &Theme, state: VisualState) -> Self {
         Self {
             background: Color::TRANSPARENT,
@@ -85,6 +89,7 @@ impl Appearance {
             } else {
                 theme.muted
             },
+            scrollbar: [theme.pressed, theme.border, theme.muted],
         }
     }
 

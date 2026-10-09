@@ -4,6 +4,7 @@ use crate::bar::Bar;
 use aegle_controls::{PointerId, PointerKind};
 use aegle_core::{Dirty, NodeId};
 use aegle_scene::Color;
+use aegle_theme::Appearance;
 use aegle_types::Point;
 
 use crate::{Result, state::State};
@@ -147,15 +148,12 @@ impl State {
         Ok(())
     }
 
-    /// Track (theme pressed fill) and thumb colors: the thumb is border at rest,
-    /// muted while hovered or dragged.
-    pub fn scrollbar_color(&self, id: NodeId) -> [Color; 2] {
+    /// Track and thumb colors from the node's [`Appearance::scrollbar`]: the
+    /// active thumb while its viewport is hovered or the thumb dragged.
+    pub fn scrollbar_color(&self, id: NodeId, appearance: &Appearance) -> [Color; 2] {
         let active = self.drag.is_some_and(|drag| drag.node == id)
             || (self.hover == Some(id) && self.tree.get(id).unwrap().context.control.viewport());
-        let theme = self.theme_of(id);
-        [
-            theme.pressed,
-            if active { theme.muted } else { theme.border },
-        ]
+        let [track, rest, hot] = appearance.scrollbar;
+        [track, if active { hot } else { rest }]
     }
 }

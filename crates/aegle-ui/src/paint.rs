@@ -16,7 +16,7 @@ impl State {
         #[cfg(feature = "motion")]
         let appearance = self.transition_appearance(id, appearance)?;
         let bars = self.scrollbars(id);
-        let bar_color = self.scrollbar_color(id);
+        let bar_color = self.scrollbar_color(id, &appearance);
         let theme = *self.theme_of(id);
         let time = self.frame_time;
         #[cfg(feature = "motion")]
