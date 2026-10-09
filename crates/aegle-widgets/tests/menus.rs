@@ -59,7 +59,7 @@ fn hover(ui: &Ui, at: Point) -> Result {
 }
 
 fn focused(item: &MenuItem) -> Result<bool> {
-    Ok(item.visual_state()?.focused)
+    item.is_focused()
 }
 
 #[test]

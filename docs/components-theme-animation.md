@@ -40,7 +40,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `aegle-theme` 提供无分配的 `ControlKind`、`VisualState`、`Appearance`、`Style` 和 `Skin`，可独立于 app 使用。`ControlKind` 是控件库声明的 `static`：名称、默认皮肤、可接受的样式组与是否为布局容器，按地址比较；内置控件的类型与中性皮肤在 `aegle_widgets::kinds`，第三方类型与它们同一形式。VisualState 包含控件类型、有效 enabled、hovered、pressed、focused 和编辑器 read_only；focused 表示焦点可见（focus-visible）：控件有焦点，且最近一次输入是按键，或控件是编辑器。指针按下使焦点不显示焦点环与焦点层，任一按键恢复显示；`Node::is_focused` 查询逻辑焦点本身。祖先禁用反映在有效 enabled 中。当前 app 的按钮/编辑器提供 hover 和 focus，pressed 由按钮、切换控件和滑块行为提供；其他种类的相应状态为 false。
 
-皮肤是纯函数 `fn(&Theme, VisualState) -> Appearance`，有三个作用范围：类型的默认皮肤、`Node::set_kind_skin(kind, Some(skin))` 给该子树（含自身）中这一类型的全部控件（最近的子树规则生效，之后新建或移入的控件同样跟随）、`Node::set_skin(Some(skin))` 只给该控件；`None` 移除对应规则。每个节点缓存解析出的皮肤指针，设置、reparent 与插入时只重新解析受影响的子树，绘制时不查找祖先。皮肤只能根据传入数据计算，不能重入 UI 或执行应用回调；不捕获环境、不创建注册表或虚函数对象。当前结果在安装前验证，以后状态在刷新时验证；非有限或负几何返回错误，不静默回退。皮肤不决定布局或字号。
+皮肤是纯函数 `fn(&Theme, VisualState) -> Appearance`，有三个作用范围：类型的默认皮肤、`Node::set_kind_skin(kind, Some(skin))` 给该子树（含自身）中这一类型的全部控件（最近的子树规则生效，之后新建或移入的控件同样跟随）、`Node::set_skin(Some(skin))` 只给该控件；`None` 移除对应规则。每个节点缓存解析出的皮肤指针，设置、reparent 与插入时只重新解析受影响的子树，绘制时不查找祖先；控件的交互状态改变时（类型可能随之改变，如切换按钮选中后换成另一类型）在存在皮肤规则时重新解析该节点。皮肤只能根据传入数据计算，不能重入 UI 或执行应用回调；不捕获环境、不创建注册表或虚函数对象。当前结果在安装前验证，以后状态在刷新时验证；非有限或负几何返回错误，不静默回退。皮肤不决定布局或字号。
 
 `Node::set_style(Style)` 设置稀疏本地覆盖；`set_background`、`set_foreground`、`set_radius` 等是简短命令式入口。`style()` 读取覆盖，`appearance()` 读取当前解析结果。`None` 恢复皮肤值；`set_style(Style::default())` 清除覆盖，`set_skin(None)` 单独移除节点皮肤。完整优先级表见[API 指南](developer/api.md#6-外观主题样式与皮肤)。局部字号通过 `set_font_size` / `clear_font_size` 控制，仅适用于文字控件，不向子节点继承。
 

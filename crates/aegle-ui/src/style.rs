@@ -174,8 +174,13 @@ impl State {
         Ok(())
     }
 
-    /// Marks what a change of interaction state invalidates.
+    /// Marks what a change of interaction state invalidates. The control's
+    /// kind may have changed with its state (a toggle), so a kind skin in
+    /// scope is resolved again.
     pub fn dirty_visual_state(&mut self, id: NodeId) -> Result {
+        if !self.skins.is_empty() {
+            self.resolve_skin(id)?;
+        }
         let dirty = if self.tree.get(id).unwrap().context.skin.is_some() {
             // A custom skin can change foreground as a function of any state.
             Dirty::PAINT | Dirty::SEMANTICS
