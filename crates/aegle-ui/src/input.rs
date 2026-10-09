@@ -29,6 +29,10 @@ impl Ui {
             if let Some(id) = state.last_focus.filter(|&id| state.usable(id)) {
                 state.set_focus(Some(id))
             } else {
+                // The first control takes focus without showing it, as
+                // Windows hides focus cues until the keyboard is used; the
+                // first key press shows it.
+                state.show_focus(false)?;
                 state.advance_focus(FocusDirection::Forward)
             }
         } else {

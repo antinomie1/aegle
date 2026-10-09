@@ -228,3 +228,32 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     assert_eq!(Rc::strong_count(&fonts), 1);
     Ok(())
 }
+
+#[test]
+fn first_activation_focuses_without_a_focus_cue_until_a_key() -> Result {
+    let mut fonts = TextSystem::new();
+    let families = fonts.register_fonts(Blob::new(Arc::new(
+        include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+    )))?;
+    fonts
+        .collection_mut()
+        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::default())?;
+    let first = ui.root().button("First")?;
+    let second = ui.root().button("Second")?;
+    ui.resize(Size::new(200.0, 120.0))?;
+    ui.refresh()?;
+    ui.window_focus(true)?;
+    assert!(first.is_focused()?);
+    assert!(!first.visual_state()?.focused, "no cue before keyboard use");
+    ui.key(KeyInput {
+        key: Key::Tab,
+        text: "",
+        modifiers: Modifiers::default(),
+        pressed: true,
+        repeat: false,
+    })?;
+    assert!(second.is_focused()?);
+    assert!(second.visual_state()?.focused);
+    Ok(())
+}
