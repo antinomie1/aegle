@@ -1,17 +1,22 @@
 //! Overlay scrollbar geometry and painting.
 //!
-//! Bars take no layout space: while an axis overflows, a light track spans the
-//! viewport's bottom or end edge (right, or left right to left) and a darker
-//! square thumb moves along it. Pressing the
-//! thumb drags it; pressing elsewhere on the strip centers the thumb there and
-//! keeps dragging. No timer, fade or hover animation is involved.
+//! Bars take no layout space: while an axis overflows, a track spans the
+//! viewport's bottom or end edge (right, or left right to left) and a pill
+//! thumb moves along it, thin at rest and full thickness while the viewport is
+//! hovered or the thumb dragged. Both ends keep clear of the viewport's rounded
+//! corners. Pressing the thumb drags it; pressing elsewhere on the strip
+//! centers the thumb there and keeps dragging. No timer, fade or animation is
+//! involved.
 use aegle_scene::{Color, Rect, RoundedRect, SceneBuilder, SceneError};
 use aegle_types::{Point, Size};
 
 /// Pointer strip width along a scrollable edge, in logical pixels.
 pub const STRIP: f32 = 12.0;
-/// Visible track and thumb thickness at the outer edge of the strip.
+/// Visible track and thumb thickness at the outer edge of the strip while the
+/// bar is active.
 pub const THICKNESS: f32 = 8.0;
+/// Thickness at rest.
+const THIN: f32 = 4.0;
 const MARGIN: f32 = 2.0;
 /// Gap kept between content and a bar, so controls never touch the track.
 const CLEARANCE: f32 = 4.0;
@@ -35,6 +40,8 @@ pub struct Bar {
     /// Laid out right to left: a vertical bar is on the left edge, and a
     /// horizontal thumb starts at the right end.
     pub rtl: bool,
+    /// Drawn at full thickness: the viewport is hovered or the thumb dragged.
+    pub active: bool,
 }
 
 impl Bar {
@@ -43,19 +50,25 @@ impl Bar {
     /// an axis whose limit is positive; `horizontal_allowed` is false for
     /// multiline editors, which only scroll vertically. Offsets are measured from
     /// the start edge, so right to left a zero horizontal offset puts the thumb
-    /// at the right end.
+    /// at the right end. `radius` is the viewport's corner radius, which the ends
+    /// of each bar keep clear of.
     pub fn layout(
         size: Size,
         offset: Point,
         limit: Point,
         horizontal_allowed: bool,
         rtl: bool,
+        radius: f32,
+        active: bool,
     ) -> [Option<Self>; 2] {
         let vertical = limit.y > 0.0;
         let horizontal = horizontal_allowed && limit.x > 0.0;
+        // Where a full-thickness bar's outer edge meets the rounded corner,
+        // measured along the edge from the corner.
+        let end = MARGIN.max(corner_clearance(radius, MARGIN) + MARGIN);
         let bar = |vertical: bool, track: f32, cross: f32, viewport: f32, offset: f32, max: f32| {
-            // Both ends stay clear of the viewport's border.
-            let track = (track - 2.0 * MARGIN).max(0.0);
+            // Both ends stay clear of the viewport's border and corners.
+            let track = (track - 2.0 * end).max(0.0);
             let width = STRIP.min(cross.max(0.0));
             let length = (track * viewport / (viewport + max))
                 .max(MIN_THUMB)
@@ -64,12 +77,12 @@ impl Bar {
             Self {
                 vertical,
                 strip: if vertical {
-                    Rect::new(if rtl { 0.0 } else { cross - width }, MARGIN, width, track)
+                    Rect::new(if rtl { 0.0 } else { cross - width }, end, width, track)
                 } else {
                     // Right to left the vertical bar's corner is on the left.
-                    let start = MARGIN
+                    let start = end
                         + if rtl {
-                            size.width - 2.0 * MARGIN - track
+                            size.width - 2.0 * end - track
                         } else {
                             0.0
                         };
@@ -82,6 +95,7 @@ impl Bar {
                 } * (track - length),
                 length,
                 rtl,
+                active,
             }
         };
         let corner = |other: bool| if other { STRIP } else { 0.0 };
@@ -165,10 +179,14 @@ impl Bar {
         })
     }
 
+    fn thickness(&self) -> f32 {
+        if self.active { THICKNESS } else { THIN }
+    }
+
     fn span(&self, offset: f32, length: f32) -> Rect {
         let s = self.strip;
         if self.vertical {
-            let width = THICKNESS.min(s.size.width);
+            let width = self.thickness().min(s.size.width);
             let x = if self.rtl {
                 s.origin.x + MARGIN.min(s.size.width - width)
             } else {
@@ -176,24 +194,33 @@ impl Bar {
             };
             Rect::new(x, s.origin.y + offset, width, length)
         } else {
-            let height = THICKNESS.min(s.size.height);
+            let height = self.thickness().min(s.size.height);
             let y = (s.origin.y + s.size.height - MARGIN - height).max(s.origin.y);
             Rect::new(s.origin.x + offset, y, length, height)
         }
     }
 }
 
-/// Paints each bar's track and thumb with rounded ends.
+/// Distance along an edge from a corner of `radius` to where the rounded
+/// outline is `inset` away from that edge.
+fn corner_clearance(radius: f32, inset: f32) -> f32 {
+    if radius <= inset {
+        return 0.0;
+    }
+    let across = radius - inset;
+    radius - (radius * radius - across * across).sqrt()
+}
+
+/// Paints each bar's track and thumb as pills.
 pub fn paint(
     builder: &mut SceneBuilder,
     bars: [Option<Bar>; 2],
     [track, thumb]: [Color; 2],
-    radius: f32,
 ) -> Result<(), SceneError> {
-    let radius = radius.min(THICKNESS * 0.5);
     for bar in bars.into_iter().flatten() {
+        let radius = bar.thickness() * 0.5;
         for (rect, color) in [(bar.track_rect(), track), (bar.thumb_rect(), thumb)] {
-            if !rect.is_empty() {
+            if !rect.is_empty() && color.to_rgba()[3] != 0 {
                 builder.fill(RoundedRect::new(rect, radius)?, color)?;
             }
         }

@@ -54,7 +54,7 @@ impl Control for ScrollControl {
             cx.appearance.border_width,
             cx.appearance.border_color,
         )?;
-        bar::paint(cx.builder, cx.bars, cx.bar_color, cx.theme.radius)?;
+        bar::paint(cx.builder, cx.bars, cx.bar_color)?;
         Ok(())
     }
 }

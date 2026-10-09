@@ -172,7 +172,7 @@ impl Control for FieldControl {
             },
         )?;
         cx.builder.pop()?.pop()?;
-        bar::paint(cx.builder, cx.bars, cx.bar_color, cx.theme.radius)?;
+        bar::paint(cx.builder, cx.bars, cx.bar_color)?;
         Ok(())
     }
 }

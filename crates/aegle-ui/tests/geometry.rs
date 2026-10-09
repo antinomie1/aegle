@@ -16,6 +16,8 @@ fn scrollbars_follow_the_offset_and_map_drags_back_to_fractions() {
         Point::new(0.0, 300.0),
         true,
         false,
+        0.0,
+        false,
     );
     assert!(horizontal.is_none());
     let bar = vertical.unwrap();
@@ -42,14 +44,14 @@ fn scrollbars_follow_the_offset_and_map_drags_back_to_fractions() {
 
     // Both axes leave a corner, and an editor never gets a horizontal bar.
     let limit = Point::new(50.0, 50.0);
-    let [v, h] = Bar::layout(size, Point::new(0.0, 0.0), limit, true, false);
+    let [v, h] = Bar::layout(size, Point::new(0.0, 0.0), limit, true, false, 0.0, false);
     assert!(v.unwrap().strip.size.height < size.height - bar::STRIP + 1.0);
     assert!(h.is_some());
-    assert!(Bar::layout(size, Point::new(0.0, 0.0), limit, false, false)[1].is_none());
+    assert!(Bar::layout(size, Point::new(0.0, 0.0), limit, false, false, 0.0, false)[1].is_none());
 
     // Right to left the vertical bar and the corner move to the left edge, and
     // an unscrolled horizontal thumb rests at the right (start) end.
-    let [v, h] = Bar::layout(size, Point::new(0.0, 0.0), limit, true, true);
+    let [v, h] = Bar::layout(size, Point::new(0.0, 0.0), limit, true, true, 0.0, false);
     let (v, h) = (v.unwrap(), h.unwrap());
     assert_eq!(v.strip.origin.x, 0.0);
     assert!(v.thumb_rect().origin.x < bar::STRIP);
@@ -64,13 +66,36 @@ fn scrollbars_follow_the_offset_and_map_drags_back_to_fractions() {
         &mut builder,
         [Some(bar), None],
         [Color::WHITE, Color::BLACK],
-        4.0,
     )
     .unwrap();
     assert_eq!(
         builder.finish().unwrap().commands().len(),
         2,
         "one track and one thumb"
+    );
+
+    // A rounded viewport keeps the bar's ends clear of its corners, and the
+    // bar is thin at rest and full thickness while active.
+    let rounded = |active| {
+        Bar::layout(
+            size,
+            Point::new(0.0, 0.0),
+            Point::new(0.0, 300.0),
+            true,
+            false,
+            24.0,
+            active,
+        )[0]
+        .unwrap()
+    };
+    let (rest, active) = (rounded(false), rounded(true));
+    assert!(rest.strip.origin.y > 10.0, "below the top corner's curve");
+    assert!(rest.strip.origin.y + rest.strip.size.height < size.height - 10.0);
+    assert_eq!(rest.thumb_rect().size.width, 4.0);
+    assert_eq!(active.thumb_rect().size.width, bar::THICKNESS);
+    assert_eq!(
+        rest.strip, active.strip,
+        "hovering doesn't move the hit strip"
     );
 }
 

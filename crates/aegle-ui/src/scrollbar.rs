@@ -33,13 +33,23 @@ impl State {
         } else {
             return [None, None];
         };
+        let radius = self.appearance(id).map_or(0.0, |look| look.radius);
         Bar::layout(
             element.bounds.size,
             element.scroll,
             self.scroll_limit(id),
             horizontal_allowed,
             element.rtl,
+            radius,
+            self.scrollbar_active(id),
         )
+    }
+
+    /// Whether a node's bars draw at full thickness and in the active thumb
+    /// color: its viewport is hovered or its thumb dragged.
+    fn scrollbar_active(&self, id: NodeId) -> bool {
+        self.drag.is_some_and(|drag| drag.node == id)
+            || (self.hover == Some(id) && self.tree.get(id).unwrap().context.control.viewport())
     }
 
     /// Topmost visible bar strip under a window point. Outer scroll views draw
@@ -151,9 +161,7 @@ impl State {
     /// Track and thumb colors from the node's [`Appearance::scrollbar`]: the
     /// active thumb while its viewport is hovered or the thumb dragged.
     pub fn scrollbar_color(&self, id: NodeId, appearance: &Appearance) -> [Color; 2] {
-        let active = self.drag.is_some_and(|drag| drag.node == id)
-            || (self.hover == Some(id) && self.tree.get(id).unwrap().context.control.viewport());
         let [track, rest, hot] = appearance.scrollbar;
-        [track, if active { hot } else { rest }]
+        [track, if self.scrollbar_active(id) { hot } else { rest }]
     }
 }
