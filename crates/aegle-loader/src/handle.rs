@@ -5,7 +5,7 @@ use std::{any::Any, rc::Rc};
 
 use aegle_markup::{PropertyName, Value as Literal};
 use aegle_ui::{Color, ColorSlot, LengthSlot, Node, Result, Style, TokenSlot};
-use aegle_widgets::NodeTooltip;
+use aegle_widgets::NodeWidgets;
 
 use crate::element::Glue;
 

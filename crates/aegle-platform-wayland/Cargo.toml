@@ -21,18 +21,10 @@ wayland-protocols = { version = "0.32.13", features = ["client", "unstable", "st
 
 [features]
 gpu = ["dep:raw-window-handle", "wayland-client/system", "wayland-client/dlopen"]
-example-accessibility = ["aegle-access/unix", "aegle-text/text-a11y"]
 
 [dev-dependencies]
 aegle-dbus.workspace = true
-aegle-access.workspace = true
-aegle-controls = { workspace = true, features = ["text"] }
-aegle-core.workspace = true
-aegle-layout.workspace = true
 wayland-protocols-misc = { version = "0.3.12", features = ["client"] }
-aegle-text = { workspace = true, features = ["scene"] }
-aegle-scene = { workspace = true, features = ["text"] }
-aegle-render-software = { workspace = true, features = ["text"] }
 
 [lints.rust]
 unsafe_code = "warn"

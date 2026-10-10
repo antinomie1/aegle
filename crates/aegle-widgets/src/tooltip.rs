@@ -30,37 +30,26 @@ struct Tooltips {
     orphan: Option<NodeId>,
 }
 
-/// Tooltips on any control.
-pub trait NodeTooltip {
-    /// Shows `text` after the pointer rests on this control (or a descendant
-    /// without its own tooltip) and sets it as the accessible description;
-    /// `None` removes it. Pressing, Escape or leaving hides it.
-    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>);
-}
-
-impl NodeTooltip for Node {
-    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>) {
-        let text = text.into();
-        self.set_accessible_description(text);
-        self.change(|state, id| {
-            state.install(&crate::HOOKS);
-            match text {
-                Some(text) => {
-                    state.ext::<Tooltips>().texts.insert(id, text.to_owned());
-                    // A pointer already resting here starts the delay now.
-                    let hover = state.hover;
-                    hovered(state, hover)?;
-                }
-                None => {
-                    state.ext::<Tooltips>().texts.remove(&id);
-                    if state.ext::<Tooltips>().shown.is_some_and(|s| s.0 == id) {
-                        hide(state)?;
-                    }
+pub(crate) fn set_tooltip(node: &Node, text: Option<&str>) {
+    node.set_accessible_description(text);
+    node.change(|state, id| {
+        state.install(&crate::HOOKS);
+        match text {
+            Some(text) => {
+                state.ext::<Tooltips>().texts.insert(id, text.to_owned());
+                // A pointer already resting here starts the delay now.
+                let hover = state.hover;
+                hovered(state, hover)?;
+            }
+            None => {
+                state.ext::<Tooltips>().texts.remove(&id);
+                if state.ext::<Tooltips>().shown.is_some_and(|s| s.0 == id) {
+                    hide(state)?;
                 }
             }
-            Ok(())
-        })
-    }
+        }
+        Ok(())
+    })
 }
 
 /// The nearest control at or above `node` with a tooltip.

@@ -165,10 +165,12 @@ fn tables_and_content_sized_rows() -> Result {
     assert_eq!(table.rows().count(), 1000);
     assert!(panics(|| drop(ui.root().table(&[], 28.0, 1, |_, _, _| ()))));
 
-    let list = ui.root().variable_list_view(20.0, 100, |row, index| {
-        row.column()
-            .set_height(Some(if index % 2 == 0 { 50.0 } else { 10.0 }))
-    });
+    let list = ui
+        .root()
+        .list_view(RowHeight::Estimate(20.0), 100, |row, index| {
+            row.column()
+                .set_height(Some(if index % 2 == 0 { 50.0 } else { 10.0 }))
+        });
     list.set_height(Some(200.0));
     ui.refresh()?;
     // Rows 0..=5 measured as 50, 10, 50, 10, 50, 10: the extent follows them.

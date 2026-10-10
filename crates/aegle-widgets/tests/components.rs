@@ -48,12 +48,12 @@ fn click(ui: &Ui, at: Point) -> Result {
     ui.dispatch_callbacks()
 }
 
-fn center(node: &aegle_ui::Node) -> Result<Point> {
+fn center(node: &aegle_ui::Node) -> Point {
     let b = node.bounds();
-    Ok(Point::new(
+    Point::new(
         b.origin.x + b.size.width / 2.0,
         b.origin.y + b.size.height / 2.0,
-    ))
+    )
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn range_variants_number_fields_and_separators() -> Result {
     assert!(bounds.size.height > bounds.size.width);
     // Bottom of a vertical slider is its minimum.
     let near_bottom = Point::new(
-        center(&slider)?.x,
+        center(&slider).x,
         bounds.origin.y + bounds.size.height - 2.0,
     );
     click(&ui, near_bottom)?;
@@ -86,7 +86,7 @@ fn range_variants_number_fields_and_separators() -> Result {
     let raised = slider.value();
     // Focused, the wheel steps the slider instead of scrolling.
     ui.wheel(
-        center(&slider)?,
+        center(&slider),
         Point::new(0.0, -32.0),
         Modifiers::default(),
         Instant::now(),
@@ -181,7 +181,7 @@ fn tabs_splitters_and_tooltips() -> Result {
         (tabs.selected(), visible(&pages)?),
         (0, vec![true, false, false])
     );
-    click(&ui, center(&tabs.tab(1).0)?)?;
+    click(&ui, center(&tabs.tab(1).0))?;
     ui.refresh()?;
     assert_eq!(
         (changed.get(), visible(&pages)?),
@@ -224,7 +224,7 @@ fn tabs_splitters_and_tooltips() -> Result {
     ui.refresh()?;
 
     button.set_tooltip(Some("Shows a hint"));
-    ui.pointer(id, PointerKind::Move, center(&button)?, m)?;
+    ui.pointer(id, PointerKind::Move, center(&button), m)?;
     let due = ui.next_wake().expect("a pending tooltip");
     let children = || {
         ui.root()

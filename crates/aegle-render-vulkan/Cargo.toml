@@ -51,5 +51,5 @@ name = "layers"
 required-features = ["text"]
 
 [[example]]
-name = "layer_cost"
+name = "vulkan_layer_cost"
 required-features = ["text"]

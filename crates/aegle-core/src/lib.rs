@@ -5,12 +5,10 @@
 
 mod focus;
 mod id;
-mod route;
 mod state;
 mod tree;
 
 pub use focus::{Focus, FocusChange, FocusDirection, FocusError, FocusPolicy};
 pub use id::NodeId;
-pub use route::{EventControl, EventPhase, Route, RouteError, RouteStep};
 pub use state::{Dirty, TreeError};
 pub use tree::{Children, Tree};

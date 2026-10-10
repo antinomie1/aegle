@@ -57,7 +57,7 @@ button.on_click(move |_| {
 | Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
 | CheckBox / Switch / Radio | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`；CheckBox 另有 `is_mixed`、`set_mixed` |
 | Container（选择/表格） | `radio(text, checked)`、`dropdown(items, selected)`、`table(columns, row_height, rows, cell)`、`variable_list_view(estimate, count, row)` |
-| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeMenu` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回 Menu（`item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
+| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeWidgets` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回 Menu（`item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
 | Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change` |
 | ScrollView | `offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；解引用到 Container |
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |

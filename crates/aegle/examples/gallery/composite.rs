@@ -1,13 +1,13 @@
 //! Choice, popup, table, content-sized list and group effect screenshots.
 use crate::{Setup, hover};
 use aegle::{
-    Color, Container, Key, KeyInput, Modifiers, NodeMenu, NodePopup, Point, Result, TableColumn,
+    Color, Container, Key, KeyInput, Modifiers, NodeWidgets, Point, Result, RowHeight, TableColumn,
     Ui, Widgets,
 };
 use aegle_ui::OrFail;
 
 /// Two overlapping squares, red then blue, at `alpha`.
-fn squares(h: &Container, alpha: u8) -> Result<Container> {
+fn squares(h: &Container, alpha: u8) -> Container {
     let pair = h.row();
     pair.set_gap(0.0, 0.0);
     for (color, offset) in [((220, 40, 40), 0.0), ((40, 80, 220), -24.0)] {
@@ -18,11 +18,11 @@ fn squares(h: &Container, alpha: u8) -> Result<Container> {
         square.set_offset(Point::new(offset, 12.0 + offset / 2.0));
         square.set_background(Color::rgba(color.0, color.1, color.2, alpha));
     }
-    Ok(pair)
+    pair
 }
 
 /// Stripes under a frosted panel that blurs them.
-fn frosted(h: &Container) -> Result {
+fn frosted(h: &Container) {
     let stripes = h.row();
     stripes.set_gap(6.0, 6.0);
     for _ in 0..8 {
@@ -38,7 +38,6 @@ fn frosted(h: &Container) -> Result {
     panel.set_offset(Point::new(20.0, -64.0));
     panel.set_background(Color::rgba(255, 255, 255, 90));
     panel.set_backdrop_blur(4.0);
-    Ok(())
 }
 
 fn enter(ui: &Ui) -> Result {
@@ -55,14 +54,13 @@ fn enter(ui: &Ui) -> Result {
     ui.dispatch_callbacks()
 }
 
-fn group(h: &Container) -> Result {
+fn group(h: &Container) {
     h.radio("Small", false);
     h.radio("Medium", true);
     h.radio("Large", false);
-    Ok(())
 }
 
-fn table(h: &Container) -> Result {
+fn table(h: &Container) {
     let columns = [
         TableColumn {
             title: "Name",
@@ -86,7 +84,6 @@ fn table(h: &Container) -> Result {
         cell.text(&text);
     });
     table.set_height(Some(150.0));
-    Ok(())
 }
 
 type Shot<'a> = &'a dyn Fn(&str, (f32, f32), &[(&str, Setup)]) -> Result;
@@ -97,19 +94,19 @@ pub(crate) fn shots(shot: Shot) -> Result {
         (150.0, 130.0),
         &[
             ("translucent colors", |_, h| {
-                squares(h, 128).map(drop).or_fail()
+                squares(h, 128);
             }),
             ("group opacity 0.5", |_, h| {
-                squares(h, 255).or_fail().set_opacity(0.5);
+                squares(h, 255).set_opacity(0.5);
             }),
-            ("backdrop blur", |_, h| frosted(h).or_fail()),
+            ("backdrop blur", |_, h| frosted(h)),
         ],
     )?;
     shot(
         "radio",
         (150.0, 176.0),
         &[
-            ("group", |_, h| group(h).or_fail()),
+            ("group", |_, h| group(h)),
             ("hovered", |ui, h| {
                 hover(ui, &h.radio("Option", false)).or_fail()
             }),
@@ -128,7 +125,7 @@ pub(crate) fn shots(shot: Shot) -> Result {
             }),
             ("open", |ui, h| {
                 h.dropdown(&["Red", "Green", "Blue"], 1).focus();
-                ui.refresh().or_fail();
+                ui.refresh().unwrap();
                 enter(ui).or_fail()
             }),
             ("focused", |_, h| {
@@ -147,7 +144,7 @@ pub(crate) fn shots(shot: Shot) -> Result {
                 let popup = h.button("Menu").popup();
                 popup.text("Popup content");
                 popup.button("Action");
-                ui.refresh().or_fail();
+                ui.refresh().unwrap();
                 popup.show();
             }),
         ],
@@ -165,9 +162,9 @@ pub(crate) fn shots(shot: Shot) -> Result {
                 recent.item("notes.txt");
                 file.separator();
                 file.check_item("Autosave", true);
-                ui.refresh().or_fail();
+                ui.refresh().unwrap();
                 file.show();
-                ui.refresh().or_fail();
+                ui.refresh().unwrap();
                 recent.show();
             }),
             ("context menu at a point", |ui, h| {
@@ -175,7 +172,7 @@ pub(crate) fn shots(shot: Shot) -> Result {
                 menu.item("Cut");
                 menu.item("Copy").set_enabled(false);
                 menu.item("Paste");
-                ui.refresh().or_fail();
+                ui.refresh().unwrap();
                 menu.show_at(Point::new(40.0, 30.0));
             }),
         ],
@@ -183,13 +180,13 @@ pub(crate) fn shots(shot: Shot) -> Result {
     shot(
         "table",
         (380.0, 200.0),
-        &[("3 columns, 100 rows", |_, h| table(h).or_fail())],
+        &[("3 columns, 100 rows", |_, h| table(h))],
     )?;
     shot(
         "variable-list",
         (260.0, 230.0),
         &[("rows sized to content", |_, h| {
-            let list = h.variable_list_view(24.0, 50, |row, index| {
+            let list = h.list_view(RowHeight::Estimate(24.0), 50, |row, index| {
                 row.set_padding(4.0);
                 let words = ["Short row.", "A longer row that wraps onto two lines here."];
                 row.text(&format!("{index}. {}", words[index % 2]));

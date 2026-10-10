@@ -55,54 +55,44 @@ impl Deref for Popup {
     }
 }
 
-/// Creates popups anchored to a control.
-pub trait NodePopup {
-    /// Creates a hidden, empty popup anchored to this control. Add content
-    /// through the popup's container methods, then [`Popup::show`] it. It uses
-    /// the anchor's theme and the theme surface with a border.
-    fn popup(&self) -> Popup;
-}
-
-impl NodePopup for Node {
-    fn popup(&self) -> Popup {
-        let id = self.change(|state, anchor| {
-            state.install(&crate::HOOKS);
-            let theme = *state.theme_of(anchor);
-            let mut style = container_style(&theme, false);
-            style.position = Position::Absolute;
-            style.inset = Edges {
-                left: LengthPercentageAuto::length(0.0),
-                top: LengthPercentageAuto::length(0.0),
-                right: LengthPercentageAuto::auto(),
-                bottom: LengthPercentageAuto::auto(),
-            };
-            let root = state.root;
-            let group = Group {
-                role: Role::Popup { list: false },
-            };
-            group.retheme(&theme, aegle_ui::LocalLayout::NONE, false, &mut style);
-            let id = state.insert(root, usize::MAX, Box::new(group), style)?;
-            state.set_visible(id, false)?;
-            let anchor_element = &state.tree.get(anchor).unwrap().context;
-            if anchor_element.theme.is_some() {
-                let local = anchor_element.theme.clone();
-                state.propagate_theme(id, local)?;
-            }
-            popups(state).entries.push(PopupEntry {
-                popup: id,
-                anchor,
-                shown: false,
-                restore: None,
-                side: false,
-                at: None,
-            });
-            Ok(id)
+pub(crate) fn popup(anchor: &Node) -> Popup {
+    let id = anchor.change(|state, anchor| {
+        state.install(&crate::HOOKS);
+        let theme = *state.theme_of(anchor);
+        let mut style = container_style(&theme, false);
+        style.position = Position::Absolute;
+        style.inset = Edges {
+            left: LengthPercentageAuto::length(0.0),
+            top: LengthPercentageAuto::length(0.0),
+            right: LengthPercentageAuto::auto(),
+            bottom: LengthPercentageAuto::auto(),
+        };
+        let root = state.root;
+        let group = Group {
+            role: Role::Popup { list: false },
+        };
+        group.retheme(&theme, aegle_ui::LocalLayout::NONE, false, &mut style);
+        let id = state.insert(root, usize::MAX, Box::new(group), style)?;
+        state.set_visible(id, false)?;
+        let anchor_element = &state.tree.get(anchor).unwrap().context;
+        if anchor_element.theme.is_some() {
+            let local = anchor_element.theme.clone();
+            state.propagate_theme(id, local)?;
+        }
+        popups(state).entries.push(PopupEntry {
+            popup: id,
+            anchor,
+            shown: false,
+            restore: None,
+            side: false,
+            at: None,
         });
-        Popup(Container(Node {
-            state: self.state.clone(),
-            id,
-        }))
-    }
+        Ok(id)
+    });
+    Popup(Container(Node {
+        state: anchor.state.clone(),
+        id,
+    }))
 }
 
 impl Popup {

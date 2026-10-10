@@ -58,8 +58,7 @@ pub mod prelude {
     pub use aegle_ui::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
     pub use aegle_widgets::{
         Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, Menu, MenuBar, MenuItem,
-        NodeMenu, NodePopup, NodeTooltip, NumberField, Orientation, Popup, Progress, Radio,
-        ScrollView, Separator, Slider, Splitter, Switch, Table, TableColumn, Tabs, TextField,
-        Widgets,
+        NodeWidgets, NumberField, Orientation, Popup, Progress, Radio, RowHeight, ScrollView,
+        Separator, Slider, Splitter, Switch, Table, TableColumn, Tabs, TextField, Widgets,
     };
 }

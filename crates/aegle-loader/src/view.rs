@@ -38,7 +38,7 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
     if root.kind == ElementKind::Window {
         return Err("a Window document is opened with Program::open".into());
     }
-    program.0.actions.validate(&program.0.checked)?;
+    crate::actions::validate(&program.0.checked)?;
     let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), carried)?;
     let mut ids = vec![None; program.0.checked.ids.len()];
     let (mut block, mut created) = (Block::new(), Vec::new());
@@ -73,7 +73,7 @@ pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
     if root.kind != ElementKind::Window {
         return Err("Program::open requires a Window document root".into());
     }
-    program.0.actions.validate(&program.0.checked)?;
+    crate::actions::validate(&program.0.checked)?;
     let literal = |name| {
         root.properties.iter().find_map(|(n, bound)| match bound {
             Bound::Literal(value) if *n == Prop::Node(name) => Some(value),
@@ -181,7 +181,6 @@ impl View {
     /// document keeps its native window, title and size, and rebuilds its
     /// content; window properties the new version omits keep their values.
     pub fn reload(&mut self, program: &Program) -> Result {
-        program.0.actions.inherit(&self.program.0.actions);
         let states = &self.program.0.checked.templates[0].states;
         let carried = |name: &str, ty: &Type| {
             let index = states.iter().position(|(n, t, _)| n == name && t == ty)?;
@@ -198,7 +197,7 @@ impl View {
             *self = view;
             return Ok(());
         }
-        program.0.actions.validate(&program.0.checked)?;
+        crate::actions::validate(&program.0.checked)?;
         let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), &carried)?;
         let old = std::mem::take(&mut self.content);
         let (old_ids, old_block) = (std::mem::take(&mut self.ids), self.effects.take());

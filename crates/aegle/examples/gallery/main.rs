@@ -26,23 +26,23 @@ const SCALE: f32 = 2.0;
 /// Builds one cell's control into `host` and puts it into the shown state.
 pub(crate) type Setup = fn(&Ui, &Container);
 
-fn center(node: &aegle::Node) -> Result<Point> {
+fn center(node: &aegle::Node) -> Point {
     let bounds = node.bounds();
-    Ok(Point::new(
+    Point::new(
         bounds.origin.x + bounds.size.width / 2.0,
         bounds.origin.y + bounds.size.height / 2.0,
-    ))
+    )
 }
 
 pub(crate) fn hover(ui: &Ui, node: &impl Deref<Target = aegle::Node>) -> Result {
     ui.refresh()?;
-    let at = center(node)?;
+    let at = center(node);
     ui.pointer(PointerId(1), PointerKind::Move, at, Modifiers::default())
 }
 
 fn press(ui: &Ui, node: &impl Deref<Target = aegle::Node>) -> Result {
     hover(ui, node)?;
-    let at = center(node)?;
+    let at = center(node);
     ui.pointer(
         PointerId(1),
         PointerKind::Down { clicks: 1 },
@@ -355,7 +355,7 @@ fn main() -> Result {
                     row.text(&format!("Row {index}"));
                 });
                 list.set_height(Some(140.0));
-                ui.refresh().or_fail();
+                ui.refresh().unwrap();
                 list.scroll_to(Point::new(0.0, 5000.0 * 28.0));
             }),
         ],
@@ -388,7 +388,7 @@ fn main() -> Result {
                 ));
             }
             star.close();
-            let star = star.finish(FillRule::NonZero).or_fail();
+            let star = star.finish(FillRule::NonZero).unwrap();
             let canvas = h.canvas(move |builder, size| {
                 builder
                     .push_transform(Affine::translation(size.width / 2.0, size.height / 2.0)?)?;

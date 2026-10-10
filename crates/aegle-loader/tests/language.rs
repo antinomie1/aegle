@@ -46,7 +46,7 @@ fn compile(main: &str) -> Result<(Program, Notes)> {
     )?;
     let notes = Notes::default();
     let sink = notes.clone();
-    program.action("note", &[Type::String, Type::Int], move |arguments| {
+    aegle_loader::action("note", &[Type::String, Type::Int], move |arguments| {
         let [Data::String(title), Data::Int(n)] = arguments else {
             unreachable!("validated argument types")
         };
@@ -133,7 +133,7 @@ fn programs_check_actions_limits_and_name_the_failing_file() -> Result {
         .expect("unregistered")
         .to_string();
     assert!(error.contains("`go` is not registered"), "{error}");
-    bare.action("go", &[Type::String], |_| Ok(()));
+    aegle_loader::action("go", &[Type::String], |_| Ok(()));
     assert!(
         bare.build(&ui.root())
             .err()
@@ -142,7 +142,7 @@ fn programs_check_actions_limits_and_name_the_failing_file() -> Result {
             .contains("takes")
     );
     assert!(names(&ui)?.is_empty());
-    bare.action("go", &[Type::Int], |_| Ok(()));
+    aegle_loader::action("go", &[Type::Int], |_| Ok(()));
     bare.build(&ui.root())?;
 
     // The statement limit stops a handler and keeps earlier assignments.

@@ -7,7 +7,7 @@ use aegle_layout::{Dimension, FlexDirection, Style};
 use aegle_ui::{Container, Control, Node, Result, State, text_style};
 
 use crate::{
-    NodePopup, Popup, Separator, Widgets,
+    NodeWidgets, Popup, Separator, Widgets,
     group::{Group, Role},
     menu_item::{self, MenuItem, MenuItemControl, item},
     popup::{entry, focus_first, hide_popup, popups, show_popup},
@@ -143,27 +143,14 @@ fn close_menus(state: &mut State) -> Result {
     Ok(())
 }
 
-/// Menus on any control.
-pub trait NodeMenu {
-    /// Creates a hidden menu below this control, shown by [`Popup::show`],
-    /// typically from a button's click handler.
-    fn menu(&self) -> Menu;
-    /// Creates a hidden menu shown where a context menu is requested over
-    /// this control: at a secondary press, or at the focused control for
-    /// the Menu key and Shift+F10 (see [`Node::on_context_menu`]).
-    fn context_menu(&self) -> Menu;
+pub(crate) fn menu(anchor: &Node) -> Menu {
+    Menu::new(anchor, false)
 }
-
-impl NodeMenu for Node {
-    fn menu(&self) -> Menu {
-        Menu::new(self, false)
-    }
-    fn context_menu(&self) -> Menu {
-        let menu = Menu::new(self, false);
-        let shown = menu.clone();
-        self.on_context_menu(move |_, at| shown.show_at(at));
-        menu
-    }
+pub(crate) fn context_menu(anchor: &Node) -> Menu {
+    let menu = Menu::new(anchor, false);
+    let shown = menu.clone();
+    anchor.on_context_menu(move |_, at| shown.show_at(at));
+    menu
 }
 
 /// A row of entries that each open a menu. Once one is open, resting on

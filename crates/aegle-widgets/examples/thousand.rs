@@ -101,9 +101,8 @@ impl MeterHandle {
     fn new(parent: &Container, value: u8) -> Self {
         Self(parent.add(|_, theme| Ok((Box::new(Meter { value }), container_style(theme, false)))))
     }
-    fn set_value(&self, value: u8) -> Result {
+    fn set_value(&self, value: u8) {
         self.update(|meter| meter.value = value);
-        Ok(())
     }
 }
 
@@ -176,7 +175,7 @@ fn main() -> Result {
 
     let (_, time, allocations) = counted(|| {
         for run in 0..RUNS {
-            meters[run as usize % 16].set_value((run % 5) as u8)?;
+            meters[run as usize % 16].set_value((run % 5) as u8);
             frame(&ui)?;
         }
         Ok(())

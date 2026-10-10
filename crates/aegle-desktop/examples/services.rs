@@ -1,5 +1,5 @@
 //! Requests one desktop service and prints the events that follow:
-//! `cargo run -p aegle-desktop --example desktop -- open|save|notify|tray|shortcut`.
+//! `cargo run -p aegle-desktop --example services -- open|save|notify|tray|shortcut`.
 use std::{sync::mpsc, time::Duration};
 
 use aegle_desktop::{Desktop, FileDialog, Icon, MenuItem, Notification, Shortcut, Tray};

@@ -39,7 +39,7 @@ use std::{fmt, fs::File, io::Read, path::Path, rc::Rc};
 use aegle_markup::Span;
 use aegle_ui::{Container, Result};
 
-pub use actions::{Limits, register_shared as action};
+pub use actions::{Limits, action};
 pub use aegle_macros::element;
 pub use aegle_markup as markup;
 #[doc(hidden)]
@@ -103,7 +103,8 @@ impl std::error::Error for RuntimeError {}
 
 /// A checked markup program, shared by every view built from it.
 ///
-/// Clones share one registry of host actions and one set of limits.
+/// Clones share one set of limits; host actions are registered per thread
+/// with [`action`].
 #[derive(Clone)]
 pub struct Program(pub(crate) Rc<Shared>);
 
@@ -111,7 +112,6 @@ pub(crate) struct Shared {
     pub checked: aegle_markup::Program,
     /// The elements of `checked.elements`, in order.
     pub glue: Vec<&'static dyn element::Glue>,
-    pub actions: actions::Actions,
     pub limits: std::cell::Cell<Limits>,
 }
 
@@ -133,7 +133,6 @@ impl Program {
         Self(Rc::new(Shared {
             checked,
             glue,
-            actions: Default::default(),
             limits: Default::default(),
         }))
     }
@@ -177,20 +176,6 @@ impl Program {
     #[doc(hidden)]
     pub fn from_checked(program: markup::Program, elements: &Elements) -> Self {
         Self::new(program, elements)
-    }
-
-    /// Registers a host action that `host.name(...)` statements call, with the
-    /// markup types of its arguments. Building a view fails, before anything is
-    /// mounted, if a call has no action or different argument types. The action
-    /// runs outside every UI borrow, like an event handler; an error it returns
-    /// stops the handler. Registering a name again replaces the action.
-    pub fn action(
-        &self,
-        name: &str,
-        params: &[markup::Type],
-        run: impl FnMut(&[Data]) -> Result + 'static,
-    ) {
-        self.0.actions.register(name, params, run);
     }
 
     /// Replaces the execution limits for views built afterwards.

@@ -59,14 +59,34 @@ impl Deref for ListView {
     }
 }
 
-/// See [`Widgets::list_view`] and [`Widgets::variable_list_view`].
+/// How tall a virtual list's rows are.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RowHeight {
+    /// Every row is this many logical pixels high.
+    Fixed(f32),
+    /// Rows size to their content; rows not yet shown count as this high.
+    /// Shown rows are measured after layout and later rows move accordingly,
+    /// so scrolling back may shift content while estimates are replaced.
+    Estimate(f32),
+}
+
+impl From<f32> for RowHeight {
+    fn from(height: f32) -> Self {
+        Self::Fixed(height)
+    }
+}
+
+/// See [`Widgets::list_view`](crate::Widgets::list_view).
 pub(crate) fn virtual_list(
     container: &Container,
-    row_height: f32,
+    height: RowHeight,
     count: usize,
-    variable: bool,
     row: RowBuilder,
 ) -> ListView {
+    let (row_height, variable) = match height {
+        RowHeight::Fixed(height) => (height, false),
+        RowHeight::Estimate(height) => (height, true),
+    };
     let height = extent(row_height, count);
     let view = container.scroll_view();
     view.change(|state, id| {

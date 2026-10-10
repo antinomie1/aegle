@@ -1,18 +1,17 @@
 //! The cursor follows the control under the pointer, or the one that captured it.
 use aegle_text::{Blob, GenericFamily};
-use aegle_ui::OrFail;
 use aegle_ui::{
     Cursor, Modifiers, Node, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui,
 };
 use aegle_widgets::*;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-fn center(node: &Node) -> Result<Point> {
+fn center(node: &Node) -> Point {
     let bounds = node.bounds();
-    Ok(Point::new(
+    Point::new(
         bounds.origin.x + bounds.size.width / 2.0,
         bounds.origin.y + bounds.size.height / 2.0,
-    ))
+    )
 }
 
 fn pointer(ui: &Ui, kind: PointerKind, position: Point) -> Result {
@@ -20,7 +19,7 @@ fn pointer(ui: &Ui, kind: PointerKind, position: Point) -> Result {
 }
 
 fn cursor_at(ui: &Ui, position: Point) -> Cursor {
-    pointer(ui, PointerKind::Move, position).or_fail();
+    pointer(ui, PointerKind::Move, position).unwrap();
     ui.cursor()
 }
 
@@ -52,33 +51,33 @@ fn cursor_tracks_text_fields_overrides_capture_and_scrollbars() -> Result {
     ui.refresh()?;
 
     assert_eq!(ui.cursor(), Cursor::Default, "no pointer yet");
-    assert_eq!(cursor_at(&ui, center(&label)?), Cursor::Default);
-    assert_eq!(cursor_at(&ui, center(&button)?), Cursor::Default);
-    assert_eq!(cursor_at(&ui, center(&field)?), Cursor::Text);
+    assert_eq!(cursor_at(&ui, center(&label)), Cursor::Default);
+    assert_eq!(cursor_at(&ui, center(&button)), Cursor::Default);
+    assert_eq!(cursor_at(&ui, center(&field)), Cursor::Text);
     field.set_read_only(true);
     assert_eq!(ui.cursor(), Cursor::Text, "read-only text stays selectable");
-    assert_eq!(cursor_at(&ui, center(&disabled)?), Cursor::Default);
+    assert_eq!(cursor_at(&ui, center(&disabled)), Cursor::Default);
 
     // An explicit shape applies to descendants; a field's I-beam still wins over
     // an ancestor's, and its own override wins over both.
     link.set_cursor(Some(Cursor::Pointer));
     assert_eq!(link.cursor(), Some(Cursor::Pointer));
-    assert_eq!(cursor_at(&ui, center(&hand)?), Cursor::Pointer);
-    assert_eq!(cursor_at(&ui, center(&inner)?), Cursor::Text);
+    assert_eq!(cursor_at(&ui, center(&hand)), Cursor::Pointer);
+    assert_eq!(cursor_at(&ui, center(&inner)), Cursor::Text);
     inner.set_cursor(Some(Cursor::Crosshair));
     assert_eq!(ui.cursor(), Cursor::Crosshair);
     inner.set_cursor(None);
     link.set_cursor(None);
     assert_eq!(ui.cursor(), Cursor::Text);
-    assert_eq!(cursor_at(&ui, center(&hand)?), Cursor::Default);
+    assert_eq!(cursor_at(&ui, center(&hand)), Cursor::Default);
 
     // A press captures the pointer, so the shape stays with the field while the
     // drag leaves it, and follows the pointer again after release.
     field.set_read_only(false);
-    let inside = center(&field)?;
+    let inside = center(&field);
     pointer(&ui, PointerKind::Down { clicks: 1 }, inside)?;
-    assert_eq!(cursor_at(&ui, center(&label)?), Cursor::Text);
-    pointer(&ui, PointerKind::Up, center(&label)?)?;
+    assert_eq!(cursor_at(&ui, center(&label)), Cursor::Text);
+    pointer(&ui, PointerKind::Up, center(&label))?;
     assert_eq!(ui.cursor(), Cursor::Default);
 
     // The overlay scrollbar strip is an arrow even over a text area.
@@ -92,13 +91,13 @@ fn cursor_tracks_text_fields_overrides_capture_and_scrollbars() -> Result {
     assert_eq!(cursor_at(&ui, strip), Cursor::Default);
 
     // Hiding or removing the control under a stationary pointer updates it.
-    let under = center(&field)?;
+    let under = center(&field);
     assert_eq!(cursor_at(&ui, under), Cursor::Text);
     field.set_visible(false);
     assert_eq!(ui.cursor(), Cursor::Default);
     field.set_visible(true);
     ui.refresh()?;
-    assert_eq!(cursor_at(&ui, center(&field)?), Cursor::Text);
+    assert_eq!(cursor_at(&ui, center(&field)), Cursor::Text);
     field.remove();
     assert_eq!(
         ui.cursor(),

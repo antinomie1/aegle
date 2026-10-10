@@ -15,16 +15,16 @@ fn ui() -> Result<Ui> {
     Ok(ui)
 }
 
-fn boxed(parent: &Container, width: f32, height: f32) -> Result<Container> {
+fn boxed(parent: &Container, width: f32, height: f32) -> Container {
     let node = parent.column();
     node.set_width(width);
     node.set_height(height);
-    Ok(node)
+    node
 }
 
-fn at(node: &Node) -> Result<(f32, f32, f32, f32)> {
+fn at(node: &Node) -> (f32, f32, f32, f32) {
     let b = node.bounds();
-    Ok((b.origin.x, b.origin.y, b.size.width, b.size.height))
+    (b.origin.x, b.origin.y, b.size.width, b.size.height)
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
     row.set_height(60.0);
     row.set_justify_content(Some(Justify::SpaceBetween));
     row.set_align_items(Some(Align::Center));
-    let (a, b) = (boxed(&row, 50.0, 20.0)?, boxed(&row, 50.0, 40.0)?);
+    let (a, b) = (boxed(&row, 50.0, 20.0), boxed(&row, 50.0, 40.0));
     b.set_align_self(Some(Align::End));
 
     let centered = root.column();
@@ -52,7 +52,7 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
         part.set_grow(grow);
         part.set_height(10.0);
     }
-    let clamped = boxed(&split, 10.0, 10.0)?;
+    let clamped = boxed(&split, 10.0, 10.0);
     clamped.set_grow(1.0);
     clamped.set_max_width(30.0);
 
@@ -60,54 +60,49 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
     flow.set_width(200.0);
     flow.set_gap(4.0, 0.0);
     flow.set_wrap(Wrap::Wrap);
-    let items: Vec<_> = (0..5)
-        .map(|_| boxed(&flow, 60.0, 10.0))
-        .collect::<Result<_>>()?;
+    let items: Vec<_> = (0..5).map(|_| boxed(&flow, 60.0, 10.0)).collect();
 
     let square = root.column();
     square.set_width(30.0);
     square.set_aspect_ratio(Some(2.0));
     square.set_align_self(Some(Align::Start));
 
-    let overlay = boxed(&root, 0.0, 0.0)?;
+    let overlay = boxed(&root, 0.0, 0.0);
     overlay.set_width(Length::Auto);
     overlay.set_height(20.0);
     overlay.set_absolute(Some(Insets::new(Length::Auto, 10.0, 5.0, 10.0)));
     // A contents group's children share the row's space distribution.
     let spread = root.row();
     spread.set_justify_content(Some(Justify::SpaceBetween));
-    let first = boxed(&spread, 10.0, 4.0)?;
+    let first = boxed(&spread, 10.0, 4.0);
     let group = spread.contents();
-    let inner = boxed(&group, 10.0, 4.0)?;
-    let nested = boxed(&group.contents(), 10.0, 4.0)?;
-    let end = boxed(&spread, 10.0, 4.0)?;
+    let inner = boxed(&group, 10.0, 4.0);
+    let nested = boxed(&group.contents(), 10.0, 4.0);
+    let end = boxed(&spread, 10.0, 4.0);
     let reversed = root.row();
     reversed.set_direction(Direction::RowReverse);
-    let last = boxed(&reversed, 20.0, 5.0)?;
+    let last = boxed(&reversed, 20.0, 5.0);
     ui.refresh()?;
 
-    assert_eq!(at(&a)?, (0.0, 20.0, 50.0, 20.0));
-    assert_eq!(at(&b)?, (350.0, 20.0, 50.0, 40.0));
-    assert_eq!(at(&centered)?, (100.0, 65.0, 200.0, 10.0));
+    assert_eq!(at(&a), (0.0, 20.0, 50.0, 20.0));
+    assert_eq!(at(&b), (350.0, 20.0, 50.0, 40.0));
+    assert_eq!(at(&centered), (100.0, 65.0, 200.0, 10.0));
     // 400 px minus the clamped item's 30 px, shared 1:3 from a zero basis.
     assert_eq!(
-        (at(&one)?.2, at(&two)?.2, at(&clamped)?.2),
+        (at(&one).2, at(&two).2, at(&clamped).2),
         (92.5, 277.5, 30.0)
     );
-    let rows: Vec<_> = items
-        .iter()
-        .map(|i| at(i).map(|r| r.1))
-        .collect::<Result<_>>()?;
+    let rows: Vec<_> = items.iter().map(|i| at(i).1).collect();
     assert_eq!(rows[..4], [rows[0], rows[0], rows[0], rows[0] + 14.0]);
-    assert_eq!(at(&square)?.3, 15.0);
-    assert_eq!(at(&overlay)?, (10.0, 275.0, 380.0, 20.0));
-    assert_eq!(at(&last)?.0, 380.0);
-    let xs = [&first, &inner, &nested, &end].map(|n| at(n).map(|r| r.0));
-    assert_eq!(xs.map(|x| x.unwrap()), [0.0, 130.0, 260.0, 390.0]);
+    assert_eq!(at(&square).3, 15.0);
+    assert_eq!(at(&overlay), (10.0, 275.0, 380.0, 20.0));
+    assert_eq!(at(&last).0, 380.0);
+    let xs = [&first, &inner, &nested, &end].map(|n| at(n).0);
+    assert_eq!(xs, [0.0, 130.0, 260.0, 390.0]);
     group.set_visible(false);
     ui.refresh()?;
-    assert_eq!((at(&first)?.0, at(&end)?.0), (0.0, 390.0));
-    assert_eq!(at(&group)?.2, 0.0);
+    assert_eq!((at(&first).0, at(&end).0), (0.0, 390.0));
+    assert_eq!(at(&group).2, 0.0);
     group.set_visible(true);
 
     // Local layout survives a theme change; theme defaults stay elsewhere.
@@ -117,8 +112,8 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
         ..Theme::dark()
     });
     ui.refresh()?;
-    assert_eq!(at(&a)?.0, 0.0);
-    assert_eq!(rows[3] - rows[0], at(&items[3])?.1 - at(&items[0])?.1);
+    assert_eq!(at(&a).0, 0.0);
+    assert_eq!(rows[3] - rows[0], at(&items[3]).1 - at(&items[0]).1);
 
     let invalid: [&dyn Fn(); 8] = [
         &|| flow.set_width(f32::NAN),
@@ -136,7 +131,7 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
     flow.set_margin(-4.0);
     root.set_padding(Insets::new(1.0, 2.0, 3.0, 4.0));
     ui.refresh()?;
-    assert_eq!(at(&a)?.0, 4.0);
+    assert_eq!(at(&a).0, 4.0);
     Ok(())
 }
 
@@ -164,20 +159,20 @@ fn grids_place_span_and_stack_children() -> Result {
     let stack = ui.root().stack();
     stack.set_height(50.0);
     let back = stack.column();
-    let badge = boxed(&stack, 10.0, 10.0)?;
+    let badge = boxed(&stack, 10.0, 10.0);
     badge.set_justify_self(Some(aegle_ui::Align::End));
     badge.set_align_self(Some(aegle_ui::Align::Start));
-    let layered = boxed(&stack.contents(), 8.0, 8.0)?;
+    let layered = boxed(&stack.contents(), 8.0, 8.0);
     layered.set_align_self(Some(aegle_ui::Align::Center));
     layered.set_justify_self(Some(aegle_ui::Align::Center));
-    let moved = boxed(&ui.root(), 6.0, 6.0)?;
+    let moved = boxed(&ui.root(), 6.0, 6.0);
     moved.reparent(&stack);
     moved.set_align_self(Some(aegle_ui::Align::End));
     moved.set_justify_self(Some(aegle_ui::Align::Start));
     ui.refresh()?;
 
     // 400 = 100 + 2 × 10 gap + 2 × 140.
-    let columns: Vec<_> = cells.iter().map(|c| at(c)).collect::<Result<_>>()?;
+    let columns: Vec<_> = cells.iter().map(|c| at(c)).collect();
     assert_eq!(
         columns[..3].iter().map(|c| c.0).collect::<Vec<_>>(),
         [0.0, 110.0, 260.0]
@@ -186,18 +181,18 @@ fn grids_place_span_and_stack_children() -> Result {
         (columns[3].0, columns[3].1, columns[3].3),
         (0.0, 30.0, 20.0)
     );
-    assert_eq!(at(&wide)?, (110.0, 60.0, 290.0, 20.0));
+    assert_eq!(at(&wide), (110.0, 60.0, 290.0, 20.0));
     // Auto-placed after the fourth cell: row 2, column 2 (110..250), end-aligned.
-    assert_eq!(at(&narrow)?, (230.0, 35.0, 20.0, 10.0));
+    assert_eq!(at(&narrow), (230.0, 35.0, 20.0, 10.0));
     // Generated children fill the free cells after the narrow item: row 2,
     // column 3, then row 3, column 1 beside the wide item.
-    assert_eq!((at(&tail[0])?.0, at(&tail[0])?.1), (260.0, 30.0));
-    assert_eq!((at(&tail[1])?.0, at(&tail[1])?.1), (0.0, 60.0));
-    let top = at(&stack)?.1;
-    assert_eq!(at(&back)?, (0.0, top, 400.0, 50.0));
-    assert_eq!(at(&badge)?, (390.0, top, 10.0, 10.0));
-    assert_eq!(at(&moved)?, (0.0, top + 44.0, 6.0, 6.0));
-    assert_eq!(at(&layered)?, (196.0, top + 21.0, 8.0, 8.0));
+    assert_eq!((at(&tail[0]).0, at(&tail[0]).1), (260.0, 30.0));
+    assert_eq!((at(&tail[1]).0, at(&tail[1]).1), (0.0, 60.0));
+    let top = at(&stack).1;
+    assert_eq!(at(&back), (0.0, top, 400.0, 50.0));
+    assert_eq!(at(&badge), (390.0, top, 10.0, 10.0));
+    assert_eq!(at(&moved), (0.0, top + 44.0, 6.0, 6.0));
+    assert_eq!(at(&layered), (196.0, top + 21.0, 8.0, 8.0));
 
     assert!(panics(|| {
         grid.set_columns(&[Track::Fr(-1.0)]);
@@ -218,16 +213,16 @@ fn grids_place_span_and_stack_children() -> Result {
 fn hiding_and_showing_a_stack_keeps_its_layout_mode() -> Result {
     let ui = ui()?;
     let stack = ui.root().stack();
-    let first = boxed(&stack, 10.0, 10.0)?;
-    let second = boxed(&stack, 10.0, 10.0)?;
+    let first = boxed(&stack, 10.0, 10.0);
+    let second = boxed(&stack, 10.0, 10.0);
     ui.refresh()?;
-    let (before_first, before_second) = (at(&first)?, at(&second)?);
+    let (before_first, before_second) = (at(&first), at(&second));
     assert_eq!(before_first, before_second, "stack children overlap");
     stack.set_visible(false);
     ui.refresh()?;
     stack.set_visible(true);
     ui.refresh()?;
-    assert_eq!((at(&first)?, at(&second)?), (before_first, before_second));
+    assert_eq!((at(&first), at(&second)), (before_first, before_second));
     Ok(())
 }
 

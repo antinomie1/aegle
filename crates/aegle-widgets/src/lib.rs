@@ -6,7 +6,8 @@
 //! [`ImageView`], [`Canvas`]. Containers and composites: [`ScrollView`],
 //! [`ListView`] (virtual, equal or content-sized rows), [`Table`], [`Popup`],
 //! [`Dropdown`], [`Menu`] and [`MenuBar`]. Create them through the [`Widgets`]
-//! trait on `Container`, [`NodePopup::popup`], or [`NodeMenu`]. Each control owns its behavior (through `aegle-controls`),
+//! trait on `Container`; [`NodeWidgets`] adds popups, menus and tooltips to
+//! any control. Each control owns its behavior (through `aegle-controls`),
 //! default skin (the pure painters in this crate), layout defaults and semantics;
 //! the engine owns the tree, input routing, focus, scrolling, motion and themes.
 //! Virtual lists, popups and radio groups plug into the engine with [`HOOKS`].
@@ -55,20 +56,20 @@ pub use dropdown::Dropdown;
 pub use field::{FieldControl, TextField};
 pub use group::Group;
 pub use label::{Label, LabelControl};
-pub use list::ListView;
-pub use menu::{Menu, MenuBar, NodeMenu};
+pub use list::{ListView, RowHeight};
+pub use menu::{Menu, MenuBar};
 pub use menu_item::{MenuItem, MenuItemControl};
 pub use number_field::{NumberField, NumberFieldControl};
 pub use numeric::{Progress, Slider};
 pub use paint::{CHEVRON, Mark, ToggleSpec, check_mark, chevron, range, slider_track, toggle};
-pub use popup::{NodePopup, Popup};
+pub use popup::Popup;
 pub use range_control::{Orientation, ProgressControl, SliderControl};
 pub use scroll_view::{ScrollControl, ScrollView};
 pub use separator::{Separator, SeparatorControl, Splitter};
 pub use table::{Table, TableColumn};
 pub use tabs::{Tabs, TabsControl};
 pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
-pub use tooltip::{NodeTooltip, TOOLTIP_DELAY};
+pub use tooltip::TOOLTIP_DELAY;
 pub use visual::{ImageControl, ImageView};
 
 /// The engine hooks the controls need: popups (overlay placement, dismissal and
@@ -166,23 +167,14 @@ pub trait Widgets {
     /// Appends a scrollable column. Children retain their state outside the viewport.
     /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
     fn scroll_view(&self) -> ScrollView;
-    /// Appends a virtual list of `count` rows of `row_height` logical pixels.
-    /// `row` fills an empty row column for an index. It runs during
-    /// [`aegle_ui::Ui::refresh`] outside the UI borrow, so it may use any handle.
-    /// `count × row_height` must not exceed 16,777,216.
+    /// Appends a virtual list of `count` rows: [`RowHeight::Fixed`] (or a plain
+    /// `f32`) rows of one height, or [`RowHeight::Estimate`] rows sized to
+    /// their content. `row` fills an empty row column for an index. It runs
+    /// during [`aegle_ui::Ui::refresh`] outside the UI borrow, so it may use
+    /// any handle. `count × height` must not exceed 16,777,216.
     fn list_view<R: HandlerResult>(
         &self,
-        row_height: f32,
-        count: usize,
-        row: impl FnMut(&Container, usize) -> R + 'static,
-    ) -> ListView;
-    /// Appends a virtual list whose rows size to their content. Rows not yet
-    /// shown count as `estimate` high; shown rows are measured after layout and
-    /// later rows move accordingly. Scrolling back may shift content while
-    /// estimates are replaced. `count × estimate` must not exceed 16,777,216.
-    fn variable_list_view<R: HandlerResult>(
-        &self,
-        estimate: f32,
+        height: impl Into<RowHeight>,
         count: usize,
         row: impl FnMut(&Container, usize) -> R + 'static,
     ) -> ListView;
@@ -253,31 +245,12 @@ impl Widgets for Container {
     }
     fn list_view<R: HandlerResult>(
         &self,
-        row_height: f32,
+        height: impl Into<RowHeight>,
         count: usize,
         mut row: impl FnMut(&Container, usize) -> R + 'static,
     ) -> ListView {
-        list::virtual_list(
-            self,
-            row_height,
-            count,
-            false,
-            Box::new(move |c, i| row(c, i).into_result()),
-        )
-    }
-    fn variable_list_view<R: HandlerResult>(
-        &self,
-        estimate: f32,
-        count: usize,
-        mut row: impl FnMut(&Container, usize) -> R + 'static,
-    ) -> ListView {
-        list::virtual_list(
-            self,
-            estimate,
-            count,
-            true,
-            Box::new(move |c, i| row(c, i).into_result()),
-        )
+        let row = Box::new(move |c: &Container, i| row(c, i).into_result());
+        list::virtual_list(self, height.into(), count, row)
     }
     fn table<R: HandlerResult>(
         &self,
@@ -307,5 +280,40 @@ impl Widgets for Container {
     }
     fn splitter(&self, orientation: Orientation) -> Splitter {
         separator::splitter(self, orientation)
+    }
+}
+
+/// The default controls' additions to every control, like [`Widgets`] for
+/// containers.
+pub trait NodeWidgets {
+    /// Creates a hidden, empty popup anchored to this control. Add content
+    /// through the popup's container methods, then [`Popup::show`] it. It uses
+    /// the anchor's theme and the theme surface with a border.
+    fn popup(&self) -> Popup;
+    /// Creates a hidden menu below this control, shown by [`Popup::show`],
+    /// typically from a button's click handler.
+    fn menu(&self) -> Menu;
+    /// Creates a hidden menu shown where a context menu is requested over
+    /// this control: at a secondary press, or at the focused control for
+    /// the Menu key and Shift+F10 (see [`Node::on_context_menu`]).
+    fn context_menu(&self) -> Menu;
+    /// Shows `text` after the pointer rests on this control (or a descendant
+    /// without its own tooltip) and sets it as the accessible description;
+    /// `None` removes it. Pressing, Escape or leaving hides it.
+    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>);
+}
+
+impl NodeWidgets for Node {
+    fn popup(&self) -> Popup {
+        popup::popup(self)
+    }
+    fn menu(&self) -> Menu {
+        menu::menu(self)
+    }
+    fn context_menu(&self) -> Menu {
+        menu::context_menu(self)
+    }
+    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>) {
+        tooltip::set_tooltip(self, text.into())
     }
 }

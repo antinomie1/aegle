@@ -235,7 +235,7 @@ fn run_steps(steps: &[Step], env: &Env, source: &Handle, run: &mut Run) -> Resul
                     .iter()
                     .map(|argument| value_of(argument, run))
                     .collect::<Result<Vec<_>>>()?;
-                env.shared.actions.call(name, &values, *span)?;
+                crate::actions::call(name, &values, *span)?;
             }
             Step::Emit(index, value) => {
                 let value = value.as_ref().map(|v| value_of(v, run)).transpose()?;

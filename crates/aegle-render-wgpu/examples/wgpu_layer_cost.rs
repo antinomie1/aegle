@@ -1,13 +1,13 @@
 //! Times a 1280×800 frame of stripes alone, with a 480×320 group-opacity
 //! layer, and with a σ=8 backdrop blur under that layer.
 //!
-//! `cargo run --release -p aegle-render-vulkan --features text --example layer_cost`
+//! `cargo run --release -p aegle-render-wgpu --features text --example wgpu_layer_cost`
 //!
 //! Each time covers recording, submission and the GPU work up to a readback
 //! of the frame, which costs the same in every case.
 use std::time::Instant;
 
-use aegle_render_vulkan::{Options, Renderer};
+use aegle_render_wgpu::{Options, Renderer};
 use aegle_scene::{Affine, Color, Layer, Rect, RoundedRect, Scene, SceneBuilder};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -17,10 +17,7 @@ const SIZE: (u32, u32) = (1280, 800);
 fn main() -> Result {
     let (stripes, panel) = scenes()?;
     let mut pixels = vec![0; (SIZE.0 * SIZE.1 * 4) as usize];
-    let mut renderer = Renderer::new(Options {
-        memory_budget: 64 << 20,
-        ..Options::default()
-    })?;
+    let mut renderer = Renderer::new(Options::default())?;
     println!("device: {}", renderer.device_name());
     for (name, layer) in [("plain", None), ("opacity", Some(0.0)), ("blur", Some(8.0))] {
         let mut frame_time = |pixels: &mut [u8]| -> Result<f64> {

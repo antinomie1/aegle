@@ -20,7 +20,7 @@ fn star() -> Result<aegle::scene::Path> {
 }
 
 /// Editors, buttons with a popup, binary and numeric choices, and the theme dropdown.
-fn inputs(window: &Window, column: &Container, status: &Label) -> Result {
+fn inputs(window: &Window, column: &Container, status: &Label) {
     column.text("Aegle showcase").set_font_size(22.0);
     let field = column.text_field("你好，世界 / 日本語 / 한글");
     field.set_accessible_label("Name");
@@ -105,7 +105,6 @@ fn inputs(window: &Window, column: &Container, status: &Label) -> Result {
             _ => Theme::high_contrast(),
         })
     });
-    Ok(())
 }
 
 /// Image, canvas and the scrolling family on one tab, a table on another.
@@ -178,7 +177,7 @@ fn views(pane: &Container) -> Result {
     list.set_height(Some(120.0));
     list.set_grow(1.0);
     let words = ["Short row.", "A longer row that wraps onto a second line."];
-    let variable = column.variable_list_view(24.0, 200, move |row, index| {
+    let variable = column.list_view(RowHeight::Estimate(24.0), 200, move |row, index| {
         row.set_padding(4.0);
         row.text(&format!("{index}. {}", words[index % 2]));
     });
@@ -253,7 +252,7 @@ fn main() -> Result<()> {
         pane.set_gap(10.0, 10.0);
     }
     let status = window.text("Interact with any control.");
-    inputs(&window, left, &status)?;
+    inputs(&window, left, &status);
     views(right)?;
     app.run()
 }

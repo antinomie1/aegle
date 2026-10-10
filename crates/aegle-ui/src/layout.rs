@@ -176,7 +176,12 @@ impl State {
             let focused = self.focus.current(&self.tree) == Some(id);
             let element = &mut self.tree.get_mut(id).unwrap().context;
             let padding = element.inset(&self.theme);
-            let viewport = element.control.text_viewport(element.bounds.size, padding);
+            // An editor's visible text, which scrolling keeps the caret within.
+            let bounds = element.bounds.size;
+            let viewport = aegle_types::Size::new(
+                (bounds.width - padding * 2.0).max(0.0),
+                (bounds.height - padding * 2.0).max(0.0),
+            );
             if let Some(field) = element.control.editor_mut() {
                 let changes = field.editor_mut().take_changes();
                 let caret = field.editor().ime_rect();

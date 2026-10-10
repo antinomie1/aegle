@@ -30,8 +30,8 @@ fn steps(ui: &Ui) -> Result<(Vec<Step>, Vec<Layer>)> {
     Ok((steps, layers))
 }
 
-fn damage(ui: &Ui) -> Result<Vec<Rect>> {
-    Ok(ui.damage().expect("partial damage").rects().to_vec())
+fn damage(ui: &Ui) -> Vec<Rect> {
+    ui.damage().expect("partial damage").rects().to_vec()
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn groups_draw_through_layers_and_damage_their_subtree() -> Result {
     assert_eq!(found, [Scene, Push(0.5, 0.0), Scene, Scene, Scene, Pop]);
     assert_eq!(layers[0].extent(), panel.bounds());
     // The group's whole subtree changes, not only the panel's own record.
-    assert_eq!(damage(&ui)?, [panel.bounds()]);
+    assert_eq!(damage(&ui), [panel.bounds()]);
     ui.clear_damage();
 
     panel.set_opacity(0.0);
@@ -96,7 +96,7 @@ fn groups_draw_through_layers_and_damage_their_subtree() -> Result {
         c.size.height + 28.0,
     );
     assert!(sampled.intersection(near.bounds()).is_some());
-    let rects = damage(&ui)?;
+    let rects = damage(&ui);
     let covers = |r: &Rect| {
         r.origin.x <= sampled.origin.x
             && r.origin.y <= sampled.origin.y

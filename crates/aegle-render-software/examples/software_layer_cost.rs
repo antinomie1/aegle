@@ -1,7 +1,7 @@
 //! Times a 1280×800 frame of stripes alone, with a 480×320 group-opacity
 //! layer, and with a σ=8 backdrop blur under that layer.
 //!
-//! `cargo run --release -p aegle-render-software --example layer_cost`
+//! `cargo run --release -p aegle-render-software --example software_layer_cost`
 use std::time::Instant;
 
 use aegle_render_software::{Renderer, Surface};

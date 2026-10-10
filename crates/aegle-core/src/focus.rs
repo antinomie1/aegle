@@ -1,4 +1,4 @@
-use crate::{NodeId, RouteError, Tree, route::within};
+use crate::{NodeId, Tree};
 
 /// A node's participation in a scoped focus traversal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,27 +36,25 @@ impl FocusChange {
     }
 }
 
-/// Invalid explicit focus request.
+/// Invalid focus request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum FocusError {
-    /// Invalid root, destination or ancestry.
-    Route(RouteError),
+    /// The root or destination is no longer alive.
+    DeadNode,
+    /// The destination is outside the root's subtree.
+    OutsideRoot,
     /// The destination is skipped or an ancestor prunes its subtree.
     NotFocusable,
 }
 
-impl From<RouteError> for FocusError {
-    fn from(error: RouteError) -> Self {
-        Self::Route(error)
-    }
-}
 impl std::fmt::Display for FocusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Route(error) => error.fmt(f),
-            Self::NotFocusable => f.write_str("destination is not eligible for focus"),
-        }
+        f.write_str(match self {
+            Self::DeadNode => "focus root or destination is no longer alive",
+            Self::OutsideRoot => "focus destination is outside the root",
+            Self::NotFocusable => "destination is not eligible for focus",
+        })
     }
 }
 impl std::error::Error for FocusError {}
@@ -99,11 +97,11 @@ impl Focus {
         target: Option<NodeId>,
         mut policy: impl FnMut(NodeId, &T) -> FocusPolicy,
     ) -> Result<FocusChange, FocusError> {
-        tree.get(root).ok_or(RouteError::DeadNode)?;
+        tree.get(root).ok_or(FocusError::DeadNode)?;
         if let Some(target) = target {
-            tree.get(target).ok_or(RouteError::DeadNode)?;
+            tree.get(target).ok_or(FocusError::DeadNode)?;
             if !within(tree, root, target) {
-                return Err(RouteError::OutsideRoot.into());
+                return Err(FocusError::OutsideRoot);
             }
             let mut node = target;
             loop {
@@ -135,8 +133,8 @@ impl Focus {
         direction: FocusDirection,
         wrap: bool,
         mut policy: impl FnMut(NodeId, &T) -> FocusPolicy,
-    ) -> Result<FocusChange, RouteError> {
-        tree.get(root).ok_or(RouteError::DeadNode)?;
+    ) -> Result<FocusChange, FocusError> {
+        tree.get(root).ok_or(FocusError::DeadNode)?;
         self.ancestors.clear();
         let (mut first, mut last, mut before, mut after) = (None, None, None, None);
         let mut found = false;
@@ -186,6 +184,17 @@ impl Focus {
         FocusChange {
             previous,
             current: target,
+        }
+    }
+}
+
+/// Whether `node` is `root` or one of its descendants.
+fn within<T>(tree: &Tree<T>, root: NodeId, mut node: NodeId) -> bool {
+    loop {
+        match tree.parent(node) {
+            Ok(_) if node == root => return true,
+            Ok(Some(parent)) => node = parent,
+            _ => return false,
         }
     }
 }

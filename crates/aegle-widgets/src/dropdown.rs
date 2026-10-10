@@ -4,7 +4,7 @@ use aegle_core::{Dirty, NodeId};
 use aegle_ui::{Container, HandlerResult, Node, Result, State, UiError, handle};
 
 use crate::{
-    NodePopup, Popup, Widgets,
+    NodeWidgets, Popup, Widgets,
     button::Variant,
     group::{Group, Role},
     popup::{entry, hide_popup, popups, show_popup},

@@ -81,7 +81,7 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 GPU 合成复用 text 的图像管线，因此 wgpu 与 Vulkan 的图层需要 `text` feature，未启用时 `push_layer` 返回 `UnsupportedCommand`。Vulkan 在每个层边界提交一次并等待。直接写 swapchain 的路径需要 `TRANSFER_SRC` 才能复制背景，因此创建 swapchain 时只要表面支持就请求该用法；表面不支持时，该路径上的背景模糊返回 `Unsupported` 错误。三个后端的离屏层测试（`tests/layers.rs`）比较同一场景：GPU 与软件结果仅在抗锯齿边缘处不同，平均通道差 RX 6800 XT 为 0.128，lavapipe 为 0.104。窗口路径由 `aegle-app/tests/native.rs` 的 `layers_draw_into_native_windows`（私有 headless Sway，`AEGLE_TEST_COMPOSITOR=private`）覆盖：条纹上一块半透明、σ=4 背景模糊的圆角面板，内含组透明度 0.5 的子树，分别以软件、Vulkan（直接写 sRGB swapchain，复制 swapchain 图像做模糊）与 wgpu 呈现；grim 截图与软件窗口相比，RX 6800 XT 上 Vulkan/wgpu 的平均通道差为 0.055/0.040，lavapipe 上为 0.071/0.034，超过 8 级的像素只有面板圆角上的 21–27 个。
 
-每个后端的代价由 `layer_cost` 示例实测（`cargo run --release -p aegle-render-{software,vulkan,wgpu} [--features text] --example layer_cost`）：1280×800 帧铺满条纹，再加一个 480×320 圆角卡片的组透明度层，或在其下加 σ=8 背景模糊。i5-13600KF 与 RX 6800 XT（RADV）上的中位数：
+每个后端的代价由 `{software,vulkan,wgpu}_layer_cost` 示例实测（`cargo run --release -p aegle-render-<后端> [--features text] --example <后端>_layer_cost`）：1280×800 帧铺满条纹，再加一个 480×320 圆角卡片的组透明度层，或在其下加 σ=8 背景模糊。i5-13600KF 与 RX 6800 XT（RADV）上的中位数：
 
 | 后端 | 无层 | 组透明度层 | 加背景模糊 | 说明 |
 |---|---|---|---|---|

@@ -3,7 +3,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use aegle_markup::{Span, Type};
-use aegle_ui::Result;
+use aegle_ui::{HandlerResult, Result};
 
 use crate::{Data, RuntimeError};
 
@@ -39,88 +39,63 @@ struct Action {
 }
 
 thread_local! {
-    /// Actions for programs that lack their own, such as those `ui!` builds.
-    static SHARED: Actions = Actions::default();
+    /// The host actions of this thread's programs, by name.
+    static ACTIONS: RefCell<HashMap<String, Action>> = RefCell::default();
 }
 
-/// Registers an action for every program on this thread that has none of that
-/// name, which is how `ui!` views reach the host. See [`crate::Program::action`].
-pub fn register_shared(name: &str, params: &[Type], run: impl FnMut(&[Data]) -> Result + 'static) {
-    SHARED.with(|shared| shared.register(name, params, run));
+/// Registers a host action that `host.name(...)` statements of every program
+/// on this thread call, with the markup types of its arguments, replacing an
+/// action of that name. Building a view fails, before anything is mounted, if
+/// a call has no action or different argument types. The action runs outside
+/// every UI borrow, like an event handler; an error it returns stops the
+/// handler.
+pub fn action<R: HandlerResult>(
+    name: &str,
+    params: &[Type],
+    mut run: impl FnMut(&[Data]) -> R + 'static,
+) {
+    let action = Action {
+        params: params.to_vec(),
+        run: Rc::new(RefCell::new(move |arguments: &[Data]| {
+            run(arguments).into_result()
+        })),
+    };
+    ACTIONS.with_borrow_mut(|actions| actions.insert(name.to_owned(), action));
 }
 
-/// Actions registered by the host, shared by every clone of a program.
-#[derive(Default)]
-pub(crate) struct Actions(RefCell<HashMap<String, Action>>);
-
-impl Actions {
-    pub fn register(
-        &self,
-        name: &str,
-        params: &[Type],
-        run: impl FnMut(&[Data]) -> Result + 'static,
-    ) {
-        self.0.borrow_mut().insert(
-            name.to_owned(),
-            Action {
-                params: params.to_vec(),
-                run: Rc::new(RefCell::new(run)),
-            },
-        );
-    }
-
-    /// Copies registrations this registry lacks, so a reload keeps its actions.
-    pub fn inherit(&self, from: &Actions) {
-        let mut mine = self.0.borrow_mut();
-        for (name, action) in from.0.borrow().iter() {
-            mine.entry(name.clone()).or_insert_with(|| Action {
-                params: action.params.clone(),
-                run: action.run.clone(),
-            });
-        }
-    }
-
-    /// Checks every `host.name(...)` call of `program` against the registry.
-    pub fn validate(&self, program: &aegle_markup::Program) -> Result {
-        for call in &program.host_calls {
-            let Some((params, _)) = self.find(&call.name) else {
-                let message = format!("host action `{}` is not registered", call.name);
-                return Err(RuntimeError::new(call.span, message).into());
-            };
-            if params != call.types {
-                let message = format!(
-                    "host action `{}` takes {:?}, called with {:?}",
-                    call.name, params, call.types
-                );
-                return Err(RuntimeError::new(call.span, message).into());
-            }
-        }
-        Ok(())
-    }
-
-    /// This registry's action, else the thread's shared one.
-    fn find(&self, name: &str) -> Option<(Vec<Type>, Run)> {
-        let own = |actions: &Actions| {
-            actions
-                .0
-                .borrow()
-                .get(name)
-                .map(|action| (action.params.clone(), action.run.clone()))
+/// Checks every `host.name(...)` call of `program` against the registry.
+pub(crate) fn validate(program: &aegle_markup::Program) -> Result {
+    for call in &program.host_calls {
+        let Some((params, _)) = find(&call.name) else {
+            let message = format!("host action `{}` is not registered", call.name);
+            return Err(RuntimeError::new(call.span, message).into());
         };
-        own(self).or_else(|| SHARED.with(own))
+        if params != call.types {
+            let message = format!(
+                "host action `{}` takes {:?}, called with {:?}",
+                call.name, params, call.types
+            );
+            return Err(RuntimeError::new(call.span, message).into());
+        }
     }
+    Ok(())
+}
 
-    /// Runs an action; an action must not call itself back through the engine.
-    pub fn call(&self, name: &str, arguments: &[Data], span: Span) -> Result {
-        let (_, run) = self
-            .find(name)
-            .expect("validated when the program was built");
-        let mut run = run.try_borrow_mut().map_err(|_| {
-            RuntimeError::new(
-                span,
-                format!("host action `{name}` was called re-entrantly"),
-            )
-        })?;
-        run(arguments)
-    }
+fn find(name: &str) -> Option<(Vec<Type>, Run)> {
+    ACTIONS.with_borrow(|actions| {
+        let action = actions.get(name)?;
+        Some((action.params.clone(), action.run.clone()))
+    })
+}
+
+/// Runs an action; an action must not call itself back through the engine.
+pub(crate) fn call(name: &str, arguments: &[Data], span: Span) -> Result {
+    let (_, run) = find(name).expect("validated when the program was built");
+    let mut run = run.try_borrow_mut().map_err(|_| {
+        RuntimeError::new(
+            span,
+            format!("host action `{name}` was called re-entrantly"),
+        )
+    })?;
+    run(arguments)
 }
