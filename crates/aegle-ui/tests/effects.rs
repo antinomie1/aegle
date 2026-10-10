@@ -13,7 +13,8 @@ fn shadows_and_gradient_backgrounds() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.resize(Size::new(200.0, 100.0))?;
     let panel = ui.root().column()?;
-    panel.set_size(80.0, 40.0)?;
+    panel.set_width(80.0)?;
+    panel.set_height(40.0)?;
     panel.set_radius(6.0)?;
     panel.set_background(Color::rgb(0, 0, 0))?;
     let stop = |offset, color| GradientStop { offset, color };
@@ -87,7 +88,8 @@ fn shadows_follow_their_transition() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.resize(Size::new(200.0, 100.0))?;
     let card = ui.root().column()?;
-    card.set_size(40.0, 20.0)?;
+    card.set_width(40.0)?;
+    card.set_height(20.0)?;
     ui.refresh()?;
     let linear = Transition::new(Duration::from_millis(100), Easing::Linear);
     card.set_property_transition(TransitionProperty::Shadow, Some(linear))?;

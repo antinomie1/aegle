@@ -8,13 +8,16 @@ fn taps_drags_and_pans_choose_by_what_is_under_the_finger() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
     let view = ui.root().scroll_view()?;
-    view.set_size(Some(200.0), Some(100.0))?;
+    view.set_width(Some(200.0))?;
+    view.set_height(Some(100.0))?;
     view.set_padding(0.0)?;
-    view.set_gap(0.0)?;
+    view.set_gap(0.0, 0.0)?;
     let slider = view.slider(0.0, 100.0, 0.0)?;
-    slider.set_size(Some(200.0), Some(30.0))?;
+    slider.set_width(Some(200.0))?;
+    slider.set_height(Some(30.0))?;
     let button = view.button("")?;
-    button.set_size(Some(180.0), Some(40.0))?;
+    button.set_width(Some(180.0))?;
+    button.set_height(Some(40.0))?;
     for _ in 0..8 {
         view.button("")?.set_height(Some(40.0))?;
     }

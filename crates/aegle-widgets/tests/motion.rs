@@ -152,7 +152,8 @@ fn offsets_move_hit_testing_and_complete_once() -> Result {
     ui.root().set_padding(0.0)?;
     let panel = ui.root().column()?;
     let button = panel.button("")?;
-    button.set_size(Some(40.0), Some(20.0))?;
+    button.set_width(Some(40.0))?;
+    button.set_height(Some(20.0))?;
     ui.resize(Size::new(300.0, 100.0))?;
     panel.set_offset(Point::new(50.0, 0.0))?; // No policy: applies at once.
     ui.refresh()?;
@@ -214,7 +215,8 @@ fn scale_and_rotation_move_scenes_and_hit_testing() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
     let button = ui.root().button("")?;
-    button.set_size(Some(40.0), Some(20.0))?;
+    button.set_width(Some(40.0))?;
+    button.set_height(Some(20.0))?;
     ui.resize(Size::new(300.0, 100.0))?;
     ui.refresh()?;
     let ends = Rc::new(Cell::new(0));
@@ -291,9 +293,10 @@ fn flings_decay_then_stop_at_edges_input_or_reduced_motion() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
     let view = ui.root().scroll_view()?;
-    view.set_size(Some(100.0), Some(100.0))?;
+    view.set_width(Some(100.0))?;
+    view.set_height(Some(100.0))?;
     view.set_padding(0.0)?;
-    view.set_gap(0.0)?;
+    view.set_gap(0.0, 0.0)?;
     for _ in 0..10 {
         view.button("")?.set_height(Some(40.0))?;
     }

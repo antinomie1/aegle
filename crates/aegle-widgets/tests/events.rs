@@ -60,29 +60,31 @@ fn window_key_handler_sees_keys_first_and_can_consume_them() -> Result {
     let last = *seen.borrow().last().unwrap();
     assert_eq!((last.0, last.2), (Key::Enter, true));
 
+    // Handlers accumulate: later ones see keys earlier ones pass on, and one
+    // added during a call runs from the next key.
     let inner = ui.clone();
-    let replaced = Rc::new(Cell::new(false));
-    let flag = replaced.clone();
+    let added = Rc::new(Cell::new(0));
+    let count = added.clone();
+    let mut first = true;
     ui.on_key(move |_| {
-        let flag = flag.clone();
-        inner.on_key(move |_| {
-            flag.set(true);
-            Ok(true)
-        })?;
-        Ok(true)
+        if std::mem::take(&mut first) {
+            let count = count.clone();
+            inner.on_key(move |_| {
+                count.set(count.get() + 1);
+                Ok(false)
+            })?;
+        }
+        Ok(false)
     })?;
     ui.key(key(Key::Enter))?;
+    assert_eq!(added.get(), 0);
     ui.key(key(Key::Enter))?;
-    assert!(replaced.get());
-    ui.clear_on_key()?;
+    assert_eq!(added.get(), 1);
     ui.on_key(|_| Err("fails".into()))?;
     assert!(ui.key(key(Key::Enter)).is_err());
-    // A failing handler stays installed and reports again until it is cleared.
+    // A failing handler stays installed and reports again.
     assert!(ui.key(key(Key::Enter)).is_err());
-    ui.clear_on_key()?;
-    toggle.focus()?;
-    space(&ui)?;
-    assert!(toggle.is_checked()?);
+    assert_eq!(added.get(), 3);
     Ok(())
 }
 
@@ -115,9 +117,5 @@ fn event_handlers_accumulate_and_survive_errors() -> Result {
     button.activate()?;
     assert!(ui.dispatch_callbacks().is_err());
     assert_eq!(log.borrow()[2..], ["first", "second", "late"]);
-    button.clear_on_click()?;
-    button.activate()?;
-    ui.dispatch_callbacks()?;
-    assert_eq!(log.borrow().len(), 5);
     Ok(())
 }

@@ -153,11 +153,6 @@ impl Checker<'_> {
             element.properties.push((prop, value));
         }
         let has = |prop| element.properties.iter().any(|(p, _)| *p == prop);
-        if has(Prop::Node(PropertyName::Easing)) && !has(Prop::Node(PropertyName::Transition)) {
-            return Err(error(
-                "easing requires a transition duration on the same component".into(),
-            ));
-        }
         if let Target::Element(spec) = target
             && let Some(missing) = (0..spec.properties.len())
                 .find(|&index| spec.properties[index].required && !has(Prop::Element(index)))

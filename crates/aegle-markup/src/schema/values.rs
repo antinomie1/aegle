@@ -56,7 +56,6 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "disabled_foreground" => DisabledForeground,
         "font_size" => FontSize,
         "transition" => Transition,
-        "easing" => Easing,
         "indicator_color" => IndicatorColor,
         "tooltip" => Tooltip,
         "paint_transition" => PaintTransition,
@@ -99,7 +98,6 @@ pub fn choices(name: PropertyName) -> &'static [&'static str] {
         Align | AlignSelf | JustifySelf | JustifyItems => ALIGN,
         Justify | AlignContent => JUSTIFY,
         Flow => &["row", "column", "row_dense", "column_dense"],
-        Easing => &["linear", "ease_in", "ease_out", "ease_in_out"],
         Theme => &["light", "dark", "high_contrast"],
         _ => &[],
     }
@@ -160,13 +158,16 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
     }
 }
 
+/// The easing curves a transition timing may name.
+pub(crate) const EASINGS: &[&str] = &["linear", "ease_in", "ease_out", "ease_in_out"];
+
 /// A duration, or a `[duration, easing]` pair.
 fn timing(value: &Literal) -> bool {
     match value {
         Literal::Duration(_) => true,
         Literal::List(items) => {
             matches!(&items[..], [Literal::Duration(_), Literal::Identifier(easing)]
-                if choices(PropertyName::Easing).contains(&easing.as_str()))
+                if EASINGS.contains(&easing.as_str()))
         }
         _ => false,
     }
@@ -312,11 +313,10 @@ pub(crate) fn validate(
         | (Grow | Shrink, Literal::Number(n)) => n.is_finite() && *n >= 0.0,
         (AspectRatio, Literal::Number(n)) => n.is_finite() && *n > 0.0,
         (FontSize, Literal::Length(n)) => n.is_finite() && *n > 0.0,
-        (Transition, Literal::Duration(_)) => true,
         (OffsetX | OffsetY, Literal::Length(n)) | (Rotation, Literal::Number(n)) => n.is_finite(),
         (Scale, Literal::Number(n)) => *n > 0.0 && *n <= 1000.0,
         (
-            PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
+            Transition | PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
             | ShadowTransition | OpacityTransition,
             value,
         ) => timing(value),
@@ -363,7 +363,6 @@ pub(crate) fn validate(
         Padding => "a nonnegative dp length or token(\"package.name\")".into(),
         AspectRatio => "a finite positive number".into(),
         FontSize => "a positive dp length or token(\"package.name\")".into(),
-        Transition => "nonnegative whole milliseconds with the ms suffix".into(),
         Shadow => "[x, y, blur, spread, color] with dp lengths and a nonnegative blur, or \
             token(\"package.name\")"
             .into(),
@@ -373,10 +372,10 @@ pub(crate) fn validate(
             .into(),
         Opacity => "a number in [0, 1]".into(),
         BackdropBlur => "a nonnegative dp length".into(),
-        PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
+        Transition | PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
         | ShadowTransition | OpacityTransition => format!(
             "milliseconds, or [milliseconds, easing] with easing one of {}",
-            choices(Easing).join(", ")
+            EASINGS.join(", ")
         ),
         OffsetX | OffsetY => "a finite dp length".into(),
         Scale => "a number in (0, 1000]".into(),
@@ -387,7 +386,7 @@ pub(crate) fn validate(
         Grow | Shrink => "a finite nonnegative number".into(),
         Visible | Enabled => "true or false".into(),
         Direction | LayoutDirection | Wrap | Align | Justify | AlignContent | AlignSelf
-        | JustifySelf | JustifyItems | Flow | Easing | Theme => choices(name).join(", "),
+        | JustifySelf | JustifyItems | Flow | Theme => choices(name).join(", "),
     };
     Err(format!("{name:?} requires {expected}"))
 }

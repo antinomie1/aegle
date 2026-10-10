@@ -7,8 +7,7 @@ ScrollView {
     border_color: #737D8C
     border_width: 1dp
     radius: 8dp
-    transition: 120ms
-    easing: ease_out
+    transition: [120ms, ease_out]
     Row {
         gap: 4dp
         Text { id: status; text: "等待" }
@@ -22,8 +21,7 @@ ScrollView {
             disabled_foreground: #20242B
             focus_color: #A78BE8
             focus_width: 3dp
-            transition: 120ms
-            easing: ease_in_out
+            transition: [120ms, ease_in_out]
         }
     }
     TextField {

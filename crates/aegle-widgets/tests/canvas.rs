@@ -20,7 +20,8 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     let view = ui.root().scroll_view()?;
     view.set_height(200.0)?;
     let canvas = view.canvas(|_, _| Ok(()))?;
-    canvas.set_size(100.0, 400.0)?;
+    canvas.set_width(100.0)?;
+    canvas.set_height(400.0)?;
     ui.refresh()?;
     // Without input, the wheel scrolls the enclosing view.
     ui.scroll_by(Point::new(50.0, 50.0), Point::new(0.0, 30.0))?;
@@ -32,7 +33,7 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     // The view's padding places the canvas at (4, 4); events are local to it.
     let origin = canvas.bounds()?.origin;
     let local = |x: f32, y: f32| Point::new(x - origin.x, y - origin.y);
-    canvas.on_input(move |_, event| {
+    canvas.set_input(move |_, event| {
         log.borrow_mut().push(event);
         Ok(())
     })?;
@@ -95,12 +96,6 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     // The key press after the pointer press shows focus.
     assert!(canvas.visual_state()?.focused);
     assert!(canvas.appearance()?.focus_width > 0.0);
-    drop(events);
-
-    canvas.clear_on_input()?;
-    assert!(!canvas.visual_state()?.focused);
-    ui.scroll_by(Point::new(50.0, 50.0), Point::new(0.0, 30.0))?;
-    assert_eq!(view.offset()?.y, revealed.y + 30.0);
     Ok(())
 }
 
@@ -111,10 +106,11 @@ fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
     ui.root().set_padding(0.0)?;
     let slider = ui.root().slider(0.0, 10.0, 0.0)?;
     let canvas = ui.root().canvas(|_, _| Ok(()))?;
-    canvas.set_size(100.0, 100.0)?;
+    canvas.set_width(100.0)?;
+    canvas.set_height(100.0)?;
     let events = Rc::new(RefCell::new(Vec::new()));
     let log = events.clone();
-    canvas.on_input(move |_, event| {
+    canvas.set_input(move |_, event| {
         log.borrow_mut().push(event);
         Ok(())
     })?;
@@ -204,7 +200,8 @@ fn canvas_drawing_beyond_its_bounds_is_damaged() -> Result {
         )?;
         Ok(())
     })?;
-    canvas.set_size(20.0, 20.0)?;
+    canvas.set_width(20.0)?;
+    canvas.set_height(20.0)?;
     ui.refresh()?;
     ui.clear_damage()?;
     reach.set(150.0);

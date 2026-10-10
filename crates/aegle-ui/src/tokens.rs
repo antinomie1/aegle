@@ -366,7 +366,7 @@ impl State {
                 self.set_padding(id, typed::<f32>(value)?.map(Insets::all))
             }
             TokenSlot::Length(LengthSlot::Gap) => {
-                self.set_gaps(id, typed::<f32>(value)?.map(|g| (g.into(), g.into())))
+                self.set_gap(id, typed::<f32>(value)?.map(|g| (g.into(), g.into())))
             }
             TokenSlot::Length(slot) => {
                 let length = typed(value)?;

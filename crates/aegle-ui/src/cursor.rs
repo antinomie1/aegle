@@ -107,7 +107,8 @@ impl Node {
     /// Sets the cursor shown over this control and, unless they set their own,
     /// its descendants; `None` restores the default. Text fields keep their
     /// I-beam unless this is set on the field itself.
-    pub fn set_cursor(&self, cursor: Option<Cursor>) -> Result {
+    pub fn set_cursor(&self, cursor: impl Into<Option<Cursor>>) -> Result {
+        let cursor = cursor.into();
         self.change(|state, id| {
             match cursor {
                 Some(cursor) => state.decorations.entry(id).or_default().cursor = Some(cursor),

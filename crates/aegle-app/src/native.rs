@@ -426,36 +426,11 @@ impl Window {
         Ok(())
     }
 
-    /// Applies a new theme to this window without replacing retained controls.
-    /// System preference changes replace a window's theme only while it still
-    /// equals the theme resolved before the change.
-    pub fn set_theme(&self, theme: Theme) -> Result<()> {
-        self.ui()?.set_theme(theme)
-    }
-
-    /// Sets this window's explicit reduced-motion preference. Enabling it snaps
-    /// active transitions to their targets without changing focus or text.
-    /// System changes apply only while the window keeps the previous resolved value.
-    #[cfg(feature = "motion")]
-    pub fn set_reduced_motion(&self, reduced: bool) -> Result<()> {
-        self.ui()?.set_reduced_motion(reduced)
-    }
-
-    /// Installs this window's key handler, which sees every key before the
-    /// focused control; see [`Ui::on_key`].
-    pub fn on_key(
-        &self,
-        handler: impl FnMut(aegle_ui::KeyEvent<'_>) -> Result<bool> + 'static,
-    ) -> Result<()> {
-        self.ui()?.on_key(handler)
-    }
-
-    /// Removes this window's key handler.
-    pub fn clear_on_key(&self) -> Result<()> {
-        self.ui()?.clear_on_key()
-    }
-
-    fn ui(&self) -> Result<Rc<Ui>> {
+    /// This window's engine, for what concerns the whole window rather than
+    /// one control: key handlers, reduced motion, tokens and default
+    /// transitions. Controls keep using their handles; the window's root is
+    /// this handle's [`Container`].
+    pub fn ui(&self) -> Result<Rc<Ui>> {
         let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
         let ui = runtime
             .borrow()

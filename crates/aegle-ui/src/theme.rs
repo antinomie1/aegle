@@ -31,7 +31,8 @@ impl Node {
     /// ancestor's; local layout, font size and visual overrides still win over both.
     /// Created and reparented controls inherit their new parent's resolved theme.
     /// Fails without a change if a bound property rejects its new value.
-    pub fn set_theme(&self, theme: Option<Theme>) -> Result {
+    pub fn set_theme(&self, theme: impl Into<Option<Theme>>) -> Result {
+        let theme = theme.into();
         if let Some(theme) = &theme {
             theme.validate()?;
         }
@@ -41,7 +42,8 @@ impl Node {
     /// snapshot from [`Self::set_theme`], it follows later changes to the parent
     /// or UI theme. `None` removes the override. Nested overrides and local
     /// themes work as for `set_theme`; font size and layout overrides still win.
-    pub fn set_theme_override(&self, theme: Option<ThemeOverride>) -> Result {
+    pub fn set_theme_override(&self, theme: impl Into<Option<ThemeOverride>>) -> Result {
+        let theme = theme.into();
         self.change(|state, id| {
             if let Some(theme) = theme {
                 let parent = state

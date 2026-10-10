@@ -12,8 +12,8 @@ pub struct Handler {
     pub callbacks: Vec<Callback>,
 }
 
-/// Appends `callback` to the handlers of `id`, giving a first handler a new
-/// version so invocations queued before a clear never reach it.
+/// Appends `callback` to the handlers of `id`. A first handler gets a new
+/// version, unique across event kinds, which queued invocations name.
 pub(crate) fn add(
     handlers: &mut HashMap<NodeId, Handler>,
     next_version: &mut u64,
@@ -63,11 +63,15 @@ impl State {
             Box::new(callback),
         )
     }
-    /// Removes every action handler of `id` and invalidates queued invocations.
-    pub fn clear_actions(&mut self, id: NodeId) {
-        self.callbacks.remove(&id);
+    /// Queues the action handlers of `id`, if it has any, to run after the
+    /// current input batch. Controls call it when the user activated them or
+    /// changed their value, including from a handler of another control.
+    pub fn queue_action(&mut self, id: NodeId) {
+        if let Some(handler) = self.callbacks.get(&id) {
+            self.pending.push_back((id, handler.version));
+        }
     }
-    /// The current handler with a queued version; versions are unique across kinds.
+    /// The handler a queued version names; versions are unique across kinds.
     fn handler(&mut self, id: NodeId, version: u64) -> Option<&mut Handler> {
         let current = |h: &&mut Handler| h.version == version;
         if let Some(handler) = self.callbacks.get_mut(&id).filter(current) {

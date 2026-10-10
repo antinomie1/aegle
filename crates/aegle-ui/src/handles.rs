@@ -154,7 +154,11 @@ impl Node {
     }
     /// Supplementary text for assistive technology, such as a tooltip's;
     /// `None` removes it.
-    pub fn set_accessible_description(&self, description: Option<&str>) -> Result {
+    pub fn set_accessible_description<'a>(
+        &self,
+        description: impl Into<Option<&'a str>>,
+    ) -> Result {
+        let description = description.into();
         self.change(|state, id| {
             match description {
                 Some(text) => state.descriptions.insert(id, text.to_owned()),

@@ -80,7 +80,6 @@ fn every_choice_builds_alike() -> Result {
         JustifySelf,
         JustifyItems,
         Flow,
-        Easing,
     ] {
         for choice in choices(name) {
             let key = (format!("{name:?}"), choice.to_string());

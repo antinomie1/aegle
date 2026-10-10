@@ -153,9 +153,10 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
     } else {
         container.row()?
     };
-    root.set_gap(0.0)?;
+    root.set_gap(0.0, 0.0)?;
     root.set_grow(1.0)?;
-    root.set_min_size(0.0, 0.0)?;
+    root.set_min_width(0.0)?;
+    root.set_min_height(0.0)?;
     let first = root.column()?;
     let grip = root.canvas(move |builder, size| {
         let line = if vertical {
@@ -172,15 +173,18 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
     let second = root.column()?;
     for pane in [&first, &second] {
         pane.set_clip(true)?;
-        pane.set_min_size(0.0, 0.0)?;
+        pane.set_min_width(0.0)?;
+        pane.set_min_height(0.0)?;
         pane.set_shrink(1.0)?;
     }
     second.set_basis(0.0)?;
     second.set_grow(1.0)?;
     if vertical {
-        grip.set_size(Length::Auto, GRIP)?;
+        grip.set_width(Length::Auto)?;
+        grip.set_height(GRIP)?;
     } else {
-        grip.set_size(GRIP, Length::Auto)?;
+        grip.set_width(GRIP)?;
+        grip.set_height(Length::Auto)?;
     }
     grip.set_cursor(Some(if vertical {
         Cursor::ResizeVertical
@@ -199,7 +203,7 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
     };
     splitter.set_ratio(0.5)?;
     let this = splitter.clone();
-    grip.on_input(move |grip, event| {
+    grip.set_input(move |grip, event| {
         let along = |p: aegle_types::Point| if vertical { p.y } else { p.x };
         // Right to left the first pane is on the right of a horizontal split.
         let mirror = !vertical && grip.layout_direction()? == aegle_ui::LayoutDirection::Rtl;

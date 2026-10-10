@@ -92,8 +92,8 @@ pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Option<
         Margin => node.set_margin(insets(value)),
         Inset => node.set_absolute(Some(insets(value))),
         Gap => match value {
-            Literal::List(items) => node.set_gaps(length(&items[1]), length(&items[0])),
-            value => node.set_gap(length(value)),
+            Literal::List(items) => node.set_gap(length(&items[0]), length(&items[1])),
+            value => node.set_gap(length(value), length(value)),
         },
         AlignSelf => node.set_align_self(align(value)),
         Direction => container().set_direction(match identifier(value) {

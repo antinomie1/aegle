@@ -195,7 +195,8 @@ fn tabs_splitters_and_tooltips() -> Result {
     assert!(tabs.select(3).is_err());
 
     let split = pages[0].splitter(Orientation::Horizontal)?;
-    split.set_size(300.0, 100.0)?;
+    split.set_width(300.0)?;
+    split.set_height(100.0)?;
     let button = split.first().button("Hint")?;
     ui.refresh()?;
     let half = split.first().bounds()?.size.width;

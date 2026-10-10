@@ -34,13 +34,6 @@ impl Button {
     pub fn on_click(&self, mut callback: impl FnMut(Button) -> Result + 'static) -> Result {
         self.change(|state, id| state.on_action(id, move |node| callback(Button(node))))
     }
-    /// Removes the click handlers and invalidates any already queued invocation.
-    pub fn clear_on_click(&self) -> Result {
-        self.change(|state, id| {
-            state.clear_actions(id);
-            Ok(())
-        })
-    }
 }
 
 /// How a button reads: plain, the face of a dropdown, or a choice inside one.
@@ -114,8 +107,22 @@ impl Control for ButtonControl {
     fn set_enabled(&mut self, _: &mut TextSystem, enabled: bool) -> Outcome {
         self.button.set_enabled(enabled)
     }
-    fn handle(&mut self, _: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
-        Ok(self.button.handle(input))
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+        let mut outcome = self.button.handle(input);
+        if outcome.action.is_some() {
+            // The behavior of composite controls built on buttons.
+            match self.variant {
+                Variant::Plain => {}
+                Variant::Dropdown { .. } => {
+                    // A dropdown's handlers hear only choices.
+                    outcome.action = None;
+                    cx.deferred.push(Box::new(crate::dropdown::toggle));
+                }
+                Variant::Option { .. } => cx.deferred.push(Box::new(crate::dropdown::chosen)),
+                Variant::Tab { .. } => cx.deferred.push(Box::new(crate::tabs::chosen)),
+            }
+        }
+        Ok(outcome)
     }
     fn hover(
         &mut self,

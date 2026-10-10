@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use aegle_core::{Focus, NodeId, Route, Tree};
+use aegle_core::{Focus, NodeId, Tree};
 use aegle_layout::{Dimension, Edges, FlexDirection, LayoutNode, LengthPercentage, Style};
 use aegle_scene::Affine;
 use aegle_text::{Selection, TextSystem};
@@ -139,7 +139,6 @@ impl Ui {
                 focus: Focus::new(),
                 last_focus: None,
                 focus_visible: true,
-                route: Route::new(),
                 capture: None,
                 drag: None,
                 hover: None,
@@ -165,8 +164,7 @@ impl Ui {
                 dispatching: false,
                 callback_version: 0,
                 frames: Vec::new(),
-                key_handler: None,
-                key_version: 0,
+                key_handlers: Vec::new(),
                 input_time: std::time::Instant::now(),
                 clicks: Default::default(),
                 drops: Default::default(),

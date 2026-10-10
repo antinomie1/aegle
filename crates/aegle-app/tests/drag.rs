@@ -111,7 +111,7 @@ fn drags_cross_windows_through_the_compositor() -> Result {
     let canvas = source.canvas(|_, _| Ok(()))?;
     canvas.set_grow(1.0)?;
     let (next, cancels) = (payloads.clone(), cancelled.clone());
-    canvas.on_input(move |canvas, event| match event {
+    canvas.set_input(move |canvas, event| match event {
         CanvasEvent::Move { pressed: true, .. } => match next.borrow_mut().pop() {
             Some(data) => canvas.start_drag(data),
             None => Ok(()),

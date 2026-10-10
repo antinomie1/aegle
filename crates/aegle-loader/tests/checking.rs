@@ -18,14 +18,14 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         visible: true; enabled: true; label: "文档"
         background: #ffffff; foreground: #000000; border_color: #12345678
         border_width: 0dp; radius: 6dp
-        transition: 120ms; easing: ease_out
+        transition: [120ms, ease_out]
         Column {
             Row { gap: 4dp; grow: 1
                 Button { id: save; text: "保存"; width: auto; height: 24dp; font_size: 14dp
                     hover_background: #abcdef; pressed_background: #123456
                     focus_color: #abcdef; focus_width: 2dp
                     disabled_background: #778899; disabled_foreground: #000000
-                    easing: linear; transition: 0ms
+                    transition: [0ms, linear]
                 }
                 Text { id: status; text: "Ready"; offset_x: -2dp; offset_y: 1.5dp
                     scale: 1.25; rotation: -45; paint_transition: [80ms, ease_in]
@@ -70,8 +70,8 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "theme: blue",
         "easing: linear",
         "transition: 120dp",
-        "transition: 1ms; easing: cubic",
-        "transition: 1ms; easing: 100",
+        "transition: [1ms, cubic]",
+        "transition: [1ms, 100]",
         "offset_x: 1dp",
         "Text { offset_x: 1 }",
         "Text { rotation: 1dp }",

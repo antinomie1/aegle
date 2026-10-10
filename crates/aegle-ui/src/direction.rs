@@ -19,7 +19,8 @@ impl Node {
     /// steppers, dropdown marks, splitters) mirror their drawing and arrow keys.
     /// Insets, margins and absolute positions stay physical. Paragraphs still
     /// order mixed-direction text by their own content, as Parley detects it.
-    pub fn set_layout_direction(&self, direction: Option<LayoutDirection>) -> Result {
+    pub fn set_layout_direction(&self, direction: impl Into<Option<LayoutDirection>>) -> Result {
+        let direction = direction.into();
         self.change(|state, id| {
             state.tree.get_mut(id).unwrap().context.direction = direction;
             state.propagate_direction(id)

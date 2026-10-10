@@ -50,13 +50,6 @@ impl TextField {
     pub fn on_submit(&self, mut callback: impl FnMut(TextField) -> Result + 'static) -> Result {
         self.change(|state, id| state.on_action(id, move |node| callback(TextField(node))))
     }
-    /// Removes the submit handlers and any queued invocation.
-    pub fn clear_on_submit(&self) -> Result {
-        self.change(|state, id| {
-            state.clear_actions(id);
-            Ok(())
-        })
-    }
     /// Applies an editor change, then restarts a focused native IME session.
     fn edit(
         &self,

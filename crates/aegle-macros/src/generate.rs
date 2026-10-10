@@ -283,7 +283,6 @@ fn timing(name: PropertyName) -> bool {
     matches!(
         name,
         Transition
-            | Easing
             | PaintTransition
             | OffsetTransition
             | ScaleTransition

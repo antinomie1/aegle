@@ -10,14 +10,15 @@ use aegle_ui::{
 fn ui() -> Result<Ui> {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
-    ui.root().set_gap(0.0)?;
+    ui.root().set_gap(0.0, 0.0)?;
     ui.resize(Size::new(400.0, 300.0))?;
     Ok(ui)
 }
 
 fn boxed(parent: &Container, width: f32, height: f32) -> Result<Container> {
     let node = parent.column()?;
-    node.set_size(width, height)?;
+    node.set_width(width)?;
+    node.set_height(height)?;
     Ok(node)
 }
 
@@ -31,18 +32,20 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
     let ui = ui()?;
     let root = ui.root();
     let row = root.row()?;
-    row.set_size(Length::Percent(100.0), 60.0)?;
+    row.set_width(Length::Percent(100.0))?;
+    row.set_height(60.0)?;
     row.set_justify_content(Some(Justify::SpaceBetween))?;
     row.set_align_items(Some(Align::Center))?;
     let (a, b) = (boxed(&row, 50.0, 20.0)?, boxed(&row, 50.0, 40.0)?);
     b.set_align_self(Some(Align::End))?;
 
     let centered = root.column()?;
-    centered.set_size(Length::Percent(50.0), 10.0)?;
+    centered.set_width(Length::Percent(50.0))?;
+    centered.set_height(10.0)?;
     centered.set_margin(Insets::symmetric(Length::Auto, 5.0))?;
 
     let split = root.row()?;
-    split.set_gap(0.0)?;
+    split.set_gap(0.0, 0.0)?;
     let (one, two) = (split.column()?, split.column()?);
     for (part, grow) in [(&one, 1.0), (&two, 3.0)] {
         part.set_basis(0.0)?;
@@ -55,7 +58,7 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
 
     let flow = root.row()?;
     flow.set_width(200.0)?;
-    flow.set_gaps(0.0, 4.0)?;
+    flow.set_gap(4.0, 0.0)?;
     flow.set_wrap(Wrap::Wrap)?;
     let items: Vec<_> = (0..5)
         .map(|_| boxed(&flow, 60.0, 10.0))
@@ -67,7 +70,8 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
     square.set_align_self(Some(Align::Start))?;
 
     let overlay = boxed(&root, 0.0, 0.0)?;
-    overlay.set_size(Length::Auto, 20.0)?;
+    overlay.set_width(Length::Auto)?;
+    overlay.set_height(20.0)?;
     overlay.set_absolute(Some(Insets::new(Length::Auto, 10.0, 5.0, 10.0)))?;
     // A contents group's children share the row's space distribution.
     let spread = root.row()?;
@@ -120,7 +124,7 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
         flow.set_width(f32::NAN),
         flow.set_width(-1.0),
         flow.set_padding(Length::Auto),
-        flow.set_gap(Length::Auto),
+        flow.set_gap(Length::Auto, Length::Auto),
         flow.set_aspect_ratio(Some(0.0)),
         flow.set_shrink(-1.0),
         flow.set_margin(f32::INFINITY),
@@ -140,17 +144,17 @@ fn flex_alignment_sizing_wrap_and_absolute_placement() -> Result {
 fn grids_place_span_and_stack_children() -> Result {
     use aegle_ui::{Placement, Track};
     let ui = ui()?;
-    let grid = ui
-        .root()
-        .grid(&[Track::Px(100.0), Track::Fr(1.0), Track::Fr(1.0)])?;
-    grid.set_gap(10.0)?;
+    let grid = ui.root().grid()?;
+    grid.set_columns(&[Track::Px(100.0), Track::Fr(1.0), Track::Fr(1.0)])?;
+    grid.set_gap(10.0, 10.0)?;
     grid.set_auto_rows(&[Track::Px(20.0)])?;
     let cells: Vec<_> = (0..4).map(|_| grid.column()).collect::<Result<_>>()?;
     let wide = grid.column()?;
     wide.set_grid_column(Placement::at(2).spanning(2))?;
     wide.set_grid_row(Placement::at(3))?;
     let narrow = grid.column()?;
-    narrow.set_size(20.0, 10.0)?;
+    narrow.set_width(20.0)?;
+    narrow.set_height(10.0)?;
     narrow.set_justify_self(Some(aegle_ui::Align::End))?;
     narrow.set_align_self(Some(aegle_ui::Align::Center))?;
 

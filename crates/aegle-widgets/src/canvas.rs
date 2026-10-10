@@ -122,7 +122,7 @@ pub enum CanvasEvent {
 /// The control inside a [`Canvas`] node.
 pub struct CanvasControl {
     painter: Box<Painter>,
-    /// Takes focus and receives input, see [`Canvas::on_input`].
+    /// Takes focus and receives input, see [`Canvas::set_input`].
     interactive: bool,
     /// The pointer that pressed on this canvas.
     pressed: Option<PointerId>,
@@ -153,16 +153,16 @@ impl Canvas {
     /// outline, captures the pointer from a press until release, consumes
     /// wheel input over it and receives keys while focused. Events of one
     /// input batch are delivered in order after it, outside every UI borrow,
-    /// like other callbacks. Unlike event handlers, the input callback is the
-    /// canvas's behavior, so it replaces any previous one.
-    pub fn on_input(
+    /// like other callbacks. The input callback is the canvas's behavior, so
+    /// like [`Self::set_painter`] it replaces any previous one.
+    pub fn set_input(
         &self,
         mut callback: impl FnMut(Canvas, CanvasEvent) -> Result + 'static,
     ) -> Result {
         self.change(|state, id| {
             state.control_as::<CanvasControl>(id).unwrap().interactive = true;
             state.tree.mark_dirty(id, Dirty::ALL)?;
-            state.clear_actions(id);
+            state.callbacks.remove(&id);
             state.on_action(id, move |node| {
                 let events = node.change(|state, id| {
                     Ok(std::mem::take(
@@ -174,20 +174,6 @@ impl Canvas {
                 }
                 Ok(())
             })
-        })
-    }
-    /// Stops input: the canvas leaves Tab order and drops queued events.
-    pub fn clear_on_input(&self) -> Result {
-        self.change(|state, id| {
-            state.clear_actions(id);
-            let canvas = state.control_as::<CanvasControl>(id).unwrap();
-            canvas.interactive = false;
-            canvas.events.clear();
-            if state.focus.current(&state.tree) == Some(id) {
-                state.set_focus(None)?;
-            }
-            state.tree.mark_dirty(id, Dirty::ALL)?;
-            Ok(())
         })
     }
 }

@@ -15,7 +15,7 @@ fn ui() -> Result<Ui> {
 }
 
 #[test]
-fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
+fn frame_callbacks_run_per_frame_until_stopped_or_removed() -> Result {
     let ui = ui()?;
     assert!(!ui.wants_frames()?);
     let log = Rc::new(RefCell::new(Vec::new()));
@@ -26,7 +26,8 @@ fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
         node.on_frame(move |node, now| {
             log.borrow_mut().push((name, now));
             // The UI is not borrowed: callbacks may change controls.
-            node.set_width(10.0)
+            node.set_width(10.0)?;
+            Ok(true)
         })?;
     }
     assert!(ui.wants_frames()? && ui.refresh()?);
@@ -41,25 +42,26 @@ fn frame_callbacks_run_per_frame_until_cleared_or_removed() -> Result {
             ("b", start + Duration::from_millis(16))
         ]
     );
-    // Callbacks accumulate; one that clears and replaces them keeps only the
-    // replacement, which first runs on the next frame.
-    let replaced = Rc::new(Cell::new(0));
-    let count = replaced.clone();
+    // Callbacks accumulate; one returning false stops, and one added during a
+    // frame first runs on the next frame.
+    let added = Rc::new(Cell::new(0));
+    let count = added.clone();
     a.on_frame(move |node, _| {
         let count = count.clone();
-        node.clear_on_frame()?;
         node.on_frame(move |_, _| {
             count.set(count.get() + 1);
-            Ok(())
-        })
+            Ok(true)
+        })?;
+        Ok(false)
     })?;
     b.remove()?;
     log.borrow_mut().clear();
     ui.run_frame(start)?;
     ui.run_frame(start)?;
-    assert_eq!((replaced.get(), log.borrow().len()), (1, 1));
-    a.clear_on_frame()?;
-    a.on_frame(|_, _| Err("stop".into()))?;
+    assert_eq!((added.get(), log.borrow().len()), (1, 2));
+    a.remove()?;
+    let c = ui.root().column()?;
+    c.on_frame(|_, _| Err("stop".into()))?;
     assert!(ui.run_frame(start).is_err());
     assert!(!ui.wants_frames()?);
     Ok(())
@@ -71,9 +73,11 @@ fn presses_count_into_double_and_triple_clicks() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.resize(Size::new(200.0, 200.0))?;
     let row = ui.root().row()?;
-    row.set_size(100.0, 40.0)?;
+    row.set_width(100.0)?;
+    row.set_height(40.0)?;
     let inner = row.column()?;
-    inner.set_size(40.0, 40.0)?;
+    inner.set_width(40.0)?;
+    inner.set_height(40.0)?;
     ui.refresh()?;
     let hits = Rc::new(Cell::new(0));
     let count = hits.clone();

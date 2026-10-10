@@ -132,7 +132,7 @@ fn local_appearance_keeps_shared_state_and_font_overrides() -> Result {
         Ok(())
     })?;
     assert!(local_runs > 0);
-    field.clear_font_size()?;
+    field.set_font_size(None)?;
     field.set_style(Style::default())?;
     assert_eq!(field.appearance()?.background, Color::BLACK);
     field.set_skin(None)?;

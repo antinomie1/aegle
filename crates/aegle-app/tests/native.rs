@@ -120,14 +120,16 @@ fn layers_draw_into_native_windows() -> Result {
     let window = app.window_with_options("Layers", options)?;
     window.set_background(Color::WHITE)?;
     let stripes = window.row()?;
-    stripes.set_gap(6.0)?;
+    stripes.set_gap(6.0, 6.0)?;
     for _ in 0..12 {
         let stripe = stripes.column()?;
-        stripe.set_size(8.0, 120.0)?;
+        stripe.set_width(8.0)?;
+        stripe.set_height(120.0)?;
         stripe.set_background(Color::rgb(40, 80, 220))?;
     }
     let panel = window.column()?;
-    panel.set_size(120.0, 60.0)?;
+    panel.set_width(120.0)?;
+    panel.set_height(60.0)?;
     panel.set_radius(10.0)?;
     panel.set_offset(Point::new(40.0, -110.0))?;
     panel.set_background(Color::rgba(255, 255, 255, 90))?;
@@ -136,7 +138,8 @@ fn layers_draw_into_native_windows() -> Result {
     group.set_opacity(0.5)?;
     for color in [Color::rgb(220, 40, 40), Color::rgb(40, 160, 60)] {
         let square = group.column()?;
-        square.set_size(24.0, 24.0)?;
+        square.set_width(24.0)?;
+        square.set_height(24.0)?;
         square.set_background(color)?;
     }
     let hold = std::env::var("AEGLE_TEST_HOLD_MS").map_or(600, |ms| ms.parse().unwrap());

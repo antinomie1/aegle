@@ -8,7 +8,7 @@ use std::{
 };
 
 use aegle_controls::PointerId;
-use aegle_core::{Focus, NodeId, Route, Tree};
+use aegle_core::{Focus, NodeId, Tree};
 use aegle_layout::LayoutNode;
 use aegle_scene::Scene;
 use aegle_text::{TextStyle, TextSystem};
@@ -160,8 +160,6 @@ pub struct State {
     /// Whether focus shows its indicator: a key press turns it on, a pointer
     /// press off. Editors show their focus either way.
     pub focus_visible: bool,
-    /// Pointer route of the press in progress.
-    pub route: Route,
     /// Pointer capture: the pointer and its target.
     pub capture: Option<(PointerId, NodeId)>,
     /// Scrollbar drag in progress.
@@ -207,14 +205,12 @@ pub struct State {
     pub pending: VecDeque<(NodeId, u64)>,
     /// A callback queue is being drained.
     pub dispatching: bool,
-    /// Bumped when callbacks are replaced during dispatch.
+    /// Source of handler versions; a queued invocation names the version it targets.
     pub callback_version: u64,
     /// Per-frame callbacks in registration order, see [`crate::Node::on_frame`].
     pub frames: Vec<crate::events::FrameHandler>,
-    /// The window key handler, see [`crate::Ui::on_key`].
-    pub key_handler: Option<crate::events::KeyHandler>,
-    /// Replacement count of the key handler, so one installed during a call survives.
-    pub key_version: u64,
+    /// Window key handlers in registration order, see [`crate::Ui::on_key`].
+    pub key_handlers: Vec<crate::events::KeyHandler>,
     /// When the input being dispatched was reported.
     pub input_time: std::time::Instant,
     /// Press counting and double-click handlers.

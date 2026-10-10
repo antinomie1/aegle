@@ -95,7 +95,8 @@ fn main() -> Result<()> {
         )?;
         Ok(())
     })?;
-    viewport.set_size(320.0, 240.0)?;
+    viewport.set_width(320.0)?;
+    viewport.set_height(240.0)?;
     let frames = Rc::new(Cell::new(0u32));
     let label = window.text("")?;
     let (start, view) = (Instant::now(), texture.create_view(&Default::default()));
@@ -133,7 +134,8 @@ fn main() -> Result<()> {
         label.set_text(&format!(
             "Frames rendered into the texture: {}",
             count.get()
-        ))
+        ))?;
+        Ok(true)
     })?;
     app.run()
 }

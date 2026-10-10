@@ -51,10 +51,10 @@ Row {
     Grid { flow: column; columns: [10dp, 10dp]; rows: [10dp, 10dp]; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #00A000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
     Grid { flow: row_dense; columns: [10dp, 10dp]; rows: [10dp, 10dp]; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #00A000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
     Grid { flow: column_dense; columns: [10dp, 10dp]; rows: [10dp, 10dp]; Column { width: 10dp; height: 10dp; background: #C00000 }; Column { width: 10dp; height: 10dp; background: #00A000 }; Column { width: 10dp; height: 10dp; background: #0000C0 } }
-    Column { id: linear; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: linear; offset_transition: [80ms, linear] }
-    Column { id: ease_in; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: ease_in; offset_transition: [80ms, ease_in] }
-    Column { id: ease_out; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: ease_out; offset_transition: [80ms, ease_out] }
-    Column { id: ease_in_out; width: 10dp; height: 10dp; background: #C00000; transition: 50ms; easing: ease_in_out; offset_transition: [80ms, ease_in_out] }
+    Column { id: linear; width: 10dp; height: 10dp; background: #C00000; transition: [50ms, linear]; offset_transition: [80ms, linear] }
+    Column { id: ease_in; width: 10dp; height: 10dp; background: #C00000; transition: [50ms, ease_in]; offset_transition: [80ms, ease_in] }
+    Column { id: ease_out; width: 10dp; height: 10dp; background: #C00000; transition: [50ms, ease_out]; offset_transition: [80ms, ease_out] }
+    Column { id: ease_in_out; width: 10dp; height: 10dp; background: #C00000; transition: [50ms, ease_in_out]; offset_transition: [80ms, ease_in_out] }
     Splitter { orientation: horizontal; width: 40dp; height: 40dp; Column { background: #C00000 }; Column { background: #0000C0 } }
     Slider { orientation: horizontal; width: 40dp; height: 40dp; value: 0.25 }
     Splitter { orientation: vertical; width: 40dp; height: 40dp; Column { background: #C00000 }; Column { background: #0000C0 } }

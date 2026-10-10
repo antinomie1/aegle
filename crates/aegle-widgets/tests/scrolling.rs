@@ -27,13 +27,15 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     ui.root().set_padding(0.0)?;
     let outer = ui.root().scroll_view()?;
-    outer.set_size(Some(200.0), Some(100.0))?;
+    outer.set_width(Some(200.0))?;
+    outer.set_height(Some(100.0))?;
     outer.set_padding(8.0)?;
-    outer.set_gap(4.0)?;
+    outer.set_gap(4.0, 4.0)?;
     let inner = outer.scroll_view()?;
-    inner.set_size(Some(180.0), Some(60.0))?;
+    inner.set_width(Some(180.0))?;
+    inner.set_height(Some(60.0))?;
     inner.set_padding(4.0)?;
-    inner.set_gap(4.0)?;
+    inner.set_gap(4.0, 4.0)?;
     let first = inner.button("first")?;
     let second = inner.button("second")?;
     let third = inner.button("third")?;
@@ -185,7 +187,8 @@ fn overlay_scrollbar_drags_above_children_without_activating_them() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
     let view = ui.root().scroll_view()?;
-    view.set_size(Some(200.0), Some(100.0))?;
+    view.set_width(Some(200.0))?;
+    view.set_height(Some(100.0))?;
     let clicks = Rc::new(Cell::new(0));
     for _ in 0..3 {
         let count = clicks.clone();
@@ -240,7 +243,8 @@ fn overflowing_viewports_reserve_the_bar_and_draw_their_border_last() -> Result 
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.root().set_padding(0.0)?;
     let view = ui.root().scroll_view()?;
-    view.set_size(Some(200.0), Some(100.0))?;
+    view.set_width(Some(200.0))?;
+    view.set_height(Some(100.0))?;
     view.set_padding(4.0)?;
     let buttons = [view.button("")?, view.button("")?, view.button("")?];
     for button in &buttons {

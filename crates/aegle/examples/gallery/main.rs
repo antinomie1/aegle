@@ -65,7 +65,7 @@ fn gallery(
         ui.resize(cell)?;
         let root = ui.root();
         root.set_padding(12.0)?;
-        root.set_gap(8.0)?;
+        root.set_gap(8.0, 8.0)?;
         let label = root.text(caption)?;
         label.set_font_size(11.0)?;
         label.set_foreground(theme.muted)?;
@@ -302,7 +302,8 @@ fn main() -> Result {
             }),
             ("both axes", |_, h| {
                 let view = h.scroll_view()?;
-                view.set_size(Some(190.0), Some(110.0))?;
+                view.set_width(Some(190.0))?;
+                view.set_height(Some(110.0))?;
                 for i in 1..=6 {
                     view.text(&format!("Row {i}: a line wider than the viewport"))?
                         .set_width(Some(320.0))?;
@@ -336,8 +337,10 @@ fn main() -> Result {
         (160.0, 120.0),
         &[
             ("pixel size", |_, h| h.image(&gradient()?).map(drop)),
-            ("set_size 96x48", |_, h| {
-                h.image(&gradient()?)?.set_size(Some(96.0), Some(48.0))
+            ("96x48", |_, h| {
+                let image = h.image(&gradient()?)?;
+                image.set_width(96.0)?;
+                image.set_height(48.0)
             }),
         ],
     )?;
@@ -364,7 +367,8 @@ fn main() -> Result {
                 builder.pop()?;
                 Ok(())
             })?;
-            canvas.set_size(Some(64.0), Some(64.0))
+            canvas.set_width(64.0)?;
+            canvas.set_height(64.0)
         })],
     )?;
     shot(

@@ -59,13 +59,6 @@ impl Slider {
     pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
         self.change(|state, id| state.on_action(id, move |node| callback(Self(node))))
     }
-    /// Removes the handlers and invalidates their queued invocations.
-    pub fn clear_on_change(&self) -> Result {
-        self.change(|state, id| {
-            state.clear_actions(id);
-            Ok(())
-        })
-    }
 }
 
 fn read_range<T>(node: &Node, read: impl FnOnce(&Range) -> T) -> Result<T> {

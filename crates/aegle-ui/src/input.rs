@@ -10,7 +10,7 @@ use aegle_controls::{
     Action, Capture, Clipboard, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,
     PointerKind,
 };
-use aegle_core::{Dirty, EventPhase, FocusChange, FocusDirection, NodeId};
+use aegle_core::{Dirty, FocusChange, FocusDirection, NodeId};
 use aegle_text::ImeEdit;
 use aegle_types::{Point, PointerButton};
 
@@ -260,17 +260,9 @@ impl State {
         if !self.usable(target) {
             return Ok(());
         }
-        let mut route = std::mem::take(&mut self.route);
-        route.rebuild(&self.tree, self.root, target)?;
-        let mut result = Ok(());
-        for step in route.iter() {
-            if step.phase == EventPhase::Target {
-                result = self
-                    .control(target, input)
-                    .and_then(|outcome| self.effects(target, outcome));
-            }
-        }
-        self.route = route;
+        let result = self
+            .control(target, input)
+            .and_then(|outcome| self.effects(target, outcome));
         if !matches!(input, Input::Ime(_)) {
             self.input_method = false;
         }
@@ -337,9 +329,8 @@ impl State {
         if matches!(
             outcome.action,
             Some(Action::Activate | Action::Submit | Action::Change)
-        ) && let Some(handler) = self.callbacks.get(&target)
-        {
-            self.pending.push_back((target, handler.version));
+        ) {
+            self.queue_action(target);
         }
         Ok(())
     }

@@ -82,8 +82,8 @@ pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result 
     match name {
         JustifySelf => node.set_justify_self(align(value)),
         JustifyItems => container().set_justify_items(align(value)),
-        Columns => container().set_column_template(&template()),
-        Rows => container().set_row_template(&template()),
+        Columns => container().set_columns(&template()),
+        Rows => container().set_rows(&template()),
         AutoColumns => container().set_auto_columns(&tracks()),
         AutoRows => container().set_auto_rows(&tracks()),
         Flow => container().set_flow(match identifier(value) {

@@ -10,7 +10,8 @@ impl Ui {
     /// theme, as [`Self::set_theme`] would, and cannot be cleared. Bound
     /// properties follow; if one rejects the new value, the change is undone
     /// and its error returned.
-    pub fn set_token<T: TokenType>(&self, token: Token<T>, value: Option<T>) -> Result {
+    pub fn set_token<T: TokenType>(&self, token: Token<T>, value: impl Into<Option<T>>) -> Result {
+        let value = value.into();
         if check(token)? {
             let value = value.ok_or(UiError::InvalidValue)?.into_value();
             let theme = self.theme()?.with_token(token.index(), value).unwrap();
@@ -42,7 +43,8 @@ impl Node {
     /// hide custom tokens. A built-in token is a sparse
     /// [`Self::set_theme_override`] entry, which replaces a local theme
     /// snapshot. Bound properties follow, as for [`Ui::set_token`].
-    pub fn set_token<T: TokenType>(&self, token: Token<T>, value: Option<T>) -> Result {
+    pub fn set_token<T: TokenType>(&self, token: Token<T>, value: impl Into<Option<T>>) -> Result {
+        let value = value.into();
         let value = value.map(T::into_value);
         if check(token)? {
             let mut tokens = self.change(|state, id| Ok(state.overrides.get(&id).copied()))?;
@@ -80,7 +82,7 @@ impl Node {
     }
 
     /// [`Self::bind_color`] for the font face of a text-bearing control;
-    /// a handle's `set_font` and `clear_font` end it.
+    /// a handle's `set_font` ends it.
     pub fn bind_font(&self, token: Token<Font>) -> Result {
         check(token)?;
         self.change(|state, id| state.bind_token(id, TokenSlot::Font, token.index()))

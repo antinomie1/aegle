@@ -71,7 +71,6 @@ pub(crate) fn consumed(name: PropertyName) -> bool {
         Title
             | Theme
             | Transition
-            | Easing
             | PaintTransition
             | OffsetTransition
             | ScaleTransition
@@ -122,7 +121,7 @@ pub fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
         (Visible, Literal::Bool(v)) => node.set_visible(*v),
         (Enabled, Literal::Bool(v)) => node.set_enabled(*v),
         (Label, Literal::String(text)) => node.set_accessible_label(text),
-        (Tooltip, Literal::String(text)) => node.set_tooltip(Some(text)),
+        (Tooltip, Literal::String(text)) => node.set_tooltip(text.as_str()),
         (Background, value) => node.set_background(color(value)),
         (Foreground, value) => node.set_foreground(color(value)),
         (BorderColor, value) => node.set_border_color(color(value)),

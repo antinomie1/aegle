@@ -17,7 +17,6 @@ pub struct TabsControl {
     bar: Option<NodeId>,
     entries: Vec<(NodeId, NodeId)>,
     selected: usize,
-    callbacks: Vec<Box<dyn FnMut(Tabs) -> Result>>,
 }
 
 impl Control for TabsControl {
@@ -46,6 +45,25 @@ impl std::ops::Deref for Tabs {
 
 fn data(state: &mut State, root: NodeId) -> &mut TabsControl {
     state.control_as::<TabsControl>(root).expect("a tabs root")
+}
+
+/// Activating a tab, run as its button's deferred work: shows its page and,
+/// when the selection changed, queues the tab list's change handlers.
+pub(crate) fn chosen(state: &mut State, tab: NodeId) -> Result {
+    let Some(root) = state
+        .tree
+        .parent(tab)?
+        .and_then(|bar| state.tree.parent(bar).ok()?)
+    else {
+        return Ok(());
+    };
+    let index = data(state, root).entries.iter().position(|e| e.0 == tab);
+    if let Some(index) = index
+        && show(state, root, index)?
+    {
+        state.queue_action(root);
+    }
+    Ok(())
 }
 
 /// Shows page `index` and marks its tab; returns whether the selection changed.
@@ -81,21 +99,13 @@ impl Tabs {
         let tab = crate::button::create_as(&bar, title, selected)?;
         let page = group::add(&self.0, Role::TabPanel, false)?;
         page.set_grow(1.0)?;
-        page.set_min_size(0.0, 0.0)?;
-        let index = self.change(|state, id| {
+        page.set_min_width(0.0)?;
+        page.set_min_height(0.0)?;
+        self.change(|state, id| {
             let tabs = data(state, id);
             tabs.entries.push((tab.id, page.id));
-            let index = tabs.entries.len() - 1;
-            let selected = tabs.selected.min(index);
-            show(state, id, selected)?;
-            Ok(index)
-        })?;
-        let tabs = self.clone();
-        tab.on_click(move |_| {
-            if tabs.change(|state, id| show(state, id, index))? {
-                tabs.notify()?;
-            }
-            Ok(())
+            let selected = tabs.selected.min(tabs.entries.len() - 1);
+            show(state, id, selected).map(drop)
         })?;
         Ok(page)
     }
@@ -128,31 +138,8 @@ impl Tabs {
     }
     /// Adds a handler called after the user selects another tab; handlers
     /// run in registration order.
-    pub fn on_change(&self, callback: impl FnMut(Tabs) -> Result + 'static) -> Result {
-        self.change(|state, id| {
-            data(state, id).callbacks.push(Box::new(callback));
-            Ok(())
-        })
-    }
-    /// Removes the change handlers.
-    pub fn clear_on_change(&self) -> Result {
-        self.change(|state, id| {
-            data(state, id).callbacks.clear();
-            Ok(())
-        })
-    }
-    /// Runs the change handlers outside the UI borrow.
-    fn notify(&self) -> Result {
-        let mut callbacks =
-            self.change(|state, id| Ok(std::mem::take(&mut data(state, id).callbacks)))?;
-        let result = crate::run_all(&mut callbacks, self);
-        self.change(|state, id| {
-            let slot = &mut data(state, id).callbacks;
-            callbacks.append(slot);
-            *slot = callbacks;
-            Ok(())
-        })?;
-        result
+    pub fn on_change(&self, mut callback: impl FnMut(Tabs) -> Result + 'static) -> Result {
+        self.change(|state, id| state.on_action(id, move |node| callback(Tabs(Container(node)))))
     }
 }
 
@@ -197,14 +184,13 @@ pub(crate) fn tabs(container: &Container) -> Result<Tabs> {
                 bar: None,
                 entries: Vec::new(),
                 selected: 0,
-                callbacks: Vec::new(),
             }) as Box<dyn Control>,
             aegle_ui::container_style(theme, false),
         ))
     })?;
     let root = Container(root);
     let bar = group::add(&root, Role::TabList, true)?;
-    bar.set_gap(0.0)?;
+    bar.set_gap(0.0, 0.0)?;
     root.change(|state, id| {
         data(state, id).bar = Some(bar.id);
         Ok(())

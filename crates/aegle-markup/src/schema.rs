@@ -117,10 +117,9 @@ pub enum PropertyName {
     DisabledForeground,
     /// Positive font size in logical pixels for text-bearing controls.
     FontSize,
-    /// Whole milliseconds for subsequent appearance transitions; requires motion support.
+    /// Timing of every transitioned property: a duration or `[duration,
+    /// easing]`; requires motion support.
     Transition,
-    /// Transition easing; requires a sibling `transition` property.
-    Easing,
     /// Paint transition timing: a duration or `[duration, easing]`.
     PaintTransition,
     /// Offset transition timing: a duration or `[duration, easing]`.

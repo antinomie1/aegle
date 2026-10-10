@@ -84,7 +84,8 @@ fn images_and_canvases_record_retained_scenes() -> Result {
         builder.fill(shape, Color::BLACK)?;
         Ok(())
     })?;
-    canvas.set_size(Some(40.0), Some(10.0))?;
+    canvas.set_width(Some(40.0))?;
+    canvas.set_height(Some(10.0))?;
     ui.resize(Size::new(200.0, 100.0))?;
     ui.refresh()?;
     assert_eq!(view.bounds()?.size, Size::new(3.0, 2.0));

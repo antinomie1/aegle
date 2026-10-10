@@ -21,7 +21,8 @@ fn baseline_rows_align_text_controls() -> Result {
     big.set_font_size(32.0)?;
     let button = row.button("Go")?;
     // Taller than its text: the label is centered, and so is its baseline.
-    button.set_size(None, Some(60.0))?;
+    button.set_width(None)?;
+    button.set_height(Some(60.0))?;
     let nodes: [Node; 5] = [
         (*big).clone(),
         (*button).clone(),

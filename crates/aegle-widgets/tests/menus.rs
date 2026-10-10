@@ -66,7 +66,8 @@ fn focused(item: &MenuItem) -> Result<bool> {
 fn context_menus_open_where_requested_and_close_on_choice() -> Result {
     let ui = ui()?;
     let area = ui.root().button("Area")?;
-    area.set_size(380.0, 280.0)?;
+    area.set_width(380.0)?;
+    area.set_height(280.0)?;
     let menu = area.context_menu()?;
     let log = Rc::new(RefCell::new(Vec::new()));
     let copy = menu.item("Copy")?;

@@ -25,16 +25,31 @@ impl Node {
     /// and rotation with one timing. Layout, font size and control state are
     /// not delayed. Retargeting starts from the last sampled presentation,
     /// including theme and skin changes. A running geometric transition keeps
-    /// the timing it started with. Ends duration token bindings.
-    pub fn set_transition(&self, timing: Transition) -> Result {
+    /// the timing it started with. `None` removes the policy and immediately
+    /// returns to the logical targets without a completion callback. Ends
+    /// duration token bindings.
+    pub fn set_transition(&self, timing: impl Into<Option<Transition>>) -> Result {
+        let timing = timing.into();
         self.change(|state, id| {
-            let current = state.presented_appearance(id)?;
-            state.motion.active.remove(&id);
-            let track = Track {
-                presented: Some(current),
-                ..Track::uniform(timing)
-            };
-            state.motion.tracks.insert(id, track);
+            match timing {
+                Some(timing) => {
+                    let current = state.presented_appearance(id)?;
+                    state.motion.active.remove(&id);
+                    let track = Track {
+                        presented: Some(current),
+                        ..Track::uniform(timing)
+                    };
+                    state.motion.tracks.insert(id, track);
+                }
+                None => {
+                    state.motion.active.remove(&id);
+                    state.motion.tracks.remove(&id);
+                    state.snap_offset(id);
+                    state.snap_spin(id);
+                    state.snap_opacity(id);
+                    state.snap_shadow(id);
+                }
+            }
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             state.tokens.unbind(id, TokenSlot::is_transition);
             Ok(())
@@ -48,8 +63,9 @@ impl Node {
     pub fn set_property_transition(
         &self,
         property: TransitionProperty,
-        timing: Option<Transition>,
+        timing: impl Into<Option<Transition>>,
     ) -> Result {
+        let timing = timing.into();
         self.change(|state, id| {
             state.set_property_transition(id, property, timing)?;
             state
@@ -66,21 +82,6 @@ impl Node {
                 .tracks
                 .get(&id)
                 .and_then(|track| track.timing(property)))
-        })
-    }
-    /// Removes the transition policy and immediately returns to the logical
-    /// targets without a completion callback. Ends duration token bindings.
-    pub fn clear_transition(&self) -> Result {
-        self.change(|state, id| {
-            state.motion.active.remove(&id);
-            state.motion.tracks.remove(&id);
-            state.snap_offset(id);
-            state.snap_spin(id);
-            state.snap_opacity(id);
-            state.snap_shadow(id);
-            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
-            state.tokens.unbind(id, TokenSlot::is_transition);
-            Ok(())
         })
     }
     /// Last sampled appearance; [`Self::appearance`] remains the logical target.
@@ -123,13 +124,6 @@ impl Node {
                 id,
                 callback,
             )
-        })
-    }
-    /// Removes the completion handlers and any queued invocation.
-    pub fn clear_on_transition_end(&self) -> Result {
-        self.change(|state, id| {
-            state.motion.ends.remove(&id);
-            Ok(())
         })
     }
     /// Stops at the sampled appearance and offset, freezing them into local
@@ -280,7 +274,8 @@ impl Node {
 impl Ui {
     /// Sets timing for subsequently created interactive controls. Existing policies
     /// are unchanged. Headless UIs default to None; native App opts into 120 ms.
-    pub fn set_default_transition(&self, timing: Option<Transition>) -> Result {
+    pub fn set_default_transition(&self, timing: impl Into<Option<Transition>>) -> Result {
+        let timing = timing.into();
         self.state
             .try_borrow_mut()
             .map_err(|_| UiError::ReentrantAccess)?

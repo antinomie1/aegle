@@ -19,11 +19,7 @@ fn axis(name: &str) -> Orientation {
 
 #[cfg(feature = "grid")]
 fn grid(parent: &Container, stack: bool) -> Result<Container> {
-    if stack {
-        parent.stack()
-    } else {
-        parent.grid(&[])
-    }
+    if stack { parent.stack() } else { parent.grid() }
 }
 
 #[cfg(not(feature = "grid"))]

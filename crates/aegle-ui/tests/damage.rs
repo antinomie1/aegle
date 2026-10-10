@@ -15,7 +15,8 @@ fn changes_damage_only_old_and_new_areas() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
     ui.resize(Size::new(200.0, 100.0))?;
     let panel = ui.root().column()?;
-    panel.set_size(80.0, 40.0)?;
+    panel.set_width(80.0)?;
+    panel.set_height(40.0)?;
     panel.set_background(Color::BLACK)?;
     ui.refresh()?;
     assert_eq!(damage(&ui)?, None, "the first frame is whole");
@@ -55,7 +56,8 @@ fn changes_damage_only_old_and_new_areas() -> Result {
 
     // An unrelated node does not repaint when another one resizes.
     let other = ui.root().column()?;
-    other.set_size(60.0, 20.0)?;
+    other.set_width(60.0)?;
+    other.set_height(20.0)?;
     other.set_background(Color::BLACK)?;
     ui.refresh()?;
     ui.clear_damage()?;

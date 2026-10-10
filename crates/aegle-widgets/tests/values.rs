@@ -24,7 +24,7 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
     let group = ui.root().column()?;
     let toggles = group.row()?;
     for parent in [ui.root(), group.clone(), toggles.clone()] {
-        parent.set_gap(0.0)?;
+        parent.set_gap(0.0, 0.0)?;
     }
     let check = toggles.check_box("世界", false)?;
     let switch = toggles.switch("Hello", false)?;

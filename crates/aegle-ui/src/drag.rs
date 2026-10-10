@@ -160,14 +160,6 @@ impl Node {
         })
     }
 
-    /// Removes the drop handlers; a drag over the control ends silently.
-    pub fn clear_on_drop(&self) -> Result {
-        self.change(|state, id| {
-            state.drops.forget(id);
-            Ok(())
-        })
-    }
-
     /// Starts dragging `data` from the pointer press in progress, usually
     /// from a move after a press. The control's press is cancelled, as the
     /// native drag takes the pointer.

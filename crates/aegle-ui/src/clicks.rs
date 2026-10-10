@@ -126,13 +126,6 @@ impl Node {
             crate::callbacks::add(&mut state.clicks.handlers, version, id, callback)
         })
     }
-    /// Removes the double-click handlers.
-    pub fn clear_on_double_click(&self) -> Result {
-        self.change(|state, id| {
-            state.clicks.handlers.remove(&id);
-            Ok(())
-        })
-    }
     /// Adds a handler run when a context menu is requested over this control
     /// or a descendant without its own handler: a secondary-button press
     /// (receiving the press point), or the Menu key, Shift+F10 or the
@@ -152,15 +145,6 @@ impl Node {
             let version = &mut state.callback_version;
             crate::callbacks::add(&mut state.clicks.menus, version, id, callback)?;
             state.tree.mark_dirty(id, aegle_core::Dirty::SEMANTICS)?;
-            Ok(())
-        })
-    }
-    /// Removes the context-menu handlers.
-    pub fn clear_on_context_menu(&self) -> Result {
-        self.change(|state, id| {
-            if state.clicks.menus.remove(&id).is_some() {
-                state.tree.mark_dirty(id, aegle_core::Dirty::SEMANTICS)?;
-            }
             Ok(())
         })
     }

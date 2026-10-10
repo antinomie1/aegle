@@ -8,10 +8,11 @@ use aegle::{
 /// Two overlapping squares, red then blue, at `alpha`.
 fn squares(h: &Container, alpha: u8) -> Result<Container> {
     let pair = h.row()?;
-    pair.set_gap(0.0)?;
+    pair.set_gap(0.0, 0.0)?;
     for (color, offset) in [((220, 40, 40), 0.0), ((40, 80, 220), -24.0)] {
         let square = pair.column()?;
-        square.set_size(48.0, 48.0)?;
+        square.set_width(48.0)?;
+        square.set_height(48.0)?;
         square.set_radius(6.0)?;
         square.set_offset(Point::new(offset, 12.0 + offset / 2.0))?;
         square.set_background(Color::rgba(color.0, color.1, color.2, alpha))?;
@@ -22,14 +23,16 @@ fn squares(h: &Container, alpha: u8) -> Result<Container> {
 /// Stripes under a frosted panel that blurs them.
 fn frosted(h: &Container) -> Result {
     let stripes = h.row()?;
-    stripes.set_gap(6.0)?;
+    stripes.set_gap(6.0, 6.0)?;
     for _ in 0..8 {
         let stripe = stripes.column()?;
-        stripe.set_size(8.0, 72.0)?;
+        stripe.set_width(8.0)?;
+        stripe.set_height(72.0)?;
         stripe.set_background(Color::rgb(40, 80, 220))?;
     }
     let panel = h.column()?;
-    panel.set_size(80.0, 40.0)?;
+    panel.set_width(80.0)?;
+    panel.set_height(40.0)?;
     panel.set_radius(8.0)?;
     panel.set_offset(Point::new(20.0, -64.0))?;
     panel.set_background(Color::rgba(255, 255, 255, 90))?;

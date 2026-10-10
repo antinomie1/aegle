@@ -29,7 +29,8 @@ fn geometric_properties_follow_their_own_timing() -> Result {
     ui.root().set_padding(0.0)?;
     ui.resize(Size::new(300.0, 100.0))?;
     let panel = ui.root().column()?;
-    panel.set_size(40.0, 20.0)?;
+    panel.set_width(40.0)?;
+    panel.set_height(20.0)?;
     panel.set_background(Color::rgb(0, 0, 0))?;
     ui.refresh()?;
     let ends = Rc::new(Cell::new(0));
@@ -86,7 +87,8 @@ fn scoped_timing_and_explicit_animations_override_the_policy() -> Result {
     ui.root().set_padding(0.0)?;
     ui.resize(Size::new(300.0, 100.0))?;
     let panel = ui.root().column()?;
-    panel.set_size(40.0, 20.0)?;
+    panel.set_width(40.0)?;
+    panel.set_height(20.0)?;
     panel.set_background(Color::BLACK)?;
     ui.refresh()?;
     let x = || panel.bounds().map(|b| b.origin.x);

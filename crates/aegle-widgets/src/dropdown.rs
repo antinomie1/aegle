@@ -1,24 +1,19 @@
 //! Dropdown: a button that opens a popup list of choices.
 
-use std::{cell::RefCell, rc::Rc};
-
 use aegle_core::{Dirty, NodeId};
-use aegle_ui::{Container, Node, Result, UiError, handle};
+use aegle_ui::{Container, Node, Result, State, UiError, handle};
 
 use crate::{
     NodePopup, Popup, Widgets,
     button::Variant,
     group::{Group, Role},
-    popup::{hide_popup, popups},
+    popup::{entry, hide_popup, popups, show_popup},
 };
-
-type ChangeHandler = Rc<RefCell<Vec<Box<dyn FnMut(Dropdown) -> Result>>>>;
 
 pub(crate) struct DropdownData {
     pub items: Vec<String>,
     pub selected: usize,
     pub popup: NodeId,
-    pub handler: ChangeHandler,
 }
 
 handle! {
@@ -32,7 +27,6 @@ pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -
     }
     let button = container.button(items[selected])?;
     let popup = button.popup()?;
-    let handler: ChangeHandler = Rc::default();
     button.change(|state, id| {
         if let Some(control) = state.control_as::<crate::button::ButtonControl>(id) {
             control.variant = Variant::Dropdown { expanded: false };
@@ -46,78 +40,85 @@ pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -
             items,
             selected,
             popup: popup.id,
-            handler,
         };
         popups(state).dropdowns.insert(id, data);
         Ok(())
     })?;
     let dropdown = Dropdown(button.0.clone());
     dropdown.options(&popup, items, selected)?;
-    let opened = dropdown.clone();
-    button.on_click(move |_| {
-        if popup.is_shown()? {
-            return popup.hide();
-        }
-        popup.show()?;
-        // Opening starts at the current choice.
-        opened.change(|state, id| {
-            let data = &popups(state).dropdowns[&id];
-            let (popup, selected) = (data.popup, data.selected);
-            let option = state.tree.child(popup, selected)?;
-            state.set_focus(option)
-        })
-    })?;
     Ok(dropdown)
+}
+
+/// Activating a dropdown: closes a shown choice list, else opens it focused
+/// at the current choice. It is the button's own behavior, so the dropdown's
+/// handlers hear only choices.
+pub(crate) fn toggle(state: &mut State, id: NodeId) -> Result {
+    let data = &popups(state).dropdowns[&id];
+    let (popup, selected) = (data.popup, data.selected);
+    if entry(state, popup).shown {
+        return hide_popup(state, popup);
+    }
+    entry(state, popup).at = None;
+    show_popup(state, popup, true)?;
+    let option = state.tree.child(popup, selected)?;
+    state.set_focus(option)
+}
+
+/// Choosing an option, run as its button's deferred work.
+pub(crate) fn chosen(state: &mut State, option: NodeId) -> Result {
+    let Some(popup) = state.tree.parent(option)? else {
+        return Ok(());
+    };
+    let dropdown = popups(state)
+        .dropdowns
+        .iter()
+        .find_map(|(&id, data)| (data.popup == popup).then_some(id));
+    let index = state
+        .tree
+        .children(popup)?
+        .position(|child| child == option);
+    match (dropdown, index) {
+        (Some(id), Some(index)) => select(state, id, index, true),
+        _ => Ok(()),
+    }
+}
+
+/// Selects choice `index`, marks the options, closes the list and, for a
+/// user choice that changed the selection, queues the change handlers.
+fn select(state: &mut State, id: NodeId, index: usize, user: bool) -> Result {
+    let data = popups(state).dropdowns.get_mut(&id).unwrap();
+    let changed = data.selected != index;
+    data.selected = index;
+    let (popup, text) = (data.popup, data.items[index].clone());
+    // Options draw and export their selected state.
+    for (position, option) in state
+        .tree
+        .children(popup)?
+        .collect::<Vec<_>>()
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(control) = state.control_as::<crate::button::ButtonControl>(option) {
+            control.variant = Variant::Option {
+                chosen: position == index,
+            };
+        }
+        state
+            .tree
+            .mark_dirty(option, Dirty::PAINT | Dirty::SEMANTICS)?;
+    }
+    hide_popup(state, popup)?;
+    if user && changed {
+        state.queue_action(id);
+    }
+    state.set_text(id, &text)
 }
 
 impl Dropdown {
     fn options(&self, popup: &Popup, items: &[&str], selected: usize) -> Result {
         for (index, &item) in items.iter().enumerate() {
             let chosen = index == selected;
-            let option = crate::button::create_as(popup, item, Variant::Option { chosen })?;
-            let dropdown = self.clone();
-            option.on_click(move |_| dropdown.select(index, true))?;
-        }
-        Ok(())
-    }
-
-    fn select(&self, index: usize, notify: bool) -> Result {
-        let (text, handler, changed) = self.change(|state, id| {
-            let data = popups(state).dropdowns.get_mut(&id).unwrap();
-            let changed = data.selected != index;
-            data.selected = index;
-            let (popup, result) = (
-                data.popup,
-                (data.items[index].clone(), data.handler.clone(), changed),
-            );
-            // Options draw and export their selected state.
-            for (position, option) in state
-                .tree
-                .children(popup)?
-                .collect::<Vec<_>>()
-                .into_iter()
-                .enumerate()
-            {
-                if let Some(control) = state.control_as::<crate::button::ButtonControl>(option) {
-                    control.variant = Variant::Option {
-                        chosen: position == index,
-                    };
-                }
-                state
-                    .tree
-                    .mark_dirty(option, Dirty::PAINT | Dirty::SEMANTICS)?;
-            }
-            hide_popup(state, popup)?;
-            Ok(result)
-        })?;
-        self.change(|state, id| state.set_text(id, &text))?;
-        if notify && changed {
-            let mut callbacks = std::mem::take(&mut *handler.borrow_mut());
-            let result = crate::run_all(&mut callbacks, self);
-            let mut slot = handler.borrow_mut();
-            callbacks.append(&mut slot);
-            *slot = callbacks;
-            result?;
+            crate::button::create_as(popup, item, Variant::Option { chosen })?;
         }
         Ok(())
     }
@@ -131,7 +132,7 @@ impl Dropdown {
         if index >= self.items()?.len() {
             return Err(UiError::InvalidValue.into());
         }
-        self.select(index, false)
+        self.change(|state, id| select(state, id, index, false))
     }
     /// Copies the choices.
     pub fn items(&self) -> Result<Vec<String>> {
@@ -157,19 +158,11 @@ impl Dropdown {
             id: popup,
         }));
         self.options(&popup, items, selected)?;
-        self.select(selected, false)
+        self.change(|state, id| select(state, id, selected, false))
     }
     /// Adds a handler run when the user chooses a different item. Handlers
     /// run in registration order outside UI borrows; programmatic selection does not invoke it.
-    pub fn on_change(&self, callback: impl FnMut(Dropdown) -> Result + 'static) -> Result {
-        let handler = self.change(|state, id| Ok(popups(state).dropdowns[&id].handler.clone()))?;
-        handler.borrow_mut().push(Box::new(callback));
-        Ok(())
-    }
-    /// Removes the change handlers.
-    pub fn clear_on_change(&self) -> Result {
-        let handler = self.change(|state, id| Ok(popups(state).dropdowns[&id].handler.clone()))?;
-        handler.borrow_mut().clear();
-        Ok(())
+    pub fn on_change(&self, mut callback: impl FnMut(Dropdown) -> Result + 'static) -> Result {
+        self.change(|state, id| state.on_action(id, move |node| callback(Dropdown(node))))
     }
 }

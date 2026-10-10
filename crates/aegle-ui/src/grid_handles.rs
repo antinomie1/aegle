@@ -36,11 +36,10 @@ pub(crate) fn stack_child(state: &State, mut parent: NodeId, style: &mut Style) 
     }
 }
 
-fn tracks(tracks: &[Track]) -> Result<Vec<aegle_layout::GridTemplateComponent<String>>> {
-    if !tracks.iter().all(|track| track.is_valid()) {
-        return Err(UiError::InvalidValue.into());
-    }
-    Ok(tracks.iter().map(|track| track.template()).collect())
+/// Converts a track list of plain [`Track`]s or [`TemplateItem`]s.
+fn template<T: Clone + Into<TemplateItem>>(items: &[T]) -> Result<aegle_layout::Template> {
+    let items: Vec<TemplateItem> = items.iter().cloned().map(Into::into).collect();
+    aegle_layout::template(&items).ok_or(UiError::InvalidValue.into())
 }
 
 fn sizing(implicit: &[Track]) -> Result<Vec<aegle_layout::TrackSizingFunction>> {
@@ -60,15 +59,14 @@ fn placement_lines(
 }
 
 impl Container {
-    /// Appends a grid with explicit column tracks, like QML's `GridLayout`.
-    /// Children fill the cells row by row, adding automatic rows as needed;
-    /// [`Node::set_grid_column`] and [`Node::set_grid_row`] place them explicitly.
-    pub fn grid(&self, columns: &[Track]) -> Result<Container> {
-        let columns = tracks(columns)?;
+    /// Appends a grid, like QML's `GridLayout`; give it columns with
+    /// [`Self::set_columns`]. Children fill the cells row by row, adding
+    /// automatic rows as needed; [`Node::set_grid_column`] and
+    /// [`Node::set_grid_row`] place them explicitly.
+    pub fn grid(&self) -> Result<Container> {
         self.add(|_, theme| {
             let mut style = container_style(theme, false);
             style.display = Display::Grid;
-            style.grid_template_columns = columns;
             Ok((Box::new(Plain), style))
         })
         .map(Container)
@@ -87,31 +85,19 @@ impl Container {
         })
         .map(Container)
     }
-    /// Replaces the explicit column tracks of a grid.
-    pub fn set_columns(&self, columns: &[Track]) -> Result {
-        let columns = tracks(columns)?;
-        self.layout(crate::LocalLayout::NONE, |s| {
-            s.grid_template_columns = columns
-        })
-    }
-    /// Replaces the explicit row tracks of a grid; rows beyond them use
-    /// [`Self::set_auto_rows`].
-    pub fn set_rows(&self, rows: &[Track]) -> Result {
-        let rows = tracks(rows)?;
-        self.layout(crate::LocalLayout::NONE, |s| s.grid_template_rows = rows)
-    }
-    /// Replaces the explicit columns with a track list that may name lines and
-    /// repeat tracks, like CSS `grid-template-columns`; see [`TemplateItem`].
-    pub fn set_column_template(&self, items: &[TemplateItem]) -> Result {
-        let (columns, names) = aegle_layout::template(items).ok_or(UiError::InvalidValue)?;
+    /// Replaces the explicit columns, like CSS `grid-template-columns`: plain
+    /// [`Track`]s, or [`TemplateItem`]s that also name lines and repeat tracks.
+    pub fn set_columns<T: Clone + Into<TemplateItem>>(&self, columns: &[T]) -> Result {
+        let (columns, names) = template(columns)?;
         self.layout(crate::LocalLayout::NONE, |s| {
             s.grid_template_columns = columns;
             s.grid_template_column_names = names;
         })
     }
-    /// Replaces the explicit rows with a track list, like CSS `grid-template-rows`.
-    pub fn set_row_template(&self, items: &[TemplateItem]) -> Result {
-        let (rows, names) = aegle_layout::template(items).ok_or(UiError::InvalidValue)?;
+    /// Replaces the explicit rows like [`Self::set_columns`]; rows beyond them
+    /// use [`Self::set_auto_rows`].
+    pub fn set_rows<T: Clone + Into<TemplateItem>>(&self, rows: &[T]) -> Result {
+        let (rows, names) = template(rows)?;
         self.layout(crate::LocalLayout::NONE, |s| {
             s.grid_template_rows = rows;
             s.grid_template_row_names = names;
@@ -146,7 +132,8 @@ impl Container {
         })
     }
     /// Aligns children horizontally within their grid areas; `None` stretches.
-    pub fn set_justify_items(&self, align: Option<Align>) -> Result {
+    pub fn set_justify_items(&self, align: impl Into<Option<Align>>) -> Result {
+        let align = align.into();
         self.layout(crate::LocalLayout::NONE, |s| {
             s.justify_items = align.map(Align::items)
         })
@@ -175,7 +162,8 @@ impl Node {
         })
     }
     /// Overrides the grid's horizontal alignment for this child; `None` follows the grid.
-    pub fn set_justify_self(&self, align: Option<Align>) -> Result {
+    pub fn set_justify_self(&self, align: impl Into<Option<Align>>) -> Result {
+        let align = align.into();
         self.layout(crate::LocalLayout::NONE, |s| {
             s.justify_self = align.map(Align::items)
         })

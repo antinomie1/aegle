@@ -35,7 +35,7 @@ fn cursor_tracks_text_fields_overrides_capture_and_scrollbars() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let root = ui.root();
     root.set_padding(0.0)?;
-    root.set_gap(4.0)?;
+    root.set_gap(4.0, 4.0)?;
     let label = root.text("说明")?;
     let button = root.button("OK")?;
     let field = root.text_field("Hello")?;

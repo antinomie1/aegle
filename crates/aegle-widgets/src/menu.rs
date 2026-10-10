@@ -1,6 +1,6 @@
 //! Menus on popups: context menus, menus opened by a control, and menu bars.
 
-use std::{ops::Deref, rc::Rc};
+use std::ops::Deref;
 
 use aegle_core::{Dirty, NodeId};
 use aegle_layout::{Dimension, FlexDirection, Style};
@@ -90,7 +90,6 @@ fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) ->
             submenu: None,
             expanded: false,
             bar,
-            handlers: Rc::default(),
         };
         let style = Style {
             size: aegle_layout::Size {
@@ -102,44 +101,30 @@ fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) ->
         };
         Ok((Box::new(control) as Box<dyn Control>, style))
     })?;
-    node.change(|state, id| state.on_action(id, |node| chosen(MenuItem(node))))?;
     Ok(MenuItem(node))
 }
 
-/// Opens or toggles an item's menu, or closes every menu, toggles a check
-/// item and runs its handlers.
-fn chosen(item: MenuItem) -> Result {
-    let handlers = item.change(|state, id| {
-        let control = self::item(state, id);
-        if let Some(menu) = control.submenu {
-            let bar = control.bar;
-            if bar && entry(state, menu).shown {
-                hide_popup(state, menu)?;
-            } else if entry(state, menu).shown {
-                focus_first(state, menu)?;
-            } else {
-                show_popup(state, menu, true)?;
-            }
-            return Ok(None);
-        }
-        let handlers = control.handlers.clone();
-        if let Some(checked) = control.checked {
-            // Choosing the checked radio item keeps it checked.
-            let checked = !checked || control.radio;
-            menu_item::check(state, id, checked)?;
-        }
-        close_menus(state)?;
-        Ok(Some(handlers))
-    })?;
-    let Some(handlers) = handlers else {
-        return Ok(());
-    };
-    let mut callbacks = std::mem::take(&mut *handlers.borrow_mut());
-    let result = crate::run_all(&mut callbacks, &item);
-    let mut slot = handlers.borrow_mut();
-    callbacks.append(&mut slot);
-    *slot = callbacks;
-    result
+/// Choosing an item, run as its control's deferred work: opens or toggles
+/// its menu, or toggles a check item and closes every menu before the item's
+/// handlers run.
+pub(crate) fn chosen(state: &mut State, id: NodeId) -> Result {
+    let control = item(state, id);
+    if let Some(menu) = control.submenu {
+        let bar = control.bar;
+        return if bar && entry(state, menu).shown {
+            hide_popup(state, menu)
+        } else if entry(state, menu).shown {
+            focus_first(state, menu)
+        } else {
+            show_popup(state, menu, true)
+        };
+    }
+    if let Some(checked) = control.checked {
+        // Choosing the checked radio item keeps it checked.
+        let checked = !checked || control.radio;
+        menu_item::check(state, id, checked)?;
+    }
+    close_menus(state)
 }
 
 /// Hides every shown menu, the most recently shown first.

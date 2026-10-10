@@ -33,36 +33,40 @@ pub(crate) fn geometry(node: &Node, name: PropertyName, value: &Value) -> Option
     Some(result)
 }
 
+/// A checked timing: a duration, or `[duration, easing]`; ease-out by default.
 #[cfg(feature = "motion")]
-fn easing(value: Option<&Value>) -> aegle_ui::Easing {
+fn timing(value: &Value) -> aegle_ui::Transition {
     use aegle_ui::Easing;
-    let Some(value) = value else {
-        return Easing::EaseOut;
+    let (milliseconds, curve) = match value {
+        Value::Duration(milliseconds) => (*milliseconds, Easing::EaseOut),
+        Value::List(items) => match &items[..] {
+            [Value::Duration(milliseconds), curve] => {
+                let curve = match crate::layout::identifier(curve) {
+                    "linear" => Easing::Linear,
+                    "ease_in" => Easing::EaseIn,
+                    "ease_out" => Easing::EaseOut,
+                    "ease_in_out" => Easing::EaseInOut,
+                    other => unreachable!("checked easing `{other}`"),
+                };
+                (*milliseconds, curve)
+            }
+            _ => unreachable!("checked timing"),
+        },
+        _ => unreachable!("checked timing"),
     };
-    match crate::layout::identifier(value) {
-        "linear" => Easing::Linear,
-        "ease_in" => Easing::EaseIn,
-        "ease_out" => Easing::EaseOut,
-        "ease_in_out" => Easing::EaseInOut,
-        other => unreachable!("checked easing `{other}`"),
-    }
+    aegle_ui::Transition::new(std::time::Duration::from_millis(milliseconds), curve)
 }
 
 /// Installs a node's literal node-wide `transition`, then each per-property
 /// timing over it; other properties are ignored.
 #[cfg(feature = "motion")]
 pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) -> Result {
-    use aegle_ui::{Transition, TransitionProperty as Property};
-    use std::time::Duration;
-    let literal = |name| {
-        properties
-            .iter()
-            .find_map(|(n, value)| (*n == name).then_some(*value))
-    };
-    if let Some(Value::Duration(milliseconds)) = literal(PropertyName::Transition) {
-        let duration = Duration::from_millis(*milliseconds);
-        let curve = easing(literal(PropertyName::Easing));
-        node.set_transition(Transition::new(duration, curve))?;
+    use aegle_ui::TransitionProperty as Property;
+    if let Some((_, value)) = properties
+        .iter()
+        .find(|(name, _)| *name == PropertyName::Transition)
+    {
+        node.set_transition(timing(value))?;
     }
     for (name, value) in properties {
         let property = match name {
@@ -74,16 +78,7 @@ pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) -> Result
             PropertyName::OpacityTransition => Property::Opacity,
             _ => continue,
         };
-        let (milliseconds, curve) = match value {
-            Value::Duration(milliseconds) => (*milliseconds, easing(None)),
-            Value::List(items) => match &items[..] {
-                [Value::Duration(milliseconds), curve] => (*milliseconds, easing(Some(curve))),
-                _ => unreachable!("checked timing"),
-            },
-            _ => unreachable!("checked timing"),
-        };
-        let timing = Transition::new(Duration::from_millis(milliseconds), curve);
-        node.set_property_transition(property, Some(timing))?;
+        node.set_property_transition(property, timing(value))?;
     }
     Ok(())
 }

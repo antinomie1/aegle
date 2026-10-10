@@ -25,7 +25,8 @@ impl Node {
     /// `TransitionProperty::Shadow` timing (the `motion` feature), offset, blur, spread and color
     /// tween from the shown shadow, and a shadow appears or goes by fading
     /// its color. Ends a [`Self::bind_shadow`] binding.
-    pub fn set_shadow(&self, shadow: Option<Shadow>) -> Result {
+    pub fn set_shadow(&self, shadow: impl Into<Option<Shadow>>) -> Result {
+        let shadow = shadow.into();
         if shadow.is_some_and(|s| !s.is_valid()) {
             return Err(UiError::InvalidValue.into());
         }
@@ -52,7 +53,8 @@ impl Node {
     /// fractions of the node's size: x of its width and y of its height, with a
     /// radial radius in fractions of its larger side. Controls that paint no
     /// background ignore it. Ends the bindings of its stop colors.
-    pub fn set_background_gradient(&self, gradient: Option<Gradient>) -> Result {
+    pub fn set_background_gradient(&self, gradient: impl Into<Option<Gradient>>) -> Result {
+        let gradient = gradient.into();
         self.change(|state, id| {
             state.set_gradient(id, gradient);
             state.tokens.unbind(id, |slot| {

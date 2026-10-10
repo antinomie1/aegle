@@ -116,7 +116,7 @@ fn views(pane: &Container) -> Result {
     let column = tabs.add("Views")?;
     let data = tabs.add("Table")?;
     for page in [&column, &data] {
-        page.set_gap(10.0)?;
+        page.set_gap(10.0, 10.0)?;
     }
     let media = column.row()?;
     let pixels = (0..48 * 48)
@@ -135,14 +135,16 @@ fn views(pane: &Container) -> Result {
         builder.pop()?;
         Ok(())
     })?;
-    canvas.set_size(Some(48.0), Some(48.0))?;
+    canvas.set_width(Some(48.0))?;
+    canvas.set_height(Some(48.0))?;
     media.button("Rotate")?.on_click(move |_| {
         turn.set(turn.get() + 0.3);
         canvas.invalidate()
     })?;
     // Native effects: a shadow beneath a gradient background, on every backend.
     let card = media.column()?;
-    card.set_size(Some(112.0), Some(48.0))?;
+    card.set_width(Some(112.0))?;
+    card.set_height(Some(48.0))?;
     card.set_radius(8.0)?;
     card.set_justify_content(Some(Justify::Center))?;
     card.set_align_items(Some(Align::Center))?;
@@ -163,7 +165,8 @@ fn views(pane: &Container) -> Result {
 
     let lists = column.row()?;
     let scroll = lists.scroll_view()?;
-    scroll.set_size(None, Some(120.0))?;
+    scroll.set_width(None)?;
+    scroll.set_height(Some(120.0))?;
     scroll.set_grow(1.0)?;
     for i in 1..=12 {
         scroll.text(&format!("Scroll item {i}"))?;
@@ -171,7 +174,8 @@ fn views(pane: &Container) -> Result {
     let list = lists.list_view(26.0, 10_000, |row, index| {
         row.text(&format!("Row {index}")).map(drop)
     })?;
-    list.set_size(None, Some(120.0))?;
+    list.set_width(None)?;
+    list.set_height(Some(120.0))?;
     list.set_grow(1.0)?;
     let words = ["Short row.", "A longer row that wraps onto a second line."];
     let variable = column.variable_list_view(24.0, 200, move |row, index| {
@@ -231,7 +235,7 @@ fn main() -> Result<()> {
     };
     let window = app.window_with_options("Aegle — all controls", options)?;
     window.set_padding(16.0)?;
-    window.set_gap(12.0)?;
+    window.set_gap(12.0, 12.0)?;
     if rtl {
         window.set_layout_direction(Some(LayoutDirection::Rtl))?;
     }
@@ -247,7 +251,7 @@ fn main() -> Result<()> {
     left.set_padding(first)?;
     right.set_padding(second)?;
     for pane in [left, right] {
-        pane.set_gap(10.0)?;
+        pane.set_gap(10.0, 10.0)?;
     }
     let status = window.text("Interact with any control.")?;
     inputs(&window, left, &status)?;

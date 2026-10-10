@@ -65,7 +65,7 @@ pub(crate) fn table(
         return Err(UiError::InvalidValue.into());
     }
     let table = group::add(container, Role::Table, false)?;
-    table.set_gap(0.0)?;
+    table.set_gap(0.0, 0.0)?;
     // Keeps the header fill inside the border.
     table.set_padding(1.0)?;
     // A clipping box has no content-based minimum size, so the virtual rows'
@@ -77,7 +77,7 @@ pub(crate) fn table(
         Ok(aegle_layout::set_style(&mut state.tree, id, style)?)
     })?;
     let header = group::add(&table, Role::TableRow, true)?;
-    header.set_gap(0.0)?;
+    header.set_gap(0.0, 0.0)?;
     header.set_skin(Some(group::header))?;
     for column in columns {
         let cell = cell(&header, column, Role::TableHeader)?;
@@ -86,7 +86,7 @@ pub(crate) fn table(
     let widths: Vec<_> = columns.iter().map(|c| c.width).collect();
     let rows = table.list_view(row_height, rows, move |row, index| {
         let line = group::add(row, Role::TableRow, true)?;
-        line.set_gap(0.0)?;
+        line.set_gap(0.0, 0.0)?;
         line.set_grow(1.0)?;
         for (column, &width) in widths.iter().enumerate() {
             let cell = cell(&line, &TableColumn { title: "", width }, Role::TableCell)?;

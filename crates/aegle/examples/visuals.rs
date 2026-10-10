@@ -34,7 +34,8 @@ fn main() -> Result<()> {
         builder.pop()?;
         Ok(())
     })?;
-    canvas.set_size(Some(48.0), Some(48.0))?;
+    canvas.set_width(Some(48.0))?;
+    canvas.set_height(Some(48.0))?;
     let rotate = row.button("Rotate")?;
     rotate.on_click(move |_| {
         turn.set(turn.get() + 0.3);

@@ -12,10 +12,13 @@ fn drags_reach_the_nearest_drop_target() -> Result {
     ui.resize(Size::new(200.0, 100.0))?;
     let row = ui.root().row()?;
     let (left, right) = (row.column()?, row.column()?);
-    left.set_size(100.0, 100.0)?;
-    right.set_size(100.0, 100.0)?;
+    left.set_width(100.0)?;
+    left.set_height(100.0)?;
+    right.set_width(100.0)?;
+    right.set_height(100.0)?;
     let inner = left.column()?;
-    inner.set_size(50.0, 50.0)?;
+    inner.set_width(50.0)?;
+    inner.set_height(50.0)?;
     ui.refresh()?;
 
     let seen = Rc::new(RefCell::new(Vec::new()));
@@ -59,7 +62,7 @@ fn drags_reach_the_nearest_drop_target() -> Result {
     assert_eq!(events[0], ("left", DropEvent::Enter));
     assert!(matches!(events[1], ("left", DropEvent::Drop { .. })));
 
-    // Leaving the window, removing a target and clearing handlers.
+    // Leaving the window and removing a target.
     ui.drag_motion(Point::new(10.0, 10.0))?;
     ui.drag_leave()?;
     assert_eq!(
@@ -70,10 +73,6 @@ fn drags_reach_the_nearest_drop_target() -> Result {
     left.remove()?;
     ui.refresh()?;
     assert!(take()?.is_empty(), "a removed target gets nothing");
-    right.clear_on_drop()?;
-    assert!(!ui.drag_motion(Point::new(150.0, 10.0))?);
-    assert!(!ui.drop_data(Point::new(150.0, 10.0), DragData::Text("x".into()))?);
-    assert!(take()?.is_empty());
     // A control's drag waits for the host once.
     right.start_drag(DragData::Text("moved".into()))?;
     assert_eq!(ui.take_drag()?, Some(DragData::Text("moved".into())));

@@ -1,8 +1,6 @@
 //! Menu items: commands, check and radio items, submenu openers and menu
 //! bar entries.
 
-use std::{cell::RefCell, rc::Rc};
-
 use aegle_controls::{Input, Outcome};
 use aegle_core::{Dirty, NodeId};
 use aegle_layout::Dimension;
@@ -21,8 +19,6 @@ use crate::paint::{CHEVRON, check_mark, chevron};
 /// Width of the check column every menu item reserves.
 const MARK: f32 = 12.0;
 
-pub(crate) type Handlers = Rc<RefCell<Vec<Box<dyn FnMut(MenuItem) -> Result>>>>;
-
 /// The control inside a [`MenuItem`] node, also used for menu bar entries.
 pub struct MenuItemControl {
     pub(crate) button: aegle_controls::Button,
@@ -38,7 +34,6 @@ pub struct MenuItemControl {
     /// Whether that menu is shown.
     pub(crate) expanded: bool,
     pub(crate) bar: bool,
-    pub(crate) handlers: Handlers,
 }
 
 impl Control for MenuItemControl {
@@ -74,8 +69,16 @@ impl Control for MenuItemControl {
     fn set_enabled(&mut self, _: &mut TextSystem, enabled: bool) -> Outcome {
         self.button.set_enabled(enabled)
     }
-    fn handle(&mut self, _: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
-        Ok(self.button.handle(input))
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+        let mut outcome = self.button.handle(input);
+        if outcome.action.is_some() {
+            cx.deferred.push(Box::new(crate::menu::chosen));
+            // An item opening a menu has no handlers to run.
+            if self.submenu.is_some() {
+                outcome.action = None;
+            }
+        }
+        Ok(outcome)
     }
     fn hover(
         &mut self,
@@ -219,7 +222,8 @@ impl MenuItem {
     /// Shows `shortcut`, such as `"Ctrl+S"`, at the end of the item, or
     /// removes it with `None`. It is a hint, also the accessible keyboard
     /// shortcut; the application binds the keys itself.
-    pub fn set_shortcut(&self, shortcut: Option<&str>) -> Result {
+    pub fn set_shortcut<'a>(&self, shortcut: impl Into<Option<&'a str>>) -> Result {
+        let shortcut = shortcut.into();
         self.change(|state, id| {
             let shortcut = match shortcut {
                 Some(text) => {
@@ -250,16 +254,8 @@ impl MenuItem {
     /// Adds a handler run when the user chooses the item, after its menus
     /// closed and a check item toggled. Items that open a submenu do not run
     /// handlers. Handlers run in registration order outside UI borrows.
-    pub fn on_click(&self, callback: impl FnMut(MenuItem) -> Result + 'static) -> Result {
-        let handlers = self.change(|state, id| Ok(item(state, id).handlers.clone()))?;
-        handlers.borrow_mut().push(Box::new(callback));
-        Ok(())
-    }
-    /// Removes the click handlers.
-    pub fn clear_on_click(&self) -> Result {
-        let handlers = self.change(|state, id| Ok(item(state, id).handlers.clone()))?;
-        handlers.borrow_mut().clear();
-        Ok(())
+    pub fn on_click(&self, mut callback: impl FnMut(MenuItem) -> Result + 'static) -> Result {
+        self.change(|state, id| state.on_action(id, move |node| callback(MenuItem(node))))
     }
 }
 

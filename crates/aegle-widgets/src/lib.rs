@@ -132,23 +132,6 @@ pub(crate) fn add(
     })
 }
 
-/// Runs every handler of one event in registration order, returning the
-/// first error after all have run.
-pub(crate) fn run_all<T: Clone>(
-    callbacks: &mut [Box<dyn FnMut(T) -> Result>],
-    control: &T,
-) -> Result {
-    let mut result = Ok(());
-    for callback in callbacks {
-        if let Err(error) = callback(control.clone())
-            && result.is_ok()
-        {
-            result = Err(error);
-        }
-    }
-    result
-}
-
 /// Creates the default controls inside a container.
 pub trait Widgets {
     /// Appends a paragraph. Text wraps to available layout width.
@@ -173,7 +156,8 @@ pub trait Widgets {
     /// Appends a determinate progress bar with finite increasing bounds.
     fn progress(&self, min: f64, max: f64, value: f64) -> Result<Progress>;
     /// Appends an image whose intrinsic logical size is its pixel size. It keeps
-    /// that size on the cross axis instead of stretching; `set_size` overrides it.
+    /// that size on the cross axis instead of stretching; `set_width` and
+    /// `set_height` override it.
     fn image(&self, image: &Image) -> Result<ImageView>;
     /// Appends a canvas drawn by `painter` with zero intrinsic size; give it a
     /// size or flex grow. The painter runs during refresh while the UI is
