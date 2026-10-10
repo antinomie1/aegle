@@ -17,7 +17,7 @@
 | 输入到首次相关呈现 | p95 ≤ 33 ms，p99 ≤ 50 ms | 60 Hz 场景；端到端测量，不仅测 setter |
 | UI 布局及构造绘制提交工作 | p95 ≤ 4 ms | 不把 GPU 等待计为纯 CPU 计算 |
 | 首帧 | 热启动 ≤ 200 ms，冷启动 ≤ 600 ms | 包含字体发现，分别报告缓存冷热 |
-| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-10-10 在 x86_64 Linux 以 facade 默认 feature 构建 `hello`（f72c7c6）为 8,495,544 B（8.1 MiB），**未达到** |
+| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-10-10 在 x86_64 Linux 以 facade 默认 feature 构建 `hello`（f72c7c6，当时默认含 `text-dictionary`）为 8,495,544 B（8.1 MiB），未达到；词典数据约占 3.6 MiB，此后改为可选。同日在 x86_64-pc-windows-gnullvm 以新默认 feature 构建为 3,487,232 B（3.3 MiB，开启 `text-dictionary` 为 7,273,984 B），**Windows 达到**；Linux 待复测 |
 | 默认组件文字场景发布文件 | ≤ 16 MiB | 包含默认无障碍、主题、补间；不含可选高级模块 |
 | 最小窗口 / 100 控件场景 PSS | ≤ 32 / 48 MiB | Linux 测量，包含可归因的用户态驱动映射；系统服务进程另列 |
 | 场景显式 GPU 分配 | ≤ 16 MiB | 800×480；计入图集、纹理和临时附件；swapchain 估计与驱动隐藏分配另列 |

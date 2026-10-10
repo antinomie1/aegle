@@ -21,6 +21,9 @@ scene = ["dep:aegle-scene", "aegle-scene/text"]
 aegle-types.workspace = true
 parley.workspace = true
 icu_segmenter = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
+# Routes ICU diagnostics, such as the missing dictionary without
+# `text-dictionary`, to `log` instead of debug-build stderr.
+icu_provider = { version = "2.3.1", default-features = false, features = ["logging"] }
 aegle-scene = { workspace = true, optional = true }
 accesskit = { workspace = true, optional = true }
 

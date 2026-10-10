@@ -15,7 +15,7 @@ default = ["desktop"]
 # System accessibility adapters are opt-in: `unix-accessibility` (AT-SPI over
 # zbus) and `windows-accessibility` (UI Automation); `accessibility` alone
 # exports the semantic tree without a platform adapter.
-desktop = ["native", "software", "system-fonts", "text-dictionary", "markup", "motion", "effects", "colrv1", "desktop-services"]
+desktop = ["native", "software", "system-fonts", "markup", "motion", "effects", "colrv1", "desktop-services"]
 # File dialogs, notifications, a tray icon and global shortcuts: `App::desktop`
 # and `aegle::desktop`.
 desktop-services = ["aegle-app/desktop-services"]
@@ -30,7 +30,8 @@ vulkan = ["aegle-app/vulkan"]
 wgpu = ["aegle-app/wgpu"]
 system-fonts = ["aegle-ui/system-fonts", "aegle-app/system-fonts"]
 # Dictionary word segmentation for Chinese, Japanese and Southeast Asian
-# scripts (word selection and movement); without it ICU logs a missing model.
+# scripts (word selection and movement), about 3.6 MiB in a release build.
+# Without it these scripts move and select by basic word boundaries.
 text-dictionary = ["aegle-ui/text-dictionary"]
 accessibility = ["aegle-ui/accessibility", "aegle-widgets/accessibility", "aegle-app/accessibility"]
 windows-accessibility = ["accessibility", "aegle-app/windows-accessibility"]

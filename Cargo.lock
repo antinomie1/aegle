@@ -316,6 +316,7 @@ dependencies = [
  "accesskit",
  "aegle-scene",
  "aegle-types",
+ "icu_provider",
  "icu_segmenter",
  "parley",
 ]
@@ -1192,6 +1193,7 @@ checksum = "d27bbb9d3abbefac45d55f647c9de1d44aafcd1186eb91879afef17c396c3e73"
 dependencies = [
  "displaydoc",
  "icu_locale_core",
+ "log",
  "serde",
  "stable_deref_trait",
  "writeable",

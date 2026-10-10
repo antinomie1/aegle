@@ -51,7 +51,7 @@ Try the bundled examples with `cargo run -p aegle --example controls --release`.
 
 ## Features
 
-Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`, `text-dictionary`, `markup`, `motion`, `effects`, `colrv1` and `desktop-services`.
+Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`, `markup`, `motion`, `effects`, `colrv1` and `desktop-services`.
 
 | Feature | Default | Purpose |
 | --- | :---: | --- |
@@ -59,7 +59,7 @@ Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`,
 | `software` | ✓ | CPU software rendering |
 | `system-fonts` | ✓ | System font discovery |
 | `markup` | ✓ | `ui!` macro and the markup engine, including runtime loading |
-| `text-dictionary` | ✓ | Dictionary word segmentation for Chinese, Japanese and Southeast Asian scripts |
+| `text-dictionary` |  | Dictionary word segmentation for Chinese, Japanese and Southeast Asian scripts (about 3.6 MiB) |
 | `motion` | ✓ | Transitions, keyframe animations and springs |
 | `effects` | ✓ | Image effects (`aegle::image::effects`) |
 | `colrv1` | ✓ | COLRv1 colour glyphs |

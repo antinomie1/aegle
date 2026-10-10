@@ -20,7 +20,7 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 `aegle-glyph/scene` 提供两类 renderer 共用的 `RasterTransform/GlyphOrigin` 策略：取仿射矩阵较大列长度确定设备字号，正向均匀轴向变换采用 hinting、整像素基线与水平四分之一像素相位，其他变换保留原点并过滤采样。共用 `mask_contrast` 按前景亮度调整灰度覆盖率 `c + c(1-c)k`：深色字加重、浅色字减轻，抵消线性混合造成的浅底细字与深底粗字；0 和满覆盖不变。它只计算字形光栅参数和 bitmap 到设备的变换，不改变排版 advance；软件后端已使用同一接口。设备基线超出 ±1,048,576 时明确返回坐标错误，最终图像边界和裁剪仍由各后端处理。
 
-独立的 `aegle-text` 默认保留基本 CJK 显示、bidi 和 UAX #14 换行，关闭词典分段数据；`text-dictionary` 启用上游 complex-scripts 数据，facade 的默认 `desktop` 组合已启用它（release 约增加 3.7 MiB）。编辑器的视觉移动、按词导航和点击选择复用 Parley，删除使用 Unicode extended grapheme 边界。中文/日文按词导航和双击选词在关闭词典时采用基础边界行为；关闭该数据也影响泰/老/缅/高棉等上下文分段。关闭词典的调试构建会输出上游缺少分段模型的诊断；即使启用词典也不能宣传为全语言完整编辑支持。
+独立的 `aegle-text` 默认保留基本 CJK 显示、bidi 和 UAX #14 换行，关闭词典分段数据；`text-dictionary` 启用上游 complex-scripts 数据（release 约增加 3.6 MiB），facade 的默认 `desktop` 组合不含它，需要中日词典分词的应用自行开启。编辑器的视觉移动、按词导航和点击选择复用 Parley，删除使用 Unicode extended grapheme 边界。中文/日文按词导航和双击选词在关闭词典时采用基础边界行为；关闭该数据也影响泰/老/缅/高棉等上下文分段。关闭词典时上游缺少分段模型的诊断经 `log` 输出；即使启用词典也不能宣传为全语言完整编辑支持。
 
 ## 当前编辑接口
 
