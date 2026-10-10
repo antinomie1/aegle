@@ -1,15 +1,60 @@
 use crate::Error;
 use aegle_types::Rect;
 
-/// Native IMM composition state. No surrounding-text support is claimed.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// Largest surrounding excerpt, in UTF-8 bytes, a request may carry.
+pub const MAX_SURROUNDING: usize = 4000;
+
+/// Desired input-method state for the editable control focused in a window.
+///
+/// The excerpt becomes the TSF document that input methods read for
+/// prediction and reconversion; both byte offsets refer to it rather than to
+/// the complete text. Changing the focused control in the same window requires
+/// disabling its old session with `None` before configuring the new control.
+#[derive(Clone, Debug, PartialEq)]
 pub struct ImeRequest {
+    /// Committed text around the selection, excluding preedit, at most
+    /// [`MAX_SURROUNDING`] bytes. `None` enables composition with an empty
+    /// document, for example when the selection alone exceeds the limit.
+    pub surrounding: Option<String>,
+    /// UTF-8 byte offset of the active selection endpoint.
+    pub cursor: usize,
+    /// UTF-8 byte offset of the fixed selection endpoint.
+    pub anchor: usize,
     /// Logical client coordinates of the active editor's caret or selection.
     pub cursor_rect: Rect,
 }
+impl Default for ImeRequest {
+    fn default() -> Self {
+        Self {
+            surrounding: Some(String::new()),
+            cursor: 0,
+            anchor: 0,
+            cursor_rect: Rect::default(),
+        }
+    }
+}
 impl ImeRequest {
-    /// Validates finite, nonnegative candidate geometry within native coordinates.
+    /// Validates the excerpt and its offsets, then returns the caret rectangle
+    /// in physical client pixels, rounded outward, as `[left, top, right, bottom]`.
     pub fn validate(&self, scale: f32) -> Result<[i32; 4], Error> {
+        if self
+            .surrounding
+            .as_ref()
+            .is_some_and(|text| text.len() > MAX_SURROUNDING)
+        {
+            return Err(Error::InvalidIme("surrounding text exceeds 4000 bytes"));
+        }
+        if self
+            .surrounding
+            .as_ref()
+            .map_or(self.cursor != 0 || self.anchor != 0, |text| {
+                !text.is_char_boundary(self.cursor) || !text.is_char_boundary(self.anchor)
+            })
+        {
+            return Err(Error::InvalidIme(
+                "surrounding offsets must be UTF-8 boundaries",
+            ));
+        }
         let r = self.cursor_rect;
         if !scale.is_finite() || scale <= 0.0 || r.size.width < 0.0 || r.size.height < 0.0 {
             return Err(Error::InvalidIme("invalid candidate geometry"));
@@ -42,18 +87,24 @@ impl ImeRequest {
 /// Native focus or atomic composition update.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImeEvent {
-    /// Keyboard focus entered a window with IMM enabled.
+    /// Keyboard focus entered a window with an enabled session.
     Entered,
-    /// Composition ended or focus left; cancel any remaining preedit.
+    /// Focus left; cancel any remaining preedit.
     Left,
     /// Apply to the focused retained editor.
     Update(ImeUpdate),
 }
 
-/// IMM result and replacement preedit, applied in that order.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One input-method edit, applied in field order: delete around the
+/// selection (or current preedit), replace it with `commit`, then show
+/// `preedit` after the commit.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ImeUpdate {
-    /// Committed composition result; `Some("")` differs from no result.
+    /// UTF-8 bytes to delete before the selection or preedit, excluding it.
+    pub delete_before: usize,
+    /// UTF-8 bytes to delete after the selection or preedit, excluding it.
+    pub delete_after: usize,
+    /// Committed replacement; `Some("")` deletes, unlike no commit.
     pub commit: Option<String>,
     /// New preedit, empty when the composition ends.
     pub preedit: Preedit,
@@ -64,25 +115,6 @@ pub struct ImeUpdate {
 pub struct Preedit {
     /// Temporary text.
     pub text: String,
-    /// Collapsed cursor or selection endpoints; None hides the cursor.
+    /// Fixed and active endpoints within `text`; None hides the cursor.
     pub cursor: Option<(usize, usize)>,
-}
-
-/// Converts a native UTF-16 cursor to a UTF-8 byte boundary, rejecting surrogate splits.
-/// Useful for IMM/TSF adapters sharing the same UTF-8 editor contract.
-pub fn utf16_cursor(text: &str, position: usize) -> Result<usize, Error> {
-    let mut units = 0;
-    for (byte, ch) in text.char_indices() {
-        if units == position {
-            return Ok(byte);
-        }
-        units += ch.len_utf16();
-    }
-    if units == position {
-        Ok(text.len())
-    } else {
-        Err(Error::InvalidIme(
-            "cursor splits UTF-16 scalar or exceeds preedit",
-        ))
-    }
 }

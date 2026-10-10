@@ -1,9 +1,10 @@
 //! Native Windows 11 windows without a polling loop or widget dependency.
 //!
 //! Software presentation borrows one bounded RGBA8 buffer and uploads an opaque
-//! DIB. Vulkan hosts use an owned window-surface lease instead. IME composition
-//! uses the native IMM compatibility interface; this is not a TSF text store and
-//! does not provide surrounding-text reconversion or the touch-keyboard contract.
+//! DIB. Vulkan hosts use an owned window-surface lease instead. Input methods
+//! compose through a Text Services Framework text store that holds the
+//! focused editor's surrounding text, so they can predict from it and
+//! reconvert it.
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[cfg(windows)]
@@ -13,7 +14,7 @@ mod drag;
 mod error;
 mod events;
 #[cfg(windows)]
-mod ime;
+mod ime_edit;
 mod ime_types;
 #[cfg(windows)]
 mod input;
@@ -26,11 +27,15 @@ mod procedure;
 #[cfg(windows)]
 mod software;
 #[cfg(windows)]
+mod text_store;
+#[cfg(windows)]
+mod tsf;
+#[cfg(windows)]
 mod window;
 
 pub use aegle_types::{DragData, PointerButton, Preferences};
 pub use error::{Error, PresentError};
 pub use events::{Event, Modifiers, PixelSize, PointerKind, WindowId, WindowInfo, WindowOptions};
-pub use ime_types::{ImeEvent, ImeRequest, ImeUpdate, Preedit, utf16_cursor};
+pub use ime_types::{ImeEvent, ImeRequest, ImeUpdate, MAX_SURROUNDING, Preedit};
 #[cfg(windows)]
 pub use window::{WakeHandle, Win32, WindowSurface};

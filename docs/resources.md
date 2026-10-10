@@ -133,4 +133,4 @@ Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS
 
 Vulkan App 不分配 Wayland SHM/GDI整帧缓冲，不上传软件渲染结果；不透明窗口只保留驱动给出的 sRGB swapchain 图像并直接绘制，透明窗口另保留 RGBA16F 目标并编码写入 swapchain。设备分配与 WSI 图像估计分别统计，只有前者受预算约束，详见 Vulkan 契约。多个 GPU 窗口当前分别拥有设备、pipeline和字形图集，字体/shaping仍共用；不把单窗样本外推为多窗最优。
 
-Wayland gpu feature 用 system/dlopen 获取已有连接的 libwayland 原生句柄，发布需 libwayland-client；软件独立构建仍可用 Rust backend。Win32 CPU buffer 仅一份，GDI/DWM 内部复制不可计入该上限。Windows 软件应用只需相应系统 API；Vulkan 另需 Vulkan loader/driver。不增加常驻框架计时线程；Windows 持续软件动画用 DWM 同步节拍，空闲消息等待，实际驱动/UIA线程成本另测。
+Wayland gpu feature 用 system/dlopen 获取已有连接的 libwayland 原生句柄，发布需 libwayland-client；软件独立构建仍可用 Rust backend。Win32 CPU buffer 仅一份，GDI/DWM 内部复制不可计入该上限。Windows 软件应用只需相应系统 API；Vulkan 另需 Vulkan loader/driver。不增加常驻框架计时线程；Windows 持续软件动画用 DWM 同步节拍，空闲消息等待，实际驱动/UIA线程成本另测。TSF 在 UI 线程激活一个线程管理器，每窗口一个文档管理器、上下文与文本存储（摘录至多 4000 UTF-8 字节的 UTF-16 副本及宿主所示副本，输入法插入另有 512 Ki 单元上限）；与此前 IMM 路径相比，`controls` 示例的私有内存、工作集、线程数与空闲 CPU 没有可测差异（实测见[实现状态](implementation.md)）。

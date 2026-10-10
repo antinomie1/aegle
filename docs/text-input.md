@@ -1,6 +1,6 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows TSF 与 macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows 经 TSF 文本存储接入输入法（见末节），macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑复用 PlainEditor，不从零重写 shaping、bidi 或选择逻辑。
 
 ## 当前显示接口
 
@@ -76,7 +76,7 @@ TextField 在 Ctrl（macOS 为 Command）+C/X/V 时只返回 `Outcome::clipboard
 
 ## 平台和无障碍衔接
 
-Wayland 已接入上述 text-input-v3；Windows 的 TSF/兼容路径及 macOS 的 NSTextInputClient 仍为待实现目标。文字引擎不代替这些平台协议。候选窗采用当前呈现几何，主题、缩放或动画更新时同步，不重建编辑器。当前 app 的局部字号改变重排同一 Editor，保留组合和选择；皮肤/局部配色只覆盖绘制，不重启 IME 会话。动画几何仍未实现。
+Wayland 已接入上述 text-input-v3，Windows 经 TSF 文本存储以同一批次形式接入（见[当前 Windows 输入边界](#当前-windows-输入边界)）；macOS 的 NSTextInputClient 仍为待实现目标。文字引擎不代替这些平台协议。候选窗采用当前呈现几何，主题、缩放或动画更新时同步，不重建编辑器。当前 app 的局部字号改变重排同一 Editor，保留组合和选择；皮肤/局部配色只覆盖绘制，不重启 IME 会话。动画几何仍未实现。
 
 `text-a11y` 提供 `EditorDriver::accessibility` 导出显示文字 run、几何、预编辑下划线和选区；`select_accessibility` 校验最近导出的身份/cluster 索引并作用于同一个 Editor。布局重建后旧映射无效；活动组合期间明确返回 CompositionActive，不能把显示范围直接套到取消后的已提交值。Unix 示例通过独立 aegle-access 接到 AT-SPI 查询、选择和焦点，当前上游缺少 EditableText，不能声称支持辅助技术文字替换；详见[无障碍边界](accessibility.md)。
 
@@ -98,11 +98,28 @@ ScrollView 仅平移既有控件几何，Editor 继续拥有自己的文字滚�
 
 ## 当前 Windows 输入边界
 
-Win32 普通文本由 WM_CHAR/WM_UNICHAR 产生，UTF-16 surrogate pair 合并为 Unicode scalar；按键与文字分开送入同一 Ui/Editor，保留 AltGr/dead-key 的系统翻译。IMM 从自有 HIMC 读取组合/结果，UTF-16 cursor 检查边界后转成 UTF-8 偏移，候选窗使用 Ui 光标矩形按 DPI 向外取整；由 Editor 绘制预编辑，系统仍绘制候选窗。自行消费 WM_IME_COMPOSITION/WM_IME_CHAR，避免默认过程再次产生已提交文本。切换编辑器/关闭禁用旧会话、取消组合并清理已排队结果。
+Win32 普通文本由 WM_CHAR/WM_UNICHAR 产生，UTF-16 surrogate pair 合并为 Unicode scalar；按键与文字分开送入同一 Ui/Editor，保留 AltGr/dead-key 的系统翻译。
 
-当前提供 IMM 兼容路径，未实现 TSF text store、周边文字查询/重转换或触屏键盘支持。真实 Microsoft Pinyin（TSF 输入法经系统 IMM 兼容层）已在 Windows 11 上验证：两个 opt-in 测试以 `SendInput` 向测试窗口发送真实按键，只在测试窗口处于前台时输入。`aegle-platform-win32/tests/ime.rs` 检查组合按键不进入宿主、预编辑、首候选只经 GCS_RESULTSTR 提交一次（WM_IME_CHAR 不重复）、Esc 取消、关闭会话丢弃预编辑及已排队结果、重新启用后开始新组合；`aegle-app/tests/ime_windows.rs` 经原生 App 把拼音提交进获得焦点的 TextField，并检查预编辑不改变已提交值、焦点移到按钮时不提交残留组合、回到字段后在光标处追加。候选窗的屏幕位置、日文/韩文输入法与 TSF 专属功能仍需人工验收。
+输入法经 Text Services Framework（TSF）接入。`Win32::connect` 在 OLE 初始化后为 UI 线程激活一个 `ITfThreadMgr`；每个窗口有一个文档管理器，其唯一上下文由窗口自己的 `ITextStoreACP` 文本存储支撑（`text_store.rs`，同一 COM 对象也是 `ITfContextOwnerCompositionSink`）。启用编辑会话时窗口关联该文档；没有编辑器、会话取消或窗口失焦时关联一个没有上下文的空文档，输入法不在其中组合。窗口不关联 IMM 上下文，只经 TSF 组合：Windows 自带的中日韩输入法都是 TSF 输入法，仅实现 IMM32 的旧式第三方输入法不受支持。TSF 激活失败时 `ime_available` 为 false，编辑器请求输入法得到 `Error::ImeUnavailable`，不静默退化为纯键盘输入。
+
+文本存储的文档是宿主提供的周边摘录（至多 `MAX_SURROUNDING` = 4000 UTF-8 字节，组合期间不含预编辑），组合文字内联其中：输入法可读取光标前后文字用于预测，也可在已提交文字上开始组合（重转换）。宿主是唯一权威：
+
+- 每次锁结束后，存储把文档相对宿主所显示内容的变化表达为一次 `ImeUpdate`：在宿主选区（组合中为预编辑）两侧删除 `delete_before`/`delete_after` 字节、以 `commit` 替换、在提交之后显示新组合及其光标，与 text-input-v3 批次同形，App 原样交给 `Ui::ime`。变化取共同前缀与后缀，并以选区和组合范围为上限，重复文字（在 "a|a" 中组合 "a"）不会错位；只在第二个代码单元不同的代理对整体替换。组合之后的文字也被改动的编辑无法用该模型表达，报告为 `Event::Error`，不错位应用。
+- 宿主在组合之外发布状态（`configure_ime`）时，其摘录与选区替换文档，并依次通知 TSF `OnTextChange`、`OnSelectionChange`；组合期间文档归输入法，只更新候选矩形并通知 `OnLayoutChange`。
+- `GetTextExt` 对任何范围都返回宿主的光标矩形（物理像素，屏幕坐标），候选窗跟随光标，而非逐字符定位；`GetACPFromPoint`、嵌入对象与文字属性不提供。
+- 锁同步授予；持锁期间的异步请求在当前锁结束前授予，同步请求得到 `TS_E_SYNCHRONOUS`。输入法给出的位置在边界校验（不越界、不拆分代理对），插入文字须为合法 UTF-16，文档上限 512 Ki 个 UTF-16 单元。
+
+取消会话（切换编辑器、`configure_ime(None)`）与窗口失焦都先停止报告再终止组合，然后关联空文档；失焦另发出 `ImeEvent::Left`，已排队的旧会话更新被丢弃。输入法终止组合时留在文档里的文字不会提交：重新启用时先以宿主状态替换文档，再恢复报告并关联文档。这一顺序来自测试中发现的问题——先关联、后发布时，Microsoft Pinyin 在新会话中读到残留的 "shi"，被报告为提交。
+
+验证（2026-10-11，Windows 11 Pro for Workstations 26100 桌面会话，简体中文 Microsoft Pinyin）：
+
+- `aegle-platform-win32/tests/tsf.rs` 以文本服务身份经真实 TSF 运行时请求编辑会话，不依赖已安装输入法：读取摘录和 UTF-16 光标；`GetTextExt` 等于光标矩形的屏幕坐标；光标处组合到提交；对已提交文字重转换（`delete_after` 加预编辑，再提交新文字）；代理对替换与原位替换已提交的 emoji（`delete_before` 4 字节）；清空组合删除预编辑；无法表达的组合报告错误；取消会话不报告，重新启用后文档等于宿主文字。
+- `aegle-platform-win32/tests/ime.rs` 以 `SendInput` 发送真实按键（只在测试窗口处于前台时输入）：组合按键不进入宿主、逐键预编辑、首候选只提交一次且不产生 WM_CHAR、Esc 取消、取消会话不提交残留、窗口失焦结束组合不提交、回到窗口后重新组合。
+- `aegle-app/tests/ime_windows.rs` 经原生 App 把拼音提交进 TextField：预编辑不改变已提交值、焦点移到按钮不提交残留、回到字段后在光标处追加；`aegle-app/tests/tsf_windows.rs` 让文本服务读取 TextField 的文字与光标，把 "世界" 重转换为 "时节"，字段值随之改变，再次读取得到宿主重新发布的状态。
+- 候选窗位置：组合 "nihao" 时截屏核对（缩放 100%），候选列表左上角在宿主报告的光标矩形左下角。
+- 未覆盖：日文/韩文输入法及其重转换按键（本机只装了 Microsoft Pinyin，重转换只经测试文本服务验证）、触屏键盘、InputScope（密码框仍由 Editor 拒绝组合）、组合显示属性（下划线按 Editor 默认绘制）、非 100% 缩放下的候选窗。
 
 ```sh
-cargo test -p aegle-platform-win32 --test ime -- --ignored
-AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-app --features windows,software --test ime_windows -- --ignored
+cargo test -p aegle-platform-win32 --test tsf --test ime -- --ignored --test-threads=1
+AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-app --features windows,software --test ime_windows --test tsf_windows -- --ignored --test-threads=1
 ```

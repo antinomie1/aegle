@@ -21,7 +21,7 @@
 | aegle-dbus | Linux 会话总线：认证、Hello、消息编解码（无 Unix fd 与 16 位整数），任意线程发送，阻塞或非阻塞读取 | 无 |
 | aegle-desktop | 桌面服务：文件选择对话框、通知、托盘及其菜单、全局快捷键；Linux 走会话总线（portal FileChooser/GlobalShortcuts、`org.freedesktop.Notifications`、StatusNotifierItem + dbusmenu），Windows 走 `IFileDialog`、`Shell_NotifyIconW`、`RegisterHotKey`；结果经一个线程安全回调送出，不依赖窗口或 UI | Linux 为 dbus |
 | aegle-platform-wayland | Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板与拖放、输出与平台偏好 | types、dbus |
-| aegle-platform-win32 | Win32 窗口、IMM 兼容输入、DPI、OLE 拖放、GDI 软件与 GPU 句柄、外观偏好；TSF 待实现 | types |
+| aegle-platform-win32 | Win32 窗口、TSF 文本存储输入法、DPI、OLE 拖放、GDI 软件与 GPU 句柄、外观偏好 | types |
 | aegle-platform-appkit | 计划中，**尚未实现**：AppKit 窗口、NSTextInputClient 及平台偏好 | types |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
 | aegle-theme | 无分配的 Theme、控件类型 `ControlKind`（默认皮肤与可接受样式组）、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；类型化 `Token<T>` 与内置 token（注册表与绑定在 aegle-ui） | types |

@@ -27,9 +27,9 @@ fn message_time() -> u32 {
 }
 
 pub(crate) fn key(native: &Native, msg: u32, w: WPARAM, l: LPARAM) {
-    // IMM owns VK_PROCESSKEY and composition keystrokes. Forwarding these to
-    // the Editor would move/delete text while the input method edits preedit.
-    if w.0 == VK_PROCESSKEY.0 as usize || native.ime.composing.get() {
+    // The input method owns VK_PROCESSKEY and composition keystrokes. Forwarding
+    // these to the Editor would move/delete text while it edits the preedit.
+    if w.0 == VK_PROCESSKEY.0 as usize || native.composing() {
         return;
     }
     native.emit(Event::Key {

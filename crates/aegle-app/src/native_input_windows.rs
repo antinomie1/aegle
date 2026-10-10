@@ -39,7 +39,7 @@ impl Entry {
         match event {
             Event::Configure { info, .. } => {
                 // DPI can change while the rounded logical extent stays equal.
-                // IMM candidate placement still needs the new physical scale.
+                // TSF candidate placement still needs the new physical scale.
                 self.ui.request_ime_sync();
                 #[cfg(feature = "windows-accessibility")]
                 if self.access_scale != f64::from(info.scale) {
@@ -117,8 +117,8 @@ impl Entry {
             }
             Event::Ime { event, .. } => match event {
                 ImeEvent::Update(update) => self.ui.ime(ImeEdit {
-                    delete_before: 0,
-                    delete_after: 0,
+                    delete_before: update.delete_before,
+                    delete_after: update.delete_after,
                     commit: update.commit.as_deref(),
                     preedit: &update.preedit.text,
                     cursor: update
@@ -217,6 +217,9 @@ pub(crate) fn clipboard(
 
 pub(crate) fn ime_request(request: Option<ImeRequest>) -> Option<crate::platform::ImeRequest> {
     request.map(|request| crate::platform::ImeRequest {
+        surrounding: request.surrounding,
+        cursor: request.selection.focus,
+        anchor: request.selection.anchor,
         cursor_rect: request.cursor_rect,
     })
 }

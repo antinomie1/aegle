@@ -1,6 +1,6 @@
 # Vulkan 绘制与原生呈现
 
-状态：独立离屏几何与可选文字已实现，2026-10-05。已在 AMD RX 6800 XT 和 Lavapipe 上执行综合测试及 Khronos 验证层检查。记录构建、着色器与图像/路径放置来自共享的 `aegle-gpu`。可选 window 已连接 Wayland/Win32 swapchain，App 可显式选择 Vulkan；Windows 实机验收范围见实现状态。
+状态：独立离屏几何与可选文字已实现，2026-10-05。已在 AMD RX 6800 XT（Linux RADV 与 Windows AMD 专有驱动）和 Lavapipe 上执行综合测试，Khronos 验证层检查仅在 Linux。记录构建、着色器与图像/路径放置来自共享的 `aegle-gpu`。可选 window 已连接 Wayland/Win32 swapchain，App 可显式选择 Vulkan；Windows 实机验收范围见实现状态。
 
 ## 范围与依赖
 

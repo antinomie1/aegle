@@ -87,7 +87,7 @@ TextArea { text: "First line\nSecond line"; read_only: true }
 
 - 方法：`text`、`set_text`（清空撤销历史并结束输入法预编辑）、`select(Selection)`（UTF-8 字节偏移；与 `set_text` 一样先结束进行中的输入法组合）、`set_read_only`、`set_password`、`on_submit`（仅单行，Enter 触发）。
 - 编辑：选择、按词/行移动、按字素删除、撤销/重做（Ctrl+Z / Ctrl+Y）、全选（Ctrl+A）、复制/剪切/粘贴（Ctrl+C / X / V，macOS 用 Cmd）；原生宿主处理剪贴板，自有宿主用 `take_clipboard` / `paste`。
-- 输入法：Wayland text-input-v3、Windows IMM；预编辑不改变已提交的值。
+- 输入法：Wayland text-input-v3、Windows TSF；预编辑不改变已提交的值。
 - 只读可选择和复制；密码模式显示 `•`，拒绝复制、输入法组合并不保留撤销历史。
 - 默认高度：单行为 `control_height`，多行为其 4 倍；多行内容溢出时显示覆盖式纵向滚动条，caret 移动会自动滚动到可见。
 - 无障碍角色 TextInput / MultilineTextInput / PasswordInput，导出文字与选择。

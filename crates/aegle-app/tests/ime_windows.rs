@@ -17,9 +17,14 @@ use std::{
 use windows::{
     Win32::{
         Foundation::HWND,
-        System::Threading::{AttachThreadInput, GetCurrentThreadId},
+        System::{
+            Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
+            Threading::{AttachThreadInput, GetCurrentThreadId},
+            Variant::VARIANT,
+        },
         UI::{
-            Input::{Ime::*, KeyboardAndMouse::*},
+            Input::KeyboardAndMouse::*,
+            TextServices::{CLSID_TF_ThreadMgr, GUID_COMPARTMENT_KEYBOARD_OPENCLOSE, ITfThreadMgr},
             WindowsAndMessaging::*,
         },
     },
@@ -105,7 +110,7 @@ fn microsoft_pinyin_commits_into_the_focused_text_field() -> Result {
     let hwnd = find();
     // SAFETY: the window belongs to this thread; the foreground thread's input
     // is attached only for the activation. The layout is activated for this
-    // process and the window's own HIMC is borrowed between acquire/release.
+    // process.
     unsafe {
         let other = GetWindowThreadProcessId(GetForegroundWindow(), None);
         let current = GetCurrentThreadId();
@@ -120,18 +125,18 @@ fn microsoft_pinyin_commits_into_the_focused_text_field() -> Result {
     }
     field.focus();
     run(&app, || true)?;
-    // SAFETY: as above; the App associated its context when the field focused.
+    // SAFETY: opens the input method through this thread's TSF keyboard
+    // compartment; the activation is balanced.
     unsafe {
-        let context = ImmGetContext(hwnd);
-        assert!(
-            !context.is_invalid(),
-            "the focused field has no input context"
-        );
-        assert!(ImmSetOpenStatus(context, true).as_bool());
-        assert!(
-            ImmSetConversionStatus(context, IME_CMODE_NATIVE, IME_SMODE_PHRASEPREDICT).as_bool()
-        );
-        let _ = ImmReleaseContext(hwnd, context);
+        let manager: ITfThreadMgr =
+            CoCreateInstance(&CLSID_TF_ThreadMgr, None, CLSCTX_INPROC_SERVER).unwrap();
+        let client = manager.Activate().unwrap();
+        let open = manager
+            .GetGlobalCompartment()
+            .and_then(|c| c.GetCompartment(&GUID_COMPARTMENT_KEYBOARD_OPENCLOSE))
+            .unwrap();
+        open.SetValue(client, &VARIANT::from(1i32)).unwrap();
+        manager.Deactivate().unwrap();
     }
 
     // Composition keystrokes are neither inserted nor committed until selection.

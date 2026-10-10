@@ -1,9 +1,9 @@
 #![allow(unsafe_code)]
 use crate::{
     Error, Event, ImeRequest, PixelSize, PresentError, WindowId, WindowInfo, WindowOptions,
-    ime::Ime,
     native::{Native, Queue},
     procedure::procedure,
+    tsf::{Session, Tsf},
 };
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
@@ -47,6 +47,9 @@ pub struct Win32 {
     next_id: u64,
     wake: Option<WakeHandle>,
     previous_dpi: DPI_AWARENESS_CONTEXT,
+    /// None when TSF could not be activated; editors then report
+    /// [`Error::ImeUnavailable`].
+    tsf: Option<Rc<Tsf>>,
 }
 
 /// Owning UI-thread surface lease; keeps HWND alive through GPU/UIA destruction.
@@ -137,6 +140,7 @@ impl Win32 {
             next_id: 0,
             wake: None,
             previous_dpi,
+            tsf: Tsf::activate().ok(),
         })
     }
 
@@ -197,7 +201,7 @@ impl Win32 {
             cursor: Cell::new(aegle_types::Cursor::Default),
             held: Cell::new(0),
             high_surrogate: Cell::new(None),
-            ime: Ime::new()?,
+            tsf: RefCell::new(None),
             pixels: RefCell::new(Vec::new()),
             drawn: Cell::new(None),
             budget: options.buffer_budget,
@@ -235,8 +239,8 @@ impl Win32 {
                 Some(Rc::as_ptr(&native).cast()),
             )?;
             RegisterDragDrop(hwnd, &crate::drag::target(&native))?;
-            // Each window gets its own context on demand; the shared default IMM
-            // context must not cause a composition to leak into another editor.
+            // Input methods compose only through TSF, never through the
+            // thread's shared default IMM context.
             ImmAssociateContext(hwnd, HIMC::default());
             let mut client = RECT::default();
             GetClientRect(hwnd, &mut client)?;
@@ -249,6 +253,9 @@ impl Win32 {
                 false,
                 true,
             );
+        }
+        if let Some(tsf) = &self.tsf {
+            *native.tsf.borrow_mut() = Some(Session::new(tsf, &native)?);
         }
         native.registered.set(true);
         native.emit(Event::Configure {
@@ -271,6 +278,8 @@ impl Win32 {
         let native = self.windows.swap_remove(index);
         native.registered.set(false);
         native.cancel_ime();
+        // COM references end with the window, before TSF and OLE do.
+        drop(native.tsf.borrow_mut().take());
         // SAFETY: live owned HWND; hiding it does not invalidate surface leases.
         unsafe {
             let _ = RevokeDragDrop(native.hwnd.get());
@@ -311,19 +320,20 @@ impl Win32 {
         native.queue_redraw();
         Ok(())
     }
-    /// Native IMM compatibility is available. This does not imply TSF text-store,
-    /// surrounding-text reconversion or an installed language/input method.
+    /// Whether TSF is active on this thread. This does not imply an installed
+    /// language or input method.
     pub fn ime_available(&self) -> bool {
-        true
+        self.tsf.is_some()
     }
-    /// Enables or cancels the current editable control's native IMM session.
+    /// Enables, updates or cancels the current editable control's TSF session.
     /// Disable before changing editor identity, even within the same window.
+    /// Fails with [`Error::ImeUnavailable`] when TSF is not active.
     pub fn configure_ime(
         &mut self,
         id: WindowId,
         request: Option<ImeRequest>,
     ) -> Result<(), Error> {
-        crate::ime::configure(self.window(id)?, request)
+        crate::tsf::configure(self.window(id)?, request)
     }
     /// Current system appearance preferences. Changes arrive as
     /// [`Event::Preferences`] while a window exists to receive the broadcast.
@@ -434,6 +444,8 @@ impl Drop for Win32 {
         unsafe {
             SetThreadDpiAwarenessContext(self.previous_dpi);
         }
+        // TSF deactivates before COM is uninitialized.
+        self.tsf = None;
         CONNECTED.with(|value| value.set(false));
         // SAFETY: balances OleInitialize in connect, after every window's
         // drop target was revoked.

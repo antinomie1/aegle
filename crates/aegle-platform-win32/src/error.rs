@@ -12,7 +12,9 @@ pub enum Error {
     InvalidWindow,
     /// Title or application identifier contains NUL or exceeds 4000 UTF-8 bytes.
     InvalidString,
-    /// Invalid native composition or candidate geometry.
+    /// The Text Services Framework could not be activated on this thread.
+    ImeUnavailable,
+    /// Invalid input-method state or candidate geometry.
     InvalidIme(&'static str),
     /// The native input stream contains malformed UTF-16.
     InvalidUtf16,
@@ -33,7 +35,8 @@ impl fmt::Display for Error {
             Self::InvalidString => {
                 f.write_str("window strings must be NUL-free and at most 4000 bytes")
             }
-            Self::InvalidIme(reason) => write!(f, "invalid IMM state: {reason}"),
+            Self::ImeUnavailable => f.write_str("the Text Services Framework is unavailable"),
+            Self::InvalidIme(reason) => write!(f, "invalid IME state: {reason}"),
             Self::InvalidUtf16 => f.write_str("native text contains malformed UTF-16"),
             Self::BufferBudget { required, budget } => write!(
                 f,

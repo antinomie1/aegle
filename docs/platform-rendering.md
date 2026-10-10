@@ -7,7 +7,7 @@
 | 平台 | 首版目标 | 绘制与输入 |
 | --- | --- | --- |
 | Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；SCTK + wayland-client；text-input-v3 |
-| Windows | Windows 11，x86_64/aarch64 | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；原生窗口；输入法当前为 IMM 兼容路径，TSF 未实现 |
+| Windows | Windows 11，x86_64/aarch64 | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；原生窗口；TSF 文本存储输入法 |
 | macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 绘制经可选 wgpu 使用 Metal，窗口平台未实现；AppKit、NSTextInputClient |
 
 这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 不实现 X11；基础普通窗口要求 xdg-shell，shell 表面另要求 layer-shell。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。
@@ -89,6 +89,9 @@ GPU 合成复用 text 的图像管线，因此 wgpu 与 Vulkan 的图层需要 `
 | Vulkan | 9.1 ms | +0.11 ms | +0.37 ms | 含读回；基线主要是不带 HOST_CACHED 的读回内存，窗口路径没有这一步。每个层边界提交一次并等待 |
 | wgpu | 0.50 ms | +0.04 ms | +0.17 ms | 含读回 |
 | Vulkan / wgpu（lavapipe） | 3.2 / 3.5 ms | 5.2 / 5.5 ms | 12.7 / 13.4 ms | CPU 实现，与软件后端同一量级 |
+| Windows 11 软件 | 0.43 ms | 5.2 ms | 11.3 ms | 同一台机器，2026-10-11 |
+| Windows 11 Vulkan（AMD 专有驱动 25.10.30） | 10.2 ms | +0.3 ms | +0.8 ms | 含读回，基线同样由读回内存决定 |
+| Windows 11 wgpu Vulkan / DX12 | 0.69 / 0.67 ms | +0.23 / +0.14 ms | +0.85 / +0.44 ms | 含读回；`WGPU_BACKEND` 选择后端 |
 
 因此软件后端上的大面积模糊会明显占用帧时间，默认组件不使用它；GPU 后端上层的代价可以忽略。
 
@@ -128,4 +131,4 @@ Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该�
 
 `aegle-platform-win32` 直接管理 Win32 HWND、消息循环、每显示器 DPI、鼠标/滚轮/双击、键盘和 UTF-16 字符输入。空闲以 MsgWaitForMultipleObjectsEx 等待消息与共享 wake event；重绘期间仍泵消息，避免动画饿死关闭和输入。窗口先隐藏创建，GPU/UIA 完成安装并成功绘制后才显示。逻辑关闭先停路由和隐藏，最后一个原生租约释放时才 DestroyWindow。
 
-软件呈现借用一个有界 RGBA8 CPU buffer，经 GDI DIB 上传，窗口不透明：GDI 忽略 alpha，半透明像素按预乘颜色（等同叠在黑色上）显示，与 Wayland 的 XRGB 呈现一致，不逐像素检查；Vulkan 用同一 HWND 直接呈现。平台与 renderer 的预算独立，GDI/DWM 与驱动分配不属于 CPU buffer_budget。输入法使用原生 IMM 兼容接口，完整 TSF、周边文字重转换与触屏键盘契约尚未实现。UIA 通过独立 aegle-access/windows 接入。Windows 11 实机上已运行原生窗口生命周期、软件/Vulkan/wgpu 呈现、Microsoft Pinyin 组合与 UIA 客户端查询，证据与仍缺的硬件 GPU、ARM64 及屏幕阅读器验收见[实现状态](implementation.md)；Wine 或交叉编译不能替代这些证据。
+软件呈现借用一个有界 RGBA8 CPU buffer，经 GDI DIB 上传，窗口不透明：GDI 忽略 alpha，半透明像素按预乘颜色（等同叠在黑色上）显示，与 Wayland 的 XRGB 呈现一致，不逐像素检查；Vulkan 用同一 HWND 直接呈现。平台与 renderer 的预算独立，GDI/DWM 与驱动分配不属于 CPU buffer_budget。输入法经每窗口的 TSF 文本存储（周边文字、重转换），触屏键盘与 InputScope 尚未接入，见[文字输入](text-input.md#当前-windows-输入边界)。UIA 通过独立 aegle-access/windows 接入。Windows 11 实机上已运行原生窗口生命周期、软件与硬件 Vulkan/wgpu（Vulkan、DX12）呈现、TSF 与 Microsoft Pinyin 组合、OLE 拖放、桌面服务与 UIA 客户端查询，证据与仍缺的 ARM64、其他 GPU 驱动及屏幕阅读器验收见[实现状态](implementation.md)；Wine 或交叉编译不能替代这些证据。

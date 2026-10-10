@@ -7,10 +7,7 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::time::Duration;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, WPARAM},
-    UI::{
-        Input::Ime::{ImmGetContext, ImmReleaseContext},
-        WindowsAndMessaging::*,
-    },
+    UI::{Input::Ime::ImmGetContext, WindowsAndMessaging::*},
 };
 
 #[test]
@@ -63,13 +60,13 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
         first,
         Some(ImeRequest {
             cursor_rect: Rect::new(4.0, 8.0, 1.0, 20.0),
+            ..Default::default()
         }),
     )?;
-    // SAFETY: native HIMC is borrowed only between its acquire/release calls.
+    // Input methods reach editors only through TSF, never an IMM context.
+    // SAFETY: a plain query on a live window of this thread.
     unsafe {
-        let context = ImmGetContext(hwnd);
-        assert!(!context.is_invalid());
-        assert!(ImmReleaseContext(hwnd, context).as_bool());
+        assert!(ImmGetContext(hwnd).is_invalid());
     }
     backend.configure_ime(first, None)?;
     while backend.next_event().is_some() {}
@@ -138,6 +135,6 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
         event = backend.next_event();
     }
     assert!(matches!(event, Some(Event::Wake)));
-    println!("Win32 native lifecycle, pixels, Unicode, IMM context and owned surface passed");
+    println!("Win32 native lifecycle, pixels, Unicode, input context and owned surface passed");
     Ok(())
 }

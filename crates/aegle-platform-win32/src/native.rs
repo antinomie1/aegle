@@ -1,14 +1,11 @@
 #![allow(unsafe_code)]
-use crate::{Event, ImeEvent, PixelSize, Preferences, WindowId, WindowInfo, ime::Ime};
+use crate::{Event, ImeEvent, PixelSize, Preferences, WindowId, WindowInfo, tsf::Session};
 use std::{
     cell::{Cell, RefCell},
     collections::VecDeque,
     rc::Rc,
 };
-use windows::Win32::{
-    Foundation::HWND,
-    UI::{Input::Ime::*, WindowsAndMessaging::*},
-};
+use windows::Win32::{Foundation::HWND, UI::WindowsAndMessaging::*};
 
 pub(crate) type Queue = Rc<RefCell<VecDeque<Event>>>;
 
@@ -30,7 +27,9 @@ pub(crate) struct Native {
     /// Held mouse buttons: bit 0 primary, then right, middle, back, forward.
     pub held: Cell<u8>,
     pub high_surrogate: Cell<Option<u16>>,
-    pub ime: Ime,
+    /// The window's TSF session, from creation until the window is removed;
+    /// `None` when TSF is unavailable.
+    pub tsf: RefCell<Option<Session>>,
     pub pixels: RefCell<Vec<u8>>,
     /// Size of the complete frame `pixels` holds, if any.
     pub drawn: Cell<Option<crate::PixelSize>>,
@@ -93,34 +92,14 @@ impl Native {
             info: self.info.get(),
         });
     }
+    /// Whether an input method is composing; its keystrokes are not host keys.
+    pub fn composing(&self) -> bool {
+        self.tsf.borrow().as_ref().is_some_and(Session::composing)
+    }
+    /// Ends the editor session; queued updates belong to the old editor.
     pub fn cancel_ime(&self) {
-        self.ime.enabled.set(false);
-        self.ime.composing.set(false);
-        *self.ime.preedit.borrow_mut() = Default::default();
-        // SAFETY: this context and HWND are owned on the calling UI thread.
-        unsafe {
-            let _ = ImmNotifyIME(self.ime.context, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
-            ImmAssociateContext(self.hwnd.get(), HIMC::default());
-            // Already posted composition messages belong to the old editor.
-            let mut msg = MSG::default();
-            while PeekMessageW(
-                &mut msg,
-                Some(self.hwnd.get()),
-                WM_IME_STARTCOMPOSITION,
-                WM_IME_COMPOSITION,
-                PM_REMOVE,
-            )
-            .as_bool()
-            {}
-            while PeekMessageW(
-                &mut msg,
-                Some(self.hwnd.get()),
-                WM_IME_CHAR,
-                WM_IME_CHAR,
-                PM_REMOVE,
-            )
-            .as_bool()
-            {}
+        if let Some(session) = self.tsf.borrow().as_ref() {
+            session.disable();
         }
         self.events.borrow_mut().retain(|event| !matches!(event, Event::Ime { window, event: ImeEvent::Update(_), .. } if *window == self.id));
     }
@@ -135,10 +114,8 @@ impl Drop for Native {
         unsafe {
             if !self.hwnd.get().is_invalid() {
                 SetWindowLongPtrW(self.hwnd.get(), GWLP_USERDATA, 0);
-                ImmAssociateContext(self.hwnd.get(), HIMC::default());
                 let _ = DestroyWindow(self.hwnd.get());
             }
         }
-        // Ime's Drop destroys the disassociated context after the HWND.
     }
 }

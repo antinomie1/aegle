@@ -405,7 +405,7 @@ impl App {
     }
 
     /// Whether this platform supports native composition (Wayland text-input-v3
-    /// or the Windows IMM compatibility path). An unavailable requested IME is
+    /// or the Windows Text Services Framework). An unavailable requested IME is
     /// returned as a capability error from the event loop.
     pub fn ime_available(&self) -> bool {
         self.runtime.borrow().backend.ime_available()

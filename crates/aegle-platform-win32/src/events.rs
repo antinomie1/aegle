@@ -159,7 +159,7 @@ pub enum Event {
         /// Message time in milliseconds since boot (`GetMessageTime`), wrapping.
         time: u32,
     },
-    /// Committed keyboard text (including dead-key composition), excluding IMM results.
+    /// Committed keyboard text (including dead-key composition), excluding input-method edits.
     Text {
         /// Target.
         window: WindowId,
@@ -179,7 +179,7 @@ pub enum Event {
         /// Message time in milliseconds since boot (`GetMessageTime`), wrapping.
         time: u32,
     },
-    /// Native IMM compatibility composition update or focus transition.
+    /// TSF composition update or focus transition.
     Ime {
         /// Target.
         window: WindowId,

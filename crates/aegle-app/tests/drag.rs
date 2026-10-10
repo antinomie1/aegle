@@ -108,7 +108,7 @@ fn drags_cross_windows_through_the_compositor() -> Result {
         DragData::Files(vec![PathBuf::from("/tmp/a b/ü.txt")]),
     ]));
     let cancelled = Rc::new(RefCell::new(0));
-    let canvas = source.canvas(|_, _| Ok(()));
+    let canvas = source.canvas(|_, _| {});
     canvas.set_grow(1.0);
     let (next, cancels) = (payloads.clone(), cancelled.clone());
     canvas.set_input(move |canvas, event| match event {

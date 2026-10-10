@@ -118,6 +118,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols-wlr",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

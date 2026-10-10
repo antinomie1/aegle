@@ -1,11 +1,11 @@
 #![allow(unsafe_code)]
-use crate::{Error, Event, ImeEvent, ImeUpdate, PixelSize, input, native::Native};
+use crate::{Error, Event, ImeEvent, PixelSize, input, native::Native, tsf::Session};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Gdi::ValidateRect,
-    UI::{HiDpi::GetDpiForWindow, Input::Ime::*, WindowsAndMessaging::*},
+    UI::{HiDpi::GetDpiForWindow, WindowsAndMessaging::*},
 };
 
 // SAFETY: Windows invokes this only for our registered class. lpCreateParams is
@@ -127,20 +127,18 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
                 window: native.id,
                 focused,
             });
-            if focused && native.ime.enabled.get() {
+            let enabled = native.tsf.borrow().as_ref().is_some_and(Session::enabled);
+            if focused && enabled {
                 native.emit(Event::Ime {
                     window: native.id,
                     event: ImeEvent::Entered,
                 });
             } else if !focused {
-                // Disable before synchronous cancellation callbacks; already
-                // queued earlier results keep their dispatch order for the host.
-                native.ime.enabled.set(false);
-                native.ime.composing.set(false);
-                *native.ime.preedit.borrow_mut() = Default::default();
-                unsafe {
-                    let _ = ImmNotifyIME(native.ime.context, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
-                    ImmAssociateContext(hwnd, HIMC::default());
+                // The session ends without reporting its composition; already
+                // queued earlier results keep their dispatch order for the host,
+                // which re-enables the session when the window regains focus.
+                if let Some(session) = native.tsf.borrow().as_ref() {
+                    session.disable();
                 }
                 native.emit(Event::Ime {
                     window: native.id,
@@ -177,37 +175,6 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
             // Handled side buttons return TRUE, so no WM_APPCOMMAND follows.
             return Ok(Some(LRESULT(1)));
         }
-        WM_IME_SETCONTEXT => return Ok(Some(crate::ime::suppress_system_composition(hwnd, w, l))),
-        WM_IME_STARTCOMPOSITION => {
-            if native.ime.enabled.get() {
-                native.ime.composing.set(true);
-            }
-        }
-        WM_IME_COMPOSITION => {
-            if native.ime.enabled.get() {
-                let update = native.ime.update(l.0 as u32)?;
-                native.emit(Event::Ime {
-                    window: native.id,
-                    event: ImeEvent::Update(update),
-                });
-            }
-        }
-        WM_IME_ENDCOMPOSITION => {
-            if native.ime.enabled.get() {
-                native.ime.composing.set(false);
-                *native.ime.preedit.borrow_mut() = Default::default();
-                native.emit(Event::Ime {
-                    window: native.id,
-                    event: ImeEvent::Update(ImeUpdate {
-                        commit: None,
-                        preedit: Default::default(),
-                    }),
-                });
-            }
-        }
-        // The result was consumed from GCS_RESULTSTR. DefWindowProc would emit
-        // duplicate WM_CHAR messages if WM_IME_CHAR were forwarded as well.
-        WM_IME_CHAR => {}
         WM_NCDESTROY => {
             // SAFETY: synchronously final callback while Native still exists.
             unsafe {
