@@ -1,5 +1,5 @@
 //! Nested retained viewports share clipping, focus, native input and semantics.
-use aegle::{Point, prelude::*};
+use aegle::{prelude::*, ui::Point};
 
 fn main() -> Result<()> {
     let app = App::new()?;

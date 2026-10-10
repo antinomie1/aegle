@@ -32,7 +32,7 @@ impl Context<'_> {
     pub(crate) fn handle_type(&self, kind: ElementKind) -> TokenStream {
         let (facade, loader) = (&self.facade, &self.loader);
         match kind {
-            ElementKind::Window => quote! { #facade::Window },
+            ElementKind::Window => quote! { #facade::app::Window },
             ElementKind::Control(index) => {
                 let element = self.element(index);
                 quote! { <#element as #loader::Element>::Handle }
@@ -70,9 +70,9 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
             Some(quote! { #field: #value, })
         });
         (
-            quote! { #facade::App },
+            quote! { #facade::app::App },
             quote! {
-                #parent.window_with_options(#title, #facade::WindowOptions {
+                #parent.window_with_options(#title, #facade::app::WindowOptions {
                     #(#size)*
                     ..::core::default::Default::default()
                 })?
@@ -85,7 +85,7 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
         };
         let element = cx.element(index);
         (
-            quote! { #facade::Container },
+            quote! { #facade::ui::Container },
             create(cx, root, index, &quote! { #parent }),
             quote! { <#element as #loader::Element>::node(&#root_handle).remove(); },
         )
@@ -106,9 +106,9 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
             pub root: #root_type,
             #(#fields)*
         }
-        move |#parent: &#parent_type| -> #facade::Result<#view> {
+        move |#parent: &#parent_type| -> #facade::ui::Result<#view> {
             let #root_handle = #create_root;
-            let __aegle_result = (|| -> #facade::Result<#view> {
+            let __aegle_result = (|| -> #facade::ui::Result<#view> {
                 #(#creations)*
                 #(#setters)*
                 #(#transitions)*
@@ -226,7 +226,7 @@ impl Output {
                     };
                     let theme = Ident::new(theme, Span::call_site());
                     self.setters
-                        .push(quote! { #handle.set_theme(#facade::Theme::#theme()); });
+                        .push(quote! { #handle.set_theme(#facade::ui::Theme::#theme()); });
                 }
                 (
                     Prop::Node(PropertyName::Title | PropertyName::Width | PropertyName::Height),

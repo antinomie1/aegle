@@ -2,7 +2,7 @@
 //! shows it inside ordinary controls, like a game or 3D viewport in an editor.
 use std::{cell::Cell, rc::Rc, time::Instant};
 
-use aegle::{prelude::*, scene::TextureId, wgpu};
+use aegle::{app::wgpu, prelude::*, ui::scene::TextureId};
 
 const SHADER: &str = "
 struct Out { @builtin(position) position: vec4<f32>, @location(0) color: vec3<f32> }
@@ -91,7 +91,7 @@ fn main() -> Result<()> {
     let viewport = window.canvas(move |builder, size| {
         builder.texture(
             id,
-            aegle::scene::Rect::new(0.0, 0.0, size.width, size.height),
+            aegle::ui::scene::Rect::new(0.0, 0.0, size.width, size.height),
         )?;
         Ok(())
     });

@@ -3,7 +3,7 @@
 
 #[allow(unused_imports)]
 use aegle::prelude::*;
-use aegle::{Point, Result, Size, TextSystem, Theme, Ui};
+use aegle::ui::{Point, Result, Size, TextSystem, Theme, Ui};
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
@@ -48,11 +48,11 @@ fn compiled_view_uses_retained_state_and_local_layout_overrides() -> Result {
     assert_eq!(view.clear.bounds().size.width, 80.0);
     assert_eq!(
         view.clear.appearance().background,
-        aegle::Color::rgb(103, 80, 164)
+        aegle::ui::Color::rgb(103, 80, 164)
     );
     assert_eq!(
         view.editor.appearance().selection,
-        aegle::Color::rgb(213, 223, 255)
+        aegle::ui::Color::rgb(213, 223, 255)
     );
     assert_eq!(view.multiline.bounds().size.height, 70.0);
     let field = view.editor.clone();

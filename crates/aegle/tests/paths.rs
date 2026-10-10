@@ -6,11 +6,11 @@
 #[allow(unused_imports)]
 use aegle::prelude::*;
 use aegle::{
-    Node, Result, Size, TextSystem, Theme, TransitionProperty, Ui,
     loader::{
         Program,
         markup::{Item, Node as Markup, PropertyName, Value as Literal, choices, parse},
     },
+    ui::{Node, Result, Size, TextSystem, Theme, TransitionProperty, Ui},
 };
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
@@ -37,7 +37,7 @@ fn scenes(ui: &Ui) -> Result<Vec<String>> {
     Ok(scenes)
 }
 
-fn timings(node: &Node) -> Result<[Option<aegle::Transition>; 2]> {
+fn timings(node: &Node) -> Result<[Option<aegle::ui::Transition>; 2]> {
     Ok([
         node.property_transition(TransitionProperty::Paint),
         node.property_transition(TransitionProperty::Offset),

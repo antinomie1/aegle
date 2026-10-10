@@ -10,8 +10,8 @@ use aegle_text::{Blob, GenericFamily};
 
 use aegle::prelude::*;
 use aegle::{
-    Size, TextSystem, Ui,
     loader::{Elements, Program},
+    ui::{Size, TextSystem, Ui},
 };
 
 /// A selectable chip: a button that remembers whether it is selected.
@@ -78,7 +78,7 @@ fn fixture(name: &str) -> String {
 
 #[test]
 fn a_library_element_builds_from_both_paths() -> Result {
-    aegle::register_token("app.chip", |_| Color::rgba(10, 20, 30, 255))?;
+    aegle::ui::register_token("app.chip", |_| Color::rgba(10, 20, 30, 255))?;
     let fonts = fonts()?;
     let compiled = ui(&fonts)?;
     let view = aegle::ui!(compiled.root(), "tests/fixtures/chips.aegle")?;

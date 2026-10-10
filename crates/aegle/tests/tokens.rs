@@ -5,8 +5,12 @@
 #[allow(unused_imports)]
 use aegle::prelude::*;
 use aegle::{
-    Color, ColorSlot, Font, LengthSlot, Node, Result, Size, TextSystem, Theme, ThemeOverride,
-    TokenSlot, Ui, UiError, Widgets, loader::Program, register_token, token,
+    loader::Program,
+    ui::{
+        Color, ColorSlot, Font, LengthSlot, Node, Result, Size, TextSystem, Theme, ThemeOverride,
+        TokenSlot, Ui, UiError, register_token, token,
+    },
+    widgets::Widgets,
 };
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
@@ -169,7 +173,7 @@ fn layout_font_and_transition_bindings_and_atomic_rejection() -> Result {
 
     #[cfg(feature = "motion")]
     {
-        use aegle::{Easing, Transition, TransitionProperty::Paint};
+        use aegle::ui::{Easing, Transition, TransitionProperty::Paint};
         use std::time::Duration;
         let speed = register_token("theme-test.speed", |_| Duration::from_millis(120))?;
         first.bind_transition(Paint, speed, Easing::Linear);

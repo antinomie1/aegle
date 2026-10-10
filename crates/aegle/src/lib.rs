@@ -5,15 +5,21 @@
 //! opt-in through `unix-accessibility` and `windows-accessibility`. Enable `vulkan`
 //! or `wgpu` and select `RendererBackend::Vulkan` or `RendererBackend::Wgpu` for GPU presentation. Lower-level crates
 //! remain independent; no macOS host is currently implemented.
+//!
+//! [`prelude`] holds the common names; everything else stays under the crate
+//! it comes from: [`ui`], [`widgets`] and [`app`].
 
-// Empty without a native platform or GPU renderer feature.
-#[allow(unused_imports)]
-pub use aegle_app::*;
+/// Native application host: `App`, windows, renderer selection and desktop
+/// services. Empty without a native platform or GPU renderer feature.
+pub use aegle_app as app;
 /// Bounded image decoding into scene images (PNG always; JPEG, WebP, GIF and SVG by
 /// feature) and, with `effects`, gradient and shadow images.
 pub use aegle_image as image;
-pub use aegle_ui::*;
-pub use aegle_widgets::*;
+/// The retained engine: `Ui`, `Node`, `Container`, styles, themes, input
+/// types and the scene.
+pub use aegle_ui as ui;
+/// The default controls.
+pub use aegle_widgets as widgets;
 extern crate self as aegle;
 
 /// Declare markup elements for a control library.

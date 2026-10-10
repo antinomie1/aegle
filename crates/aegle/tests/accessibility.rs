@@ -7,7 +7,10 @@
     feature = "unix-accessibility"
 ))]
 
-use aegle::{Result, Size, TextSystem, Theme, Ui, Widgets, accesskit::Role};
+use aegle::{
+    ui::{Result, Size, TextSystem, Theme, Ui, accesskit::Role},
+    widgets::Widgets,
+};
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 

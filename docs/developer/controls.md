@@ -75,7 +75,7 @@ name.on_submit(|field| {
     println!("submitted {}", field.text());
 });
 let notes = window.text_area("First line\nSecond line");
-notes.select(aegle::Selection { anchor: 0, focus: 5 });
+notes.select(aegle::ui::Selection { anchor: 0, focus: 5 });
 let secret = window.text_field("");
 secret.set_password(true);
 ```
@@ -356,7 +356,7 @@ context.item("Paste");
 <img src="images/image-view.png" width="320" alt="ImageView：原始像素尺寸、拉伸为 96×48">
 
 ```rust
-use aegle::scene::Image;
+use aegle::ui::scene::Image;
 
 let pixels = vec![255u8; 48 * 48 * 4];             // 非预乘 sRGB RGBA8，首行在前
 let image = Image::new(48, 48, pixels)?;
@@ -374,7 +374,7 @@ view.set_height(48.0);
 <img src="images/canvas.png" width="160" alt="Canvas：自定义绘制的星形">
 
 ```rust
-use aegle::scene::{Color, FillRule, PathBuilder, Point};
+use aegle::ui::scene::{Color, FillRule, PathBuilder, Point};
 
 let canvas = window.canvas(|builder, size| {
     let mut path = PathBuilder::new();

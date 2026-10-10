@@ -2,7 +2,7 @@
 
 本文面向用 Aegle 编写应用的开发者，按任务介绍当前已实现的接口；不使用 `aegle` facade、只用控件库时见[不经 facade 使用控件库](standalone.md)。各控件的外观、状态和专属方法见[控件参考](controls.md)；设计契约与验证记录分别见 [Rust API 契约](../rust-api.md)、[标记语言](../markup.md)和[实现状态](../implementation.md)。
 
-Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。创建、修改和读取控件的方法直接返回值，不返回 `Result`；误用是程序错误，会 panic：控件已删除或窗口已关闭（可先用 `is_alive()` 判断）、在绘制器或钩子里使用句柄、传入文档排除的参数（如负宽度、NaN）。会因环境或应用代码失败的操作才返回 `aegle::Result<T>`（`Result<T, Box<dyn Error>>`）：创建 App 与窗口、关闭窗口、加载标记、`refresh` 与输入投递等宿主操作。事件处理器可以返回 `()` 或 `Result`，错误交给 `App::on_error`（见第 7 节），默认不会结束程序。
+Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。创建、修改和读取控件的方法直接返回值，不返回 `Result`；误用是程序错误，会 panic：控件已删除或窗口已关闭（可先用 `is_alive()` 判断）、在绘制器或钩子里使用句柄、传入文档排除的参数（如负宽度、NaN）。会因环境或应用代码失败的操作才返回 `Result<T>`（`aegle::ui::Result`，即 `Result<T, Box<dyn Error>>`，prelude 已引入）：创建 App 与窗口、关闭窗口、加载标记、`refresh` 与输入投递等宿主操作。事件处理器可以返回 `()` 或 `Result`，错误交给 `App::on_error`（见第 7 节），默认不会结束程序。
 
 ## 1. 依赖与 feature
 
@@ -34,6 +34,10 @@ aegle = { path = "../aegle/crates/aegle" }
 
 Linux 构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon；启用 `system-fonts` 时还需要 Fontconfig。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。
 
+`use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入与 `scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口与 `desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
+
+`use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入、`scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口、`desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
+
 ## 2. 最小程序
 
 命令式：
@@ -61,8 +65,8 @@ Window {
 ```rust
 use aegle::prelude::*;   // 让内置元素在 ui! 处可见，不能省略
 
-fn main() -> aegle::Result<()> {
-    aegle::App::run_ui(aegle::ui!("examples/hello.aegle"))
+fn main() -> Result<()> {
+    App::run_ui(aegle::ui!("examples/hello.aegle"))
 }
 ```
 
@@ -101,7 +105,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 `WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限），Linux 另有 `layer: Option<LayerOptions>`，用 wlr layer-shell 创建面板/背景/覆盖层：
 
 ```rust
-use aegle::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
+use aegle::app::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
 
 let panel = app.window_with_options("Panel", WindowOptions {
     height: 32,
@@ -405,7 +409,7 @@ UI 句柄只能留在 UI 线程。`let proxy = app.proxy(move |message: Job| lab
 ### 桌面服务（`desktop-services`，默认 `desktop` 组合包含）
 
 ```rust
-use aegle::desktop::{Event, FileDialog, Icon, MenuItem, Notification, Shortcut, Tray};
+use aegle::app::desktop::{Event, FileDialog, Icon, MenuItem, Notification, Shortcut, Tray};
 
 let desktop = app.desktop("org.example.Notes", move |event| match event {
     Event::Files { paths: Some(paths), .. } => status.set_text(&format!("{paths:?}")),
@@ -520,7 +524,7 @@ view.reload(&Program::load("ui/panel.aegle")?);   // 失败时保留旧界面
 不使用 `App` 时，可以把无窗口 `Ui` 接到自己的窗口系统和 renderer（`default-features = false` 即可；也可以完全不依赖 facade，见[不经 facade 使用控件库](standalone.md)）：
 
 ```rust
-use aegle::{Size, TextSystem, Theme, Ui, Visit};
+use aegle::ui::{Size, TextSystem, Theme, Ui, Visit};
 use std::{cell::RefCell, rc::Rc};
 
 let fonts = Rc::new(RefCell::new(TextSystem::new()));   // 注册应用字体

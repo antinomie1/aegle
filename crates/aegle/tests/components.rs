@@ -6,8 +6,8 @@
 #[allow(unused_imports)]
 use aegle::prelude::*;
 use aegle::{
-    Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui,
     loader::{Data, Program},
+    ui::{Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui},
 };
 use aegle_text::{Blob, GenericFamily};
 use std::{cell::RefCell, rc::Rc, sync::Arc};

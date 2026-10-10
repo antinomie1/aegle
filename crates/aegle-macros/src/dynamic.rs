@@ -17,9 +17,9 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
     }
     let root_type = cx.handle_type(root.kind);
     let (parent_type, method) = if root.kind == ElementKind::Window {
-        (quote! { #facade::App }, quote! { open })
+        (quote! { #facade::app::App }, quote! { open })
     } else {
-        (quote! { #facade::Container }, quote! { build })
+        (quote! { #facade::ui::Container }, quote! { build })
     };
     let states = &program.templates[0].states;
     let ids: Vec<Ident> = program
@@ -59,7 +59,7 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
             #(pub #ids: #id_types,)*
             #(pub #state_names: #loader::State<#state_types>,)*
         }
-        move |#parent: &#parent_type| -> #facade::Result<#view> {
+        move |#parent: &#parent_type| -> #facade::ui::Result<#view> {
             let view = __AEGLE_PROGRAM.with(|program| program.#method(#parent))?;
             let typed = "markup handle types are fixed when compiled";
             ::core::result::Result::Ok(#view {

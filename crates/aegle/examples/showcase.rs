@@ -3,12 +3,12 @@ use std::{cell::Cell, rc::Rc};
 
 use aegle::{
     prelude::*,
-    scene::{Affine, FillRule, Gradient, GradientStop, Image, PathBuilder, Point, Stroke},
+    ui::scene::{Affine, FillRule, Gradient, GradientStop, Image, PathBuilder, Point, Stroke},
 };
 
 const THEMES: [&str; 3] = ["Light", "Dark", "High contrast"];
 
-fn star() -> Result<aegle::scene::Path> {
+fn star() -> Result<aegle::ui::scene::Path> {
     let mut star = PathBuilder::new();
     star.move_to(Point::new(0.0, -22.0));
     for i in 1..5 {

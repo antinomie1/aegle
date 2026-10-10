@@ -23,9 +23,9 @@ use syn::{Expr, ExprLit, Ident, Lit, LitStr, Token, parse::Parse, parse::ParseSt
 
 /// Compiles a manifest-relative `.aegle` file into a typed retained view.
 ///
-/// `ui!("view.aegle")` produces a builder closure taking `&aegle::App` for a
-/// `Window` root, or `&aegle::Container` for any other component root. The builder
-/// returns `aegle::Result<View>`. `ui!(parent, "view.aegle")` invokes that builder
+/// `ui!("view.aegle")` produces a builder closure taking `&aegle::app::App` for a
+/// `Window` root, or `&aegle::ui::Container` for any other component root. The builder
+/// returns `aegle::ui::Result<View>`. `ui!(parent, "view.aegle")` invokes that builder
 /// immediately and evaluates the parent expression once.
 ///
 /// The inferred view has a public `root` handle and a public typed field for

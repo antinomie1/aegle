@@ -12,7 +12,11 @@
 
 #[allow(unused_imports)]
 use aegle::prelude::*;
-use aegle::{App, AppOptions, Result, TextSystem, loader::Program};
+use aegle::{
+    app::{App, AppOptions},
+    loader::Program,
+    ui::{Result, TextSystem},
+};
 use std::time::Duration;
 
 #[test]

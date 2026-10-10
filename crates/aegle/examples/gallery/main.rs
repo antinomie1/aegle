@@ -9,9 +9,12 @@
 mod composite;
 
 use aegle::{
-    Container, Modifiers, Point, PointerId, PointerKind, Result, Selection, Size, TextSystem,
-    Theme, Transition, Ui, Visit, Widgets,
-    scene::{Affine, Color, FillRule, Image, PathBuilder, Rect, Stroke},
+    ui::{
+        Container, Modifiers, Point, PointerId, PointerKind, Result, Selection, Size, TextSystem,
+        Theme, Transition, Ui, Visit,
+        scene::{Affine, Color, FillRule, Image, PathBuilder, Rect, Stroke},
+    },
+    widgets::Widgets,
 };
 use aegle_render_software::{Renderer, Surface};
 use aegle_text::{Blob, GenericFamily};
@@ -26,7 +29,7 @@ const SCALE: f32 = 2.0;
 /// Builds one cell's control into `host` and puts it into the shown state.
 pub(crate) type Setup = fn(&Ui, &Container);
 
-fn center(node: &aegle::Node) -> Point {
+fn center(node: &aegle::ui::Node) -> Point {
     let bounds = node.bounds();
     Point::new(
         bounds.origin.x + bounds.size.width / 2.0,
@@ -34,13 +37,13 @@ fn center(node: &aegle::Node) -> Point {
     )
 }
 
-pub(crate) fn hover(ui: &Ui, node: &impl Deref<Target = aegle::Node>) -> Result {
+pub(crate) fn hover(ui: &Ui, node: &impl Deref<Target = aegle::ui::Node>) -> Result {
     ui.refresh()?;
     let at = center(node);
     ui.pointer(PointerId(1), PointerKind::Move, at, Modifiers::default())
 }
 
-fn press(ui: &Ui, node: &impl Deref<Target = aegle::Node>) -> Result {
+fn press(ui: &Ui, node: &impl Deref<Target = aegle::ui::Node>) -> Result {
     hover(ui, node)?;
     let at = center(node);
     ui.pointer(
@@ -379,10 +382,10 @@ fn main() -> Result {
         (160.0, 120.0),
         &[("custom painter", |_, h| {
             let mut star = PathBuilder::new();
-            star.move_to(aegle::scene::Point::new(0.0, -28.0));
+            star.move_to(aegle::ui::scene::Point::new(0.0, -28.0));
             for i in 1..5 {
                 let angle = i as f32 * 4.0 * std::f32::consts::PI / 5.0;
-                star.line_to(aegle::scene::Point::new(
+                star.line_to(aegle::ui::scene::Point::new(
                     28.0 * angle.sin(),
                     -28.0 * angle.cos(),
                 ));

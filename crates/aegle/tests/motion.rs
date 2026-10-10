@@ -5,8 +5,10 @@
 #[allow(unused_imports)]
 use aegle::prelude::*;
 use aegle::{
-    Easing, Node, Point, Result, Size, TextSystem, Theme, Transition, TransitionProperty, Ui,
     loader::{Data, Program},
+    ui::{
+        Easing, Node, Point, Result, Size, TextSystem, Theme, Transition, TransitionProperty, Ui,
+    },
 };
 use std::{cell::RefCell, f32::consts::FRAC_PI_2, rc::Rc, time::Duration};
 

@@ -3,7 +3,7 @@ use std::{cell::Cell, rc::Rc};
 
 use aegle::{
     prelude::*,
-    scene::{Affine, FillRule, Image, PathBuilder, Point, Stroke},
+    ui::scene::{Affine, FillRule, Image, PathBuilder, Point, Stroke},
 };
 
 fn main() -> Result<()> {

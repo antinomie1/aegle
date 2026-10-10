@@ -1,8 +1,8 @@
 //! Choice, popup, table, content-sized list and group effect screenshots.
 use crate::{Setup, hover};
 use aegle::{
-    Color, Container, Key, KeyInput, Modifiers, NodeWidgets, Point, Result, RowHeight, TableColumn,
-    Ui, Widgets,
+    ui::{Color, Container, Key, KeyInput, Modifiers, Point, Result, Ui},
+    widgets::{NodeWidgets, RowHeight, TableColumn, Widgets},
 };
 use aegle_ui::OrFail;
 

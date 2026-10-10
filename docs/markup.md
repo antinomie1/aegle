@@ -16,8 +16,10 @@ Window {
 `main.rs`：
 
 ```rust
-fn main() -> aegle::Result<()> {
-    aegle::App::run_ui(aegle::ui!("main.aegle"))
+use aegle::prelude::*;
+
+fn main() -> Result<()> {
+    App::run_ui(aegle::ui!("main.aegle"))
 }
 ```
 

@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use aegle::{
-    desktop::{Event, FileDialog, Icon, MenuItem, Notification, Tray},
+    app::desktop::{Event, FileDialog, Icon, MenuItem, Notification, Tray},
     prelude::*,
 };
 

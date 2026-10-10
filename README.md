@@ -29,8 +29,8 @@ and run it:
 ```rust
 use aegle::prelude::*;
 
-fn main() -> aegle::Result<()> {
-    aegle::App::run_ui(aegle::ui!("main.aegle"))
+fn main() -> Result<()> {
+    App::run_ui(aegle::ui!("main.aegle"))
 }
 ```
 

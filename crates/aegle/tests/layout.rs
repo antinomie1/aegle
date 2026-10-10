@@ -6,9 +6,8 @@
 #[allow(unused_imports)]
 use aegle::prelude::*;
 use aegle::{
-    Result, Size, TextSystem, Theme, Ui,
     loader::{Data, Program},
-    scene::Rect,
+    ui::{Result, Size, TextSystem, Theme, Ui, scene::Rect},
 };
 use std::{cell::RefCell, rc::Rc};
 

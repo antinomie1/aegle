@@ -6,8 +6,12 @@
 #[allow(unused_imports)]
 use aegle::prelude::*;
 use aegle::{
-    Color, Point, Result, Shadow, Size, TextSystem, Theme, TransitionProperty, Ui,
-    loader::Elements, loader::Program, register_token, scene::GradientGeometry,
+    loader::Elements,
+    loader::Program,
+    ui::{
+        Color, Point, Result, Shadow, Size, TextSystem, Theme, TransitionProperty, Ui,
+        register_token, scene::GradientGeometry,
+    },
 };
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
