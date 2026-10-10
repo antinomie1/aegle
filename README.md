@@ -27,6 +27,8 @@ Window {
 and run it:
 
 ```rust
+use aegle::prelude::*;
+
 fn main() -> aegle::Result<()> {
     aegle::App::run_ui(aegle::ui!("main.aegle"))
 }
@@ -49,18 +51,19 @@ Try the bundled examples with `cargo run -p aegle --example controls --release`.
 
 ## Features
 
-Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`, `text-dictionary`, `markup`, `motion`, `effects` and `colrv1`.
+Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`, `text-dictionary`, `markup`, `motion`, `effects`, `colrv1` and `desktop-services`.
 
 | Feature | Default | Purpose |
 | --- | :---: | --- |
 | `native` | ✓ | Native windows: Wayland on Linux, Win32 on Windows |
 | `software` | ✓ | CPU software rendering |
 | `system-fonts` | ✓ | System font discovery |
-| `markup` | ✓ | `ui!` macro and the dynamic markup engine |
+| `markup` | ✓ | `ui!` macro and the markup engine, including runtime loading |
 | `text-dictionary` | ✓ | Dictionary word segmentation for Chinese, Japanese and Southeast Asian scripts |
-| `motion` | ✓ | Paint and position transitions |
+| `motion` | ✓ | Transitions, keyframe animations and springs |
 | `effects` | ✓ | Image effects (`aegle::image::effects`) |
 | `colrv1` | ✓ | COLRv1 colour glyphs |
+| `desktop-services` | ✓ | File dialogs, notifications, tray icon and global shortcuts (`App::desktop`) |
 | `vulkan` |  | Vulkan rendering |
 | `wgpu` |  | Portable minimal wgpu rendering |
 | `accessibility` |  | Semantic tree export without a platform adapter |

@@ -17,7 +17,7 @@
 | 输入到首次相关呈现 | p95 ≤ 33 ms，p99 ≤ 50 ms | 60 Hz 场景；端到端测量，不仅测 setter |
 | UI 布局及构造绘制提交工作 | p95 ≤ 4 ms | 不把 GPU 等待计为纯 CPU 计算 |
 | 首帧 | 热启动 ≤ 200 ms，冷启动 ≤ 600 ms | 包含字体发现，分别报告缓存冷热 |
-| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提 |
+| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-10-10 在 x86_64 Linux 以 facade 默认 feature 构建 `hello`（f72c7c6）为 8,495,544 B（8.1 MiB），**未达到** |
 | 默认组件文字场景发布文件 | ≤ 16 MiB | 包含默认无障碍、主题、补间；不含可选高级模块 |
 | 最小窗口 / 100 控件场景 PSS | ≤ 32 / 48 MiB | Linux 测量，包含可归因的用户态驱动映射；系统服务进程另列 |
 | 场景显式 GPU 分配 | ≤ 16 MiB | 800×480；计入图集、纹理和临时附件；swapchain 估计与驱动隐藏分配另列 |
@@ -29,14 +29,12 @@
 | 缓存 | 小设备默认上限 | 处理策略 |
 | --- | --- | --- |
 | CPU 字形图像 | 2 MiB | 按使用淘汰；不预装 CJK 字库 |
-| GPU 字形图集 | 4 MiB | 分页、按需分配；在途页延迟回收 |
-| 普通图像纹理缓存 | 与 GPU 字形图集共用页/条目/设备预算 | 按 Image id 缓存，整页 LRU；scene 持有的像素由调用方负责 |
-| 非活动文本布局缓存 | 2 MiB | 最近使用淘汰，活动编辑状态不放入可丢弃缓存 |
+| GPU 字形与图像图集 | Vulkan：最多 8 页 512²（灰度页 256 KiB、彩色页 1 MiB），计入 16 MiB 设备预算；wgpu：一张 1024² 灰度页加一张 1024² 彩色页（共 5 MiB），放不下的图像与路径 mask 另得专用纹理，不设上限 | 按需分配；Vulkan 整页 LRU，wgpu 页满时整页清空；按 Image id 缓存，scene 持有的像素由调用方负责 |
 | 特效临时纹理池 | 软件 `Renderer::set_effect_budget(bytes)`，默认不限（层不超过窗口大小）；Vulkan 计入设备内存预算；wgpu 不设上限 | 层图像按层范围分配，同尺寸复用，下一帧最多保留 8 张备用；模糊暂存三张按采样区分配，尺寸变化时重建。超预算时打开层返回错误，背景模糊被跳过并计入 `skipped_blurs()`。渐变与阴影按像素解析求值，不占此池。各后端的时间代价见[平台与绘制 · 图层](platform-rendering.md#图层) |
 
 上限只约束对应缓存，不等于整个模块 RAM。活动文本、字体 metadata、映射文件、AccessKit 树、交换链和驱动资源分别计量。缓存对象被在途命令引用时不能立刻释放；需要保证预算内复用/等待，而不是无限新建另一批资源。
 
-活动文本或单张资源本身超过预算时返回 BudgetExceeded 或接受调用者显式提高预算；由窗口尺寸决定的像素存储（SHM/GDI 缓冲、软件 mask、swapchain）默认不设字节上限，结构上界见下文；不无限扩容，也不静默破坏编辑状态。图片先验证尺寸及溢出，默认单张解码结果最多 16 MiB。
+活动文本或单张资源本身超过预算时返回各模块的预算错误（如 Vulkan 的 `Error::Budget`、平台的 `BufferBudget`、wgpu 的 `TooLarge`），或由调用者显式提高预算；由窗口尺寸决定的像素存储（SHM/GDI 缓冲、软件 mask、swapchain）默认不设字节上限，结构上界见下文；不无限扩容，也不静默破坏编辑状态。图片先验证尺寸及溢出，默认单张解码结果最多 16 MiB。
 
 ### 当前软件后端的内存边界
 
@@ -123,7 +121,7 @@ Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping sou
 
 Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText，GPU 绘制经可选 wgpu 使用 Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 
-当前发布配置采用优化等级 3、thin LTO、单 codegen unit 和 strip debuginfo，优先运行性能；不默认 panic=abort 以换体积，公开边界使用 Result，后台/平台回调不得展开跨 FFI。具体性能配置可按测量调整，但必须保留配置记录。
+当前发布配置采用优化等级 3、thin LTO、单 codegen unit 和 strip symbols，优先运行性能；不默认 panic=abort 以换体积，公开边界使用 Result，后台/平台回调不得展开跨 FFI。具体性能配置可按测量调整，但必须保留配置记录。
 
 ### 当前滚动成本
 

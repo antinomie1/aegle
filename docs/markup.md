@@ -21,9 +21,9 @@ fn main() -> aegle::Result<()> {
 }
 ```
 
-两份手写源码合计 7 行，初始化包含在 App::run_ui 中。宏是构建期能力：静态文档生成直接创建/设置控件的 Rust 代码；含动态特性的文档生成构造已检查程序的 Rust 代码，由 `aegle::loader` 执行。两者的编译产物都不携带标记解析器。宏为入口及每个导入文件生成编译器可追踪的依赖标记，修改任一文件都会触发重编译。
+两份手写源码合计 8 行（4 行标记、4 行 Rust），初始化包含在 App::run_ui 中；`use aegle::prelude::*` 不能省略，它让内置元素在 `ui!` 的调用处可见。宏是构建期能力：静态文档生成直接创建/设置控件的 Rust 代码；含动态特性的文档生成构造已检查程序的 Rust 代码，由 `aegle::loader` 执行。两者的编译产物都不携带标记解析器。宏为入口及每个导入文件生成编译器可追踪的依赖标记，修改任一文件都会触发重编译。
 
-对应可执行示例为 `cargo run -p aegle --example hello_markup`；加上示例的文档注释，两份文件共 8 行。当前 App 需要 Linux Wayland 与系统字体；`markup` 本身不启用原生平台，片段可挂到无窗口 Ui。
+对应可执行示例为 `cargo run -p aegle --example hello_markup`；加上示例的文档注释，两份文件共 9 行。当前 App 需要 Linux Wayland 与系统字体；`markup` 本身不启用原生平台，片段可挂到无窗口 Ui。
 
 ## 当前编译接口
 
@@ -116,12 +116,11 @@ view.done.on_click(move |_| view.status.set_text("已完成"))?;
 | `backdrop_blur` | 除 Window 外任意控件，非负 `dp` 标准差，先模糊其圆角边界内已绘制的内容 |
 | `tooltip` | 除 Window 外任意控件的提示字符串，同时作为无障碍描述 |
 | `indicator_color` | 标志或完成部分的颜色 |
-| `transition` | 全节点外观过渡，非负整数毫秒，如 `120ms`；零表示立即到目标 |
-| `easing` | 同节点须有 transition；linear/ease_in/ease_out/ease_in_out，默认 ease_out |
+| `transition` | 全节点过渡：`120ms` 或 `[120ms, ease_in_out]`，曲线为 linear/ease_in/ease_out/ease_in_out，未写时 ease_out；零表示立即到目标 |
 | `offset_x`、`offset_y` | 除 Window 外任意控件的呈现位移，有限 `dp`；可绑定 float（按 dp）。另一轴保持当前目标 |
 | `scale` | 除 Window 外任意控件以中心缩放子树，(0, 1000] 的数，默认 1；可绑定 |
 | `rotation` | 除 Window 外任意控件以中心旋转子树，有限的度数（顺时针为正）；可绑定 |
-| `paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition`、`opacity_transition`、`shadow_transition` | 单独设置外观、位移、缩放、旋转、组透明度、阴影的过渡：`200ms` 或 `[200ms, linear]`，未写 easing 时为 ease_out；覆盖同节点 `transition` 中的对应部分 |
+| `paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition`、`opacity_transition`、`shadow_transition` | 单独设置外观、位移、缩放、旋转、组透明度、阴影的过渡，写法同 `transition`；覆盖同节点 `transition` 中的对应部分 |
 
 Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
 
@@ -129,7 +128,7 @@ ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`
 
 声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性与 `shadow`、渐变色标。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知属性、重复属性/ID、不适用属性、错误类型及未实现语法在 `ui!` 的编译期、运行时加载的挂载前拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 
-`transition: 120ms` 与可选 `easing: ease_out` 需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。过渡在本次构建的全部属性设置后才安装（见上文构建顺序），首次显示没有初始样式动画。`transition` 为外观、位移、缩放、旋转、组透明度和阴影统一设置时长，六个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
+`transition: [120ms, ease_out]` 等过渡属性需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。过渡在本次构建的全部属性设置后才安装（见上文构建顺序），首次显示没有初始样式动画。`transition` 为外观、位移、缩放、旋转、组透明度和阴影统一设置时长，六个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
 
 独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、元素规格 `ElementSpec`、多文件 `Sources`/`compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，括号、调用实参和列表的嵌套，以及运算符与字段读取构成的左脊，合计受同一层数上限约束，`list<…>` 类型不允许嵌套；整数字面量必须在 i64 内；显式解析深度最多 `Limits::MAX_DEPTH`（256）。尺寸预算只由解析器执行；`check_program` 对手工构造的 AST 只施加同一 256 层上限，使构建不会递归更深。`ui!` 与 `Program::load` 使用默认上限。`choices(name)` 列出节点属性接受的标识符，元素的选项写在其规格中；两条路径都把节点属性交给 loader 的同一组 setter，把元素属性交给元素自己的胶水代码，引擎逐项显式映射，不把未知值落到默认值。静态文档的运行时不保留 AST、规格或解析器；`syn`/`quote`/`proc-macro-crate` 仅用于构建宏及识别重命名依赖。
 
@@ -148,11 +147,11 @@ Window {
 
 `state name: type = value` 只能写在文档根节点或组件体顶层；类型为 bool、int（i64）、float（有限 f32）、string、`list<int>`、`list<string>`。初始值可读参数和此前声明的 state，每个实例求值一次。表达式包含字面量、名称（内层 for 项 → state → 参数）、事件块中元素声明的 `self` 字段、`!`、一元 `-`、`|| && == != < <= > >= + - * / %`、列表字面量，以及 `str`、`len`、`int`、`float`。除整数字面量可按上下文转为 float 外没有隐式转换；`+` 也连接字符串和同类列表，比较只用于数值和字符串。未知名称、类型不符、不适用属性等在编译或加载时报告文件、行、Unicode 列和源码片段。
 
-属性值写表达式即为单向绑定：节点属性中可绑定 label/tooltip（string）、visible/enabled（bool）与 offset_x/offset_y/scale/rotation（float）；元素属性中有 setter、非必填且类型为 bool、int、float、fraction、length、string 或 line 的可绑定。其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。元素的事件见其规格（内置元素见上表），事件不携带值，处理块用 `self.字段` 读取元素声明的字段；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受源码大小约束。标记事件块占用控件的回调槽，Rust 再设置同一回调会替换它。
+属性值写表达式即为单向绑定：节点属性中可绑定 label/tooltip（string）、visible/enabled（bool）与 offset_x/offset_y/scale/rotation（float）；元素属性中有 setter、非必填且类型为 bool、int、float、fraction、length、string 或 line 的可绑定。其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。元素的事件见其规格（内置元素见上表），事件不携带值，处理块用 `self.字段` 读取元素声明的字段；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受 `Limits` 约束（见下文限额）。标记事件块与 Rust 的 `on_*` 处理器一样追加到控件上，两者共存、按注册顺序执行。
 
 `if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点放在一个透明的 contents 分组中，直接参与父容器的布局：在 Row/Column 中与兄弟共享对齐、换行、gap 和 grow，在 Grid 中各自占一格，在 Stack 中叠放。release 测量（本机 CJK 测试字体，7 次中位数）：1000 行 `for` 首次构建加刷新 3.6 ms，追加一行 0.8 ms，整体反序 5.8 ms；大数据仍应使用 ListView。
 
-`component Name(p: type = literal, q: type) { state ...; Root { ... } }` 声明组件，组件体只有一个根节点；`Name { p: expr }` 实例化，参数随调用方表达式读取的 state 更新，组件 state 每个实例独立。实例不接受子节点、事件或 id；递归实例化、与元素同名或重复组件名均为错误。`use "relative.aegle"` 导入另一文件声明的所有组件：路径相对于导入方文件、以 `/` 分隔且不能为绝对路径；导入环为错误，重复导入只加载一次，被导入文件只能声明组件，一个程序最多 256 个文件。组件名在已加载文件间全局可见。
+`component Name(p: type = literal, q: type) { state ...; Root { ... } }` 声明组件，组件体只有一个根节点；`Name { p: expr }` 实例化，参数随调用方表达式读取的 state 更新，组件 state 每个实例独立。实例不接受 `id`；子节点只能放入组件的 `slot`，事件只能是组件声明的 `event`（见下文）；递归实例化、与元素同名或重复组件名均为错误。`use "relative.aegle"` 导入另一文件声明的所有组件：路径相对于导入方文件、以 `/` 分隔且不能为绝对路径；导入环为错误，重复导入只加载一次，被导入文件只能声明组件，一个程序最多 256 个文件。组件名在已加载文件间全局可见。
 
 **record、key、let、宿主动作、slot、组件事件与限额**：
 
@@ -214,7 +213,7 @@ Window {
 
 整数溢出和除零为带源位置的错误，两条执行路径一致。float 计算结果非有限时也报错。字符串是 UTF-8，用户可见字符操作遵守文本模块的 grapheme 规则，不按字节切割。
 
-属性表达式可读取 state、输入属性、已命名节点的公开属性和宿主导出的只读数据；编译/加载时建立依赖。`text: str(count)` 在 count 改变时更新，不每帧求值。绑定环被拒绝；赋值和动画优先级见[架构](architecture.md)。
+属性表达式当前读取 state、组件参数、`for` 项与事件块里的 `self` 字段，编译/加载时建立依赖；`text: str(count)` 在 count 改变时更新，不每帧求值。读取已命名节点的公开属性和宿主导出的只读数据仍是目标。赋值和动画优先级见[架构](architecture.md)。
 
 ## 后续目标：事件与宿主
 
@@ -224,7 +223,7 @@ Window {
 
 宿主注册具名动作及参数/返回类型，界面使用 `host.refresh()` 等直接调用。耗时操作由宿主异步执行，结果通过更新 state/模型返回；标记语言不内置 await 或通用 VM。动作只能使用宿主明确暴露的能力。
 
-每个事件块最多执行 10,000 个简单操作，每轮更新传播上限为 64 轮；超限报告错误并停止本轮，保留此前合法赋值。编译型与运行时执行型均遵守这些语义，限制可由宿主显式下调，不默认放开。
+每次事件处理最多执行 10,000 条语句，嵌套 `emit` 最多 64 层，单个 `for` 最多 10,000 行；超限报告错误并停止本次处理，保留此前合法赋值。绑定不写 state，没有传播轮次。编译型与运行时执行型均遵守这些语义，限制可由宿主经 `Program::set_limits` 调整。
 
 ## 后续目标：条件、列表和组件
 
@@ -255,16 +254,16 @@ component Counter(start: int = 0) {
 
 组件支持有类型的输入属性、具名事件和一个默认 slot（具名 slot 仍是目标）；slot 只表示由调用方提供的子内容，不引入继承层次。首版使用组合，不做组件类继承。导入通过 `use "relative.aegle"` 或 `use md3 from rust("my_md3")`，依赖环拒绝，Rust 映射需构建时或宿主显式注册。
 
-组件间通信采用输入属性和事件；没有隐式全局状态。样式通过主题 token 与本地属性，不实现 CSS 选择器/级联语言。动画通过按属性组的 transition，例如 `scale_transition: [120ms, ease_out]`；详见[主题动画](components-theme-animation.md)。
+组件间通信采用输入属性和事件。唯一的线程级共享状态是宿主动作表：`aegle::loader::action` 把动作登记给本线程所有没有同名动作的程序，`ui!` 生成的视图经它调用宿主。样式通过主题 token 与本地属性，不实现 CSS 选择器/级联语言。动画通过按属性组的 transition，例如 `scale_transition: [120ms, ease_out]`；详见[主题动画](components-theme-animation.md)。
 
 ## 后续目标：加载与重载
 
 编译工具和 loader 共用解析、源位置和类型检查规则；前者生成构造已检查程序的 Rust 代码，后者在运行时解析，两者交给同一引擎执行。当前引擎保留已检查程序（含表达式树）供绑定和块重建使用，不保留源码或解析器状态；表达式以小型树解释，不引入 JIT、GC 或动态代码加载。
 
-运行时组件/宿主动作注册表只有 loader 构建需要。未注册组件、未知属性、错误类型和不支持能力均在挂载前报错，不能静默忽略拼写错误。
+第三方元素在运行时由 `Elements::with` 登记；宿主动作既可登记到单个程序（`Program::action`），也可登记到线程共享表（`ui!` 视图只能用后者）。未注册组件、未知属性、错误类型和不支持能力均在挂载前报错，不能静默忽略拼写错误。
 
 首版只提供显式 `reload()`，不内置文件监视器。先解析、检查、构造未挂载子树，成功后原子替换根；失败保留旧界面。替换保留宿主显式模型，重置控件本地状态，结束旧 IME 会话和动画，不承诺复杂热重载状态迁移。
 
-默认加载上限：源文件总计 1 MiB、嵌套 64 层、单窗口 10,000 个逻辑节点；超限错误，不隐式无限扩容。宿主可配置上限。错误包含文件、行列、组件路径和原因，提供数据结构及文本呈现，不依赖重型常驻语言服务器。
+默认解析上限：源文件总计 1 MiB、嵌套 64 层、10,000 个语法节点；`for` 展开的行数另受 `Limits::rows` 约束；超限错误，不隐式无限扩容。宿主可配置上限。错误包含文件、行列、组件路径和原因，提供数据结构及文本呈现，不依赖重型常驻语言服务器。
 
 首版不做通用脚本插件、在线包管理器、动态 Rust 编译、反射式任意方法调用或独立可视化 IDE。

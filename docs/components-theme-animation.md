@@ -12,7 +12,7 @@
 
 ## 当前切换与数值控件
 
-`Container::check_box(text, checked)` / `switch(text, checked)` 创建带可选可见标签的二态控件；标签同时作为默认无障碍名称，`set_accessible_label` 可覆盖。Toggle 复用 Button 的按压、捕获、Space 释放/Enter 首次按下与语义激活规则；复选标记和开关位置都表达当前状态，不只用颜色区分。当前没有三态、分组单选或专属触摸处理。
+`Container::check_box(text, checked)` / `switch(text, checked)` 创建带可选可见标签的二态控件；标签同时作为默认无障碍名称，`set_accessible_label` 可覆盖。Toggle 复用 Button 的按压、捕获、Space 释放/Enter 首次按下与语义激活规则；复选标记和开关位置都表达当前状态，不只用颜色区分。CheckBox 另有部分选中（`set_mixed`）；`radio(text, checked)` 的单选按钮按同一父容器分组，选中一个即取消其余。触摸经 `Ui::touch` 转为同样的指针行为，没有专属触摸处理。
 
 `slider(min, max, value)` / `progress(min, max, value)` 共用独立 `aegle-controls::Range`；边界与数值为 f64，要求有限、min < max 且跨度有限，有限越界值按公开契约 clamp。`set_range` 原子替换边界，失败保留旧状态。Progress 不接受焦点或用户调整；`set_indeterminate(true)` 显示 1.6 秒往复扫过的不确定进度，期间经 `PaintCx::request_frame` 逐帧重绘，关闭后停止请求帧。两者都有 `set_orientation(Orientation::Vertical)`：竖直时自下而上增长，指针位置按竖轴换算。
 
@@ -42,13 +42,13 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 皮肤是纯函数 `fn(&Theme, VisualState) -> Appearance`，有三个作用范围：类型的默认皮肤、`Node::set_kind_skin(kind, Some(skin))` 给该子树（含自身）中这一类型的全部控件（最近的子树规则生效，之后新建或移入的控件同样跟随）、`Node::set_skin(Some(skin))` 只给该控件；`None` 移除对应规则。每个节点缓存解析出的皮肤指针，设置、reparent 与插入时只重新解析受影响的子树，绘制时不查找祖先；控件的交互状态改变时（类型可能随之改变，如切换按钮选中后换成另一类型）在存在皮肤规则时重新解析该节点。皮肤只能根据传入数据计算，不能重入 UI 或执行应用回调；不捕获环境、不创建注册表或虚函数对象。当前结果在安装前验证，以后状态在刷新时验证；非有限或负几何返回错误，不静默回退。皮肤不决定布局或字号。
 
-`Node::set_style(Style)` 设置稀疏本地覆盖；`set_background`、`set_foreground`、`set_radius` 等是简短命令式入口。`style()` 读取覆盖，`appearance()` 读取当前解析结果。`None` 恢复皮肤值；`set_style(Style::default())` 清除覆盖，`set_skin(None)` 单独移除节点皮肤。完整优先级表见[API 指南](developer/api.md#6-外观主题样式与皮肤)。局部字号通过 `set_font_size` / `clear_font_size` 控制，仅适用于文字控件，不向子节点继承。
+`Node::set_style(Style)` 设置稀疏本地覆盖；`set_background`、`set_foreground`、`set_radius` 等是它的单字段简写，传 `None` 让该字段回到皮肤值。`style()` 读取覆盖，`appearance()` 读取当前解析结果。`set_style(Style::default())` 清除全部覆盖，`set_skin(None)` 单独移除节点皮肤。完整优先级表见[API 指南](developer/api.md#6-外观主题样式与皮肤)。局部字号通过 `set_font_size(size)` 设置、`set_font_size(None)` 回到主题字号，仅适用于文字控件，不向子节点继承。
 
 解析顺序为默认/自定义皮肤 → 本地基础覆盖 → 本地 disabled、pressed 或 hover 覆盖。高优先状态没有指定覆盖时保留基础值，不回落到其他状态；focus 环最后独立绘制；有效启用且聚焦时才有非零目标宽度，失焦过渡可短暂保留渐隐的呈现轮廓。边框与 focus 宽度为零可关闭，相对于自身矩形向内绘制，不侵入相邻控件；容器圆角不隐含对子树的裁剪。hover/focus 覆盖限交互控件，pressed 覆盖限按钮/切换控件/滑块，selection/caret 限编辑器，indicator 限复选框/开关/滑块/进度条；对应 setter 只定义在这些控件的类型化句柄上（`handle!` 的样式组），误用在编译期报错，标记属性也在编译期拒绝；只有整体传入的 `Style` 值在运行时检查并返回 WrongKind。
 
 局部视觉数据按 NodeId 放在 Ui 的稀疏表中，无样式节点不保存一份完整 Style。纯配色/边框变化只失效绘制，前景色同时失效语义；自定义皮肤可随交互状态改变前景，相关状态变化会同时刷新语义。字号改变才重排文字及布局，保持编辑器、组合输入、选择和控件身份。
 
-普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用，并用局部深色主题和滑出后关闭演示继承与完成回调；它不是完整 MD3 套件。`Canvas` 提供绘制扩展，`on_input` 后接收指针、滚轮、按键与焦点事件作为自定义输入行为；`ListView` 提供等高虚拟列表，`ImageView` 显示共享图像。
+普通 Rust 函数组合现有控件即可形成组件库。`crates/aegle/examples/components.rs` 使用按钮工厂、主题皮肤和 `.aegle` 结构展示复用，并用局部深色主题和滑出后关闭演示继承与完成回调；它不是完整 MD3 套件。`Canvas` 提供绘制扩展，`set_input` 后接收指针、滚轮、按键与焦点事件作为自定义输入行为；`ListView` 提供等高虚拟列表，`ImageView` 显示共享图像。
 
 ## 默认组件范围
 
@@ -60,27 +60,29 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 视觉规范
 
-| token | 浅色 | 深色 |
+| `Theme` 字段 | 浅色 | 深色 |
 | --- | --- | --- |
-| canvas | #F6F7F9 | #15181D |
+| background | #F6F7F9 | #15181D |
 | surface | #FFFFFF | #1E232B |
-| on_surface | #20242B | #F0F2F5 |
-| secondary_text | #5B6472 | #ADB6C4 |
-| accent / focus | #355CDA | #9EB5FF |
-| on_accent | #FFFFFF | #15213F |
+| foreground | #20242B | #F0F2F5 |
+| muted | #5B6472 | #ADB6C4 |
+| accent（焦点与标记） | #355CDA | #9EB5FF |
 | border | #737D8C | #788596 |
+| hover | #ECEFF5 | #2A313C |
+| pressed | #DEE5F0 | #2F3744 |
+| selection | #D5DFFF | #2D4076 |
 
-尺寸采用 dp；基础正文 14 dp、辅助文字 12 dp、标题 20 dp，字体族使用带 locale 的系统 sans-serif 回退。间距为 4/8/12/16/24 dp，标准控件高 36 dp、紧凑模式 28 dp、触摸模式命中区域至少 44×44 dp。默认控件、面板、标志、开关、滑块和进度条均为直角（主题圆角 0）；应用设置正的主题 radius 时这些默认控件统一圆化。边框 1 dp，焦点环 2 dp。
+尺寸采用 dp；主题只有一个正文字号 14 dp，padding 与 gap 8 dp，控件高 36 dp，字体族使用带 locale 的系统 sans-serif 回退。没有紧凑或触摸尺寸模式；其他排版角色由组件库经 `Control::text_role` 定义。默认控件、面板、标志、开关、滑块和进度条均为直角（主题圆角 0）；应用设置正的主题 radius 时这些默认控件统一圆化。边框 1 dp，焦点环 2 dp。
 
 默认不使用背景模糊、大面积阴影或持续装饰动画。hover/pressed 用轻度叠色，拖动响应直接；disabled 不只靠变淡区分，语义同步不可用状态。选中、错误和焦点不能仅靠颜色，应有形状/标记或文字反馈。
 
-普通文字对比度目标至少 4.5:1，交互轮廓/焦点目标至少 3:1。此处是设计与验收要求，不是认证声明。应用自定义颜色也要接受对比度检查。高对比模式把默认 token 调整为系统或黑白高对比配色；内置 `high_contrast()` 为黑底白字与白色轮廓、黄色焦点和标记，禁用与次要文字使用对黑底 8:1 的灰色，使禁用控件与启用控件可区分。显式本地覆盖仍由应用负责。
+普通文字对比度目标至少 4.5:1，交互轮廓/焦点目标至少 3:1。此处是内置主题的设计要求，不是认证声明；框架不检查应用自定义颜色的对比度。高对比模式把默认 token 调整为系统或黑白高对比配色；内置 `high_contrast()` 为黑底白字与白色轮廓、黄色焦点和标记，禁用与次要文字使用对黑底 8:1 的灰色，使禁用控件与启用控件可区分。显式本地覆盖仍由应用负责。
 
 ## 主题契约
 
 当前可用的 `aegle-theme::Theme` 是公开字段的无分配快照：颜色为 `background/surface/foreground/muted/accent/border/hover/pressed/selection`，尺寸为 `font_size/padding/gap/radius/control_height`。`light()`、`dark()`、`high_contrast()` 提供显式配色；`Default` 为浅色。三种配色共用正文 14、padding 8、gap 8、圆角 0、控件高 36 的逻辑像素尺寸；窗口可用 `set_padding` 独立增加外侧留白。`validate()` 拒绝非有限或负尺寸，并要求正文大小和控件高度大于零。accent 用于焦点/标记，selection 与普通 foreground 配对，不隐含另一套文本颜色。
 
-`Ui::set_theme` 和 `Window::set_theme` 更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析。
+`Ui::set_theme`（没有局部主题的节点的基础主题）与 `Node::set_theme`（含 `window.set_theme`，即根节点的局部主题）都更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析。
 
 `Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。`Node::set_theme_override(Some(ThemeOverride))` 则只替换指定字段，其余沿父级解析主题；它随父级或 `Ui::set_theme` 的变化重新解析，嵌套覆盖逐层叠加，`set_theme` 的快照会替换它。
 
@@ -90,11 +92,11 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 组件状态样式采用固定状态集合及明确优先顺序：disabled、pressed、selected/checked、hover、normal；focus 环作为独立覆盖，不被 hover 隐藏。复合组件需要不同优先级时在自己的有类型样式函数中显式定义，不引入 CSS specificity。
 
-控件默认值 → 主题/状态值 → 本地常量或绑定，构成逻辑目标；优先级总表见[API 指南](developer/api.md#6-外观主题样式与皮肤)。动画覆盖呈现值。一个属性的本地值要么是常量要么跟随 token，后写者生效：`set_background` 等单项 setter 写该字段并结束该项绑定，`set_style` 写全部字段因而结束全部 Style 绑定，`cancel_transition` 同样写入全部 Style，`set_font_size`/`clear_font_size`、`set_font`/`clear_font`、`set_padding`、`set_gap`/`set_gaps` 结束各自的绑定，`set_transition`/`clear_transition` 结束全部时长绑定，`set_property_transition` 结束该项的时长绑定；`unbind_token` 结束绑定并清除该属性（字体回到 `Font::DEFAULT`，padding/gap 回到控件的主题默认值，过渡变为立即）。颜色变化只刷新绘制，字体/尺寸变化才使布局失效，语义无关的 token 变化不广播语义值更新。
+控件默认值 → 主题/状态值 → 本地常量或绑定，构成逻辑目标；优先级总表见[API 指南](developer/api.md#6-外观主题样式与皮肤)。动画覆盖呈现值。一个属性的本地值要么是常量要么跟随 token，后写者生效：`set_background` 等单项 setter 写该字段并结束该项绑定，`set_style` 写全部字段因而结束全部 Style 绑定，`cancel_transition` 同样写入全部 Style，`set_font_size`、`set_font`、`set_padding`、`set_gap` 结束各自的绑定，`set_transition`（含传 `None`）结束全部时长绑定，`set_property_transition` 结束该项的时长绑定；`unbind_token` 结束绑定并清除该属性（字体回到 `Font::DEFAULT`，padding/gap 回到控件的主题默认值，过渡变为立即）。颜色变化只刷新绘制，字体/尺寸变化才使布局失效，语义无关的 token 变化不广播语义值更新。
 
 默认跟随系统深浅色、对比度、文本缩放与减少动态效果；应用可显式选 Light/Dark/System。系统没有提供某项偏好时用默认值并允许应用配置。系统字体缩放与设备像素缩放各应用一次，不能重复放大。
 
-当前原生 App 从平台读取 `Preferences { dark, high_contrast, reduced_motion }`（各为 `Option<bool>`，None 表示系统未报告）。Linux 经会话总线读取 XDG desktop portal 的 `org.freedesktop.appearance`（color-scheme、contrast、reduced-motion）并监听 SettingChanged；Windows 读取 `AppsUseLightTheme`、`SPI_GETHIGHCONTRAST` 与 `SPI_GETCLIENTAREAANIMATION`，在 `WM_SETTINGCHANGE` 时重读。窗口主题按 high_contrast_theme → dark_theme → theme 解析，对应偏好为 true 且选项不为 None 时才采用；显式选择浅色或深色即把其他两项设为 None 或相同主题。`reduced_motion: None` 跟随系统，未报告时为 false。偏好变化只更新仍等于变化前解析值的窗口主题/减少动态效果，应用用 `Window::set_theme` 等显式设置的值保留。`Preferences::text_scale`（百分比，50–400）来自 Windows 的 `TextScaleFactor` 与 portal 的 GNOME `text-scaling-factor`；`AppOptions::text_scale` 显式覆盖，原生 App 把解析后主题的 `font_size` 与 `control_height` 按它缩放，且与设备像素缩放各应用一次。系统未报告时保持 100%。无窗口 Ui 不读取系统偏好。
+当前原生 App 从平台读取 `Preferences { dark, high_contrast, reduced_motion }`（各为 `Option<bool>`，None 表示系统未报告）。Linux 经会话总线读取 XDG desktop portal 的 `org.freedesktop.appearance`（color-scheme、contrast、reduced-motion）并监听 SettingChanged；Windows 读取 `AppsUseLightTheme`、`SPI_GETHIGHCONTRAST` 与 `SPI_GETCLIENTAREAANIMATION`，在 `WM_SETTINGCHANGE` 时重读。窗口主题按 high_contrast_theme → dark_theme → theme 解析，对应偏好为 true 且选项不为 None 时才采用；显式选择浅色或深色即把其他两项设为 None 或相同主题。`reduced_motion: None` 跟随系统，未报告时为 false。偏好变化只更新仍等于变化前解析值的窗口主题/减少动态效果，应用显式设置的值保留：`window.set_theme(..)` 给根节点局部主题，系统偏好只改变 Ui 的基础主题；`window.ui()?.set_reduced_motion(..)` 同理。`Preferences::text_scale`（百分比，50–400）来自 Windows 的 `TextScaleFactor` 与 portal 的 GNOME `text-scaling-factor`；`AppOptions::text_scale` 显式覆盖，原生 App 把解析后主题的 `font_size` 与 `control_height` 按它缩放，且与设备像素缩放各应用一次。系统未报告时保持 100%。无窗口 Ui 不读取系统偏好。
 
 ## 当前外观过渡
 
@@ -104,9 +106,9 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `Node::set_offset(Point)` 在布局后平移节点及其子树，不改变布局或滚动范围；`bounds`、命中、裁剪、IME 候选锚点和无障碍边界都使用呈现位移。没有 motion 或过渡策略时立即生效；有策略时从当前呈现位移开始补间，请求在下一次刷新时以宿主当前时钟开始，因而回调中设置也不会因旧时间戳直接结束。位移采样只更新几何，不重新录制绘制记录。`offset()` 返回逻辑目标。运行中的位移保留开始时的时长。
 
-`clear_transition()` 移除策略并立即回到目标；`finish_transition()` 立即到达当前目标；`cancel_transition()` 将最近呈现写为本地外观覆盖和位移目标，替换状态颜色覆盖，保留后续设置的过渡策略。焦点轮廓的可见性仍受真实行为约束。
+`set_transition(None)` 移除策略并立即回到目标；`finish_transition()` 立即到达当前目标；`cancel_transition()` 将最近呈现写为本地外观覆盖和位移目标，替换状态颜色覆盖，保留后续设置的过渡策略。焦点轮廓的可见性仍受真实行为约束。
 
-`on_transition_end(callback)` 在节点所有活动过渡（外观、位移、缩放和旋转中最晚的一项）到达目标后排队一次，与点击回调共用版本化队列，在借用外执行。正常结束、`finish_transition()`，以及有策略时因减少动态效果、隐藏或零时长而直接跳到目标的变化都会完成；取消、`clear_transition()`、删除节点或关闭窗口不完成，已排队的通知随节点删除丢弃。
+`on_transition_end(callback)` 在节点所有活动过渡（外观、位移、缩放、旋转、透明度和阴影中最晚的一项）到达目标后排队一次，与点击回调共用版本化队列，在借用外执行。正常结束、`finish_transition()`，以及有策略时因减少动态效果、隐藏或零时长而直接跳到目标的变化都会完成；取消、`set_transition(None)`、删除节点或关闭窗口不完成，已排队的通知随节点删除丢弃。
 
 ## 显式动画入口
 
@@ -114,7 +116,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 - `node.with_transition(timing, || ...)`：闭包内对该控件的外观、位移、缩放与旋转修改按 `timing` 补间，无论它有无策略；没有策略的控件从当前显示值开始。闭包结束后的修改恢复按策略处理，已开始的补间跑完。对其他控件的修改仍按各自策略。
 - `node.snap(|| ...)`：闭包内对该控件的修改立即生效，不补间；同一属性正在进行的过渡跳到新值并完成。Slider/Progress 的程序化数值滑动也遵守它（经 `State::snapping` 供控件库查询）。
-- `node.animate(Animate::Offset(..) | Scale(..) | Rotation(..))`：启动一个 `aegle_motion::Animation`，从其第一个关键帧开始，替换该属性正在进行的过渡或动画；结束时停在 `Animation::target`，它也是 `offset()`/`transform()` 读到的逻辑值。它与过渡共用 `is_animating`、`finish_transition`、`cancel_transition` 和 `on_transition_end`。
+- `node.animate(Animate::Offset(..) | Scale(..) | Rotation(..) | Opacity(..))`：启动一个 `aegle_motion::Animation`，从其第一个关键帧开始，替换该属性正在进行的过渡或动画；结束时停在 `Animation::target`，它也是 `offset()`/`transform()` 读到的逻辑值。它与过渡共用 `is_animating`、`finish_transition`、`cancel_transition` 和 `on_transition_end`。
 
 `Animation` 由关键帧（`Keyframe::new(at, value).easing(..)`，`at` 从 0.0 到 1.0 不倒退，同位置的后一帧表示跳变）、一个周期时长、`delay`、`cycles(Cycles::Times(n) | Cycles::Forever)` 与 `alternate` 组成；`Animation::tween(from, to, timing)` 是不分配内存的两帧特例，自动过渡内部也用它。序列即多个关键帧；不同属性或控件之间的先后由 `on_transition_end` 串联。`Cycles::Forever` 不会自行完成，运行期间宿主持续出帧，需要 `finish_transition`/`cancel_transition` 停止。外观（颜色）没有显式关键帧入口，由过渡与作用域入口覆盖。
 
@@ -122,19 +124,11 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 无窗口 Ui 默认不安装过渡。`set_default_transition` 只影响随后创建的交互控件；首次刷新直接建立呈现值，不做入场动画。原生 App 在启用 motion 时为交互控件默认安装120ms EaseOut，`AppOptions.transition=None` 可关闭自动安装。各 App 共用一个单调时钟，通过 Wayland frame callback 推进；没有活动动画时不请求动画帧，无轮询定时器。隐藏子树刷新时直接到目标；compositor 暂停窗口帧回调时不主动唤醒，恢复时采样当前时刻。
 
-`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观、几何过渡或显式动画是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui/Window::set_reduced_motion(true)` 立即到目标并完成，保留最后一帧重绘；期间不启动新过渡，`with_transition` 与 `animate` 也直接到目标。原生 App 默认跟随系统减少动态效果偏好，`AppOptions.reduced_motion` 可显式覆盖。
+`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观、几何过渡或显式动画是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui::set_reduced_motion(true)`（原生窗口经 `window.ui()?`）立即到目标并完成，保留最后一帧重绘；期间不启动新过渡，`with_transition` 与 `animate` 也直接到目标。原生 App 默认跟随系统减少动态效果偏好，`AppOptions.reduced_motion` 可显式覆盖。
 
-## 后续动画契约
+## 动画约束
 
-motion 提供标量、二维向量和颜色的补间、属性过渡、关键帧动画与弹簧/Bézier 曲线（见上节）。颜色在预乘线性空间插值。没有通用时间线编辑器或动画脚本。
-
-默认 hover/焦点过渡 120 ms，开关/选择 160 ms，面板出现 180 ms。几何动画可以修改 transform，命中与候选窗跟随呈现变换（当前已实现平移）；width/height 动画明确触发布局，不伪装成免费合成动画。
-
-新目标从当前呈现值继续过渡。cancel 将当前呈现值固化为本地目标并解除该属性绑定，随后移除动画；finish 立即到达逻辑目标。完成回调只在正常完成/显式 finish 且节点仍存活时执行，取消或销毁不执行完成回调。
-
-同一 UI 共用时钟，只管理活动动画。隐藏窗口暂停装饰动画，恢复时按当前逻辑目标重建呈现，不积压追赶大量历史帧。没有活动动画就没有动画定时唤醒。重复循环必须由调用者显式请求，不在默认皮肤启动永久循环。
-
-减少动态效果开启时，非必要位移、缩放、弹簧和循环直接跳到目标；保留不超过 80 ms 的轻微透明度反馈，应用也可完全关闭。进度仍通过语义值表达，不能把关闭动画变成丢失进度信息。
+颜色在预乘线性空间插值；没有通用时间线编辑器或动画脚本。默认过渡只有一个：原生 App 给交互控件安装的 120 ms ease-out，开关位置与面板出现没有单独的时长。几何动画只改呈现变换，命中与候选窗跟随；没有 width/height 动画，布局尺寸变化立即生效。同一 UI 共用时钟，只管理活动动画；没有活动动画就没有动画定时唤醒，默认皮肤不启动永久循环。减少动态效果开启时所有过渡与动画直接到目标（见上节），进度仍通过语义值表达。
 
 ## 组件作者的完整接口
 

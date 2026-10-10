@@ -1,12 +1,12 @@
-//! Overlay scrollbar geometry and painting.
+//! Scrollbar geometry and painting.
 //!
-//! Bars take no layout space: while an axis overflows, a track spans the
-//! viewport's bottom or end edge (right, or left right to left) and a pill
-//! thumb moves along it, thin at rest and full thickness while the viewport is
-//! hovered or the thumb dragged. Both ends keep clear of the viewport's rounded
-//! corners. Pressing the thumb drags it; pressing elsewhere on the strip
-//! centers the thumb there and keeps dragging. No timer, fade or animation is
-//! involved.
+//! While an axis overflows, the viewport reserves [`FOOTPRINT`] beyond its
+//! padding on that side, and a track spans its bottom or end edge (right, or
+//! left right to left) with a pill thumb, thin at rest and full thickness
+//! while the viewport is hovered or the thumb dragged. Both ends keep clear of
+//! the viewport's rounded corners. Pressing the thumb drags it; pressing
+//! elsewhere on the strip centers the thumb there and keeps dragging. No
+//! timer, fade or animation is involved.
 use aegle_scene::{Color, Rect, RoundedRect, SceneBuilder, SceneError};
 use aegle_types::{Point, Size};
 

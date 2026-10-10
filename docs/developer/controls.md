@@ -40,7 +40,7 @@ title.set_text("新的文字")?;
 Text { text: "Hello, 世界"; font_size: 20dp }
 ```
 
-- 方法：`set_text`、`text`、`set_font_size` / `clear_font_size`、`set_foreground`。
+- 方法：`set_text`、`text`、`set_font_size`（`None` 回到主题字号）、`set_foreground`。
 - 按父容器宽度自动换行；默认无内边距，不可聚焦，不压缩高度。
 - 无障碍角色 Label，值为文字内容。
 
@@ -58,7 +58,7 @@ save.activate()?;            // 按用户激活的规则排队回调
 Button { id: save; text: "Save"; on clicked { saved = true } }
 ```
 
-- 方法：`set_text`、`on_click` / `clear_on_click`、`activate`。
+- 方法：`set_text`、`on_click`、`activate`。
 - 指针在按钮上按下并在按钮上释放才激活；Space 在释放时激活，Enter 在首次按下时激活，按键重复不重复触发。失焦、禁用或指针取消时不激活。
 - 默认高度为主题 `control_height`（36），宽度为文字加两侧内边距；`set_width`、`set_grow` 可改变。
 - 无障碍角色 Button，名称默认为按钮文字，支持 Focus/Click 动作。
@@ -86,7 +86,7 @@ TextField { id: name; text: ""; on submitted { submitted = self.text } }
 TextArea { text: "First line\nSecond line"; read_only: true }
 ```
 
-- 方法：`text`、`set_text`（清空撤销历史并结束输入法预编辑）、`select(Selection)`（UTF-8 字节偏移）、`set_read_only`、`set_password`、`on_submit` / `clear_on_submit`（仅单行，Enter 触发）。
+- 方法：`text`、`set_text`（清空撤销历史并结束输入法预编辑）、`select(Selection)`（UTF-8 字节偏移）、`set_read_only`、`set_password`、`on_submit`（仅单行，Enter 触发）。
 - 编辑：选择、按词/行移动、按字素删除、撤销/重做（Ctrl+Z / Ctrl+Y）、全选（Ctrl+A）、复制/剪切/粘贴（Ctrl+C / X / V，macOS 用 Cmd）；原生宿主处理剪贴板，自有宿主用 `take_clipboard` / `paste`。
 - 输入法：Wayland text-input-v3、Windows IMM；预编辑不改变已提交的值。
 - 只读可选择和复制；密码模式显示 `•`，拒绝复制、输入法组合并不保留撤销历史。
@@ -111,7 +111,7 @@ agree.set_mixed(true)?;     // 部分选中（三态）
 CheckBox { text: "I agree"; checked: agree; on changed { agree = self.checked } }
 ```
 
-- 方法：`is_checked`、`set_checked`、`is_mixed`、`set_mixed`、`toggle`（按用户操作规则切换并触发回调）、`text`、`set_text`、`on_change` / `clear_on_change`。
+- 方法：`is_checked`、`set_checked`、`is_mixed`、`set_mixed`、`toggle`（按用户操作规则切换并触发回调）、`text`、`set_text`、`on_change`。
 - 标志 18 dp，选中绘制对勾、部分选中绘制横线，不只依靠颜色区分；激活规则与 Button 相同。用户从部分选中状态切换后变为选中；`set_checked` 也会结束部分选中。标记写 `mixed: true`。
 - 无障碍角色 CheckBox，Toggled 为 True / False / Mixed。
 
@@ -175,7 +175,7 @@ volume.on_change(|slider| {
 Slider { min: 0; max: 100; value: 30; step: 5; on changed { volume = self.value } }
 ```
 
-- 方法：`value`、`range`、`set_value`、`set_range`、`step`、`set_step`（0 为连续）、`increment` / `decrement`、`on_change` / `clear_on_change`。越界的有限值会被限制到范围内。
+- 方法：`value`、`range`、`set_value`、`set_range`、`step`、`set_step`（0 为连续）、`increment` / `decrement`、`on_change`。越界的有限值会被限制到范围内。
 - 键盘：方向键移动一步（连续时为跨度的 1%），PageUp/PageDown 十步（或 10%），Home/End 到端点。指针按下轨道直接设值并可拖动。
 - 手柄 16 dp，轨道 2 dp，已完成部分 4 dp；宽度不足时缩小。
 - 无障碍角色 Slider，带数值、范围与步长。
@@ -202,7 +202,7 @@ Progress { min: 0; max: 100; value: 40 }
 
 ```rust
 let form = window.column()?;
-form.set_gap(12.0)?;
+form.set_gap(12.0, 12.0)?;
 form.set_padding(16.0)?;
 let actions = form.row()?;
 actions.button("Cancel")?;
@@ -310,7 +310,7 @@ color.set_items(&["One", "Two"], 0)?;   // 程序设置，不触发 on_change
 ```
 
 - 按钮显示当前选项和下拉箭头；激活（点击、Space、Enter）在下方弹出选项列表，焦点位于当前选项，当前选项带对勾。Up/Down 移动，Enter 或点击选择并关闭；Escape 或点击外部关闭且不改变选择。
-- 方法：`selected`、`set_selected`、`items`、`set_items`、`on_change` / `clear_on_change`。
+- 方法：`selected`、`set_selected`、`items`、`set_items`、`on_change`。
 - 无障碍角色 ComboBox（带展开状态）、ListBox 与 ListBoxOption（带选中状态）。
 
 ## Popup
@@ -354,7 +354,7 @@ context.item("Paste")?;
 ```
 
 - `Menu` 是角色为菜单的 Popup：`item(text)`、`check_item(text, checked)`、`radio_item(text, checked)`、`submenu(text) -> Menu`、`separator()`，也可以放任意控件。相邻的单选项构成一组，分隔线或其他种类的项开始新组；选择单选项会勾选它并取消同组其他项，再次选择已勾选的项保持勾选。`node.menu()` 显示在锚点下方，由应用调用 `show()`（如在按钮的 `on_click` 中）；`node.context_menu()` 在该控件或其后代请求上下文菜单时于请求点 `show_at`。
-- `MenuItem`：`on_click` / `clear_on_click`、`set_text`、`set_shortcut`、`is_checked` / `set_checked`（单选项勾选时取消同组其他项）、`activate`，以及 `set_enabled` 等通用方法。选择一项会先关闭所有菜单、切换勾选或单选项，再按注册顺序运行处理器；打开子菜单的项不运行处理器。子菜单的打开项是 `submenu.anchor()`。
+- `MenuItem`：`on_click`、`set_text`、`set_shortcut`、`is_checked` / `set_checked`（单选项勾选时取消同组其他项）、`activate`，以及 `set_enabled` 等通用方法。选择一项会先关闭所有菜单、切换勾选或单选项，再按注册顺序运行处理器；打开子菜单的项不运行处理器。子菜单的打开项是 `submenu.anchor()`。
 - 键盘：Up/Down 在项间移动并跳过分隔线和禁用项，Home/End 到两端，Right 打开子菜单并聚焦其第一项（从右到左时为 Left），Left 或 Escape 关闭子菜单回到打开项，Enter/Space 选择。指针停在项上即聚焦它并打开其子菜单，同时关闭同级的子菜单。子菜单显示在打开项的结束一侧并与其顶端对齐，放不下时换到另一侧。
 - `MenuBar` 是一行入口，`menu(text)` 添加入口并返回其菜单。点击入口打开或关闭菜单；某个菜单打开时指针移到另一个入口即切换；焦点在入口上时 Left/Right 移动、Down 打开；菜单内 Left/Right 移到相邻菜单。F10 聚焦第一个菜单栏的第一个入口。
 - 每项预留勾选列（单选项画圆点）。`set_shortcut(Some("Ctrl+S"))` 在项尾以次要文字色显示快捷键提示，随主题字号与字体变化，并作为无障碍键盘快捷键导出；它不注册按键，应用自己处理快捷键。
@@ -370,7 +370,8 @@ use aegle::scene::Image;
 let pixels = vec![255u8; 48 * 48 * 4];             // 非预乘 sRGB RGBA8，首行在前
 let image = Image::new(48, 48, pixels)?;
 let view = window.image(&image)?;
-view.set_size(Some(96.0), Some(48.0))?;            // 按边界拉伸，不保持宽高比
+view.set_width(96.0)?;                             // 按边界拉伸，不保持宽高比
+view.set_height(48.0)?;
 ```
 
 - 默认尺寸为图像像素尺寸（逻辑像素），交叉轴不拉伸。`image()` 读取、`set_image()` 替换。
@@ -393,7 +394,8 @@ let canvas = window.canvas(|builder, size| {
     builder.fill_path(&path.finish(FillRule::NonZero)?, Color::rgb(53, 92, 218))?;
     Ok(())
 })?;
-canvas.set_size(Some(64.0), Some(64.0))?;
+canvas.set_width(64.0)?;
+canvas.set_height(64.0)?;
 canvas.invalidate()?;   // 数据变化后重新绘制
 ```
 
@@ -403,10 +405,10 @@ canvas.invalidate()?;   // 数据变化后重新绘制
 
 **GPU 纹理**：painter 里 `builder.texture(id, rect)` 绘制应用自己渲染的 GPU 纹理（游戏画面、3D 预览）。wgpu 后端：`app.wgpu()` 给出共享设备，在其上创建 `TEXTURE_BINDING` 纹理并 `register_texture` 得到 `TextureId`；每帧在 `on_frame` 里向同一队列提交渲染命令即可，完整示例见 `cargo run -p aegle --features wgpu --example gpu_texture`。Vulkan 后端用 `app.vulkan()` 的 `raw_device()` 与 unsafe `register_texture(view, extent)`。软件后端不支持应用纹理，画到它会使帧失败（`UnsupportedCommand`）。
 
-**交互**：`on_input` 让 Canvas 成为可聚焦的交互控件，适合时间轴、谱面、曲线编辑器等需要自绘又要处理输入的场景：
+**交互**：`set_input` 让 Canvas 成为可聚焦的交互控件，适合时间轴、谱面、曲线编辑器等需要自绘又要处理输入的场景：
 
 ```rust
-canvas.on_input(move |canvas, event| {
+canvas.set_input(move |canvas, event| {
     match event {
         CanvasEvent::Press { position, modifiers, .. } => editor.begin(position, modifiers),
         CanvasEvent::Move { position, pressed: true, .. } => editor.drag(position),
@@ -425,7 +427,7 @@ canvas.on_input(move |canvas, event| {
 - 右键、中键与侧键（`PointerButton::{Secondary, Middle, Back, Forward}`）作为 `ButtonPress`/`ButtonRelease { button, .. }` 送达，同样获得焦点并捕获指针，直到在 Canvas 上按下的所有按键都释放；`Move` 的 `pressed` 只表示主键，按住其他键拖动（如中键平移）时用自己记录的按键状态。默认控件忽略这些按键。
 - 鼠标滚轮与触控板滚动先交给其下的交互 Canvas 并被消费，外层 ScrollView 不滚动；惯性滚动只作用于滚动视图。
 - 获得焦点时有焦点框并加入 Tab 顺序，聚焦时收到全部按键（Tab 仍用于切换焦点）；`Focus(bool)` 报告焦点变化。
-- 同一批输入的事件按顺序在该批之后、所有借用之外交给回调，回调里可以修改任意控件；`clear_on_input` 恢复为纯绘制。
+- 同一批输入的事件按顺序在该批之后、所有借用之外交给回调，回调里可以修改任意控件。输入回调是画布自身的行为，与 `set_painter` 一样，再次设置会替换。
 
 ## 已知限制
 

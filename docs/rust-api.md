@@ -1,6 +1,6 @@
 # Rust 命令式 API
 
-状态：v0.1。基础 Ui/App、弱句柄、命令式控件、静态与动态标记编译及运行时加载已有源码；第三方控件经 `Control` trait 接入；组件宏仍是设计目标，下文分别标注。验证记录见[实现状态](implementation.md)。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
+状态：v0.1。基础 Ui/App、弱句柄、命令式控件、静态与动态标记编译及运行时加载已有源码；第三方控件经 `Control` trait、`handle!` 句柄宏与 `element!` 标记元素宏接入；超出现有接口的部分在“目标接口族”中单列。验证记录见[实现状态](implementation.md)。项目采用 Rust 2024，编译器基线见[依赖](dependencies.md)。
 
 ## 完整 Hello world
 
@@ -35,38 +35,40 @@ button.on_click(move |_| {
 
 控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。第三方控件用 `Container::add` 加入，见[组件库作者](#组件库作者)。
 
-`on_click`、`on_change`、`on_submit`、`on_transition_end` 与 `on_frame` 追加处理器，同一事件按注册顺序执行；`clear_on_*` 移除该事件的全部处理器，并使已排队的调用失效。`Canvas::on_input` 与 `Window::on_key` 是唯一的行为/策略入口，再次设置会替换。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
+命名规则只有两条：`on_*` 追加处理器，`set_*` 替换值。`on_click`、`on_change`、`on_submit`、`on_transition_end`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame` 与 `Ui::on_key` 都追加，同一事件按注册顺序执行；处理器与控件同生命周期，没有单独的移除方法，需要停止时在闭包内判断（`on_frame` 返回 `false` 即停止）。`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。所有动作处理器存放在引擎的同一张表里：控件只报告激活或值变化，组合控件（Tabs、Dropdown、MenuItem）把自身行为放在按钮的延后工作中，再用 `State::queue_action` 排队自己的处理器，不另存处理器列表。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
 
-公开创建和修改操作返回 `Result`；当前错误保留底层来源，包括 `DeadHandle`、跨 Ui 父节点、不合法数值、字体/呈现预算及平台能力错误。弱句柄的操作因此不能不返回结果；保留单一的 `Result` 形态，而不是再提供一套 panic 版本。回调出错时处理器保留，同一事件的其他处理器照常执行，此前合法修改保留；无窗口 `Ui::dispatch_callbacks` 返回第一个错误。原生 App 把回调、代理与输入处理的错误交给 `App::on_error`，返回错误才结束 `run`，未设置时打印到 stderr 并继续；绘制与平台失败仍结束 `run`。逐帧回调出错时被移除，避免每帧重复报告。
+公开创建和修改操作返回 `Result`；当前错误保留底层来源，包括 `DeadHandle`、跨 Ui 父节点、不合法数值、字体/呈现预算及平台能力错误。弱句柄的操作因此不能不返回结果；保留单一的 `Result` 形态，而不是再提供一套 panic 版本。回调出错时处理器保留，同一事件的其他处理器照常执行，此前合法修改保留；无窗口 `Ui::dispatch_callbacks` 返回第一个错误。原生 App 把回调、代理与输入处理的错误交给 `App::on_error`，返回错误才结束 `run`，未设置时打印到 stderr 并继续；绘制与平台失败仍结束 `run`。逐帧回调出错时停止，避免每帧重复报告。
+
+可清除的属性只有一个 setter：参数为 `impl Into<Option<T>>`，传值设置、传 `None` 清除，如 `set_font_size(18.0)` / `set_font_size(None)`、`set_theme(Theme::dark())` / `set_theme(None)`、`set_background(None)`；不再有 `clear_*` 方法。皮肤是函数指针，`set_skin`/`set_kind_skin` 仍写 `Some(skin)`。
 
 当前公共操作包括：
 
 | 类型 | 已有接口 |
 | --- | --- |
-| Node / 所有控件句柄 | `decorate`、`on_double_click`、`clear_on_double_click`、`on_context_menu`、`clear_on_context_menu`、`on_drop`、`clear_on_drop`、`start_drag`、`is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
-| 布局（Node） | `set_size`、`set_width`、`set_height`、`set_min_*`、`set_max_*`、`set_aspect_ratio`、`set_grow`、`set_shrink`、`set_basis`、`set_align_self`、`set_margin`、`set_absolute`、`set_padding`、`set_gap`、`set_gaps`、`set_layout_direction`、`layout_direction`、`baseline`；`grid` 另有 `set_grid_column`、`set_grid_row`（`Placement` 或可用线名/区域名的 `GridLines`）、`set_grid_area`、`set_justify_self` |
-| 布局（Container） | `row`、`column`、`contents`、`set_direction`、`set_wrap`、`set_align_items`、`set_justify_content`、`set_align_content`；`grid` 另有 `grid`、`stack`、`set_columns`、`set_rows`、`set_column_template`、`set_row_template`（`TemplateItem`：轨道、线名、`Repeat`）、`set_areas`、`set_auto_columns`、`set_auto_rows`、`set_flow`、`set_justify_items` |
+| Node / 所有控件句柄 | `decorate`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame`、`start_drag`、`is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
+| 布局（Node） | 逐轴的 `set_width`、`set_height`、`set_min_width`、`set_min_height`、`set_max_width`、`set_max_height`，`set_aspect_ratio`、`set_grow`、`set_shrink`、`set_basis`、`set_align_self`、`set_margin`、`set_absolute`、`set_padding`、`set_gap(行, 列)`、`set_layout_direction`、`layout_direction`、`baseline`；`grid` 另有 `set_grid_column`、`set_grid_row`（`Placement` 或可用线名/区域名的 `GridLines`）、`set_grid_area`、`set_justify_self` |
+| 布局（Container） | `row`、`column`、`contents`、`set_direction`、`set_wrap`、`set_align_items`、`set_justify_content`、`set_align_content`；`grid` 另有 `grid`、`stack`、`set_columns`、`set_rows`（`Track` 列表，或含线名与 `Repeat` 的 `TemplateItem` 列表）、`set_areas`、`set_auto_columns`、`set_auto_rows`、`set_flow`、`set_justify_items` |
 | 外观（Node） | `set_style`、`style`、`set_skin`（本节点）、`set_kind_skin`（子树中某类型的全部控件）、`appearance`、`visual_state`；所有控件都接受的 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground` |
-| 外观（按控件） | 由 `aegle_ui::handle!` 的样式组生成在相应句柄上：文字控件的 `set_font_size`/`clear_font_size`/`set_font`/`clear_font`/`font`，交互控件的 `set_hover_background`/`set_focus_color`/`set_focus_width`，按钮/切换/滑块的 `set_pressed_background`，切换/滑块/进度条的 `set_indicator_color`，编辑器的 `set_selection_color`/`set_caret_color`；分布见[API 指南](developer/api.md#6-外观主题样式与皮肤) |
-| 局部主题与位移 | `set_theme(Option<Theme>)`、`theme`；`set_offset(Point)`、`offset` |
-| 过渡与动画（motion） | `set_transition`、`set_property_transition`、`property_transition`、`clear_transition`、`with_transition`、`snap`、`animate(Animate)`、`presented_appearance`、`is_animating`、`finish_transition`、`cancel_transition`、`on_transition_end`、`clear_on_transition_end`；曲线与关键帧见 `aegle-motion` 的 `Easing`、`Spring`、`Animation`、`Keyframe`、`Cycles` |
-| Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`set_password`、`on_submit`、`clear_on_submit` |
-| Button | `set_text`、`activate`、`on_click`、`clear_on_click` |
+| 外观（按控件） | 由 `aegle_ui::handle!` 的样式组生成在相应句柄上：文字控件的 `set_font_size`/`set_font`/`font`，交互控件的 `set_hover_background`/`set_focus_color`/`set_focus_width`，按钮/切换/滑块的 `set_pressed_background`，切换/滑块/进度条的 `set_indicator_color`，编辑器的 `set_selection_color`/`set_caret_color`；分布见[API 指南](developer/api.md#6-外观主题样式与皮肤) |
+| 局部主题与位移 | `set_theme`、`set_theme_override`、`theme`；`set_offset(Point)`、`offset` |
+| 过渡与动画（motion） | `set_transition`、`set_property_transition`、`property_transition`、`with_transition`、`snap`、`animate(Animate)`、`presented_appearance`、`is_animating`、`finish_transition`、`cancel_transition`、`on_transition_end`；曲线与关键帧见 `aegle-motion` 的 `Easing`、`Spring`、`Animation`、`Keyframe`、`Cycles` |
+| Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`set_password`、`on_submit` |
+| Button | `set_text`、`activate`、`on_click` |
 | Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
-| CheckBox / Switch / Radio | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`、`clear_on_change`；CheckBox 另有 `is_mixed`、`set_mixed` |
+| CheckBox / Switch / Radio | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`；CheckBox 另有 `is_mixed`、`set_mixed` |
 | Container（选择/表格） | `radio(text, checked)`、`dropdown(items, selected)`、`table(columns, row_height, rows, cell)`、`variable_list_view(estimate, count, row)` |
-| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`、`clear_on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeMenu` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回 Menu（`item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
-| Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change`、`clear_on_change` |
+| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeMenu` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回 Menu（`item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
+| Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change` |
 | ScrollView | `offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；解引用到 Container |
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |
-| ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter` |
+| ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter`、`set_input` |
 | ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
 | loader::Program / View | `load`、`load_with(path, &Elements)`、`from_sources(entry, &Elements, read)`、`build(&Container)`、`open(&App)`（`from_checked` 仅供 `ui!` 生成的代码，文档隐藏）；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`，`Handle::typed::<T>()` 取得有类型句柄；`State<T>` 有 `get`、`set` |
 | loader::Element / Elements / element! | 标记元素契约：`element!` 声明规格与胶水并实现 `Element`；`Elements::new()` 为内置元素，`with::<E>()` 登记第三方元素 |
 | Node（生命周期） | `keep_alive(value)`：值随控件删除或窗口关闭释放 |
-| Ui / Window | `set_theme`；Window 另有 `close`；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果；拖放用 `drag_motion`/`drag_leave`/`drop_data` 报告原生拖动、`take_drag` 取控件发起的拖动 |
+| Ui / Window | Ui 有 `set_theme`（无局部主题节点的基础主题）、`on_key`、`set_reduced_motion`、`set_token`、`set_default_transition`；Window 有 `close` 与 `ui()`，后者给出窗口的 Ui，窗口级设置都经它完成，`window.set_theme(..)` 即根节点的局部主题；无窗口 Ui 宿主用 `take_clipboard` 取 `ClipboardRequest`、`paste` 送回读取结果；拖放用 `drag_motion`/`drag_leave`/`drop_data` 报告原生拖动、`take_drag` 取控件发起的拖动 |
 
-`bounds` 返回最近刷新后的窗口逻辑坐标，包含呈现位移。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。`Node::set_theme` 给子树一份局部主题，`theme` 读取解析结果；`set_offset` 在布局后平移子树，`set_transform(Transform { scale, rotation })` 以节点中心缩放/旋转子树（呈现层，可补间）；`set_theme_override(ThemeOverride)` 只替换指定 token 并随父主题更新；`Ui::fling`/`touch` 提供惯性滚动与手指输入。启用 motion 后用 `set_transition(Transition::default())` 安装外观与几何过渡，`set_property_transition(TransitionProperty::Scale, ..)` 逐项设置，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`clear_transition` 控制生命周期，`on_transition_end` 接收完成；详见[主题契约](components-theme-animation.md#主题契约)与[过渡契约](components-theme-animation.md#当前外观过渡)。`register_token("pkg.name", |theme| ..)` 登记类型化组件 token，`Ui::set_token`/`Node::set_token` 设全局或子树覆盖，`bind_color`/`bind_length`/`bind_shadow` 让 Style 颜色、渐变色标、宽度、圆角、字号或阴影跟随 token，直接 setter 结束绑定；详见[主题契约](components-theme-animation.md#主题契约)。当前没有通用属性表。
+`bounds` 返回最近刷新后的窗口逻辑坐标，包含呈现位移。显式设置的 size、padding、gap、字号和外观在切换主题后仍生效；`appearance` 是当前状态的逻辑外观目标。`Node::set_theme` 给子树一份局部主题，`theme` 读取解析结果；`set_offset` 在布局后平移子树，`set_transform(Transform { scale, rotation })` 以节点中心缩放/旋转子树（呈现层，可补间）；`set_theme_override(override)` 只替换指定 token 并随父主题更新；`Ui::fling`/`touch` 提供惯性滚动与手指输入。启用 motion 后用 `set_transition(Transition::default())` 安装外观与几何过渡，`set_property_transition(TransitionProperty::Scale, ..)` 逐项设置，`presented_appearance` 查询最近呈现值，`finish_transition`、`cancel_transition`、`set_transition(None)` 控制生命周期，`on_transition_end` 接收完成；详见[主题契约](components-theme-animation.md#主题契约)与[过渡契约](components-theme-animation.md#当前外观过渡)。`register_token("pkg.name", |theme| ..)` 登记类型化组件 token，`Ui::set_token`/`Node::set_token` 设全局或子树覆盖，`bind_color`/`bind_length`/`bind_shadow` 让 Style 颜色、渐变色标、宽度、圆角、字号或阴影跟随 token，直接 setter 结束绑定；详见[主题契约](components-theme-animation.md#主题契约)。当前没有通用属性表。
 
 数值与切换控件的程序 setter 不触发用户修改回调；范围、步长、键盘及无障碍规则见[值控件契约](components-theme-animation.md#当前切换与数值控件)。
 
@@ -76,11 +78,11 @@ button.on_click(move |_| {
 
 `ensure_visible` 先刷新布局，再逐层滚动祖先，使控件或编辑器 caret 可见，不改变焦点；隐藏节点无操作。Tab 焦点和 caret 更新也使用这条显露路径。`visible_bounds` 返回最近刷新几何与祖先滚动视口的交集；隐藏或完全裁剪时为 None，不额外裁剪到窗口边缘。移出视口不销毁控件。嵌套视口和编辑器通过 `Ui::scroll_by(position, delta)` 将未消费的双轴滚轮位移向外传递。
 
-滚动裁剪为直角矩形，不随外观圆角改变。自有宿主的 `Ui::visit_scenes` 回调按顺序接收 `Visit`：`Scene { scene, transform, clip }` 是保留绘制记录、平移和窗口逻辑坐标裁剪，宿主必须应用裁剪；`PushLayer(Layer)` 与 `PopLayer` 包住有组透明度或背景模糊的子树，宿主缩放后交给 renderer 的 `push_layer`/`pop_layer`。某轴溢出时 ScrollView 在该轴末端绘制覆盖式滚动条：不占布局空间，12dp 指针带内贴边绘制 8dp 宽的完整轨道（主题 `pressed` 色），直角滑块在轨道中移动（最短 24dp），两轴同时出现时纵轴让出角落；多行编辑器只绘制纵向滑块。滑块在子树之后绘制，外层视口优先命中。按下滑块拖动，按下滑块外的指针带先把滑块中心移到该处再拖动；拖动期间其他控件不接收该指针事件，取消、隐藏或删除结束拖动且保留最后偏移。滑块静止用 theme `border`，悬停或拖动用 `muted`，均深于轨道，没有淡出计时器或动画。当前没有 ScrollView 独立键盘焦点或滚动动画。可执行嵌套表单示例：`cargo run -p aegle --example scrolling`。
+滚动裁剪为直角矩形，不随外观圆角改变。自有宿主的 `Ui::visit_scenes` 回调按顺序接收 `Visit`：`Scene { scene, transform, clip }` 是保留绘制记录、平移和窗口逻辑坐标裁剪，宿主必须应用裁剪；`PushLayer(Layer)` 与 `PopLayer` 包住有组透明度或背景模糊的子树，宿主缩放后交给 renderer 的 `push_layer`/`pop_layer`。某轴溢出时 ScrollView 在该轴末端绘制滚动条：12dp 指针带内贴外缘是轨道与胶囊形滑块（最短 24dp），静止时 4dp 粗，视图悬停或拖动时 8dp，两端让开视图圆角，两轴同时出现时纵轴让出角落；多行编辑器只绘制纵向滑块。溢出的一侧在内边距之外为滚动条留出 14dp（轨道、边距与 4dp 间隙），内容不会滚到滚动条下面。滑块在子树之后绘制，外层视口优先命中。按下滑块拖动，按下滑块外的指针带先把滑块中心移到该处再拖动；拖动期间其他控件不接收该指针事件，取消、隐藏或删除结束拖动且保留最后偏移。轨道与滑块颜色取自外观的 `scrollbar` 字段，默认为主题的 pressed、border 与 muted；没有淡出计时器或动画。当前没有 ScrollView 独立键盘焦点或滚动动画。可执行嵌套表单示例：`cargo run -p aegle --example scrolling`。
 
 ## 当前图像、画布与虚拟列表
 
-`aegle::scene` 重新导出绘制命令。`image(&Image)` 以像素尺寸为固有逻辑尺寸，交叉轴不拉伸，`set_size` 后按边界拉伸，不保持宽高比；导出 Image 角色。像素须由调用方解码，App 不内置 PNG/JPEG 解码器。`canvas(painter)` 的 painter 以局部坐标和当前尺寸录制 scene 命令，只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行；它在刷新期间持有 UI 借用，不能使用控件句柄，绘制不裁剪到边界；`on_input(|canvas, event| ...)` 使其可聚焦并在借用之外按序接收 `CanvasEvent`（按下/移动/释放/离开/取消/滚轮/按键/焦点，以及右键、中键与侧键的 `ButtonPress`/`ButtonRelease`），作为自定义输入行为；实现 `Control` 的控件从 `PointerKind::ButtonDown`/`ButtonUp` 收到同样的按键；导出 Canvas 角色。需要逐帧动画的自定义控件在 `paint` 中调用 `PaintCx::request_frame`，以 `cx.time` 计算进度；需要悬停或延时的扩展安装 `Hooks::hover` / `Hooks::wake` 并设置 `State::wake`。
+`aegle::scene` 重新导出绘制命令。`image(&Image)` 以像素尺寸为固有逻辑尺寸，交叉轴不拉伸，`set_width`/`set_height` 后按边界拉伸，不保持宽高比；导出 Image 角色。像素须由调用方解码，App 不内置 PNG/JPEG 解码器。`canvas(painter)` 的 painter 以局部坐标和当前尺寸录制 scene 命令，只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行；它在刷新期间持有 UI 借用，不能使用控件句柄，绘制不裁剪到边界；`set_input(|canvas, event| ...)` 使其可聚焦并在借用之外按序接收 `CanvasEvent`（按下/移动/释放/离开/取消/滚轮/按键/焦点，以及右键、中键与侧键的 `ButtonPress`/`ButtonRelease`），作为自定义输入行为；实现 `Control` 的控件从 `PointerKind::ButtonDown`/`ButtonUp` 收到同样的按键；导出 Canvas 角色。需要逐帧动画的自定义控件在 `paint` 中调用 `PaintCx::request_frame`，以 `cx.time` 计算进度；需要悬停或延时的扩展安装 `Hooks::hover` / `Hooks::wake` 并设置 `State::wake`。
 
 `list_view(row_height, count, row)` 为等高虚拟列表：间隔节点高 `count × row_height`（不超过 16,777,216），只有与视口、祖先裁剪和窗口相交的行作为真实控件存在。`Ui::refresh` 在借用外先为新进入的行建立空列并调用 `row(&Container, index)`，再布局；离开的行连同焦点和局部状态删除，因此只能 Tab 到已存在的行。行按索引插入以保持焦点顺序，行内容溢出行高时不裁剪。`set_count` 删除超出的行，`reload` 在下次刷新重建全部已存在行。列表默认按 flex 收缩到父容器剩余空间，因此嵌套在 ScrollView 中时自身滚动。辅助技术只看到已建立的行，不报告总行数。
 
@@ -142,6 +144,6 @@ Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 
 
 ## 当前可用的底层接口
 
-`Tree` 保存实际状态，`Route::rebuild/iter` 构造捕获/目标/冒泡路径，`Focus::set/advance` 按宿主策略处理焦点；这不是第二套函数式 UI 入口。`Button::handle(Input)` 返回激活、capture、焦点和绘制效果，`TextField::handle(&mut TextSystem, Input)` 在同一个 Editor 上实现编辑行为。控件不隐式获取平台服务。
+`Tree` 保存实际状态，`Route::rebuild/iter` 为自建宿主构造捕获/目标/冒泡路径，`Focus::set/advance` 按宿主策略处理焦点；这不是第二套函数式 UI 入口。`aegle-ui` 不用 `Route`：输入只交给命中或聚焦的目标控件，没有捕获或冒泡阶段。`Button::handle(Input)` 返回激活、capture、焦点和绘制效果，`TextField::handle(&mut TextSystem, Input)` 在同一个 Editor 上实现编辑行为。控件不隐式获取平台服务。
 
 IME 数据通过 `EditorDriver::apply_ime` 一次验证并应用，`Editor::surrounding` 借出有界周边文字。调用方消费 `Outcome` 与 `Editor::take_changes` 后同步布局、平台和绘制。`aegle-platform-wayland --example editor` 保留底层显式组装示例；`aegle --example controls` 展示应用层创建、编辑、按钮回调、主题切换与关闭窗口，使用上面的统一接口。

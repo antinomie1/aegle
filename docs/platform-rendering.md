@@ -6,8 +6,8 @@
 
 | 平台 | 首版目标 | 绘制与输入 |
 | --- | --- | --- |
-| Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | ash/Vulkan；SCTK + wayland-client；text-input-v3 |
-| Windows | Windows 11，x86_64/aarch64，存在兼容 Vulkan 驱动 | ash/Vulkan；原生窗口与 TSF，必要时 IMM 兼容 |
+| Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；SCTK + wayland-client；text-input-v3 |
+| Windows | Windows 11，x86_64/aarch64 | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；原生窗口；输入法当前为 IMM 兼容路径，TSF 未实现 |
 | macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 绘制经可选 wgpu 使用 Metal，窗口平台未实现；AppKit、NSTextInputClient |
 
 这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 不实现 X11；基础普通窗口要求 xdg-shell，shell 表面另要求 layer-shell。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。

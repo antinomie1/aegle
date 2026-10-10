@@ -92,7 +92,7 @@ ScrollView 仅平移既有控件几何，Editor 继续拥有自己的文字滚�
 
 ## 窗口级按键与输入时间
 
-`Ui::on_key`（原生 `Window::on_key`）在焦点控件和 Tab 遍历之前收到每个按键事件，返回 true 即消费，编辑器不再收到。它只看到普通按键：Wayland 上输入法组合期间的按键由 compositor 交给输入法，Win32 上 `VK_PROCESSKEY` 与组合中的按键在平台层已被过滤，所以快捷键处理器不会截走组合输入；`KeyEvent::editing` 告诉处理器焦点在编辑器中，处理器应把普通字符留给文字输入。Win32 的 WM_CHAR 文字作为 `Key::Unidentified` 加文字的事件同样先经过处理器。Menu 键（Wayland `Menu` keysym、Win32 `VK_APPS`）是 `Key::ContextMenu`，F1–F24 是 `Key::Function(n)`；控件库钩子不使用时，Menu 键与 Shift+F10 向焦点控件（没有焦点时为根）请求上下文菜单，F10 由默认控件库用于聚焦菜单栏。
+`Ui::on_key`（原生窗口经 `window.ui()?.on_key`）在焦点控件和 Tab 遍历之前收到每个按键事件；多个处理器按注册顺序执行，第一个返回 true 的处理器消费该键，编辑器不再收到。它只看到普通按键：Wayland 上输入法组合期间的按键由 compositor 交给输入法，Win32 上 `VK_PROCESSKEY` 与组合中的按键在平台层已被过滤，所以快捷键处理器不会截走组合输入；`KeyEvent::editing` 告诉处理器焦点在编辑器中，处理器应把普通字符留给文字输入。Win32 的 WM_CHAR 文字作为 `Key::Unidentified` 加文字的事件同样先经过处理器。Menu 键（Wayland `Menu` keysym、Win32 `VK_APPS`）是 `Key::ContextMenu`，F1–F24 是 `Key::Function(n)`；控件库钩子不使用时，Menu 键与 Shift+F10 向焦点控件（没有焦点时为根）请求上下文菜单，F10 由默认控件库用于聚焦菜单栏。
 
 按键和指针事件的平台时间（Wayland 毫秒时间戳、Win32 `GetMessageTime`）按窗口映射到 `Instant`：以相邻事件的差值推进，任何晚于投递时刻的结果把锚点移回投递时刻，因此映射收敛到观察到的最小投递延迟，不会超前于时钟，32 位回绕按有符号差值处理。
 

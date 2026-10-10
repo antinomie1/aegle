@@ -59,6 +59,8 @@ Window {
 ```
 
 ```rust
+use aegle::prelude::*;   // 让内置元素在 ui! 处可见，不能省略
+
 fn main() -> aegle::Result<()> {
     aegle::App::run_ui(aegle::ui!("examples/hello.aegle"))
 }
@@ -92,7 +94,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 | `app.preferences()` | 最近应用的系统偏好 `Preferences { dark, high_contrast, reduced_motion }` |
 | `app.ime_available()` | 平台是否支持原生输入法组合 |
 | `window.close()` | 关闭窗口并使其所有控件句柄失效 |
-| `window.set_theme(theme)` / `window.set_reduced_motion(b)` | 窗口级主题与减少动态效果 |
+| `window.ui()?` | 窗口的引擎 `Ui`：窗口级 `on_key`、`set_reduced_motion`、`set_token`、`set_default_transition` 等；主题用根节点的 `window.set_theme(theme)` |
 
 `AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Vulkan`/`Wgpu`，编译了软件绘制时默认软件）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
 
@@ -163,16 +165,16 @@ let panel = app.window_with_options("Panel", WindowOptions {
 
 | 子项方法（`Node`） | 说明 |
 | --- | --- |
-| `set_size(w, h)`、`set_width`、`set_height` | 尺寸；自动高度会替换控件的主题高度 |
-| `set_min_size(w, h)`、`set_min_width`、`set_min_height` | 最小尺寸；自动表示由内容决定 |
-| `set_max_size(w, h)`、`set_max_width`、`set_max_height` | 最大尺寸；自动表示不限 |
-| `set_aspect_ratio(Some(r))` | 宽/高比，一边自动时由另一边推出 |
+| `set_width`、`set_height` | 尺寸，逐轴设置；自动高度会替换控件的主题高度 |
+| `set_min_width`、`set_min_height` | 最小尺寸；自动表示由内容决定 |
+| `set_max_width`、`set_max_height` | 最大尺寸；自动表示不限 |
+| `set_aspect_ratio(r)` | 宽/高比，一边自动时由另一边推出；`None` 移除 |
 | `set_grow(f)`、`set_shrink(f)`、`set_basis(len)` | 分配剩余空间、空间不足时的收缩比例（默认 1）、增减前的主轴尺寸 |
-| `set_align_self(Some(Align))` | 覆盖父容器的交叉轴对齐；网格中为纵向对齐 |
+| `set_align_self(Align)` | 覆盖父容器的交叉轴对齐；网格中为纵向对齐；`None` 跟随父容器 |
 | `set_margin(insets)` | 外边距，可为负；左右都为 `Length::Auto` 时水平居中 |
-| `set_absolute(Some(insets))` | 移出流式布局，按父容器内边距框的四边定位并绘制在兄弟之上；`None` 恢复 |
+| `set_absolute(insets)` | 移出流式布局，按父容器内边距框的四边定位并绘制在兄弟之上；`None` 恢复 |
 | `set_padding(insets)` | 内边距；容器接受任意四边，文字控件只接受统一像素值 |
-| `set_gap(g)`、`set_gaps(水平, 垂直)` | 子控件间距 |
+| `set_gap(行间距, 列间距)` | 子控件间距，顺序同 CSS `gap` 与标记 `gap: [行, 列]` |
 
 | 容器方法（`Container`） | 说明 |
 | --- | --- |
@@ -180,39 +182,40 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `contents()` | 追加透明分组：其子控件直接参与本容器的行、列、换行或网格布局，可整体显示、隐藏或替换 |
 | `set_direction(Direction)` | `Row`、`Column`、`RowReverse`、`ColumnReverse` |
 | `set_wrap(Wrap::Wrap)` | 放不下时换行，类似 QML `Flow` |
-| `set_align_items(Some(Align))` | 交叉轴对齐：`Start`、`End`、`Center`、`Stretch`、`Baseline`；`None` 恢复拉伸 |
-| `set_justify_content(Some(Justify))` | 主轴剩余空间：`Start`、`End`、`Center`、`SpaceBetween`、`SpaceAround`、`SpaceEvenly` |
-| `set_align_content(Some(Justify))` | 换行后各行之间（网格中各行之间）的剩余空间 |
+| `set_align_items(Align)` | 交叉轴对齐：`Start`、`End`、`Center`、`Stretch`、`Baseline`；`None` 恢复拉伸 |
+| `set_justify_content(Justify)` | 主轴剩余空间：`Start`、`End`、`Center`、`SpaceBetween`、`SpaceAround`、`SpaceEvenly` |
+| `set_align_content(Justify)` | 换行后各行之间（网格中各行之间）的剩余空间 |
 
 ```rust
 let bar = window.row()?;
-bar.set_justify_content(Some(Justify::SpaceBetween))?;
-bar.set_align_items(Some(Align::Center))?;
+bar.set_justify_content(Justify::SpaceBetween)?;
+bar.set_align_items(Align::Center)?;
 bar.text("标题")?;
 bar.button("设置")?;
 
 let tags = window.row()?;
 tags.set_wrap(Wrap::Wrap)?;
-tags.set_gaps(6.0, 6.0)?;
+tags.set_gap(6.0, 6.0)?;
 
 let fab = window.button("+")?;
-fab.set_absolute(Some(Insets::new(Length::Auto, 24.0, 24.0, Length::Auto)))?;
+fab.set_absolute(Insets::new(Length::Auto, 24.0, 24.0, Length::Auto))?;
 ```
 
 **网格与叠放**（facade `grid` feature，release 约增加 244 KiB）：
 
 | 方法 | 说明 |
 | --- | --- |
-| `grid(&[Track])` | 追加网格，给出列轨道；子控件逐行填入，行不够时自动增加 |
+| `grid()` | 追加网格；用 `set_columns` 给出列，子控件逐行填入，行不够时自动增加 |
 | `stack()` | 追加叠放容器：所有子控件位于同一格并互相覆盖，容器至少与最大的子控件一样大，后加的绘制在上面 |
-| `set_columns`、`set_rows`、`set_auto_columns`、`set_auto_rows` | 显式轨道与自动增加的轨道 |
-| `set_flow(Flow)`、`set_justify_items(Some(Align))` | 自动放置顺序（`Row`、`Column`、`RowDense`、`ColumnDense`）；子项在格内的水平对齐 |
+| `set_columns`、`set_rows`、`set_auto_columns`、`set_auto_rows` | 显式轨道与自动增加的轨道；显式轨道接受 `Track` 列表，或可命名线与 `Repeat` 的 `TemplateItem` 列表 |
+| `set_flow(Flow)`、`set_justify_items(Align)` | 自动放置顺序（`Row`、`Column`、`RowDense`、`ColumnDense`）；子项在格内的水平对齐 |
 | `set_grid_column(Placement)`、`set_grid_row(Placement)`、`set_justify_self` | 子项位置：`Placement::at(2)`、`Placement::at(1).spanning(2)`、`Placement::span(2)`；线号从 1 开始，负数从末尾数 |
 
 `Track` 有 `Px`、`Percent`、`Fr`（按份分配剩余空间）、`Auto`、`MinContent`、`MaxContent`、`FitContent(px)` 与 `MinMax(px, fr)`。
 
 ```rust
-let cards = window.grid(&[Track::Px(160.0), Track::Fr(1.0), Track::Fr(1.0)])?;
+let cards = window.grid()?;
+cards.set_columns(&[Track::Px(160.0), Track::Fr(1.0), Track::Fr(1.0)])?;
 cards.set_auto_rows(&[Track::Px(96.0)])?;
 let wide = cards.column()?;
 wide.set_grid_column(Placement::at(2).spanning(2))?;
@@ -220,8 +223,8 @@ wide.set_grid_column(Placement::at(2).spanning(2))?;
 let avatar = window.stack()?;
 avatar.image(&photo)?;
 let badge = avatar.text("3")?;
-badge.set_align_self(Some(Align::Start))?;
-badge.set_justify_self(Some(Align::End))?;
+badge.set_align_self(Align::Start)?;
+badge.set_justify_self(Align::End)?;
 ```
 
 **最小尺寸**：与 CSS flex 一样，容器在主轴上的最小尺寸默认由内容决定。滚动视图、虚拟列表和表格本身可以收缩，但若它们放在一个中间行/列里，要让这个中间容器也能缩小，需对它 `set_min_height(0.0)`（行中为 `set_min_width`）。要让一个内容很多的子项只占剩余空间，用 `set_basis(0.0)` 加 `set_grow(1.0)`，否则它会从完整内容尺寸开始参与收缩。
@@ -235,11 +238,11 @@ badge.set_justify_self(Some(Align::End))?;
 **主题** `Theme` 是一组颜色与尺寸：`background`、`surface`、`foreground`、`muted`、`accent`、`border`、`hover`、`pressed`、`selection`、`font_size`、`padding`、`gap`、`radius`（默认 0，直角）、`control_height`。内置 `Theme::light()`、`dark()`、`high_contrast()`，可修改字段后用 `validate()` 检查。
 
 ```rust
-window.set_theme(Theme { radius: 6.0, ..Theme::dark() })?;   // 整个窗口
-panel.set_theme(Some(Theme::dark()))?;                      // 只作用于 panel 子树
-panel.set_theme(None)?;                                     // 恢复继承
+window.set_theme(Theme { radius: 6.0, ..Theme::dark() })?;  // 整个窗口：根节点的局部主题
+panel.set_theme(Theme::dark())?;                           // 只作用于 panel 子树
+panel.set_theme(None)?;                                    // 恢复继承
 // 只替换指定 token，其余跟随父主题（含之后的变化）
-panel.set_theme_override(Some(ThemeOverride { accent: Some(Color::rgb(200, 40, 40)), ..Default::default() }))?;
+panel.set_theme_override(ThemeOverride { accent: Some(Color::rgb(200, 40, 40)), ..Default::default() })?;
 ```
 
 原生 `App` 把系统文本缩放（Windows 的文本大小、GNOME 的 `text-scaling-factor`，百分比）应用到解析后主题的 `font_size` 与 `control_height`；`AppOptions.text_scale = Some(125)` 可显式指定，`None`（默认）跟随系统。
@@ -251,11 +254,13 @@ card.set_style(Style { background: Some(Color::WHITE), radius: Some(8.0), ..card
 card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
 ```
 
-所有控件都有 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground`。只对部分控件有意义的 setter 只出现在对应句柄上，用错控件在编译期报错：
+所有控件都有 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground`；传 `None` 让该项回到皮肤值。只对部分控件有意义的 setter 只出现在对应句柄上，用错控件在编译期报错：
+
+可清除的属性只有一个 setter：传值设置，传 `None` 清除（参数为 `impl Into<Option<T>>`），没有另外的 `clear_*` 方法。这适用于样式与字体、主题与覆盖、token 覆盖、过渡、对齐、绝对定位、宽高比、光标、布局方向、无障碍描述、提示和菜单快捷键提示。皮肤是函数指针，Rust 不会把函数项隐式转换进 `Into`，因此 `set_skin`、`set_kind_skin` 保持 `Some(skin)` / `None`。
 
 | 方法 | 所在句柄 |
 | --- | --- |
-| `set_font_size`、`clear_font_size`、`set_font`、`clear_font`、`font` | Label、Button、Dropdown、TextField、NumberField、CheckBox、Switch、Radio |
+| `set_font_size`、`set_font`（`None` 回到主题字号或默认字体）、`font` | Label、Button、Dropdown、TextField、NumberField、CheckBox、Switch、Radio |
 | `set_hover_background`、`set_focus_color`、`set_focus_width` | Button、Dropdown、TextField、NumberField、CheckBox、Switch、Radio、Slider |
 | `set_pressed_background` | Button、Dropdown、CheckBox、Switch、Radio、Slider |
 | `set_indicator_color` | CheckBox、Switch、Radio、Slider、Progress |
@@ -268,7 +273,7 @@ card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
 | 层 | 来源 | 写入 | 移除 |
 | --- | --- | --- | --- |
 | 呈现 | 进行中的过渡或动画（`motion`） | `set_transition`、`with_transition`、`animate` | 到达目标；`finish_transition`、`cancel_transition`、`snap` |
-| 本地值 | 常量或 token 绑定，同一属性只能是其中之一，后写者生效 | setter、`set_style`；`bind_color`、`bind_length`、`bind_font`、`bind_shadow` | `set_style(Style::default())`、`unbind_token` |
+| 本地值 | 常量或 token 绑定，同一属性只能是其中之一，后写者生效 | setter、`set_style`；`bind_color`、`bind_length`、`bind_font`、`bind_shadow` | setter 传 `None`、`set_style(Style::default())`、`unbind_token` |
 | 节点皮肤 | 该控件自己的皮肤 | `set_skin(Some(skin))` | `set_skin(None)` |
 | 类型皮肤 | 最近的祖先（含自身）为该控件类型设置的皮肤 | `set_kind_skin(&kinds::BUTTON, Some(skin))` | `set_kind_skin(kind, None)` |
 | 默认皮肤 | 控件类型（`ControlKind`）自带的皮肤 | 由控件库登记类型时给出 | — |
@@ -292,8 +297,8 @@ row.bind_length(LengthSlot::Gap, space)?;             // 也可绑定 padding、
 title.bind_font(heading)?;
 play.bind_transition(TransitionProperty::Paint, speed, Easing::EaseOut)?;
 
-panel.set_token(fill, Some(Color::rgb(200, 40, 40)))?; // 只覆盖 panel 子树
-window.set_token(space, Some(4.0))?;                    // 整个窗口
+panel.set_token(fill, Color::rgb(200, 40, 40))?;       // 只覆盖 panel 子树
+window.set_token(space, 4.0)?;                          // 整个窗口
 play.set_background(Color::WHITE)?;                     // 后写者生效：改为常量，结束该项绑定
 ```
 
@@ -333,23 +338,23 @@ let save = window.button("Save")?;
 save.on_click(move |_button| status.set_text("Saved"))?;
 ```
 
-| 控件 | 事件 | 清除 |
-| --- | --- | --- |
-| `Button` | `on_click(FnMut(Button) -> Result)` | `clear_on_click()` |
-| `TextField`（单行） | `on_submit(FnMut(TextField) -> Result)`，Enter 触发 | `clear_on_submit()` |
-| `CheckBox` / `Switch` / `Radio` / `Slider` / `Dropdown` | `on_change(FnMut(Self) -> Result)` | `clear_on_change()` |
-| 任意控件（`motion`） | `on_transition_end(FnMut(Node) -> Result)` | `clear_on_transition_end()` |
-| `Canvas` | `on_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) | `clear_on_input()` |
-| 任意控件 | `on_double_click(FnMut(Node) -> Result)`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 | `clear_on_double_click()` |
-| 任意控件 | `on_context_menu(FnMut(Node, Point) -> Result)`：在该控件或没有自己处理器的后代上请求上下文菜单——右键按下（得到按下点），或焦点在其中时按 Menu 键、Shift+F10，或辅助技术的 ShowContextMenu（得到该控件左上角）；点为窗口逻辑坐标，可直接交给 `Popup::show_at` | `clear_on_context_menu()` |
-| 任意控件 | `on_drop(FnMut(Node, DropEvent) -> Result)`：成为该控件及没有自己处理器的后代的放置目标。每次拖动经过先得到 `DropEvent::Enter`，再得到一次 `Leave` 或 `Drop { data, position }`（`data` 为 `DragData::Text` 或 `DragData::Files`，`position` 为窗口逻辑坐标）；有处理器即接受文字与文件，不用的数据忽略即可 | `clear_on_drop()` |
-| `MenuItem` | `on_click(FnMut(MenuItem) -> Result)`：菜单关闭、勾选项切换之后执行 | `clear_on_click()` |
+| 控件 | 事件 |
+| --- | --- |
+| `Button` | `on_click(FnMut(Button) -> Result)` |
+| `TextField`（单行） | `on_submit(FnMut(TextField) -> Result)`，Enter 触发 |
+| `CheckBox` / `Switch` / `Radio` / `Slider` / `NumberField` / `Dropdown` / `Tabs` | `on_change(FnMut(Self) -> Result)` |
+| 任意控件（`motion`） | `on_transition_end(FnMut(Node) -> Result)` |
+| `Canvas` | `set_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) |
+| 任意控件 | `on_double_click(FnMut(Node) -> Result)`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 |
+| 任意控件 | `on_context_menu(FnMut(Node, Point) -> Result)`：在该控件或没有自己处理器的后代上请求上下文菜单——右键按下（得到按下点），或焦点在其中时按 Menu 键、Shift+F10，或辅助技术的 ShowContextMenu（得到该控件左上角）；点为窗口逻辑坐标，可直接交给 `Popup::show_at` |
+| 任意控件 | `on_drop(FnMut(Node, DropEvent) -> Result)`：成为该控件及没有自己处理器的后代的放置目标。每次拖动经过先得到 `DropEvent::Enter`，再得到一次 `Leave` 或 `Drop { data, position }`（`data` 为 `DragData::Text` 或 `DragData::Files`，`position` 为窗口逻辑坐标）；有处理器即接受文字与文件，不用的数据忽略即可 |
+| `MenuItem` | `on_click(FnMut(MenuItem) -> Result)`：菜单关闭、勾选项切换之后执行 |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
-- 同一事件可以注册多个处理器，按注册顺序执行；`clear_on_*` 移除该事件的全部处理器。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。
+- `on_*` 一律追加：同一事件可以注册多个处理器，按注册顺序执行，处理器与控件同生命周期，没有单独的移除方法。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。
 - 回调返回错误时处理器保留，同一事件的其他处理器照常执行。原生 App 把错误交给 `app.on_error(|error| ...)`：返回 `Ok(())` 继续运行，返回错误则结束 `App::run`；没有设置时打印到 stderr 并继续。无窗口 `Ui::dispatch_callbacks` 把第一个错误返回给宿主，后续排队的回调留到下次调用。
 - 程序 setter（`set_checked`、`set_value`、`set_text` 等）不触发回调，可安全地相互同步；`activate()`、`toggle()`、`increment()`/`decrement()` 模拟用户操作并触发回调。
-- `Canvas::on_input` 是画布的行为本身，再次设置会替换；`Window::on_key` 是窗口唯一的按键策略，同样替换。
+- `set_*` 替换：`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。
 
 ### 逐帧回调与窗口级按键
 
@@ -357,11 +362,11 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 // 播放头：每帧读音频时钟并移动一个小控件；只改 offset，不重新布局或重画时间轴。
 playhead.on_frame(move |node, now| {
     let x = audio.position_seconds() * pixels_per_second - scroll;
-    node.set_offset(Point::new(x, 0.0))
+    node.set_offset(Point::new(x, 0.0))?;
+    Ok(audio.playing())                          // 返回 false 停止，窗口回到空闲
 })?;
-playhead.clear_on_frame()?;                      // 停止播放时清除，窗口回到空闲
 
-window.on_key(move |key| {
+window.ui()?.on_key(move |key| {
     if key.pressed && !key.editing && key.key == Key::Character(' ') {
         transport.toggle(key.time);              // key.time：平台报告的按键时刻（Instant）
         return Ok(true);                         // 消费此键，焦点控件不再收到
@@ -370,8 +375,8 @@ window.on_key(move |key| {
 })?;
 ```
 
-- `Node::on_frame(FnMut(Node, Instant) -> Result)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外；同一控件可注册多个，`clear_on_frame` 全部移除。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部清除后不再唤醒。控件删除时其回调随之移除；逐帧回调出错时被移除（否则每帧都会报同一个错误），错误交给 `on_error`。
-- `Window::on_key` / `Ui::on_key` 在焦点控件和 Tab 遍历之前收到每个按键，返回 `true` 表示已处理。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。处理器出错时错误照常返回，处理器保留，由调用方决定是否清除。
+- `Node::on_frame(FnMut(Node, Instant) -> Result<bool>)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外；返回 `true` 继续，返回 `false` 停止。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部停止后不再唤醒。控件删除时其回调随之移除；逐帧回调出错时同样停止（否则每帧都会报同一个错误），错误交给 `on_error`。
+- `Ui::on_key`（原生窗口用 `window.ui()?.on_key`）在焦点控件和 Tab 遍历之前收到每个按键；多个处理器按注册顺序执行，第一个返回 `true` 的处理器消费该键。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。处理器出错时错误照常返回，处理器保留。
 - 按键与指针事件带有平台时间：Wayland 的毫秒时间戳与 Win32 的 `GetMessageTime` 被映射到 `Instant`（锚定到最小投递延迟，处理 32 位回绕）。窗口按键处理器从 `KeyEvent::time` 读取，自定义控件从 `InputCx::time` 读取；嵌入宿主用 `key_at`、`pointer_at` 传入。
 
 ### 拖放
@@ -385,7 +390,7 @@ zone.on_drop(move |zone, event| match event {
     DropEvent::Drop { .. } => zone.set_background(Color::WHITE),
 })?;
 // 拖动源：在按下后的移动中发起；控件的按下随即取消，指针交给系统拖动。
-canvas.on_input(move |canvas, event| match event {
+canvas.set_input(move |canvas, event| match event {
     CanvasEvent::Move { pressed: true, .. } => canvas.start_drag(DragData::Text("片段".into())),
     _ => Ok(()),
 })?;
@@ -428,8 +433,8 @@ card.set_offset(Point::new(0.0, 480.0))?;               // 布局后平移，命
 card.on_transition_end(move |_| window.close())?;       // 全部过渡完成后执行
 ```
 
-- 外观过渡覆盖背景、文字、边框、圆角、焦点环、选择、caret 和标志颜色；`presented_appearance()` 返回当前呈现值。`set_property_transition(TransitionProperty::Offset, Some(t))` 只给某一项设置时长与曲线。
-- `finish_transition()` 立即到终点并完成；`cancel_transition()` 停在当前呈现值；`clear_transition()` 移除策略并回到目标。
+- 外观过渡覆盖背景、文字、边框、圆角、焦点环、选择、caret 和标志颜色；`presented_appearance()` 返回当前呈现值。`set_property_transition(TransitionProperty::Offset, t)` 只给某一项设置时长与曲线，`None` 让该项立即到目标。
+- `finish_transition()` 立即到终点并完成；`cancel_transition()` 停在当前呈现值；`set_transition(None)` 移除策略并回到目标。
 - `set_offset` 不改变布局；没有过渡策略时立即生效。
 - `card.set_transform(Transform { scale: 1.2, rotation: 0.1 })` 以节点中心缩放/旋转子树（弧度，呈现层变换，布局不变），同样可补间；命中、滚动视口裁剪（外包框）、IME 锚点与无障碍变换跟随。
 - `ui.fling(position, velocity)` 在触摸板/触摸抬起后继续滚动（逻辑像素/秒，指数衰减），任何新的滚动、按下或 `ui.stop_fling()` 都会停止。

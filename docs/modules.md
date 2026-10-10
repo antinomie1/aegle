@@ -4,7 +4,7 @@
 
 ## 拆分尺度
 
-按可独立使用的能力和真实后端差异拆分。每个模块需有自己的 Interface：类型、所有权、调用顺序、错误和资源成本。模块不通过全局服务定位器寻找其他模块，由调用者显式传入能力。
+按可独立使用的能力和真实后端差异拆分。每个模块需有自己的 Interface：类型、所有权、调用顺序、错误和资源成本。模块不通过全局服务定位器寻找其他模块，由调用者显式传入能力。线程级共享状态只有两处，都是按名称登记的表：`aegle-ui` 的 token 注册表与 `aegle-loader` 的宿主动作共享表。
 
 | crate | 责任及独立用途 | Aegle 内部依赖 |
 | --- | --- | --- |
@@ -27,12 +27,12 @@
 | aegle-theme | 无分配的 Theme、控件类型 `ControlKind`（默认皮肤与可接受样式组）、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；类型化 `Token<T>` 与内置 token（注册表与绑定在 aegle-ui） | types |
 | aegle-motion | 补间、过渡、关键帧动画与 Bézier/弹簧曲线；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
-| aegle-widgets | 默认控件库，包含全部默认控件：Label、Button、TextField（单/多行）、CheckBox、Switch、Radio、Slider、Progress、ImageView、Canvas、ScrollView、ListView、Table、Popup、Dropdown、Menu、MenuBar，以及它们的类型与中性皮肤（`kinds`）和纯函数绘制（`paint`）；通过 `Control` trait 与 `Hooks` 接入 aegle-ui，创建入口是 `Widgets` trait | ui、controls、text、scene、theme、core、layout、types；access 按 feature |
+| aegle-widgets | 默认控件库，包含全部默认控件：Label、Button、TextField（单/多行）、CheckBox、Switch、Radio、Slider、Progress、NumberField、Separator、Splitter、Tabs、Tooltip、ImageView、Canvas、ScrollView、ListView、Table、Popup、Dropdown、Menu、MenuBar，以及它们的类型与中性皮肤（`kinds`）和纯函数绘制（`paint`）；通过 `Control` trait 与 `Hooks` 接入 aegle-ui，创建入口是 `Widgets` trait | ui、controls、text、scene、theme、core、layout、types；access 按 feature |
 | aegle-image | 有界图像解码：PNG（始终可用，字体位图用 `decode_into`）与可选 JPEG、WebP、GIF 首帧、静态 SVG 栅格化，以及可选的渐变/阴影图像（`effects`）；不依赖任何 UI | scene；解码器按 feature |
-| aegle-markup | 有界解析、跨度、内建控件 schema、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
+| aegle-markup | 有界解析、跨度、节点属性表与元素规格 `ElementSpec`（不含具体元素）、多文件导入与 state/表达式/事件/块/组件的类型检查 | 无 |
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |
-| aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载 | ui、widgets、markup；app 按 feature |
-| aegle-ui | 无窗口保留式 UI 引擎：节点树、布局、输入路由与焦点、滚动与滚动条、光标、触摸/惯性、主题、过渡、IME 与语义导出；控件通过开放的 `Control` trait（经 `InputCx`/`MeasureCx`/`PaintCx`/`SemanticsCx` 上下文）和 `Hooks` 接入，引擎不含任何具体控件 | types、core、layout、scene、text、controls、theme、motion；access 按 feature |
+| aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载；元素契约 `Element` 与内置元素 | ui、widgets、markup、macros（`element!`）；app 按 feature |
+| aegle-ui | 无窗口保留式 UI 引擎：节点树、布局、输入路由与焦点、滚动与滚动条、光标、触摸/惯性、主题、过渡、IME 与语义导出；控件通过开放的 `Control` trait（经 `InputCx`/`MeasureCx`/`PaintCx`/`SemanticsCx` 上下文）和 `Hooks` 接入；引擎自带的只有无外观容器（`Plain`、grid 的 `Stack`）与滚动条，其余控件都在控件库中 | types、core、layout、scene、text、controls、theme、motion；access 按 feature |
 | aegle-app | 原生应用宿主：App/Window、事件循环、平台与 renderer 选择、系统偏好、后台代理（UiProxy）；每窗口一个 `Ui`；`desktop-services` 时 `App::desktop` 把桌面服务事件经代理交回 UI 线程 | ui、types、scene、text；平台、renderer、access、desktop 按 feature；widgets 仅用于测试 |
 | aegle | 应用便捷入口与重导出（app、ui、widgets、image），不提供另一套实现 | app、ui、widgets、image；其他按 feature 重导出 |
 
@@ -70,7 +70,7 @@
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 ui 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 ui 派生的滚动几何。
 
-`aegle` 重导出 app、ui、widgets 与 image，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 词典分词 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由 `unix-accessibility` 选择；Windows UIA 由 `windows-accessibility` 选择。`aegle-ui` / `aegle-widgets` 的 `accessibility` 仅启用语义树导出，`aegle-app` 转发它，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主与缩放/旋转动画仍待实现；动态标记由 `markup` 中的 loader 执行。
+`aegle` 重导出 app、ui、widgets 与 image，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 词典分词 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由 `unix-accessibility` 选择；Windows UIA 由 `windows-accessibility` 选择。`aegle-ui` / `aegle-widgets` 的 `accessibility` 仅启用语义树导出，`aegle-app` 转发它，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 原生宿主仍待实现；动态标记与运行时加载都由 `markup` 中的 loader 执行。
 
 `aegle-markup` 是无第三方依赖的有界解析器、schema 与类型检查器；不依赖 app 或任何平台，可供外部工具独立检查，I/O 由调用方的读取函数提供。`aegle-macros` 复用它，并用 syn/quote/proc-macro-crate 处理 Rust 宏参数、代码生成与依赖别名，避免自建 Rust 语法处理。facade 的可选 `markup` 增加编译期宏与 `aegle-loader`：静态文档生成直接创建控件的代码，不链接引擎；动态文档生成构造已检查程序的代码并由引擎执行，发布程序不带解析器。引擎以 state 单元和效果（effect）记录绑定依赖，绑定与块随控件通过 `Node::keep_alive` 释放；运行时加载额外链接解析器。
 
@@ -107,20 +107,17 @@ flowchart TD
 
 这是一张依赖图，不是每次更新必须经过的多层调用链。markup 只定义语言、节点属性和元素规格 `ElementSpec`，不认识任何具体元素；loader 定义元素契约 `Element` 并用 macros 的 `element!` 声明内置元素，第三方控件库以同样方式声明自己的元素。core 不依赖 ui、app、widgets、loader、GPU 或操作系统库；renderer 不依赖控件或标记语言。
 
-## 目标默认组合与可裁剪组合
-
-本表为完整版本的设计目标；当前可编译 feature 以各 crate 清单及上面的实现说明为准。
+## 默认组合与可裁剪组合
 
 | 组合 | 包含 | 不自动包含 |
 | --- | --- | --- |
-| `aegle` 默认 desktop | 目标平台、目标 GPU、Taffy Flex/Block、CJK 文本/编辑与词典分词、默认组件、主题、基本补间、编译宏 | 系统无障碍适配、运行时加载、SVG 与 JPEG/WebP/GIF、SVG 字形、Grid、弹簧 |
+| `aegle` 默认 `desktop` | 目标平台窗口（`native`）、软件绘制、系统字体、词典分词、`markup`（编译宏与 loader，含运行时加载）、`motion`（过渡、关键帧与弹簧）、`effects`、`colrv1`、`desktop-services` | 系统无障碍适配、Vulkan、wgpu、JPEG/WebP/GIF/SVG、Grid |
 | `default-features = false` | 不自动选择窗口/renderer；使用者显式加所需功能或直接用独立模块 | 便捷默认组合 |
-| `runtime-ui` | loader、所注册组件的类型描述与宿主动作 | 通用脚本 VM、文件监视器 |
 | `text-dictionary` | 中日词典分词及相关复杂文字分段数据 | 网络字体 |
 | `effects`（桌面默认）/ `colrv1`（桌面默认）/ `jpeg` / `webp` / `gif` / `svg` | 渐变与阴影图像、COLRv1 字形、各图像格式、静态 SVG（图像与 OpenType-SVG 字形） | 彼此不暗中全部开启 |
 | `grid` | Taffy Grid 算法、`grid`/`stack` 容器与标记 `Grid`/`Stack`（release 约 244 KiB） | 默认 desktop 不包含 |
 
-默认桌面组合启用无障碍与减少动态效果支持。嵌入式应用可以显式不编译 OS 无障碍 adapter；不能将这种构建宣传为完整无障碍构建。省掉平台 adapter 不要求删除控件的基本语义定义。
+默认组合不启用系统无障碍 adapter：`unix-accessibility`、`windows-accessibility` 显式选择，`accessibility` 只导出可检查的语义树；不能把未接 adapter 的构建宣传为完整无障碍构建，省掉平台 adapter 也不删除控件的基本语义定义。减少动态效果偏好由 `motion` 跟随系统。
 
 Cargo feature 在依赖图中会统一：不能承诺同一程序里的某个控件使用有字典的 Parley，另一个控件因此完全不承担其静态数据成本。发布检查必须查看实际闭包和最终文件，而不是只查看 facade 清单。
 

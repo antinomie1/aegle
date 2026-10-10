@@ -27,6 +27,8 @@ Window {
 然后运行：
 
 ```rust
+use aegle::prelude::*;
+
 fn main() -> aegle::Result<()> {
     aegle::App::run_ui(aegle::ui!("main.aegle"))
 }
@@ -49,18 +51,19 @@ fn main() -> Result<()> {
 
 ## Features
 
-在 `aegle` crate 上设置。默认启用 `native`、`software`、`system-fonts`、`text-dictionary`、`markup`、`motion`、`effects` 与 `colrv1`。
+在 `aegle` crate 上设置。默认启用 `native`、`software`、`system-fonts`、`text-dictionary`、`markup`、`motion`、`effects`、`colrv1` 与 `desktop-services`。
 
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
 | `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32 |
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现 |
-| `markup` | ✓ | `ui!` 宏与动态标记引擎 |
+| `markup` | ✓ | `ui!` 宏与标记引擎，含运行时加载 |
 | `text-dictionary` | ✓ | 中日及东南亚文字的词典分词 |
-| `motion` | ✓ | 外观/位移过渡 |
+| `motion` | ✓ | 过渡、关键帧动画与弹簧 |
 | `effects` | ✓ | 图像效果（`aegle::image::effects`） |
 | `colrv1` | ✓ | COLRv1 彩色字形 |
+| `desktop-services` | ✓ | 文件对话框、通知、托盘与全局快捷键（`App::desktop`） |
 | `vulkan` |  | Vulkan 绘制 |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制 |
 | `accessibility` |  | 导出语义树，不接系统适配器 |

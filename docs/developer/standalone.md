@@ -68,7 +68,7 @@ cargo run -p aegle-widgets --features motion --example standalone
 | 平台协作 | `take_ime_state` 同步输入法，`take_clipboard`/`paste` 处理剪贴板，`cursor()` 设置指针形状 |
 | 等待 | 没有 `has_animations`、`wants_frames`、`has_pending_callbacks` 时睡眠，最迟在 `next_wake()` 醒来调用 `ui.wake(now)` |
 
-无窗口 `Ui` 默认不给交互控件安装过渡；要与原生 App 一致，创建控件前调用 `ui.set_default_transition(Some(Transition::default()))`。系统深浅色、高对比与减少动态效果由宿主读取，再调用 `set_theme`、`set_reduced_motion`。
+无窗口 `Ui` 默认不给交互控件安装过渡；要与原生 App 一致，创建控件前调用 `ui.set_default_transition(Transition::default())`。系统深浅色、高对比与减少动态效果由宿主读取，再调用 `set_theme`、`set_reduced_motion`。
 
 ## 自定义控件
 

@@ -54,7 +54,7 @@ cargo run -p aegle-render-software --features text --example editor_scene --rele
 cargo run -p aegle-platform-wayland --example editor --release
 ```
 
-hello 是 7 行 Rust 加 1 行文档注释的完整应用；hello_markup 为 3 行 Rust、4 行标记加 1 行文档注释。controls 与 markup_controls 用相同界面演示跨控件回调、CJK 编辑、主题和关闭窗口，均使用系统字体。layout 与三个 renderer 示例没有窗口。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
+hello 是 7 行 Rust 加 1 行文档注释的完整应用；hello_markup 为 4 行 Rust（含引入内置元素的 `use aegle::prelude::*`）、4 行标记加 1 行文档注释。controls 与 markup_controls 用相同界面演示跨控件回调、CJK 编辑、主题和关闭窗口，均使用系统字体。layout 与三个 renderer 示例没有窗口。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
 
 文字示例将 Paragraph 保留在同一棵树的节点中，以 Taffy 测量回调换行，并按最终布局宽度录制字形。真实显示拉丁文字、中文、日文、韩文及裁剪，输出 `target/aegle-text.png`；不是可交互控件或 GUI Hello world。测试字体共约 21 KiB，仅供测试/示例，附 OFL 原始声明和重建脚本。
 
@@ -64,7 +64,7 @@ hello 是 7 行 Rust 加 1 行文档注释的完整应用；hello_markup 为 3 �
 
 ## 验证
 
-- Linux：`cargo test --workspace` 在默认与 `--all-features` 下通过且无警告；`cargo clippy --workspace --all-targets` 在两种配置下无告警；`cargo doc --workspace --all-features` 无告警；facade 的九组 feature 组合（无 feature、`markup`、`markup,wayland`、`markup,wayland,software`、`markup,motion`、`motion,wayland,software`、`grid,markup`、`wayland,vulkan`、`wayland,wgpu`）`cargo check --all-targets` 无警告。
+- Linux（2026-10-10，rustc 1.97，API 收敛之后）：`cargo test --workspace` 在默认（122 项）与 `--all-features`（131 项，另 29 项需要 compositor/GPU 而标为 ignored）下通过且无警告；`cargo clippy --workspace --all-targets` 在两种配置下无告警；`cargo doc --workspace --all-features` 无告警；facade 的九组 feature 组合（无 feature、`markup`、`markup,wayland`、`markup,wayland,software`、`markup,motion`、`motion,wayland,software`、`grid,markup`、`wayland,vulkan`、`wayland,wgpu`）`cargo check --all-targets` 无警告。
 - Wayland：在隔离的 Sway/wlroots headless + Pixman compositor 上做了窗口生命周期、软件 SHM 绘制与截图检查，并用 fake input-method-v2 / virtual-keyboard 对 text-input-v3 做了 CJK 预编辑、提交、取消与跨窗口焦点的协议验证。需要专用 compositor 的测试标记 ignored；运行方式：
 
 ```sh
@@ -100,7 +100,10 @@ WGPU_BACKEND=dx12 cargo test -p aegle-render-wgpu --all-features -- --ignored --
 ## 已知取舍
 
 - 公开错误为 `Box<dyn Error>` 包裹各模块的类型化错误，用 `downcast_ref` 区分，不携带节点身份；模块错误枚举标 `#[non_exhaustive]`，`aegle-gpu::Error` 除外（后端须逐项映射）。
-- `Element`/`State` 字段公开，是控件库的创作面（`aegle-widgets` 依赖）；未收窄。文字读写（`State::text`/`set_text`）与事件处理器注册（`State::on_action`）也在这一层，由类型化句柄包装，不在通用 `Node` 上。
+- `Element`/`State` 字段公开，是控件库的创作面（`aegle-widgets` 依赖）；未收窄。文字读写（`State::text`/`set_text`）、事件处理器注册与排队（`State::on_action`/`queue_action`）也在这一层，由类型化句柄包装，不在通用 `Node` 上。`Node::change` 把 `&mut State` 交给任何调用方，因此类型化句柄的样式组限制只是便利，不是强制边界。
+- 事件只交给命中、捕获或聚焦的目标控件，没有捕获/冒泡阶段；跨节点协作经控件库的 `Hooks`。
+- 处理器只追加、不单独移除，随控件删除；需要停止时在闭包内判断，逐帧回调返回 `false`。代价是不能撤掉别处注册的处理器。
+- 可清除的属性用一个 `impl Into<Option<T>>` setter 设置与清除。`Option<&str>` 参数不再自动解引用 `&String`（写 `text.as_str()`）；皮肤是函数指针，`set_skin` 仍要写 `Some(skin)`。
 - 句柄操作保留 `Result`（含 `is_alive`）：弱句柄可能失效、绘制与钩子期间 Ui 被借用，返回错误比 panic 或静默忽略更可预测；回调错误默认不结束原生 App，减轻 `?` 的代价。
 - `aegle-loader` 对 `aegle-app` 的依赖是可选 feature，app 不依赖 loader。
 - GPU 多窗口只共享实例/设备/管线，图集按窗口独立。
