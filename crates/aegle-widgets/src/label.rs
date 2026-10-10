@@ -20,11 +20,11 @@ handle! {
 
 impl Label {
     /// Replaces text and invalidates its shared layout, scene and semantic state.
-    pub fn set_text(&self, text: &str) -> Result {
+    pub fn set_text(&self, text: &str) {
         self.change(|state, id| state.set_text(id, text))
     }
     /// Copies the current display text.
-    pub fn text(&self) -> Result<String> {
+    pub fn text(&self) -> String {
         self.change(|state, id| state.text(id))
     }
 }
@@ -88,8 +88,8 @@ impl Control for LabelControl {
     }
 }
 
-pub(crate) fn create(container: &Container, text: &str) -> Result<Label> {
-    crate::add(container, |state, theme| {
+pub(crate) fn create(container: &Container, text: &str) -> Label {
+    Label(crate::add(container, |state, theme| {
         Ok((
             Box::new(LabelControl::new(&state.fonts, text, theme)?),
             Style {
@@ -97,6 +97,5 @@ pub(crate) fn create(container: &Container, text: &str) -> Result<Label> {
                 ..Default::default()
             },
         ))
-    })
-    .map(Label)
+    }))
 }

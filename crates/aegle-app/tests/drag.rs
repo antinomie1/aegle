@@ -108,26 +108,26 @@ fn drags_cross_windows_through_the_compositor() -> Result {
         DragData::Files(vec![PathBuf::from("/tmp/a b/ü.txt")]),
     ]));
     let cancelled = Rc::new(RefCell::new(0));
-    let canvas = source.canvas(|_, _| Ok(()))?;
-    canvas.set_grow(1.0)?;
+    let canvas = source.canvas(|_, _| Ok(()));
+    canvas.set_grow(1.0);
     let (next, cancels) = (payloads.clone(), cancelled.clone());
     canvas.set_input(move |canvas, event| match event {
-        CanvasEvent::Move { pressed: true, .. } => match next.borrow_mut().pop() {
-            Some(data) => canvas.start_drag(data),
-            None => Ok(()),
-        },
+        CanvasEvent::Move { pressed: true, .. } => {
+            if let Some(data) = next.borrow_mut().pop() {
+                canvas.start_drag(data);
+            }
+        }
         CanvasEvent::Cancel => {
             *cancels.borrow_mut() += 1;
-            Ok(())
         }
-        _ => Ok(()),
-    })?;
+        _ => {}
+    });
     let seen = Rc::new(RefCell::new(Vec::new()));
     let log = seen.clone();
     target.on_drop(move |_, event| {
         log.borrow_mut().push(event);
         Ok(())
-    })?;
+    });
 
     let mut pointer = Pointer::new();
     let pump = |until: &dyn Fn() -> bool| -> Result {

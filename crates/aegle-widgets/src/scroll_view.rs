@@ -4,7 +4,7 @@ use aegle_layout::{Overflow, Style};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
-    Container, Control, Result, UiError, bar, container_style,
+    Container, Control, Result, bar, container_style,
     control::{Frame, PaintCx},
     scroll_padding,
 };
@@ -59,32 +59,31 @@ impl Control for ScrollControl {
     }
 }
 
-pub(crate) fn create(container: &Container) -> Result<ScrollView> {
-    crate::add(container, |_, theme| {
+pub(crate) fn create(container: &Container) -> ScrollView {
+    ScrollView(Container(crate::add(container, |_, theme| {
         let mut style = container_style(theme, false);
         style.padding = scroll_padding(theme);
         style.overflow.x = Overflow::Scroll;
         style.overflow.y = Overflow::Scroll;
         style.flex_shrink = 0.0;
         Ok((Box::new(ScrollControl) as Box<dyn Control>, style))
-    })
-    .map(|node| ScrollView(Container(node)))
+    })))
 }
 
 impl ScrollView {
     /// Current nonnegative logical offset. Hiding preserves this retained value.
-    pub fn offset(&self) -> Result<Point> {
+    pub fn offset(&self) -> Point {
         self.change(|state, id| Ok(state.tree.get(id).unwrap().context.scroll))
     }
 
     /// Maximum offset from the last refreshed layout, including trailing padding.
     /// Hidden layouts have no extent until they are shown and refreshed again.
-    pub fn max_offset(&self) -> Result<Point> {
+    pub fn max_offset(&self) -> Point {
         self.change(|state, id| Ok(state.scroll_limit(id)))
     }
 
     /// Last refreshed viewport size plus its scrollable overflow on each axis.
-    pub fn content_size(&self) -> Result<Size> {
+    pub fn content_size(&self) -> Size {
         self.change(|state, id| {
             let viewport = state.tree.get(id).unwrap().context.bounds.size;
             let limit = state.scroll_limit(id);
@@ -97,8 +96,8 @@ impl ScrollView {
 
     /// Refreshes layout and scrolls to a finite offset, clamped to current limits.
     /// Negative values select the start. Hidden views retain their previous offset.
-    pub fn scroll_to(&self, offset: Point) -> Result {
-        finite(offset)?;
+    pub fn scroll_to(&self, offset: Point) {
+        finite(offset);
         self.change(|state, id| {
             let repaint = state.refresh()?;
             state.repaint |= repaint;
@@ -108,8 +107,8 @@ impl ScrollView {
     }
 
     /// Moves by a finite logical displacement, clamped independently on each axis.
-    pub fn scroll_by(&self, delta: Point) -> Result {
-        finite(delta)?;
+    pub fn scroll_by(&self, delta: Point) {
+        finite(delta);
         self.change(|state, id| {
             let repaint = state.refresh()?;
             state.repaint |= repaint;
@@ -120,10 +119,6 @@ impl ScrollView {
     }
 }
 
-fn finite(point: Point) -> Result {
-    if point.x.is_finite() && point.y.is_finite() {
-        Ok(())
-    } else {
-        Err(UiError::InvalidValue.into())
-    }
+fn finite(point: Point) {
+    aegle_ui::require(point.x.is_finite() && point.y.is_finite());
 }

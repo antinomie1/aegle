@@ -1,15 +1,16 @@
 //! Per-frame callbacks, the window key handler and input timestamps.
 
+use crate::OrFail;
 use std::time::Instant;
 
 use aegle_controls::{Key, KeyInput, Modifiers, PointerId, PointerKind};
 use aegle_core::NodeId;
 use aegle_types::Point;
 
-use crate::{Node, Result, Ui, UiError};
+use crate::{Node, Result, Ui};
 
 /// A per-frame callback; returning true keeps it running.
-pub(crate) type FrameCallback = Box<dyn FnMut(Node, Instant) -> Result<bool>>;
+pub(crate) type FrameCallback = Box<dyn FnMut(Node, Instant) -> bool>;
 
 /// A per-frame callback with the version it was registered under.
 pub struct FrameHandler {
@@ -39,7 +40,7 @@ pub struct KeyEvent<'a> {
 }
 
 /// A window key handler; returning true consumes the key.
-pub(crate) type KeyHandler = Box<dyn FnMut(KeyEvent<'_>) -> Result<bool>>;
+pub(crate) type KeyHandler = Box<dyn FnMut(KeyEvent<'_>) -> bool>;
 
 impl Node {
     /// Adds `callback`, run once per presented frame with the frame's time
@@ -48,15 +49,9 @@ impl Node {
     /// display, so use it for playheads and other continuously moving content
     /// and return false when idle. It runs before layout and painting, outside
     /// every UI borrow.
-    pub fn on_frame(
-        &self,
-        callback: impl FnMut(Node, Instant) -> Result<bool> + 'static,
-    ) -> Result {
+    pub fn on_frame(&self, callback: impl FnMut(Node, Instant) -> bool + 'static) {
         self.change(|state, id| {
-            state.callback_version = state
-                .callback_version
-                .checked_add(1)
-                .ok_or(UiError::IdentityExhausted)?;
+            state.callback_version += 1;
             let handler = FrameHandler {
                 id,
                 version: state.callback_version,
@@ -73,25 +68,24 @@ impl Node {
 impl Ui {
     /// Whether a frame callback is registered or a control is animating; a
     /// host keeps requesting frames, calling [`Self::run_frame`], while true.
-    pub fn wants_frames(&self) -> Result<bool> {
-        let state = self.read()?;
-        Ok(!state.animated.is_empty() || state.frames.iter().any(|h| h.callback.is_some()))
+    pub fn wants_frames(&self) -> bool {
+        let state = self.read();
+        !state.animated.is_empty() || state.frames.iter().any(|h| h.callback.is_some())
     }
     /// Starts a frame at `now`: animating controls repaint at this time, then
     /// the frame callbacks registered before this call run in registration
     /// order, outside the UI borrow. Hosts call it once per frame before
-    /// refreshing. A callback returning false or an error is removed; the
-    /// error is returned.
-    pub fn run_frame(&self, now: Instant) -> Result {
+    /// refreshing. A callback returning false is removed.
+    pub fn run_frame(&self, now: Instant) {
         let queued: Vec<(NodeId, u64)> = {
-            let mut state = self
-                .state
-                .try_borrow_mut()
-                .map_err(|_| UiError::ReentrantAccess)?;
+            let mut state = self.write();
             state.frame_time = now;
             let animated: Vec<NodeId> = state.animated.iter().copied().collect();
             for id in animated {
-                state.tree.mark_dirty(id, aegle_core::Dirty::PAINT)?;
+                state
+                    .tree
+                    .mark_dirty(id, aegle_core::Dirty::PAINT)
+                    .or_fail();
             }
             state.frames.iter().map(|h| (h.id, h.version)).collect()
         };
@@ -112,34 +106,29 @@ impl Ui {
                 state: std::rc::Rc::downgrade(&self.state),
                 id,
             };
-            let result = callback(node, now);
+            let keep = callback(node, now);
             let mut state = self.state.borrow_mut();
             let position = state
                 .frames
                 .iter()
                 .position(|h| h.id == id && h.version == version);
-            match (position, &result) {
-                (Some(index), Ok(true)) => state.frames[index].callback = Some(callback),
-                (Some(index), _) => {
+            match (position, keep) {
+                (Some(index), true) => state.frames[index].callback = Some(callback),
+                (Some(index), false) => {
                     state.frames.remove(index);
                 }
                 (None, _) => {}
             }
-            result?;
         }
-        Ok(())
     }
     /// When delayed control-library work (a tooltip) is due; a host waits at
     /// most until then and calls [`Self::wake`].
-    pub fn next_wake(&self) -> Result<Option<Instant>> {
-        Ok(self.read()?.wake)
+    pub fn next_wake(&self) -> Option<Instant> {
+        self.read().wake
     }
     /// Runs delayed control-library work that is due at `now`.
     pub fn wake(&self, now: Instant) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         if state.wake.is_none_or(|wake| wake > now) {
             return Ok(());
         }
@@ -155,22 +144,14 @@ impl Ui {
     /// control and Tab traversal, in registration order, outside the UI
     /// borrow; the first to return true consumes the key. Check
     /// [`KeyEvent::editing`] before taking plain keys a text field would type.
-    pub fn on_key(&self, handler: impl FnMut(KeyEvent<'_>) -> Result<bool> + 'static) -> Result {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .key_handlers
-            .push(Box::new(handler));
-        Ok(())
+    pub fn on_key(&self, handler: impl FnMut(KeyEvent<'_>) -> bool + 'static) {
+        self.write().key_handlers.push(Box::new(handler));
     }
     /// Delivers a key that the platform reported at `time`: first to the
     /// window key handler, then like [`Ui::key`].
     pub fn key_at(&self, key: KeyInput<'_>, time: Instant) -> Result {
         let (mut handlers, editing) = {
-            let mut state = self
-                .state
-                .try_borrow_mut()
-                .map_err(|_| UiError::ReentrantAccess)?;
+            let mut state = self.write();
             state.input_time = time;
             let editing = state.focus.current(&state.tree).is_some_and(|id| {
                 state
@@ -193,20 +174,14 @@ impl Ui {
             time,
             editing,
         };
-        let mut result = Ok(false);
-        for handler in &mut handlers {
-            result = handler(event);
-            if !matches!(result, Ok(false)) {
-                break;
-            }
-        }
+        let consumed = handlers.iter_mut().any(|handler| handler(event));
         {
             // Handlers added while these ran follow them.
             let mut state = self.state.borrow_mut();
             handlers.append(&mut state.key_handlers);
             state.key_handlers = handlers;
         }
-        if result? {
+        if consumed {
             return Ok(());
         }
         self.dispatch_key(key)
@@ -220,10 +195,7 @@ impl Ui {
         modifiers: Modifiers,
         time: Instant,
     ) -> Result {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .input_time = time;
+        self.write().input_time = time;
         self.dispatch_pointer(id, kind, position, modifiers)
     }
 }

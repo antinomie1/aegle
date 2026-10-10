@@ -6,6 +6,7 @@
 //!
 //! `cargo run -p aegle-widgets --features motion --example standalone`
 
+use aegle_ui::OrFail;
 use std::{cell::RefCell, fs, rc::Rc, sync::Arc, time::Duration};
 
 use aegle_motion::{Spring, Transition};
@@ -29,26 +30,26 @@ fn main() -> Result {
     };
     let ui = Ui::with_fonts(Rc::new(RefCell::new(text)), theme)?;
     // A native App installs this default; an embedding chooses for itself.
-    ui.set_default_transition(Some(Transition::default()))?;
+    ui.set_default_transition(Some(Transition::default()));
 
     let root = ui.root();
-    let status = root.text("Not saved")?;
-    let row = root.row()?;
-    let save = row.button("Save")?;
-    let undo = row.button("Undo")?;
-    undo.set_enabled(false)?;
+    let status = root.text("Not saved");
+    let row = root.row();
+    let save = row.button("Save");
+    let undo = row.button("Undo");
+    undo.set_enabled(false);
     let label = status.clone();
     save.on_click(move |_| {
-        label.set_text("Saved, 你好")?;
-        let spring = Transition::spring(Spring::new(300.0, 14.0)?);
+        label.set_text("Saved, 你好");
+        let spring = Transition::spring(Spring::new(300.0, 14.0).or_fail());
         label.with_transition(spring, || label.set_offset(Point::new(16.0, 0.0)))
-    })?;
+    });
 
     // The host's side: size, input, callbacks, the animation clock, refresh
     // and drawing. A real host forwards its window events the same way.
-    ui.resize(Size::new(240.0, 100.0))?;
+    ui.resize(Size::new(240.0, 100.0));
     ui.refresh()?;
-    let bounds = save.bounds()?;
+    let bounds = save.bounds();
     let at = Point::new(bounds.origin.x + 8.0, bounds.origin.y + 8.0);
     let (pointer, none) = (PointerId(1), Modifiers::default());
     ui.pointer(pointer, PointerKind::Down { clicks: 1 }, at, none)?;
@@ -57,15 +58,15 @@ fn main() -> Result {
     let mut now = Duration::ZERO;
     ui.advance_animations(now)?;
     ui.refresh()?;
-    while ui.has_animations()? {
+    while ui.has_animations() {
         now += Duration::from_millis(16);
         ui.advance_animations(now)?;
         ui.refresh()?;
     }
     println!(
         "{:?} at x = {} after {} ms",
-        status.text()?,
-        status.bounds()?.origin.x,
+        status.text(),
+        status.bounds().origin.x,
         now.as_millis()
     );
     draw(&ui, theme, "target/aegle-standalone.ppm")

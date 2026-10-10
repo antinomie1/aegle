@@ -12,7 +12,7 @@ use aegle_controls::Input;
 use aegle_core::NodeId;
 use aegle_types::{DragData, Point};
 
-use crate::{Node, Result, Ui, UiError, callbacks::Handler, state::State};
+use crate::{Node, Ui, callbacks::Handler, state::State};
 
 /// What a drop handler is told.
 #[derive(Clone, Debug, PartialEq)]
@@ -99,45 +99,36 @@ impl Ui {
     /// A native drag moved over the window at `position`, in logical window
     /// coordinates. Returns whether a control there takes drops; hosts
     /// accept or refuse the drag with it.
-    pub fn drag_motion(&self, position: Point) -> Result<bool> {
-        crate::valid(position.x)?;
-        crate::valid(position.y)?;
-        let mut state = self.write()?;
+    pub fn drag_motion(&self, position: Point) -> bool {
+        crate::require(position.x.is_finite() && position.y.is_finite());
+        let mut state = self.write();
         let target = state.drop_target(position);
         state.retarget(target);
-        Ok(target.is_some())
+        target.is_some()
     }
 
     /// The native drag left the window or was cancelled.
-    pub fn drag_leave(&self) -> Result {
-        self.write()?.retarget(None);
-        Ok(())
+    pub fn drag_leave(&self) {
+        self.write().retarget(None);
     }
 
     /// Delivers dropped data to the control at `position`; returns whether
     /// one took it.
-    pub fn drop_data(&self, position: Point, data: DragData) -> Result<bool> {
-        crate::valid(position.x)?;
-        crate::valid(position.y)?;
-        let mut state = self.write()?;
+    pub fn drop_data(&self, position: Point, data: DragData) -> bool {
+        crate::require(position.x.is_finite() && position.y.is_finite());
+        let mut state = self.write();
         let target = state.drop_target(position);
         state.retarget(target);
         if let Some(id) = state.drops.target.take() {
             state.queue_drop(id, DropEvent::Drop { data, position });
         }
-        Ok(target.is_some())
+        target.is_some()
     }
 
     /// Takes the data of a drag a control started, for the host to begin a
     /// native drag with the latest press.
-    pub fn take_drag(&self) -> Result<Option<DragData>> {
-        Ok(self.write()?.drops.start.take())
-    }
-
-    fn write(&self) -> Result<std::cell::RefMut<'_, State>> {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess.into())
+    pub fn take_drag(&self) -> Option<DragData> {
+        self.write().drops.start.take()
     }
 }
 
@@ -147,23 +138,27 @@ impl Node {
     /// the control gives one [`DropEvent::Enter`], then one `Leave` or
     /// `Drop`. Text and files are both offered; a handler ignores what it
     /// does not use.
-    pub fn on_drop(&self, mut callback: impl FnMut(Node, DropEvent) -> Result + 'static) -> Result {
+    pub fn on_drop<R: crate::HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Node, DropEvent) -> R + 'static,
+    ) {
         self.change(|state, id| {
             let callback = Box::new(move |node: Node| {
                 let event = node.change(|state, id| {
                     Ok(state.drops.events.get(&id).and_then(|e| e.front()).cloned())
-                })?;
-                event.map_or(Ok(()), |event| callback(node, event))
+                });
+                event.map_or(Ok(()), |event| callback(node, event).into_result())
             });
             let version = &mut state.callback_version;
-            crate::callbacks::add(&mut state.drops.handlers, version, id, callback)
+            crate::callbacks::add(&mut state.drops.handlers, version, id, callback);
+            Ok(())
         })
     }
 
     /// Starts dragging `data` from the pointer press in progress, usually
     /// from a move after a press. The control's press is cancelled, as the
     /// native drag takes the pointer.
-    pub fn start_drag(&self, data: DragData) -> Result {
+    pub fn start_drag(&self, data: DragData) {
         self.change(|state, _| {
             state.drops.start = Some(data);
             if let Some((_, id)) = state.capture.take() {

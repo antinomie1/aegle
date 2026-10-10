@@ -7,7 +7,7 @@ use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
-    Container, Control, Result,
+    Container, Control, HandlerResult, Result,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
@@ -21,18 +21,18 @@ handle! {
 
 impl Button {
     /// Replaces the button label.
-    pub fn set_text(&self, text: &str) -> Result {
+    pub fn set_text(&self, text: &str) {
         self.change(|state, id| state.set_text(id, text))
     }
     /// Queues semantic activation using the normal enabled/visible behavior.
-    pub fn activate(&self) -> Result {
+    pub fn activate(&self) {
         self.change(|state, id| state.dispatch(id, Input::Activate))
     }
     /// Adds a click handler; handlers run in registration order after the
     /// input batch, outside every UI/tree borrow, so they may safely create or
     /// remove controls.
-    pub fn on_click(&self, mut callback: impl FnMut(Button) -> Result + 'static) -> Result {
-        self.change(|state, id| state.on_action(id, move |node| callback(Button(node))))
+    pub fn on_click<R: HandlerResult>(&self, mut callback: impl FnMut(Button) -> R + 'static) {
+        self.on_action(move |node| callback(Button(node)).into_result())
     }
 }
 
@@ -243,13 +243,13 @@ impl Control for ButtonControl {
     }
 }
 
-pub(crate) fn create(container: &Container, text: &str) -> Result<Button> {
+pub(crate) fn create(container: &Container, text: &str) -> Button {
     create_as(container, text, Variant::Plain)
 }
 
 /// Appends a button reading as `variant`, which fixes its kind.
-pub(crate) fn create_as(container: &Container, text: &str, variant: Variant) -> Result<Button> {
-    crate::add(container, |state, theme| {
+pub(crate) fn create_as(container: &Container, text: &str, variant: Variant) -> Button {
+    Button(crate::add(container, |state, theme| {
         let mut control = ButtonControl::new(&state.fonts, text, theme)?;
         control.variant = variant;
         Ok((
@@ -263,6 +263,5 @@ pub(crate) fn create_as(container: &Container, text: &str, variant: Variant) -> 
                 ..Default::default()
             },
         ))
-    })
-    .map(Button)
+    }))
 }

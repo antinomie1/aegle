@@ -372,10 +372,7 @@ impl State {
         #[cfg(feature = "accessibility")]
         {
             element.access_id = aegle_access::accesskit::NodeId(self.next_access_id);
-            self.next_access_id = self
-                .next_access_id
-                .checked_add(1)
-                .ok_or(crate::UiError::IdentityExhausted)?;
+            self.next_access_id += 1;
         }
         let id = self
             .tree

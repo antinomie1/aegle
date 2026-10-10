@@ -57,14 +57,15 @@ impl Entry {
         let (x, y) = recent[1..]
             .iter()
             .fold((0.0, 0.0), |(x, y), (_, d)| (x + d.x, y + d.y));
-        self.ui.fling(position, Point::new(x / span, y / span))
+        self.ui.fling(position, Point::new(x / span, y / span));
+        Ok(())
     }
 
     pub fn event(&mut self, event: Event) -> Result<()> {
         match event {
             Event::Configure { info, .. } => {
                 self.ui
-                    .resize(Size::new(info.size.width as f32, info.size.height as f32))?;
+                    .resize(Size::new(info.size.width as f32, info.size.height as f32));
                 #[cfg(feature = "unix-accessibility")]
                 self.accessibility.set_window_focused(info.active);
             }
@@ -202,7 +203,7 @@ impl Entry {
                             .map(|(anchor, focus)| Selection { anchor, focus }),
                     })?,
                     ImeEvent::Left => self.ui.ime_left()?,
-                    ImeEvent::Entered => self.ui.request_ime_sync()?,
+                    ImeEvent::Entered => self.ui.request_ime_sync(),
                 }
             }
             Event::Clipboard { seat, text, .. } if self.seat.as_ref() == Some(&seat) => {
@@ -223,12 +224,12 @@ pub(crate) fn drag(
 ) -> Result<Option<Event>> {
     match event {
         Event::Drag { seat, position, .. } => {
-            let accept = entry.ui.drag_motion(position)?;
+            let accept = entry.ui.drag_motion(position);
             backend.accept_drag(&seat, accept);
         }
-        Event::DragLeave { .. } => entry.ui.drag_leave()?,
+        Event::DragLeave { .. } => entry.ui.drag_leave(),
         Event::Drop { position, data, .. } => {
-            entry.ui.drop_data(position, data)?;
+            entry.ui.drop_data(position, data);
         }
         event => return Ok(Some(event)),
     }

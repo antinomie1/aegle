@@ -21,8 +21,8 @@ fn ui() -> Result<Ui> {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    ui.root().set_padding(0.0)?;
-    ui.resize(Size::new(400.0, 300.0))?;
+    ui.root().set_padding(0.0);
+    ui.resize(Size::new(400.0, 300.0));
     Ok(ui)
 }
 
@@ -32,14 +32,14 @@ fn compiled_and_loaded_components_match() -> Result {
     let view = aegle::ui!(compiled.root(), "tests/fixtures/components.aegle")?;
     compiled.refresh()?;
     assert_eq!(view.split.ratio(), 0.25);
-    assert!(view.progress.is_indeterminate()?);
+    assert!(view.progress.is_indeterminate());
     assert_eq!(
-        (view.number.value()?, view.number.text()?.as_str()),
+        (view.number.value(), view.number.text().as_str()),
         (2.0, "2.0")
     );
-    let slider = view.slider.bounds()?;
+    let slider = view.slider.bounds();
     assert!(slider.size.height > slider.size.width);
-    assert_eq!(view.other.visible_bounds()?, None);
+    assert_eq!(view.other.visible_bounds(), None);
 
     let loaded = ui()?;
     let program = Program::load(concat!(
@@ -59,7 +59,7 @@ fn compiled_and_loaded_components_match() -> Result {
     ];
     for (id, node) in nodes {
         let handle = runtime.handle(id).unwrap();
-        assert_eq!(handle.node().bounds()?, node.bounds()?, "{id}");
+        assert_eq!(handle.node().bounds(), node.bounds(), "{id}");
     }
     let split: Splitter = runtime.handle("split").unwrap().typed().unwrap();
     assert_eq!(split.ratio(), 0.25);
@@ -101,11 +101,11 @@ fn change_events_update_markup_state() -> Result {
         }
         ui.dispatch_callbacks()
     };
-    number.focus()?;
-    number.change(|state, id| state.set_text(id, "4"))?;
+    number.focus();
+    number.change(|state, id| state.set_text(id, "4"));
     enter()?;
     assert_eq!(view.get("amount"), Some(Data::Float(4.0)));
-    tabs.tab(1)?.focus()?;
+    tabs.tab(1).focus();
     enter()?;
     assert_eq!(view.get("page"), Some(Data::Int(1)));
     Ok(())

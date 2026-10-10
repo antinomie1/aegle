@@ -1,7 +1,7 @@
 //! The built-in elements, declared with [`element!`](crate::element) exactly
 //! like a control library's.
 
-use aegle_ui::{Container, Result};
+use aegle_ui::Container;
 use aegle_widgets::{
     Button, CheckBox, Label, NumberField, Orientation, Progress, Radio, ScrollView, Separator,
     Slider, Splitter, Switch, Tabs, TextField, Widgets,
@@ -18,13 +18,13 @@ fn axis(name: &str) -> Orientation {
 }
 
 #[cfg(feature = "grid")]
-fn grid(parent: &Container, stack: bool) -> Result<Container> {
+fn grid(parent: &Container, stack: bool) -> Container {
     if stack { parent.stack() } else { parent.grid() }
 }
 
 #[cfg(not(feature = "grid"))]
-fn grid(_: &Container, _: bool) -> Result<Container> {
-    Err("markup Grid and Stack require the grid feature".into())
+fn grid(_: &Container, _: bool) -> Container {
+    panic!("markup Grid and Stack require the grid feature")
 }
 
 aegle_macros::element! {
@@ -152,7 +152,7 @@ aegle_macros::element! {
         children only Tab;
         create |parent| parent.tabs();
         event changed => |tabs, run| tabs.on_change(move |_| run());
-        get selected: int => |tabs| tabs.selected().map(|index| index as i64);
+        get selected: int => |tabs| tabs.selected() as i64;
     }
     /// One page of a `Tabs`, titled by `title`.
     pub Tab(Container) {

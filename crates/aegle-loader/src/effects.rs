@@ -6,17 +6,19 @@ use aegle_ui::{
     scene::{Gradient, GradientStop},
 };
 
-/// Applies a checked effect property; `None` for other properties.
+/// Applies a checked effect property; `None` for other properties. Fails
+/// if a gradient stop names no color token.
 pub(crate) fn apply(node: &Node, name: PropertyName, value: &Value) -> Option<Result> {
-    Some(match (name, value) {
+    match (name, value) {
         (PropertyName::Shadow, Value::List(items)) => shadow(node, items),
         (PropertyName::BackgroundGradient, Value::Call(function, arguments)) => {
-            gradient(node, function, arguments)
+            return Some(gradient(node, function, arguments));
         }
         (PropertyName::Opacity, Value::Number(opacity)) => node.set_opacity(*opacity),
         (PropertyName::BackdropBlur, Value::Length(blur)) => node.set_backdrop_blur(*blur),
         _ => return None,
-    })
+    }
+    Some(Ok(()))
 }
 
 /// A checked token call's name.
@@ -38,7 +40,7 @@ fn color(value: &Value) -> Color {
     }
 }
 
-fn shadow(node: &Node, items: &[Value]) -> Result {
+fn shadow(node: &Node, items: &[Value]) {
     let [
         Value::Length(x),
         Value::Length(y),
@@ -54,7 +56,7 @@ fn shadow(node: &Node, items: &[Value]) -> Result {
         blur: *blur,
         spread: *spread,
         color: color(paint),
-    }))
+    }));
 }
 
 fn gradient(node: &Node, function: &str, arguments: &[Value]) -> Result {
@@ -99,9 +101,9 @@ fn gradient(node: &Node, function: &str, arguments: &[Value]) -> Result {
         None => Gradient::radial(Point::new(0.5, 0.5), 0.5, resolved),
     }
     .expect("checked gradient");
-    node.set_background_gradient(Some(gradient))?;
+    node.set_background_gradient(Some(gradient));
     for (index, name) in tokens {
-        node.bind_color(ColorSlot::GradientStop(index), aegle_ui::token(name)?)?;
+        node.bind_color(ColorSlot::GradientStop(index), aegle_ui::token(name)?);
     }
     Ok(())
 }

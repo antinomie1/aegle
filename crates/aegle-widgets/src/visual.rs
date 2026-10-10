@@ -18,11 +18,11 @@ handle! {
 
 impl ImageView {
     /// Returns the shared image.
-    pub fn image(&self) -> Result<Image> {
+    pub fn image(&self) -> Image {
         self.read(|image| image.0.clone())
     }
     /// Replaces the image and its intrinsic size.
-    pub fn set_image(&self, image: &Image) -> Result {
+    pub fn set_image(&self, image: &Image) {
         self.change(|state, id| {
             state
                 .tree
@@ -55,8 +55,8 @@ impl Control for ImageControl {
     }
 }
 
-pub(crate) fn image(container: &Container, image: &Image) -> Result<ImageView> {
-    crate::add(container, |_, _| {
+pub(crate) fn image(container: &Container, image: &Image) -> ImageView {
+    ImageView(crate::add(container, |_, _| {
         Ok((
             Box::new(ImageControl(image.clone())) as Box<dyn Control>,
             Style {
@@ -65,6 +65,5 @@ pub(crate) fn image(container: &Container, image: &Image) -> Result<ImageView> {
                 ..Default::default()
             },
         ))
-    })
-    .map(ImageView)
+    }))
 }

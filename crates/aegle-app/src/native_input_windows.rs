@@ -40,14 +40,14 @@ impl Entry {
             Event::Configure { info, .. } => {
                 // DPI can change while the rounded logical extent stays equal.
                 // IMM candidate placement still needs the new physical scale.
-                self.ui.request_ime_sync()?;
+                self.ui.request_ime_sync();
                 #[cfg(feature = "windows-accessibility")]
                 if self.access_scale != f64::from(info.scale) {
                     self.access_scale = f64::from(info.scale);
                     self.initial_access = true;
                 }
                 self.ui
-                    .resize(Size::new(info.size.width as f32, info.size.height as f32))?;
+                    .resize(Size::new(info.size.width as f32, info.size.height as f32));
             }
             Event::Redraw { .. } => self.ready = true,
             Event::KeyboardFocus { focused, .. } => {
@@ -127,7 +127,7 @@ impl Entry {
                         .map(|(anchor, focus)| Selection { anchor, focus }),
                 })?,
                 ImeEvent::Left => self.ui.ime_left()?,
-                ImeEvent::Entered => self.ui.request_ime_sync()?,
+                ImeEvent::Entered => self.ui.request_ime_sync(),
             },
             _ => {}
         }
@@ -176,12 +176,12 @@ pub(crate) fn drag(
 ) -> Result<Option<Event>> {
     match event {
         Event::Drag { position, .. } => {
-            let accept = entry.ui.drag_motion(position)?;
+            let accept = entry.ui.drag_motion(position);
             backend.accept_drag(entry.id, accept)?;
         }
-        Event::DragLeave { .. } => entry.ui.drag_leave()?,
+        Event::DragLeave { .. } => entry.ui.drag_leave(),
         Event::Drop { position, data, .. } => {
-            entry.ui.drop_data(position, data)?;
+            entry.ui.drop_data(position, data);
         }
         event => return Ok(Some(event)),
     }

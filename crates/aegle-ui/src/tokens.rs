@@ -82,11 +82,11 @@ pub fn token<T: TokenType>(name: &str) -> Result<Token<T>> {
 
 /// Checks that a handle names a registered token of its type, and whether it
 /// is built in.
-pub(crate) fn check<T: TokenType>(token: Token<T>) -> Result<bool> {
+pub(crate) fn check<T: TokenType>(token: Token<T>) -> bool {
     REGISTRY.with_borrow(
         |registry| match registry.entries.get(usize::from(token.index())) {
-            Some(&(kind, default)) if kind == T::KIND => Ok(default.is_none()),
-            _ => Err(UiError::Token.into()),
+            Some(&(kind, default)) if kind == T::KIND => default.is_none(),
+            _ => crate::handles::fail(UiError::Token.into()),
         },
     )
 }

@@ -22,44 +22,44 @@ fn raised(theme: &Theme) -> Shadow {
 
 /// The effects of the fixture's card, caption and halo, after a theme switch.
 fn check(ui: &Ui, card: &Node, caption: &Node, halo: &Node) -> Result {
-    assert_eq!(card.shadow()?, Some(raised(&Theme::light())));
-    let gradient = card.background_gradient()?.unwrap();
+    assert_eq!(card.shadow(), Some(raised(&Theme::light())));
+    let gradient = card.background_gradient().unwrap();
     let GradientGeometry::Linear { start, end } = gradient.geometry() else {
         panic!("a linear gradient")
     };
     assert!((start.x - 0.0).abs() < 1e-6 && (start.y - 0.5).abs() < 1e-6);
     assert!((end.x - 1.0).abs() < 1e-6 && (end.y - 0.5).abs() < 1e-6);
     let colors = |node: &Node| -> Result<Vec<Color>> {
-        let gradient = node.background_gradient()?.unwrap();
+        let gradient = node.background_gradient().unwrap();
         Ok(gradient.stops().iter().map(|s| s.color).collect())
     };
     assert_eq!(colors(card)?, [Theme::light().accent, Color::WHITE]);
-    assert_eq!(card.opacity()?, 0.5);
-    assert_eq!(card.backdrop_blur()?, 6.0);
+    assert_eq!(card.opacity(), 0.5);
+    assert_eq!(card.backdrop_blur(), 6.0);
     let timing = card
-        .property_transition(TransitionProperty::Opacity)?
+        .property_transition(TransitionProperty::Opacity)
         .unwrap();
     assert_eq!(timing.duration, Duration::from_millis(120));
     let timing = card
-        .property_transition(TransitionProperty::Shadow)?
+        .property_transition(TransitionProperty::Shadow)
         .unwrap();
     assert_eq!(timing.duration, Duration::from_millis(200));
-    assert_eq!(caption.shadow()?.unwrap().offset, Point::new(0.0, -1.0));
-    let offsets: Vec<_> = (halo.background_gradient()?.unwrap().stops().iter())
+    assert_eq!(caption.shadow().unwrap().offset, Point::new(0.0, -1.0));
+    let offsets: Vec<_> = (halo.background_gradient().unwrap().stops().iter())
         .map(|s| s.offset)
         .collect();
     assert_eq!(offsets, [0.0, 1.0]);
     // Both the stop and the shadow follow their tokens; the shadow tweens.
-    ui.set_theme(Theme::dark())?;
+    ui.set_theme(Theme::dark());
     assert_eq!(colors(card)?, [Theme::dark().accent, Color::WHITE]);
-    assert_eq!(card.shadow()?, Some(raised(&Theme::dark())));
-    assert!(ui.has_animations()?);
+    assert_eq!(card.shadow(), Some(raised(&Theme::dark())));
+    assert!(ui.has_animations());
     Ok(())
 }
 
 fn ui() -> Result<Ui> {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.resize(Size::new(320.0, 200.0))?;
+    ui.resize(Size::new(320.0, 200.0));
     Ok(ui)
 }
 

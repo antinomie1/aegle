@@ -11,7 +11,7 @@ use aegle_scene::SceneBuilder;
 use aegle_theme::ControlKind;
 use aegle_types::{Point, Size};
 use aegle_ui::{
-    Container, Control, Result,
+    Container, Control, HandlerResult, Result,
     control::{InputCx, PaintCx},
     handle,
 };
@@ -136,17 +136,14 @@ pub struct CanvasControl {
 
 impl Canvas {
     /// Re-records the painter on the next refresh, for example after its data changed.
-    pub fn invalidate(&self) -> Result {
+    pub fn invalidate(&self) {
         self.change(|state, id| {
             state.tree.mark_dirty(id, Dirty::PAINT)?;
             Ok(())
         })
     }
     /// Replaces the painter and re-records it on the next refresh.
-    pub fn set_painter(
-        &self,
-        painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
-    ) -> Result {
+    pub fn set_painter(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) {
         self.update(|canvas| canvas.painter = Box::new(painter))
     }
     /// Makes the canvas interactive: it joins Tab order, shows a focus
@@ -155,10 +152,10 @@ impl Canvas {
     /// input batch are delivered in order after it, outside every UI borrow,
     /// like other callbacks. The input callback is the canvas's behavior, so
     /// like [`Self::set_painter`] it replaces any previous one.
-    pub fn set_input(
+    pub fn set_input<R: HandlerResult>(
         &self,
-        mut callback: impl FnMut(Canvas, CanvasEvent) -> Result + 'static,
-    ) -> Result {
+        mut callback: impl FnMut(Canvas, CanvasEvent) -> R + 'static,
+    ) {
         self.change(|state, id| {
             state.control_as::<CanvasControl>(id).unwrap().interactive = true;
             state.tree.mark_dirty(id, Dirty::ALL)?;
@@ -168,12 +165,13 @@ impl Canvas {
                     Ok(std::mem::take(
                         &mut state.control_as::<CanvasControl>(id).unwrap().events,
                     ))
-                })?;
+                });
                 for event in events {
-                    callback(Canvas(node.clone()), event)?;
+                    callback(Canvas(node.clone()), event).into_result()?;
                 }
                 Ok(())
-            })
+            });
+            Ok(())
         })
     }
 }
@@ -344,8 +342,8 @@ impl Control for CanvasControl {
 pub(crate) fn canvas(
     container: &Container,
     painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
-) -> Result<Canvas> {
-    crate::add(container, |_, _| {
+) -> Canvas {
+    Canvas(crate::add(container, |_, _| {
         Ok((
             Box::new(CanvasControl {
                 painter: Box::new(painter),
@@ -360,6 +358,5 @@ pub(crate) fn canvas(
                 ..Default::default()
             },
         ))
-    })
-    .map(Canvas)
+    }))
 }

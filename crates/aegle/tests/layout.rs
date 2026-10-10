@@ -19,8 +19,8 @@ const IDS: [&str; 21] = [
 
 fn ui() -> Result<Ui> {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.root().set_padding(0.0)?;
-    ui.resize(Size::new(400.0, 300.0))?;
+    ui.root().set_padding(0.0);
+    ui.resize(Size::new(400.0, 300.0));
     Ok(ui)
 }
 
@@ -54,7 +54,7 @@ fn compiled_and_loaded_layouts_match() -> Result {
         (&view.overlay, rect(384.0, 284.0, 16.0, 16.0)),
     ];
     for (node, bounds) in expected {
-        assert_eq!(node.bounds()?, bounds);
+        assert_eq!(node.bounds(), bounds);
     }
 
     let loaded = ui()?;
@@ -87,10 +87,10 @@ fn compiled_and_loaded_layouts_match() -> Result {
         &view.wrapped,
         &view.overlay,
     ];
-    assert_eq!(runtime.root().node().bounds()?, view.root.bounds()?);
+    assert_eq!(runtime.root().node().bounds(), view.root.bounds());
     for (id, node) in IDS.iter().zip(compiled_bounds) {
         let handle = runtime.handle(id).unwrap();
-        assert_eq!(handle.node().bounds()?, node.bounds()?, "{id}");
+        assert_eq!(handle.node().bounds(), node.bounds(), "{id}");
     }
     Ok(())
 }
@@ -116,12 +116,12 @@ fn generated_rows_fill_grid_cells() -> Result {
     ui.refresh()?;
     // Header row plus two rows of two cells; one wrapper cell would stack them instead.
     let grid = view.root().node();
-    assert_eq!(grid.bounds()?.size.height, 60.0);
+    assert_eq!(grid.bounds().size.height, 60.0);
     view.set("names", Data::List(vec![Data::String("z".into())].into()))?;
     ui.refresh()?;
-    assert_eq!(grid.bounds()?.size.height, 40.0);
+    assert_eq!(grid.bounds().size.height, 40.0);
     assert_eq!(
-        view.handle("head").unwrap().node().bounds()?.size.width,
+        view.handle("head").unwrap().node().bounds().size.width,
         200.0
     );
     Ok(())

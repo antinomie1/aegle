@@ -1,7 +1,7 @@
 //! Dropdown: a button that opens a popup list of choices.
 
 use aegle_core::{Dirty, NodeId};
-use aegle_ui::{Container, Node, Result, State, UiError, handle};
+use aegle_ui::{Container, HandlerResult, Node, Result, State, UiError, handle};
 
 use crate::{
     NodePopup, Popup, Widgets,
@@ -21,12 +21,12 @@ handle! {
     pub Dropdown(crate::button::ButtonControl): text, interactive, pressed
 }
 
-pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -> Result<Dropdown> {
+pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -> Dropdown {
     if selected >= items.len() {
-        return Err(UiError::InvalidValue.into());
+        panic!("{}", UiError::InvalidValue);
     }
-    let button = container.button(items[selected])?;
-    let popup = button.popup()?;
+    let button = container.button(items[selected]);
+    let popup = button.popup();
     button.change(|state, id| {
         if let Some(control) = state.control_as::<crate::button::ButtonControl>(id) {
             control.variant = Variant::Dropdown { expanded: false };
@@ -43,10 +43,10 @@ pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -
         };
         popups(state).dropdowns.insert(id, data);
         Ok(())
-    })?;
+    });
     let dropdown = Dropdown(button.0.clone());
-    dropdown.options(&popup, items, selected)?;
-    Ok(dropdown)
+    dropdown.options(&popup, items, selected);
+    dropdown
 }
 
 /// Activating a dropdown: closes a shown choice list, else opens it focused
@@ -115,33 +115,32 @@ fn select(state: &mut State, id: NodeId, index: usize, user: bool) -> Result {
 }
 
 impl Dropdown {
-    fn options(&self, popup: &Popup, items: &[&str], selected: usize) -> Result {
+    fn options(&self, popup: &Popup, items: &[&str], selected: usize) {
         for (index, &item) in items.iter().enumerate() {
             let chosen = index == selected;
-            crate::button::create_as(popup, item, Variant::Option { chosen })?;
+            crate::button::create_as(popup, item, Variant::Option { chosen });
         }
-        Ok(())
     }
 
     /// The selected choice index.
-    pub fn selected(&self) -> Result<usize> {
+    pub fn selected(&self) -> usize {
         self.change(|state, id| Ok(popups(state).dropdowns[&id].selected))
     }
     /// Selects a valid choice without invoking the change handler.
-    pub fn set_selected(&self, index: usize) -> Result {
-        if index >= self.items()?.len() {
-            return Err(UiError::InvalidValue.into());
+    pub fn set_selected(&self, index: usize) {
+        if index >= self.items().len() {
+            panic!("{}", UiError::InvalidValue);
         }
         self.change(|state, id| select(state, id, index, false))
     }
     /// Copies the choices.
-    pub fn items(&self) -> Result<Vec<String>> {
+    pub fn items(&self) -> Vec<String> {
         self.change(|state, id| Ok(popups(state).dropdowns[&id].items.clone()))
     }
     /// Replaces the choices and selection without invoking the change handler.
-    pub fn set_items(&self, items: &[&str], selected: usize) -> Result {
+    pub fn set_items(&self, items: &[&str], selected: usize) {
         if selected >= items.len() {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
         let popup = self.change(|state, id| {
             let popup = popups(state).dropdowns[&id].popup;
@@ -152,17 +151,17 @@ impl Dropdown {
             let data = popups(state).dropdowns.get_mut(&id).unwrap();
             data.items = items.iter().map(|&item| item.to_owned()).collect();
             Ok(popup)
-        })?;
+        });
         let popup = Popup(Container(Node {
             state: self.state.clone(),
             id: popup,
         }));
-        self.options(&popup, items, selected)?;
+        self.options(&popup, items, selected);
         self.change(|state, id| select(state, id, selected, false))
     }
     /// Adds a handler run when the user chooses a different item. Handlers
     /// run in registration order outside UI borrows; programmatic selection does not invoke it.
-    pub fn on_change(&self, mut callback: impl FnMut(Dropdown) -> Result + 'static) -> Result {
-        self.change(|state, id| state.on_action(id, move |node| callback(Dropdown(node))))
+    pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Dropdown) -> R + 'static) {
+        self.on_action(move |node| callback(Dropdown(node)).into_result())
     }
 }

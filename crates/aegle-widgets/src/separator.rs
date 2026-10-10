@@ -77,8 +77,8 @@ fn line(vertical: bool) -> Style {
     }
 }
 
-pub(crate) fn separator(container: &Container) -> Result<Separator> {
-    crate::add(container, |state, _| {
+pub(crate) fn separator(container: &Container) -> Separator {
+    Separator(crate::add(container, |state, _| {
         // Across a row the divider is vertical, across a column horizontal.
         let parent = container.id;
         let vertical = matches!(
@@ -92,8 +92,7 @@ pub(crate) fn separator(container: &Container) -> Result<Separator> {
             }) as Box<dyn Control>,
             line(vertical),
         ))
-    })
-    .map(Separator)
+    }))
 }
 
 /// Two panes divided by a draggable, keyboard-adjustable handle.
@@ -132,12 +131,12 @@ impl Splitter {
         self.ratio.get()
     }
     /// Gives `ratio` (finite, `0.0..=1.0`) of the space to the first pane.
-    pub fn set_ratio(&self, ratio: f32) -> Result {
+    pub fn set_ratio(&self, ratio: f32) {
         if !(0.0..=1.0).contains(&ratio) {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
         self.ratio.set(ratio);
-        self.first.set_basis(Length::Percent(ratio * 100.0))?;
+        self.first.set_basis(Length::Percent(ratio * 100.0));
         self.handle.update(|grip| {
             if let Some((_, share)) = &mut grip.splitter {
                 *share = ratio;
@@ -146,18 +145,18 @@ impl Splitter {
     }
 }
 
-pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Result<Splitter> {
+pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Splitter {
     let vertical = orientation == Orientation::Vertical;
     let root = if vertical {
-        container.column()?
+        container.column()
     } else {
-        container.row()?
+        container.row()
     };
-    root.set_gap(0.0, 0.0)?;
-    root.set_grow(1.0)?;
-    root.set_min_width(0.0)?;
-    root.set_min_height(0.0)?;
-    let first = root.column()?;
+    root.set_gap(0.0, 0.0);
+    root.set_grow(1.0);
+    root.set_min_width(0.0);
+    root.set_min_height(0.0);
+    let first = root.column();
     let grip = root.canvas(move |builder, size| {
         let line = if vertical {
             Rect::new(0.0, size.height * 0.5 - 0.5, size.width, 1.0)
@@ -169,30 +168,30 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
             aegle_scene::Color::rgba(128, 128, 128, 160),
         )?;
         Ok(())
-    })?;
-    let second = root.column()?;
+    });
+    let second = root.column();
     for pane in [&first, &second] {
-        pane.set_clip(true)?;
-        pane.set_min_width(0.0)?;
-        pane.set_min_height(0.0)?;
-        pane.set_shrink(1.0)?;
+        pane.set_clip(true);
+        pane.set_min_width(0.0);
+        pane.set_min_height(0.0);
+        pane.set_shrink(1.0);
     }
-    second.set_basis(0.0)?;
-    second.set_grow(1.0)?;
+    second.set_basis(0.0);
+    second.set_grow(1.0);
     if vertical {
-        grip.set_width(Length::Auto)?;
-        grip.set_height(GRIP)?;
+        grip.set_width(Length::Auto);
+        grip.set_height(GRIP);
     } else {
-        grip.set_width(GRIP)?;
-        grip.set_height(Length::Auto)?;
+        grip.set_width(GRIP);
+        grip.set_height(Length::Auto);
     }
     grip.set_cursor(Some(if vertical {
         Cursor::ResizeVertical
     } else {
         Cursor::ResizeHorizontal
-    }))?;
-    grip.set_accessible_label("Resize panes")?;
-    grip.update(|grip| grip.splitter = Some((vertical, 0.5)))?;
+    }));
+    grip.set_accessible_label("Resize panes");
+    grip.update(|grip| grip.splitter = Some((vertical, 0.5)));
     let ratio = Rc::new(Cell::new(0.5));
     let splitter = Splitter {
         root,
@@ -201,19 +200,19 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
         handle: grip.clone(),
         ratio,
     };
-    splitter.set_ratio(0.5)?;
+    splitter.set_ratio(0.5);
     let this = splitter.clone();
     grip.set_input(move |grip, event| {
         let along = |p: aegle_types::Point| if vertical { p.y } else { p.x };
         // Right to left the first pane is on the right of a horizontal split.
-        let mirror = !vertical && grip.layout_direction()? == aegle_ui::LayoutDirection::Rtl;
+        let mirror = !vertical && grip.layout_direction() == aegle_ui::LayoutDirection::Rtl;
         let target = match event {
             CanvasEvent::Move {
                 position,
                 pressed: true,
                 ..
             } => {
-                let (area, at) = (this.root.bounds()?, grip.bounds()?);
+                let (area, at) = (this.root.bounds(), grip.bounds());
                 let extent = if vertical {
                     area.size.height
                 } else {
@@ -238,10 +237,9 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Resul
             },
             _ => None,
         };
-        match target {
-            Some(ratio) => this.set_ratio(ratio.clamp(0.0, 1.0)),
-            None => Ok(()),
+        if let Some(ratio) = target {
+            this.set_ratio(ratio.clamp(0.0, 1.0));
         }
-    })?;
-    Ok(splitter)
+    });
+    splitter
 }

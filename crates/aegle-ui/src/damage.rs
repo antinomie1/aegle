@@ -4,7 +4,7 @@
 //! structure changes, resizing the window and a new window background damage
 //! all of it.
 
-use crate::{Result, Ui, UiError, state::State};
+use crate::{Ui, state::State};
 use aegle_core::NodeId;
 use aegle_types::{Rect, Region};
 
@@ -61,19 +61,15 @@ impl Ui {
     /// The rectangles whose pixels changed since [`Self::clear_damage`], in
     /// logical window coordinates; `None` means the whole window. Hosts that
     /// keep earlier pixels redraw and present only these after a refresh.
-    pub fn damage(&self) -> Result<Option<Region<Rect>>> {
-        let state = self.read()?;
-        Ok(Some(state.damage).filter(|d| !state.damage_full && !d.is_empty()))
+    pub fn damage(&self) -> Option<Region<Rect>> {
+        let state = self.read();
+        Some(state.damage).filter(|d| !state.damage_full && !d.is_empty())
     }
 
     /// Marks the window's pixels as presented, after a successful present.
-    pub fn clear_damage(&self) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    pub fn clear_damage(&self) {
+        let mut state = self.write();
         state.damage = Region::default();
         state.damage_full = false;
-        Ok(())
     }
 }

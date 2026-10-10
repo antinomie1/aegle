@@ -7,7 +7,7 @@
 use aegle_core::NodeId;
 use aegle_types::{Cursor, Point};
 
-use crate::{Node, Result, Ui, UiError, state::State};
+use crate::{Node, Ui, state::State};
 
 impl State {
     /// Shape for the last pointer position; the arrow while no pointer is inside.
@@ -92,14 +92,11 @@ impl Ui {
     /// hosts apply it after each batch of input; embedding hosts call it after
     /// [`Self::pointer`] and [`Self::refresh`], since layout can move controls
     /// under a stationary pointer.
-    pub fn cursor(&self) -> Result<Cursor> {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    pub fn cursor(&self) -> Cursor {
+        let mut state = self.write();
         // Removed controls must not linger in the hit-test order.
         state.rebuild_order();
-        Ok(state.cursor())
+        state.cursor()
     }
 }
 
@@ -107,7 +104,7 @@ impl Node {
     /// Sets the cursor shown over this control and, unless they set their own,
     /// its descendants; `None` restores the default. Text fields keep their
     /// I-beam unless this is set on the field itself.
-    pub fn set_cursor(&self, cursor: impl Into<Option<Cursor>>) -> Result {
+    pub fn set_cursor(&self, cursor: impl Into<Option<Cursor>>) {
         let cursor = cursor.into();
         self.change(|state, id| {
             match cursor {
@@ -124,7 +121,7 @@ impl Node {
     }
 
     /// The cursor set on this control itself, if any.
-    pub fn cursor(&self) -> Result<Option<Cursor>> {
+    pub fn cursor(&self) -> Option<Cursor> {
         self.change(|state, id| Ok(state.explicit_cursor(id)))
     }
 }

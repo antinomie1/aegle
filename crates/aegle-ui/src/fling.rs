@@ -49,33 +49,24 @@ impl Ui {
     /// ends at 10 px/s or when no viewport can move further. A later scroll,
     /// pointer press or [`Self::stop_fling`] cancels it; reduced motion ignores it.
     /// The host drives it through [`Self::advance_animations`].
-    pub fn fling(&self, position: Point, velocity: Point) -> Result {
+    pub fn fling(&self, position: Point, velocity: Point) {
         if ![position.x, position.y, velocity.x, velocity.y]
             .into_iter()
             .all(f32::is_finite)
         {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         state.motion.fling = (!state.motion.reduced && velocity.x.hypot(velocity.y) >= STOP)
             .then_some(Fling {
                 position,
                 velocity,
                 last: None,
             });
-        Ok(())
     }
 
     /// Cancels momentum scrolling, for example when a finger touches down.
-    pub fn stop_fling(&self) -> Result {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .motion
-            .fling = None;
-        Ok(())
+    pub fn stop_fling(&self) {
+        self.write().motion.fling = None;
     }
 }

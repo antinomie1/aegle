@@ -22,11 +22,11 @@ fn stock_widgets_export_roles_and_names() -> Result {
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let root = ui.root();
-    root.text("Title")?;
-    root.button("Clear")?;
-    root.check_box("Wrap", false)?;
-    root.text_field("你好")?;
-    ui.resize(Size::new(320.0, 200.0))?;
+    root.text("Title");
+    root.button("Clear");
+    root.check_box("Wrap", false);
+    root.text_field("你好");
+    ui.resize(Size::new(320.0, 200.0));
     let tree = ui.accessibility(true, "Window")?;
     let has = |role, name: &str| {
         tree.nodes.iter().any(|(_, node)| {

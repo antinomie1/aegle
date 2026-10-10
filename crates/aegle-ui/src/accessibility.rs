@@ -13,25 +13,22 @@ use aegle_types::Point;
 
 impl Ui {
     /// Whether logical semantics changed since the last exported update.
-    pub fn access_dirty(&self) -> Result<bool> {
-        let state = self.read()?;
-        Ok(state.topology_dirty
+    pub fn access_dirty(&self) -> bool {
+        let state = self.read();
+        state.topology_dirty
             || state.geometry_dirty
             || state.order.iter().any(|&id| {
                 state
                     .tree
                     .dirty(id)
                     .is_ok_and(|dirty| dirty.intersects(Dirty::SEMANTICS))
-            }))
+            })
     }
     /// Exports current semantics from the same controls used for painting and input.
     /// Refresh is performed first so geometry and text-run ranges agree.
     pub fn accessibility(&self, initial: bool, title: &str) -> Result<TreeUpdate> {
         let repaint = self.refresh()?;
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         // Semantic inspection must not consume a host's pending paint request.
         state.repaint |= repaint;
         state.prepare_accessibility()?;
@@ -46,10 +43,7 @@ impl Ui {
         scale: f64,
         publish: impl FnOnce(&mut dyn FnMut(bool) -> TreeUpdate),
     ) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         state.prepare_accessibility()?;
         publish(&mut |initial| state.export_accessibility(initial, title, scale));
         Ok(())
@@ -62,10 +56,7 @@ impl Ui {
         if request.target_tree != TreeId::ROOT {
             return Ok(false);
         }
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         state.rebuild_order();
         let Some(target) = state
             .order
@@ -151,7 +142,6 @@ impl State {
     fn prepare_accessibility(&self) -> Result {
         // These are precisely the fallible text bridge boundaries. Font-backed
         // geometry and finite origins make the subsequent exporter infallible.
-        let mut remaining_ids = self.tree.len() as u64;
         for &id in &self.order {
             let element = &self.tree.get(id).unwrap().context;
             if let Some(field) = element.control.editor() {
@@ -161,15 +151,8 @@ impl State {
                 if !element.scroll.x.is_finite() || !element.scroll.y.is_finite() {
                     return Err(UiError::InvalidValue.into());
                 }
-                // A layout run cannot outnumber scalar bytes plus its empty run.
-                remaining_ids = remaining_ids
-                    .checked_add(field.editor().display_text().len() as u64 + 1)
-                    .ok_or(UiError::IdentityExhausted)?;
             }
         }
-        self.next_access_id
-            .checked_add(remaining_ids)
-            .ok_or(UiError::IdentityExhausted)?;
         Ok(())
     }
     fn export_accessibility(&mut self, initial: bool, title: &str, scale: f64) -> TreeUpdate {

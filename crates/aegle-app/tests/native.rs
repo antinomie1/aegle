@@ -50,21 +50,21 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
     };
     let first = app.window_with_options("First", options)?;
     let second = app.window_with_options("Second", options)?;
-    let label = first.text("Hello, 世界")?;
-    let start = first.button("Start")?;
-    let finish = second.button("Finish")?;
+    let label = first.text("Hello, 世界");
+    let start = first.button("Start");
+    let finish = second.button("Finish");
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
         app.dispatch(Some(Duration::from_millis(20)))?;
     }
-    assert!(label.bounds()?.size.width > 0.0);
+    assert!(label.bounds().size.width > 0.0);
     let completed = Rc::new(Cell::new(false));
     let done = completed.clone();
     finish.on_click(move |_| {
         second.close()?;
         done.set(true);
         Ok(())
-    })?;
+    });
     let nested = Rc::downgrade(&app);
     let stale = label.clone();
     start.on_click(move |_| {
@@ -74,12 +74,13 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
             error.downcast_ref::<UiError>(),
             Some(&UiError::ReentrantAccess)
         );
-        first.close()?;
-        assert!(!stale.is_alive()?);
-        assert!(stale.set_text("dead").is_err());
+        first.close().unwrap();
+        assert!(!stale.is_alive());
+        let write = std::panic::AssertUnwindSafe(|| stale.set_text("dead"));
+        assert!(std::panic::catch_unwind(write).is_err());
         finish.activate()
-    })?;
-    start.activate()?;
+    });
+    start.activate();
     let deadline = Instant::now() + Duration::from_secs(2);
     while app.dispatch(Some(Duration::from_millis(20)))? {
         assert!(
@@ -88,7 +89,7 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
         );
     }
     assert!(completed.get());
-    assert!(!label.is_alive()?);
+    assert!(!label.is_alive());
     Ok(())
 }
 
@@ -118,36 +119,36 @@ fn layers_draw_into_native_windows() -> Result {
         ..Default::default()
     };
     let window = app.window_with_options("Layers", options)?;
-    window.set_background(Color::WHITE)?;
-    let stripes = window.row()?;
-    stripes.set_gap(6.0, 6.0)?;
+    window.set_background(Color::WHITE);
+    let stripes = window.row();
+    stripes.set_gap(6.0, 6.0);
     for _ in 0..12 {
-        let stripe = stripes.column()?;
-        stripe.set_width(8.0)?;
-        stripe.set_height(120.0)?;
-        stripe.set_background(Color::rgb(40, 80, 220))?;
+        let stripe = stripes.column();
+        stripe.set_width(8.0);
+        stripe.set_height(120.0);
+        stripe.set_background(Color::rgb(40, 80, 220));
     }
-    let panel = window.column()?;
-    panel.set_width(120.0)?;
-    panel.set_height(60.0)?;
-    panel.set_radius(10.0)?;
-    panel.set_offset(Point::new(40.0, -110.0))?;
-    panel.set_background(Color::rgba(255, 255, 255, 90))?;
-    panel.set_backdrop_blur(4.0)?;
-    let group = panel.column()?;
-    group.set_opacity(0.5)?;
+    let panel = window.column();
+    panel.set_width(120.0);
+    panel.set_height(60.0);
+    panel.set_radius(10.0);
+    panel.set_offset(Point::new(40.0, -110.0));
+    panel.set_background(Color::rgba(255, 255, 255, 90));
+    panel.set_backdrop_blur(4.0);
+    let group = panel.column();
+    group.set_opacity(0.5);
     for color in [Color::rgb(220, 40, 40), Color::rgb(40, 160, 60)] {
-        let square = group.column()?;
-        square.set_width(24.0)?;
-        square.set_height(24.0)?;
-        square.set_background(color)?;
+        let square = group.column();
+        square.set_width(24.0);
+        square.set_height(24.0);
+        square.set_background(color);
     }
     let hold = std::env::var("AEGLE_TEST_HOLD_MS").map_or(600, |ms| ms.parse().unwrap());
     let deadline = Instant::now() + Duration::from_millis(hold);
     while Instant::now() < deadline {
         app.dispatch(Some(Duration::from_millis(20)))?;
     }
-    assert!(panel.bounds()?.size.width > 0.0);
+    assert!(panel.bounds().size.width > 0.0);
     Ok(())
 }
 
@@ -160,13 +161,13 @@ fn proxy_messages_from_threads_reach_the_ui_thread_in_order() -> Result {
     );
     let app = App::with_fonts(test_fonts()?, AppOptions::default())?;
     let window = app.window("Proxy")?;
-    let label = window.text("waiting")?;
+    let label = window.text("waiting");
     let seen = Rc::new(std::cell::RefCell::new(Vec::new()));
     let log = seen.clone();
     let closing = window.clone();
     let proxy = app.proxy(move |n: u32| {
         log.borrow_mut().push(n);
-        label.set_text(&format!("got {n}"))?;
+        label.set_text(&format!("got {n}"));
         if n == 3 {
             closing.close()?;
         }

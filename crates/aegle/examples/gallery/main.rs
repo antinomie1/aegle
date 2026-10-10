@@ -15,6 +15,7 @@ use aegle::{
 };
 use aegle_render_software::{Renderer, Surface};
 use aegle_text::{Blob, GenericFamily};
+use aegle_ui::OrFail;
 use std::{
     cell::RefCell, fs::File, io::BufWriter, ops::Deref, path::Path, rc::Rc, sync::Arc,
     time::Duration,
@@ -23,10 +24,10 @@ use std::{
 const SCALE: f32 = 2.0;
 
 /// Builds one cell's control into `host` and puts it into the shown state.
-pub(crate) type Setup = fn(&Ui, &Container) -> Result;
+pub(crate) type Setup = fn(&Ui, &Container);
 
 fn center(node: &aegle::Node) -> Result<Point> {
-    let bounds = node.bounds()?;
+    let bounds = node.bounds();
     Ok(Point::new(
         bounds.origin.x + bounds.size.width / 2.0,
         bounds.origin.y + bounds.size.height / 2.0,
@@ -61,16 +62,16 @@ fn gallery(
     let mut uis = Vec::new();
     for (caption, setup) in cells {
         let ui = Ui::with_fonts(fonts.clone(), theme)?;
-        ui.set_default_transition(Some(Transition::default()))?;
-        ui.resize(cell)?;
+        ui.set_default_transition(Some(Transition::default()));
+        ui.resize(cell);
         let root = ui.root();
-        root.set_padding(12.0)?;
-        root.set_gap(8.0, 8.0)?;
-        let label = root.text(caption)?;
-        label.set_font_size(11.0)?;
-        label.set_foreground(theme.muted)?;
-        let host = root.column()?;
-        setup(&ui, &host)?;
+        root.set_padding(12.0);
+        root.set_gap(8.0, 8.0);
+        let label = root.text(caption);
+        label.set_font_size(11.0);
+        label.set_foreground(theme.muted);
+        let host = root.column();
+        setup(&ui, &host);
         ui.refresh()?;
         ui.dispatch_callbacks()?;
         ui.refresh()?;
@@ -136,17 +137,16 @@ fn gradient() -> Result<Image> {
     Ok(Image::new(48, 48, pixels)?)
 }
 
-fn form(_: &Ui, host: &Container) -> Result {
-    host.text("Settings")?.set_font_size(16.0)?;
-    host.text_field("Hello, 世界")?;
-    let row = host.row()?;
-    row.button("Save")?;
-    row.button("Cancel")?.set_enabled(false)?;
-    host.check_box("Check box", true)?;
-    host.switch("Switch", true)?;
-    host.slider(0.0, 100.0, 60.0)?;
-    host.progress(0.0, 100.0, 40.0)?;
-    Ok(())
+fn form(_: &Ui, host: &Container) {
+    host.text("Settings").set_font_size(16.0);
+    host.text_field("Hello, 世界");
+    let row = host.row();
+    row.button("Save");
+    row.button("Cancel").set_enabled(false);
+    host.check_box("Check box", true);
+    host.switch("Switch", true);
+    host.slider(0.0, 100.0, 60.0);
+    host.progress(0.0, 100.0, 40.0);
 }
 
 fn main() -> Result {
@@ -172,12 +172,14 @@ fn main() -> Result {
         "text",
         (220.0, 100.0),
         &[
-            ("default", |_, h| h.text("Hello, 世界").map(drop)),
+            ("default", |_, h| {
+                h.text("Hello, 世界");
+            }),
             ("font_size 20", |_, h| {
-                h.text("Hello, 世界")?.set_font_size(20.0)
+                h.text("Hello, 世界").set_font_size(20.0);
             }),
             ("wraps to width", |_, h| {
-                h.text("Text wraps to the width of its parent.").map(drop)
+                h.text("Text wraps to the width of its parent.");
             }),
         ],
     )?;
@@ -185,35 +187,41 @@ fn main() -> Result {
         "button",
         (140.0, 84.0),
         &[
-            ("normal", |_, h| h.button("Button").map(drop)),
-            ("hovered", |ui, h| hover(ui, &h.button("Button")?)),
-            ("pressed", |ui, h| press(ui, &h.button("Button")?)),
-            ("focused", |_, h| h.button("Button")?.focus()),
-            ("disabled", |_, h| h.button("Button")?.set_enabled(false)),
+            ("normal", |_, h| {
+                h.button("Button");
+            }),
+            ("hovered", |ui, h| hover(ui, &h.button("Button")).or_fail()),
+            ("pressed", |ui, h| press(ui, &h.button("Button")).or_fail()),
+            ("focused", |_, h| h.button("Button").focus()),
+            ("disabled", |_, h| h.button("Button").set_enabled(false)),
         ],
     )?;
     shot(
         "text-field",
         (190.0, 84.0),
         &[
-            ("empty", |_, h| h.text_field("").map(drop)),
-            ("text", |_, h| h.text_field("Hello, 世界").map(drop)),
+            ("empty", |_, h| {
+                h.text_field("");
+            }),
+            ("text", |_, h| {
+                h.text_field("Hello, 世界");
+            }),
             ("focused, selection", |_, h| {
-                let field = h.text_field("Hello, 世界")?;
-                field.focus()?;
+                let field = h.text_field("Hello, 世界");
+                field.focus();
                 field.select(Selection {
                     anchor: 0,
                     focus: 5,
-                })
+                });
             }),
             ("read_only", |_, h| {
-                h.text_field("Read only")?.set_read_only(true)
+                h.text_field("Read only").set_read_only(true);
             }),
             ("password", |_, h| {
-                h.text_field("secret")?.set_password(true)
+                h.text_field("secret").set_password(true);
             }),
             ("disabled", |_, h| {
-                h.text_field("Disabled")?.set_enabled(false)
+                h.text_field("Disabled").set_enabled(false);
             }),
         ],
     )?;
@@ -222,26 +230,32 @@ fn main() -> Result {
         (240.0, 196.0),
         &[
             ("multiline", |_, h| {
-                h.text_area("First line\nSecond line\n你好, 世界").map(drop)
+                h.text_area("First line\nSecond line\n你好, 世界");
             }),
             ("overflow, scroll bar", |_, h| {
                 let lines: Vec<String> = (1..=12).map(|i| format!("Line {i}")).collect();
-                h.text_area(&lines.join("\n"))?.set_height(Some(110.0))
+                h.text_area(&lines.join("\n")).set_height(Some(110.0));
             }),
-            ("focused", |_, h| h.text_area("Caret after text")?.focus()),
+            ("focused", |_, h| h.text_area("Caret after text").focus()),
         ],
     )?;
     shot(
         "check-box",
         (150.0, 72.0),
         &[
-            ("unchecked", |_, h| h.check_box("Option", false).map(drop)),
-            ("checked", |_, h| h.check_box("Option", true).map(drop)),
-            ("mixed", |_, h| h.check_box("Option", true)?.set_mixed(true)),
-            ("hovered", |ui, h| hover(ui, &h.check_box("Option", false)?)),
-            ("focused", |_, h| h.check_box("Option", true)?.focus()),
+            ("unchecked", |_, h| {
+                h.check_box("Option", false);
+            }),
+            ("checked", |_, h| {
+                h.check_box("Option", true);
+            }),
+            ("mixed", |_, h| h.check_box("Option", true).set_mixed(true)),
+            ("hovered", |ui, h| {
+                hover(ui, &h.check_box("Option", false)).or_fail()
+            }),
+            ("focused", |_, h| h.check_box("Option", true).focus()),
             ("disabled", |_, h| {
-                h.check_box("Option", true)?.set_enabled(false)
+                h.check_box("Option", true).set_enabled(false);
             }),
         ],
     )?;
@@ -249,12 +263,18 @@ fn main() -> Result {
         "switch",
         (150.0, 72.0),
         &[
-            ("off", |_, h| h.switch("Option", false).map(drop)),
-            ("on", |_, h| h.switch("Option", true).map(drop)),
-            ("hovered", |ui, h| hover(ui, &h.switch("Option", false)?)),
-            ("focused", |_, h| h.switch("Option", true)?.focus()),
+            ("off", |_, h| {
+                h.switch("Option", false);
+            }),
+            ("on", |_, h| {
+                h.switch("Option", true);
+            }),
+            ("hovered", |ui, h| {
+                hover(ui, &h.switch("Option", false)).or_fail()
+            }),
+            ("focused", |_, h| h.switch("Option", true).focus()),
             ("disabled", |_, h| {
-                h.switch("Option", true)?.set_enabled(false)
+                h.switch("Option", true).set_enabled(false);
             }),
         ],
     )?;
@@ -262,12 +282,16 @@ fn main() -> Result {
         "slider",
         (190.0, 72.0),
         &[
-            ("value 30", |_, h| h.slider(0.0, 100.0, 30.0).map(drop)),
-            ("step 25", |_, h| h.slider(0.0, 100.0, 50.0)?.set_step(25.0)),
-            ("hovered", |ui, h| hover(ui, &h.slider(0.0, 100.0, 50.0)?)),
-            ("focused", |_, h| h.slider(0.0, 100.0, 70.0)?.focus()),
+            ("value 30", |_, h| {
+                h.slider(0.0, 100.0, 30.0);
+            }),
+            ("step 25", |_, h| h.slider(0.0, 100.0, 50.0).set_step(25.0)),
+            ("hovered", |ui, h| {
+                hover(ui, &h.slider(0.0, 100.0, 50.0)).or_fail()
+            }),
+            ("focused", |_, h| h.slider(0.0, 100.0, 70.0).focus()),
             ("disabled", |_, h| {
-                h.slider(0.0, 100.0, 70.0)?.set_enabled(false)
+                h.slider(0.0, 100.0, 70.0).set_enabled(false);
             }),
         ],
     )?;
@@ -275,9 +299,15 @@ fn main() -> Result {
         "progress",
         (190.0, 64.0),
         &[
-            ("0 %", |_, h| h.progress(0.0, 100.0, 0.0).map(drop)),
-            ("40 %", |_, h| h.progress(0.0, 100.0, 40.0).map(drop)),
-            ("100 %", |_, h| h.progress(0.0, 100.0, 100.0).map(drop)),
+            ("0 %", |_, h| {
+                h.progress(0.0, 100.0, 0.0);
+            }),
+            ("40 %", |_, h| {
+                h.progress(0.0, 100.0, 40.0);
+            }),
+            ("100 %", |_, h| {
+                h.progress(0.0, 100.0, 100.0);
+            }),
         ],
     )?;
     shot(
@@ -285,30 +315,28 @@ fn main() -> Result {
         (220.0, 170.0),
         &[
             ("vertical overflow", |_, h| {
-                let view = h.scroll_view()?;
-                view.set_height(Some(110.0))?;
+                let view = h.scroll_view();
+                view.set_height(Some(110.0));
                 for i in 1..=8 {
-                    view.text(&format!("Item {i}"))?;
+                    view.text(&format!("Item {i}"));
                 }
-                Ok(())
             }),
             ("scrolled", |_, h| {
-                let view = h.scroll_view()?;
-                view.set_height(Some(110.0))?;
+                let view = h.scroll_view();
+                view.set_height(Some(110.0));
                 for i in 1..=8 {
-                    view.text(&format!("Item {i}"))?;
+                    view.text(&format!("Item {i}"));
                 }
-                view.scroll_to(Point::new(0.0, 80.0))
+                view.scroll_to(Point::new(0.0, 80.0));
             }),
             ("both axes", |_, h| {
-                let view = h.scroll_view()?;
-                view.set_width(Some(190.0))?;
-                view.set_height(Some(110.0))?;
+                let view = h.scroll_view();
+                view.set_width(Some(190.0));
+                view.set_height(Some(110.0));
                 for i in 1..=6 {
-                    view.text(&format!("Row {i}: a line wider than the viewport"))?
-                        .set_width(Some(320.0))?;
+                    view.text(&format!("Row {i}: a line wider than the viewport"))
+                        .set_width(Some(320.0));
                 }
-                Ok(())
             }),
         ],
     )?;
@@ -318,17 +346,17 @@ fn main() -> Result {
         &[
             ("10,000 rows", |_, h| {
                 let list = h.list_view(28.0, 10_000, |row, index| {
-                    row.text(&format!("Row {index}")).map(drop)
-                })?;
-                list.set_height(Some(140.0))
+                    row.text(&format!("Row {index}"));
+                });
+                list.set_height(Some(140.0));
             }),
             ("scrolled to row 5,000", |ui, h| {
                 let list = h.list_view(28.0, 10_000, |row, index| {
-                    row.text(&format!("Row {index}")).map(drop)
-                })?;
-                list.set_height(Some(140.0))?;
-                ui.refresh()?;
-                list.scroll_to(Point::new(0.0, 5000.0 * 28.0))
+                    row.text(&format!("Row {index}"));
+                });
+                list.set_height(Some(140.0));
+                ui.refresh().or_fail();
+                list.scroll_to(Point::new(0.0, 5000.0 * 28.0));
             }),
         ],
     )?;
@@ -336,11 +364,13 @@ fn main() -> Result {
         "image-view",
         (160.0, 120.0),
         &[
-            ("pixel size", |_, h| h.image(&gradient()?).map(drop)),
+            ("pixel size", |_, h| {
+                h.image(&gradient().unwrap());
+            }),
             ("96x48", |_, h| {
-                let image = h.image(&gradient()?)?;
-                image.set_width(96.0)?;
-                image.set_height(48.0)
+                let image = h.image(&gradient().unwrap());
+                image.set_width(96.0);
+                image.set_height(48.0);
             }),
         ],
     )?;
@@ -358,7 +388,7 @@ fn main() -> Result {
                 ));
             }
             star.close();
-            let star = star.finish(FillRule::NonZero)?;
+            let star = star.finish(FillRule::NonZero).or_fail();
             let canvas = h.canvas(move |builder, size| {
                 builder
                     .push_transform(Affine::translation(size.width / 2.0, size.height / 2.0)?)?;
@@ -366,9 +396,9 @@ fn main() -> Result {
                 builder.stroke_path(&star, Color::rgb(32, 36, 43), Stroke::new(1.5))?;
                 builder.pop()?;
                 Ok(())
-            })?;
-            canvas.set_width(64.0)?;
-            canvas.set_height(64.0)
+            });
+            canvas.set_width(64.0);
+            canvas.set_height(64.0);
         })],
     )?;
     shot(
@@ -376,28 +406,25 @@ fn main() -> Result {
         (230.0, 150.0),
         &[
             ("column, gap 8", |_, h| {
-                let column = h.column()?;
-                column.set_padding(8.0)?;
-                column.set_border_width(1.0)?;
-                column.set_border_color(Theme::light().border)?;
-                column.button("One")?;
-                column.button("Two")?;
-                Ok(())
+                let column = h.column();
+                column.set_padding(8.0);
+                column.set_border_width(1.0);
+                column.set_border_color(Theme::light().border);
+                column.button("One");
+                column.button("Two");
             }),
             ("row, gap 8", |_, h| {
-                let row = h.row()?;
-                row.set_padding(8.0)?;
-                row.set_border_width(1.0)?;
-                row.set_border_color(Theme::light().border)?;
-                row.button("One")?;
-                row.button("Two")?;
-                Ok(())
+                let row = h.row();
+                row.set_padding(8.0);
+                row.set_border_width(1.0);
+                row.set_border_color(Theme::light().border);
+                row.button("One");
+                row.button("Two");
             }),
             ("grow 1", |_, h| {
-                let row = h.row()?;
-                row.button("Fixed")?;
-                row.button("Grows")?.set_grow(1.0)?;
-                Ok(())
+                let row = h.row();
+                row.button("Fixed");
+                row.button("Grows").set_grow(1.0);
             }),
         ],
     )?;
@@ -405,19 +432,21 @@ fn main() -> Result {
         "styles",
         (150.0, 84.0),
         &[
-            ("default", |_, h| h.button("Button").map(drop)),
-            ("radius 8", |_, h| h.button("Button")?.set_radius(8.0)),
+            ("default", |_, h| {
+                h.button("Button");
+            }),
+            ("radius 8", |_, h| h.button("Button").set_radius(8.0)),
             ("colors", |_, h| {
-                let button = h.button("Button")?;
-                button.set_background(Color::rgb(103, 80, 164))?;
-                button.set_foreground(Color::WHITE)?;
-                button.set_border_width(0.0)
+                let button = h.button("Button");
+                button.set_background(Color::rgb(103, 80, 164));
+                button.set_foreground(Color::WHITE);
+                button.set_border_width(0.0);
             }),
             ("local dark theme", |_, h| {
-                h.set_theme(Some(Theme::dark()))?;
-                h.set_padding(8.0)?;
-                h.set_background(Theme::dark().background)?;
-                h.button("Button").map(drop)
+                h.set_theme(Some(Theme::dark()));
+                h.set_padding(8.0);
+                h.set_background(Theme::dark().background);
+                h.button("Button");
             }),
         ],
     )?;

@@ -35,28 +35,28 @@ fn window_key_handler_sees_keys_first_and_can_consume_them() -> Result {
         Rc::new(RefCell::new(TextSystem::new())),
         Theme::light(),
     )?);
-    ui.resize(Size::new(200.0, 200.0))?;
-    let toggle = ui.root().check_box("", false)?;
-    let field = ui.root().text_field("")?;
+    ui.resize(Size::new(200.0, 200.0));
+    let toggle = ui.root().check_box("", false);
+    let field = ui.root().text_field("");
     let seen = Rc::new(RefCell::new(Vec::new()));
     let log = seen.clone();
     ui.on_key(move |event| {
         log.borrow_mut()
             .push((event.key, event.time, event.editing));
-        Ok(event.key == Key::Character(' '))
-    })?;
+        event.key == Key::Character(' ')
+    });
     let at = Instant::now() - Duration::from_millis(30);
-    toggle.focus()?;
+    toggle.focus();
     ui.refresh()?;
     // Consumed: the focused check box does not toggle.
     ui.key_at(key(Key::Character(' ')), at)?;
     space(&ui)?;
-    assert!(!toggle.is_checked()?);
+    assert!(!toggle.is_checked());
     assert_eq!(seen.borrow()[0], (Key::Character(' '), at, false));
     // Not consumed: Tab still moves focus, into the editor.
     ui.key(key(Key::Tab))?;
     ui.key(key(Key::Enter))?;
-    assert!(field.visual_state()?.focused);
+    assert!(field.visual_state().focused);
     let last = *seen.borrow().last().unwrap();
     assert_eq!((last.0, last.2), (Key::Enter, true));
 
@@ -71,34 +71,34 @@ fn window_key_handler_sees_keys_first_and_can_consume_them() -> Result {
             let count = count.clone();
             inner.on_key(move |_| {
                 count.set(count.get() + 1);
-                Ok(false)
-            })?;
+                false
+            });
         }
-        Ok(false)
-    })?;
+        false
+    });
     ui.key(key(Key::Enter))?;
     assert_eq!(added.get(), 0);
     ui.key(key(Key::Enter))?;
     assert_eq!(added.get(), 1);
-    ui.on_key(|_| Err("fails".into()))?;
-    assert!(ui.key(key(Key::Enter)).is_err());
-    // A failing handler stays installed and reports again.
-    assert!(ui.key(key(Key::Enter)).is_err());
-    assert_eq!(added.get(), 3);
+    // The first handler returning true consumes the key.
+    ui.on_key(|_| true);
+    ui.on_key(|_| unreachable!("a consumed key reaches no later handler"));
+    ui.key(key(Key::Enter))?;
+    assert_eq!(added.get(), 2);
     Ok(())
 }
 
 #[test]
 fn event_handlers_accumulate_and_survive_errors() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.resize(Size::new(200.0, 200.0))?;
-    let button = ui.root().button("Go")?;
+    ui.resize(Size::new(200.0, 200.0));
+    let button = ui.root().button("Go");
     let log = Rc::new(RefCell::new(Vec::new()));
     let first = log.clone();
     button.on_click(move |_| {
         first.borrow_mut().push("first");
         Err("first fails".into())
-    })?;
+    });
     let second = log.clone();
     button.on_click(move |button| {
         second.borrow_mut().push("second");
@@ -108,13 +108,13 @@ fn event_handlers_accumulate_and_survive_errors() -> Result {
             late.borrow_mut().push("late");
             Ok(())
         })
-    })?;
-    button.activate()?;
+    });
+    button.activate();
     // Every handler of the event runs; the first error is reported.
     assert!(ui.dispatch_callbacks().is_err());
     assert_eq!(*log.borrow(), ["first", "second"]);
     // The failing handler stays installed.
-    button.activate()?;
+    button.activate();
     assert!(ui.dispatch_callbacks().is_err());
     assert_eq!(log.borrow()[2..], ["first", "second", "late"]);
     Ok(())

@@ -86,23 +86,23 @@ fn a_ripple_decorates_a_button_without_changing_it() -> Result {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    let button = ui.root().button("Ripple")?;
+    let button = ui.root().button("Ripple");
     let clicks = Rc::new(Cell::new(0));
     let counted = clicks.clone();
     button.on_click(move |_| {
         counted.set(counted.get() + 1);
         Ok(())
-    })?;
+    });
     let seen = Rc::new(Cell::new(None));
     button.decorate(Ripple {
         seen: seen.clone(),
         ..Default::default()
-    })?;
-    ui.resize(Size::new(200.0, 80.0))?;
+    });
+    ui.resize(Size::new(200.0, 80.0));
     ui.refresh()?;
-    assert!(!ui.wants_frames()?);
+    assert!(!ui.wants_frames());
 
-    let bounds = button.bounds()?;
+    let bounds = button.bounds();
     let at = Point::new(bounds.origin.x + 10.0, bounds.origin.y + 6.0);
     ui.pointer(
         PointerId(1),
@@ -114,7 +114,7 @@ fn a_ripple_decorates_a_button_without_changing_it() -> Result {
     assert_eq!(seen.get(), Some(Point::new(10.0, 6.0)));
     ui.refresh()?;
     assert_eq!(ink_fills(&ui)?, 1);
-    assert!(ui.wants_frames()?);
+    assert!(ui.wants_frames());
 
     // The button behaves as before: the release clicks it.
     ui.pointer(PointerId(1), PointerKind::Up, at, Modifiers::default())?;
@@ -123,13 +123,13 @@ fn a_ripple_decorates_a_button_without_changing_it() -> Result {
 
     // An animation starting outside a frame starts at the refresh.
     let start = Instant::now();
-    ui.run_frame(start + SPREAD / 2)?;
+    ui.run_frame(start + SPREAD / 2);
     ui.refresh()?;
     assert_eq!(ink_fills(&ui)?, 1);
     // Once the ripple has spread it draws nothing and stops asking for frames.
-    ui.run_frame(start + SPREAD * 2)?;
+    ui.run_frame(start + SPREAD * 2);
     ui.refresh()?;
     assert_eq!(ink_fills(&ui)?, 0);
-    assert!(!ui.wants_frames()?);
+    assert!(!ui.wants_frames());
     Ok(())
 }

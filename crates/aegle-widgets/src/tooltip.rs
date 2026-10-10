@@ -35,13 +35,13 @@ pub trait NodeTooltip {
     /// Shows `text` after the pointer rests on this control (or a descendant
     /// without its own tooltip) and sets it as the accessible description;
     /// `None` removes it. Pressing, Escape or leaving hides it.
-    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>) -> Result;
+    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>);
 }
 
 impl NodeTooltip for Node {
-    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>) -> Result {
+    fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>) {
         let text = text.into();
-        self.set_accessible_description(text)?;
+        self.set_accessible_description(text);
         self.change(|state, id| {
             state.install(&crate::HOOKS);
             match text {

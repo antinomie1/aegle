@@ -1,5 +1,5 @@
 //! Shared value behavior connects pointer/keyboard input, callbacks and semantics.
-use aegle_text::{Blob, GenericFamily, Selection, TextError};
+use aegle_text::{Blob, GenericFamily, Selection};
 use aegle_ui::{
     ImeEdit, Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem,
     Theme, Ui,
@@ -21,44 +21,48 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    let group = ui.root().column()?;
-    let toggles = group.row()?;
+    let group = ui.root().column();
+    let toggles = group.row();
     for parent in [ui.root(), group.clone(), toggles.clone()] {
-        parent.set_gap(0.0, 0.0)?;
+        parent.set_gap(0.0, 0.0);
     }
-    let check = toggles.check_box("世界", false)?;
-    let switch = toggles.switch("Hello", false)?;
-    let slider = group.slider(0.0, 10.0, 3.0)?;
-    slider.set_step(3.0)?;
-    slider.set_accessible_label("Volume")?;
-    let progress = group.progress(0.0, 10.0, 3.0)?;
-    progress.set_accessible_label("Progress")?;
-    let field = ui.root().text_field("Hello")?;
-    assert!(progress.focus().is_err());
+    let check = toggles.check_box("世界", false);
+    let switch = toggles.switch("Hello", false);
+    let slider = group.slider(0.0, 10.0, 3.0);
+    slider.set_step(3.0);
+    slider.set_accessible_label("Volume");
+    let progress = group.progress(0.0, 10.0, 3.0);
+    progress.set_accessible_label("Progress");
+    let field = ui.root().text_field("Hello");
+    assert!(panics(|| {
+        progress.focus();
+    }));
     let hover = aegle_ui::Style {
         hover_background: Some(aegle_ui::Color::BLACK),
         ..Default::default()
     };
-    assert!(progress.set_style(hover).is_err());
+    assert!(panics(|| {
+        progress.set_style(hover);
+    }));
     let changes = Rc::new(Cell::new(0));
     let count = changes.clone();
     let target = switch.clone();
     check.on_change(move |check| {
         count.set(count.get() + 1);
-        target.set_checked(check.is_checked()?)
-    })?;
+        target.set_checked(check.is_checked())
+    });
     let target = progress.clone();
-    slider.on_change(move |slider| target.set_value(slider.value()?))?;
-    ui.resize(Size::new(360.0, 360.0))?;
+    slider.on_change(move |slider| target.set_value(slider.value()));
+    ui.resize(Size::new(360.0, 360.0));
     ui.refresh()?;
-    let width = check.bounds()?.size.width;
+    let width = check.bounds().size.width;
     ui.set_theme(Theme {
         gap: 40.0,
         ..Theme::light()
-    })?;
+    });
     ui.refresh()?;
-    assert!((check.bounds()?.size.width - width - 32.0).abs() < 0.001);
-    ui.set_theme(Theme::light())?;
+    assert!((check.bounds().size.width - width - 32.0).abs() < 0.001);
+    ui.set_theme(Theme::light());
     let key = |key, pressed| {
         ui.key(KeyInput {
             key,
@@ -68,18 +72,18 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
             repeat: false,
         })
     };
-    check.focus()?;
+    check.focus();
     key(Key::Character(' '), true)?;
-    assert!(!check.is_checked()?);
+    assert!(!check.is_checked());
     key(Key::Character(' '), false)?;
     ui.dispatch_callbacks()?;
-    assert!(check.is_checked()? && switch.is_checked()?);
+    assert!(check.is_checked() && switch.is_checked());
     assert_eq!(changes.get(), 1);
-    check.set_checked(false)?;
+    check.set_checked(false);
     ui.dispatch_callbacks()?;
     assert_eq!(changes.get(), 1); // Model updates do not loop through user callbacks.
-    slider.focus()?;
-    slider.set_height(Some(1.0))?;
+    slider.focus();
+    slider.set_height(Some(1.0));
     ui.refresh()?;
     let mut tiny_focus = false;
     ui.visit_scenes(|visit| {
@@ -92,15 +96,15 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
         Ok(())
     })?;
     assert!(tiny_focus);
-    slider.set_height(Some(36.0))?;
+    slider.set_height(Some(36.0));
     key(Key::Right, true)?;
     ui.dispatch_callbacks()?;
-    assert_eq!(progress.value()?, 6.0);
+    assert_eq!(progress.value(), 6.0);
     key(Key::End, true)?;
-    slider.decrement()?;
-    assert_eq!(slider.value()?, 9.0);
+    slider.decrement();
+    assert_eq!(slider.value(), 9.0);
     ui.refresh()?;
-    let bounds = slider.bounds()?;
+    let bounds = slider.bounds();
     let point = Point::new(
         bounds.origin.x + bounds.size.width / 2.0,
         bounds.origin.y + bounds.size.height / 2.0,
@@ -117,17 +121,21 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
         Point::new(bounds.origin.x + bounds.size.width + 30.0, point.y),
         Modifiers::default(),
     )?;
-    assert_eq!(slider.value()?, 10.0);
-    group.set_enabled(false)?;
+    assert_eq!(slider.value(), 10.0);
+    group.set_enabled(false);
     ui.pointer(PointerId(1), PointerKind::Up, point, Modifiers::default())?;
-    slider.decrement()?;
-    assert_eq!(slider.value()?, 10.0);
-    check.toggle()?;
-    assert!(!check.is_checked()?);
-    group.set_enabled(true)?;
-    assert!(slider.set_range(4.0, 4.0).is_err());
-    assert!(slider.set_step(f64::NAN).is_err());
-    assert_eq!(slider.range()?, (0.0, 10.0));
+    slider.decrement();
+    assert_eq!(slider.value(), 10.0);
+    check.toggle();
+    assert!(!check.is_checked());
+    group.set_enabled(true);
+    assert!(panics(|| {
+        slider.set_range(4.0, 4.0);
+    }));
+    assert!(panics(|| {
+        slider.set_step(f64::NAN);
+    }));
+    assert_eq!(slider.range(), (0.0, 10.0));
     #[cfg(feature = "accessibility")]
     {
         use aegle_access::accesskit::{Action, ActionData, ActionRequest, Role, Toggled, TreeId};
@@ -157,41 +165,40 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
             Some(ActionData::NumericValue(7.0))
         ))?);
         ui.dispatch_callbacks()?;
-        assert_eq!(slider.value()?, 6.0);
-        assert_eq!(progress.value()?, 6.0);
+        assert_eq!(slider.value(), 6.0);
+        assert_eq!(progress.value(), 6.0);
         assert!(!ui.access_action(request(
             Action::SetValue,
             Some(ActionData::NumericValue(f64::NAN))
         ))?);
-        slider.set_enabled(false)?;
+        slider.set_enabled(false);
         assert!(!ui.access_action(request(Action::Increment, None))?);
-        slider.set_enabled(true)?;
+        slider.set_enabled(true);
     }
-    field.focus()?;
+    field.focus();
     ui.refresh()?;
-    ui.take_ime_state(4000)?;
+    ui.take_ime_state(4000);
     ui.ime(ImeEdit {
         preedit: "世界",
         ..Default::default()
     })?;
-    slider.set_value(0.0)?;
-    switch.set_checked(false)?;
-    ui.set_theme(Theme::dark())?;
+    slider.set_value(0.0);
+    switch.set_checked(false);
+    ui.set_theme(Theme::dark());
     ui.refresh()?;
-    assert_eq!(field.text()?, "Hello");
-    assert_eq!(
-        field
-            .select(Selection::default())
-            .unwrap_err()
-            .downcast_ref(),
-        Some(&TextError::CompositionActive)
-    );
-    assert!(ui.take_ime_state(4000)?.is_none_or(|state| !state.reset));
-    check.toggle()?;
-    group.remove()?;
+    assert_eq!(field.text(), "Hello");
+    field.select(Selection::default()); // Cancels the composition.
+    assert_eq!(field.text(), "Hello");
+    check.toggle();
+    group.remove();
     ui.dispatch_callbacks()?;
     assert_eq!(changes.get(), 1); // Destroyed queued controls are never invoked.
-    assert!(!slider.is_alive()?);
+    assert!(!slider.is_alive());
     ui.refresh()?;
     Ok(())
+}
+
+/// Whether `change` panics, as handle methods do on rejected values.
+fn panics(change: impl FnOnce()) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
 }

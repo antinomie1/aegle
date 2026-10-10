@@ -3,7 +3,7 @@
 use aegle_controls::{Input, Key, KeyInput};
 use aegle_core::{Dirty, NodeId};
 use aegle_theme::ControlKind;
-use aegle_ui::{Container, Control, Node, Result, State, UiError, control::Frame};
+use aegle_ui::{Container, Control, HandlerResult, Node, Result, State, UiError, control::Frame};
 
 use crate::{
     Button,
@@ -88,33 +88,33 @@ fn show(state: &mut State, root: NodeId, index: usize) -> Result<bool> {
 impl Tabs {
     /// Adds a tab titled `title` and returns its page, a column. The first
     /// tab added is selected.
-    pub fn add(&self, title: &str) -> Result<Container> {
+    pub fn add(&self, title: &str) -> Container {
         let bar =
-            self.change(|state, id| Ok(data(state, id).bar.expect("created with its tab list")))?;
+            self.change(|state, id| Ok(data(state, id).bar.expect("created with its tab list")));
         let bar = Container(Node {
             state: self.state.clone(),
             id: bar,
         });
         let selected = Variant::Tab { selected: false };
-        let tab = crate::button::create_as(&bar, title, selected)?;
-        let page = group::add(&self.0, Role::TabPanel, false)?;
-        page.set_grow(1.0)?;
-        page.set_min_width(0.0)?;
-        page.set_min_height(0.0)?;
+        let tab = crate::button::create_as(&bar, title, selected);
+        let page = group::add(&self.0, Role::TabPanel, false);
+        page.set_grow(1.0);
+        page.set_min_width(0.0);
+        page.set_min_height(0.0);
         self.change(|state, id| {
             let tabs = data(state, id);
             tabs.entries.push((tab.id, page.id));
             let selected = tabs.selected.min(tabs.entries.len() - 1);
             show(state, id, selected).map(drop)
-        })?;
-        Ok(page)
+        });
+        page
     }
     /// The selected tab's index.
-    pub fn selected(&self) -> Result<usize> {
+    pub fn selected(&self) -> usize {
         self.change(|state, id| Ok(data(state, id).selected))
     }
     /// Selects a tab without calling the change handler.
-    pub fn select(&self, index: usize) -> Result {
+    pub fn select(&self, index: usize) {
         self.change(|state, id| {
             if index >= data(state, id).entries.len() {
                 return Err(UiError::InvalidValue.into());
@@ -123,23 +123,23 @@ impl Tabs {
         })
     }
     /// The tab button at `index`, for its text, style or accessible label.
-    pub fn tab(&self, index: usize) -> Result<Button> {
+    pub fn tab(&self, index: usize) -> Button {
         let tab = self.change(|state, id| {
             data(state, id)
                 .entries
                 .get(index)
                 .map(|entry| entry.0)
                 .ok_or(UiError::InvalidValue.into())
-        })?;
-        Ok(Button(Node {
+        });
+        Button(Node {
             state: self.state.clone(),
             id: tab,
-        }))
+        })
     }
     /// Adds a handler called after the user selects another tab; handlers
     /// run in registration order.
-    pub fn on_change(&self, mut callback: impl FnMut(Tabs) -> Result + 'static) -> Result {
-        self.change(|state, id| state.on_action(id, move |node| callback(Tabs(Container(node)))))
+    pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Tabs) -> R + 'static) {
+        self.on_action(move |node| callback(Tabs(Container(node))).into_result())
     }
 }
 
@@ -177,7 +177,7 @@ pub(crate) fn tab_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
     Ok(true)
 }
 
-pub(crate) fn tabs(container: &Container) -> Result<Tabs> {
+pub(crate) fn tabs(container: &Container) -> Tabs {
     let root = crate::add(container, |_, theme| {
         Ok((
             Box::new(TabsControl {
@@ -187,13 +187,13 @@ pub(crate) fn tabs(container: &Container) -> Result<Tabs> {
             }) as Box<dyn Control>,
             aegle_ui::container_style(theme, false),
         ))
-    })?;
+    });
     let root = Container(root);
-    let bar = group::add(&root, Role::TabList, true)?;
-    bar.set_gap(0.0, 0.0)?;
+    let bar = group::add(&root, Role::TabList, true);
+    bar.set_gap(0.0, 0.0);
     root.change(|state, id| {
         data(state, id).bar = Some(bar.id);
         Ok(())
-    })?;
-    Ok(Tabs(root))
+    });
+    Tabs(root)
 }

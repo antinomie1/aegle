@@ -2,7 +2,7 @@
 
 use aegle_layout::Style;
 use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
-use aegle_ui::{Container, Control, Result, container_style};
+use aegle_ui::{Container, Control, container_style};
 
 /// The role a [`Group`] exports to assistive technology.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,8 +85,8 @@ pub(crate) fn header(theme: &Theme, state: VisualState) -> Appearance {
 }
 
 /// Appends a column or row (by `style`) with `role`.
-pub(crate) fn add(container: &Container, role: Role, row: bool) -> Result<Container> {
-    crate::add(container, |_, theme| {
+pub(crate) fn add(container: &Container, role: Role, row: bool) -> Container {
+    Container(crate::add(container, |_, theme| {
         let mut style = container_style(theme, false);
         if row {
             style.flex_direction = aegle_layout::FlexDirection::Row;
@@ -94,6 +94,5 @@ pub(crate) fn add(container: &Container, role: Role, row: bool) -> Result<Contai
         let group = Group { role };
         group.retheme(theme, aegle_ui::LocalLayout::NONE, false, &mut style);
         Ok((Box::new(group) as Box<dyn Control>, style))
-    })
-    .map(Container)
+    }))
 }

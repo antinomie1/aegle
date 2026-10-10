@@ -4,7 +4,7 @@
 mod grid;
 
 use aegle_markup::{PropertyName, Value as Literal};
-use aegle_ui::{Align, Container, Insets, Justify, Length, Node, Result};
+use aegle_ui::{Align, Container, Insets, Justify, Length, Node};
 
 fn length(value: &Literal) -> Length {
     match value {
@@ -75,10 +75,10 @@ pub(crate) fn number(value: &Literal) -> f32 {
 
 /// Applies a layout property, or returns `None` for other properties.
 /// Container properties are only checked on containers.
-pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Option<Result> {
+pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Option<()> {
     use PropertyName::*;
     let container = || Container(node.clone());
-    Some(match name {
+    match name {
         Width => node.set_width(length(value)),
         Height => node.set_height(length(value)),
         MinWidth => node.set_min_width(length(value)),
@@ -120,14 +120,15 @@ pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Option<
         JustifySelf | JustifyItems | Columns | Rows | AutoColumns | AutoRows | Flow
         | GridColumn | GridRow | Areas | GridArea => grid::apply(node, name, value),
         _ => return None,
-    })
+    }
+    Some(())
 }
 
 #[cfg(not(feature = "grid"))]
 mod grid {
     use super::*;
 
-    pub(crate) fn apply(_: &Node, name: PropertyName, _: &Literal) -> Result {
-        Err(format!("markup {name:?} requires the grid feature").into())
+    pub(crate) fn apply(_: &Node, name: PropertyName, _: &Literal) {
+        panic!("markup {name:?} requires the grid feature")
     }
 }

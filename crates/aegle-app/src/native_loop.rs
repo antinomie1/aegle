@@ -66,8 +66,8 @@ impl App {
         // Delayed control work (tooltips) bounds the wait without any frames.
         let (mut pending, mut wake) = (false, None);
         for entry in &self.runtime.borrow().windows {
-            pending |= entry.ui.has_pending_callbacks()?;
-            if let Some(at) = entry.ui.next_wake()? {
+            pending |= entry.ui.has_pending_callbacks();
+            if let Some(at) = entry.ui.next_wake() {
                 wake = Some(wake.map_or(at, |earliest: std::time::Instant| earliest.min(at)));
             }
         }
@@ -148,7 +148,7 @@ impl App {
         let now = std::time::Instant::now();
         scratch.clear();
         for entry in &self.runtime.borrow().windows {
-            if entry.ui.next_wake()?.is_some_and(|wake| wake <= now) {
+            if entry.ui.next_wake().is_some_and(|wake| wake <= now) {
                 scratch.push(entry.ui.clone());
             }
         }
@@ -166,7 +166,7 @@ impl App {
     fn frames(&self, scratch: &mut Vec<Rc<Ui>>) -> Result<()> {
         scratch.clear();
         for entry in &self.runtime.borrow().windows {
-            if entry.ready && entry.ui.wants_frames()? {
+            if entry.ready && entry.ui.wants_frames() {
                 scratch.push(entry.ui.clone());
             }
         }
@@ -175,7 +175,7 @@ impl App {
         }
         let now = std::time::Instant::now();
         for ui in scratch.drain(..) {
-            self.report(ui.run_frame(now))?;
+            ui.run_frame(now);
         }
         self.callbacks(scratch)?;
         self.runtime.borrow_mut().refresh()
@@ -229,29 +229,31 @@ impl Runtime {
     }
 
     /// Re-resolves windows that still use the previously resolved values.
-    fn preferences(&mut self, preferences: crate::platform::Preferences) -> Result<()> {
+    fn preferences(&mut self, preferences: crate::platform::Preferences) {
         let theme = self.theme();
         #[cfg(feature = "motion")]
         let reduced = self.reduced_motion();
         self.preferences = preferences;
         for entry in &self.windows {
-            entry.ui.set_double_click(self.double_click(), 4.0)?;
-            let current = entry.ui.theme()?;
+            entry.ui.set_double_click(self.double_click(), 4.0);
+            let current = entry.ui.theme();
             if current == theme {
-                entry.ui.set_theme(self.theme())?;
+                entry.ui.set_theme(self.theme());
             }
             #[cfg(feature = "motion")]
-            if entry.ui.reduced_motion()? == reduced {
-                entry.ui.set_reduced_motion(self.reduced_motion())?;
+            if entry.ui.reduced_motion() == reduced {
+                entry.ui.set_reduced_motion(self.reduced_motion());
             }
         }
-        Ok(())
     }
 
     fn event(&mut self, event: Event) -> Result<()> {
         let event = match event {
             Event::Error(error) => return Err(error.into()),
-            Event::Preferences(preferences) => return self.preferences(preferences),
+            Event::Preferences(preferences) => {
+                self.preferences(preferences);
+                return Ok(());
+            }
             event => event,
         };
         let Some(id) = crate::native_input::target(&event) else {
@@ -279,10 +281,10 @@ impl Runtime {
             #[cfg(feature = "motion")]
             entry.ui.advance_animations(now)?;
             // Synchronous pastes land before this refresh records them.
-            if let Some(request) = entry.ui.take_clipboard()? {
+            if let Some(request) = entry.ui.take_clipboard() {
                 crate::native_input::clipboard(&mut self.backend, entry, request)?;
             }
-            if let Some(data) = entry.ui.take_drag()? {
+            if let Some(data) = entry.ui.take_drag() {
                 crate::native_input::start_drag(&mut self.backend, entry, data)?;
             }
             if entry.ui.refresh()? {
@@ -291,12 +293,12 @@ impl Runtime {
             // Layout, visibility and focus can change the control under a
             // stationary pointer, so this runs after every refresh, not only
             // after pointer events.
-            let cursor = entry.ui.cursor()?;
+            let cursor = entry.ui.cursor();
             if cursor != entry.cursor {
                 self.backend.set_cursor(entry.id, cursor)?;
                 entry.cursor = cursor;
             }
-            if let Some(ime) = entry.ui.take_ime_state(4000)? {
+            if let Some(ime) = entry.ui.take_ime_state(4000) {
                 if ime.reset && self.backend.ime_available() {
                     self.backend.configure_ime(entry.id, None)?;
                 }
@@ -311,7 +313,7 @@ impl Runtime {
                 all(feature = "unix-accessibility", target_os = "linux"),
                 all(feature = "windows-accessibility", target_os = "windows")
             ))]
-            if entry.initial_access || entry.ui.access_dirty()? {
+            if entry.initial_access || entry.ui.access_dirty() {
                 #[cfg(target_os = "linux")]
                 let scale = 1.0;
                 #[cfg(target_os = "windows")]

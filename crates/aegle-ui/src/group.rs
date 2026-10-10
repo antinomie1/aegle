@@ -63,9 +63,9 @@ impl Node {
     /// Hit testing, focus and accessibility are unchanged; zero draws
     /// nothing. With `motion`, a control with an opacity timing animates.
     /// Renderers draw it through an offscreen layer.
-    pub fn set_opacity(&self, opacity: f32) -> Result {
+    pub fn set_opacity(&self, opacity: f32) {
         if !(0.0..=1.0).contains(&opacity) {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
         self.change(|state, id| {
             state.groups.entry(id).or_default();
@@ -80,7 +80,7 @@ impl Node {
         })
     }
     /// The logical target opacity.
-    pub fn opacity(&self) -> Result<f32> {
+    pub fn opacity(&self) -> f32 {
         self.change(|state, id| Ok(state.target_opacity(id)))
     }
     /// Blurs what lies behind this node within its rounded bounds before
@@ -88,9 +88,9 @@ impl Node {
     /// pixels; zero removes it. The blurred backdrop is drawn at the node's
     /// opacity. Only what this window draws is blurred, not the desktop
     /// behind a transparent window.
-    pub fn set_backdrop_blur(&self, blur: f32) -> Result {
+    pub fn set_backdrop_blur(&self, blur: f32) {
         if !(blur.is_finite() && blur >= 0.0) {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
         self.change(|state, id| {
             state.groups.entry(id).or_default();
@@ -100,7 +100,7 @@ impl Node {
         })
     }
     /// The backdrop blur set by [`Self::set_backdrop_blur`].
-    pub fn backdrop_blur(&self) -> Result<f32> {
+    pub fn backdrop_blur(&self) -> f32 {
         self.change(|state, id| Ok(state.tree.get(id).unwrap().context.group.backdrop_blur))
     }
 }

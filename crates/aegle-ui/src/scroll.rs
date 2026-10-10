@@ -322,7 +322,7 @@ impl Node {
     /// Scrolls ancestor viewports just enough to reveal this control, without changing
     /// focus. Oversized editors reveal their caret on the constrained axis. Layout
     /// is refreshed first. Hidden nodes no-op.
-    pub fn ensure_visible(&self) -> Result {
+    pub fn ensure_visible(&self) {
         self.change(|state, id| {
             let repaint = state.refresh()?;
             state.repaint |= repaint;
@@ -332,7 +332,7 @@ impl Node {
 
     /// Last refreshed bounds intersected with ancestor scroll viewports.
     /// Returns `None` when hidden or wholly clipped; does not clip to window edges.
-    pub fn visible_bounds(&self) -> Result<Option<Rect>> {
+    pub fn visible_bounds(&self) -> Option<Rect> {
         self.change(|state, id| {
             let element = &state.tree.get(id).unwrap().context;
             Ok(if !element.effective_visible || element.bounds.is_empty() {

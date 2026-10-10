@@ -1,3 +1,4 @@
+use crate::OrFail;
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
@@ -182,12 +183,21 @@ impl Ui {
         })
     }
 
-    /// Borrows the state to read it: [`UiError::ReentrantAccess`] while the UI
-    /// is being changed, as when a control's paint calls back into it.
-    pub(crate) fn read(&self) -> Result<std::cell::Ref<'_, State>> {
-        self.state
-            .try_borrow()
-            .map_err(|_| UiError::ReentrantAccess.into())
+    /// Borrows the state to read it.
+    ///
+    /// # Panics
+    ///
+    /// While the UI is being changed, as when a control's paint calls back
+    /// into it.
+    pub(crate) fn read(&self) -> std::cell::Ref<'_, State> {
+        let state = self.state.try_borrow();
+        state.unwrap_or_else(|_| crate::handles::fail(UiError::ReentrantAccess.into()))
+    }
+
+    /// Borrows the state to change it; panics like [`Self::read`].
+    pub(crate) fn write(&self) -> std::cell::RefMut<'_, State> {
+        let state = self.state.try_borrow_mut();
+        state.unwrap_or_else(|_| crate::handles::fail(UiError::ReentrantAccess.into()))
     }
 
     /// The root column; all public handles remain weak.
@@ -199,30 +209,27 @@ impl Ui {
     }
 
     /// The theme of the UI itself, which nodes without a local theme use.
-    pub fn theme(&self) -> Result<Theme> {
-        Ok(self.read()?.theme)
+    pub fn theme(&self) -> Theme {
+        self.read().theme
     }
 
     /// Window clear color from the root's resolved theme.
-    pub fn background(&self) -> Result<Color> {
-        let state = self.read()?;
-        Ok(state.theme_of(state.root).background)
+    pub fn background(&self) -> Color {
+        let state = self.read();
+        state.theme_of(state.root).background
     }
 
     /// Changes the viewport's logical size. Zero is valid for a suspended surface.
-    pub fn resize(&self, size: Size) -> Result {
+    pub fn resize(&self, size: Size) {
         if ![size.width, size.height]
             .into_iter()
             .all(|v| v.is_finite() && v >= 0.0)
         {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         if state.size == size {
-            return Ok(());
+            return;
         }
         state.size = size;
         let root = state.root;
@@ -231,22 +238,16 @@ impl Ui {
             width: Dimension::length(size.width),
             height: Dimension::length(size.height),
         };
-        aegle_layout::set_style(&mut state.tree, root, style)?;
+        aegle_layout::set_style(&mut state.tree, root, style).or_fail();
         state.damage_full = true;
         state.repaint = true;
         state.ime_dirty = true;
-        Ok(())
     }
 
     /// Updates virtual list rows, layout and only invalidated scene records.
     /// Returns whether pixels changed.
     pub fn refresh(&self) -> Result<bool> {
-        let refresh = || {
-            self.state
-                .try_borrow_mut()
-                .map_err(|_| UiError::ReentrantAccess)?
-                .refresh()
-        };
+        let refresh = || self.write().refresh();
         self.realize()?;
         let mut repaint = refresh()?;
         // New layout can expose rows of resized or first-laid-out lists, and
@@ -254,10 +255,7 @@ impl Ui {
         for _ in 0..4 {
             let mut measured = false;
             {
-                let mut state = self
-                    .state
-                    .try_borrow_mut()
-                    .map_err(|_| UiError::ReentrantAccess)?;
+                let mut state = self.write();
                 for hook in state.hooks.clone() {
                     if let Some(measure) = hook.measure {
                         measured |= measure(&mut state)?;
@@ -275,7 +273,7 @@ impl Ui {
     /// Lets installed control libraries build or drop virtual content, outside any
     /// engine borrow. Returns whether anything changed.
     fn realize(&self) -> Result<bool> {
-        let hooks = self.read()?.hooks.clone();
+        let hooks = self.read().hooks.clone();
         let mut changed = false;
         for hook in hooks {
             if let Some(realize) = hook.realize {
@@ -292,7 +290,7 @@ impl Ui {
     /// draw a layer must fail rather than skip it. Call after refresh; the
     /// callback must not mutate this UI.
     pub fn visit_scenes(&self, mut visit: impl FnMut(Visit<'_>) -> Result) -> Result {
-        let state = self.read()?;
+        let state = self.read();
         // Scroll bars overlay their viewport's entire subtree.
         let mut overlays = state.overlays.iter().peekable();
         let draw = |id, overlay: bool, visit: &mut dyn FnMut(Visit<'_>) -> Result| -> Result {
@@ -371,23 +369,15 @@ impl Ui {
 
     /// Consumes the latest copy, cut or paste request. Password fields never
     /// request a write; cut has already deleted its selection.
-    pub fn take_clipboard(&self) -> Result<Option<ClipboardRequest>> {
-        Ok(self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .clipboard
-            .take())
+    pub fn take_clipboard(&self) -> Option<ClipboardRequest> {
+        self.write().clipboard.take()
     }
 
     /// Consumes pending IME synchronization after refresh and event callbacks.
-    pub fn take_ime_state(&self, max_bytes: usize) -> Result<Option<ImeState>> {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    pub fn take_ime_state(&self, max_bytes: usize) -> Option<ImeState> {
+        let mut state = self.write();
         if !state.ime_dirty {
-            return Ok(None);
+            return None;
         }
         state.ime_dirty = false;
         let reset = std::mem::take(&mut state.ime_reset);
@@ -424,19 +414,16 @@ impl Ui {
                 input_method: state.input_method,
             })
         });
-        Ok(Some(ImeState { reset, request }))
+        Some(ImeState { reset, request })
     }
 
     /// Destroys the whole tree, cancelling focus, capture, callbacks and
     /// animations; every handle becomes dead. A host calls this when its window
     /// closes.
-    pub fn close(&self) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    pub fn close(&self) {
+        let mut state = self.write();
         let root = state.root;
-        state.tree.remove(root)?;
+        state.tree.remove(root).or_fail();
         state.order.clear();
         state.pending.clear();
         state.callbacks.clear();
@@ -452,7 +439,6 @@ impl Ui {
         state.hover = None;
         state.pointer = None;
         state.reveal_target = None;
-        Ok(())
     }
 }
 

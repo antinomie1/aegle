@@ -47,7 +47,7 @@ use aegle_layout::Style;
 use aegle_scene::{Image, SceneBuilder};
 use aegle_theme::Theme;
 use aegle_types::Size;
-use aegle_ui::{Container, Control, Hooks, Node, Result, State};
+use aegle_ui::{Container, Control, HandlerResult, Hooks, Node, Result, State};
 
 pub use button::{Button, ButtonControl};
 pub use canvas::{Canvas, CanvasControl, CanvasEvent, Painter};
@@ -125,7 +125,7 @@ fn pruned(state: &mut State) -> Result {
 pub(crate) fn add(
     container: &Container,
     create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, Style)>,
-) -> Result<Node> {
+) -> Node {
     container.add(|state, theme| {
         state.install(&HOOKS);
         create(state, theme)
@@ -135,169 +135,177 @@ pub(crate) fn add(
 /// Creates the default controls inside a container.
 pub trait Widgets {
     /// Appends a paragraph. Text wraps to available layout width.
-    fn text(&self, text: &str) -> Result<Label>;
+    fn text(&self, text: &str) -> Label;
     /// Appends a neutral button with its visible text as the default accessible name.
-    fn button(&self, text: &str) -> Result<Button>;
+    fn button(&self, text: &str) -> Button;
     /// Appends a single-line editor. Enter produces a submit action.
-    fn text_field(&self, text: &str) -> Result<TextField>;
+    fn text_field(&self, text: &str) -> TextField;
     /// Appends a wrapping multiline editor with a default four-line viewport.
-    fn text_area(&self, text: &str) -> Result<TextField>;
+    fn text_area(&self, text: &str) -> TextField;
     /// Appends a binary checkbox; the text is also its default accessible name.
-    fn check_box(&self, text: &str, checked: bool) -> Result<CheckBox>;
+    fn check_box(&self, text: &str, checked: bool) -> CheckBox;
     /// Appends a binary switch with a visible label.
-    fn switch(&self, text: &str, checked: bool) -> Result<Switch>;
+    fn switch(&self, text: &str, checked: bool) -> Switch;
     /// Appends a radio button. Radio buttons sharing a parent form one group:
     /// checking one, by the user or [`Radio::set_checked`], unchecks the others.
     /// A newly created checked radio button unchecks its existing siblings.
-    fn radio(&self, text: &str, checked: bool) -> Result<Radio>;
+    fn radio(&self, text: &str, checked: bool) -> Radio;
     /// Appends a continuous horizontal slider. Bounds must have a finite positive
     /// span; finite initial values clamp to them. Use set_step for discrete steps.
-    fn slider(&self, min: f64, max: f64, value: f64) -> Result<Slider>;
+    fn slider(&self, min: f64, max: f64, value: f64) -> Slider;
     /// Appends a determinate progress bar with finite increasing bounds.
-    fn progress(&self, min: f64, max: f64, value: f64) -> Result<Progress>;
+    fn progress(&self, min: f64, max: f64, value: f64) -> Progress;
     /// Appends an image whose intrinsic logical size is its pixel size. It keeps
     /// that size on the cross axis instead of stretching; `set_width` and
     /// `set_height` override it.
-    fn image(&self, image: &Image) -> Result<ImageView>;
+    fn image(&self, image: &Image) -> ImageView;
     /// Appends a canvas drawn by `painter` with zero intrinsic size; give it a
     /// size or flex grow. The painter runs during refresh while the UI is
     /// borrowed, so it must not use UI handles. Drawing is not clipped to the bounds.
-    fn canvas(
-        &self,
-        painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
-    ) -> Result<Canvas>;
+    fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) -> Canvas;
     /// Appends a scrollable column. Children retain their state outside the viewport.
     /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
-    fn scroll_view(&self) -> Result<ScrollView>;
+    fn scroll_view(&self) -> ScrollView;
     /// Appends a virtual list of `count` rows of `row_height` logical pixels.
     /// `row` fills an empty row column for an index. It runs during
     /// [`aegle_ui::Ui::refresh`] outside the UI borrow, so it may use any handle.
     /// `count × row_height` must not exceed 16,777,216.
-    fn list_view(
+    fn list_view<R: HandlerResult>(
         &self,
         row_height: f32,
         count: usize,
-        row: impl FnMut(&Container, usize) -> Result + 'static,
-    ) -> Result<ListView>;
+        row: impl FnMut(&Container, usize) -> R + 'static,
+    ) -> ListView;
     /// Appends a virtual list whose rows size to their content. Rows not yet
     /// shown count as `estimate` high; shown rows are measured after layout and
     /// later rows move accordingly. Scrolling back may shift content while
     /// estimates are replaced. `count × estimate` must not exceed 16,777,216.
-    fn variable_list_view(
+    fn variable_list_view<R: HandlerResult>(
         &self,
         estimate: f32,
         count: usize,
-        row: impl FnMut(&Container, usize) -> Result + 'static,
-    ) -> Result<ListView>;
+        row: impl FnMut(&Container, usize) -> R + 'static,
+    ) -> ListView;
     /// Appends a table of `rows` rows of `row_height`, with at least one column.
     /// `fill(cell, row, column)` fills an empty cell column when its row becomes
     /// visible; it runs outside the UI borrow, like [`Widgets::list_view`] rows.
     /// Give the table a height or flex space.
-    fn table(
+    fn table<R: HandlerResult>(
         &self,
         columns: &[TableColumn],
         row_height: f32,
         rows: usize,
-        fill: impl FnMut(&Container, usize, usize) -> Result + 'static,
-    ) -> Result<Table>;
+        fill: impl FnMut(&Container, usize, usize) -> R + 'static,
+    ) -> Table;
     /// Appends a dropdown with at least one choice and a valid selected index.
     /// The choice list opens below it; Up/Down and Enter or a click choose.
-    fn dropdown(&self, items: &[&str], selected: usize) -> Result<Dropdown>;
+    fn dropdown(&self, items: &[&str], selected: usize) -> Dropdown;
     /// Appends a numeric field with finite increasing bounds; the value clamps.
     /// Typing commits on Enter or blur; steppers, arrows and the wheel step it.
-    fn number_field(&self, min: f64, max: f64, value: f64) -> Result<NumberField>;
+    fn number_field(&self, min: f64, max: f64, value: f64) -> NumberField;
     /// Appends a one-pixel divider: vertical in a row, horizontal otherwise.
-    fn separator(&self) -> Result<Separator>;
+    fn separator(&self) -> Separator;
     /// Appends a tab list with one shown page per tab; see [`Tabs::add`].
-    fn tabs(&self) -> Result<Tabs>;
+    fn tabs(&self) -> Tabs;
     /// Appends a menu bar; add its menus with [`MenuBar::menu`].
-    fn menu_bar(&self) -> Result<MenuBar>;
+    fn menu_bar(&self) -> MenuBar;
     /// Appends two panes divided by a draggable, keyboard-adjustable handle:
     /// side by side when horizontal, stacked when vertical. It grows to fill.
-    fn splitter(&self, orientation: Orientation) -> Result<Splitter>;
+    fn splitter(&self, orientation: Orientation) -> Splitter;
 }
 
 impl Widgets for Container {
-    fn text(&self, text: &str) -> Result<Label> {
+    fn text(&self, text: &str) -> Label {
         label::create(self, text)
     }
-    fn button(&self, text: &str) -> Result<Button> {
+    fn button(&self, text: &str) -> Button {
         button::create(self, text)
     }
-    fn text_field(&self, text: &str) -> Result<TextField> {
+    fn text_field(&self, text: &str) -> TextField {
         field::create(self, text, false)
     }
-    fn text_area(&self, text: &str) -> Result<TextField> {
+    fn text_area(&self, text: &str) -> TextField {
         field::create(self, text, true)
     }
-    fn check_box(&self, text: &str, checked: bool) -> Result<CheckBox> {
+    fn check_box(&self, text: &str, checked: bool) -> CheckBox {
         toggle::check_box(self, text, checked)
     }
-    fn switch(&self, text: &str, checked: bool) -> Result<Switch> {
+    fn switch(&self, text: &str, checked: bool) -> Switch {
         toggle::switch(self, text, checked)
     }
-    fn radio(&self, text: &str, checked: bool) -> Result<Radio> {
+    fn radio(&self, text: &str, checked: bool) -> Radio {
         toggle::radio(self, text, checked)
     }
-    fn slider(&self, min: f64, max: f64, value: f64) -> Result<Slider> {
+    fn slider(&self, min: f64, max: f64, value: f64) -> Slider {
         numeric::slider(self, min, max, value)
     }
-    fn progress(&self, min: f64, max: f64, value: f64) -> Result<Progress> {
+    fn progress(&self, min: f64, max: f64, value: f64) -> Progress {
         numeric::progress(self, min, max, value)
     }
-    fn image(&self, image: &Image) -> Result<ImageView> {
+    fn image(&self, image: &Image) -> ImageView {
         visual::image(self, image)
     }
-    fn canvas(
-        &self,
-        painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
-    ) -> Result<Canvas> {
+    fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) -> Canvas {
         canvas::canvas(self, painter)
     }
-    fn scroll_view(&self) -> Result<ScrollView> {
+    fn scroll_view(&self) -> ScrollView {
         scroll_view::create(self)
     }
-    fn list_view(
+    fn list_view<R: HandlerResult>(
         &self,
         row_height: f32,
         count: usize,
-        row: impl FnMut(&Container, usize) -> Result + 'static,
-    ) -> Result<ListView> {
-        list::virtual_list(self, row_height, count, false, Box::new(row))
+        mut row: impl FnMut(&Container, usize) -> R + 'static,
+    ) -> ListView {
+        list::virtual_list(
+            self,
+            row_height,
+            count,
+            false,
+            Box::new(move |c, i| row(c, i).into_result()),
+        )
     }
-    fn variable_list_view(
+    fn variable_list_view<R: HandlerResult>(
         &self,
         estimate: f32,
         count: usize,
-        row: impl FnMut(&Container, usize) -> Result + 'static,
-    ) -> Result<ListView> {
-        list::virtual_list(self, estimate, count, true, Box::new(row))
+        mut row: impl FnMut(&Container, usize) -> R + 'static,
+    ) -> ListView {
+        list::virtual_list(
+            self,
+            estimate,
+            count,
+            true,
+            Box::new(move |c, i| row(c, i).into_result()),
+        )
     }
-    fn table(
+    fn table<R: HandlerResult>(
         &self,
         columns: &[TableColumn],
         row_height: f32,
         rows: usize,
-        fill: impl FnMut(&Container, usize, usize) -> Result + 'static,
-    ) -> Result<Table> {
-        table::table(self, columns, row_height, rows, fill)
+        mut fill: impl FnMut(&Container, usize, usize) -> R + 'static,
+    ) -> Table {
+        table::table(self, columns, row_height, rows, move |c, r, k| {
+            fill(c, r, k).into_result()
+        })
     }
-    fn dropdown(&self, items: &[&str], selected: usize) -> Result<Dropdown> {
+    fn dropdown(&self, items: &[&str], selected: usize) -> Dropdown {
         dropdown::dropdown(self, items, selected)
     }
-    fn number_field(&self, min: f64, max: f64, value: f64) -> Result<NumberField> {
+    fn number_field(&self, min: f64, max: f64, value: f64) -> NumberField {
         number_field::create(self, min, max, value)
     }
-    fn separator(&self) -> Result<Separator> {
+    fn separator(&self) -> Separator {
         separator::separator(self)
     }
-    fn tabs(&self) -> Result<Tabs> {
+    fn tabs(&self) -> Tabs {
         tabs::tabs(self)
     }
-    fn menu_bar(&self) -> Result<MenuBar> {
+    fn menu_bar(&self) -> MenuBar {
         menu::menu_bar(self)
     }
-    fn splitter(&self, orientation: Orientation) -> Result<Splitter> {
+    fn splitter(&self, orientation: Orientation) -> Splitter {
         separator::splitter(self, orientation)
     }
 }

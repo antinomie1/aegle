@@ -15,14 +15,14 @@ impl Node {
     /// its kind resolves to in this subtree. Its result in the current state is
     /// validated first; later states are validated during refresh. Local
     /// style keeps precedence over every skin.
-    pub fn set_skin(&self, skin: Option<Skin>) -> Result {
+    pub fn set_skin(&self, skin: Option<Skin>) {
         self.change(|state, id| state.set_skin_rule(id, None, skin))
     }
     /// Skins every control of `kind` in this subtree, this one included, like
     /// a local theme: a nearer subtree's skin for the kind wins, and a
     /// control's own [`Self::set_skin`] wins over both. `None` removes it.
     /// Controls created or moved into the subtree follow it.
-    pub fn set_kind_skin(&self, kind: &'static ControlKind, skin: Option<Skin>) -> Result {
+    pub fn set_kind_skin(&self, kind: &'static ControlKind, skin: Option<Skin>) {
         self.change(|state, id| state.set_skin_rule(id, Some(kind), skin))
     }
 }

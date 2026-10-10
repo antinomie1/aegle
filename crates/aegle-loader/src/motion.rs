@@ -1,36 +1,29 @@
 //! Presented geometry and transition timing properties.
 
 use aegle_markup::{PropertyName, Value};
-use aegle_ui::{Node, Point, Result, Transform};
+use aegle_ui::{Node, Point, Transform};
 
 /// Applies an offset, scale or rotation, literal or bound, keeping the other
 /// parts of the node's target geometry; `None` for other properties.
-pub(crate) fn geometry(node: &Node, name: PropertyName, value: &Value) -> Option<Result> {
+pub(crate) fn geometry(node: &Node, name: PropertyName, value: &Value) -> Option<()> {
     let (Value::Length(value) | Value::Number(value)) = *value else {
         return None;
     };
-    let result = match name {
-        PropertyName::OffsetX => node
-            .offset()
-            .and_then(|offset| node.set_offset(Point::new(value, offset.y))),
-        PropertyName::OffsetY => node
-            .offset()
-            .and_then(|offset| node.set_offset(Point::new(offset.x, value))),
-        PropertyName::Scale => node.transform().and_then(|transform| {
-            node.set_transform(Transform {
-                scale: value,
-                ..transform
-            })
+    let (offset, transform) = (node.offset(), node.transform());
+    match name {
+        PropertyName::OffsetX => node.set_offset(Point::new(value, offset.y)),
+        PropertyName::OffsetY => node.set_offset(Point::new(offset.x, value)),
+        PropertyName::Scale => node.set_transform(Transform {
+            scale: value,
+            ..transform
         }),
-        PropertyName::Rotation => node.transform().and_then(|transform| {
-            node.set_transform(Transform {
-                rotation: value.to_radians(),
-                ..transform
-            })
+        PropertyName::Rotation => node.set_transform(Transform {
+            rotation: value.to_radians(),
+            ..transform
         }),
         _ => return None,
-    };
-    Some(result)
+    }
+    Some(())
 }
 
 /// A checked timing: a duration, or `[duration, easing]`; ease-out by default.
@@ -60,13 +53,13 @@ fn timing(value: &Value) -> aegle_ui::Transition {
 /// Installs a node's literal node-wide `transition`, then each per-property
 /// timing over it; other properties are ignored.
 #[cfg(feature = "motion")]
-pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) -> Result {
+pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) {
     use aegle_ui::TransitionProperty as Property;
     if let Some((_, value)) = properties
         .iter()
         .find(|(name, _)| *name == PropertyName::Transition)
     {
-        node.set_transition(timing(value))?;
+        node.set_transition(timing(value));
     }
     for (name, value) in properties {
         let property = match name {
@@ -78,14 +71,13 @@ pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) -> Result
             PropertyName::OpacityTransition => Property::Opacity,
             _ => continue,
         };
-        node.set_property_transition(property, timing(value))?;
+        node.set_property_transition(property, timing(value));
     }
-    Ok(())
 }
 
 /// Installs timing properties; they require the `motion` feature.
 #[cfg(not(feature = "motion"))]
-pub fn transitions(_: &Node, properties: &[(PropertyName, &Value)]) -> Result {
+pub fn transitions(_: &Node, properties: &[(PropertyName, &Value)]) {
     use PropertyName::*;
     let timed = properties.iter().any(|(name, _)| {
         matches!(
@@ -99,8 +91,5 @@ pub fn transitions(_: &Node, properties: &[(PropertyName, &Value)]) -> Result {
                 | OpacityTransition
         )
     });
-    if timed {
-        return Err("markup transitions require the motion feature".into());
-    }
-    Ok(())
+    assert!(!timed, "markup transitions require the motion feature");
 }

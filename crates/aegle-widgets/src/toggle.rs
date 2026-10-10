@@ -7,7 +7,7 @@ use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
-    Container, Control, Node, Result, State,
+    Container, Control, HandlerResult, Node, Result, State,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
@@ -30,31 +30,31 @@ handle! {
 macro_rules! toggles {
     ($($ty:ident),*) => { $(impl $ty {
         /// Returns the retained binary value.
-        pub fn is_checked(&self) -> Result<bool> {
+        pub fn is_checked(&self) -> bool {
             self.read(|toggle| toggle.control.is_checked())
         }
         /// Sets the value without invoking the user-change callback. A check
         /// box leaves the mixed state; checking a radio button unchecks its siblings.
-        pub fn set_checked(&self, checked: bool) -> Result {
+        pub fn set_checked(&self, checked: bool) {
             self.change(|state, id| set_checked(state, id, checked))
         }
         /// Toggles through the same enabled/visible behavior as user activation.
-        pub fn toggle(&self) -> Result {
+        pub fn toggle(&self) {
             self.change(|state, id| state.dispatch(id, Input::Activate))
         }
         /// Replaces the visible label and its default accessible name.
-        pub fn set_text(&self, text: &str) -> Result {
+        pub fn set_text(&self, text: &str) {
             self.change(|state, id| state.set_text(id, text))
         }
         /// Copies the visible label.
-        pub fn text(&self) -> Result<String> {
+        pub fn text(&self) -> String {
             self.change(|state, id| state.text(id))
         }
         /// Adds a user-change handler. Handlers run in registration order
         /// outside tree borrows and can query the latest value; programmatic
         /// setters do not invoke them.
-        pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
-            self.change(|state, id| state.on_action(id, move |node| callback(Self(node))))
+        pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Self) -> R + 'static) {
+            self.on_action(move |node| callback(Self(node)).into_result())
         }
     })* };
 }
@@ -62,12 +62,12 @@ toggles!(CheckBox, Switch, Radio);
 
 impl CheckBox {
     /// Whether the box shows the mixed (partially checked) state.
-    pub fn is_mixed(&self) -> Result<bool> {
+    pub fn is_mixed(&self) -> bool {
         self.read(|toggle| toggle.mixed)
     }
     /// Shows or leaves the mixed state without invoking the change handler.
     /// A user change from the mixed state checks the box.
-    pub fn set_mixed(&self, mixed: bool) -> Result {
+    pub fn set_mixed(&self, mixed: bool) {
         self.update(|toggle| toggle.mixed = mixed)
     }
 }
@@ -307,7 +307,7 @@ fn control_style(height: f32) -> Style {
     }
 }
 
-fn create(container: &Container, text: &str, checked: bool, mark: Mark) -> Result<Node> {
+fn create(container: &Container, text: &str, checked: bool, mark: Mark) -> Node {
     crate::add(container, |state, theme| {
         let text = state
             .fonts
@@ -325,18 +325,18 @@ fn create(container: &Container, text: &str, checked: bool, mark: Mark) -> Resul
     })
 }
 
-pub(crate) fn check_box(container: &Container, text: &str, checked: bool) -> Result<CheckBox> {
-    create(container, text, checked, Mark::Check).map(CheckBox)
+pub(crate) fn check_box(container: &Container, text: &str, checked: bool) -> CheckBox {
+    CheckBox(create(container, text, checked, Mark::Check))
 }
 
-pub(crate) fn switch(container: &Container, text: &str, checked: bool) -> Result<Switch> {
-    create(container, text, checked, Mark::Switch).map(Switch)
+pub(crate) fn switch(container: &Container, text: &str, checked: bool) -> Switch {
+    Switch(create(container, text, checked, Mark::Switch))
 }
 
-pub(crate) fn radio(container: &Container, text: &str, checked: bool) -> Result<Radio> {
-    let radio = create(container, text, checked, Mark::Radio)?;
+pub(crate) fn radio(container: &Container, text: &str, checked: bool) -> Radio {
+    let radio = create(container, text, checked, Mark::Radio);
     if checked {
-        radio.change(select_radio)?;
+        radio.change(select_radio);
     }
-    Ok(Radio(radio))
+    Radio(radio)
 }

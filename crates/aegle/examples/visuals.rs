@@ -9,12 +9,12 @@ use aegle::{
 fn main() -> Result<()> {
     let app = App::new()?;
     let window = app.window("Aegle — images, paths and lists")?;
-    window.set_padding(16.0)?;
-    let row = window.row()?;
+    window.set_padding(16.0);
+    let row = window.row();
     let pixels = (0..48 * 48)
         .flat_map(|i| [(i % 48 * 5) as u8, (i / 48 * 5) as u8, 160, 255])
         .collect();
-    row.image(&Image::new(48, 48, pixels)?)?;
+    row.image(&Image::new(48, 48, pixels)?);
     let mut star = PathBuilder::new();
     star.move_to(Point::new(0.0, -20.0));
     for i in 1..5 {
@@ -33,17 +33,16 @@ fn main() -> Result<()> {
         builder.stroke_path(&star, Color::rgb(30, 30, 30), Stroke::new(1.5))?;
         builder.pop()?;
         Ok(())
-    })?;
-    canvas.set_width(Some(48.0))?;
-    canvas.set_height(Some(48.0))?;
-    let rotate = row.button("Rotate")?;
+    });
+    canvas.set_width(Some(48.0));
+    canvas.set_height(Some(48.0));
+    let rotate = row.button("Rotate");
     rotate.on_click(move |_| {
         turn.set(turn.get() + 0.3);
         canvas.invalidate()
-    })?;
+    });
     window.list_view(28.0, 10_000, |row, index| {
-        row.text(&format!("Row {index}"))?;
-        Ok(())
-    })?;
+        row.text(&format!("Row {index}"));
+    });
     app.run()
 }

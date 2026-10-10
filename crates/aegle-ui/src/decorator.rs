@@ -38,7 +38,7 @@ pub trait Decorator: Any {
 impl Node {
     /// Adds a decorator after any this control already has; it lives as
     /// long as the control.
-    pub fn decorate(&self, decorator: impl Decorator) -> Result {
+    pub fn decorate(&self, decorator: impl Decorator) {
         self.change(|state, id| {
             state
                 .decorators

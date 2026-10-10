@@ -1,4 +1,5 @@
-use crate::{Node, Result, Theme, ThemeOverride, Ui, UiError, state::State};
+use crate::OrFail;
+use crate::{Node, Result, Theme, ThemeOverride, Ui, state::State};
 use aegle_core::{Dirty, NodeId};
 use std::rc::Rc;
 
@@ -6,22 +7,19 @@ impl Ui {
     /// Replaces the theme while preserving editor text, focus, selection and preedit.
     /// Palette-only changes do not reshape text or recompute layout. Local layout
     /// setters and subtrees with a local theme remain authoritative. If a bound
-    /// property rejects its new value, the old theme is restored and the error returned.
-    pub fn set_theme(&self, theme: Theme) -> Result {
-        theme.validate()?;
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    /// property rejects its new value, the old theme is restored and this panics.
+    pub fn set_theme(&self, theme: Theme) {
+        theme.validate().or_fail();
+        let mut state = self.write();
         let old = state.theme;
         if old == theme {
-            return Ok(());
+            return;
         }
         let outcome = state.replace_theme(&old, &theme);
         if outcome.is_err() {
-            state.replace_theme(&theme, &old)?;
+            state.replace_theme(&theme, &old).or_fail();
         }
-        outcome
+        outcome.or_fail()
     }
 }
 
@@ -30,11 +28,11 @@ impl Node {
     /// `None` returns them to the parent's. A nested local theme wins over an
     /// ancestor's; local layout, font size and visual overrides still win over both.
     /// Created and reparented controls inherit their new parent's resolved theme.
-    /// Fails without a change if a bound property rejects its new value.
-    pub fn set_theme(&self, theme: impl Into<Option<Theme>>) -> Result {
+    /// Panics without a change if a bound property rejects its new value.
+    pub fn set_theme(&self, theme: impl Into<Option<Theme>>) {
         let theme = theme.into();
         if let Some(theme) = &theme {
-            theme.validate()?;
+            theme.validate().or_fail();
         }
         self.change(|state, id| state.set_local_theme(id, None, theme.map(Rc::new)))
     }
@@ -42,7 +40,7 @@ impl Node {
     /// snapshot from [`Self::set_theme`], it follows later changes to the parent
     /// or UI theme. `None` removes the override. Nested overrides and local
     /// themes work as for `set_theme`; font size and layout overrides still win.
-    pub fn set_theme_override(&self, theme: impl Into<Option<ThemeOverride>>) -> Result {
+    pub fn set_theme_override(&self, theme: impl Into<Option<ThemeOverride>>) {
         let theme = theme.into();
         self.change(|state, id| {
             if let Some(theme) = theme {
@@ -57,7 +55,7 @@ impl Node {
     }
     /// The resolved theme: this control's local theme, the nearest ancestor's,
     /// or the UI theme.
-    pub fn theme(&self) -> Result<Theme> {
+    pub fn theme(&self) -> Theme {
         self.change(|state, id| Ok(*state.theme_of(id)))
     }
 }

@@ -12,7 +12,7 @@ use std::{cell::RefCell, f32::consts::FRAC_PI_2, rc::Rc, time::Duration};
 
 fn ui() -> Result<Ui> {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.resize(Size::new(200.0, 100.0))?;
+    ui.resize(Size::new(200.0, 100.0));
     Ok(ui)
 }
 
@@ -25,19 +25,19 @@ fn check(ui: &Ui, panel: &Node, zoom: &dyn Fn(f32) -> Result) -> Result {
         (TransitionProperty::Rotation, timing(50, Easing::EaseOut)),
     ];
     for (property, timing) in timings {
-        assert_eq!(panel.property_transition(property)?, timing, "{property:?}");
+        assert_eq!(panel.property_transition(property), timing, "{property:?}");
     }
     ui.refresh()?;
-    assert_eq!(panel.offset()?, Point::new(10.0, 4.0));
-    let transform = panel.transform()?;
+    assert_eq!(panel.offset(), Point::new(10.0, 4.0));
+    let transform = panel.transform();
     assert_eq!(transform.scale, 1.0);
     assert!((transform.rotation - FRAC_PI_2).abs() < 1e-6);
     zoom(2.0)?;
     ui.refresh()?;
-    assert_eq!(panel.transform()?.scale, 2.0);
-    assert!(panel.is_animating()?);
+    assert_eq!(panel.transform().scale, 2.0);
+    assert!(panel.is_animating());
     ui.advance_animations(Duration::from_millis(100))?;
-    assert!(!panel.is_animating()?);
+    assert!(!panel.is_animating());
     Ok(())
 }
 

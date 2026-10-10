@@ -60,11 +60,11 @@ pub trait NodePopup {
     /// Creates a hidden, empty popup anchored to this control. Add content
     /// through the popup's container methods, then [`Popup::show`] it. It uses
     /// the anchor's theme and the theme surface with a border.
-    fn popup(&self) -> Result<Popup>;
+    fn popup(&self) -> Popup;
 }
 
 impl NodePopup for Node {
-    fn popup(&self) -> Result<Popup> {
+    fn popup(&self) -> Popup {
         let id = self.change(|state, anchor| {
             state.install(&crate::HOOKS);
             let theme = *state.theme_of(anchor);
@@ -97,18 +97,18 @@ impl NodePopup for Node {
                 at: None,
             });
             Ok(id)
-        })?;
-        Ok(Popup(Container(Node {
+        });
+        Popup(Container(Node {
             state: self.state.clone(),
             id,
-        })))
+        }))
     }
 }
 
 impl Popup {
     /// Shows the popup above all controls, at least as wide as its anchor,
     /// and focuses its first enabled control.
-    pub fn show(&self) -> Result {
+    pub fn show(&self) {
         self.change(|state, id| {
             entry(state, id).at = None;
             show_popup(state, id, true)
@@ -118,9 +118,9 @@ impl Popup {
     /// moved or flipped to fit the window, and focuses its first enabled
     /// control; a shown popup moves there. Used for context menus: a press
     /// on the anchor then hides it too.
-    pub fn show_at(&self, at: Point) -> Result {
+    pub fn show_at(&self, at: Point) {
         if !(at.x.is_finite() && at.y.is_finite()) {
-            return Err(aegle_ui::UiError::InvalidValue.into());
+            panic!("{}", aegle_ui::UiError::InvalidValue);
         }
         self.change(|state, id| {
             entry(state, id).at = Some(at);
@@ -130,20 +130,20 @@ impl Popup {
     }
     /// Hides the popup and every popup anchored inside it, returning focus
     /// to where it was when shown.
-    pub fn hide(&self) -> Result {
+    pub fn hide(&self) {
         self.change(hide_popup)
     }
     /// The control the popup is anchored to: for a submenu its item, for a
     /// menu bar's menu its entry.
-    pub fn anchor(&self) -> Result<Node> {
-        self.change(|state, id| Ok(entry(state, id).anchor))
-            .map(|id| Node {
-                state: self.state.clone(),
-                id,
-            })
+    pub fn anchor(&self) -> Node {
+        let id = self.change(|state, id| Ok(entry(state, id).anchor));
+        Node {
+            state: self.state.clone(),
+            id,
+        }
     }
     /// Whether the popup is currently shown.
-    pub fn is_shown(&self) -> Result<bool> {
+    pub fn is_shown(&self) -> bool {
         self.change(|state, id| {
             Ok(popups(state)
                 .entries

@@ -98,13 +98,12 @@ handle! {
 }
 
 impl MeterHandle {
-    fn new(parent: &Container, value: u8) -> Result<Self> {
-        parent
-            .add(|_, theme| Ok((Box::new(Meter { value }), container_style(theme, false))))
-            .map(Self)
+    fn new(parent: &Container, value: u8) -> Self {
+        Self(parent.add(|_, theme| Ok((Box::new(Meter { value }), container_style(theme, false)))))
     }
     fn set_value(&self, value: u8) -> Result {
-        self.update(|meter| meter.value = value)
+        self.update(|meter| meter.value = value);
+        Ok(())
     }
 }
 
@@ -141,20 +140,20 @@ fn main() -> Result {
         let (built, time, allocations) = counted(|| {
             let ui = Ui::with_fonts(fonts.clone(), Theme::light())?;
             // Every meter takes the inherited skin of its kind.
-            ui.root().set_kind_skin(&METER, Some(meter_skin))?;
-            let list = ui.root().scroll_view()?;
+            ui.root().set_kind_skin(&METER, Some(meter_skin));
+            let list = ui.root().scroll_view();
             let (mut meters, mut buttons) = (Vec::new(), Vec::new());
             for row in 0..125 {
-                let line = list.row()?;
-                line.text(&format!("行 {row}"))?;
-                buttons.push(line.button("Open")?);
-                line.check_box("Done", row % 2 == 0)?;
-                line.slider(0.0, 1.0, 0.5)?;
+                let line = list.row();
+                line.text(&format!("行 {row}"));
+                buttons.push(line.button("Open"));
+                line.check_box("Done", row % 2 == 0);
+                line.slider(0.0, 1.0, 0.5);
                 for value in 0..4 {
-                    meters.push(MeterHandle::new(&line, value)?);
+                    meters.push(MeterHandle::new(&line, value));
                 }
             }
-            ui.resize(Size::new(1280.0, 800.0))?;
+            ui.resize(Size::new(1280.0, 800.0));
             frame(&ui)?;
             Ok((ui, meters, buttons))
         })?;
@@ -191,7 +190,7 @@ fn main() -> Result {
     let pointer = PointerId(1);
     let mut targets = Vec::new();
     for button in &buttons[..8] {
-        let bounds = button.bounds()?;
+        let bounds = button.bounds();
         targets.push(Point::new(bounds.origin.x + 4.0, bounds.origin.y + 4.0));
     }
     let (_, time, allocations) = counted(|| {
@@ -210,10 +209,10 @@ fn main() -> Result {
 
     // A drag over the scene: the root is the drop target, found from the
     // control under the point.
-    ui.root().on_drop(|_, _| Ok(()))?;
+    ui.root().on_drop(|_, _| Ok(()));
     let (_, time, allocations) = counted(|| {
         for run in 0..RUNS {
-            ui.drag_motion(targets[run as usize % targets.len()])?;
+            ui.drag_motion(targets[run as usize % targets.len()]);
             ui.dispatch_callbacks()?;
         }
         Ok(())

@@ -7,7 +7,7 @@ use crate::platform::{Wayland as Platform, WlSeat};
 use aegle_render_software::Renderer;
 #[cfg(feature = "motion")]
 use aegle_ui::Transition;
-use aegle_ui::{Container, Modifiers, Result, Size, TextSystem, Theme, Ui, UiError};
+use aegle_ui::{Container, Modifiers, OrFail, Result, Size, TextSystem, Theme, Ui, UiError};
 #[cfg(feature = "motion")]
 use std::time::Instant;
 use std::{
@@ -313,11 +313,11 @@ impl App {
         #[cfg(feature = "motion")]
         {
             ui.advance_animations(runtime.clock.elapsed())?;
-            ui.set_default_transition(runtime.options.transition)?;
-            ui.set_reduced_motion(runtime.reduced_motion())?;
+            ui.set_default_transition(runtime.options.transition);
+            ui.set_reduced_motion(runtime.reduced_motion());
         }
-        ui.set_double_click(runtime.double_click(), 4.0)?;
-        ui.resize(Size::new(options.width as f32, options.height as f32))?;
+        ui.set_double_click(runtime.double_click(), 4.0);
+        ui.resize(Size::new(options.width as f32, options.height as f32));
         let app_id = runtime.options.app_id.clone();
         let id = runtime
             .backend
@@ -418,7 +418,9 @@ impl App {
 }
 
 impl Window {
-    /// Closes this window immediately; subsequent control operations fail.
+    /// Closes this window immediately and removes its controls; their
+    /// handles then panic like those of removed controls. Fails if the
+    /// window was already closed or the platform fails to destroy it.
     pub fn close(&self) -> Result<()> {
         let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
         let mut runtime = runtime.borrow_mut();
@@ -429,18 +431,13 @@ impl Window {
     /// This window's engine, for what concerns the whole window rather than
     /// one control: key handlers, reduced motion, tokens and default
     /// transitions. Controls keep using their handles; the window's root is
-    /// this handle's [`Container`].
-    pub fn ui(&self) -> Result<Rc<Ui>> {
-        let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
-        let ui = runtime
-            .borrow()
-            .windows
-            .iter()
-            .find(|entry| entry.id == self.id)
-            .ok_or(UiError::DeadHandle)?
-            .ui
-            .clone();
-        Ok(ui)
+    /// this handle's [`Container`]. Panics once the window is closed.
+    pub fn ui(&self) -> Rc<Ui> {
+        let runtime = self.runtime.upgrade();
+        let runtime = runtime.ok_or(UiError::DeadHandle).or_fail();
+        let runtime = runtime.borrow();
+        let entry = runtime.windows.iter().find(|entry| entry.id == self.id);
+        entry.ok_or(UiError::DeadHandle).or_fail().ui.clone()
     }
 }
 
@@ -458,7 +455,7 @@ impl Runtime {
             .iter()
             .position(|entry| entry.id == id)
             .ok_or(UiError::DeadHandle)?;
-        self.windows[index].ui.close()?;
+        self.windows[index].ui.close();
         // Destroy the GPU surface and swapchain while the platform still owns
         // its window, then remove the window and queued native events.
         drop(self.windows.remove(index));

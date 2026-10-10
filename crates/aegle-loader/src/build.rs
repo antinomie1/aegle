@@ -133,7 +133,7 @@ impl<'r> Region<'r> {
                 Child::If(..) | Child::For(..) => {
                     let Made::Block(wrapper) = self.made(|region| {
                         // A transparent group keeps the block in the parent's layout.
-                        let wrapper = parent.contents()?;
+                        let wrapper = parent.contents();
                         if top {
                             region.created.push(Handle::group(wrapper.clone()));
                         }
@@ -198,7 +198,7 @@ impl<'r> Region<'r> {
                     _ => None,
                 })
                 .collect();
-            let handle = glue.create(parent, &args)?;
+            let handle = glue.create(parent, &args);
             if top {
                 region.created.push(handle.clone());
             }
@@ -229,12 +229,12 @@ impl<'r> Region<'r> {
                     })
                     .collect();
                 if !timed.is_empty() {
-                    crate::motion::transitions(handle.node(), &timed)?;
+                    crate::motion::transitions(handle.node(), &timed);
                 }
                 for (event, steps) in &element.events {
                     let (steps, env, source) = (steps.clone(), env.clone(), handle.clone());
                     let handler = Box::new(move || run(&steps, &env, &source));
-                    handle.glue().listen(handle, *event, handler)?;
+                    handle.glue().listen(handle, *event, handler);
                 }
             }
         }
@@ -301,7 +301,7 @@ fn properties(element: &Element, handle: &Handle, env: &Env, block: &mut Block) 
                 if !property.new {
                     handle
                         .glue()
-                        .set(handle, *index, Arg::literal(property.ty, value))?;
+                        .set(handle, *index, Arg::literal(property.ty, value));
                 }
             }
             (_, Bound::Literal(_)) => {}
@@ -317,14 +317,14 @@ fn binding(handle: Handle, prop: Prop, expr: Rc<Expr>, env: Env) -> Result<Rc<Ef
     let mut last = None;
     Effect::new(move |effect| {
         // A control removed directly by the application no longer updates.
-        if !handle.node().is_alive()? {
+        if !handle.node().is_alive() {
             return Ok(());
         }
         let value = eval(&expr, &env, Some(effect), None).map_err(|e| env.locate(e))?;
         if last.as_ref() != Some(&value) {
             match prop {
                 Prop::Node(name) => apply(handle.node(), name, &node_value(&value))?,
-                Prop::Element(index) => handle.glue().set(&handle, index, Arg::data(&value))?,
+                Prop::Element(index) => handle.glue().set(&handle, index, Arg::data(&value)),
             }
             last = Some(value);
         }
@@ -343,12 +343,11 @@ fn node_value(value: &Data) -> Value {
 }
 
 /// Removes built controls and drops the effects that updated them.
-fn clear(handles: &mut Vec<Handle>, block: &mut Block) -> Result {
+fn clear(handles: &mut Vec<Handle>, block: &mut Block) {
     for handle in handles.drain(..) {
-        handle.node().remove()?;
+        handle.node().remove();
     }
     block.clear();
-    Ok(())
 }
 
 fn conditional(
@@ -362,7 +361,7 @@ fn conditional(
     let env = env.clone();
     let (mut shown, mut handles, mut owned) = (None, Vec::new(), Block::new());
     block.push(Effect::new(move |effect| {
-        if !wrapper.is_alive()? {
+        if !wrapper.is_alive() {
             return Ok(());
         }
         let value = truth(eval(&condition, &env, Some(effect), None).map_err(|e| env.locate(e))?);
@@ -370,10 +369,10 @@ fn conditional(
             return Ok(());
         }
         shown = None;
-        clear(&mut handles, &mut owned)?;
+        clear(&mut handles, &mut owned);
         let items = if value { &then } else { &otherwise };
         children(items, &wrapper, &env, &mut owned, &mut handles)?;
-        wrapper.set_visible(!handles.is_empty())?;
+        wrapper.set_visible(!handles.is_empty());
         shown = Some(value);
         Ok(())
     })?);
@@ -414,7 +413,7 @@ fn repeat(
     let env = env.clone();
     let mut rows: Vec<Row> = Vec::new();
     block.push(Effect::new(move |effect| {
-        if !wrapper.is_alive()? {
+        if !wrapper.is_alive() {
             return Ok(());
         }
         let Data::List(items) = eval(&list, &env, Some(effect), None).map_err(|e| env.locate(e))?
@@ -459,7 +458,7 @@ fn repeat(
                     rows.push(retained);
                     continue;
                 }
-                clear(&mut retained.handles, &mut retained.block)?;
+                clear(&mut retained.handles, &mut retained.block);
             }
             built = true;
             let mut row = Row {
@@ -478,14 +477,15 @@ fn repeat(
             }
         }
         for (_, (_, mut row)) in old {
-            clear(&mut row.handles, &mut row.block)?;
+            clear(&mut row.handles, &mut row.block);
         }
         if moved {
             for handle in rows.iter().flat_map(|row| &row.handles) {
-                handle.node().reparent(&wrapper)?;
+                handle.node().reparent(&wrapper);
             }
         }
-        wrapper.set_visible(!rows.is_empty())
+        wrapper.set_visible(!rows.is_empty());
+        Ok(())
     })?);
     Ok(())
 }

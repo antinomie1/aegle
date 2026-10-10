@@ -11,8 +11,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use aegle_ui::{
-    Accepts, Appearance, Container, Control, ControlKind, Key, KeyInput, Modifiers, Point,
-    PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui, container_style,
+    Accepts, Appearance, Container, Control, ControlKind, HandlerResult, Key, KeyInput, Modifiers,
+    Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui, container_style,
     control::{Action, Frame, Input, InputCx, MeasureCx, Outcome, PaintCx},
     handle,
     scene::{Rect, RoundedRect},
@@ -174,42 +174,40 @@ handle! {
 
 impl Rating {
     /// Appends a rating to `parent`.
-    fn new(parent: &Container, value: u8) -> Result<Self> {
+    fn new(parent: &Container, value: u8) -> Self {
         let value = value.clamp(1, STEPS);
         let control = RatingControl { value, hover: None };
-        let node = parent.add(|_, theme| Ok((Box::new(control), container_style(theme, false))))?;
-        Ok(Self(node))
+        Self(parent.add(|_, theme| Ok((Box::new(control), container_style(theme, false)))))
     }
-    fn value(&self) -> Result<u8> {
+    fn value(&self) -> u8 {
         self.read(|rating| rating.value)
     }
     /// Sets the value without calling the change handlers.
-    fn set_value(&self, value: u8) -> Result {
-        self.update(|rating| rating.value = value.clamp(1, STEPS))
+    fn set_value(&self, value: u8) {
+        self.update(|rating| rating.value = value.clamp(1, STEPS));
     }
     /// Adds a handler run after the user changes the value.
-    fn on_change(&self, mut callback: impl FnMut(Rating) -> Result + 'static) -> Result {
-        self.change(|state, id| state.on_action(id, move |node| callback(Rating(node))))
+    fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Rating) -> R + 'static) {
+        self.on_action(move |node| callback(Rating(node)).into_result())
     }
 }
 
 fn main() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    let rating = Rating::new(&ui.root(), 3)?;
-    rating.set_indicator_color(aegle_ui::Color::rgb(230, 160, 0))?;
+    let rating = Rating::new(&ui.root(), 3);
+    rating.set_indicator_color(aegle_ui::Color::rgb(230, 160, 0));
     let log = Rc::new(RefCell::new(Vec::new()));
     let seen = log.clone();
     rating.on_change(move |rating| {
-        seen.borrow_mut().push(rating.value()?);
-        Ok(())
-    })?;
+        seen.borrow_mut().push(rating.value());
+    });
 
-    ui.resize(Size::new(200.0, 60.0))?;
+    ui.resize(Size::new(200.0, 60.0));
     ui.refresh()?;
     // A press on the fifth cell focuses the control and chooses 5. Like a
     // real host, run the callbacks after each input batch: handlers read the
     // value current when they run.
-    let bounds = rating.bounds()?;
+    let bounds = rating.bounds();
     let fifth = Point::new(
         bounds.origin.x + bounds.size.width - 4.0,
         bounds.origin.y + 6.0,
@@ -230,13 +228,13 @@ fn main() -> Result {
         ui.key(input)?;
         ui.dispatch_callbacks()?;
     }
-    rating.set_value(4)?;
+    rating.set_value(4);
     ui.refresh()?;
     println!(
         "changes {:?}, now {}, focused {}",
         log.borrow(),
-        rating.value()?,
-        rating.visual_state()?.focused
+        rating.value(),
+        rating.visual_state().focused
     );
     Ok(())
 }

@@ -58,16 +58,16 @@ impl Def {
         });
         let fields = self.fields.iter().enumerate().map(|(index, (_, ty, get))| {
             let data = match ty {
-                ValueType::Bool => quote! { Bool(#p::get(handle, #get)?) },
-                ValueType::Int(..) => quote! { Int(#p::get(handle, #get)?) },
+                ValueType::Bool => quote! { Bool(#p::get(handle, #get)) },
+                ValueType::Int(..) => quote! { Int(#p::get(handle, #get)) },
                 ValueType::String | ValueType::Line => quote! {
                     String(::std::convert::Into::into(
-                        #p::get::<_, ::std::string::String>(handle, #get)?,
+                        #p::get::<_, ::std::string::String>(handle, #get),
                     ))
                 },
-                _ => quote! { Float(#p::get::<_, f64>(handle, #get)? as f32) },
+                _ => quote! { Float(#p::get::<_, f64>(handle, #get) as f32) },
             };
-            quote! { #index => ::core::result::Result::Ok(#l::Data::#data), }
+            quote! { #index => #l::Data::#data, }
         });
         let place = match &self.place {
             Some(place) => quote! { #p::place(handle, child, #place) },
@@ -83,7 +83,7 @@ impl Def {
                 fn create(
                     #parent: &#p::Container,
                     args: &[(usize, #l::Arg<'_>)],
-                ) -> #p::Result<#handle> {
+                ) -> #handle {
                     #[allow(unused)]
                     let __find = |index: usize| {
                         args.iter().find(|(i, _)| *i == index).map(|(_, a)| *a)
@@ -95,14 +95,14 @@ impl Def {
                     handle
                 }
                 #[allow(unused_variables)]
-                fn set(handle: &#handle, property: usize, value: #l::Arg<'_>) -> #p::Result {
+                fn set(handle: &#handle, property: usize, value: #l::Arg<'_>) {
                     match property {
                         #(#setters)*
                         _ => ::core::unreachable!("checked element property"),
                     }
                 }
                 #[allow(unused_variables)]
-                fn get(handle: &#handle, field: usize) -> #p::Result<#l::Data> {
+                fn get(handle: &#handle, field: usize) -> #l::Data {
                     match field {
                         #(#fields)*
                         _ => ::core::unreachable!("checked element field"),
@@ -113,7 +113,7 @@ impl Def {
                     handle: &#handle,
                     event: usize,
                     run: ::std::boxed::Box<dyn Fn() -> #p::Result>,
-                ) -> #p::Result {
+                ) {
                     match event {
                         #(#events)*
                         _ => ::core::unreachable!("checked element event"),

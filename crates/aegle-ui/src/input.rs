@@ -17,10 +17,7 @@ use aegle_types::{Point, PointerButton};
 impl Ui {
     /// Updates native window activation. Losing activation cancels capture and IME.
     pub fn window_focus(&self, focused: bool) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         if focused && state.focus.current(&state.tree).is_some() {
             return Ok(());
         }
@@ -49,10 +46,7 @@ impl Ui {
         self.key_at(key, std::time::Instant::now())
     }
     pub(crate) fn dispatch_key(&self, key: KeyInput<'_>) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         if key.pressed {
             state.show_focus(true)?;
             for hook in state.hooks.clone() {
@@ -105,10 +99,7 @@ impl Ui {
         if !position.x.is_finite() || !position.y.is_finite() {
             return Err(UiError::InvalidValue.into());
         }
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         state.rebuild_order();
         if matches!(kind, PointerKind::Down { .. } | PointerKind::ButtonDown(_)) {
             state.show_focus(false)?;
@@ -158,10 +149,7 @@ impl Ui {
     }
     /// Ends this surface's pointer gesture on leave or device removal.
     pub fn pointer_leave(&self) -> Result {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .cancel_pointer()
+        self.write().cancel_pointer()
     }
     /// Scrolls at a window point by a finite logical vertical displacement.
     /// Uses the same nested viewport/editor routing as [`Self::scroll_by`].
@@ -195,10 +183,7 @@ impl Ui {
         {
             return Err(UiError::InvalidValue.into());
         }
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         #[cfg(feature = "motion")]
         {
             state.motion.fling = None;
@@ -209,10 +194,7 @@ impl Ui {
     }
     /// Applies one validated native IME transaction to the focused editable field.
     pub fn ime(&self, edit: ImeEdit<'_>) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         if let Some(id) = state.focus.current(&state.tree) {
             state.dispatch(id, Input::Ime(edit))?;
             state.ime_dirty = true;
@@ -223,10 +205,7 @@ impl Ui {
     /// Delivers native clipboard text to the focused editor, replacing its
     /// selection. Single-line editors drop line breaks.
     pub fn paste(&self, text: &str) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         if let Some(id) = state.focus.current(&state.tree) {
             state.dispatch(id, Input::Paste(text))?;
         }
@@ -234,10 +213,7 @@ impl Ui {
     }
     /// Cancels local composition when the native text-input focus leaves the window.
     pub fn ime_left(&self) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+        let mut state = self.write();
         if let Some(id) = state.focus.current(&state.tree) {
             state.dispatch(id, Input::Cancel)?;
         }
@@ -245,12 +221,8 @@ impl Ui {
         Ok(())
     }
     /// Requests resending current editor state when a native input method enters.
-    pub fn request_ime_sync(&self) -> Result {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .ime_dirty = true;
-        Ok(())
+    pub fn request_ime_sync(&self) {
+        self.write().ime_dirty = true;
     }
 }
 

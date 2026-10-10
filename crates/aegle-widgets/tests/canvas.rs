@@ -15,28 +15,28 @@ use aegle_widgets::{CanvasEvent, Widgets};
 #[test]
 fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.resize(Size::new(300.0, 300.0))?;
-    ui.root().set_padding(0.0)?;
-    let view = ui.root().scroll_view()?;
-    view.set_height(200.0)?;
-    let canvas = view.canvas(|_, _| Ok(()))?;
-    canvas.set_width(100.0)?;
-    canvas.set_height(400.0)?;
+    ui.resize(Size::new(300.0, 300.0));
+    ui.root().set_padding(0.0);
+    let view = ui.root().scroll_view();
+    view.set_height(200.0);
+    let canvas = view.canvas(|_, _| Ok(()));
+    canvas.set_width(100.0);
+    canvas.set_height(400.0);
     ui.refresh()?;
     // Without input, the wheel scrolls the enclosing view.
     ui.scroll_by(Point::new(50.0, 50.0), Point::new(0.0, 30.0))?;
-    assert_eq!(view.offset()?.y, 30.0);
-    view.scroll_to(Point::default())?;
+    assert_eq!(view.offset().y, 30.0);
+    view.scroll_to(Point::default());
 
     let events = Rc::new(RefCell::new(Vec::new()));
     let log = events.clone();
     // The view's padding places the canvas at (4, 4); events are local to it.
-    let origin = canvas.bounds()?.origin;
+    let origin = canvas.bounds().origin;
     let local = |x: f32, y: f32| Point::new(x - origin.x, y - origin.y);
     canvas.set_input(move |_, event| {
         log.borrow_mut().push(event);
         Ok(())
-    })?;
+    });
     ui.refresh()?;
     let (id, mods) = (PointerId(1), Modifiers::default());
     let at = Instant::now() - Duration::from_millis(5);
@@ -57,7 +57,7 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     };
     // Focusing the canvas revealed it; the wheel itself must not scroll.
     ui.refresh()?;
-    let revealed = view.offset()?;
+    let revealed = view.offset();
     ui.wheel(Point::new(50.0, 50.0), Point::new(0.0, 30.0), ctrl, at)?;
     ui.key(KeyInput {
         key: Key::Character('n'),
@@ -92,28 +92,28 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
         CanvasEvent::Wheel { delta, modifiers, .. } if delta.y == 30.0 && modifiers.control
     ));
     assert!(matches!(&events[6], CanvasEvent::Key { text, .. } if text == "n"));
-    assert_eq!(view.offset()?, revealed);
+    assert_eq!(view.offset(), revealed);
     // The key press after the pointer press shows focus.
-    assert!(canvas.visual_state()?.focused);
-    assert!(canvas.appearance()?.focus_width > 0.0);
+    assert!(canvas.visual_state().focused);
+    assert!(canvas.appearance().focus_width > 0.0);
     Ok(())
 }
 
 #[test]
 fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.resize(Size::new(300.0, 300.0))?;
-    ui.root().set_padding(0.0)?;
-    let slider = ui.root().slider(0.0, 10.0, 0.0)?;
-    let canvas = ui.root().canvas(|_, _| Ok(()))?;
-    canvas.set_width(100.0)?;
-    canvas.set_height(100.0)?;
+    ui.resize(Size::new(300.0, 300.0));
+    ui.root().set_padding(0.0);
+    let slider = ui.root().slider(0.0, 10.0, 0.0);
+    let canvas = ui.root().canvas(|_, _| Ok(()));
+    canvas.set_width(100.0);
+    canvas.set_height(100.0);
     let events = Rc::new(RefCell::new(Vec::new()));
     let log = events.clone();
     canvas.set_input(move |_, event| {
         log.borrow_mut().push(event);
         Ok(())
-    })?;
+    });
     ui.refresh()?;
     let (id, mods) = (PointerId(1), Modifiers::default());
     let centre = |bounds: aegle_ui::scene::Rect| {
@@ -123,7 +123,7 @@ fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
         )
     };
     let right = PointerKind::ButtonDown(PointerButton::Secondary);
-    let (thumb, inside) = (centre(slider.bounds()?), centre(canvas.bounds()?));
+    let (thumb, inside) = (centre(slider.bounds()), centre(canvas.bounds()));
     ui.pointer(id, right, thumb, mods)?;
     ui.pointer(
         id,
@@ -131,8 +131,8 @@ fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
         thumb,
         mods,
     )?;
-    assert_eq!(slider.value()?, 0.0);
-    assert!(!slider.visual_state()?.focused);
+    assert_eq!(slider.value(), 0.0);
+    assert!(!slider.visual_state().focused);
 
     // A middle drag keeps the pointer captured across a primary click and
     // ends with the last release; motion after it no longer arrives.
@@ -180,16 +180,16 @@ fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
             "cancel"
         ]
     );
-    assert!(canvas.is_focused()?);
+    assert!(canvas.is_focused());
     // A pointer press focuses without showing focus.
-    assert!(!canvas.visual_state()?.focused);
+    assert!(!canvas.visual_state().focused);
     Ok(())
 }
 
 #[test]
 fn canvas_drawing_beyond_its_bounds_is_damaged() -> Result {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.resize(Size::new(300.0, 300.0))?;
+    ui.resize(Size::new(300.0, 300.0));
     let reach = Rc::new(std::cell::Cell::new(10.0f32));
     let painted = reach.clone();
     let canvas = ui.root().canvas(move |builder, _| {
@@ -199,16 +199,16 @@ fn canvas_drawing_beyond_its_bounds_is_damaged() -> Result {
             aegle_ui::Color::BLACK,
         )?;
         Ok(())
-    })?;
-    canvas.set_width(20.0)?;
-    canvas.set_height(20.0)?;
+    });
+    canvas.set_width(20.0);
+    canvas.set_height(20.0);
     ui.refresh()?;
-    ui.clear_damage()?;
+    ui.clear_damage();
     reach.set(150.0);
-    canvas.invalidate()?;
+    canvas.invalidate();
     ui.refresh()?;
-    let origin = canvas.bounds()?.origin;
-    let damage = ui.damage()?.unwrap();
+    let origin = canvas.bounds().origin;
+    let damage = ui.damage().unwrap();
     assert_eq!(damage.rects().len(), 1);
     let rect = damage.rects()[0];
     assert_eq!((rect.origin, rect.size.width), (origin, 150.0));

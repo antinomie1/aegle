@@ -29,7 +29,7 @@ fn main() -> Result<()> {
         ..Default::default()
     })?;
     let window = app.window("Aegle — GPU texture")?;
-    window.text("A wgpu render pass draws the viewport below every frame.")?;
+    window.text("A wgpu render pass draws the viewport below every frame.");
     let gpu = app
         .wgpu()
         .ok_or("the window did not create a wgpu device")?;
@@ -94,11 +94,11 @@ fn main() -> Result<()> {
             aegle::scene::Rect::new(0.0, 0.0, size.width, size.height),
         )?;
         Ok(())
-    })?;
-    viewport.set_width(320.0)?;
-    viewport.set_height(240.0)?;
+    });
+    viewport.set_width(320.0);
+    viewport.set_height(240.0);
     let frames = Rc::new(Cell::new(0u32));
-    let label = window.text("")?;
+    let label = window.text("");
     let (start, view) = (Instant::now(), texture.create_view(&Default::default()));
     let count = frames.clone();
     viewport.on_frame(move |_, now| {
@@ -134,8 +134,8 @@ fn main() -> Result<()> {
         label.set_text(&format!(
             "Frames rendered into the texture: {}",
             count.get()
-        ))?;
-        Ok(true)
-    })?;
+        ));
+        true
+    });
     app.run()
 }

@@ -148,7 +148,7 @@ pub(crate) fn eval(
         ExprKind::SelfField(field) => frame
             .expect("checked: self only in handlers")
             .source
-            .field(field)?,
+            .field(field),
         ExprKind::Unary("!", operand) => Data::Bool(!truth(eval(operand)?)),
         ExprKind::Unary(_, operand) => match eval(operand)? {
             Data::Int(n) => Data::Int(n.checked_neg().ok_or_else(|| overflow(expr.span))?),

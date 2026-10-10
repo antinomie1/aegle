@@ -45,13 +45,13 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
     let result = build::root(root, parent, &env, &mut block, &mut created, &mut ids);
     if let Err(error) = result {
         if let Some(root) = created.first() {
-            root.node().remove()?;
+            root.node().remove();
         }
         return Err(error);
     }
     let root = created.swap_remove(0);
     let effects = Rc::new(RefCell::new(block));
-    root.node().keep_alive(effects.clone())?;
+    root.node().keep_alive(effects.clone());
     Ok(View {
         program: program.clone(),
         root,
@@ -108,7 +108,7 @@ pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
         window.close()?;
         return Err(error);
     }
-    handle.node().keep_alive(effects)?;
+    handle.node().keep_alive(effects);
     Ok(view)
 }
 
@@ -194,7 +194,7 @@ impl View {
         }
         if let Some(parent) = &self.parent {
             let view = fragment(program, parent, &carried)?;
-            self.root.node().remove()?;
+            self.root.node().remove();
             *self = view;
             return Ok(());
         }
@@ -204,14 +204,14 @@ impl View {
         let (old_ids, old_block) = (std::mem::take(&mut self.ids), self.effects.take());
         if let Err(error) = self.fill(program, env) {
             for handle in std::mem::replace(&mut self.content, old) {
-                handle.node().remove()?;
+                handle.node().remove();
             }
             self.ids = old_ids;
             *self.effects.borrow_mut() = old_block;
             return Err(error);
         }
         for handle in old {
-            handle.node().remove()?;
+            handle.node().remove();
         }
         Ok(())
     }
@@ -238,7 +238,7 @@ impl View {
                     "dark" => aegle_ui::Theme::dark(),
                     "high_contrast" => aegle_ui::Theme::high_contrast(),
                     other => unreachable!("checked theme `{other}`"),
-                })?;
+                });
             }
         }
         let mut block = Block::new();

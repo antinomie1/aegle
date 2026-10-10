@@ -3,10 +3,10 @@ use aegle::prelude::*;
 use std::time::Duration;
 
 fn action_button(parent: &Container, text: &str) -> Result<Button> {
-    let button = parent.button(text)?;
-    button.set_skin(Some(primary))?;
-    button.set_padding(18.0)?;
-    button.set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut))?;
+    let button = parent.button(text);
+    button.set_skin(Some(primary));
+    button.set_padding(18.0);
+    button.set_transition(Transition::new(Duration::from_millis(120), Easing::EaseOut));
     Ok(button)
 }
 
@@ -39,21 +39,21 @@ fn card(theme: &Theme, state: VisualState) -> Appearance {
 fn main() -> Result<()> {
     let app = App::new()?;
     let view = aegle::ui!(&app, "examples/components.aegle")?;
-    view.card.set_skin(Some(card))?;
-    action_button(&view.actions, "Clear text")?.on_click(move |_| view.editor.set_text(""))?;
+    view.card.set_skin(Some(card));
+    action_button(&view.actions, "Clear text")?.on_click(move |_| view.editor.set_text(""));
     // A local theme restyles only the card's subtree.
     let panel = view.card.clone();
     action_button(&view.actions, "Dark card")?.on_click(move |_| {
-        let dark = panel.theme()? == Theme::dark();
+        let dark = panel.theme() == Theme::dark();
         panel.set_theme((!dark).then(Theme::dark))
-    })?;
+    });
     // Slide the card away, then close once the transition completes.
     action_button(&view.actions, "Close")?.on_click(move |_| {
         let window = view.root.clone();
         view.card
-            .set_transition(Transition::new(Duration::from_millis(180), Easing::EaseIn))?;
-        view.card.on_transition_end(move |_| window.close())?;
+            .set_transition(Transition::new(Duration::from_millis(180), Easing::EaseIn));
+        view.card.on_transition_end(move |_| window.close());
         view.card.set_offset(Point::new(0.0, 480.0))
-    })?;
+    });
     app.run()
 }

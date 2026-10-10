@@ -43,13 +43,13 @@ impl Table {
 }
 
 /// A header or body cell sized by its column.
-fn cell(line: &Container, column: &TableColumn, role: Role) -> Result<Container> {
-    let cell = group::add(line, role, false)?;
+fn cell(line: &Container, column: &TableColumn, role: Role) -> Container {
+    let cell = group::add(line, role, false);
     match column.width {
-        Some(width) => cell.set_width(Some(width))?,
-        None => cell.set_grow(1.0)?,
+        Some(width) => cell.set_width(Some(width)),
+        None => cell.set_grow(1.0),
     }
-    Ok(cell)
+    cell
 }
 
 /// See [`Widgets::table`].
@@ -59,15 +59,15 @@ pub(crate) fn table(
     row_height: f32,
     rows: usize,
     mut fill: impl FnMut(&Container, usize, usize) -> Result + 'static,
-) -> Result<Table> {
+) -> Table {
     let valid = |width: Option<f32>| width.is_none_or(|w| w.is_finite() && w >= 0.0);
     if columns.is_empty() || !columns.iter().all(|c| valid(c.width)) {
-        return Err(UiError::InvalidValue.into());
+        panic!("{}", UiError::InvalidValue);
     }
-    let table = group::add(container, Role::Table, false)?;
-    table.set_gap(0.0, 0.0)?;
+    let table = group::add(container, Role::Table, false);
+    table.set_gap(0.0, 0.0);
     // Keeps the header fill inside the border.
-    table.set_padding(1.0)?;
+    table.set_padding(1.0);
     // A clipping box has no content-based minimum size, so the virtual rows'
     // full extent never stops the table from shrinking to the space it is given.
     table.change(|state, id| {
@@ -75,28 +75,28 @@ pub(crate) fn table(
         style.overflow.x = Overflow::Hidden;
         style.overflow.y = Overflow::Hidden;
         Ok(aegle_layout::set_style(&mut state.tree, id, style)?)
-    })?;
-    let header = group::add(&table, Role::TableRow, true)?;
-    header.set_gap(0.0, 0.0)?;
-    header.set_skin(Some(group::header))?;
+    });
+    let header = group::add(&table, Role::TableRow, true);
+    header.set_gap(0.0, 0.0);
+    header.set_skin(Some(group::header));
     for column in columns {
-        let cell = cell(&header, column, Role::TableHeader)?;
-        cell.text(column.title)?;
+        let cell = cell(&header, column, Role::TableHeader);
+        cell.text(column.title);
     }
     let widths: Vec<_> = columns.iter().map(|c| c.width).collect();
     let rows = table.list_view(row_height, rows, move |row, index| {
-        let line = group::add(row, Role::TableRow, true)?;
-        line.set_gap(0.0, 0.0)?;
-        line.set_grow(1.0)?;
+        let line = group::add(row, Role::TableRow, true);
+        line.set_gap(0.0, 0.0);
+        line.set_grow(1.0);
         for (column, &width) in widths.iter().enumerate() {
-            let cell = cell(&line, &TableColumn { title: "", width }, Role::TableCell)?;
+            let cell = cell(&line, &TableColumn { title: "", width }, Role::TableCell);
             fill(&cell, index, column)?;
         }
         Ok(())
-    })?;
-    rows.set_grow(1.0)?;
+    });
+    rows.set_grow(1.0);
     // The table draws the border; its rows sit flush inside it.
-    rows.set_border_width(0.0)?;
-    rows.set_padding(0.0)?;
-    Ok(Table { table, rows })
+    rows.set_border_width(0.0);
+    rows.set_padding(0.0);
+    Table { table, rows }
 }

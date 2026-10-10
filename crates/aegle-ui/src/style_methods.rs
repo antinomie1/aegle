@@ -18,10 +18,10 @@
 ///     pub Chip(ChipControl): text, interactive, pressed
 /// }
 /// impl Chip {
-///     pub fn is_selected(&self) -> aegle_ui::Result<bool> {
+///     pub fn is_selected(&self) -> bool {
 ///         self.read(|chip| chip.selected)
 ///     }
-///     pub fn set_selected(&self, selected: bool) -> aegle_ui::Result {
+///     pub fn set_selected(&self, selected: bool) {
 ///         self.update(|chip| chip.selected = selected)
 ///     }
 /// }
@@ -43,7 +43,7 @@ macro_rules! handle {
         $crate::handle!($(#[$meta])* $vis $name);
         impl $name {
             /// Reads the control's state.
-            pub fn read<R>(&self, read: impl FnOnce(&$control) -> R) -> $crate::Result<R> {
+            pub fn read<R>(&self, read: impl FnOnce(&$control) -> R) -> R {
                 self.change(|state, id| {
                     let control = state.control_as::<$control>(id).ok_or($crate::UiError::WrongKind)?;
                     Ok(read(control))
@@ -51,7 +51,7 @@ macro_rules! handle {
             }
             /// Changes the control's state and repaints it, updating its
             /// semantics; changes of its size go through the node's layout.
-            pub fn update<R>(&self, update: impl FnOnce(&mut $control) -> R) -> $crate::Result<R> {
+            pub fn update<R>(&self, update: impl FnOnce(&mut $control) -> R) -> R {
                 self.change(|state, id| {
                     let control = state.control_as::<$control>(id).ok_or($crate::UiError::WrongKind)?;
                     let value = update(control);
@@ -72,7 +72,7 @@ macro_rules! style_setters {
     ($($(#[$doc:meta])* $name:ident($value:ident: $ty:ty) => $field:ident, $slot:expr;)*) => {
         $($(#[$doc])*
         #[doc = concat!("\n\nShorthand for `Style::", stringify!($field), "`: `None` returns to the skin's value. Ends a token binding of that field only.")]
-        pub fn $name(&self, $value: impl Into<Option<$ty>>) -> $crate::Result {
+        pub fn $name(&self, $value: impl Into<Option<$ty>>) {
             let $value = $value.into();
             self.change(|state, id| {
                 state.set_style_field(id, $slot.into(), |style| style.$field = $value)
@@ -89,7 +89,7 @@ macro_rules! style_methods {
             /// Sets a positive finite local text size, keeping text, selection
             /// and preedit; it does not inherit to children. `None` returns to
             /// the theme's size. Ends a font size token binding.
-            pub fn set_font_size(&self, size: impl Into<Option<f32>>) -> $crate::Result {
+            pub fn set_font_size(&self, size: impl Into<Option<f32>>) {
                 let (size, slot) = (size.into(), $crate::LengthSlot::FontSize.into());
                 self.change(|state, id| {
                     state.write_unbound(id, slot, |state| state.set_font_size(id, size))
@@ -97,16 +97,16 @@ macro_rules! style_methods {
             }
             /// Sets the font face, reshaping the text and keeping selection and
             /// preedit; it does not inherit to children. `None` returns to
-            /// `Font::DEFAULT`. Ends a font token binding. Fails with
-            /// InvalidValue for blank families or a weight outside 1–1000.
-            pub fn set_font(&self, font: impl Into<Option<$crate::Font>>) -> $crate::Result {
+            /// `Font::DEFAULT`. Ends a font token binding. Panics for blank
+            /// families or a weight outside 1–1000.
+            pub fn set_font(&self, font: impl Into<Option<$crate::Font>>) {
                 let font = font.into();
                 self.change(|state, id| {
                     state.write_unbound(id, $crate::TokenSlot::Font, |state| state.set_font(id, font))
                 })
             }
             /// The local font face; `None` uses `Font::DEFAULT`.
-            pub fn font(&self) -> $crate::Result<Option<$crate::Font>> {
+            pub fn font(&self) -> Option<$crate::Font> {
                 self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.font)))
             }
         }

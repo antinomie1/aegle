@@ -9,7 +9,7 @@ use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
-    Control, Result, State,
+    Control, HandlerResult, Result, State,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle,
 };
@@ -216,13 +216,13 @@ handle! {
 
 impl MenuItem {
     /// Replaces the item text.
-    pub fn set_text(&self, text: &str) -> Result {
+    pub fn set_text(&self, text: &str) {
         self.change(|state, id| state.set_text(id, text))
     }
     /// Shows `shortcut`, such as `"Ctrl+S"`, at the end of the item, or
     /// removes it with `None`. It is a hint, also the accessible keyboard
     /// shortcut; the application binds the keys itself.
-    pub fn set_shortcut<'a>(&self, shortcut: impl Into<Option<&'a str>>) -> Result {
+    pub fn set_shortcut<'a>(&self, shortcut: impl Into<Option<&'a str>>) {
         let shortcut = shortcut.into();
         self.change(|state, id| {
             let shortcut = match shortcut {
@@ -238,24 +238,24 @@ impl MenuItem {
         })
     }
     /// Whether a check or radio item is checked; always false for other items.
-    pub fn is_checked(&self) -> Result<bool> {
+    pub fn is_checked(&self) -> bool {
         self.change(|state, id| Ok(item(state, id).checked == Some(true)))
     }
     /// Checks or unchecks a check or radio item without calling the click
     /// handlers; checking a radio item unchecks the rest of its group. An item
     /// created by [`crate::Menu::item`] becomes a check item.
-    pub fn set_checked(&self, checked: bool) -> Result {
+    pub fn set_checked(&self, checked: bool) {
         self.change(|state, id| check(state, id, checked))
     }
     /// Activates the item as a click or Enter would.
-    pub fn activate(&self) -> Result {
+    pub fn activate(&self) {
         self.change(|state, id| state.dispatch(id, Input::Activate))
     }
     /// Adds a handler run when the user chooses the item, after its menus
     /// closed and a check item toggled. Items that open a submenu do not run
     /// handlers. Handlers run in registration order outside UI borrows.
-    pub fn on_click(&self, mut callback: impl FnMut(MenuItem) -> Result + 'static) -> Result {
-        self.change(|state, id| state.on_action(id, move |node| callback(MenuItem(node))))
+    pub fn on_click<R: HandlerResult>(&self, mut callback: impl FnMut(MenuItem) -> R + 'static) {
+        self.on_action(move |node| callback(MenuItem(node)).into_result())
     }
 }
 

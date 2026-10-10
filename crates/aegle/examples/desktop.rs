@@ -10,8 +10,8 @@ use aegle::{
 fn main() -> Result<()> {
     let app = App::new()?;
     let window = app.window("Desktop services")?;
-    window.set_padding(16.0)?;
-    let status = window.text("Nothing yet")?;
+    window.set_padding(16.0);
+    let status = window.text("Nothing yet");
     let shown = status.clone();
     let desktop = Rc::new(app.desktop("org.aegle.DesktopDemo", move |event| {
         let text = match event {
@@ -48,9 +48,9 @@ fn main() -> Result<()> {
             },
         ],
     }))?;
-    let row = window.row()?;
+    let row = window.row();
     let opener = desktop.clone();
-    row.button("Open…")?.on_click(move |_| {
+    row.button("Open…").on_click(move |_| {
         let filters: &[(&str, &[&str])] = &[("Text", &["*.txt", "*.md"])];
         opener.open_file(&FileDialog {
             title: "Open",
@@ -58,14 +58,14 @@ fn main() -> Result<()> {
             ..Default::default()
         })?;
         Ok(())
-    })?;
-    row.button("Notify")?.on_click(move |_| {
+    });
+    row.button("Notify").on_click(move |_| {
         desktop.notify(&Notification {
             summary: "Hello",
             body: "From Aegle",
             actions: &[],
         })?;
         Ok(())
-    })?;
+    });
     app.run()
 }

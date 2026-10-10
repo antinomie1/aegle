@@ -6,7 +6,7 @@ use std::{collections::HashMap, time::Duration, time::Instant};
 use aegle_core::NodeId;
 use aegle_types::Point;
 
-use crate::{Node, Result, Ui, UiError, callbacks::Handler, state::State};
+use crate::{Node, Ui, callbacks::Handler, state::State};
 
 /// The last primary press and the rule for counting the next one.
 pub struct Clicks {
@@ -102,15 +102,11 @@ impl Ui {
     /// Sets how close in time and logical pixels presses must be to count as
     /// a double or triple click; hosts pass the system setting. The default
     /// is 400 ms and 4 px.
-    pub fn set_double_click(&self, interval: Duration, distance: f32) -> Result {
-        crate::valid(distance)?;
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    pub fn set_double_click(&self, interval: Duration, distance: f32) {
+        crate::require(distance.is_finite() && distance >= 0.0);
+        let mut state = self.write();
         state.clicks.interval = interval;
         state.clicks.distance = distance;
-        Ok(())
     }
 }
 
@@ -119,11 +115,15 @@ impl Node {
     /// this control or a descendant without its own double-click handler,
     /// after the press's normal behavior. Handlers run like click handlers,
     /// outside every UI borrow, in registration order.
-    pub fn on_double_click(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
+    pub fn on_double_click<R: crate::HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Node) -> R + 'static,
+    ) {
         self.change(|state, id| {
-            let callback = Box::new(callback);
+            let callback = Box::new(move |node| callback(node).into_result());
             let version = &mut state.callback_version;
-            crate::callbacks::add(&mut state.clicks.handlers, version, id, callback)
+            crate::callbacks::add(&mut state.clicks.handlers, version, id, callback);
+            Ok(())
         })
     }
     /// Adds a handler run when a context menu is requested over this control
@@ -133,17 +133,17 @@ impl Node {
     /// focus (receiving the focused control's top-left corner). The point is
     /// in logical window coordinates, ready for `Menu::show_at` in
     /// `aegle-widgets`. Handlers run like click handlers.
-    pub fn on_context_menu(
+    pub fn on_context_menu<R: crate::HandlerResult>(
         &self,
-        mut callback: impl FnMut(Node, Point) -> Result + 'static,
-    ) -> Result {
+        mut callback: impl FnMut(Node, Point) -> R + 'static,
+    ) {
         self.change(|state, id| {
             let callback = Box::new(move |node: Node| {
-                let at = node.change(|state, _| Ok(state.clicks.menu_at))?;
-                callback(node, at)
+                let at = node.change(|state, _| Ok(state.clicks.menu_at));
+                callback(node, at).into_result()
             });
             let version = &mut state.callback_version;
-            crate::callbacks::add(&mut state.clicks.menus, version, id, callback)?;
+            crate::callbacks::add(&mut state.clicks.menus, version, id, callback);
             state.tree.mark_dirty(id, aegle_core::Dirty::SEMANTICS)?;
             Ok(())
         })

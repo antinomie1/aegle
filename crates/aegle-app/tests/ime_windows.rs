@@ -94,8 +94,8 @@ fn microsoft_pinyin_commits_into_the_focused_text_field() -> Result {
             ..Default::default()
         },
     )?;
-    let field = window.text_field("")?;
-    let button = window.button("Other")?;
+    let field = window.text_field("");
+    let button = window.button("Other");
     // SAFETY: looks up this process's uniquely titled window.
     let find = || unsafe { FindWindowW(None, w!("Aegle IME field")).unwrap_or_default() };
     run(&app, || {
@@ -118,7 +118,7 @@ fn microsoft_pinyin_commits_into_the_focused_text_field() -> Result {
         let layout = LoadKeyboardLayoutW(w!("00000804"), KLF_ACTIVATE).unwrap();
         ActivateKeyboardLayout(layout, KLF_SETFORPROCESS).unwrap();
     }
-    field.focus()?;
+    field.focus();
     run(&app, || true)?;
     // SAFETY: as above; the App associated its context when the field focused.
     unsafe {
@@ -137,28 +137,28 @@ fn microsoft_pinyin_commits_into_the_focused_text_field() -> Result {
     // Composition keystrokes are neither inserted nor committed until selection.
     tap(hwnd, "nihao");
     run(&app, || true)?;
-    assert_eq!(field.text()?, "");
+    assert_eq!(field.text(), "");
     tap(hwnd, " ");
-    run(&app, || field.text().unwrap() == "你好")?;
-    assert_eq!(field.text()?, "你好");
+    run(&app, || field.text() == "你好")?;
+    assert_eq!(field.text(), "你好");
 
     // Escape cancels the composition, not the field.
     tap(hwnd, "zhong\x1b");
     run(&app, || true)?;
-    assert_eq!(field.text()?, "你好");
+    assert_eq!(field.text(), "你好");
 
     // Moving focus away ends the session without committing its preedit.
     tap(hwnd, "shi");
     run(&app, || true)?;
-    button.focus()?;
+    button.focus();
     run(&app, || true)?;
-    assert_eq!(field.text()?, "你好");
+    assert_eq!(field.text(), "你好");
 
     // Returning starts a fresh session that appends at the caret.
-    field.focus()?;
+    field.focus();
     run(&app, || true)?;
     tap(hwnd, "zhongwen ");
-    run(&app, || field.text().unwrap() == "你好中文")?;
+    run(&app, || field.text() == "你好中文")?;
     window.close()?;
     Ok(())
 }

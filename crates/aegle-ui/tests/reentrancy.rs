@@ -34,14 +34,16 @@ impl Control for Probe {
     fn paint(&mut self, _: &mut PaintCx<'_>) -> Result {
         let ui = self.ui.upgrade().unwrap();
         let node = self.node.borrow().clone().unwrap();
-        for result in [
-            ui.theme().map(drop),
-            ui.background().map(drop),
-            ui.has_pending_callbacks().map(drop),
-            node.is_alive().map(drop),
-        ] {
-            let error = result.unwrap_err();
-            assert_eq!(error.downcast_ref(), Some(&UiError::ReentrantAccess));
+        let attempts: [&dyn Fn(); 4] = [
+            &|| _ = ui.theme(),
+            &|| _ = ui.background(),
+            &|| _ = ui.has_pending_callbacks(),
+            &|| _ = node.is_alive(),
+        ];
+        for attempt in attempts {
+            let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(attempt));
+            let message = *refused.unwrap_err().downcast::<String>().unwrap();
+            assert_eq!(message, UiError::ReentrantAccess.to_string());
             self.refused.set(self.refused.get() + 1);
         }
         Ok(())
@@ -71,7 +73,7 @@ fn reentrant_calls_and_hook_failures_are_errors() -> Result {
         Rc::new(RefCell::new(TextSystem::new())),
         Theme::light(),
     )?);
-    ui.resize(Size::new(100.0, 100.0))?;
+    ui.resize(Size::new(100.0, 100.0));
     let (node, refused) = (Rc::new(RefCell::new(None)), Rc::new(Cell::new(0)));
     let probe = |kind| Probe {
         ui: Rc::downgrade(&ui),
@@ -84,21 +86,26 @@ fn reentrant_calls_and_hook_failures_are_errors() -> Result {
             Box::new(probe(&aegle_ui::CONTAINER)),
             aegle_ui::container_style(theme, false),
         ))
-    })?;
+    });
     *node.borrow_mut() = Some(added);
     ui.refresh()?;
     assert_eq!(refused.get(), 4);
 
     // A kind claiming an editor without one would be styled as one but take no text.
-    let Err(error) = ui.root().add(|_, theme| {
-        Ok((
-            Box::new(probe(&EDITOR)),
-            aegle_ui::container_style(theme, false),
-        ))
-    }) else {
+    let root = ui.root();
+    let add = std::panic::AssertUnwindSafe(|| {
+        root.add(|_, theme| {
+            Ok((
+                Box::new(probe(&EDITOR)),
+                aegle_ui::container_style(theme, false),
+            ))
+        })
+    });
+    let Err(panic) = std::panic::catch_unwind(add) else {
         panic!("a text field kind without an editor was added");
     };
-    assert_eq!(error.downcast_ref(), Some(&UiError::WrongKind));
+    let message = *panic.downcast::<String>().unwrap();
+    assert_eq!(message, UiError::WrongKind.to_string());
 
     ui.state.borrow_mut().install(&FAILING);
     let key = KeyInput {

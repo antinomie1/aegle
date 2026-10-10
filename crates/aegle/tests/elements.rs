@@ -29,17 +29,17 @@ impl Deref for Chip {
 }
 
 impl Chip {
-    fn new(parent: &Container, label: &str, selected: bool) -> Result<Self> {
+    fn new(parent: &Container, label: &str, selected: bool) -> Self {
         let chip = Self {
-            button: parent.button(label)?,
+            button: parent.button(label),
             selected: Rc::new(Cell::new(false)),
         };
-        chip.select(selected)?;
-        Ok(chip)
+        chip.select(selected);
+        chip
     }
-    fn select(&self, selected: bool) -> Result {
+    fn select(&self, selected: bool) {
         self.selected.set(selected);
-        self.set_border_width(if selected { 2.0 } else { 1.0 })
+        self.set_border_width(if selected { 2.0 } else { 1.0 });
     }
 }
 
@@ -51,7 +51,7 @@ aegle::element! {
         set label: line => |chip, text| chip.set_text(text);
         set selected: bool => |chip, on| chip.select(on);
         event toggled => |chip, run| chip.on_click(move |_| run());
-        get selected: bool => |chip| Ok(chip.selected.get());
+        get selected: bool => |chip| chip.selected.get();
     }
 }
 
@@ -68,7 +68,7 @@ fn fonts() -> Result<Rc<RefCell<TextSystem>>> {
 
 fn ui(fonts: &Rc<RefCell<TextSystem>>) -> Result<Ui> {
     let ui = Ui::with_fonts(fonts.clone(), Theme::light())?;
-    ui.resize(Size::new(400.0, 300.0))?;
+    ui.resize(Size::new(400.0, 300.0));
     Ok(ui)
 }
 
@@ -115,15 +115,15 @@ fn a_library_element_binds_state_and_raises_events() -> Result {
     let ui = ui(&fonts()?)?;
     let view = aegle::ui!(ui.root(), "tests/fixtures/chip_state.aegle")?;
     ui.refresh()?;
-    let height = view.root.bounds()?.size.height;
+    let height = view.root.bounds().size.height;
     assert!(!view.toggle.selected.get());
-    view.toggle.activate()?;
+    view.toggle.activate();
     ui.dispatch_callbacks()?;
     // The event ran with `self` reading the chip, and the binding followed.
     assert!(view.on.get());
     assert!(view.toggle.selected.get());
     // The `if` block inside the component's slot built another chip.
     ui.refresh()?;
-    assert!(view.root.bounds()?.size.height > height);
+    assert!(view.root.bounds().size.height > height);
     Ok(())
 }

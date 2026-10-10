@@ -28,55 +28,55 @@ impl Deref for Menu {
 }
 
 impl Menu {
-    fn new(anchor: &Node, side: bool) -> Result<Self> {
-        let popup = anchor.popup()?;
+    fn new(anchor: &Node, side: bool) -> Self {
+        let popup = anchor.popup();
         popup.change(|state, id| {
             state.control_as::<Group>(id).unwrap().role = Role::Menu;
             entry(state, id).side = side;
             state.tree.mark_dirty(id, Dirty::ALL)?;
             Ok(())
-        })?;
-        Ok(Self(popup))
+        });
+        Self(popup)
     }
     /// Appends a command item.
-    pub fn item(&self, text: &str) -> Result<MenuItem> {
+    pub fn item(&self, text: &str) -> MenuItem {
         add_item(self, text, None, false)
     }
     /// Appends a check item; choosing it toggles the check before its
     /// handlers run.
-    pub fn check_item(&self, text: &str, checked: bool) -> Result<MenuItem> {
+    pub fn check_item(&self, text: &str, checked: bool) -> MenuItem {
         add_item(self, text, Some(checked), false)
     }
     /// Appends a radio item, exclusive among the radio items next to it: a
     /// separator or another kind of item starts a new group. Choosing it
     /// checks it and unchecks the rest of its group before its handlers run.
-    pub fn radio_item(&self, text: &str, checked: bool) -> Result<MenuItem> {
-        let item = add_item(self, text, Some(false), false)?;
+    pub fn radio_item(&self, text: &str, checked: bool) -> MenuItem {
+        let item = add_item(self, text, Some(false), false);
         item.change(|state, id| {
             self::item(state, id).radio = true;
             menu_item::check(state, id, checked)
-        })?;
-        Ok(item)
+        });
+        item
     }
     /// Appends an item that opens a submenu beside it, and returns the
     /// submenu to fill.
-    pub fn submenu(&self, text: &str) -> Result<Menu> {
-        let item = add_item(self, text, None, false)?;
-        let menu = Menu::new(&item, true)?;
+    pub fn submenu(&self, text: &str) -> Menu {
+        let item = add_item(self, text, None, false);
+        let menu = Menu::new(&item, true);
         item.change(|state, id| {
             self::item(state, id).submenu = Some(menu.id);
             state.tree.mark_dirty(id, Dirty::ALL)?;
             Ok(())
-        })?;
-        Ok(menu)
+        });
+        menu
     }
     /// Appends a horizontal divider between groups of items.
-    pub fn separator(&self) -> Result<Separator> {
+    pub fn separator(&self) -> Separator {
         self.0.0.separator()
     }
 }
 
-fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) -> Result<MenuItem> {
+fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) -> MenuItem {
     let node = crate::add(parent, |state, theme| {
         let control = MenuItemControl {
             button: aegle_controls::Button::new(),
@@ -100,8 +100,8 @@ fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) ->
             ..Default::default()
         };
         Ok((Box::new(control) as Box<dyn Control>, style))
-    })?;
-    Ok(MenuItem(node))
+    });
+    MenuItem(node)
 }
 
 /// Choosing an item, run as its control's deferred work: opens or toggles
@@ -147,22 +147,22 @@ fn close_menus(state: &mut State) -> Result {
 pub trait NodeMenu {
     /// Creates a hidden menu below this control, shown by [`Popup::show`],
     /// typically from a button's click handler.
-    fn menu(&self) -> Result<Menu>;
+    fn menu(&self) -> Menu;
     /// Creates a hidden menu shown where a context menu is requested over
     /// this control: at a secondary press, or at the focused control for
     /// the Menu key and Shift+F10 (see [`Node::on_context_menu`]).
-    fn context_menu(&self) -> Result<Menu>;
+    fn context_menu(&self) -> Menu;
 }
 
 impl NodeMenu for Node {
-    fn menu(&self) -> Result<Menu> {
+    fn menu(&self) -> Menu {
         Menu::new(self, false)
     }
-    fn context_menu(&self) -> Result<Menu> {
-        let menu = Menu::new(self, false)?;
+    fn context_menu(&self) -> Menu {
+        let menu = Menu::new(self, false);
         let shown = menu.clone();
-        self.on_context_menu(move |_, at| shown.show_at(at))?;
-        Ok(menu)
+        self.on_context_menu(move |_, at| shown.show_at(at));
+        menu
     }
 }
 
@@ -182,19 +182,19 @@ impl Deref for MenuBar {
 
 impl MenuBar {
     /// Appends an entry opening a new menu below it, and returns the menu.
-    pub fn menu(&self, text: &str) -> Result<Menu> {
-        let item = add_item(&self.0, text, None, true)?;
-        let menu = Menu::new(&item, false)?;
+    pub fn menu(&self, text: &str) -> Menu {
+        let item = add_item(&self.0, text, None, true);
+        let menu = Menu::new(&item, false);
         item.change(|state, id| {
             self::item(state, id).submenu = Some(menu.id);
             Ok(())
-        })?;
-        Ok(menu)
+        });
+        menu
     }
 }
 
-pub(crate) fn menu_bar(container: &Container) -> Result<MenuBar> {
-    let bar = crate::group::add(container, Role::MenuBar, true)?;
+pub(crate) fn menu_bar(container: &Container) -> MenuBar {
+    let bar = crate::group::add(container, Role::MenuBar, true);
     bar.change(|state, id| {
         popups(state).bars.push(id);
         let mut style = state.tree.get(id).unwrap().style().clone();
@@ -202,8 +202,8 @@ pub(crate) fn menu_bar(container: &Container) -> Result<MenuBar> {
         style.flex_shrink = 0.0;
         aegle_layout::set_style(&mut state.tree, id, style)?;
         Ok(())
-    })?;
-    Ok(MenuBar(bar))
+    });
+    MenuBar(bar)
 }
 
 pub(crate) fn is_menu(state: &mut State, node: NodeId) -> bool {

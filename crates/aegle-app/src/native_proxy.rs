@@ -1,5 +1,5 @@
 use crate::{native::App, platform::WakeHandle};
-use aegle_ui::Result;
+use aegle_ui::{HandlerResult, Result};
 use std::{
     cell::RefCell,
     collections::VecDeque,
@@ -88,9 +88,9 @@ impl App {
     /// thread, in order, while the event loop runs. The handler may keep control
     /// handles, which stay on this thread. Handler errors go to
     /// [`App::on_error`], like a click callback's.
-    pub fn proxy<T: Send + 'static>(
+    pub fn proxy<T: Send + 'static, R: HandlerResult>(
         &self,
-        handler: impl FnMut(T) -> Result + 'static,
+        mut handler: impl FnMut(T) -> R + 'static,
     ) -> Result<UiProxy<T>> {
         let mut runtime = self.runtime.borrow_mut();
         let shared = Arc::new(Shared {
@@ -100,7 +100,7 @@ impl App {
         });
         runtime.proxies.push(Rc::new(RefCell::new(Receiver {
             shared: shared.clone(),
-            handler: Box::new(handler),
+            handler: Box::new(move |message| handler(message).into_result()),
         })));
         Ok(UiProxy { shared })
     }
@@ -122,10 +122,10 @@ impl App {
     /// icon and global shortcuts. `handler` receives their events on the UI
     /// thread, like a [`Self::proxy`] handler. Fails without a desktop
     /// session, such as a Linux session without a bus.
-    pub fn desktop(
+    pub fn desktop<R: HandlerResult>(
         &self,
         app_id: &str,
-        handler: impl FnMut(aegle_desktop::Event) -> Result + 'static,
+        handler: impl FnMut(aegle_desktop::Event) -> R + 'static,
     ) -> Result<aegle_desktop::Desktop> {
         let proxy = self.proxy(handler)?;
         let desktop = aegle_desktop::Desktop::new(app_id, move |event| {

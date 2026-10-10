@@ -7,8 +7,9 @@ use aegle_scene::{Affine, PathBuilder, Point as ScenePoint, Rect, RoundedRect};
 use aegle_text::{Selection, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
+use aegle_ui::OrFail;
 use aegle_ui::{
-    Container, Control, Result, UiError,
+    Container, Control, HandlerResult, Result, UiError,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle,
 };
@@ -91,38 +92,38 @@ impl NumberFieldControl {
 
 impl NumberField {
     /// Returns the committed value; text being typed counts after Enter or blur.
-    pub fn value(&self) -> Result<f64> {
+    pub fn value(&self) -> f64 {
         self.read(|control| control.range.value())
     }
     /// Sets a finite value, clamped to the range, without a change callback.
-    pub fn set_value(&self, value: f64) -> Result {
+    pub fn set_value(&self, value: f64) {
         self.edit(|control, fonts| {
             control.range.set_value(value)?;
             control.show(fonts)
         })
     }
     /// Returns the inclusive bounds.
-    pub fn range(&self) -> Result<(f64, f64)> {
+    pub fn range(&self) -> (f64, f64) {
         self.read(|control| (control.range.min(), control.range.max()))
     }
     /// Replaces finite increasing bounds, clamping the value.
-    pub fn set_range(&self, min: f64, max: f64) -> Result {
+    pub fn set_range(&self, min: f64, max: f64) {
         self.edit(|control, fonts| {
             control.range.set_bounds(min, max)?;
             control.show(fonts)
         })
     }
     /// Sets a finite nonnegative step; zero steps by 1% of the range.
-    pub fn set_step(&self, step: f64) -> Result {
+    pub fn set_step(&self, step: f64) {
         self.edit(|control, fonts| {
             control.range.set_step(step)?;
             control.show(fonts)
         })
     }
     /// Shows at most 9 digits after the decimal point.
-    pub fn set_decimals(&self, decimals: u8) -> Result {
+    pub fn set_decimals(&self, decimals: u8) {
         if decimals > 9 {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
         self.edit(|control, fonts| {
             control.decimals = decimals;
@@ -130,18 +131,15 @@ impl NumberField {
         })
     }
     /// The displayed text, which may hold uncommitted typing.
-    pub fn text(&self) -> Result<String> {
+    pub fn text(&self) -> String {
         self.change(|state, id| state.text(id))
     }
     /// Adds a user-change handler; handlers run in registration order outside tree borrows.
-    pub fn on_change(&self, mut callback: impl FnMut(Self) -> Result + 'static) -> Result {
-        self.change(|state, id| state.on_action(id, move |node| callback(Self(node))))
+    pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Self) -> R + 'static) {
+        self.on_action(move |node| callback(Self(node)).into_result())
     }
     /// Changes the control and its shown text.
-    fn edit(
-        &self,
-        update: impl FnOnce(&mut NumberFieldControl, &mut TextSystem) -> Result,
-    ) -> Result {
+    fn edit(&self, update: impl FnOnce(&mut NumberFieldControl, &mut TextSystem) -> Result) {
         self.change(|state, id| {
             let fonts = state.fonts.clone();
             update(
@@ -361,9 +359,9 @@ impl Control for NumberFieldControl {
     }
 }
 
-pub(crate) fn create(container: &Container, min: f64, max: f64, value: f64) -> Result<NumberField> {
-    let range = Range::new(min, max, value, 0.0)?;
-    crate::add(container, |state, theme| {
+pub(crate) fn create(container: &Container, min: f64, max: f64, value: f64) -> NumberField {
+    let range = Range::new(min, max, value, 0.0).or_fail();
+    NumberField(crate::add(container, |state, theme| {
         let (field, style) = crate::field::control(state, theme, "", false)?;
         let mut control = NumberFieldControl {
             field,
@@ -376,6 +374,5 @@ pub(crate) fn create(container: &Container, min: f64, max: f64, value: f64) -> R
         };
         control.show(&mut state.fonts.borrow_mut())?;
         Ok((Box::new(control) as Box<dyn Control>, style))
-    })
-    .map(NumberField)
+    }))
 }

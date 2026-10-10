@@ -28,8 +28,8 @@ fn window_documents_build_and_reload_like_fragments() -> Result {
     let mut loaded = Program::load(path)?.open(&app)?;
     app.dispatch(Some(Duration::from_millis(50)))?;
     let panel = loaded.handle("panel").unwrap().node().clone();
-    assert!(!compiled.panel.is_animating()?);
-    assert!(!panel.is_animating()?);
+    assert!(!compiled.panel.is_animating());
+    assert!(!panel.is_animating());
 
     let source = "Window { Button { on clicked { host.missing() } } }";
     let missing =
@@ -38,6 +38,6 @@ fn window_documents_build_and_reload_like_fragments() -> Result {
         })?;
     let error = loaded.reload(&missing).unwrap_err().to_string();
     assert!(error.contains("`missing` is not registered"), "{error}");
-    assert!(panel.is_alive()?);
+    assert!(panel.is_alive());
     Ok(())
 }

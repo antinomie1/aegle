@@ -20,15 +20,15 @@ pub trait Element: 'static {
     const SPEC: ElementSpec<'static>;
     /// Creates the control as the last child of `parent`, with the literal
     /// constructor arguments markup wrote, by property index.
-    fn create(parent: &Container, args: &[(usize, Arg<'_>)]) -> Result<Self::Handle>;
+    fn create(parent: &Container, args: &[(usize, Arg<'_>)]) -> Self::Handle;
     /// The control's node.
     fn node(handle: &Self::Handle) -> &Node;
     /// Sets the property with this index.
-    fn set(handle: &Self::Handle, property: usize, value: Arg<'_>) -> Result;
+    fn set(handle: &Self::Handle, property: usize, value: Arg<'_>);
     /// Reads the `self` field with this index.
-    fn get(handle: &Self::Handle, field: usize) -> Result<Data>;
+    fn get(handle: &Self::Handle, field: usize) -> Data;
     /// Runs `run` after each occurrence of the event with this index.
-    fn listen(handle: &Self::Handle, event: usize, run: Box<dyn Fn() -> Result>) -> Result;
+    fn listen(handle: &Self::Handle, event: usize, run: Box<dyn Fn() -> Result>);
     /// The container child number `child` is created in.
     fn parent(handle: &Self::Handle, child: usize) -> Container;
 }
@@ -136,10 +136,10 @@ impl Elements {
 /// [`Element`] over an untyped [`Handle`].
 pub(crate) trait Glue {
     fn spec(&self) -> &'static ElementSpec<'static>;
-    fn create(&'static self, parent: &Container, args: &[(usize, Arg<'_>)]) -> Result<Handle>;
-    fn set(&self, handle: &Handle, property: usize, value: Arg<'_>) -> Result;
-    fn get(&self, handle: &Handle, field: usize) -> Result<Data>;
-    fn listen(&self, handle: &Handle, event: usize, run: Box<dyn Fn() -> Result>) -> Result;
+    fn create(&'static self, parent: &Container, args: &[(usize, Arg<'_>)]) -> Handle;
+    fn set(&self, handle: &Handle, property: usize, value: Arg<'_>);
+    fn get(&self, handle: &Handle, field: usize) -> Data;
+    fn listen(&self, handle: &Handle, event: usize, run: Box<dyn Fn() -> Result>);
     fn parent(&self, handle: &Handle, child: usize) -> Container;
 }
 
@@ -156,21 +156,21 @@ impl<E: Element> Glue for Erase<E> {
     fn spec(&self) -> &'static ElementSpec<'static> {
         const { &E::SPEC }
     }
-    fn create(&'static self, parent: &Container, args: &[(usize, Arg<'_>)]) -> Result<Handle> {
-        let typed = E::create(parent, args)?;
-        Ok(Handle {
+    fn create(&'static self, parent: &Container, args: &[(usize, Arg<'_>)]) -> Handle {
+        let typed = E::create(parent, args);
+        Handle {
             node: E::node(&typed).clone(),
             typed: Rc::new(typed) as Rc<dyn Any>,
             glue: Some(self),
-        })
+        }
     }
-    fn set(&self, handle: &Handle, property: usize, value: Arg<'_>) -> Result {
+    fn set(&self, handle: &Handle, property: usize, value: Arg<'_>) {
         E::set(typed::<E>(handle), property, value)
     }
-    fn get(&self, handle: &Handle, field: usize) -> Result<Data> {
+    fn get(&self, handle: &Handle, field: usize) -> Data {
         E::get(typed::<E>(handle), field)
     }
-    fn listen(&self, handle: &Handle, event: usize, run: Box<dyn Fn() -> Result>) -> Result {
+    fn listen(&self, handle: &Handle, event: usize, run: Box<dyn Fn() -> Result>) {
         E::listen(typed::<E>(handle), event, run)
     }
     fn parent(&self, handle: &Handle, child: usize) -> Container {
@@ -186,19 +186,19 @@ pub mod __private {
     pub use crate::handle::{apply, transitions};
 
     /// Calls a setter with its handle and value types known first.
-    pub fn set<H, T>(handle: &H, value: T, set: impl FnOnce(&H, T) -> Result) -> Result {
+    pub fn set<H, T>(handle: &H, value: T, set: impl FnOnce(&H, T)) {
         set(handle, value)
     }
     /// Calls a getter with its handle type known first.
-    pub fn get<H, T>(handle: &H, get: impl FnOnce(&H) -> Result<T>) -> Result<T> {
+    pub fn get<H, T>(handle: &H, get: impl FnOnce(&H) -> T) -> T {
         get(handle)
     }
     /// Calls an event registration with its handle type known first.
     pub fn listen<H>(
         handle: &H,
         run: Box<dyn Fn() -> Result>,
-        listen: impl FnOnce(&H, Box<dyn Fn() -> Result>) -> Result,
-    ) -> Result {
+        listen: impl FnOnce(&H, Box<dyn Fn() -> Result>),
+    ) {
         listen(handle, run)
     }
     /// Calls a child placement with its handle type known first.

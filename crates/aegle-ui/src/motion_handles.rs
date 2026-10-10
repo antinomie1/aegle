@@ -1,5 +1,6 @@
+use crate::OrFail;
 use crate::{
-    Node, Point, Result, State, Style, Transform, Transition, TransitionProperty, Ui, UiError,
+    Node, Point, Result, State, Style, Transform, Transition, TransitionProperty, Ui,
     motion::{Running, Track},
     tokens::TokenSlot,
 };
@@ -28,7 +29,7 @@ impl Node {
     /// the timing it started with. `None` removes the policy and immediately
     /// returns to the logical targets without a completion callback. Ends
     /// duration token bindings.
-    pub fn set_transition(&self, timing: impl Into<Option<Transition>>) -> Result {
+    pub fn set_transition(&self, timing: impl Into<Option<Transition>>) {
         let timing = timing.into();
         self.change(|state, id| {
             match timing {
@@ -64,7 +65,7 @@ impl Node {
         &self,
         property: TransitionProperty,
         timing: impl Into<Option<Transition>>,
-    ) -> Result {
+    ) {
         let timing = timing.into();
         self.change(|state, id| {
             state.set_property_transition(id, property, timing)?;
@@ -75,7 +76,7 @@ impl Node {
         })
     }
     /// The timing of one property, if it animates.
-    pub fn property_transition(&self, property: TransitionProperty) -> Result<Option<Transition>> {
+    pub fn property_transition(&self, property: TransitionProperty) -> Option<Transition> {
         self.change(|state, id| {
             Ok(state
                 .motion
@@ -85,17 +86,17 @@ impl Node {
         })
     }
     /// Last sampled appearance; [`Self::appearance`] remains the logical target.
-    pub fn presented_appearance(&self) -> Result<crate::Appearance> {
+    pub fn presented_appearance(&self) -> crate::Appearance {
         self.change(|state, id| state.presented_appearance(id))
     }
     /// Whether a paint transition started by the most recent refresh, or a
     /// geometric transition, is still running.
-    pub fn is_animating(&self) -> Result<bool> {
+    pub fn is_animating(&self) -> bool {
         self.change(|state, id| Ok(state.motion.running(id)))
     }
     /// Jumps to the current logical targets, retaining timing for future changes.
     /// Completes a running transition.
-    pub fn finish_transition(&self) -> Result {
+    pub fn finish_transition(&self) {
         self.change(|state, id| {
             let target = state.appearance(id)?;
             let painting = state.motion.active.remove(&id).is_some();
@@ -115,22 +116,26 @@ impl Node {
     /// policy change that snaps (reduced motion, hidden, zero duration).
     /// Cancelling, clearing the policy and removal do not complete. Dispatched
     /// like click handlers, outside every UI borrow, in registration order.
-    pub fn on_transition_end(&self, callback: impl FnMut(Node) -> Result + 'static) -> Result {
+    pub fn on_transition_end<R: crate::HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Node) -> R + 'static,
+    ) {
         self.change(|state, id| {
-            let callback = Box::new(callback);
+            let callback = Box::new(move |node| callback(node).into_result());
             crate::callbacks::add(
                 &mut state.motion.ends,
                 &mut state.callback_version,
                 id,
                 callback,
-            )
+            );
+            Ok(())
         })
     }
     /// Stops at the sampled appearance and offset, freezing them into local
     /// paint overrides and the offset target. State-specific local colors are
     /// replaced and style token bindings end. Focus visibility still follows
     /// behavior; timing remains for future setters.
-    pub fn cancel_transition(&self) -> Result {
+    pub fn cancel_transition(&self) {
         self.change(|state, id| {
             state.motion.moving.remove(&id);
             state.motion.scaling.remove(&id);
@@ -183,24 +188,16 @@ impl Node {
     ///     card.set_offset(Point::new(0.0, 24.0))
     /// })?;
     /// ```
-    pub fn with_transition<R>(
-        &self,
-        timing: Transition,
-        change: impl FnOnce() -> Result<R>,
-    ) -> Result<R> {
+    pub fn with_transition<R>(&self, timing: Transition, change: impl FnOnce() -> R) -> R {
         self.scoped(Some(timing), change)
     }
     /// Runs `change` with the changes it makes to this control applied at
     /// once, without a transition, whatever the policy. A transition already
     /// running for a changed property jumps to the new value and completes.
-    pub fn snap<R>(&self, change: impl FnOnce() -> Result<R>) -> Result<R> {
+    pub fn snap<R>(&self, change: impl FnOnce() -> R) -> R {
         self.scoped(None, change)
     }
-    fn scoped<R>(
-        &self,
-        timing: Option<Transition>,
-        change: impl FnOnce() -> Result<R>,
-    ) -> Result<R> {
+    fn scoped<R>(&self, timing: Option<Transition>, change: impl FnOnce() -> R) -> R {
         let outer = self.change(|state, id| {
             if timing.is_some() && !state.motion.tracks.contains_key(&id) {
                 // A policy-free control animates from what it shows now.
@@ -210,7 +207,7 @@ impl Node {
             }
             state.motion.paint_once.insert(id, timing);
             Ok(state.motion.scoped.replace((id, timing)))
-        })?;
+        });
         let result = change();
         // The closure returned, so nothing borrows the UI; it may have
         // removed this control or dropped the UI.
@@ -228,7 +225,7 @@ impl Node {
     /// motion and hidden controls go straight to the target; a
     /// [`Cycles::Forever`](aegle_motion::Cycles::Forever) animation runs, and
     /// requests frames, until stopped.
-    pub fn animate(&self, animation: Animate) -> Result {
+    pub fn animate(&self, animation: Animate) {
         self.change(|state, id| {
             let element = &mut state.tree.get_mut(id).unwrap().context;
             match animation {
@@ -274,43 +271,32 @@ impl Node {
 impl Ui {
     /// Sets timing for subsequently created interactive controls. Existing policies
     /// are unchanged. Headless UIs default to None; native App opts into 120 ms.
-    pub fn set_default_transition(&self, timing: impl Into<Option<Transition>>) -> Result {
+    pub fn set_default_transition(&self, timing: impl Into<Option<Transition>>) {
         let timing = timing.into();
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .motion
-            .default = timing;
-        Ok(())
+        self.write().motion.default = timing;
     }
     /// Samples active paint transitions at a caller-owned monotonic timestamp.
     /// Start at any nonnegative time; moving backwards is rejected. Then refresh
     /// and present normally. No active animation means no work beyond clock update.
     pub fn advance_animations(&self, now: Duration) -> Result {
-        self.state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?
-            .advance_animations(now)
+        self.write().advance_animations(now)
     }
     /// Whether a host must request another frame. The Ui owns no timer or thread.
-    pub fn has_animations(&self) -> Result<bool> {
-        let state = self.read()?;
-        Ok(state.motion.any_running() || state.motion.fling.is_some())
+    pub fn has_animations(&self) -> bool {
+        let state = self.read();
+        state.motion.any_running() || state.motion.fling.is_some()
     }
     /// Whether reduced motion is currently in effect.
-    pub fn reduced_motion(&self) -> Result<bool> {
-        Ok(self.read()?.motion.reduced)
+    pub fn reduced_motion(&self) -> bool {
+        self.read().motion.reduced
     }
     /// Explicit reduced-motion preference. When true all transitions snap to
     /// their targets, completing, and no new animations start. Changing this
     /// flag does not affect editor/focus state.
-    pub fn set_reduced_motion(&self, reduced: bool) -> Result {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    pub fn set_reduced_motion(&self, reduced: bool) {
+        let mut state = self.write();
         if state.motion.reduced == reduced {
-            return Ok(());
+            return;
         }
         state.motion.reduced = reduced;
         if reduced {
@@ -318,7 +304,10 @@ impl Ui {
         }
         let ids: Vec<_> = state.motion.active.keys().copied().collect();
         for id in ids {
-            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+            state
+                .tree
+                .mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)
+                .or_fail();
         }
         if reduced {
             let moving: Vec<_> = state.motion.moving.keys().copied().collect();
@@ -346,11 +335,10 @@ impl Ui {
                 state.snap_shadow(id);
                 state.complete(id);
             }
-            let repaint = state.refresh()?;
+            let repaint = state.refresh().or_fail();
             // Keep the snapped frame pending for the host's next presentation.
             state.repaint |= repaint;
         }
-        Ok(())
     }
 }
 

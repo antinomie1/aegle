@@ -1,4 +1,4 @@
-use crate::{Node, Result, UiError, state::State};
+use crate::{Node, UiError, state::State};
 #[cfg(feature = "motion")]
 use crate::{
     TransitionProperty,
@@ -49,9 +49,9 @@ impl State {
 impl Node {
     /// Sets the scale and rotation of this subtree. With `motion`, a control with
     /// a transition policy animates from its presented value.
-    pub fn set_transform(&self, transform: Transform) -> Result {
+    pub fn set_transform(&self, transform: Transform) {
         if !transform.valid() {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
         self.change(|state, id| {
             #[cfg(feature = "motion")]
@@ -65,7 +65,7 @@ impl Node {
     }
 
     /// The logical target transform; scenes show the presented one.
-    pub fn transform(&self) -> Result<Transform> {
+    pub fn transform(&self) -> Transform {
         self.change(|state, id| {
             #[cfg(feature = "motion")]
             return Ok(state.target_spin(id));
@@ -79,7 +79,7 @@ impl Node {
 impl State {
     /// Starts, retargets or snaps scale and rotation, each with its own timing,
     /// like [`Self::transition_offset`].
-    pub fn transition_spin(&mut self, id: NodeId, target: Transform) -> Result {
+    pub fn transition_spin(&mut self, id: NodeId, target: Transform) -> crate::Result {
         let (scale_policy, scale_timing) = self.timing(id, TransitionProperty::Scale);
         let (turn_policy, turn_timing) = self.timing(id, TransitionProperty::Rotation);
         let mut spin = self.tree.get(id).unwrap().context.spin;

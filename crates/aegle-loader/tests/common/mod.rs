@@ -16,7 +16,7 @@ pub fn ui() -> Result<Ui> {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families);
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    ui.resize(Size::new(300.0, 400.0))?;
+    ui.resize(Size::new(300.0, 400.0));
     Ok(ui)
 }
 

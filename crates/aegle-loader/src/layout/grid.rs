@@ -1,7 +1,7 @@
 //! Grid tracks, templates, areas and placements.
 
 use aegle_markup::{PropertyName, Value as Literal};
-use aegle_ui::{Container, GridLine, GridLines, Node, Repeat, Result, TemplateItem, Track};
+use aegle_ui::{Container, GridLine, GridLines, Node, Repeat, TemplateItem, Track};
 
 use super::{align, identifier};
 
@@ -74,7 +74,7 @@ fn placement(value: &Literal) -> GridLines {
     }
 }
 
-pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
+pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) {
     use PropertyName::*;
     let container = || Container(node.clone());
     let template = || items(value).iter().map(template_item).collect::<Vec<_>>();
@@ -101,7 +101,7 @@ pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result 
                     _ => unreachable!("checked area rows"),
                 })
                 .collect();
-            container().set_areas(&rows)
+            container().set_areas(&rows);
         }
         GridArea => match value {
             Literal::String(name) => node.set_grid_area(name),

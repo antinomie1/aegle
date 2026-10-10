@@ -75,7 +75,7 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
                 #parent.window_with_options(#title, #facade::WindowOptions {
                     #(#size)*
                     ..::core::default::Default::default()
-                })
+                })?
             },
             quote! { #root_handle.close()?; },
         )
@@ -87,7 +87,7 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
         (
             quote! { #facade::Container },
             create(cx, root, index, &quote! { #parent }),
-            quote! { <#element as #loader::Element>::node(&#root_handle).remove()?; },
+            quote! { <#element as #loader::Element>::node(&#root_handle).remove(); },
         )
     };
     let mut output = Output::default();
@@ -107,7 +107,7 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
             #(#fields)*
         }
         move |#parent: &#parent_type| -> #facade::Result<#view> {
-            let #root_handle = #create_root?;
+            let #root_handle = #create_root;
             let __aegle_result = (|| -> #facade::Result<#view> {
                 #(#creations)*
                 #(#setters)*
@@ -226,7 +226,7 @@ impl Output {
                     };
                     let theme = Ident::new(theme, Span::call_site());
                     self.setters
-                        .push(quote! { #handle.set_theme(#facade::Theme::#theme())?; });
+                        .push(quote! { #handle.set_theme(#facade::Theme::#theme()); });
                 }
                 (
                     Prop::Node(PropertyName::Title | PropertyName::Width | PropertyName::Height),
@@ -246,7 +246,7 @@ impl Output {
                     if !property.new {
                         let arg = arg(property.ty, literal, loader);
                         self.setters
-                            .push(quote! { #glue::set(&#handle, #index, #arg)?; });
+                            .push(quote! { #glue::set(&#handle, #index, #arg); });
                     }
                 }
                 (Prop::Element(_), None) => unreachable!("windows have no element properties"),
@@ -254,7 +254,7 @@ impl Output {
         }
         if !timed.is_empty() {
             self.transitions
-                .push(quote! { #p::transitions(#node, &[#(#timed),*])?; });
+                .push(quote! { #p::transitions(#node, &[#(#timed),*]); });
         }
         for (index, child) in element.children.iter().enumerate() {
             let Child::Element(child) = child else {
@@ -272,7 +272,7 @@ impl Output {
             };
             let constructor = create(cx, child, kind, &parent);
             self.creations
-                .push(quote! { let #child_handle = #constructor?; });
+                .push(quote! { let #child_handle = #constructor; });
             self.visit(cx, child, &child_handle);
         }
     }

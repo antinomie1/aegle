@@ -16,8 +16,8 @@ use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
 fn ui() -> Result<Ui> {
     let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
-    ui.root().set_padding(0.0)?;
-    ui.resize(Size::new(640.0, 480.0))?;
+    ui.root().set_padding(0.0);
+    ui.resize(Size::new(640.0, 480.0));
     Ok(ui)
 }
 
@@ -39,8 +39,8 @@ fn scenes(ui: &Ui) -> Result<Vec<String>> {
 
 fn timings(node: &Node) -> Result<[Option<aegle::Transition>; 2]> {
     Ok([
-        node.property_transition(TransitionProperty::Paint)?,
-        node.property_transition(TransitionProperty::Offset)?,
+        node.property_transition(TransitionProperty::Paint),
+        node.property_transition(TransitionProperty::Offset),
     ])
 }
 
@@ -112,7 +112,7 @@ fn ancestors_apply_before_transitions_install() -> Result {
     let runtime = load(&loaded, "order.aegle")?;
     let slider = runtime.handle("slider").unwrap().node();
     assert_eq!(scenes(&compiled)?, scenes(&loaded)?);
-    assert!(!view.slider.is_animating()?);
-    assert!(!slider.is_animating()?);
+    assert!(!view.slider.is_animating());
+    assert!(!slider.is_animating());
     Ok(())
 }

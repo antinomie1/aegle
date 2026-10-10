@@ -20,7 +20,7 @@ fn ui() -> Result<Ui> {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    ui.resize(Size::new(320.0, 200.0))?;
+    ui.resize(Size::new(320.0, 200.0));
     Ok(ui)
 }
 
@@ -37,29 +37,29 @@ fn follows(ui: &Ui, lane: &Node, play: &Node) -> Result {
     let red = Color::rgb(200, 0, 0);
     let fill = token::<Color>("studio.lane")?;
     let size = token::<f32>("studio.type")?;
-    assert_eq!(play.style()?.background, Some(Theme::light().accent));
-    assert_eq!(play.style()?.radius, Some(0.0));
-    ui.set_theme(Theme::dark())?;
-    assert_eq!(play.style()?.background, Some(Theme::dark().accent));
-    ui.set_token(fill, Some(Color::BLACK))?;
-    lane.set_token(fill, Some(red))?;
-    lane.set_token(Theme::RADIUS, Some(5.0))?;
-    assert_eq!(play.style()?.background, Some(red));
-    assert_eq!(play.style()?.radius, Some(5.0));
-    assert_eq!(ui.token_value(fill)?, Color::BLACK);
-    lane.set_token(fill, None)?;
-    assert_eq!(play.style()?.background, Some(Color::BLACK));
-    ui.set_token(size, Some(20.0))?;
-    assert_eq!(play.token_value(size)?, 20.0);
+    assert_eq!(play.style().background, Some(Theme::light().accent));
+    assert_eq!(play.style().radius, Some(0.0));
+    ui.set_theme(Theme::dark());
+    assert_eq!(play.style().background, Some(Theme::dark().accent));
+    ui.set_token(fill, Some(Color::BLACK));
+    lane.set_token(fill, Some(red));
+    lane.set_token(Theme::RADIUS, Some(5.0));
+    assert_eq!(play.style().background, Some(red));
+    assert_eq!(play.style().radius, Some(5.0));
+    assert_eq!(ui.token_value(fill), Color::BLACK);
+    lane.set_token(fill, None);
+    assert_eq!(play.style().background, Some(Color::BLACK));
+    ui.set_token(size, Some(20.0));
+    assert_eq!(play.token_value(size), 20.0);
     // A zero font size is refused and the old value restored.
-    assert!(ui.set_token(size, Some(0.0)).is_err());
-    assert_eq!(ui.token_value(size)?, 20.0);
-    ui.set_token(fill, None)?;
-    assert_eq!(play.style()?.background, Some(Theme::dark().accent));
+    assert!(panics(|| ui.set_token(size, Some(0.0))));
+    assert_eq!(ui.token_value(size), 20.0);
+    ui.set_token(fill, None);
+    assert_eq!(play.style().background, Some(Theme::dark().accent));
     // A direct setter ends the binding.
-    play.set_background(Color::WHITE)?;
-    ui.set_token(fill, Some(red))?;
-    assert_eq!(play.style()?.background, Some(Color::WHITE));
+    play.set_background(Color::WHITE);
+    ui.set_token(fill, Some(red));
+    assert_eq!(play.style().background, Some(Color::WHITE));
     Ok(())
 }
 
@@ -101,22 +101,22 @@ fn tokens_resolve_and_bindings_follow() -> Result {
     // drops the subtree's overrides and bindings.
     let ui = ui()?;
     let fill = token::<Color>("studio.lane")?;
-    let (left, right) = (ui.root().row()?, ui.root().row()?);
-    right.set_token(fill, Some(Color::WHITE))?;
-    let label = left.text("lane")?;
-    label.bind_color(ColorSlot::Foreground, fill)?;
-    label.bind_length(LengthSlot::FontSize, token("studio.type")?)?;
-    assert!(label.bind_color(ColorSlot::Caret, fill).is_err());
-    label.reparent(&right)?;
-    assert_eq!(label.style()?.foreground, Some(Color::WHITE));
-    label.unbind_token(ColorSlot::Foreground)?;
-    assert_eq!(label.style()?.foreground, None);
+    let (left, right) = (ui.root().row(), ui.root().row());
+    right.set_token(fill, Some(Color::WHITE));
+    let label = left.text("lane");
+    label.bind_color(ColorSlot::Foreground, fill);
+    label.bind_length(LengthSlot::FontSize, token("studio.type")?);
+    assert!(panics(|| label.bind_color(ColorSlot::Caret, fill)));
+    label.reparent(&right);
+    assert_eq!(label.style().foreground, Some(Color::WHITE));
+    label.unbind_token(ColorSlot::Foreground);
+    assert_eq!(label.style().foreground, None);
     right.set_theme_override(Some(ThemeOverride {
         font_size: Some(30.0),
         ..Default::default()
-    }))?;
-    assert_eq!(label.token_value(token::<f32>("studio.type")?)?, 32.0);
-    right.remove()?;
+    }));
+    assert_eq!(label.token_value(token::<f32>("studio.type")?), 32.0);
+    right.remove();
     Ok(())
 }
 
@@ -132,55 +132,54 @@ fn serif(_: &Theme) -> Font {
 fn layout_font_and_transition_bindings_and_atomic_rejection() -> Result {
     let ui = ui()?;
     let space = register_token("theme-test.space", |theme| theme.gap * 2.0)?;
-    let column = ui.root().column()?;
-    let (first, second) = (column.text("a")?, column.text("b")?);
-    column.bind_length(LengthSlot::Padding, space)?;
-    column.bind_length(LengthSlot::Gap, space)?;
+    let column = ui.root().column();
+    let (first, second) = (column.text("a"), column.text("b"));
+    column.bind_length(LengthSlot::Padding, space);
+    column.bind_length(LengthSlot::Gap, space);
     let spacing = || -> Result<(f32, f32)> {
         ui.refresh()?;
-        let (outer, a, b) = (column.bounds()?, first.bounds()?, second.bounds()?);
+        let (outer, a, b) = (column.bounds(), first.bounds(), second.bounds());
         Ok((
             a.origin.x - outer.origin.x,
             b.origin.y - a.origin.y - a.size.height,
         ))
     };
     assert_eq!(spacing()?, (16.0, 16.0));
-    ui.set_token(space, Some(4.0))?;
+    ui.set_token(space, Some(4.0));
     assert_eq!(spacing()?, (4.0, 4.0));
-    column.unbind_token(LengthSlot::Padding)?;
-    column.unbind_token(LengthSlot::Gap)?;
+    column.unbind_token(LengthSlot::Padding);
+    column.unbind_token(LengthSlot::Gap);
     assert_eq!(spacing()?, (0.0, Theme::light().gap));
 
     let face = register_token("theme-test.face", serif)?;
-    first.bind_font(face)?;
-    assert_eq!(first.font()?, Some(serif(&Theme::light())));
+    first.bind_font(face);
+    assert_eq!(first.font(), Some(serif(&Theme::light())));
     let thin = Font {
         weight: 100,
         ..Font::DEFAULT
     };
-    ui.set_token(face, Some(thin))?;
-    assert_eq!(first.font()?, Some(thin));
-    assert!(
-        ui.set_token(face, Some(Font { weight: 0, ..thin }))
-            .is_err()
-    );
-    assert!(column.bind_font(face).is_err());
-    first.unbind_token(TokenSlot::Font)?;
-    assert_eq!(first.font()?, None);
+    ui.set_token(face, Some(thin));
+    assert_eq!(first.font(), Some(thin));
+    assert!(panics(
+        || ui.set_token(face, Some(Font { weight: 0, ..thin }))
+    ));
+    assert!(panics(|| column.bind_font(face)));
+    first.unbind_token(TokenSlot::Font);
+    assert_eq!(first.font(), None);
 
     #[cfg(feature = "motion")]
     {
         use aegle::{Easing, Transition, TransitionProperty::Paint};
         use std::time::Duration;
         let speed = register_token("theme-test.speed", |_| Duration::from_millis(120))?;
-        first.bind_transition(Paint, speed, Easing::Linear)?;
-        ui.set_token(speed, Some(Duration::from_millis(300)))?;
+        first.bind_transition(Paint, speed, Easing::Linear);
+        ui.set_token(speed, Some(Duration::from_millis(300)));
         let slow = Transition::new(Duration::from_millis(300), Easing::Linear);
-        assert_eq!(first.property_transition(Paint)?, Some(slow));
-        first.set_transition(Transition::default())?;
-        ui.set_token(speed, None)?;
+        assert_eq!(first.property_transition(Paint), Some(slow));
+        first.set_transition(Transition::default());
+        ui.set_token(speed, None);
         assert_eq!(
-            first.property_transition(Paint)?,
+            first.property_transition(Paint),
             Some(Transition::default())
         );
     }
@@ -192,24 +191,29 @@ fn layout_font_and_transition_bindings_and_atomic_rejection() -> Result {
         font_size: Some(20.0),
         ..Default::default()
     };
-    column.set_theme_override(Some(large))?;
-    first.bind_length(LengthSlot::FontSize, small)?;
-    let plain = ui.root().row()?;
-    assert!(first.reparent(&plain).is_err());
-    assert_eq!(first.theme()?.font_size, 20.0);
-    assert!(first.bounds()?.origin.y < second.bounds()?.origin.y);
-    assert!(column.set_theme_override(None).is_err());
-    assert!(column.set_theme(Some(Theme::light())).is_err());
-    assert_eq!(column.theme()?.font_size, 20.0);
-    let top = ui.root().text("top")?;
+    column.set_theme_override(Some(large));
+    first.bind_length(LengthSlot::FontSize, small);
+    let plain = ui.root().row();
+    assert!(panics(|| first.reparent(&plain)));
+    assert_eq!(first.theme().font_size, 20.0);
+    assert!(first.bounds().origin.y < second.bounds().origin.y);
+    assert!(panics(|| column.set_theme_override(None)));
+    assert!(panics(|| column.set_theme(Some(Theme::light()))));
+    assert_eq!(column.theme().font_size, 20.0);
+    let top = ui.root().text("top");
     let large = Theme {
         font_size: 20.0,
         ..Theme::light()
     };
-    ui.set_theme(large)?;
-    top.bind_length(LengthSlot::FontSize, small)?;
-    assert!(ui.set_theme(Theme::dark()).is_err());
-    assert_eq!(ui.theme()?, large);
-    assert_eq!(top.token_value(small)?, 4.0);
+    ui.set_theme(large);
+    top.bind_length(LengthSlot::FontSize, small);
+    assert!(panics(|| ui.set_theme(Theme::dark())));
+    assert_eq!(ui.theme(), large);
+    assert_eq!(top.token_value(small), 4.0);
     Ok(())
+}
+
+/// Whether `change` panics, as handle methods do on rejected values.
+fn panics(change: impl FnOnce()) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
 }

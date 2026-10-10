@@ -51,7 +51,7 @@ impl Handle {
     }
 
     /// Reads a checked `self` field inside an event handler.
-    pub(crate) fn field(&self, name: &str) -> Result<crate::Data> {
+    pub(crate) fn field(&self, name: &str) -> crate::Data {
         let glue = self.glue();
         let index = glue.spec().fields.iter().position(|(n, _)| *n == name);
         glue.get(self, index.expect("checked self field"))
@@ -82,7 +82,6 @@ pub(crate) fn consumed(name: PropertyName) -> bool {
 
 /// Applies one checked node property other than a window's or timing one.
 pub fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
-    use PropertyName::*;
     let color = |value: &Literal| {
         let Literal::Color([r, g, b, a]) = *value else {
             unreachable!("checked color")
@@ -97,15 +96,20 @@ pub fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
         };
         return bind_token(node, name, token);
     }
-    if let Some(result) = crate::layout::apply(node, name, value) {
-        return result;
-    }
-    if let Some(result) = crate::motion::geometry(node, name, value) {
-        return result;
-    }
     if let Some(result) = crate::effects::apply(node, name, value) {
         return result;
     }
+    if crate::layout::apply(node, name, value).is_none()
+        && crate::motion::geometry(node, name, value).is_none()
+    {
+        literal(node, name, value, color);
+    }
+    Ok(())
+}
+
+/// Applies a literal node property that is not layout, geometry or an effect.
+fn literal(node: &Node, name: PropertyName, value: &Literal, color: impl Fn(&Literal) -> Color) {
+    use PropertyName::*;
     match (name, value) {
         (Grow, Literal::Number(n)) => node.set_grow(*n),
         (BorderWidth, Literal::Length(n)) => node.set_border_width(*n),
@@ -148,16 +152,17 @@ pub fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
 }
 
 /// Sets the style field the markup checker accepted on `node`.
-fn style(node: &Node, slot: impl Into<TokenSlot>, edit: impl FnOnce(&mut Style)) -> Result {
+fn style(node: &Node, slot: impl Into<TokenSlot>, edit: impl FnOnce(&mut Style)) {
     node.change(|state, id| state.set_style_field(id, slot.into(), edit))
 }
 
-/// Binds a checked property to a token looked up by name.
+/// Binds a checked property to a token looked up by name; fails if no token
+/// of the property's type has that name.
 fn bind_token(node: &Node, name: PropertyName, token: &str) -> Result {
     use PropertyName::*;
     use aegle_ui::{ColorSlot as C, LengthSlot as L};
-    let color = |slot| node.bind_color(slot, aegle_ui::token(token)?);
-    let length = |slot| node.bind_length(slot, aegle_ui::token(token)?);
+    let color = |slot| aegle_ui::token(token).map(|token| node.bind_color(slot, token));
+    let length = |slot| aegle_ui::token(token).map(|token| node.bind_length(slot, token));
     match name {
         Background => color(C::Background),
         Foreground => color(C::Foreground),
@@ -176,7 +181,7 @@ fn bind_token(node: &Node, name: PropertyName, token: &str) -> Result {
         FontSize => length(L::FontSize),
         Padding => length(L::Padding),
         Gap => length(L::Gap),
-        Shadow => node.bind_shadow(aegle_ui::token(token)?),
+        Shadow => aegle_ui::token(token).map(|token| node.bind_shadow(token)),
         _ => unreachable!("checked token property"),
     }
 }

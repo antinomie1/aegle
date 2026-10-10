@@ -47,7 +47,7 @@ fn bindings_blocks_rows_and_components_follow_state() -> Result {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families);
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    ui.resize(Size::new(300.0, 400.0))?;
+    ui.resize(Size::new(300.0, 400.0));
     let view = program(MAIN)?.build(&ui.root())?;
     assert_eq!(names(&ui)?, ["count 0", "add", "even", "a0/0", "b0/0"]);
     click(&ui, "a0/0")?; // Component-local state.
@@ -79,10 +79,10 @@ fn bindings_blocks_rows_and_components_follow_state() -> Result {
         .unwrap()
         .typed::<aegle_widgets::Button>()
         .unwrap();
-    add.activate()?;
+    add.activate();
     assert!(ui.dispatch_callbacks().is_err()); // Overflow stops the handler.
     let status = view.id(0).typed::<aegle_widgets::Label>().unwrap();
-    assert_eq!(status.text()?, format!("count {}", i64::MAX));
+    assert_eq!(status.text(), format!("count {}", i64::MAX));
 
     // A reload keeps compatible states and replaces the controls atomically.
     let mut view = view;

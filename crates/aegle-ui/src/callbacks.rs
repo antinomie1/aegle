@@ -1,6 +1,25 @@
-use crate::{Node, Result, Ui, UiError, state::State};
+use crate::{Node, Result, Ui, state::State};
 use aegle_core::NodeId;
 use std::{collections::HashMap, rc::Rc};
+
+/// What an event handler returns: nothing, or a [`Result`] whose error the
+/// host reports (the native App passes it to `App::on_error`).
+pub trait HandlerResult {
+    /// The handler's outcome as a `Result`.
+    fn into_result(self) -> Result;
+}
+
+impl HandlerResult for () {
+    fn into_result(self) -> Result {
+        Ok(())
+    }
+}
+
+impl HandlerResult for Result {
+    fn into_result(self) -> Result {
+        self
+    }
+}
 
 /// A boxed application callback taking the control it was registered on.
 pub type Callback = Box<dyn FnMut(Node) -> Result>;
@@ -19,26 +38,32 @@ pub(crate) fn add(
     next_version: &mut u64,
     id: NodeId,
     callback: Callback,
-) -> Result {
+) {
     if let Some(handler) = handlers.get_mut(&id) {
         handler.callbacks.push(callback);
-        return Ok(());
+        return;
     }
-    *next_version = next_version
-        .checked_add(1)
-        .ok_or(UiError::IdentityExhausted)?;
+    *next_version += 1;
     let version = *next_version;
     let callbacks = vec![callback];
     handlers.insert(id, Handler { version, callbacks });
-    Ok(())
 }
 
 impl Node {
+    /// Adds an action handler (click, change, submit...); typed handles'
+    /// `on_*` methods wrap it with their own callback types. See
+    /// [`State::on_action`].
+    pub fn on_action(&self, callback: impl FnMut(Node) -> Result + 'static) {
+        self.change(|state, id| {
+            state.on_action(id, callback);
+            Ok(())
+        })
+    }
     /// Keeps `value` until this control is removed or its window closes, tying
     /// application state such as markup bindings to the control's lifetime.
     /// The value is dropped while the UI is being modified, so its `Drop` must
     /// not use this UI.
-    pub fn keep_alive(&self, value: impl std::any::Any) -> Result {
+    pub fn keep_alive(&self, value: impl std::any::Any) {
         self.change(|state, id| {
             state.kept.entry(id).or_default().push(Box::new(value));
             Ok(())
@@ -51,11 +76,7 @@ impl State {
     /// handles wrap it with their own callback types. Handlers run in
     /// registration order after the input batch, outside every UI borrow, so
     /// they may create or remove controls.
-    pub fn on_action(
-        &mut self,
-        id: NodeId,
-        callback: impl FnMut(Node) -> Result + 'static,
-    ) -> Result {
+    pub fn on_action(&mut self, id: NodeId, callback: impl FnMut(Node) -> Result + 'static) {
         add(
             &mut self.callbacks,
             &mut self.callback_version,
@@ -99,10 +120,7 @@ impl Ui {
     /// for the next call. Earlier valid changes remain.
     pub fn dispatch_callbacks(&self) -> Result {
         let count = {
-            let mut state = self
-                .state
-                .try_borrow_mut()
-                .map_err(|_| UiError::ReentrantAccess)?;
+            let mut state = self.write();
             if state.dispatching {
                 return Ok(());
             }
@@ -150,7 +168,7 @@ impl Ui {
         failure
     }
     /// Whether application callbacks still need a dispatch pass before sleeping.
-    pub fn has_pending_callbacks(&self) -> Result<bool> {
-        Ok(!self.read()?.pending.is_empty())
+    pub fn has_pending_callbacks(&self) -> bool {
+        !self.read().pending.is_empty()
     }
 }

@@ -34,12 +34,9 @@ impl Ui {
         match phase {
             TouchPhase::Down => {
                 #[cfg(feature = "motion")]
-                self.stop_fling()?;
-                let drags = self.drags_at(position)?;
-                let mut state = self
-                    .state
-                    .try_borrow_mut()
-                    .map_err(|_| UiError::ReentrantAccess)?;
+                self.stop_fling();
+                let drags = self.drags_at(position);
+                let mut state = self.write();
                 state.fingers.retain(|finger| finger.id != id);
                 state.fingers.push(Finger {
                     id,
@@ -53,10 +50,7 @@ impl Ui {
                 self.pointer(id, PointerKind::Down { clicks: 1 }, position, mods)
             }
             TouchPhase::Move => {
-                let mut state = self
-                    .state
-                    .try_borrow_mut()
-                    .map_err(|_| UiError::ReentrantAccess)?;
+                let mut state = self.write();
                 let Some(finger) = state.fingers.iter_mut().find(|f| f.id == id) else {
                     return Ok(());
                 };
@@ -83,10 +77,7 @@ impl Ui {
             }
             TouchPhase::Up | TouchPhase::Cancel => {
                 let finger = {
-                    let mut state = self
-                        .state
-                        .try_borrow_mut()
-                        .map_err(|_| UiError::ReentrantAccess)?;
+                    let mut state = self.write();
                     let Some(index) = state.fingers.iter().position(|f| f.id == id) else {
                         return Ok(());
                     };
@@ -95,7 +86,7 @@ impl Ui {
                 if finger.panning {
                     #[cfg(feature = "motion")]
                     if phase == TouchPhase::Up {
-                        self.release_pan(&finger, position, time)?;
+                        self.release_pan(&finger, position, time);
                     }
                     return Ok(());
                 }
@@ -112,31 +103,28 @@ impl Ui {
     }
 
     /// Whether the control under `position` handles drags itself.
-    fn drags_at(&self, position: Point) -> Result<bool> {
-        let mut state = self
-            .state
-            .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+    fn drags_at(&self, position: Point) -> bool {
+        let mut state = self.write();
         state.rebuild_order();
         let control = state
             .hit(position)
             .is_some_and(|id| state.tree.get(id).unwrap().context.control.drags());
-        Ok(control || state.scrollbar_at(position, None).is_some())
+        control || state.scrollbar_at(position, None).is_some()
     }
 
     #[cfg(feature = "motion")]
-    fn release_pan(&self, finger: &Finger, position: Point, time: u32) -> Result {
+    fn release_pan(&self, finger: &Finger, position: Point, time: u32) {
         let recent: Vec<_> = finger
             .samples
             .iter()
             .filter(|(at, _)| time.wrapping_sub(*at) <= WINDOW)
             .collect();
         let (Some(first), Some(last)) = (recent.first(), recent.last()) else {
-            return Ok(());
+            return;
         };
         let span = last.0.wrapping_sub(first.0) as f32 / 1000.0;
         if recent.len() < 2 || span <= 0.0 {
-            return Ok(());
+            return;
         }
         let velocity = Point::new((first.1.x - last.1.x) / span, (first.1.y - last.1.y) / span);
         self.fling(position, velocity)

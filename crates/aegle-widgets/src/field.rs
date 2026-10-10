@@ -7,7 +7,7 @@ use aegle_text::{EditorDriver, EditorOptions, EditorPaint, Selection, TextError,
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
-    Container, Control, Result, bar,
+    Container, Control, HandlerResult, Result, bar,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
@@ -19,15 +19,15 @@ handle! {
 
 impl TextField {
     /// Replaces the committed text, clears history and explicitly ends native preedit.
-    pub fn set_text(&self, text: &str) -> Result {
+    pub fn set_text(&self, text: &str) {
         self.change(|state, id| state.set_text(id, text))
     }
     /// Copies committed text, never substituting transient preedit.
-    pub fn text(&self) -> Result<String> {
+    pub fn text(&self) -> String {
         self.change(|state, id| state.text(id))
     }
     /// Allows selection but rejects user edits when true.
-    pub fn set_read_only(&self, read_only: bool) -> Result {
+    pub fn set_read_only(&self, read_only: bool) {
         self.edit(|editor| {
             editor.set_read_only(read_only);
             Ok(())
@@ -36,25 +36,30 @@ impl TextField {
     /// Masks the value with one bullet per character. Password fields keep no
     /// undo history, open no IME composition, refuse copy/cut and expose only
     /// the masks to accessibility. Selections then use display-buffer offsets.
-    pub fn set_password(&self, password: bool) -> Result {
+    pub fn set_password(&self, password: bool) {
         self.edit(|editor| {
             editor.set_password(password);
             Ok(())
         })
     }
-    /// Changes the committed UTF-8 selection; active preedit must first be cancelled.
-    pub fn select(&self, selection: Selection) -> Result {
-        self.edit(|editor| editor.select(selection))
+    /// Changes the committed UTF-8 selection, cancelling active preedit like
+    /// [`Self::set_text`]. Panics on endpoints outside the text or inside a
+    /// character.
+    pub fn select(&self, selection: Selection) {
+        self.edit(|editor| {
+            editor.cancel_preedit();
+            editor.select(selection)
+        })
     }
     /// Adds a single-line Enter handler, dispatched outside the tree borrow.
-    pub fn on_submit(&self, mut callback: impl FnMut(TextField) -> Result + 'static) -> Result {
-        self.change(|state, id| state.on_action(id, move |node| callback(TextField(node))))
+    pub fn on_submit<R: HandlerResult>(&self, mut callback: impl FnMut(TextField) -> R + 'static) {
+        self.on_action(move |node| callback(TextField(node)).into_result())
     }
     /// Applies an editor change, then restarts a focused native IME session.
     fn edit(
         &self,
         apply: impl FnOnce(&mut EditorDriver<'_>) -> std::result::Result<(), TextError>,
-    ) -> Result {
+    ) {
         self.change(|state, id| {
             let fonts = state.fonts.clone();
             let field = state
@@ -202,10 +207,9 @@ pub(crate) fn control(
     ))
 }
 
-pub(crate) fn create(container: &Container, text: &str, multiline: bool) -> Result<TextField> {
-    crate::add(container, |state, theme| {
+pub(crate) fn create(container: &Container, text: &str, multiline: bool) -> TextField {
+    TextField(crate::add(container, |state, theme| {
         let (control, style) = control(state, theme, text, multiline)?;
         Ok((Box::new(control) as Box<dyn Control>, style))
-    })
-    .map(TextField)
+    }))
 }

@@ -66,9 +66,9 @@ pub(crate) fn virtual_list(
     count: usize,
     variable: bool,
     row: RowBuilder,
-) -> Result<ListView> {
-    let height = extent(row_height, count)?;
-    let view = container.scroll_view()?;
+) -> ListView {
+    let height = extent(row_height, count);
+    let view = container.scroll_view();
     view.change(|state, id| {
         state.install(&crate::HOOKS);
         let mut style = state.tree.get(id).unwrap().style().clone();
@@ -91,12 +91,12 @@ pub(crate) fn virtual_list(
             },
         ));
         Ok(())
-    })?;
-    Ok(ListView(view))
+    });
+    ListView(view)
 }
 
 impl ListView {
-    fn list<T>(&self, change: impl FnOnce(&mut State, &mut List) -> Result<T>) -> Result<T> {
+    fn list<T>(&self, change: impl FnOnce(&mut State, &mut List) -> Result<T>) -> T {
         self.change(|state, id| {
             let (index, mut list) = take(state, id);
             let result = change(state, &mut list);
@@ -105,19 +105,19 @@ impl ListView {
         })
     }
     /// Returns the number of rows.
-    pub fn count(&self) -> Result<usize> {
+    pub fn count(&self) -> usize {
         self.list(|_, list| Ok(list.count))
     }
     /// Returns the fixed logical row height, or the estimate of a list whose
     /// rows size to their content.
-    pub fn row_height(&self) -> Result<f32> {
+    pub fn row_height(&self) -> f32 {
         self.list(|_, list| Ok(list.row_height))
     }
     /// Changes the row count. Realized rows at or past it are removed on refresh;
     /// rows below it keep their controls.
-    pub fn set_count(&self, count: usize) -> Result {
+    pub fn set_count(&self, count: usize) {
         self.list(|state, list| {
-            let mut height = extent(list.row_height, count)?;
+            let mut height = extent(list.row_height, count);
             if let Some(offsets) = &mut list.offsets {
                 offsets.truncate(count.min(list.count) + 1);
                 while offsets.len() <= count {
@@ -134,7 +134,7 @@ impl ListView {
         })
     }
     /// Rebuilds every realized row on the next refresh, for changed row data.
-    pub fn reload(&self) -> Result {
+    pub fn reload(&self) {
         self.list(|state, list| {
             list.reload = true;
             state.repaint = true;
@@ -143,13 +143,10 @@ impl ListView {
     }
 }
 
-fn extent(row_height: f32, count: usize) -> Result<f32> {
+fn extent(row_height: f32, count: usize) -> f32 {
     let height = row_height * count as f32;
-    if row_height.is_finite() && row_height > 0.0 && height <= MAX_EXTENT {
-        Ok(height)
-    } else {
-        Err(UiError::InvalidValue.into())
-    }
+    aegle_ui::require(row_height.is_finite() && row_height > 0.0 && height <= MAX_EXTENT);
+    height
 }
 
 /// A row at `top`, of a fixed height or sized to its content.
@@ -366,13 +363,9 @@ pub(crate) fn realize_rows(ui: &Ui) -> Result<bool> {
                 state: Rc::downgrade(&ui.state),
                 id: node,
             });
-            result = container.is_alive().and_then(|alive| {
-                if alive {
-                    builder(&container, row)
-                } else {
-                    Ok(())
-                }
-            });
+            if container.is_alive() {
+                result = builder(&container, row);
+            }
             if result.is_err() {
                 break;
             }

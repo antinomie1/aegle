@@ -2,7 +2,6 @@
 use aegle_text::{Blob, GenericFamily, Selection};
 use aegle_ui::{
     ClipboardRequest, ImeEdit, Key, KeyInput, Modifiers, Result, Size, TextSystem, Theme, Ui,
-    UiError,
 };
 use aegle_widgets::*;
 use std::{
@@ -23,21 +22,21 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     let fonts = Rc::new(RefCell::new(fonts));
     let ui = Ui::with_fonts(fonts.clone(), Theme::default())?;
     let root = ui.root();
-    let row = root.row()?;
-    row.set_padding(3.0)?;
-    let label = row.text("Hello")?;
-    let field = root.text_area("Hello, 世界\n你好 / 日本語 / 한글\nthird\nfourth\nfifth\nsixth")?;
-    field.set_width(None)?;
-    field.set_height(Some(60.0))?;
-    field.set_min_width(0.0)?;
-    field.set_min_height(0.0)?;
-    let button = root.button("Clear")?;
-    ui.resize(Size::new(320.0, 200.0))?;
+    let row = root.row();
+    row.set_padding(3.0);
+    let label = row.text("Hello");
+    let field = root.text_area("Hello, 世界\n你好 / 日本語 / 한글\nthird\nfourth\nfifth\nsixth");
+    field.set_width(None);
+    field.set_height(Some(60.0));
+    field.set_min_width(0.0);
+    field.set_min_height(0.0);
+    let button = root.button("Clear");
+    ui.resize(Size::new(320.0, 200.0));
     assert!(ui.refresh()?);
     assert!(!ui.refresh()?);
     #[cfg(feature = "accessibility")]
     {
-        label.set_text("Changed")?;
+        label.set_text("Changed");
         let snapshot = ui.accessibility(true, "Lifecycle")?;
         assert!(ui.refresh()?, "semantic inspection consumed pending pixels");
         assert!(!ui.refresh()?);
@@ -54,19 +53,19 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
         }
     }
 
-    assert!(label.bounds()?.origin.x >= Theme::default().padding + 3.0);
-    field.focus()?;
-    field.select(Selection::default())?;
+    assert!(label.bounds().origin.x >= Theme::default().padding + 3.0);
+    field.focus();
+    field.select(Selection::default());
     ui.refresh()?;
-    let first = ui.take_ime_state(4000)?.unwrap().request.unwrap();
-    let length = field.text()?.len();
+    let first = ui.take_ime_state(4000).unwrap().request.unwrap();
+    let length = field.text().len();
     field.select(Selection {
         anchor: length,
         focus: length,
-    })?;
+    });
     ui.refresh()?;
-    let last = ui.take_ime_state(4000)?.unwrap().request.unwrap();
-    assert!(last.cursor_rect.origin.y < field.bounds()?.origin.y + field.bounds()?.size.height);
+    let last = ui.take_ime_state(4000).unwrap().request.unwrap();
+    assert!(last.cursor_rect.origin.y < field.bounds().origin.y + field.bounds().size.height);
     assert!(last.selection.focus > first.selection.focus);
     ui.ime(ImeEdit {
         preedit: "世界",
@@ -77,8 +76,8 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
         ..Default::default()
     })?;
     ui.refresh()?;
-    let committed = field.text()?;
-    ui.set_theme(Theme::dark())?;
+    let committed = field.text();
+    ui.set_theme(Theme::dark());
     ui.refresh()?;
     #[cfg(feature = "accessibility")]
     {
@@ -93,47 +92,44 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
             Theme::dark().foreground.to_rgba()
         );
     }
-    assert_eq!(field.text()?, committed);
-    assert_eq!(field.bounds()?.size.height, 60.0);
+    assert_eq!(field.text(), committed);
+    assert_eq!(field.bounds().size.height, 60.0);
     ui.window_focus(false)?;
     ui.window_focus(true)?;
-    assert!(ui.take_ime_state(4000)?.unwrap().request.is_some());
+    assert!(ui.take_ime_state(4000).unwrap().request.is_some());
     let clicks = Rc::new(Cell::new(0));
     let count = clicks.clone();
     let label_copy = label.clone();
     let field_copy = field.clone();
     button.on_click(move |button| {
         count.set(count.get() + 1);
-        field_copy.set_text("")?;
-        label_copy.set_text("Done")?;
-        button.on_click(|button| button.remove())?;
+        field_copy.set_text("");
+        label_copy.set_text("Done");
+        button.on_click(|button| button.remove());
         button.activate()
-    })?;
-    button.activate()?;
+    });
+    button.activate();
     ui.dispatch_callbacks()?;
     assert_eq!(clicks.get(), 1);
-    assert_eq!(label.text()?, "Done");
-    assert!(button.is_alive()?);
-    assert!(ui.has_pending_callbacks()?);
+    assert_eq!(label.text(), "Done");
+    assert!(button.is_alive());
+    assert!(ui.has_pending_callbacks());
     ui.dispatch_callbacks()?;
-    assert!(!button.is_alive()?);
-    assert!(matches!(
-        button.activate().unwrap_err().downcast_ref::<UiError>(),
-        Some(UiError::DeadHandle)
-    ));
-    let moved = row.text("move")?;
-    moved.reparent(&root)?;
-    row.remove()?;
-    assert!(!label.is_alive()?);
-    assert!(moved.is_alive()?);
-    let single = root.text_field("submit")?;
+    assert!(!button.is_alive());
+    assert!(panics(|| button.activate()));
+    let moved = row.text("move");
+    moved.reparent(&root);
+    row.remove();
+    assert!(!label.is_alive());
+    assert!(moved.is_alive());
+    let single = root.text_field("submit");
     let submits = Rc::new(Cell::new(0));
     let count = submits.clone();
     single.on_submit(move |_| {
         count.set(count.get() + 1);
         Ok(())
-    })?;
-    single.focus()?;
+    });
+    single.focus();
     ui.key(KeyInput {
         key: Key::Enter,
         text: "",
@@ -159,36 +155,36 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     single.select(Selection {
         anchor: 0,
         focus: 3,
-    })?;
+    });
     ui.key(shortcut('x', true))?;
     assert_eq!(
-        ui.take_clipboard()?,
+        ui.take_clipboard(),
         Some(ClipboardRequest::Write("sub".into()))
     );
     ui.key(shortcut('v', true))?;
-    assert_eq!(ui.take_clipboard()?, Some(ClipboardRequest::Read));
+    assert_eq!(ui.take_clipboard(), Some(ClipboardRequest::Read));
     ui.paste("re\nsub")?;
-    assert_eq!(single.text()?, "resubmit");
+    assert_eq!(single.text(), "resubmit");
     // Passwords keep their value behind masks and never reach the clipboard.
-    single.set_password(true)?;
+    single.set_password(true);
     ui.key(shortcut('1', false))?;
     ui.key(shortcut('a', true))?;
     ui.key(shortcut('c', true))?;
-    assert_eq!(ui.take_clipboard()?, None);
-    assert_eq!(single.text()?, "resubmit!");
+    assert_eq!(ui.take_clipboard(), None);
+    assert_eq!(single.text(), "resubmit!");
     ui.refresh()?;
-    assert!(ui.take_ime_state(4000)?.unwrap().request.is_none());
+    assert!(ui.take_ime_state(4000).unwrap().request.is_none());
     ui.refresh()?;
-    ui.take_ime_state(4000)?;
-    field.select(Selection::default())?;
-    field.set_text("background")?;
-    field.set_read_only(true)?;
+    ui.take_ime_state(4000);
+    field.select(Selection::default());
+    field.set_text("background");
+    field.set_read_only(true);
     ui.refresh()?;
-    assert!(ui.take_ime_state(4000)?.is_none_or(|state| !state.reset));
+    assert!(ui.take_ime_state(4000).is_none_or(|state| !state.reset));
 
-    root.set_enabled(false)?;
-    assert!(ui.take_ime_state(4000)?.unwrap().request.is_none());
-    root.set_enabled(true)?;
+    root.set_enabled(false);
+    assert!(ui.take_ime_state(4000).unwrap().request.is_none());
+    root.set_enabled(true);
     ui.key(KeyInput {
         key: Key::Tab,
         text: "",
@@ -216,17 +212,11 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
                 .iter()
                 .any(|(_, node)| node.value().is_some_and(|value| value.contains("sub")))
         );
-        assert!(!ui.access_dirty()?);
+        assert!(!ui.access_dirty());
     }
     drop(ui);
-    assert!(!field.is_alive()?);
-    assert!(matches!(
-        field
-            .set_text("dead")
-            .unwrap_err()
-            .downcast_ref::<UiError>(),
-        Some(UiError::DeadHandle)
-    ));
+    assert!(!field.is_alive());
+    assert!(panics(|| field.set_text("dead")));
     assert_eq!(Rc::strong_count(&fonts), 1);
     Ok(())
 }
@@ -241,13 +231,13 @@ fn first_activation_focuses_without_a_focus_cue_until_a_key() -> Result {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::default())?;
-    let first = ui.root().button("First")?;
-    let second = ui.root().button("Second")?;
-    ui.resize(Size::new(200.0, 120.0))?;
+    let first = ui.root().button("First");
+    let second = ui.root().button("Second");
+    ui.resize(Size::new(200.0, 120.0));
     ui.refresh()?;
     ui.window_focus(true)?;
-    assert!(first.is_focused()?);
-    assert!(!first.visual_state()?.focused, "no cue before keyboard use");
+    assert!(first.is_focused());
+    assert!(!first.visual_state().focused, "no cue before keyboard use");
     ui.key(KeyInput {
         key: Key::Tab,
         text: "",
@@ -255,7 +245,12 @@ fn first_activation_focuses_without_a_focus_cue_until_a_key() -> Result {
         pressed: true,
         repeat: false,
     })?;
-    assert!(second.is_focused()?);
-    assert!(second.visual_state()?.focused);
+    assert!(second.is_focused());
+    assert!(second.visual_state().focused);
     Ok(())
+}
+
+/// Whether `change` panics, as handle methods on removed controls do.
+fn panics(change: impl FnOnce()) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
 }

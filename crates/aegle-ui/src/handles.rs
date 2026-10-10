@@ -23,34 +23,63 @@ pub struct Node {
     pub id: NodeId,
 }
 
+/// Panics with a misuse error; see [`Node::change`].
+#[cold]
+pub(crate) fn fail(error: Box<dyn std::error::Error>) -> ! {
+    panic!("{error}")
+}
+
+/// Unwraps internal results in handle methods, panicking like
+/// [`Node::change`] on an error; for control libraries' handles.
+pub trait OrFail<T> {
+    /// The value, or a panic with the error.
+    fn or_fail(self) -> T;
+}
+
+impl<T, E: Into<Box<dyn std::error::Error>>> OrFail<T> for std::result::Result<T, E> {
+    fn or_fail(self) -> T {
+        self.unwrap_or_else(|error| fail(error.into()))
+    }
+}
+
 impl Node {
     /// Runs `change` on the live node with the UI borrowed; the entry point for
     /// control libraries' typed handles.
-    pub fn change<T>(&self, change: impl FnOnce(&mut State, NodeId) -> Result<T>) -> Result<T> {
-        let owner = self.state.upgrade().ok_or(UiError::DeadHandle)?;
+    ///
+    /// # Panics
+    ///
+    /// Misusing a handle is a programming error, so handle methods panic
+    /// instead of returning errors: when the control was removed or its
+    /// window closed (check [`Self::is_alive`]), when called from a painter,
+    /// hook or scene visitor, and when `change` fails, which handle methods
+    /// do for the invalid arguments their documentation names.
+    pub fn change<T>(&self, change: impl FnOnce(&mut State, NodeId) -> Result<T>) -> T {
+        let owner = self.state.upgrade();
+        let owner = owner.unwrap_or_else(|| fail(UiError::DeadHandle.into()));
         let mut state = owner
             .try_borrow_mut()
-            .map_err(|_| UiError::ReentrantAccess)?;
+            .unwrap_or_else(|_| fail(UiError::ReentrantAccess.into()));
         if state.tree.get(self.id).is_none() {
-            return Err(UiError::DeadHandle.into());
+            fail(UiError::DeadHandle.into());
         }
-        change(&mut state, self.id)
+        change(&mut state, self.id).unwrap_or_else(|error| fail(error))
     }
     /// Whether this node and its owning UI still exist.
-    pub fn is_alive(&self) -> Result<bool> {
-        let Some(owner) = self.state.upgrade() else {
-            return Ok(false);
-        };
-        let state = owner.try_borrow().map_err(|_| UiError::ReentrantAccess)?;
-        Ok(state.tree.get(self.id).is_some())
+    pub fn is_alive(&self) -> bool {
+        self.state.upgrade().is_some_and(|owner| {
+            let state = owner
+                .try_borrow()
+                .unwrap_or_else(|_| fail(UiError::ReentrantAccess.into()));
+            state.tree.get(self.id).is_some()
+        })
     }
     /// Last refreshed geometry in logical window coordinates.
-    pub fn bounds(&self) -> Result<Rect> {
+    pub fn bounds(&self) -> Rect {
         self.change(|state, id| Ok(state.tree.get(id).unwrap().context.bounds))
     }
     /// The first text baseline below the top of [`Self::bounds`] as of the last
     /// layout, the line `Align::Baseline` lines up; `None` without text.
-    pub fn baseline(&self) -> Result<Option<f32>> {
+    pub fn baseline(&self) -> Option<f32> {
         self.change(|state, id| {
             let element = &state.tree.get(id).unwrap().context;
             let padding = element.inset(&state.theme);
@@ -58,7 +87,7 @@ impl Node {
         })
     }
     /// Removes this control and every descendant, cancelling focus, capture and callbacks.
-    pub fn remove(&self) -> Result {
+    pub fn remove(&self) {
         self.change(|state, id| {
             if id == state.root {
                 return Err(UiError::RootMutation.into());
@@ -68,10 +97,10 @@ impl Node {
     }
     /// Moves this subtree to the end of another container in the same UI.
     /// If a bound property rejects its value there, the subtree stays where
-    /// it was and the error is returned.
-    pub fn reparent(&self, parent: &Container) -> Result {
+    /// it was and this panics.
+    pub fn reparent(&self, parent: &Container) {
         if !Weak::ptr_eq(&self.state, &parent.state) {
-            return Err(UiError::ForeignUi.into());
+            panic!("{}", UiError::ForeignUi);
         }
         self.change(|state, id| {
             if id == state.root {
@@ -112,11 +141,11 @@ impl Node {
         })
     }
     /// Shows or hides the entire subtree. Hidden controls take no layout space.
-    pub fn set_visible(&self, visible: bool) -> Result {
+    pub fn set_visible(&self, visible: bool) {
         self.change(|state, id| state.set_visible(id, visible))
     }
     /// Disables interaction throughout this subtree, preserving its displayed values.
-    pub fn set_enabled(&self, enabled: bool) -> Result {
+    pub fn set_enabled(&self, enabled: bool) {
         self.change(|state, id| {
             if !enabled {
                 state.cancel_subtree(id)?;
@@ -144,20 +173,17 @@ impl Node {
         })
     }
     /// Requests logical focus using the same enabled/visible policy as keyboard traversal.
-    pub fn focus(&self) -> Result {
+    pub fn focus(&self) {
         self.change(|state, id| state.set_focus(Some(id)))
     }
     /// Whether this control has logical focus, whether or not it shows it
     /// (see `VisualState::focused`).
-    pub fn is_focused(&self) -> Result<bool> {
+    pub fn is_focused(&self) -> bool {
         self.change(|state, id| Ok(state.focus.current(&state.tree) == Some(id)))
     }
     /// Supplementary text for assistive technology, such as a tooltip's;
     /// `None` removes it.
-    pub fn set_accessible_description<'a>(
-        &self,
-        description: impl Into<Option<&'a str>>,
-    ) -> Result {
+    pub fn set_accessible_description<'a>(&self, description: impl Into<Option<&'a str>>) {
         let description = description.into();
         self.change(|state, id| {
             match description {
@@ -169,7 +195,7 @@ impl Node {
         })
     }
     /// Explicit semantic name, including a text field's accessible label.
-    pub fn set_accessible_label(&self, label: &str) -> Result {
+    pub fn set_accessible_label(&self, label: &str) {
         self.change(|state, id| {
             state.tree.update(id, Dirty::SEMANTICS, |node| {
                 node.context.label.clear();
@@ -191,7 +217,7 @@ impl Container {
     pub fn add(
         &self,
         create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, Style)>,
-    ) -> Result<Node> {
+    ) -> Node {
         self.change(|state, parent| {
             let theme = *state.theme_of(parent);
             let (control, style) = create(state, &theme)?;
@@ -203,31 +229,29 @@ impl Container {
         })
     }
     /// Appends a vertical container.
-    pub fn column(&self) -> Result<Container> {
-        self.add(|_, theme| Ok((Box::new(Plain), container_style(theme, false))))
-            .map(Container)
+    pub fn column(&self) -> Container {
+        Container(self.add(|_, theme| Ok((Box::new(Plain), container_style(theme, false)))))
     }
     /// Appends a horizontal container.
-    pub fn row(&self) -> Result<Container> {
-        self.add(|_, theme| {
+    pub fn row(&self) -> Container {
+        Container(self.add(|_, theme| {
             let mut style = container_style(theme, false);
             style.flex_direction = FlexDirection::Row;
             Ok((Box::new(Plain), style))
-        })
-        .map(Container)
+        }))
     }
     /// Appends a transparent group: its children take part in this
     /// container's layout (row, column, wrap or grid) as if they were its own
     /// children, so they can be shown, hidden or replaced as a unit. Its own
     /// layout settings are ignored; hiding it hides its children.
-    pub fn contents(&self) -> Result<Container> {
-        let group = self.add(|_, _| Ok((Box::new(Plain), Style::default())))?;
-        group.change(|state, id| Ok(aegle_layout::set_contents(&mut state.tree, id, true)?))?;
-        Ok(Container(group))
+    pub fn contents(&self) -> Container {
+        let group = self.add(|_, _| Ok((Box::new(Plain), Style::default())));
+        group.change(|state, id| Ok(aegle_layout::set_contents(&mut state.tree, id, true)?));
+        Container(group)
     }
     /// Clips the children's painting, hit testing and pointer shapes to this
     /// container's bounds; layout is unchanged, so they may still overflow it.
-    pub fn set_clip(&self, clip: bool) -> Result {
+    pub fn set_clip(&self, clip: bool) {
         self.change(|state, id| {
             let element = &mut state.tree.get_mut(id).unwrap().context;
             if element.clips != clip {
@@ -240,11 +264,10 @@ impl Container {
     }
 }
 
-/// Rejects nonfinite or negative lengths.
-pub fn valid(value: f32) -> Result {
-    if value.is_finite() && value >= 0.0 {
-        Ok(())
-    } else {
-        Err(UiError::InvalidValue.into())
+/// Checks a handle method's argument: panics with [`UiError::InvalidValue`]
+/// unless `valid`, like [`Node::change`] on other misuse.
+pub fn require(valid: bool) {
+    if !valid {
+        fail(UiError::InvalidValue.into());
     }
 }

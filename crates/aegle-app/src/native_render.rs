@@ -150,14 +150,14 @@ fn device_damage(
     scale: f32,
     width: u32,
     height: u32,
-) -> Result<Option<aegle_types::Region<aegle_types::PixelRect>>> {
-    Ok(ui.damage()?.map(|logical| {
+) -> Option<aegle_types::Region<aegle_types::PixelRect>> {
+    ui.damage().map(|logical| {
         let mut pixels = aegle_types::Region::default();
         for &rect in logical.rects() {
             pixels.add(aegle_types::PixelRect::covering(rect, scale, width, height));
         }
         pixels
-    }))
+    })
 }
 
 impl Runtime {
@@ -175,7 +175,7 @@ impl Runtime {
             #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
             let info = self.backend.window_info(entry.id)?;
             #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
-            let background = entry.ui.background()?;
+            let background = entry.ui.background();
             match self.options.renderer {
                 #[cfg(feature = "software")]
                 RendererBackend::Software => {
@@ -188,7 +188,7 @@ impl Runtime {
                     let scale = info.scale;
                     // Only the changed area is redrawn into a retained buffer.
                     let size = info.buffer_size()?;
-                    let damage = device_damage(&entry.ui, scale, size.width, size.height)?;
+                    let damage = device_damage(&entry.ui, scale, size.width, size.height);
                     let presented = self
                         .backend
                         .present(entry.id, damage, |pixels, size, region| -> Result<()> {
@@ -212,7 +212,7 @@ impl Runtime {
                         })
                         .map_err(|error| format!("present: {error}"))?;
                     if presented {
-                        entry.ui.clear_damage()?;
+                        entry.ui.clear_damage();
                     }
                 }
                 #[cfg(feature = "vulkan")]
@@ -232,7 +232,7 @@ impl Runtime {
                                 };
                             let [width, height] = frame.extent();
                             let scale = info.scale;
-                            if let Some(damage) = device_damage(&entry.ui, scale, width, height)? {
+                            if let Some(damage) = device_damage(&entry.ui, scale, width, height) {
                                 frame.set_damage(damage.rects());
                             }
                             scenes(&entry.ui, scale, &mut frame)?;
@@ -243,7 +243,7 @@ impl Runtime {
                             }
                         });
                     if result.map_err(|error| format!("Vulkan present: {error}"))? {
-                        entry.ui.clear_damage()?;
+                        entry.ui.clear_damage();
                     } else {
                         self.backend.request_redraw(entry.id)?;
                     }
@@ -267,7 +267,7 @@ impl Runtime {
                             Ok(true)
                         });
                     if result.map_err(|error| format!("wgpu present: {error}"))? {
-                        entry.ui.clear_damage()?;
+                        entry.ui.clear_damage();
                     } else {
                         self.backend.request_redraw(entry.id)?;
                     }
@@ -277,10 +277,10 @@ impl Runtime {
             }
             // Native frame pacing blocks occluded windows without an idle poll.
             #[cfg(feature = "motion")]
-            let animating = entry.ui.has_animations()?;
+            let animating = entry.ui.has_animations();
             #[cfg(not(feature = "motion"))]
             let animating = false;
-            if animating || entry.ui.wants_frames()? {
+            if animating || entry.ui.wants_frames() {
                 self.backend.request_redraw(entry.id)?;
             }
         }

@@ -3,6 +3,12 @@
 //! renderer or operating system dependency.
 //!
 //! Control handles are weak references; dropping a handle does not remove a node.
+//! Their methods return plain values and panic on misuse: a removed control,
+//! use from a painter or hook, or an argument their documentation rules out
+//! (see [`Node::change`]). Operations that run control or application code,
+//! such as [`Ui::refresh`], input delivery and [`Ui::dispatch_callbacks`],
+//! return [`Result`]; event handlers may return `()` or a `Result`
+//! ([`HandlerResult`]).
 //! `system-fonts` adds system font discovery (explicit fonts remain available
 //! without it); `accessibility` exports semantic trees; `motion` adds
 //! transitions, momentum scrolling and animated transforms. A native host such as
@@ -75,6 +81,7 @@ pub use aegle_theme::{
 pub use aegle_types::{
     Color, Cursor, DragData, Point, Preferences, Rect, Region, Shadow, Size, TouchPhase,
 };
+pub use callbacks::HandlerResult;
 pub use control::{CONTAINER, Control, Plain};
 pub use decorator::Decorator;
 pub use drag::{DropEvent, Drops};
@@ -82,7 +89,7 @@ pub use events::KeyEvent;
 #[cfg(feature = "grid")]
 pub use grid_handles::Stack;
 pub use group::Visit;
-pub use handles::{Container, Node, valid};
+pub use handles::{Container, Node, OrFail, require};
 pub use hooks::Hooks;
 pub use layout_handles::LocalLayout;
 #[cfg(feature = "motion")]

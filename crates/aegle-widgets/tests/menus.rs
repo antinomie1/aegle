@@ -16,7 +16,7 @@ fn ui() -> Result<Ui> {
         .collection_mut()
         .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    ui.resize(Size::new(400.0, 300.0))?;
+    ui.resize(Size::new(400.0, 300.0));
     Ok(ui)
 }
 
@@ -58,32 +58,32 @@ fn hover(ui: &Ui, at: Point) -> Result {
     ui.refresh().map(drop)
 }
 
-fn focused(item: &MenuItem) -> Result<bool> {
+fn focused(item: &MenuItem) -> bool {
     item.is_focused()
 }
 
 #[test]
 fn context_menus_open_where_requested_and_close_on_choice() -> Result {
     let ui = ui()?;
-    let area = ui.root().button("Area")?;
-    area.set_width(380.0)?;
-    area.set_height(280.0)?;
-    let menu = area.context_menu()?;
+    let area = ui.root().button("Area");
+    area.set_width(380.0);
+    area.set_height(280.0);
+    let menu = area.context_menu();
     let log = Rc::new(RefCell::new(Vec::new()));
-    let copy = menu.item("Copy")?;
+    let copy = menu.item("Copy");
     let seen = log.clone();
     copy.on_click(move |_| {
         seen.borrow_mut().push("copy");
         Ok(())
-    })?;
-    menu.separator()?;
-    let wrap = menu.check_item("Wrap", false)?;
+    });
+    menu.separator();
+    let wrap = menu.check_item("Wrap", false);
     let seen = log.clone();
     wrap.on_click(move |item| {
         seen.borrow_mut()
-            .push(if item.is_checked()? { "on" } else { "off" });
+            .push(if item.is_checked() { "on" } else { "off" });
         Ok(())
-    })?;
+    });
     ui.refresh()?;
 
     // A secondary press shows the menu with its corner at the point.
@@ -92,15 +92,15 @@ fn context_menus_open_where_requested_and_close_on_choice() -> Result {
     ui.pointer(PointerId(1), secondary, at, Modifiers::default())?;
     ui.dispatch_callbacks()?;
     ui.refresh()?;
-    assert!(menu.is_shown()?);
-    assert_eq!(menu.bounds()?.origin, at);
-    assert!(focused(&copy)?);
+    assert!(menu.is_shown());
+    assert_eq!(menu.bounds().origin, at);
+    assert!(focused(&copy));
     // Down skips the separator; Enter toggles the check item and closes.
     key(&ui, Key::Down)?;
-    assert!(focused(&wrap)?);
+    assert!(focused(&wrap));
     key(&ui, Key::Enter)?;
-    assert!(!menu.is_shown()?);
-    assert!(wrap.is_checked()?);
+    assert!(!menu.is_shown());
+    assert!(wrap.is_checked());
 
     // Near the window's corner it flips to fit; a press on the anchor area
     // outside the menu closes it.
@@ -108,28 +108,28 @@ fn context_menus_open_where_requested_and_close_on_choice() -> Result {
     ui.pointer(PointerId(1), secondary, corner, Modifiers::default())?;
     ui.dispatch_callbacks()?;
     ui.refresh()?;
-    let bounds = menu.bounds()?;
+    let bounds = menu.bounds();
     assert_eq!(bounds.origin.x + bounds.size.width, corner.x);
     assert!(bounds.origin.y + bounds.size.height <= 300.0);
     click(&ui, Point::new(20.0, 20.0))?;
-    assert!(!menu.is_shown()?);
+    assert!(!menu.is_shown());
 
     // The Menu key and Shift+F10 open it at the focused control.
-    area.focus()?;
+    area.focus();
     key(&ui, Key::ContextMenu)?;
-    assert!(menu.is_shown()?);
-    assert_eq!(menu.bounds()?.origin, area.bounds()?.origin);
+    assert!(menu.is_shown());
+    assert_eq!(menu.bounds().origin, area.bounds().origin);
     key(&ui, Key::Escape)?;
-    assert!(!menu.is_shown()?);
-    assert!(area.visual_state()?.focused);
+    assert!(!menu.is_shown());
+    assert!(area.visual_state().focused);
     let shift = Modifiers {
         shift: true,
         ..Default::default()
     };
     key_with(&ui, Key::Function(10), shift)?;
-    assert!(menu.is_shown()?);
-    click(&ui, center(copy.bounds()?))?;
-    assert!(!menu.is_shown()?);
+    assert!(menu.is_shown());
+    click(&ui, center(copy.bounds()))?;
+    assert!(!menu.is_shown());
     assert_eq!(*log.borrow(), ["on", "copy"]);
 
     #[cfg(feature = "accessibility")]
@@ -155,7 +155,7 @@ fn context_menus_open_where_requested_and_close_on_choice() -> Result {
         };
         assert!(ui.access_action(request)?);
         ui.dispatch_callbacks()?;
-        assert!(menu.is_shown()?);
+        assert!(menu.is_shown());
     }
     Ok(())
 }
@@ -163,132 +163,132 @@ fn context_menus_open_where_requested_and_close_on_choice() -> Result {
 #[test]
 fn submenus_follow_hover_and_arrow_keys() -> Result {
     let ui = ui()?;
-    let button = ui.root().row()?.button("File")?;
-    let menu = button.menu()?;
-    let new = menu.item("New")?;
-    let recent = menu.submenu("Recent")?;
-    let first = recent.item("a.txt")?;
-    recent.item("b.txt")?;
-    let quit = menu.item("Quit")?;
+    let button = ui.root().row().button("File");
+    let menu = button.menu();
+    let new = menu.item("New");
+    let recent = menu.submenu("Recent");
+    let first = recent.item("a.txt");
+    recent.item("b.txt");
+    let quit = menu.item("Quit");
     ui.refresh()?;
-    menu.show()?;
+    menu.show();
     ui.refresh()?;
-    assert!(focused(&new)?);
+    assert!(focused(&new));
 
     // Right opens the submenu beside its item and focuses its first entry;
     // Left closes it and returns to the item.
     key(&ui, Key::Down)?;
     key(&ui, Key::Right)?;
-    assert!(recent.is_shown()?);
-    assert!(focused(&first)?);
-    let (opener, inner) = (recent.anchor()?.bounds()?, recent.bounds()?);
+    assert!(recent.is_shown());
+    assert!(focused(&first));
+    let (opener, inner) = (recent.anchor().bounds(), recent.bounds());
     assert_eq!(inner.origin.x, opener.origin.x + opener.size.width);
     assert_eq!(inner.origin.y, opener.origin.y);
     key(&ui, Key::Left)?;
-    assert!(!recent.is_shown()?);
-    assert!(menu.is_shown()?);
+    assert!(!recent.is_shown());
+    assert!(menu.is_shown());
     key(&ui, Key::End)?;
-    assert!(focused(&quit)?);
+    assert!(focused(&quit));
 
     // Resting on the opener shows the submenu without moving focus into it;
     // resting on a sibling hides it again.
-    let opener = center(recent.anchor()?.bounds()?);
+    let opener = center(recent.anchor().bounds());
     hover(&ui, opener)?;
-    assert!(recent.is_shown()?);
-    assert!(!focused(&first)?);
-    hover(&ui, center(quit.bounds()?))?;
-    assert!(!recent.is_shown()?);
-    assert!(focused(&quit)?);
+    assert!(recent.is_shown());
+    assert!(!focused(&first));
+    hover(&ui, center(quit.bounds()))?;
+    assert!(!recent.is_shown());
+    assert!(focused(&quit));
 
     // Hiding a menu hides its open submenu.
     hover(&ui, opener)?;
-    assert!(recent.is_shown()?);
-    menu.hide()?;
-    assert!(!recent.is_shown()?);
+    assert!(recent.is_shown());
+    menu.hide();
+    assert!(!recent.is_shown());
     Ok(())
 }
 
 #[test]
 fn menu_bars_switch_between_open_menus() -> Result {
     let ui = ui()?;
-    let bar = ui.root().menu_bar()?;
-    let file = bar.menu("File")?;
-    let open = file.item("Open")?;
-    let edit = bar.menu("Edit")?;
-    let undo = edit.item("Undo")?;
-    ui.root().button("Body")?;
+    let bar = ui.root().menu_bar();
+    let file = bar.menu("File");
+    let open = file.item("Open");
+    let edit = bar.menu("Edit");
+    let undo = edit.item("Undo");
+    ui.root().button("Body");
     ui.refresh()?;
-    let file_entry = center(file.anchor()?.bounds()?);
-    let edit_entry = center(edit.anchor()?.bounds()?);
+    let file_entry = center(file.anchor().bounds());
+    let edit_entry = center(edit.anchor().bounds());
 
     // A click opens a menu below its entry; resting on the next entry
     // switches menus; a second click on that entry closes it.
     click(&ui, file_entry)?;
-    assert!(file.is_shown()?);
-    assert!(focused(&open)?);
+    assert!(file.is_shown());
+    assert!(focused(&open));
     hover(&ui, edit_entry)?;
-    assert!(!file.is_shown()? && edit.is_shown()?);
+    assert!(!file.is_shown() && edit.is_shown());
     click(&ui, edit_entry)?;
-    assert!(!edit.is_shown()?);
+    assert!(!edit.is_shown());
 
     // F10 focuses the first entry; Right moves along the bar and Down
     // opens; inside a menu Left and Right move to the neighboring menu.
     key(&ui, Key::Function(10))?;
     key(&ui, Key::Right)?;
     key(&ui, Key::Down)?;
-    assert!(edit.is_shown()? && focused(&undo)?);
+    assert!(edit.is_shown() && focused(&undo));
     key(&ui, Key::Right)?;
-    assert!(!edit.is_shown()? && file.is_shown()? && focused(&open)?);
+    assert!(!edit.is_shown() && file.is_shown() && focused(&open));
     key(&ui, Key::Left)?;
-    assert!(edit.is_shown()?);
+    assert!(edit.is_shown());
     key(&ui, Key::Escape)?;
-    assert!(!edit.is_shown()?);
+    assert!(!edit.is_shown());
     Ok(())
 }
 
 #[test]
 fn radio_items_are_exclusive_within_their_run() -> Result {
     let ui = ui()?;
-    let button = ui.root().row()?.button("View")?;
-    let menu = button.menu()?;
-    let small = menu.radio_item("Small", true)?;
-    let large = menu.radio_item("Large", false)?;
-    menu.separator()?;
-    let light = menu.radio_item("Light", true)?;
-    let save = menu.item("Save")?;
-    menu.show()?;
+    let button = ui.root().row().button("View");
+    let menu = button.menu();
+    let small = menu.radio_item("Small", true);
+    let large = menu.radio_item("Large", false);
+    menu.separator();
+    let light = menu.radio_item("Light", true);
+    let save = menu.item("Save");
+    menu.show();
     // The hint at the end of the item widens the menu, and follows the
     // theme's font size like the item's text.
     let share = |ui: &Ui| -> Result<f32> {
         ui.refresh()?;
-        let width = menu.bounds()?.size.width;
-        save.set_shortcut(Some("Ctrl+S"))?;
+        let width = menu.bounds().size.width;
+        save.set_shortcut(Some("Ctrl+S"));
         ui.refresh()?;
-        Ok(menu.bounds()?.size.width - width)
+        Ok(menu.bounds().size.width - width)
     };
     let normal = share(&ui)?;
     assert!(normal > 20.0);
     let theme = Theme::light();
-    save.set_shortcut(None)?;
+    save.set_shortcut(None);
     ui.set_theme(Theme {
         font_size: theme.font_size * 2.0,
         ..theme
-    })?;
+    });
     let doubled = share(&ui)?;
     assert!(doubled > normal * 1.5, "{normal} → {doubled}");
-    ui.set_theme(theme)?;
+    ui.set_theme(theme);
     ui.refresh()?;
 
     // Choosing a radio item unchecks only its own run; choosing it again
     // keeps it checked.
-    click(&ui, center(large.bounds()?))?;
-    assert!(large.is_checked()? && !small.is_checked()? && light.is_checked()?);
-    menu.show()?;
+    click(&ui, center(large.bounds()))?;
+    assert!(large.is_checked() && !small.is_checked() && light.is_checked());
+    menu.show();
     ui.refresh()?;
-    click(&ui, center(large.bounds()?))?;
-    assert!(large.is_checked()?);
-    small.set_checked(true)?;
-    assert!(small.is_checked()? && !large.is_checked()? && light.is_checked()?);
+    click(&ui, center(large.bounds()))?;
+    assert!(large.is_checked());
+    small.set_checked(true);
+    assert!(small.is_checked() && !large.is_checked() && light.is_checked());
 
     #[cfg(feature = "accessibility")]
     {

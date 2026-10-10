@@ -11,8 +11,8 @@ impl Node {
     /// Writing every field, it ends every style token binding; font and
     /// layout bindings remain. Hover/focus fields require an interactive
     /// control, pressed a button/toggle/slider, indicator a toggle, slider or
-    /// progress bar, and selection/caret an editor; otherwise returns WrongKind.
-    pub fn set_style(&self, style: Style) -> Result {
+    /// progress bar, and selection/caret an editor; otherwise this panics.
+    pub fn set_style(&self, style: Style) {
         self.change(|state, id| {
             state.set_style(id, style)?;
             state.tokens.unbind(id, TokenSlot::is_style);
@@ -20,7 +20,7 @@ impl Node {
         })
     }
     /// Reads local paint overrides; unresolved `None` values come from the skin.
-    pub fn style(&self) -> Result<Style> {
+    pub fn style(&self) -> Style {
         self.change(|state, id| {
             Ok(state
                 .decorations
@@ -29,22 +29,22 @@ impl Node {
         })
     }
     /// Resolves and validates the visible skin and local overrides in the current state.
-    pub fn appearance(&self) -> Result<Appearance> {
+    pub fn appearance(&self) -> Appearance {
         self.change(|state, id| state.appearance(id))
     }
     /// Reads effective enabled, focus, pointer and editor policy state for a skin.
     /// Hover/focus are available on interactive controls; pressed on buttons,
     /// toggles and sliders. Checked is meaningful for toggles, read-only for editors.
-    pub fn visual_state(&self) -> Result<VisualState> {
+    pub fn visual_state(&self) -> VisualState {
         self.change(|state, id| Ok(state.visual_state(id)))
     }
     /// Translates this subtree by a finite logical offset after layout, without
     /// changing layout or scroll extents. Bounds, hit testing, clipping, the IME
     /// anchor and accessibility follow it. With `motion`, a control with a
     /// transition policy animates from its presented offset.
-    pub fn set_offset(&self, offset: Point) -> Result {
+    pub fn set_offset(&self, offset: Point) {
         if !(offset.x.is_finite() && offset.y.is_finite()) {
-            return Err(UiError::InvalidValue.into());
+            panic!("{}", UiError::InvalidValue);
         }
         self.change(|state, id| {
             #[cfg(feature = "motion")]
@@ -59,7 +59,7 @@ impl Node {
         })
     }
     /// The logical target offset; [`Self::bounds`] reflects the presented one.
-    pub fn offset(&self) -> Result<Point> {
+    pub fn offset(&self) -> Point {
         self.change(|state, id| {
             #[cfg(feature = "motion")]
             if let Some(active) = state.motion.moving.get(&id) {

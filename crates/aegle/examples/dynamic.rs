@@ -14,6 +14,6 @@ fn main() -> Result<()> {
             eprintln!("{error}");
         }
         Ok(())
-    })?;
+    });
     app.run()
 }
