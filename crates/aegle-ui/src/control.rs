@@ -238,6 +238,10 @@ pub trait Control: Any {
     fn editor_mut(&mut self) -> Option<&mut TextField> {
         None
     }
+    /// Adjusts the node's text style for this control's text, as a type
+    /// role scaling the size and weight. The engine applies it wherever it
+    /// shapes the control's text: set text, font changes and theme changes.
+    fn text_role(&self, _style: &mut TextStyle<'_>) {}
     /// Reshapes its text in a new font size or face, from the theme or a
     /// local font; by default its paragraph or editor. A control showing more
     /// text, such as a menu item's shortcut hint, reshapes that too.
@@ -262,6 +266,15 @@ pub trait Control: Any {
     /// an editor's scrolled text origin, a slider's track start.
     fn content_offset(&self, _size: Size, _padding: f32, _scroll: Point) -> Point {
         Point::default()
+    }
+    /// The visible size of an editor's text inside a control of `size`,
+    /// which scrolling keeps the caret within; by default inside `padding`.
+    /// A control drawing labels or icons around its editor narrows it.
+    fn text_viewport(&self, size: Size, padding: f32) -> Size {
+        Size::new(
+            (size.width - padding * 2.0).max(0.0),
+            (size.height - padding * 2.0).max(0.0),
+        )
     }
     /// The pointer moved over the control while no other control holds it.
     fn hover(

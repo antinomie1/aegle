@@ -232,14 +232,7 @@ dependencies = [
 name = "aegle-platform-wayland"
 version = "0.1.0"
 dependencies = [
- "aegle-access",
- "aegle-controls",
- "aegle-core",
  "aegle-dbus",
- "aegle-layout",
- "aegle-render-software",
- "aegle-scene",
- "aegle-text",
  "aegle-types",
  "raw-window-handle",
  "smithay-client-toolkit",

@@ -96,7 +96,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 默认跟随系统深浅色、对比度、文本缩放与减少动态效果；应用可显式选 Light/Dark/System。系统没有提供某项偏好时用默认值并允许应用配置。系统字体缩放与设备像素缩放各应用一次，不能重复放大。
 
-当前原生 App 从平台读取 `Preferences { dark, high_contrast, reduced_motion }`（各为 `Option<bool>`，None 表示系统未报告）。Linux 经会话总线读取 XDG desktop portal 的 `org.freedesktop.appearance`（color-scheme、contrast、reduced-motion）并监听 SettingChanged；Windows 读取 `AppsUseLightTheme`、`SPI_GETHIGHCONTRAST` 与 `SPI_GETCLIENTAREAANIMATION`，在 `WM_SETTINGCHANGE` 时重读。窗口主题按 high_contrast_theme → dark_theme → theme 解析，对应偏好为 true 且选项不为 None 时才采用；显式选择浅色或深色即把其他两项设为 None 或相同主题。`reduced_motion: None` 跟随系统，未报告时为 false。偏好变化只更新仍等于变化前解析值的窗口主题/减少动态效果，应用显式设置的值保留：`window.set_theme(..)` 给根节点局部主题，系统偏好只改变 Ui 的基础主题；`window.ui()?.set_reduced_motion(..)` 同理。`Preferences::text_scale`（百分比，50–400）来自 Windows 的 `TextScaleFactor` 与 portal 的 GNOME `text-scaling-factor`；`AppOptions::text_scale` 显式覆盖，原生 App 把解析后主题的 `font_size` 与 `control_height` 按它缩放，且与设备像素缩放各应用一次。系统未报告时保持 100%。无窗口 Ui 不读取系统偏好。
+当前原生 App 从平台读取 `Preferences { dark, high_contrast, reduced_motion }`（各为 `Option<bool>`，None 表示系统未报告）。Linux 经会话总线读取 XDG desktop portal 的 `org.freedesktop.appearance`（color-scheme、contrast、reduced-motion）并监听 SettingChanged；Windows 读取 `AppsUseLightTheme`、`SPI_GETHIGHCONTRAST` 与 `SPI_GETCLIENTAREAANIMATION`，在 `WM_SETTINGCHANGE` 时重读。窗口主题按 high_contrast_theme → dark_theme → theme 解析，对应偏好为 true 且选项不为 None 时才采用；显式选择浅色或深色即把其他两项设为 None 或相同主题。`reduced_motion: None` 跟随系统，未报告时为 false。偏好变化只更新仍等于变化前解析值的窗口主题/减少动态效果，应用显式设置的值保留：`window.set_theme(..)` 给根节点局部主题，系统偏好只改变 Ui 的基础主题；`window.ui().set_reduced_motion(..)` 同理。`Preferences::text_scale`（百分比，50–400）来自 Windows 的 `TextScaleFactor` 与 portal 的 GNOME `text-scaling-factor`；`AppOptions::text_scale` 显式覆盖，原生 App 把解析后主题的 `font_size` 与 `control_height` 按它缩放，且与设备像素缩放各应用一次。系统未报告时保持 100%。无窗口 Ui 不读取系统偏好。
 
 ## 当前外观过渡
 
@@ -124,7 +124,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 无窗口 Ui 默认不安装过渡。`set_default_transition` 只影响随后创建的交互控件；首次刷新直接建立呈现值，不做入场动画。原生 App 在启用 motion 时为交互控件默认安装120ms EaseOut，`AppOptions.transition=None` 可关闭自动安装。各 App 共用一个单调时钟，通过 Wayland frame callback 推进；没有活动动画时不请求动画帧，无轮询定时器。隐藏子树刷新时直接到目标；compositor 暂停窗口帧回调时不主动唤醒，恢复时采样当前时刻。
 
-`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观、几何过渡或显式动画是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui::set_reduced_motion(true)`（原生窗口经 `window.ui()?`）立即到目标并完成，保留最后一帧重绘；期间不启动新过渡，`with_transition` 与 `animate` 也直接到目标。原生 App 默认跟随系统减少动态效果偏好，`AppOptions.reduced_motion` 可显式覆盖。
+`Ui::advance_animations(Duration)` 供独立宿主显式采样，拒绝时钟倒退；随后按常规 refresh/呈现。新目标从最近采样的呈现值开始。`is_animating()`/`has_animations()` 反映外观、几何过渡或显式动画是否仍活动，节点删除和窗口关闭立即清理对应动画及完成处理器。`Ui::set_reduced_motion(true)`（原生窗口经 `window.ui()`）立即到目标并完成，保留最后一帧重绘；期间不启动新过渡，`with_transition` 与 `animate` 也直接到目标。原生 App 默认跟随系统减少动态效果偏好，`AppOptions.reduced_motion` 可显式覆盖。
 
 ## 动画约束
 

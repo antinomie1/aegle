@@ -2,7 +2,7 @@
 
 本文面向用 Aegle 编写应用的开发者，按任务介绍当前已实现的接口；不使用 `aegle` facade、只用控件库时见[不经 facade 使用控件库](standalone.md)。各控件的外观、状态和专属方法见[控件参考](controls.md)；设计契约与验证记录分别见 [Rust API 契约](../rust-api.md)、[标记语言](../markup.md)和[实现状态](../implementation.md)。
 
-Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。几乎所有调用都返回 `aegle::Result<T>`（`Result<T, Box<dyn Error>>`）：句柄是弱引用，所指控件可能已被删除，此时操作返回 `DeadHandle` 而不是 panic。在回调里直接用 `?`，错误交给 `App::on_error`（见第 7 节），默认不会结束程序。
+Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。创建、修改和读取控件的方法直接返回值，不返回 `Result`；误用是程序错误，会 panic：控件已删除或窗口已关闭（可先用 `is_alive()` 判断）、在绘制器或钩子里使用句柄、传入文档排除的参数（如负宽度、NaN）。会因环境或应用代码失败的操作才返回 `aegle::Result<T>`（`Result<T, Box<dyn Error>>`）：创建 App 与窗口、关闭窗口、加载标记、`refresh` 与输入投递等宿主操作。事件处理器可以返回 `()` 或 `Result`，错误交给 `App::on_error`（见第 7 节），默认不会结束程序。
 
 ## 1. 依赖与 feature
 
@@ -44,7 +44,7 @@ use aegle::prelude::*;
 fn main() -> Result<()> {
     let app = App::new()?;
     let window = app.window("Hello")?;
-    window.text("你好，世界")?;
+    window.text("你好，世界");
     app.run()
 }
 ```
@@ -94,7 +94,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 | `app.preferences()` | 最近应用的系统偏好 `Preferences { dark, high_contrast, reduced_motion }` |
 | `app.ime_available()` | 平台是否支持原生输入法组合 |
 | `window.close()` | 关闭窗口并使其所有控件句柄失效 |
-| `window.ui()?` | 窗口的引擎 `Ui`：窗口级 `on_key`、`set_reduced_motion`、`set_token`、`set_default_transition` 等；主题用根节点的 `window.set_theme(theme)` |
+| `window.ui()` | 窗口的引擎 `Ui`：窗口级 `on_key`、`set_reduced_motion`、`set_token`、`set_default_transition` 等；主题用根节点的 `window.set_theme(theme)` |
 
 `AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Vulkan`/`Wgpu`，编译了软件绘制时默认软件）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
 
@@ -123,7 +123,7 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | --- | --- | --- |
 | `column()` / `row()` | `Container` | 纵向 / 横向容器 |
 | `scroll_view()` | `ScrollView` | 可滚动列 |
-| `list_view(row_height, count, row)` | `ListView` | 等高虚拟列表 |
+| `list_view(height, count, row)` | `ListView` | 虚拟列表；`height` 为等高行的 `f32`，或 `RowHeight::Estimate(估计)` 表示行高随内容变化 |
 | `text(s)` | `Label` | 文本 |
 | `button(s)` | `Button` | 按钮 |
 | `text_field(s)` / `text_area(s)` | `TextField` | 单行 / 多行编辑器 |
@@ -131,7 +131,6 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `radio(s, checked)` | `Radio` | 单选按钮，同一父容器内互斥 |
 | `dropdown(items, selected)` | `Dropdown` | 下拉选择 |
 | `table(columns, row_height, rows, cell)` | `Table` | 表头加虚拟行的表格 |
-| `variable_list_view(estimate, count, row)` | `ListView` | 行高随内容变化的虚拟列表 |
 | `slider(min, max, value)` / `progress(min, max, value)` | `Slider` / `Progress` | 数值控件 |
 | `image(&Image)` | `ImageView` | 图像 |
 | `canvas(painter)` | `Canvas` | 自定义绘制 |
@@ -144,7 +143,7 @@ let panel = app.window_with_options("Panel", WindowOptions {
 
 | `Node` 方法 | 说明 |
 | --- | --- |
-| `is_alive()` | 控件是否仍存在（`Result<bool>`，见下文 `ReentrantAccess`） |
+| `is_alive()` | 控件是否仍存在；删除后其他方法会 panic |
 | `bounds()` / `visible_bounds()` | 最近刷新后的窗口逻辑坐标 / 与祖先视口的交集 |
 | `remove()` / `reparent(&container)` | 删除子树 / 移到另一容器末尾 |
 | `set_visible(b)` / `set_enabled(b)` | 作用于整棵子树；隐藏不占布局 |
@@ -152,12 +151,13 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `set_cursor(Option<Cursor>)` / `cursor()` | 设置/读取该控件及其后代上的鼠标指针形状，`None` 恢复默认 |
 | `set_accessible_label(s)` | 无障碍名称 |
 | `keep_alive(value)` | 让任意值与控件同生命周期 |
-| `popup()` | 创建锚定于该控件的弹出层 `Popup`（`show` / `show_at` / `hide` / `is_shown`） |
-| `menu()` / `context_menu()` | 创建锚定于该控件的菜单；后者在上下文菜单请求处显示，见[控件参考](controls.md#menu--menubar) |
+| `popup()` | 创建锚定于该控件的弹出层 `Popup`（`show` / `show_at` / `hide` / `is_shown`）；来自 `NodeWidgets` trait |
+| `menu()` / `context_menu()` | 创建锚定于该控件的菜单；后者在上下文菜单请求处显示，见[控件参考](controls.md#menu--menubar)；来自 `NodeWidgets` |
+| `set_tooltip(text)` | 悬停提示，同时作为无障碍描述；`None` 移除；来自 `NodeWidgets` |
 
 **鼠标指针形状**：原生窗口会自动跟随。可用形状见 `Cursor`（`Default`、`Text`、`Pointer`、`Crosshair`、`Move`、`Grab`、`Grabbing`、`NotAllowed`、`ResizeHorizontal`、`ResizeVertical`）。规则按优先级：按下后捕获指针的控件（拖选文字时指针移出字段仍是 I-beam）；鼠标下最上层可见控件上的显式 `set_cursor`；可用的文本字段（含只读，因为文字可选）显示 I-beam，禁用的字段不显示；最近祖先的显式形状；箭头。滚动条条带与拖动滚动条始终是箭头；已显示的弹出层遮住其下方的控件。按钮默认不变手形，这是桌面惯例，需要时对按钮或链接式标签 `set_cursor(Some(Cursor::Pointer))`。Windows 没有抓手光标，`Grab` 用手形、`Grabbing` 用四向箭头。
 
-句柄是弱引用：丢弃句柄不会删除控件；删除控件或关闭窗口后，其句柄的调用返回 `UiError::DeadHandle`。句柄可以克隆后移入回调。
+句柄是弱引用：丢弃句柄不会删除控件；删除控件或关闭窗口后，其句柄的其他调用以 `UiError::DeadHandle` 的消息 panic，`is_alive()` 返回 false。句柄可以克隆后移入回调；可能比控件活得久的回调（后台任务、`App::proxy`）应先检查 `is_alive()`。
 
 ## 5. 布局
 
@@ -187,18 +187,18 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `set_align_content(Justify)` | 换行后各行之间（网格中各行之间）的剩余空间 |
 
 ```rust
-let bar = window.row()?;
-bar.set_justify_content(Justify::SpaceBetween)?;
-bar.set_align_items(Align::Center)?;
-bar.text("标题")?;
-bar.button("设置")?;
+let bar = window.row();
+bar.set_justify_content(Justify::SpaceBetween);
+bar.set_align_items(Align::Center);
+bar.text("标题");
+bar.button("设置");
 
-let tags = window.row()?;
-tags.set_wrap(Wrap::Wrap)?;
-tags.set_gap(6.0, 6.0)?;
+let tags = window.row();
+tags.set_wrap(Wrap::Wrap);
+tags.set_gap(6.0, 6.0);
 
-let fab = window.button("+")?;
-fab.set_absolute(Insets::new(Length::Auto, 24.0, 24.0, Length::Auto))?;
+let fab = window.button("+");
+fab.set_absolute(Insets::new(Length::Auto, 24.0, 24.0, Length::Auto));
 ```
 
 **网格与叠放**（facade `grid` feature，release 约增加 244 KiB）：
@@ -214,17 +214,17 @@ fab.set_absolute(Insets::new(Length::Auto, 24.0, 24.0, Length::Auto))?;
 `Track` 有 `Px`、`Percent`、`Fr`（按份分配剩余空间）、`Auto`、`MinContent`、`MaxContent`、`FitContent(px)` 与 `MinMax(px, fr)`。
 
 ```rust
-let cards = window.grid()?;
-cards.set_columns(&[Track::Px(160.0), Track::Fr(1.0), Track::Fr(1.0)])?;
-cards.set_auto_rows(&[Track::Px(96.0)])?;
-let wide = cards.column()?;
-wide.set_grid_column(Placement::at(2).spanning(2))?;
+let cards = window.grid();
+cards.set_columns(&[Track::Px(160.0), Track::Fr(1.0), Track::Fr(1.0)]);
+cards.set_auto_rows(&[Track::Px(96.0)]);
+let wide = cards.column();
+wide.set_grid_column(Placement::at(2).spanning(2));
 
-let avatar = window.stack()?;
-avatar.image(&photo)?;
-let badge = avatar.text("3")?;
-badge.set_align_self(Align::Start)?;
-badge.set_justify_self(Align::End)?;
+let avatar = window.stack();
+avatar.image(&photo);
+let badge = avatar.text("3");
+badge.set_align_self(Align::Start);
+badge.set_justify_self(Align::End);
 ```
 
 **最小尺寸**：与 CSS flex 一样，容器在主轴上的最小尺寸默认由内容决定。滚动视图、虚拟列表和表格本身可以收缩，但若它们放在一个中间行/列里，要让这个中间容器也能缩小，需对它 `set_min_height(0.0)`（行中为 `set_min_width`）。要让一个内容很多的子项只占剩余空间，用 `set_basis(0.0)` 加 `set_grow(1.0)`，否则它会从完整内容尺寸开始参与收缩。
@@ -238,11 +238,11 @@ badge.set_justify_self(Align::End)?;
 **主题** `Theme` 是一组颜色与尺寸：`background`、`surface`、`foreground`、`muted`、`accent`、`border`、`hover`、`pressed`、`selection`、`font_size`、`padding`、`gap`、`radius`（默认 0，直角）、`control_height`。内置 `Theme::light()`、`dark()`、`high_contrast()`，可修改字段后用 `validate()` 检查。
 
 ```rust
-window.set_theme(Theme { radius: 6.0, ..Theme::dark() })?;  // 整个窗口：根节点的局部主题
-panel.set_theme(Theme::dark())?;                           // 只作用于 panel 子树
-panel.set_theme(None)?;                                    // 恢复继承
+window.set_theme(Theme { radius: 6.0, ..Theme::dark() });  // 整个窗口：根节点的局部主题
+panel.set_theme(Theme::dark());                           // 只作用于 panel 子树
+panel.set_theme(None);                                    // 恢复继承
 // 只替换指定 token，其余跟随父主题（含之后的变化）
-panel.set_theme_override(ThemeOverride { accent: Some(Color::rgb(200, 40, 40)), ..Default::default() })?;
+panel.set_theme_override(ThemeOverride { accent: Some(Color::rgb(200, 40, 40)), ..Default::default() });
 ```
 
 原生 `App` 把系统文本缩放（Windows 的文本大小、GNOME 的 `text-scaling-factor`，百分比）应用到解析后主题的 `font_size` 与 `control_height`；`AppOptions.text_scale = Some(125)` 可显式指定，`None`（默认）跟随系统。
@@ -250,8 +250,8 @@ panel.set_theme_override(ThemeOverride { accent: Some(Color::rgb(200, 40, 40)), 
 **局部样式** 覆盖单个控件，优先于皮肤和主题。`set_style(Style { .. })` 一次写入全部字段（未给出的字段回到皮肤值），`style()` 读取，`appearance()` 返回当前解析结果；逐项 setter 是它的单字段简写，只写自己那一项：
 
 ```rust
-card.set_style(Style { background: Some(Color::WHITE), radius: Some(8.0), ..card.style()? })?;
-card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
+card.set_style(Style { background: Some(Color::WHITE), radius: Some(8.0), ..card.style() });
+card.set_border_width(1.0);   // 等同于只改 Style::border_width
 ```
 
 所有控件都有 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground`；传 `None` 让该项回到皮肤值。只对部分控件有意义的 setter 只出现在对应句柄上，用错控件在编译期报错：
@@ -266,7 +266,7 @@ card.set_border_width(1.0)?;   // 等同于只改 Style::border_width
 | `set_indicator_color` | CheckBox、Switch、Radio、Slider、Progress |
 | `set_selection_color`、`set_caret_color` | TextField、NumberField |
 
-`Style` 是值，其中不适用于该控件的字段仍在运行时返回 `UiError::WrongKind`。
+`Style` 是值，其中不适用于该控件的字段在运行时以 `UiError::WrongKind` panic。
 
 **优先级**：一个外观属性的显示值按下表自上而下取第一个存在的来源。
 
@@ -292,14 +292,14 @@ let space = register_token("studio.space", |theme: &Theme| theme.gap * 2.0)?;
 let heading = register_token("studio.heading", |_: &Theme| Font { weight: 700, ..Font::DEFAULT })?;
 let speed = register_token("studio.speed", |_: &Theme| Duration::from_millis(160))?;
 
-play.bind_color(ColorSlot::Background, fill)?;        // 随主题、覆盖与 reparent 更新
-row.bind_length(LengthSlot::Gap, space)?;             // 也可绑定 padding、字号、边框与圆角
-title.bind_font(heading)?;
-play.bind_transition(TransitionProperty::Paint, speed, Easing::EaseOut)?;
+play.bind_color(ColorSlot::Background, fill);        // 随主题、覆盖与 reparent 更新
+row.bind_length(LengthSlot::Gap, space);             // 也可绑定 padding、字号、边框与圆角
+title.bind_font(heading);
+play.bind_transition(TransitionProperty::Paint, speed, Easing::EaseOut);
 
-panel.set_token(fill, Color::rgb(200, 40, 40))?;       // 只覆盖 panel 子树
-window.set_token(space, 4.0)?;                          // 整个窗口
-play.set_background(Color::WHITE)?;                     // 后写者生效：改为常量，结束该项绑定
+panel.set_token(fill, Color::rgb(200, 40, 40));       // 只覆盖 panel 子树
+window.set_token(space, 4.0);                          // 整个窗口
+play.set_background(Color::WHITE);                     // 后写者生效：改为常量，结束该项绑定
 ```
 
 若某个绑定拒绝新值（例如字号变为 0），`set_token`、`set_theme`、`set_theme_override` 与 `reparent` 返回错误且不做任何改变。标记中写 `background: token("studio.lane")`，见[标记语言](../markup.md)。
@@ -315,9 +315,9 @@ fn primary(theme: &Theme, state: VisualState) -> Appearance {
         ..Appearance::base(theme, state)   // 透明、无边框、主题前景色与焦点环
     }
 }
-window.set_kind_skin(&kinds::BUTTON, Some(primary))?;  // 窗口里所有按钮，含之后新建的
-dialog.set_kind_skin(&kinds::BUTTON, None)?;          // 移除该子树上的规则
-save.set_skin(Some(primary))?;                        // 只给这一个控件
+window.set_kind_skin(&kinds::BUTTON, Some(primary));  // 窗口里所有按钮，含之后新建的
+dialog.set_kind_skin(&kinds::BUTTON, None);          // 移除该子树上的规则
+save.set_skin(Some(primary));                        // 只给这一个控件
 ```
 
 `VisualState` 含 `kind`、`enabled`、`hovered`、`pressed`、`focused`、`read_only`、`checked`；`(state.kind.skin)(theme, state)` 得到类型的默认外观，可在其上修改。
@@ -333,26 +333,26 @@ save.set_skin(Some(primary))?;                        // 只给这一个控件
 ## 7. 事件与回调
 
 ```rust
-let status = window.text("Ready")?;
-let save = window.button("Save")?;
-save.on_click(move |_button| status.set_text("Saved"))?;
+let status = window.text("Ready");
+let save = window.button("Save");
+save.on_click(move |_button| status.set_text("Saved"));
 ```
 
 | 控件 | 事件 |
 | --- | --- |
-| `Button` | `on_click(FnMut(Button) -> Result)` |
-| `TextField`（单行） | `on_submit(FnMut(TextField) -> Result)`，Enter 触发 |
-| `CheckBox` / `Switch` / `Radio` / `Slider` / `NumberField` / `Dropdown` / `Tabs` | `on_change(FnMut(Self) -> Result)` |
-| 任意控件（`motion`） | `on_transition_end(FnMut(Node) -> Result)` |
-| `Canvas` | `set_input(FnMut(Canvas, CanvasEvent) -> Result)`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) |
-| 任意控件 | `on_double_click(FnMut(Node) -> Result)`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 |
-| 任意控件 | `on_context_menu(FnMut(Node, Point) -> Result)`：在该控件或没有自己处理器的后代上请求上下文菜单——右键按下（得到按下点），或焦点在其中时按 Menu 键、Shift+F10，或辅助技术的 ShowContextMenu（得到该控件左上角）；点为窗口逻辑坐标，可直接交给 `Popup::show_at` |
-| 任意控件 | `on_drop(FnMut(Node, DropEvent) -> Result)`：成为该控件及没有自己处理器的后代的放置目标。每次拖动经过先得到 `DropEvent::Enter`，再得到一次 `Leave` 或 `Drop { data, position }`（`data` 为 `DragData::Text` 或 `DragData::Files`，`position` 为窗口逻辑坐标）；有处理器即接受文字与文件，不用的数据忽略即可 |
-| `MenuItem` | `on_click(FnMut(MenuItem) -> Result)`：菜单关闭、勾选项切换之后执行 |
+| `Button` | `on_click(FnMut(Button))` |
+| `TextField`（单行） | `on_submit(FnMut(TextField))`，Enter 触发 |
+| `CheckBox` / `Switch` / `Radio` / `Slider` / `NumberField` / `Dropdown` / `Tabs` | `on_change(FnMut(Self))` |
+| 任意控件（`motion`） | `on_transition_end(FnMut(Node))` |
+| `Canvas` | `set_input(FnMut(Canvas, CanvasEvent))`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) |
+| 任意控件 | `on_double_click(FnMut(Node))`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 |
+| 任意控件 | `on_context_menu(FnMut(Node, Point))`：在该控件或没有自己处理器的后代上请求上下文菜单——右键按下（得到按下点），或焦点在其中时按 Menu 键、Shift+F10，或辅助技术的 ShowContextMenu（得到该控件左上角）；点为窗口逻辑坐标，可直接交给 `Popup::show_at` |
+| 任意控件 | `on_drop(FnMut(Node, DropEvent))`：成为该控件及没有自己处理器的后代的放置目标。每次拖动经过先得到 `DropEvent::Enter`，再得到一次 `Leave` 或 `Drop { data, position }`（`data` 为 `DragData::Text` 或 `DragData::Files`，`position` 为窗口逻辑坐标）；有处理器即接受文字与文件，不用的数据忽略即可 |
+| `MenuItem` | `on_click(FnMut(MenuItem))`：菜单关闭、勾选项切换之后执行 |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
 - `on_*` 一律追加：同一事件可以注册多个处理器，按注册顺序执行，处理器与控件同生命周期，没有单独的移除方法。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。
-- 回调返回错误时处理器保留，同一事件的其他处理器照常执行。原生 App 把错误交给 `app.on_error(|error| ...)`：返回 `Ok(())` 继续运行，返回错误则结束 `App::run`；没有设置时打印到 stderr 并继续。无窗口 `Ui::dispatch_callbacks` 把第一个错误返回给宿主，后续排队的回调留到下次调用。
+- 处理器可以返回 `()`，也可以返回 `Result` 以便在里面用 `?`（`HandlerResult` trait 接受两者）。回调返回错误时处理器保留，同一事件的其他处理器照常执行。原生 App 把错误交给 `app.on_error(|error| ...)`：返回 `Ok(())` 继续运行，返回错误则结束 `App::run`；没有设置时打印到 stderr 并继续。无窗口 `Ui::dispatch_callbacks` 把第一个错误返回给宿主，后续排队的回调留到下次调用。
 - 程序 setter（`set_checked`、`set_value`、`set_text` 等）不触发回调，可安全地相互同步；`activate()`、`toggle()`、`increment()`/`decrement()` 模拟用户操作并触发回调。
 - `set_*` 替换：`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。
 
@@ -362,21 +362,21 @@ save.on_click(move |_button| status.set_text("Saved"))?;
 // 播放头：每帧读音频时钟并移动一个小控件；只改 offset，不重新布局或重画时间轴。
 playhead.on_frame(move |node, now| {
     let x = audio.position_seconds() * pixels_per_second - scroll;
-    node.set_offset(Point::new(x, 0.0))?;
-    Ok(audio.playing())                          // 返回 false 停止，窗口回到空闲
-})?;
+    node.set_offset(Point::new(x, 0.0));
+    audio.playing()                              // 返回 false 停止，窗口回到空闲
+});
 
-window.ui()?.on_key(move |key| {
+window.ui().on_key(move |key| {
     if key.pressed && !key.editing && key.key == Key::Character(' ') {
         transport.toggle(key.time);              // key.time：平台报告的按键时刻（Instant）
-        return Ok(true);                         // 消费此键，焦点控件不再收到
+        return true;                             // 消费此键，焦点控件不再收到
     }
-    Ok(false)
-})?;
+    false
+});
 ```
 
-- `Node::on_frame(FnMut(Node, Instant) -> Result<bool>)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外；返回 `true` 继续，返回 `false` 停止。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部停止后不再唤醒。控件删除时其回调随之移除；逐帧回调出错时同样停止（否则每帧都会报同一个错误），错误交给 `on_error`。
-- `Ui::on_key`（原生窗口用 `window.ui()?.on_key`）在焦点控件和 Tab 遍历之前收到每个按键；多个处理器按注册顺序执行，第一个返回 `true` 的处理器消费该键。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。处理器出错时错误照常返回，处理器保留。
+- `Node::on_frame(FnMut(Node, Instant) -> bool)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外；返回 `true` 继续，返回 `false` 停止。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部停止后不再唤醒。控件删除时其回调随之移除。
+- `Ui::on_key(FnMut(KeyEvent) -> bool)`（原生窗口用 `window.ui().on_key`）在焦点控件和 Tab 遍历之前收到每个按键；多个处理器按注册顺序执行，第一个返回 `true` 的处理器消费该键。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。
 - 按键与指针事件带有平台时间：Wayland 的毫秒时间戳与 Win32 的 `GetMessageTime` 被映射到 `Instant`（锚定到最小投递延迟，处理 32 位回绕）。窗口按键处理器从 `KeyEvent::time` 读取，自定义控件从 `InputCx::time` 读取；嵌入宿主用 `key_at`、`pointer_at` 传入。
 
 ### 拖放
@@ -386,21 +386,21 @@ window.ui()?.on_key(move |key| {
 zone.on_drop(move |zone, event| match event {
     DropEvent::Enter => zone.set_background(Color::rgb(220, 232, 255)),
     DropEvent::Leave => zone.set_background(Color::WHITE),
-    DropEvent::Drop { data: DragData::Files(files), .. } => { zone.set_background(Color::WHITE)?; open(files) }
+    DropEvent::Drop { data: DragData::Files(files), .. } => { zone.set_background(Color::WHITE); open(files) }
     DropEvent::Drop { .. } => zone.set_background(Color::WHITE),
-})?;
+});
 // 拖动源：在按下后的移动中发起；控件的按下随即取消，指针交给系统拖动。
 canvas.set_input(move |canvas, event| match event {
     CanvasEvent::Move { pressed: true, .. } => canvas.start_drag(DragData::Text("片段".into())),
-    _ => Ok(()),
-})?;
+    _ => {}
+});
 ```
 
 拖放只有复制语义，数据为文字或本地文件列表。外部程序拖入的数据与本应用其他窗口拖出的数据走同一路径（Wayland 经 compositor 的 `wl_data_device`，Windows 经 OLE）。Windows 上 `start_drag` 在系统拖动循环中阻塞到放下或取消。
 
 ### 后台线程
 
-UI 句柄只能留在 UI 线程。`let proxy = app.proxy(move |message: Job| { label.set_text(&message.text)?; Ok(()) })?;` 返回可克隆、可发送的 `UiProxy<Job>`；任意线程 `proxy.send(job)`（队列上限 1024，满或应用退出时把消息退回）并唤醒事件循环，handler 在 UI 线程于所有借用之外按序运行，可以自由使用其中捕获的控件句柄。
+UI 句柄只能留在 UI 线程。`let proxy = app.proxy(move |message: Job| label.set_text(&message.text))?;` 返回可克隆、可发送的 `UiProxy<Job>`；任意线程 `proxy.send(job)`（队列上限 1024，满或应用退出时把消息退回）并唤醒事件循环，handler 在 UI 线程于所有借用之外按序运行，可以自由使用其中捕获的控件句柄。
 
 ### 桌面服务（`desktop-services`，默认 `desktop` 组合包含）
 
@@ -410,7 +410,7 @@ use aegle::desktop::{Event, FileDialog, Icon, MenuItem, Notification, Shortcut, 
 let desktop = app.desktop("org.example.Notes", move |event| match event {
     Event::Files { paths: Some(paths), .. } => status.set_text(&format!("{paths:?}")),
     Event::Unavailable(why) => status.set_text(&why),   // 没有对应的桌面服务
-    _ => Ok(()),
+    _ => {}
 })?;
 let filters: &[(&str, &[&str])] = &[("Text", &["*.txt"])];
 desktop.open_file(&FileDialog { title: "Open", filters, ..Default::default() })?;
@@ -427,10 +427,10 @@ desktop.set_tray(Some(&Tray { icon, tooltip: "Notes", menu: &[MenuItem::Item { i
 ```rust
 use std::time::Duration;
 
-card.set_transition(Transition::new(Duration::from_millis(180), Easing::EaseOut))?;
-card.set_background(Color::rgb(235, 240, 255))?;      // 外观变化按过渡补间
-card.set_offset(Point::new(0.0, 480.0))?;               // 布局后平移，命中与 IME 跟随
-card.on_transition_end(move |_| window.close())?;       // 全部过渡完成后执行
+card.set_transition(Transition::new(Duration::from_millis(180), Easing::EaseOut));
+card.set_background(Color::rgb(235, 240, 255));      // 外观变化按过渡补间
+card.set_offset(Point::new(0.0, 480.0));               // 布局后平移，命中与 IME 跟随
+card.on_transition_end(move |_| window.close());       // 全部过渡完成后执行
 ```
 
 - 外观过渡覆盖背景、文字、边框、圆角、焦点环、选择、caret 和标志颜色；`presented_appearance()` 返回当前呈现值。`set_property_transition(TransitionProperty::Offset, t)` 只给某一项设置时长与曲线，`None` 让该项立即到目标。
@@ -444,10 +444,10 @@ card.on_transition_end(move |_| window.close())?;       // 全部过渡完成后
 **只针对一次变化**，不改控件的过渡策略：
 
 ```rust
-button.snap(|| button.set_background(Color::WHITE))?;           // 这次不补间
+button.snap(|| button.set_background(Color::WHITE));           // 这次不补间
 card.with_transition(Transition::spring(Spring::new(300.0, 12.0)?), || {
     card.set_offset(Point::new(0.0, 24.0))                        // 这次按弹簧补间，即使 card 没有策略
-})?;
+});
 ```
 
 闭包只作用于调用它的控件；闭包结束后，该控件的修改恢复按策略处理。
@@ -461,13 +461,13 @@ let shake = Animation::new(Duration::from_millis(300), [
     Keyframe::new(0.75, Point::new(8.0, 0.0)).easing(Easing::EaseInOut),
     Keyframe::new(1.0, Point::new(0.0, 0.0)),
 ])?;
-field.animate(Animate::Offset(shake))?;
+field.animate(Animate::Offset(shake));
 
 let pulse = Animation::tween(1.0, 1.08, Transition::default())?
     .delay(Duration::from_millis(500))
     .cycles(Cycles::Forever)
     .alternate(true);
-badge.animate(Animate::Scale(pulse))?;                         // 一直运行，直到 finish/cancel_transition
+badge.animate(Animate::Scale(pulse));                         // 一直运行，直到 finish/cancel_transition
 ```
 
 曲线：`Easing::{Linear, EaseIn, EaseOut, EaseInOut}`、`Easing::cubic_bezier(x1, y1, x2, y2)?`（同 CSS `cubic-bezier`）与 `Easing::Spring(Spring::new(stiffness, damping)?)`；`Transition::spring(spring)` 使用弹簧自然的稳定时间。回弹曲线会让位移、旋转短暂越过目标。`aegle-motion` 的 `Tween` 与 `Animation` 不依赖窗口，也可在自己的宿主里按时间采样。
@@ -488,7 +488,7 @@ Column {
 ```rust
 let view = aegle::ui!(&window, "panel.aegle")?;
 let status = view.status.clone();
-view.done.on_click(move |_| status.set_text("Finished"))?;
+view.done.on_click(move |_| status.set_text("Finished"));
 ```
 
 动态文档可声明 state、表达式绑定、事件块、`if`/`for` 和组件：
@@ -510,10 +510,10 @@ use aegle::loader::Program;
 
 let mut view = Program::load("ui/panel.aegle")?.build(&window)?; // 第三方元素用 load_with(path, &Elements::new().with::<E>())
 view.set("count", aegle::loader::Data::Int(2))?;
-view.reload(&Program::load("ui/panel.aegle")?)?;   // 失败时保留旧界面
+view.reload(&Program::load("ui/panel.aegle")?);   // 失败时保留旧界面
 ```
 
-还可声明 `record`、写 `for item in items key item.id`、在事件块里用 `let`、`emit` 和 `host.name(args)`（宿主用 `aegle::loader::action(name, &[Type], f)` 或 `Program::action` 注册），组件可有 `slot` 与自己的 `event`。完整语法、可绑定属性、类型规则和限制见[标记语言](../markup.md)。
+还可声明 `record`、写 `for item in items key item.id`、在事件块里用 `let`、`emit` 和 `host.name(args)`（宿主用 `aegle::loader::action(name, &[Type], f)` 为本线程的所有程序注册），组件可有 `slot` 与自己的 `event`。完整语法、可绑定属性、类型规则和限制见[标记语言](../markup.md)。
 
 ## 10. 嵌入自有宿主
 
@@ -525,11 +525,11 @@ use std::{cell::RefCell, rc::Rc};
 
 let fonts = Rc::new(RefCell::new(TextSystem::new()));   // 注册应用字体
 let ui = Ui::with_fonts(fonts, Theme::light())?;
-ui.root().button("OK")?;
-ui.resize(Size::new(320.0, 200.0))?;
+ui.root().button("OK");
+ui.resize(Size::new(320.0, 200.0));
 if ui.refresh()? {
     // 保留上一帧像素的宿主可只重绘 damage 的矩形（None 为整窗口），成功呈现后清除
-    let _damage = ui.damage()?;
+    let _damage = ui.damage();
     ui.visit_scenes(|visit| {
         match visit {
             // transform 为窗口逻辑平移，clip 为祖先裁剪（必须应用）
@@ -538,9 +538,8 @@ if ui.refresh()? {
             Visit::PushLayer(layer) => {}
             Visit::PopLayer => {}
         }
-        Ok(())
     })?;
-    ui.clear_damage()?;
+    ui.clear_damage();
 }
 ```
 
@@ -565,4 +564,4 @@ if ui.refresh()? {
 
 ## 11. 错误
 
-`UiError` 变体：`DeadHandle`（控件已删除）、`WrongKind`（操作不适用于该控件）、`ForeignUi`（父子属于不同 Ui）、`InvalidValue`（非有限或越界数值）、`RootMutation`（删除或移动根）、`ReentrantAccess`（在自定义控件的 `paint`、Canvas 的 painter、`Hooks` 或 scene 访问中使用句柄或 Ui；这些代码只能绘制或读取传入的数据，改动放到回调里做。`theme`、`wants_frames`、`has_animations` 等查询与 `is_alive` 因此也返回 `Result`，不会 panic）、`IdentityExhausted`。其他错误保留来源类型，例如字体缺失、平台能力缺失、`aegle::loader::RuntimeError`（标记运行时溢出等）和 `aegle::loader::markup::ProgramError`（带文件/行/列的标记诊断）。可用 `error.downcast_ref::<UiError>()` 区分。
+句柄方法的误用以 `UiError` 的消息 panic：`DeadHandle`（控件已删除或窗口已关闭）、`WrongKind`（操作不适用于该控件）、`ForeignUi`（父子属于不同 Ui）、`InvalidValue`（非有限或越界数值）、`RootMutation`（删除或移动根）、`ReentrantAccess`（在自定义控件的 `paint`、Canvas 的 painter、`Hooks` 或 scene 访问中使用句柄或 Ui；这些代码只能绘制或读取传入的数据，改动放到回调里做）、`Token`（token 未登记或类型不符）。`Result` 中的错误保留来源类型（`register_token` 超过 65 536 个时为 `IdentityExhausted`），例如字体缺失、平台能力缺失、`aegle::loader::RuntimeError`（标记运行时溢出等）和 `aegle::loader::markup::ProgramError`（带文件/行/列的标记诊断）。可用 `error.downcast_ref::<UiError>()` 区分。

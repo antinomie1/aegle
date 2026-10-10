@@ -21,7 +21,7 @@
 | [Progress](#progress) | `progress(min, max, value) -> Progress` | `Progress` |
 | [Column / Row](#column--row) | `column()` / `row() -> Container` | `Column` / `Row` |
 | [ScrollView](#scrollview) | `scroll_view() -> ScrollView` | `ScrollView` |
-| [ListView](#listview) | `list_view(h, n, row)` / `variable_list_view(估计, n, row) -> ListView` | — |
+| [ListView](#listview) | `list_view(h, n, row) -> ListView`（`h` 为行高或 `RowHeight::Estimate(估计)`） | — |
 | [Table](#table) | `table(columns, h, n, cell) -> Table` | — |
 | [ImageView](#imageview) | `image(&Image) -> ImageView` | — |
 | [Canvas](#canvas) | `canvas(painter) -> Canvas` | — |
@@ -31,9 +31,9 @@
 <img src="images/text.png" width="660" alt="Text：默认、font_size 20、自动换行">
 
 ```rust
-let title = window.text("Hello, 世界")?;
-title.set_font_size(20.0)?;
-title.set_text("新的文字")?;
+let title = window.text("Hello, 世界");
+title.set_font_size(20.0);
+title.set_text("新的文字");
 ```
 
 ```text
@@ -49,9 +49,9 @@ Text { text: "Hello, 世界"; font_size: 20dp }
 <img src="images/button.png" width="700" alt="Button：普通、悬停、按下、聚焦、禁用">
 
 ```rust
-let save = window.button("Save")?;
-save.on_click(|button| button.set_text("Saved"))?;
-save.activate()?;            // 按用户激活的规则排队回调
+let save = window.button("Save");
+save.on_click(|button| button.set_text("Saved"));
+save.activate();            // 按用户激活的规则排队回调
 ```
 
 ```text
@@ -70,15 +70,14 @@ Button { id: save; text: "Save"; on clicked { saved = true } }
 <img src="images/text-area.png" width="720" alt="TextArea：多行、溢出与滚动条、聚焦">
 
 ```rust
-let name = window.text_field("")?;
+let name = window.text_field("");
 name.on_submit(|field| {
-    println!("submitted {}", field.text()?);
-    Ok(())
-})?;
-let notes = window.text_area("First line\nSecond line")?;
-notes.select(aegle::Selection { anchor: 0, focus: 5 })?;
-let secret = window.text_field("")?;
-secret.set_password(true)?;
+    println!("submitted {}", field.text());
+});
+let notes = window.text_area("First line\nSecond line");
+notes.select(aegle::Selection { anchor: 0, focus: 5 });
+let secret = window.text_field("");
+secret.set_password(true);
 ```
 
 ```text
@@ -86,7 +85,7 @@ TextField { id: name; text: ""; on submitted { submitted = self.text } }
 TextArea { text: "First line\nSecond line"; read_only: true }
 ```
 
-- 方法：`text`、`set_text`（清空撤销历史并结束输入法预编辑）、`select(Selection)`（UTF-8 字节偏移）、`set_read_only`、`set_password`、`on_submit`（仅单行，Enter 触发）。
+- 方法：`text`、`set_text`（清空撤销历史并结束输入法预编辑）、`select(Selection)`（UTF-8 字节偏移；与 `set_text` 一样先结束进行中的输入法组合）、`set_read_only`、`set_password`、`on_submit`（仅单行，Enter 触发）。
 - 编辑：选择、按词/行移动、按字素删除、撤销/重做（Ctrl+Z / Ctrl+Y）、全选（Ctrl+A）、复制/剪切/粘贴（Ctrl+C / X / V，macOS 用 Cmd）；原生宿主处理剪贴板，自有宿主用 `take_clipboard` / `paste`。
 - 输入法：Wayland text-input-v3、Windows IMM；预编辑不改变已提交的值。
 - 只读可选择和复制；密码模式显示 `•`，拒绝复制、输入法组合并不保留撤销历史。
@@ -98,13 +97,12 @@ TextArea { text: "First line\nSecond line"; read_only: true }
 <img src="images/check-box.png" width="900" alt="CheckBox：未选中、选中、部分选中、悬停、聚焦、禁用">
 
 ```rust
-let agree = window.check_box("I agree", false)?;
+let agree = window.check_box("I agree", false);
 agree.on_change(|control| {
-    println!("checked: {}", control.is_checked()?);
-    Ok(())
-})?;
-agree.set_checked(true)?;   // 程序设置，不触发 on_change
-agree.set_mixed(true)?;     // 部分选中（三态）
+    println!("checked: {}", control.is_checked());
+});
+agree.set_checked(true);   // 程序设置，不触发 on_change
+agree.set_mixed(true);     // 部分选中（三态）
 ```
 
 ```text
@@ -120,11 +118,10 @@ CheckBox { text: "I agree"; checked: agree; on changed { agree = self.checked } 
 <img src="images/switch.png" width="750" alt="Switch：关、开、悬停、聚焦、禁用">
 
 ```rust
-let wifi = window.switch("Wi-Fi", true)?;
+let wifi = window.switch("Wi-Fi", true);
 wifi.on_change(|control| {
-    println!("on: {}", control.is_checked()?);
-    Ok(())
-})?;
+    println!("on: {}", control.is_checked());
+});
 ```
 
 ```text
@@ -139,14 +136,13 @@ Switch { text: "Wi-Fi"; checked: true }
 <img src="images/radio.png" width="600" alt="Radio：分组、悬停、聚焦、禁用">
 
 ```rust
-let size = window.row()?;
-size.radio("Small", false)?;
-let medium = size.radio("Medium", true)?;
-size.radio("Large", false)?;
+let size = window.row();
+size.radio("Small", false);
+let medium = size.radio("Medium", true);
+size.radio("Large", false);
 medium.on_change(|radio| {
-    println!("medium chosen: {}", radio.is_checked()?);
-    Ok(())
-})?;
+    println!("medium chosen: {}", radio.is_checked());
+});
 ```
 
 ```text
@@ -163,12 +159,11 @@ Row { RadioButton { text: "Small" }; RadioButton { text: "Medium"; checked: true
 <img src="images/slider.png" width="950" alt="Slider：数值 30、步长 25、悬停、聚焦、禁用">
 
 ```rust
-let volume = window.slider(0.0, 100.0, 30.0)?;
-volume.set_step(5.0)?;
+let volume = window.slider(0.0, 100.0, 30.0);
+volume.set_step(5.0);
 volume.on_change(|slider| {
-    println!("value: {}", slider.value()?);
-    Ok(())
-})?;
+    println!("value: {}", slider.value());
+});
 ```
 
 ```text
@@ -185,8 +180,8 @@ Slider { min: 0; max: 100; value: 30; step: 5; on changed { volume = self.value 
 <img src="images/progress.png" width="570" alt="Progress：0%、40%、100%">
 
 ```rust
-let download = window.progress(0.0, 100.0, 0.0)?;
-download.set_value(40.0)?;
+let download = window.progress(0.0, 100.0, 0.0);
+download.set_value(40.0);
 ```
 
 ```text
@@ -201,12 +196,12 @@ Progress { min: 0; max: 100; value: 40 }
 <img src="images/layout.png" width="690" alt="Column、Row 与 grow">
 
 ```rust
-let form = window.column()?;
-form.set_gap(12.0, 12.0)?;
-form.set_padding(16.0)?;
-let actions = form.row()?;
-actions.button("Cancel")?;
-actions.button("OK")?.set_grow(1.0)?;
+let form = window.column();
+form.set_gap(12.0, 12.0);
+form.set_padding(16.0);
+let actions = form.row();
+actions.button("Cancel");
+actions.button("OK").set_grow(1.0);
 ```
 
 ```text
@@ -223,12 +218,12 @@ Column { gap: 12dp; padding: 16dp
 <img src="images/scroll-view.png" width="660" alt="ScrollView：纵向溢出、已滚动、双轴溢出">
 
 ```rust
-let list = window.scroll_view()?;
-list.set_height(Some(200.0))?;
+let list = window.scroll_view();
+list.set_height(Some(200.0));
 for i in 1..=50 {
-    list.text(&format!("Item {i}"))?;
+    list.text(&format!("Item {i}"));
 }
-list.scroll_to(Point::new(0.0, 120.0))?;
+list.scroll_to(Point::new(0.0, 120.0));
 ```
 
 ```text
@@ -251,12 +246,11 @@ ScrollView { height: 200dp
 
 ```rust
 let rows = window.list_view(28.0, 10_000, |row, index| {
-    row.text(&format!("Row {index}"))?;
-    Ok(())
-})?;
-rows.set_height(Some(300.0))?;
-rows.set_count(20_000)?;   // 行数变化
-rows.reload()?;            // 行数据变化，重建已显示的行
+    row.text(&format!("Row {index}"));
+});
+rows.set_height(Some(300.0));
+rows.set_count(20_000);   // 行数变化
+rows.reload();            // 行数据变化，重建已显示的行
 ```
 
 - 等高虚拟列表：只有与可见区域相交的行真正存在，滚出的行被删除，进入的行调用回调重建。一万行首次刷新约 0.24 ms，内存增长约 1 MB。
@@ -264,15 +258,14 @@ rows.reload()?;            // 行数据变化，重建已显示的行
 - 回调在刷新期间、UI 借用之外执行，可以使用任意句柄；行内状态在行滚出后丢失，应保存在应用数据中。
 - `行高 × 行数` 不超过 16,777,216。
 
-行高随内容变化时使用 `variable_list_view(估计行高, 行数, row)`：未显示的行按估计值占位，显示后测量实际高度并移动后续行；估计值被替换时滚动位置可能轻微跳动。
+行高随内容变化时把行高写成 `RowHeight::Estimate(估计行高)`：未显示的行按估计值占位，显示后测量实际高度并移动后续行；估计值被替换时滚动位置可能轻微跳动。
 
 <img src="images/variable-list.png" width="260" alt="可变高度列表">
 
 ```rust
-let notes = window.variable_list_view(24.0, 500, move |row, index| {
-    row.text(&messages[index])?;
-    Ok(())
-})?;
+let notes = window.list_view(RowHeight::Estimate(24.0), 500, move |row, index| {
+    row.text(&messages[index]);
+});
 ```
 
 ## Table
@@ -285,11 +278,10 @@ let columns = [
     TableColumn { title: "Size", width: None },   // 占剩余宽度
 ];
 let table = window.table(&columns, 28.0, 100, |cell, row, column| {
-    cell.text(&format!("{row}:{column}"))?;
-    Ok(())
-})?;
-table.set_height(Some(240.0))?;
-table.rows().set_count(200)?;
+    cell.text(&format!("{row}:{column}"));
+});
+table.set_height(Some(240.0));
+table.rows().set_count(200);
 ```
 
 - 带边框的表头行加等高虚拟行（基于 ListView）；`fill(cell, row, column)` 在行进入可见区域时填充单元格列，可放任意控件。`rows()` 返回行列表，用于 `set_count`、`reload` 和滚动。
@@ -301,12 +293,11 @@ table.rows().set_count(200)?;
 <img src="images/dropdown.png" width="600" alt="Dropdown：关闭、展开、聚焦">
 
 ```rust
-let color = window.dropdown(&["Red", "Green", "Blue"], 1)?;
+let color = window.dropdown(&["Red", "Green", "Blue"], 1);
 color.on_change(|dropdown| {
-    println!("chosen {}", dropdown.selected()?);
-    Ok(())
-})?;
-color.set_items(&["One", "Two"], 0)?;   // 程序设置，不触发 on_change
+    println!("chosen {}", dropdown.selected());
+});
+color.set_items(&["One", "Two"], 0);   // 程序设置，不触发 on_change
 ```
 
 - 按钮显示当前选项和下拉箭头；激活（点击、Space、Enter）在下方弹出选项列表，焦点位于当前选项，当前选项带对勾。Up/Down 移动，Enter 或点击选择并关闭；Escape 或点击外部关闭且不改变选择。
@@ -318,12 +309,12 @@ color.set_items(&["One", "Two"], 0)?;   // 程序设置，不触发 on_change
 <img src="images/popup.png" width="440" alt="Popup：隐藏、显示在锚点下方">
 
 ```rust
-let menu = window.button("Menu")?;
-let popup = menu.popup()?;
-popup.text("Popup content")?;
-popup.button("Action")?;
+let menu = window.button("Menu");
+let popup = menu.popup();
+popup.text("Popup content");
+popup.button("Action");
 let shown = popup.clone();
-menu.on_click(move |_| if shown.is_shown()? { shown.hide() } else { shown.show() })?;
+menu.on_click(move |_| if shown.is_shown() { shown.hide() } else { shown.show() });
 ```
 
 - 任意控件可用 `popup()` 创建锚定于自己的弹出层：一个可添加任意子控件的列，默认隐藏。
@@ -335,22 +326,22 @@ menu.on_click(move |_| if shown.is_shown()? { shown.hide() } else { shown.show()
 <img src="images/menu.png" width="600" alt="Menu：菜单栏展开带子菜单；在某点打开的右键菜单">
 
 ```rust
-let bar = window.menu_bar()?;
-let file = bar.menu("File")?;
-file.item("Open")?.on_click(|_| open())?;
-let recent = file.submenu("Open recent")?;
-recent.item("notes.txt")?;
-file.separator()?;
-let autosave = file.check_item("Autosave", true)?;
-autosave.on_click(|item| set_autosave(item.is_checked()?))?;
-file.item("Save")?.set_shortcut(Some("Ctrl+S"))?; // 只是提示，按键由应用绑定
-file.separator()?;
-let small = file.radio_item("Small icons", true)?;   // 相邻的单选项为一组
-file.radio_item("Large icons", false)?;
+let bar = window.menu_bar();
+let file = bar.menu("File");
+file.item("Open").on_click(|_| open());
+let recent = file.submenu("Open recent");
+recent.item("notes.txt");
+file.separator();
+let autosave = file.check_item("Autosave", true);
+autosave.on_click(|item| set_autosave(item.is_checked()));
+file.item("Save").set_shortcut(Some("Ctrl+S")); // 只是提示，按键由应用绑定
+file.separator();
+let small = file.radio_item("Small icons", true);   // 相邻的单选项为一组
+file.radio_item("Large icons", false);
 
-let editor = window.text_area("")?;
-let context = editor.context_menu()?;      // 右键、Menu 键、Shift+F10
-context.item("Paste")?;
+let editor = window.text_area("");
+let context = editor.context_menu();      // 右键、Menu 键、Shift+F10
+context.item("Paste");
 ```
 
 - `Menu` 是角色为菜单的 Popup：`item(text)`、`check_item(text, checked)`、`radio_item(text, checked)`、`submenu(text) -> Menu`、`separator()`，也可以放任意控件。相邻的单选项构成一组，分隔线或其他种类的项开始新组；选择单选项会勾选它并取消同组其他项，再次选择已勾选的项保持勾选。`node.menu()` 显示在锚点下方，由应用调用 `show()`（如在按钮的 `on_click` 中）；`node.context_menu()` 在该控件或其后代请求上下文菜单时于请求点 `show_at`。
@@ -369,9 +360,9 @@ use aegle::scene::Image;
 
 let pixels = vec![255u8; 48 * 48 * 4];             // 非预乘 sRGB RGBA8，首行在前
 let image = Image::new(48, 48, pixels)?;
-let view = window.image(&image)?;
-view.set_width(96.0)?;                             // 按边界拉伸，不保持宽高比
-view.set_height(48.0)?;
+let view = window.image(&image);
+view.set_width(96.0);                             // 按边界拉伸，不保持宽高比
+view.set_height(48.0);
 ```
 
 - 默认尺寸为图像像素尺寸（逻辑像素），交叉轴不拉伸。`image()` 读取、`set_image()` 替换。
@@ -393,10 +384,10 @@ let canvas = window.canvas(|builder, size| {
     path.close();
     builder.fill_path(&path.finish(FillRule::NonZero)?, Color::rgb(53, 92, 218))?;
     Ok(())
-})?;
-canvas.set_width(64.0)?;
-canvas.set_height(64.0)?;
-canvas.invalidate()?;   // 数据变化后重新绘制
+});
+canvas.set_width(64.0);
+canvas.set_height(64.0);
+canvas.invalidate();   // 数据变化后重新绘制
 ```
 
 - painter 用局部坐标和当前尺寸录制 scene 命令（矩形、圆角、边框、路径、图像、变换、裁剪），只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行，不按帧调用。
@@ -420,7 +411,7 @@ canvas.set_input(move |canvas, event| {
         _ => {}
     }
     canvas.invalidate()
-})?;
+});
 ```
 
 - 事件坐标是 Canvas 的局部逻辑坐标，带平台时间 `time`。按下时获得焦点并捕获指针，之后的 `Move { pressed: true }` 与 `Release` 即使在 Canvas 外也会送达；未按下时的移动是 `Move { pressed: false }`，离开是 `Leave`；捕获丢失为 `Cancel`。

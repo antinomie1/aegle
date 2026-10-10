@@ -38,7 +38,7 @@ Column {
 
 ```rust
 let view = aegle::ui!(&window, "panel.aegle")?;
-view.done.on_click(move |_| view.status.set_text("已完成"))?;
+view.done.on_click(move |_| view.status.set_text("已完成"));
 ```
 
 生成的局部 View 有 `root` 字段和每个 `id` 对应的有类型公开字段；没有运行时字符串查询表。ID 在一个文件中唯一，使用 ASCII Rust 标识符，不能是 Rust 关键字、`_` 或保留名 `root`。丢弃 View 不删除控件；它与命令式 API 使用相同弱句柄、回调、布局、主题、IME 和语义树。
@@ -178,7 +178,7 @@ Column {
 - `record Name { field: type }` 全局声明（跨文件，与组件名不得重名），字段为 bool/int/float/string；值用位置式调用 `Task(1, "a", false)` 构造，读取用 `task.title`；record 可作为 state、参数和 `list<Task>` 的元素类型，`==`/`!=` 比较各字段。
 - `for item in list key expression { }`：key 表达式可读本次循环项，类型为 int 或 string；record 列表必须写 key，标量列表默认以项值为 key。同一 key 的行在项值不变时保留控件与本地状态，项值变化则就地重建；重复 key 仍为错误并保留原有行。
 - `let name = expression` 在事件块内声明局部，作用到所在块结束；`on name(value)` 把组件事件携带的值绑定为局部。
-- `host.name(args)`：调用宿主注册的动作。动作用 `Program::action(name, &[Type], f)` 注册，或用 `aegle::loader::action` 注册到线程共享表（`ui!` 生成的视图使用它）；构建视图时校验每个调用有同名动作且参数类型一致，缺失或不符在挂载前报错。动作在 UI 借用外运行，返回的错误停止本次处理；动作不返回值，结果通过更新 state 带回。
+- `host.name(args)`：调用宿主注册的动作。动作用 `aegle::loader::action(name, &[Type], f)` 注册，对本线程的所有程序与 `ui!` 视图生效，`f` 返回 `()` 或 `Result`；构建视图时校验每个调用有同名动作且参数类型一致，缺失或不符在挂载前报错。动作在 UI 借用外运行，返回的错误停止本次处理；动作不返回值，结果通过更新 state 带回。
 - `slot` 写在组件体中，放置实例的子节点：`Card { title: "x"; Text {} }`；子节点在调用方的环境里求值，不可带 `id`，每个组件至多一个 slot，没有 slot 的组件不接受子节点。
 - 组件事件：组件体内 `event name` 或 `event name(type)` 声明，事件块里 `emit name` / `emit name(expr)` 触发，实例上 `on name { }` / `on name(v) { }` 在调用方的环境里处理。
 - 限额：`Program::set_limits(Limits { steps, rows, emit_depth })`，默认每次处理最多 10,000 条语句、单个 `for` 最多 10,000 行、嵌套 emit 最多 64 层；超限是运行时错误，保留此前的赋值与旧的行。运行时错误带文件路径与字节跨度。
@@ -260,7 +260,7 @@ component Counter(start: int = 0) {
 
 编译工具和 loader 共用解析、源位置和类型检查规则；前者生成构造已检查程序的 Rust 代码，后者在运行时解析，两者交给同一引擎执行。当前引擎保留已检查程序（含表达式树）供绑定和块重建使用，不保留源码或解析器状态；表达式以小型树解释，不引入 JIT、GC 或动态代码加载。
 
-第三方元素在运行时由 `Elements::with` 登记；宿主动作既可登记到单个程序（`Program::action`），也可登记到线程共享表（`ui!` 视图只能用后者）。未注册组件、未知属性、错误类型和不支持能力均在挂载前报错，不能静默忽略拼写错误。
+第三方元素在运行时由 `Elements::with` 登记；宿主动作只有一张按线程的表（`aegle::loader::action`），运行时加载的程序与 `ui!` 视图都从中查找。未注册组件、未知属性、错误类型和不支持能力均在挂载前报错，不能静默忽略拼写错误。
 
 首版只提供显式 `reload()`，不内置文件监视器。先解析、检查、构造未挂载子树，成功后原子替换根；失败保留旧界面。替换保留宿主显式模型，重置控件本地状态，结束旧 IME 会话和动画，不承诺复杂热重载状态迁移。
 

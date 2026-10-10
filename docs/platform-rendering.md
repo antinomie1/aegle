@@ -114,7 +114,7 @@ Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该�
 
 输入事件携带原生 seat 身份。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。layer-shell 表面复用同一窗口表与帧门控：两侧相对边同时锚定时该轴拉伸到输出，configure 为 0 的轴保留当前尺寸，层表面始终报告 active。剪贴板按 seat 以 data device 设置/读取，管道读写不阻塞事件循环。拖放复用同一 data device：拖动进入窗口或移动时发出 `Event::Drag`（seat、逻辑坐标），宿主以 `accept_drag(seat, bool)` 回答，接受时选 `text/uri-list` 优先、其次文本类型并设置复制动作；compositor 只把放下交给已接受的窗口，数据经同一非阻塞管道读完后作为 `Event::Drop` 交出并 `finish` offer，读不出或拒绝时为 `DragLeave`。`start_drag(window, seat, data)` 以该 seat 最近的按键/按钮 serial 发起复制拖动，按需非阻塞写出数据。外观偏好由会话总线上的 desktop portal 提供：连接时以最多 100 ms 的有界等待读取，之后的回复与 SettingChanged 通过同一事件循环的 socket 源转成 `Event::Preferences`；没有总线或 portal 时偏好保持未知，不影响 Wayland 连接。`wl_touch` 以 `Event::Touch`（手指 ID、逻辑坐标、毫秒时间、阶段）交给宿主，窗口移除、能力丢失或 compositor cancel 时合成 Cancel。客户端窗口装饰及完整系统无障碍仍待接入；gpu feature 的原生租约与 present_external 复用当前窗口与帧门控。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。
 
-`wake_handle()` 按需创建一个共享的 calloop ping source，克隆句柄可从后台线程请求 `Event::Wake`；宿主先将工作入自己的队列，再发信号，不引入轮询。该连接点已用于可选 Unix 无障碍回调。示例启用 `example-accessibility` 后，由独立 aegle-access adapter 导出同一控件树；Wayland 库的正常依赖仍不包含它。
+`wake_handle()` 按需创建一个共享的 calloop ping source，克隆句柄可从后台线程请求 `Event::Wake`；宿主先将工作入自己的队列，再发信号，不引入轮询。该连接点已用于可选 Unix 无障碍回调：原生 App 启用 `unix-accessibility` 后，由独立 aegle-access adapter 导出控件树；Wayland 库的正常依赖仍不包含它。
 
 ## 当前应用宿主
 

@@ -60,13 +60,13 @@ AccessKit 当前上游 README 表示已发布适配支持单行和多行输入�
 
 ## 当前接入与行为边界
 
-`aegle-access` 默认仅依赖 AccessKit schema，提供与窗口循环无关的 `Mailbox/Handlers`。`unix` feature 才编译 `UnixAdapter` 与 Unix AT-SPI 依赖；Wayland 模块不因此永久绑定无障碍实现。`editor` 示例通过 `example-accessibility` feature 组合它们，从现有 Taffy/控件树派生窗口、标签、按钮、文本框及文字 run，并用 `Dirty::SEMANTICS` 提交变化。首次激活或重新激活提交完整树，其后提交发生变化的逻辑控件及其文字 run；当前没有每个文字 run 的独立差量比较缓存。 facade 默认 desktop 不启用任何系统适配：Linux 应用显式选择 `unix-accessibility` 才会链接 zbus/AT-SPI 依赖并启动上游 worker，Windows 应用显式选择 `windows-accessibility` 才接入 UIA；只需检查语义树时选择 `accessibility`。
+`aegle-access` 默认仅依赖 AccessKit schema，提供与窗口循环无关的 `Mailbox/Handlers`。`unix` feature 才编译 `UnixAdapter` 与 Unix AT-SPI 依赖；Wayland 模块不因此永久绑定无障碍实现。原生 App 在启用 `unix-accessibility` 时组合它们，从控件树派生窗口、控件、文本框及文字 run，并用 `Dirty::SEMANTICS` 提交变化。首次激活或重新激活提交完整树，其后提交发生变化的控件及其文字 run；当前没有每个文字 run 的独立差量比较缓存。 facade 默认 desktop 不启用任何系统适配：Linux 应用显式选择 `unix-accessibility` 才会链接 zbus/AT-SPI 依赖并启动上游 worker，Windows 应用显式选择 `windows-accessibility` 才接入 UIA；只需检查语义树时选择 `accessibility`。
 
 AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handlers 只排队并唤醒主线程；`Wayland::wake_handle()` 复用 calloop 的事件唤醒，不增加轮询定时器。激活回调返回 `None`，宿主收到 `InitialTree` 后立即在 UI 线程构建完整树，即使没有像素需要重画。`UnixAdapter::update_if_active` 的闭包只在原生适配处于活动或待初始化状态时调用；逻辑控件焦点和原生窗口激活分别同步；当前辅助 Focus 不会请求 xdg-activation 来激活后台窗口。按钮 Click 经过与物理输入共用的 `Input::Activate`，Focus 经过现有焦点策略，过期或不适用的目标不会直接访问已失效控件。
 
 `aegle-text/text-a11y` 的 `EditorDriver::accessibility` 导出当前显示文本、布局几何、只读状态及选区；显示文本包含 IME 预编辑及下划线，不能视为已提交值。`select_accessibility` 使用最近一次导出的 run 身份验证范围，布局重建后须重新导出。AccessKit 的 run 内位置以可选择的 shaping cluster 计数，AT-SPI 外部偏移以 Unicode scalar 计数；平台 adapter 与 Parley 依据 run 的字符长度完成转换，不能直接传递 UTF-8 字节偏移。
 
-只读编辑器仍接受合法选择。活动预编辑期间 `select_accessibility` 返回 `CompositionActive`，当前示例报告并拒绝该次选择，不隐式取消组合或重解释旧范围；需要接受此操作的宿主应先显式结束 IME 会话，再发布恢复后的文本并接受基于新快照的选择。未知 run、越界位置或重排后尚未重新发布的选择返回 `InvalidRange`。密码编辑器导出 `PasswordInput` 角色，值、文字 run 与选择只含 `•` 遮盖字符，选择按遮盖偏移转换。
+只读编辑器仍接受合法选择。活动预编辑期间 `select_accessibility` 返回 `CompositionActive`，引擎拒绝该次辅助技术选择，不隐式取消组合或重解释旧范围；应用代码的 `TextField::select` 则先结束组合再选择。未知 run、越界位置或重排后尚未重新发布的选择返回 `InvalidRange`。密码编辑器导出 `PasswordInput` 角色，值、文字 run 与选择只含 `•` 遮盖字符，选择按遮盖偏移转换。
 
 当前 Unix 平台能力如下；API 已存在与系统能力已验证必须分别表述。
 

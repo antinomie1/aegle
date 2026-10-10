@@ -51,7 +51,6 @@ cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
 cargo run -p aegle-render-software --features text --example editor_scene --release
-cargo run -p aegle-platform-wayland --example editor --release
 ```
 
 hello 是 7 行 Rust 加 1 行文档注释的完整应用；hello_markup 为 4 行 Rust（含引入内置元素的 `use aegle::prelude::*`）、4 行标记加 1 行文档注释。controls 与 markup_controls 用相同界面演示跨控件回调、CJK 编辑、主题和关闭窗口，均使用系统字体。layout 与三个 renderer 示例没有窗口。形状示例将保留树的 Taffy 结果接到局部 Scene；首次建立 12 个记录，仅改按钮背景时重建 1 个记录，输出 `target/aegle-software.png`。
@@ -64,7 +63,8 @@ hello 是 7 行 Rust 加 1 行文档注释的完整应用；hello_markup 为 4 �
 
 ## 验证
 
-- Linux（2026-10-10，rustc 1.97，API 收敛之后）：`cargo test --workspace` 在默认（122 项）与 `--all-features`（131 项，另 29 项需要 compositor/GPU 而标为 ignored）下通过且无警告；`cargo clippy --workspace --all-targets` 在两种配置下无告警；`cargo doc --workspace --all-features` 无告警；facade 的九组 feature 组合（无 feature、`markup`、`markup,wayland`、`markup,wayland,software`、`markup,motion`、`motion,wayland,software`、`grid,markup`、`wayland,vulkan`、`wayland,wgpu`）`cargo check --all-targets` 无警告。
+- Linux（2026-10-10，rustc 1.97，句柄不再返回 `Result` 之后）：`cargo test --workspace` 在默认（122 项）与 `--all-features`（131 项，另 29 项需要 compositor/GPU 而标为 ignored）下通过且无警告；`cargo clippy --workspace --all-targets` 在两种配置下无告警；`cargo doc --workspace --all-features` 无告警；facade 的九组 feature 组合（无 feature、`markup`、`markup,wayland`、`markup,wayland,software`、`markup,motion`、`motion,wayland,software`、`grid,markup`、`wayland,vulkan`、`wayland,wgpu`）`cargo check --all-targets` 无警告。
+- Windows 交叉检查（2026-10-10，`x86_64-pc-windows-gnu`）：`cargo check` 与 `cargo clippy --workspace --all-targets --all-features`（不含 Wayland 与 D-Bus crate）无告警；未链接、未运行。
 - Wayland：在隔离的 Sway/wlroots headless + Pixman compositor 上做了窗口生命周期、软件 SHM 绘制与截图检查，并用 fake input-method-v2 / virtual-keyboard 对 text-input-v3 做了 CJK 预编辑、提交、取消与跨窗口焦点的协议验证。需要专用 compositor 的测试标记 ignored；运行方式：
 
 ```sh
@@ -104,7 +104,7 @@ WGPU_BACKEND=dx12 cargo test -p aegle-render-wgpu --all-features -- --ignored --
 - 事件只交给命中、捕获或聚焦的目标控件，没有捕获/冒泡阶段；跨节点协作经控件库的 `Hooks`。
 - 处理器只追加、不单独移除，随控件删除；需要停止时在闭包内判断，逐帧回调返回 `false`。代价是不能撤掉别处注册的处理器。
 - 可清除的属性用一个 `impl Into<Option<T>>` setter 设置与清除。`Option<&str>` 参数不再自动解引用 `&String`（写 `text.as_str()`）；皮肤是函数指针，`set_skin` 仍要写 `Some(skin)`。
-- 句柄操作保留 `Result`（含 `is_alive`）：弱句柄可能失效、绘制与钩子期间 Ui 被借用，返回错误比 panic 或静默忽略更可预测；回调错误默认不结束原生 App，减轻 `?` 的代价。
+- 句柄操作不返回 `Result`：句柄失效、在绘制与钩子期间使用、参数不合法都是调用方的程序错误，以 `UiError` 的消息 panic；可能比控件活得久的回调（后台代理、桌面服务事件）需先检查 `is_alive()`。`Result` 留给平台、加载与应用代码可能失败的操作；处理器可返回 `()` 或 `Result`，错误默认不结束原生 App。代价是 panic 处没有恢复路径：程序拿到失效句柄时只能通过 `is_alive` 预先判断。
 - `aegle-loader` 对 `aegle-app` 的依赖是可选 feature，app 不依赖 loader。
 - GPU 多窗口只共享实例/设备/管线，图集按窗口独立。
 
@@ -113,4 +113,5 @@ WGPU_BACKEND=dx12 cargo test -p aegle-render-wgpu --all-features -- --ignored --
 - 平台验收：Windows 硬件 Vulkan/DX12 驱动与 ARM64、日文/韩文输入法与候选窗位置、讲述人/NVDA、TSF text store/重转换/触屏键盘；macOS AppKit/Metal；Wayland 客户端窗口装饰与真实触摸设备；Windows 触摸与惯性；真实桌面 portal 与 Windows 设置变更；fcitx/IBus 真人候选窗与真实屏幕阅读器验收。
 - 桌面集成：Windows 上 OLE 拖放与桌面服务的实机运行；与其他 Wayland 客户端（文件管理器等）互拖的人工验收；真实通知守护进程、托盘宿主与 GlobalShortcuts portal 的验收。
 - 文字/无障碍：Unix adapter 的上游 EditableText 等限制。
+- 下游：am3 跟随 `main`，本分支合入后需迁移：句柄方法去掉 `?`、`set_size` 改为逐轴、`Canvas::on_input` 改为 `set_input`、`NodePopup`/`NodeMenu`/`NodeTooltip` 改为 `NodeWidgets`、`clear_on_click`/`clear_actions` 与 `aegle_ui::valid` 改用现有路径。
 - 工程：多 compositor/GPU 与嵌入式完整资源测量；在 CI 上确认 Linux MSRV 与 Wayland 作业。现有桌面样本不能替代这些证据。

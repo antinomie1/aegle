@@ -121,7 +121,7 @@ Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping sou
 
 Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText，GPU 绘制经可选 wgpu 使用 Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 
-当前发布配置采用优化等级 3、thin LTO、单 codegen unit 和 strip symbols，优先运行性能；不默认 panic=abort 以换体积，公开边界使用 Result，后台/平台回调不得展开跨 FFI。具体性能配置可按测量调整，但必须保留配置记录。
+当前发布配置采用优化等级 3、thin LTO、单 codegen unit 和 strip symbols，优先运行性能；不默认 panic=abort 以换体积；可能失败的公开边界使用 Result，句柄误用 panic，后台/平台回调不得展开跨 FFI（Win32 窗口过程只排队事件，遇到 panic 即 abort）。具体性能配置可按测量调整，但必须保留配置记录。
 
 ### 当前滚动成本
 

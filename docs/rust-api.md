@@ -9,7 +9,7 @@ use aegle::prelude::*;
 fn main() -> Result<()> {
     let app = App::new()?;
     let window = app.window("Hello")?;
-    window.text("你好，世界")?;
+    window.text("你好，世界");
     app.run()
 }
 ```
@@ -25,19 +25,18 @@ fn main() -> Result<()> {
 ## 创建、修改与事件
 
 ```rust
-let label = window.text("等待操作")?;
-let button = window.button("完成")?;
+let label = window.text("等待操作");
+let button = window.button("完成");
 button.on_click(move |_| {
-    label.set_text("已完成")?;
-    Ok(())
-})?;
+    label.set_text("已完成");
+});
 ```
 
 控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。第三方控件用 `Container::add` 加入，见[组件库作者](#组件库作者)。
 
 命名规则只有两条：`on_*` 追加处理器，`set_*` 替换值。`on_click`、`on_change`、`on_submit`、`on_transition_end`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame` 与 `Ui::on_key` 都追加，同一事件按注册顺序执行；处理器与控件同生命周期，没有单独的移除方法，需要停止时在闭包内判断（`on_frame` 返回 `false` 即停止）。`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。所有动作处理器存放在引擎的同一张表里：控件只报告激活或值变化，组合控件（Tabs、Dropdown、MenuItem）把自身行为放在按钮的延后工作中，再用 `State::queue_action` 排队自己的处理器，不另存处理器列表。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
 
-公开创建和修改操作返回 `Result`；当前错误保留底层来源，包括 `DeadHandle`、跨 Ui 父节点、不合法数值、字体/呈现预算及平台能力错误。弱句柄的操作因此不能不返回结果；保留单一的 `Result` 形态，而不是再提供一套 panic 版本。回调出错时处理器保留，同一事件的其他处理器照常执行，此前合法修改保留；无窗口 `Ui::dispatch_callbacks` 返回第一个错误。原生 App 把回调、代理与输入处理的错误交给 `App::on_error`，返回错误才结束 `run`，未设置时打印到 stderr 并继续；绘制与平台失败仍结束 `run`。逐帧回调出错时停止，避免每帧重复报告。
+句柄的创建、修改与读取方法直接返回值。误用句柄是程序错误，因此以 `UiError` 的消息 panic，而不是让每个调用都返回 `Result`：控件已删除或窗口已关闭（`DeadHandle`，先用 `is_alive()` 判断）、在 painter、钩子或 scene 访问中使用（`ReentrantAccess`）、文档排除的参数（`InvalidValue`、`WrongKind`、`ForeignUi`、`RootMutation`、`Token`）。`Result` 只留给会因环境或应用代码失败的操作：创建 App 与窗口、`Window::close`、加载与构建标记、标记状态更新（重新求值绑定可能出错）、按名查找 token，以及宿主驱动的 `refresh`、输入投递和 `dispatch_callbacks`。处理器返回 `()` 或 `Result`（`HandlerResult`），逐帧与按键处理器返回 `bool`；处理器出错时保留，同一事件的其他处理器照常执行，此前合法修改保留；无窗口 `Ui::dispatch_callbacks` 返回第一个错误。原生 App 把回调、代理与输入处理的错误交给 `App::on_error`，返回错误才结束 `run`，未设置时打印到 stderr 并继续；绘制与平台失败仍结束 `run`。
 
 可清除的属性只有一个 setter：参数为 `impl Into<Option<T>>`，传值设置、传 `None` 清除，如 `set_font_size(18.0)` / `set_font_size(None)`、`set_theme(Theme::dark())` / `set_theme(None)`、`set_background(None)`；不再有 `clear_*` 方法。皮肤是函数指针，`set_skin`/`set_kind_skin` 仍写 `Some(skin)`。
 
@@ -56,11 +55,11 @@ button.on_click(move |_| {
 | Button | `set_text`、`activate`、`on_click` |
 | Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
 | CheckBox / Switch / Radio | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`；CheckBox 另有 `is_mixed`、`set_mixed` |
-| Container（选择/表格） | `radio(text, checked)`、`dropdown(items, selected)`、`table(columns, row_height, rows, cell)`、`variable_list_view(estimate, count, row)` |
+| Container（选择/表格） | `radio(text, checked)`、`dropdown(items, selected)`、`table(columns, row_height, rows, cell)` |
 | Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeWidgets` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回 Menu（`item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
 | Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change` |
 | ScrollView | `offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；解引用到 Container |
-| Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(row_height, count, row)` |
+| Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(height, count, row)`（`height` 为等高行的 `f32` 或 `RowHeight::Estimate`） |
 | ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter`、`set_input` |
 | ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
 | loader::Program / View | `load`、`load_with(path, &Elements)`、`from_sources(entry, &Elements, read)`、`build(&Container)`、`open(&App)`（`from_checked` 仅供 `ui!` 生成的代码，文档隐藏）；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`，`Handle::typed::<T>()` 取得有类型句柄；`State<T>` 有 `get`、`set` |
@@ -91,13 +90,13 @@ button.on_click(move |_| {
 普通函数组合已有控件即可复用输入与语义；不要求组件宏或注册器。例如：
 
 ```rust
-fn primary(parent: &Container, text: &str) -> Result<Button> {
-    let button = parent.button(text)?;
-    button.set_background(Color::rgb(103, 80, 164))?;
-    button.set_foreground(Color::WHITE)?;
-    button.set_hover_background(Color::rgb(91, 68, 130))?;
-    button.set_radius(18.0)?;
-    Ok(button)
+fn primary(parent: &Container, text: &str) -> Button {
+    let button = parent.button(text);
+    button.set_background(Color::rgb(103, 80, 164));
+    button.set_foreground(Color::WHITE);
+    button.set_hover_background(Color::rgb(91, 68, 130));
+    button.set_radius(18.0);
+    button
 }
 ```
 
@@ -127,10 +126,10 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 
 自定义控件实现 `aegle_ui::Control`，经 `Container::add(|state, theme| Ok((Box::new(control), style)))` 加入树；输入、测量、绘制与语义分别经 `InputCx`、`MeasureCx`、`PaintCx`、`SemanticsCx` 访问，段落、编辑器与视口以能力方法（`paragraph`、`editor`、`viewport` 等）暴露；字号或字体变化时引擎调用 `restyle`，默认重排段落或编辑器，显示更多文字的控件（如菜单项的快捷键提示）覆盖它一并重排。文字有自己排版角色的控件（如 Material 的 label/title 角色）实现 `text_role`，把节点文字样式换算为角色的字号、行高、字重与字距；引擎在设置文字、字体变化与主题变化时都先经它换算，控件无需覆盖这些路径。在编辑器周围绘制标签或图标的控件用 `content_offset` 给出文字原点、用 `text_viewport` 给出可见文字区域，滚动据此保持插入点可见。需要跨节点协作的行为安装 `Hooks`，库数据放在 `State::ext`。
 
-- `kind()` 返回控件类型 `&'static ControlKind`：控件库为自己的每种控件声明一个 `static`（名称、默认皮肤、接受的样式组 `Accepts`、是否为布局容器），与 `aegle_widgets::kinds` 中的内置类型完全同一形式；类型在节点存活期间不变。默认皮肤即该类型的第一方皮肤，`set_kind_skin` 与 `set_skin` 在子树或单个节点上替换它（优先级见[API 指南](developer/api.md#6-外观主题样式与皮肤)）。类型化句柄用 `aegle_ui::handle! { pub Name(NameControl): text, interactive, pressed, indicator, editor }` 定义：声明控件类型后句柄得到 `read(|c| ..)` 与 `update(|c| ..)`（修改后自动请求重绘并更新语义；尺寸变化走布局），列出的样式组（与类型的 `accepts` 相符）生成对应 setter；Rust 1.86 起 trait 对象可直接向上转型为 `dyn Any`，`Control` 不需要 `as_any`；文字读写用 `State::text`/`State::set_text`，事件处理器用 `State::on_action`/`State::clear_actions`。接受 `Accepts::EDITOR` 的类型必须提供 `editor()`，其他类型不能提供；不一致时 `Container::add` 返回 `WrongKind`。
+- `kind()` 返回控件类型 `&'static ControlKind`：控件库为自己的每种控件声明一个 `static`（名称、默认皮肤、接受的样式组 `Accepts`、是否为布局容器），与 `aegle_widgets::kinds` 中的内置类型完全同一形式；类型在节点存活期间不变。默认皮肤即该类型的第一方皮肤，`set_kind_skin` 与 `set_skin` 在子树或单个节点上替换它（优先级见[API 指南](developer/api.md#6-外观主题样式与皮肤)）。类型化句柄用 `aegle_ui::handle! { pub Name(NameControl): text, interactive, pressed, indicator, editor }` 定义：声明控件类型后句柄得到 `read(|c| ..)` 与 `update(|c| ..)`（修改后自动请求重绘并更新语义；尺寸变化走布局），列出的样式组（与类型的 `accepts` 相符）生成对应 setter；Rust 1.86 起 trait 对象可直接向上转型为 `dyn Any`，`Control` 不需要 `as_any`；文字读写用 `State::text`/`State::set_text`；句柄的 `on_*` 方法用 `Node::on_action` 登记处理器，控件用 `State::queue_action` 报告用户操作。句柄方法经 `Node::change` 访问状态，内部的 `Result` 在那里变成 panic；参数检查用 `aegle_ui::require`，其余内部结果用 `OrFail::or_fail`。接受 `Accepts::EDITOR` 的类型必须提供 `editor()`，其他类型不能提供；不一致时 `Container::add` 以 `WrongKind` panic。
 - 不改行为、只给已有控件（含内置控件）加绘制时实现 `aegle_ui::Decorator` 并用 `node.decorate(..)` 挂上：`input` 在控件处理完输入后以节点局部坐标观察它（不能吞掉或改变结果，返回是否重绘），`under` 在背景与边框之前、`over` 在内容之后焦点环之前，以与控件相同的 `PaintCx` 录制；动画中的装饰器每次绘制调用 `request_frame`，静止时不产生帧。例如按下涟漪：`input` 记下按下点，`over` 按 `cx.time` 画随时间扩大并裁剪到 `cx.shape` 的圆（`aegle-widgets/tests/decorators.rs`）。装饰器随节点删除。
 - `retheme(theme, local, root, style)` 在主题变化时更新跟随主题的布局；`local: LocalLayout` 标出应用设置过、需要保留的高度、内边距、间距和最小高度。
-- `paint` 与 `Hooks` 在 Ui 借用期间运行，只能使用传入的 `State`/上下文；此时调用 Ui 或句柄的方法返回 `ReentrantAccess`；钩子返回的错误原样传给宿主。
+- `paint` 与 `Hooks` 在 Ui 借用期间运行，只能使用传入的 `State`/上下文；此时调用 Ui 或句柄的方法以 `ReentrantAccess` panic；钩子返回的错误原样传给宿主。
 
 - 控件出现在标记中用 `aegle::element!` 声明元素：构造参数、可绑定属性、事件与 `self` 字段，与内置元素走同一条检查与构建路径（[ADR 0004](adr/0004-element-contract.md)，写法见[编写控件库 §6](developer/library.md#6-标记元素)）。
 
@@ -138,12 +137,12 @@ fn primary(parent: &Container, text: &str) -> Result<Button> {
 
 ## 所有权与异步
 
-Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 ID。处理器可以捕获其他控件或窗口句柄而不形成强拥有环。UI 句柄不能发送到后台线程；`App::proxy(handler)` 返回可克隆、可发送的 `UiProxy<T>`，`send` 的消息由 UI 线程上的 handler 处理，handler 里持有的弱句柄在目标已销毁时报告 DeadHandle。`App::desktop(app_id, handler)`（`desktop-services` feature）在此之上接入文件对话框、通知、托盘与全局快捷键的事件。
+Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 ID。处理器可以捕获其他控件或窗口句柄而不形成强拥有环。UI 句柄不能发送到后台线程；`App::proxy(handler)` 返回可克隆、可发送的 `UiProxy<T>`，`send` 的消息由 UI 线程上的 handler 处理，handler 里持有的弱句柄在目标已销毁后会 panic，handler 应先检查 `is_alive()`。`App::desktop(app_id, handler)`（`desktop-services` feature）在此之上接入文件对话框、通知、托盘与全局快捷键的事件。
 
 第三方任务系统的 post/取消句柄也是后续目标。框架不要求应用把所有函数变成 async，不让文本输入处理等待任意网络任务。
 
 ## 当前可用的底层接口
 
-`Tree` 保存实际状态，`Route::rebuild/iter` 为自建宿主构造捕获/目标/冒泡路径，`Focus::set/advance` 按宿主策略处理焦点；这不是第二套函数式 UI 入口。`aegle-ui` 不用 `Route`：输入只交给命中或聚焦的目标控件，没有捕获或冒泡阶段。`Button::handle(Input)` 返回激活、capture、焦点和绘制效果，`TextField::handle(&mut TextSystem, Input)` 在同一个 Editor 上实现编辑行为。控件不隐式获取平台服务。
+`Tree` 保存实际状态，`Focus::set/advance` 按宿主策略处理焦点；这不是第二套函数式 UI 入口。输入只交给命中、捕获或聚焦的目标控件，没有捕获或冒泡阶段。`Button::handle(Input)` 返回激活、capture、焦点和绘制效果，`TextField::handle(&mut TextSystem, Input)` 在同一个 Editor 上实现编辑行为。控件不隐式获取平台服务。
 
-IME 数据通过 `EditorDriver::apply_ime` 一次验证并应用，`Editor::surrounding` 借出有界周边文字。调用方消费 `Outcome` 与 `Editor::take_changes` 后同步布局、平台和绘制。`aegle-platform-wayland --example editor` 保留底层显式组装示例；`aegle --example controls` 展示应用层创建、编辑、按钮回调、主题切换与关闭窗口，使用上面的统一接口。
+IME 数据通过 `EditorDriver::apply_ime` 一次验证并应用，`Editor::surrounding` 借出有界周边文字。调用方消费 `Outcome` 与 `Editor::take_changes` 后同步布局、平台和绘制。`aegle --example controls` 展示应用层创建、编辑、按钮回调、主题切换与关闭窗口，使用上面的统一接口。

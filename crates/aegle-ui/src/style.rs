@@ -76,7 +76,10 @@ impl State {
 
     /// The text style of `id` under `theme`, with its local size and font.
     pub fn text_style_in(&self, id: NodeId, theme: &Theme) -> TextStyle<'static> {
-        face(theme, self.decorations.get(&id))
+        let mut style = face(theme, self.decorations.get(&id));
+        let control = &self.tree.get(id).unwrap().context.control;
+        control.text_role(&mut style);
+        style
     }
 
     /// Drops the decoration of `id` once it holds no override.
@@ -160,8 +163,9 @@ impl State {
         if (decoration.font_size, decoration.font) == (old.font_size, old.font) {
             return Ok(());
         }
-        let style = face(self.theme_of(id), Some(&decoration));
+        let mut style = face(self.theme_of(id), Some(&decoration));
         let control = &mut self.tree.get_mut(id).unwrap().context.control;
+        control.text_role(&mut style);
         control.restyle(&mut self.fonts.borrow_mut(), &style)?;
         self.decorations.insert(id, decoration);
         self.trim_decoration(id);

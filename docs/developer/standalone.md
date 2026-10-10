@@ -39,9 +39,9 @@ use std::{cell::RefCell, rc::Rc};
 fn main() -> Result {
     let fonts = TextSystem::system();         // 系统字体；或 TextSystem::new() 后 register_fonts
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
-    let status = ui.root().text("Not saved")?;
-    ui.root().button("Save")?.on_click(move |_| status.set_text("Saved"))?;
-    ui.resize(Size::new(240.0, 100.0))?;
+    let status = ui.root().text("Not saved");
+    ui.root().button("Save").on_click(move |_| status.set_text("Saved"));
+    ui.resize(Size::new(240.0, 100.0));
     ui.refresh()?;
     ui.visit_scenes(|_visit| Ok(()))?; // Scene / PushLayer / PopLayer 交给 renderer
     Ok(())

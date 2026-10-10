@@ -40,7 +40,6 @@ cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-software --example software_scene --release
 cargo run -p aegle-render-software --features text --example text_scene --release
 cargo run -p aegle-render-software --features text --example editor_scene --release
-cargo run -p aegle-platform-wayland --example editor --release
 cargo doc --workspace --all-features --no-deps
 ```
 
@@ -109,15 +108,3 @@ cargo run -p aegle-render-vulkan --features text --example vulkan_text_scene --r
 ```
 
 wgpu 的对应示例与测试命令见 [wgpu](wgpu.md#验证)。
-
-## Wayland 平台示例
-
-`editor` 示例在一棵保留 Taffy 树中组合 CJK 文本字段与按钮，带路由动作、Tab 焦点和指针捕获；键盘编辑与 IME 使用共享控件和原子文本事务 API。原生组合另需 text-input-v3 与输入法。这个独立平台示例保持为低层组合；应用层 API 的演示是 `aegle --example controls`。
-
-启用原生无障碍示例：
-
-```sh
-cargo run -p aegle-platform-wayland --example editor --features example-accessibility --release
-```
-
-这需要会话 D-Bus 与 AT-SPI 服务。适配器共享现有的控件/编辑器状态并无需轮询地唤醒 UI，会增加一个进程级工作线程和语义缓存；当前限制（包括缺少 EditableText 与 Wayland 屏幕定位）见[无障碍](accessibility.md)。

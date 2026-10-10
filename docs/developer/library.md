@@ -23,7 +23,7 @@ pub static RATING: ControlKind = ControlKind {
 
 ## 2. 定义控件
 
-实现 `aegle_ui::Control`：`kind` 返回上面的静态类型，`measure` 给出尺寸，`handle`/`hover` 处理输入并返回 `Outcome`，`paint` 用 `cx.appearance` 录制图元，`semantics` 与 `action_input` 提供无障碍语义和动作。用 `Container::add` 插入树中。用户改变取值时返回 `Outcome { action: Some(Action::Change), .. }`，已注册的处理器随后在 UI 借用外运行。跨节点协作（弹出层、单选组）用 `Hooks`，库数据放在 `State::ext`。契约细节见 [Rust API · 组件库作者](../rust-api.md#组件库作者)。
+实现 `aegle_ui::Control`：`kind` 返回上面的静态类型，`measure` 给出尺寸，`handle`/`hover` 处理输入并返回 `Outcome`，`paint` 用 `cx.appearance` 录制图元，`semantics` 与 `action_input` 提供无障碍语义和动作。用 `Container::add` 插入树中。用户改变取值时返回 `Outcome { action: Some(Action::Change), .. }`，已注册的处理器随后在 UI 借用外运行。`Control` 的方法在引擎内部运行，仍返回 `Result`，错误经 `refresh` 或输入投递交给宿主。跨节点协作（弹出层、单选组）用 `Hooks`，库数据放在 `State::ext`。契约细节见 [Rust API · 组件库作者](../rust-api.md#组件库作者)。
 
 ## 3. 句柄
 
@@ -34,19 +34,19 @@ aegle_ui::handle! {
 }
 
 impl Rating {
-    pub fn value(&self) -> aegle_ui::Result<u8> {
+    pub fn value(&self) -> u8 {
         self.read(|rating| rating.value)
     }
-    pub fn set_value(&self, value: u8) -> aegle_ui::Result {
+    pub fn set_value(&self, value: u8) {
         self.update(|rating| rating.value = value.clamp(1, 5))
     }
-    pub fn on_change(&self, mut f: impl FnMut(Rating) -> aegle_ui::Result + 'static) -> aegle_ui::Result {
-        self.change(|state, id| state.on_action(id, move |node| f(Rating(node))))
+    pub fn on_change<R: aegle_ui::HandlerResult>(&self, mut f: impl FnMut(Rating) -> R + 'static) {
+        self.on_action(move |node| f(Rating(node)).into_result())
     }
 }
 ```
 
-`read`/`update` 取得控件状态；`update` 之后自动重绘并更新语义。列出的样式组生成相应 setter（如 `set_indicator_color`），必须与类型的 `accepts` 一致；未列出的 setter 不存在，误用在编译期报错。
+`read`/`update` 取得控件状态；`update` 之后自动重绘并更新语义。句柄方法直接返回值：控件已删除、在绘制或钩子中调用，或类型不符时它们 panic（经 `Node::change`）；需要拒绝的参数用 `aegle_ui::require(条件)` 检查。处理器类型参数 `R: HandlerResult` 让应用的处理器既能返回 `()` 也能返回 `Result`，`Node::on_action` 把它登记到引擎的处理器表。列出的样式组生成相应 setter（如 `set_indicator_color`），必须与类型的 `accepts` 一致；未列出的 setter 不存在，误用在编译期报错。
 
 ## 4. 皮肤与 token
 
@@ -56,8 +56,8 @@ impl Rating {
 fn rating_skin(theme: &Theme, state: VisualState) -> Appearance {
     Appearance { radius: theme.radius, ..Appearance::base(theme, state) }
 }
-window.root().set_kind_skin(&RATING, Some(gold_rating))?; // 这个子树里的全部 Rating
-rating.set_skin(Some(gold_rating))?;                      // 只有这一个
+window.root().set_kind_skin(&RATING, Some(gold_rating)); // 这个子树里的全部 Rating
+rating.set_skin(Some(gold_rating));                      // 只有这一个
 ```
 
 优先级从高到低：局部 `Style`（含 token 绑定）> 节点皮肤 > 最近祖先的类型皮肤 > 类型默认皮肤，完整表见 [API 指南 §6](api.md#6-外观主题样式与皮肤)。库的设计 token 用 `register_token("库名.名称", 默认值函数)` 登记，应用经 `bind_color`/`bind_length` 或标记 `token("库名.名称")` 绑定，随主题与覆盖更新。
@@ -78,12 +78,12 @@ aegle::element! {
         create |parent, value: int(1, 5) = 3| Rating::new(parent, value as u8);
         set value: int(1, 5) => |rating, value| rating.set_value(value as u8);
         event changed => |rating, run| rating.on_change(move |_| run());
-        get value: int => |rating| rating.value().map(i64::from);
+        get value: int => |rating| i64::from(rating.value());
     }
 }
 ```
 
-`create` 的参数是构造属性（有默认值可省略，没有默认值的必填且只能写字面量），`set` 声明可设置、可绑定表达式的属性，`event` 注册处理块，`get` 声明处理块里的 `self.value`。容器元素加 `layout box|flex|grid`，可用 `children only Name|exactly N`、`parent Name` 和 `children => |handle, index| container` 约束和放置子节点。完整语法见 `aegle::element!` 的文档，值类型与 Rust 类型的对应也在那里。
+`create` 的参数是构造属性（有默认值可省略，没有默认值的必填且只能写字面量），`set` 声明可设置、可绑定表达式的属性，`event` 注册处理块，`get` 声明处理块里的 `self.value`。各闭包直接调用句柄方法、返回值本身，不返回 `Result`；`event` 收到的 `run` 返回标记处理块的 `Result`，交给句柄的 `on_*` 即可。容器元素加 `layout box|flex|grid`，可用 `children only Name|exactly N`、`parent Name` 和 `children => |handle, index| container` 约束和放置子节点。完整语法见 `aegle::element!` 的文档，值类型与 Rust 类型的对应也在那里。
 
 `element!` 为句柄类型实现 `aegle::loader::Element`，并在 crate 根定义同名的隐藏宏；在 crate 根重导出句柄类型，使用者一次 `use rating_lib::Rating;` 就同时得到两者：
 
