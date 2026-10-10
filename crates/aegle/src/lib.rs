@@ -20,17 +20,49 @@ pub use aegle_image as image;
 pub use aegle_ui as ui;
 /// The default controls.
 pub use aegle_widgets as widgets;
-extern crate self as aegle;
 
 /// Declare markup elements for a control library.
 #[cfg(feature = "markup")]
 pub use aegle_loader::element;
 #[doc(hidden)]
 #[cfg(feature = "markup")]
-pub use aegle_macros::__ui_resume;
-/// Compile a `.aegle` file to ordinary retained control construction.
+pub use aegle_macros::{__ui, __ui_resume};
+
+/// Compiles a manifest-relative `.aegle` file into a typed retained view.
+///
+/// `ui!("view.aegle")` produces a builder closure taking `&aegle::app::App` for a
+/// `Window` root, or `&aegle::ui::Container` for any other component root. The builder
+/// returns `aegle::ui::Result<View>`. `ui!(parent, "view.aegle")` invokes that builder
+/// immediately and evaluates the parent expression once.
+///
+/// The inferred view has a public `root` handle and a public typed field for
+/// every markup `id`, plus a `loader::State<T>` field for every state of a
+/// dynamic document's root. Bind Rust callbacks through those fields after
+/// creation; IDs inside blocks and components are not exposed. Imports resolve
+/// against the importing file and are tracked for recompilation too.
+/// Dropping the view keeps its retained controls alive. A construction failure
+/// removes the new subtree; it never removes the parent supplied by the caller.
+/// Transition properties require the `motion` feature. Transitions are
+/// installed after every static property, so initial construction does not animate.
+///
+/// Element names resolve in Rust scope where `ui!` is called, like types:
+/// `use aegle::prelude::*` brings the built-in elements, and a control
+/// library's elements come with their handle types. Each element's spec
+/// reaches the checker through the macro [`element!`] defines with its name,
+/// so a library's elements are checked like the built-in ones.
+///
+/// Paths are relative to `CARGO_MANIFEST_DIR`, including explicit `../` paths.
+/// The generated dependency marker makes file edits trigger recompilation.
+/// Unknown properties and unsupported language constructs are rejected with
+/// file, line and column diagnostics at the path argument; an element not in
+/// scope is reported by rustc as a missing macro.
 #[cfg(feature = "markup")]
-pub use aegle_macros::ui;
+#[macro_export]
+macro_rules! ui {
+    ($($input:tt)*) => {
+        $crate::__ui!($crate; $($input)*)
+    };
+}
 
 /// Runtime engine for dynamic markup and run-time loading.
 #[cfg(feature = "markup")]

@@ -20,8 +20,6 @@
 //! `if` and `for` children live in an internal row or column that follows the
 //! parent's direction and literal `gap`, and is hidden while empty.
 
-extern crate self as aegle_loader;
-
 mod actions;
 mod build;
 mod effects;
@@ -40,7 +38,8 @@ use aegle_markup::Span;
 use aegle_ui::{Container, Result};
 
 pub use actions::{Limits, action};
-pub use aegle_macros::element;
+#[doc(hidden)]
+pub use aegle_macros::__element;
 pub use aegle_markup as markup;
 #[doc(hidden)]
 pub use element::__private;
@@ -48,6 +47,52 @@ pub use element::{Arg, Element, Elements};
 pub use elements::{Column, Grid, RadioButton, Row, ScrollView, Stack, Tab, Text, TextArea};
 pub use handle::Handle;
 pub use view::{State, StateValue, View};
+
+/// Declares markup elements: each one's spec, and the glue that creates its
+/// control and applies its properties, events and `self` fields.
+///
+/// ```ignore
+/// aegle::element! {
+///     /// A selectable chip.
+///     pub Chip {
+///         style text interactive pressed;
+///         create |parent, text: line = ""| Chip::new(parent, text);
+///         set text: line => |chip, text| chip.set_text(text);
+///         set selected: bool => |chip, on| chip.set_selected(on);
+///         event changed => |chip, run| chip.on_change(move |_| run());
+///         get selected: bool => |chip| chip.is_selected();
+///     }
+/// }
+/// ```
+///
+/// `pub Name { ... }` implements `Element` for the handle type `Name`;
+/// `pub Name(Handle) { ... }` defines a marker type `Name` for elements
+/// sharing a handle type. Either way it defines a hidden macro `Name` that
+/// `ui!` asks for the spec: re-export the handle or marker type at the
+/// crate root, where the macro lives, so one `use` brings both.
+///
+/// Items, each ending with `;`:
+/// - `layout leaf | box | flex | grid` (default `leaf`), and for containers
+///   `children any | only Name | exactly N` (default `any`);
+/// - `parent Name`: it may only be written directly inside `Name`;
+/// - `style` followed by the groups `text interactive pressed indicator editor`;
+/// - `create |parent, name: type = default, ...| expr` returning the handle;
+///   a constructor argument without a default is required and literal;
+/// - `set name: type => |handle, value| ...` for a settable, bindable property;
+/// - `event name => |handle, run| ...` registering `run` as a handler;
+/// - `get name: type => |handle| ...` for a `self.name` field;
+/// - `children => |handle, index| container` where child `index` goes.
+///
+/// Types are `bool`, `int`, `int(min, max)`, `float`, `float(min)`,
+/// `float(min, max)`, `fraction`, `length`, `string`, `line`, `color` and
+/// `choice(a, b, ...)`, arriving as `bool`, `i64`, `f64`, `f32`, `f32`,
+/// `&str`, `&str`, `Color` and `&str`.
+#[macro_export]
+macro_rules! element {
+    ($($input:tt)*) => {
+        $crate::__element! { $crate; $($input)* }
+    };
+}
 
 /// A runtime value of a state, parameter or expression.
 #[derive(Clone, Debug, PartialEq)]

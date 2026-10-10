@@ -16,42 +16,16 @@ use std::{fs::File, io::Read, path::Path};
 
 use aegle_markup::{ElementSpec, Sources};
 use proc_macro::TokenStream;
-use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Delimiter, TokenStream as Tokens, TokenTree};
 use quote::quote;
 use syn::{Expr, ExprLit, Ident, Lit, LitStr, Token, parse::Parse, parse::ParseStream};
 
-/// Compiles a manifest-relative `.aegle` file into a typed retained view.
-///
-/// `ui!("view.aegle")` produces a builder closure taking `&aegle::app::App` for a
-/// `Window` root, or `&aegle::ui::Container` for any other component root. The builder
-/// returns `aegle::ui::Result<View>`. `ui!(parent, "view.aegle")` invokes that builder
-/// immediately and evaluates the parent expression once.
-///
-/// The inferred view has a public `root` handle and a public typed field for
-/// every markup `id`, plus a `loader::State<T>` field for every state of a
-/// dynamic document's root. Bind Rust callbacks through those fields after
-/// creation; IDs inside blocks and components are not exposed. Imports resolve
-/// against the importing file and are tracked for recompilation too.
-/// Dropping the view keeps its retained controls alive. A construction failure
-/// removes the new subtree; it never removes the parent supplied by the caller.
-/// Transition properties require the facade's `motion` feature. Transitions are
-/// installed after every static property, so initial construction does not animate.
-///
-/// Element names resolve in Rust scope where `ui!` is called, like types:
-/// `use aegle::prelude::*` brings the built-in elements, and a control
-/// library's elements come with their handle types. Each element's spec
-/// reaches the checker through the macro [`element!`] defines with its name,
-/// so a library's elements are checked like the built-in ones.
-///
-/// Paths are relative to `CARGO_MANIFEST_DIR`, including explicit `../` paths.
-/// The generated dependency marker makes file edits trigger recompilation.
-/// Unknown properties and unsupported language constructs are rejected with
-/// file, line and column diagnostics at the path argument; an element not in
-/// scope is reported by rustc as a missing macro.
+/// Expands the facade's `ui!`, which passes its own path ahead of the
+/// arguments: `$crate; parent, "view.aegle"`.
+#[doc(hidden)]
 #[proc_macro]
-pub fn ui(input: TokenStream) -> TokenStream {
-    let tokens = Tokens::from(input);
+pub fn __ui(input: TokenStream) -> TokenStream {
+    let (facade, tokens) = split_path(input.into());
     let arguments = match syn::parse2::<Arguments>(tokens.clone()) {
         Ok(arguments) => arguments,
         Err(error) => return error.into_compile_error().into(),
@@ -61,7 +35,7 @@ pub fn ui(input: TokenStream) -> TokenStream {
         let names = sources.elements();
         let span = arguments.file.span();
         let names: Vec<Ident> = names.iter().map(|name| Ident::new(name, span)).collect();
-        resume(&[], &names, tokens, &arguments)
+        resume(&facade, &[], &names, tokens, &arguments)
     };
     start()
         .unwrap_or_else(syn::Error::into_compile_error)
@@ -75,7 +49,7 @@ pub fn ui(input: TokenStream) -> TokenStream {
 pub fn __ui_resume(input: TokenStream) -> TokenStream {
     let mut specs = Vec::new();
     let mut names = Vec::new();
-    let mut arguments = Tokens::new();
+    let (mut facade, mut arguments) = (Tokens::new(), Tokens::new());
     for tree in Tokens::from(input) {
         let TokenTree::Group(group) = tree else {
             unreachable!("ui! state is grouped")
@@ -83,7 +57,7 @@ pub fn __ui_resume(input: TokenStream) -> TokenStream {
         match group.delimiter() {
             Delimiter::Brace => specs.push(group.stream()),
             Delimiter::Bracket => names = group.stream().into_iter().collect(),
-            _ => arguments = group.stream(),
+            _ => (facade, arguments) = split_path(group.stream()),
         }
     }
     let step = || -> syn::Result<Tokens> {
@@ -92,7 +66,7 @@ pub fn __ui_resume(input: TokenStream) -> TokenStream {
             .into_iter()
             .map(|name| syn::parse2(name.into()))
             .collect::<syn::Result<_>>()?;
-        resume(&specs, &names, arguments, &parsed)
+        resume(&facade, &specs, &names, arguments, &parsed)
     };
     step().unwrap_or_else(syn::Error::into_compile_error).into()
 }
@@ -100,68 +74,32 @@ pub fn __ui_resume(input: TokenStream) -> TokenStream {
 /// Asks the next unresolved element for its spec, or expands once every
 /// spec has arrived.
 fn resume(
+    facade: &Tokens,
     specs: &[Tokens],
     names: &[Ident],
     arguments: Tokens,
     parsed: &Arguments,
 ) -> syn::Result<Tokens> {
-    let facade = facade(&parsed.file)?;
     if let Some((next, rest)) = names.split_first() {
         return Ok(quote! {
-            #next! { [#facade::__ui_resume] #({#specs})* [#(#rest)*] (#arguments) }
+            #next! { [#facade::__ui_resume] #({#specs})* [#(#rest)*] (#facade; #arguments) }
         });
     }
     let specs = specs
         .iter()
         .map(|spec| element::parse_spec(spec.clone()))
         .collect::<syn::Result<Vec<_>>>()?;
-    expand(parsed, &specs)
+    expand(facade, parsed, &specs)
 }
 
-/// Declares markup elements: each one's spec, and the glue that creates its
-/// control and applies its properties, events and `self` fields.
-///
-/// ```ignore
-/// aegle::element! {
-///     /// A selectable chip.
-///     pub Chip {
-///         style text interactive pressed;
-///         create |parent, text: line = ""| Chip::new(parent, text);
-///         set text: line => |chip, text| chip.set_text(text);
-///         set selected: bool => |chip, on| chip.set_selected(on);
-///         event changed => |chip, run| chip.on_change(move |_| run());
-///         get selected: bool => |chip| chip.is_selected();
-///     }
-/// }
-/// ```
-///
-/// `pub Name { ... }` implements `Element` for the handle type `Name`;
-/// `pub Name(Handle) { ... }` defines a marker type `Name` for elements
-/// sharing a handle type. Either way it defines a hidden macro `Name` that
-/// `ui!` asks for the spec: re-export the handle or marker type at the
-/// crate root, where the macro lives, so one `use` brings both.
-///
-/// Items, each ending with `;`:
-/// - `layout leaf | box | flex | grid` (default `leaf`), and for containers
-///   `children any | only Name | exactly N` (default `any`);
-/// - `parent Name`: it may only be written directly inside `Name`;
-/// - `style` followed by the groups `text interactive pressed indicator editor`;
-/// - `create |parent, name: type = default, ...| expr` returning the handle;
-///   a constructor argument without a default is required and literal;
-/// - `set name: type => |handle, value| ...` for a settable, bindable property;
-/// - `event name => |handle, run| ...` registering `run` as a handler;
-/// - `get name: type => |handle| ...` for a `self.name` field;
-/// - `children => |handle, index| container` where child `index` goes.
-///
-/// Types are `bool`, `int`, `int(min, max)`, `float`, `float(min)`,
-/// `float(min, max)`, `fraction`, `length`, `string`, `line`, `color` and
-/// `choice(a, b, ...)`, arriving as `bool`, `i64`, `f64`, `f32`, `f32`,
-/// `&str`, `&str`, `Color` and `&str`.
+/// Expands the loader's `element!`, which passes its own path ahead of the
+/// definitions: `$crate; pub Name { ... }`.
+#[doc(hidden)]
 #[proc_macro]
-pub fn element(input: TokenStream) -> TokenStream {
-    let defs = syn::parse_macro_input!(input as element::Defs);
-    let loader = match loader() {
-        Ok(loader) => loader,
+pub fn __element(input: TokenStream) -> TokenStream {
+    let (loader, tokens) = split_path(input.into());
+    let defs = match syn::parse2::<element::Defs>(tokens) {
+        Ok(defs) => defs,
         Err(error) => return error.into_compile_error().into(),
     };
     defs.0
@@ -233,7 +171,22 @@ fn sources(file: &LitStr) -> syn::Result<(std::path::PathBuf, Sources)> {
     Ok((manifest, sources))
 }
 
-fn expand(arguments: &Arguments, specs: &[ElementSpec<'static>]) -> syn::Result<Tokens> {
+/// Splits the `$crate;` a wrapper macro puts ahead of its input. Generated
+/// code names that crate by this path, which holds under any dependency rename.
+fn split_path(input: Tokens) -> (Tokens, Tokens) {
+    let mut trees = input.into_iter();
+    let path = trees
+        .by_ref()
+        .take_while(|tree| !matches!(tree, TokenTree::Punct(punct) if punct.as_char() == ';'))
+        .collect();
+    (path, trees.collect())
+}
+
+fn expand(
+    facade: &Tokens,
+    arguments: &Arguments,
+    specs: &[ElementSpec<'static>],
+) -> syn::Result<Tokens> {
     let file = &arguments.file;
     let diagnostic = |message| syn::Error::new(file.span(), message);
     let (manifest, sources) = sources(file)?;
@@ -249,10 +202,9 @@ fn expand(arguments: &Arguments, specs: &[ElementSpec<'static>]) -> syn::Result<
             Ok(LitStr::new(path, file.span()))
         })
         .collect::<syn::Result<Vec<_>>>()?;
-    let facade = facade(file)?;
     let cx = generate::Context {
         loader: quote! { #facade::loader },
-        facade,
+        facade: facade.clone(),
         program: &program,
         specs,
         span: file.span(),
@@ -273,34 +225,4 @@ fn expand(arguments: &Arguments, specs: &[ElementSpec<'static>]) -> syn::Result<
         #(const _: &str = ::core::include_str!(#dependencies);)*
         #invocation
     }})
-}
-
-/// The loader as seen by an `element!` call: through the facade, or the
-/// loader crate itself for the built-in elements.
-fn loader() -> syn::Result<Tokens> {
-    let error =
-        |error: proc_macro_crate::Error| syn::Error::new(proc_macro2::Span::call_site(), error);
-    let path = match crate_name("aegle") {
-        Ok(FoundCrate::Name(name)) => format!("::{name}::loader"),
-        Ok(FoundCrate::Itself) => "::aegle::loader".into(),
-        Err(_) => match crate_name("aegle-loader").map_err(error)? {
-            FoundCrate::Name(name) => format!("::{name}"),
-            FoundCrate::Itself => "::aegle_loader".into(),
-        },
-    };
-    let path = syn::parse_str::<syn::Path>(&path)?;
-    Ok(quote! { #path })
-}
-
-fn facade(file: &LitStr) -> syn::Result<Tokens> {
-    let name = match crate_name("aegle").map_err(|error| syn::Error::new(file.span(), error))? {
-        FoundCrate::Name(name) => name,
-        // Also covers examples and integration tests in the facade package.
-        // The facade aliases itself under this name for its own macro calls.
-        FoundCrate::Itself => "aegle".into(),
-    };
-    let path = syn::parse_str::<syn::Path>(&format!("::{name}"))
-        .or_else(|_| syn::parse_str(&format!("::r#{name}")))
-        .map_err(|error| syn::Error::new(file.span(), error))?;
-    Ok(quote! { #path })
 }

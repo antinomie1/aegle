@@ -27,7 +27,7 @@ fn grid(_: &Container, _: bool) -> Container {
     panic!("markup Grid and Stack require the grid feature")
 }
 
-aegle_macros::element! {
+crate::element! {
     /// A vertical flex container.
     pub Column(Container) {
         layout flex;

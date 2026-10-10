@@ -20,7 +20,6 @@ aegle-gpu.workspace = true
 aegle-scene.workspace = true
 aegle-types = { workspace = true, features = ["color-math"] }
 bytemuck = { version = "1.25.0", features = ["derive"] }
-pollster = "1.0.1"
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl", "vulkan", "dx12", "metal"] }
 aegle-glyph = { workspace = true, optional = true, features = ["scene"] }
 hashbrown = { version = "0.17.1", default-features = false, optional = true }

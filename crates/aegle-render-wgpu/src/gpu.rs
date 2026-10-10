@@ -9,7 +9,10 @@ use wgpu::{
 
 use std::{
     cell::RefCell,
+    pin::pin,
     sync::{Arc, OnceLock},
+    task::{Context, Poll, Wake, Waker},
+    thread::{self, Thread},
 };
 
 use crate::{Error, Result};
@@ -75,7 +78,7 @@ impl Gpu {
         instance: &Instance,
         surface: Option<&wgpu::Surface<'_>>,
     ) -> Result<(Self, Option<wgpu::SurfaceCapabilities>)> {
-        let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
+        let adapter = block_on(wgpu::util::initialize_adapter_from_env_or_default(
             instance, surface,
         ))?;
         // GL reports the fragment count when the vertex stage has none, so the
@@ -91,12 +94,11 @@ impl Gpu {
             max_storage_buffers_per_shader_stage: 2,
             ..wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits())
         };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                label: Some("aegle"),
-                required_limits: limits,
-                ..Default::default()
-            }))?;
+        let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("aegle"),
+            required_limits: limits,
+            ..Default::default()
+        }))?;
         let capabilities = surface.map(|surface| surface.get_capabilities(&adapter));
         Ok((Self::new(device, queue, adapter), capabilities))
     }
@@ -311,4 +313,24 @@ fn pipeline(
         multiview_mask: None,
         cache: None,
     })
+}
+
+/// Polls `future` on this thread, parking it until the future's waker runs.
+/// wgpu resolves adapter and device requests from its own callbacks.
+fn block_on<F: Future>(future: F) -> F::Output {
+    struct Unpark(Thread);
+    impl Wake for Unpark {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+    let waker = Waker::from(Arc::new(Unpark(thread::current())));
+    let mut context = Context::from_waker(&waker);
+    let mut future = pin!(future);
+    loop {
+        if let Poll::Ready(output) = future.as_mut().poll(&mut context) {
+            return output;
+        }
+        thread::park();
+    }
 }

@@ -7,7 +7,7 @@
 | 布局 | Taffy 0.14.0 | Flex/Block 默认，Grid 可选；低层树适配 |
 | 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由小型自有实现完成 |
 | Vulkan | ash 0.38.0+1.3.281 | 当前离屏/原生窗口几何及可选文字；loaded/std 动态加载，资源与同步由小型封装管理，不采用 vulkano；wgpu 只用于下一行的可选后端 |
-| 跨平台 GPU | wgpu 30.0.1、pollster 1.0.1 | 仅 `aegle-render-wgpu`：关闭默认 feature，启用 std、parking_lot、wgsl、vulkan、dx12、metal；不启用 GLES（无顶点存储缓冲）；pollster 阻塞式等待适配器与设备请求 |
+| 跨平台 GPU | wgpu 30.0.1 | 仅 `aegle-render-wgpu`：关闭默认 feature，启用 std、parking_lot、wgsl、vulkan、dx12、metal；不启用 GLES（无顶点存储缓冲）；适配器与设备请求由 `gpu.rs` 中约 20 行的 std `block_on`（`Wake` + `thread::park`）阻塞等待 |
 | GPU 数据布局 | bytemuck 1.25（当前锁定 1.25.2） | Pod/Zeroable 与安全字节转换；shader 布局按显式契约对应 |
 | Vulkan shader 编译 | Naga 30.0.1 | 仅构建期 wgsl-in/spv-out，生成 Vulkan 1.1 SPIR-V，不进入发布运行依赖 |
 | Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 软件独立构建用 Rust client backend；gpu feature 启用 system/dlopen 获取 libwayland 原生句柄，保留同一连接 |
@@ -27,7 +27,7 @@
 | SVG | resvg/usvg 0.48.1 | 仅 `aegle-image/svg` 与 `aegle-glyph/svg`：关闭 text、system-fonts 等默认 feature，glyph 侧启用 svgz；不处理 SVG 文字、外部文件或网络资源 |
 | 其他图像格式 | zune-jpeg 0.5、image-webp 0.2、gif 0.14 | 仅 `aegle-image` 的 `jpeg`/`webp`/`gif` feature；都先检查尺寸与字节预算再分配；`image` crate 只作为测试编码器的开发依赖 |
 | COLRv1 字形 | tiny-skia 0.12.0（已在 workspace） | `aegle-glyph/colrv1` 光栅 skrifa 的绘制回调，不增加新包 |
-| 标记编译宏 | syn 2、quote 1、proc-macro2 1、proc-macro-crate 3.5 | 仅编译期；Rust 语法/生成与 facade 重命名识别复用现成库 |
+| 标记编译宏 | syn 2、quote 1、proc-macro2 1 | 仅编译期；Rust 语法与代码生成复用现成库；facade 与 loader 的 `macro_rules!` 包装把 `$crate` 传给 proc macro，依赖改名后路径仍然正确，不读 Cargo 清单 |
 
 设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何/文字依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。Windows 编译与运行证据、GPU 原生呈现验证另见实现状态，不能将其等同于全部实机验收；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
@@ -41,7 +41,7 @@ Wayland 库本身没有 AccessKit 依赖；Unix adapter 由 aegle-app 的 `unix-
 
 SVG 默认以路径图标/构建期资产为主；可选运行时 resvg（`aegle-image/svg`、OpenType-SVG 字形的 `aegle-glyph/svg`）不处理 SVG text、外部 URL 或网络资源。需要 SVG 文字时在构建期转轮廓。构建期转换为位图需要指定尺寸/缩放档位，不能宣称与任意动态缩放完全等价。
 
-`aegle-markup` 的语法很小，采用直接流式词法分析和递归下降，表达式按优先级爬升解析，不引入通用脚本或表达式框架；`aegle-loader` 以小型树解释已检查的表达式，同样没有第三方依赖。`aegle-macros` 则复用 syn/quote 和 proc-macro-crate 的清单解析，避免重复实现 Rust 参数语法和重命名依赖规则；这些包只参与构建，不随应用运行。`markup` 的目标依赖闭包与发布体积须区分编译主机侧的宏依赖。
+`aegle-markup` 的语法很小，采用直接流式词法分析和递归下降，表达式按优先级爬升解析，不引入通用脚本或表达式框架；`aegle-loader` 以小型树解释已检查的表达式，同样没有第三方依赖。`aegle-macros` 则复用 syn/quote，避免重复实现 Rust 参数语法；生成代码经包装宏传入的 `$crate` 指向 facade 或 loader，不解析调用方的 Cargo 清单；这些包只参与构建，不随应用运行。`markup` 的目标依赖闭包与发布体积须区分编译主机侧的宏依赖。
 
 来源：[Parley 发布清单](https://docs.rs/crate/parley/0.11.1/source/Cargo.toml)、[Swash 发布清单](https://docs.rs/crate/swash/0.2.10/source/Cargo.toml)、[AccessKit](https://github.com/AccessKit/accesskit)、[resvg 发布清单](https://docs.rs/crate/resvg/0.48.1/source/Cargo.toml.orig)。
 
