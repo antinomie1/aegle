@@ -165,8 +165,8 @@ impl State {
         };
         let size = element.bounds.size;
         let radius = self.presented_radius(id)?;
-        let shape = RoundedRect::new(Rect::new(0.0, 0.0, size.width, size.height), radius)?;
-        let place = Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?;
+        let shape = RoundedRect::new(Rect::new(0.0, 0.0, size.width, size.height), radius);
+        let place = Affine::translation(element.bounds.origin.x, element.bounds.origin.y);
         let transform = element.xf.map_or(Ok(place), |xf| place.then(xf))?;
         let layer = Layer::new(
             shape,

@@ -22,7 +22,7 @@ use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{Accepts, Appearance, ControlKind, Theme, VisualState};
 use aegle_types::{Point, Size};
 
-use crate::{LocalLayout, Result, bar::Bar, state::State};
+use crate::{LocalLayout, OrFail, Result, bar::Bar, state::State};
 
 /// Work a control asks the engine to run after its input is handled, with the
 /// node that handled it. It runs before the outcome's effects, so it can change
@@ -245,13 +245,12 @@ pub trait Control: Any {
     /// Reshapes its text in a new font size or face, from the theme or a
     /// local font; by default its paragraph or editor. A control showing more
     /// text, such as a menu item's shortcut hint, reshapes that too.
-    fn restyle(&mut self, fonts: &mut TextSystem, style: &TextStyle<'_>) -> Result {
+    fn restyle(&mut self, fonts: &mut TextSystem, style: &TextStyle<'_>) {
         if let Some(text) = self.paragraph_mut() {
-            fonts.restyle(text, style)?;
+            fonts.restyle(text, style).or_fail();
         } else if let Some(field) = self.editor_mut() {
-            fonts.edit(field.editor_mut()).restyle(style)?;
+            fonts.edit(field.editor_mut()).restyle(style).or_fail();
         }
-        Ok(())
     }
 
     /// Interaction state for skins.
@@ -282,17 +281,17 @@ pub trait Control: Any {
         _cx: &mut InputCx<'_>,
         _pointer: aegle_controls::PointerId,
         _input: Input<'_>,
-    ) -> Result<Outcome> {
-        Ok(Outcome::default())
+    ) -> Outcome {
+        Outcome::default()
     }
     /// Handles one routed input event.
-    fn handle(&mut self, _cx: &mut InputCx<'_>, _input: Input<'_>) -> Result<Outcome> {
-        Ok(Outcome::default())
+    fn handle(&mut self, _cx: &mut InputCx<'_>, _input: Input<'_>) -> Outcome {
+        Outcome::default()
     }
 
     /// Intrinsic size including padding; containers measure zero.
-    fn measure(&mut self, _cx: &MeasureCx<'_>) -> Result<Size> {
-        Ok(Size::default())
+    fn measure(&mut self, _cx: &MeasureCx<'_>) -> Size {
+        Size::default()
     }
     /// The first text baseline from the top of a box of `size` laid out by the
     /// last measurement, for baseline alignment; `None` aligns the bottom edge.
@@ -301,21 +300,15 @@ pub trait Control: Any {
     }
     /// Re-lays out retained text for the final width after layout, given as
     /// `cx.width`.
-    fn finalize(&mut self, _cx: &MeasureCx<'_>) -> Result {
-        Ok(())
-    }
+    fn finalize(&mut self, _cx: &MeasureCx<'_>) {}
     /// Adjusts the layout style that follows the theme when it changes, leaving
     /// fields in `local` (bits the application set) alone.
     fn retheme(&self, _theme: &Theme, _local: LocalLayout, _root: bool, _style: &mut Style) {}
 
     /// Records the control's content.
-    fn paint(&mut self, _cx: &mut PaintCx<'_>) -> Result {
-        Ok(())
-    }
+    fn paint(&mut self, _cx: &mut PaintCx<'_>) {}
     /// Records what a viewport draws over its children: border and scrollbars.
-    fn paint_overlay(&mut self, _cx: &mut PaintCx<'_>) -> Result {
-        Ok(())
-    }
+    fn paint_overlay(&mut self, _cx: &mut PaintCx<'_>) {}
     /// The input a semantic action (click, increment, set value) stands for, if
     /// this control supports it.
     #[cfg(feature = "accessibility")]

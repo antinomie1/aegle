@@ -59,7 +59,7 @@ fn images_and_paths_match_software_reuse_and_recycle() -> Result {
         ));
     }
     star.close();
-    let star = star.finish(FillRule::EvenOdd)?;
+    let star = star.finish(FillRule::EvenOdd);
     let mut wave = PathBuilder::new();
     wave.move_to(Point::new(4.0, 70.0))
         .quad_to(Point::new(24.0, 50.0), Point::new(44.0, 70.0))
@@ -68,7 +68,7 @@ fn images_and_paths_match_software_reuse_and_recycle() -> Result {
             Point::new(70.0, 50.0),
             Point::new(88.0, 70.0),
         );
-    let wave = wave.finish(FillRule::NonZero)?;
+    let wave = wave.finish(FillRule::NonZero);
     let stroke = Stroke {
         width: 4.0,
         cap: LineCap::Round,
@@ -76,13 +76,13 @@ fn images_and_paths_match_software_reuse_and_recycle() -> Result {
     };
     let mut builder = SceneBuilder::new();
     builder
-        .image(&image, Rect::new(2.0, 2.0, 3.0, 2.0))?
-        .image(&image, Rect::new(8.25, 2.5, 21.0, 10.0))?
-        .push_transform(Affine::translation(40.0, 4.0)?)?
-        .fill_path(&star, Color::rgba(200, 40, 90, 220))?
-        .pop()?
-        .stroke_path(&wave, Color::rgb(20, 120, 60), stroke)?;
-    let scene = builder.finish()?;
+        .image(&image, Rect::new(2.0, 2.0, 3.0, 2.0))
+        .image(&image, Rect::new(8.25, 2.5, 21.0, 10.0))
+        .push_transform(Affine::translation(40.0, 4.0))
+        .fill_path(&star, Color::rgba(200, 40, 90, 220))
+        .pop()
+        .stroke_path(&wave, Color::rgb(20, 120, 60), stroke);
+    let scene = builder.finish();
 
     // An 80-pixel page holds the images and star masks but not the wave masks or the
     // 80-pixel image below, which receive exact-size textures.
@@ -104,7 +104,7 @@ fn images_and_paths_match_software_reuse_and_recycle() -> Result {
     );
 
     // Whole-pixel moves reuse masks; a new linear transform rasterizes again.
-    compare(&mut renderer, &scene, Affine::translation(3.0, -2.0)?)?;
+    compare(&mut renderer, &scene, Affine::translation(3.0, -2.0))?;
     assert_eq!(renderer.resident_entries(), 3);
     compare(
         &mut renderer,
@@ -117,8 +117,8 @@ fn images_and_paths_match_software_reuse_and_recycle() -> Result {
     // already did, so both kinds are released once two frames skip them.
     let large = Image::new(80, 10, [90, 30, 160, 255].repeat(800))?;
     let mut builder = SceneBuilder::new();
-    builder.image(&large, Rect::new(4.0, 80.0, 80.0, 10.0))?;
-    let pixels = compare(&mut renderer, &builder.finish()?, Affine::IDENTITY)?;
+    builder.image(&large, Rect::new(4.0, 80.0, 80.0, 10.0));
+    let pixels = compare(&mut renderer, &builder.finish(), Affine::IDENTITY)?;
     assert_eq!(
         &pixels[(84 * SIZE as usize + 40) * 4..][..4],
         [90, 30, 160, 255]

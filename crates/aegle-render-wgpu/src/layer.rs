@@ -134,7 +134,7 @@ impl Renderer {
             return Ok(());
         }
         let [x, y] = open.origin;
-        let shift = Affine::translation(-(x as f32), -(y as f32))?;
+        let shift = Affine::translation(-(x as f32), -(y as f32));
         let clip = clip.map(|rect| shifted(rect, open.origin));
         self.walk(scene, transform.then(shift)?, clip)
     }
@@ -292,7 +292,7 @@ impl Renderer {
         self.gpu.check()?;
         let group = images[2].sampled.clone();
         let page = self.bind_frame_texture(&group);
-        let shift = Affine::translation(-(origin[0] as f32), -(origin[1] as f32))?;
+        let shift = Affine::translation(-(origin[0] as f32), -(origin[1] as f32));
         let shape = (layer.shape(), layer.transform().then(shift)?);
         let at = [sampled[0], sampled[1]];
         let (rec, viewport) = (&mut self.rec, self.viewport);

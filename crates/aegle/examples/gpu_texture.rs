@@ -92,8 +92,7 @@ fn main() -> Result<()> {
         builder.texture(
             id,
             aegle::ui::scene::Rect::new(0.0, 0.0, size.width, size.height),
-        )?;
-        Ok(())
+        );
     });
     viewport.set_width(320.0);
     viewport.set_height(240.0);

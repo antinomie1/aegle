@@ -107,7 +107,9 @@ impl Scene {
 
 /// Records drawing operations, validating geometry and scope state at insertion.
 ///
-/// A rejected operation leaves the builder unchanged. Transform state uses a
+/// Invalid geometry (nonfinite, negative or out of the `f32` range once
+/// transformed) and unbalanced scopes are programming errors: the recording
+/// method panics with the [`SceneError`] that describes them. Transform state uses a
 /// fixed inline stack (about 2.9 KiB, with each scope's clip box), avoiding a second heap allocation while
 /// recording. Only commands and their resources remain in the completed scene.
 #[derive(Debug)]
@@ -176,24 +178,22 @@ impl SceneBuilder {
     }
 
     /// Records a solid fill. Empty shapes produce no command.
-    pub fn fill(&mut self, shape: RoundedRect, color: Color) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn fill(&mut self, shape: RoundedRect, color: Color) -> &mut Self {
         if !shape.is_empty() {
-            self.transform.validate_shape(shape, 0.0)?;
+            crate::valid(self.transform.validate_shape(shape, 0.0));
             self.cover(shape.rect(), 0.0);
             self.scene.commands.push(Command::Fill { shape, color });
         }
-        Ok(self)
+        self
     }
 
     /// Fills `shape` with `gradient`, whose geometry shares the shape's local
     /// coordinates. Empty shapes produce no command.
-    pub fn fill_gradient(
-        &mut self,
-        shape: RoundedRect,
-        gradient: &Gradient,
-    ) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn fill_gradient(&mut self, shape: RoundedRect, gradient: &Gradient) -> &mut Self {
         if !shape.is_empty() {
-            self.transform.validate_shape(shape, 0.0)?;
+            crate::valid(self.transform.validate_shape(shape, 0.0));
             self.cover(shape.rect(), 0.0);
             self.scene.gradients.push(gradient.clone());
             let gradient = self.scene.gradients.len() - 1;
@@ -201,41 +201,38 @@ impl SceneBuilder {
                 .commands
                 .push(Command::FillGradient { shape, gradient });
         }
-        Ok(self)
+        self
     }
 
     /// Records the soft shadow of `shape`; see [`Command::Shadow`]. A zero
     /// `blur` records an ordinary fill; empty shapes produce no command.
-    pub fn shadow(
-        &mut self,
-        shape: RoundedRect,
-        color: Color,
-        blur: f32,
-    ) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn shadow(&mut self, shape: RoundedRect, color: Color, blur: f32) -> &mut Self {
         if !blur.is_finite() {
-            return Err(SceneError::NonFinite);
+            crate::fail(SceneError::NonFinite);
         }
         if blur < 0.0 {
-            return Err(SceneError::NegativeExtent);
+            crate::fail(SceneError::NegativeExtent);
         }
         if blur == 0.0 {
             return self.fill(shape, color);
         }
         if !shape.is_empty() {
-            self.transform.validate_shape(shape, blur * 3.0)?;
+            crate::valid(self.transform.validate_shape(shape, blur * 3.0));
             self.cover(shape.rect(), blur * 3.0);
             self.scene
                 .commands
                 .push(Command::Shadow { shape, color, blur });
         }
-        Ok(self)
+        self
     }
 
     /// Records `image` stretched over `rect`. Empty rectangles produce no command.
-    pub fn image(&mut self, image: &Image, rect: Rect) -> Result<&mut Self, SceneError> {
-        let shape = RoundedRect::new(rect, 0.0)?;
+    #[track_caller]
+    pub fn image(&mut self, image: &Image, rect: Rect) -> &mut Self {
+        let shape = RoundedRect::new(rect, 0.0);
         if !shape.is_empty() {
-            self.transform.validate_shape(shape, 0.0)?;
+            crate::valid(self.transform.validate_shape(shape, 0.0));
             self.cover(rect, 0.0);
             let image_index = self.scene.images.len();
             self.scene.images.push(image.clone());
@@ -244,54 +241,52 @@ impl SceneBuilder {
                 rect,
             });
         }
-        Ok(self)
+        self
     }
 
     /// Draws a registered application texture stretched over `rect`. Empty
     /// rectangles produce no command; see [`Command::Texture`]. Only GPU
     /// renderers draw textures: in a native app, a texture can be registered
     /// exactly when `App::wgpu` or `App::vulkan` returns a device.
-    pub fn texture(&mut self, texture: TextureId, rect: Rect) -> Result<&mut Self, SceneError> {
-        let shape = RoundedRect::new(rect, 0.0)?;
+    #[track_caller]
+    pub fn texture(&mut self, texture: TextureId, rect: Rect) -> &mut Self {
+        let shape = RoundedRect::new(rect, 0.0);
         if !shape.is_empty() {
-            self.transform.validate_shape(shape, 0.0)?;
+            crate::valid(self.transform.validate_shape(shape, 0.0));
             self.cover(rect, 0.0);
             self.scene.commands.push(Command::Texture { texture, rect });
         }
-        Ok(self)
+        self
     }
 
     /// Fills `path` with its fill rule. Paths without segments produce no command.
-    pub fn fill_path(&mut self, path: &Path, color: Color) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn fill_path(&mut self, path: &Path, color: Color) -> &mut Self {
         if !path.is_empty() {
-            self.transform
-                .validate_shape(RoundedRect::new(path.bounds(), 0.0)?, 0.0)?;
+            let shape = RoundedRect::new(path.bounds(), 0.0);
+            crate::valid(self.transform.validate_shape(shape, 0.0));
             self.cover(path.bounds(), 0.0);
             let index = self.push_path(path);
             self.scene
                 .commands
                 .push(Command::FillPath { path: index, color });
         }
-        Ok(self)
+        self
     }
 
     /// Strokes `path`. Paths without segments and zero widths produce no command.
-    pub fn stroke_path(
-        &mut self,
-        path: &Path,
-        color: Color,
-        stroke: Stroke,
-    ) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn stroke_path(&mut self, path: &Path, color: Color, stroke: Stroke) -> &mut Self {
         if !stroke.width.is_finite() {
-            return Err(SceneError::NonFinite);
+            crate::fail(SceneError::NonFinite);
         }
         if stroke.width < 0.0 {
-            return Err(SceneError::NegativeExtent);
+            crate::fail(SceneError::NegativeExtent);
         }
         if !path.is_empty() && stroke.width > 0.0 {
             // Miter joins reach at most twice the width (limit 4) from the outline.
-            let shape = RoundedRect::new(path.bounds(), 0.0)?;
-            self.transform.validate_shape(shape, stroke.width * 2.0)?;
+            let shape = RoundedRect::new(path.bounds(), 0.0);
+            crate::valid(self.transform.validate_shape(shape, stroke.width * 2.0));
             self.cover(path.bounds(), stroke.width * 2.0);
             let index = self.push_path(path);
             self.scene.commands.push(Command::StrokePath {
@@ -300,7 +295,7 @@ impl SceneBuilder {
                 stroke,
             });
         }
-        Ok(self)
+        self
     }
 
     fn push_path(&mut self, path: &Path) -> usize {
@@ -311,11 +306,12 @@ impl SceneBuilder {
     /// Records positioned glyphs, retaining a shared font handle, never bitmaps.
     /// The rasterizer owns any glyph cache. Empty runs produce no command.
     #[cfg(feature = "text")]
-    pub fn glyphs(&mut self, run: crate::GlyphRun) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn glyphs(&mut self, run: crate::GlyphRun) -> &mut Self {
         for glyph in run.glyphs() {
             let p = self.transform.map_point(glyph.position);
             if !p.x.is_finite() || !p.y.is_finite() {
-                return Err(SceneError::CoordinateRange);
+                crate::fail(SceneError::CoordinateRange);
             }
         }
         if let Some(first) = run.glyphs().first() {
@@ -339,26 +335,22 @@ impl SceneBuilder {
             self.scene.glyph_runs.push(run);
             self.scene.commands.push(Command::Glyphs(index));
         }
-        Ok(self)
+        self
     }
 
     /// Records a centered stroke. Empty shapes and zero widths produce no command.
     ///
     /// The width is measured in local coordinates and scales with the transform.
-    pub fn stroke(
-        &mut self,
-        shape: RoundedRect,
-        color: Color,
-        width: f32,
-    ) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn stroke(&mut self, shape: RoundedRect, color: Color, width: f32) -> &mut Self {
         if !width.is_finite() {
-            return Err(SceneError::NonFinite);
+            crate::fail(SceneError::NonFinite);
         }
         if width < 0.0 {
-            return Err(SceneError::NegativeExtent);
+            crate::fail(SceneError::NegativeExtent);
         }
         if !shape.is_empty() && width > 0.0 {
-            self.transform.validate_shape(shape, width * 0.5)?;
+            crate::valid(self.transform.validate_shape(shape, width * 0.5));
             self.cover(shape.rect(), width * 0.5);
             self.scene.commands.push(Command::Stroke {
                 shape,
@@ -366,20 +358,22 @@ impl SceneBuilder {
                 width,
             });
         }
-        Ok(self)
+        self
     }
 
     /// Opens a local-to-parent transform scope, validating its composition.
-    pub fn push_transform(&mut self, local: Affine) -> Result<&mut Self, SceneError> {
-        let composed = local.then(self.transform)?;
+    #[track_caller]
+    pub fn push_transform(&mut self, local: Affine) -> &mut Self {
+        let composed = crate::valid(local.then(self.transform));
         self.push(Command::PushTransform(local), composed)
     }
 
     /// Opens a clip scope; the clip captures the current transform.
     ///
     /// An empty shape clips all subsequent drawing until its matching pop.
-    pub fn push_clip(&mut self, shape: RoundedRect) -> Result<&mut Self, SceneError> {
-        self.transform.validate_shape(shape, 0.0)?;
+    #[track_caller]
+    pub fn push_clip(&mut self, shape: RoundedRect) -> &mut Self {
+        crate::valid(self.transform.validate_shape(shape, 0.0));
         let clip = self.transform.bounds(shape.rect(), 0.0);
         let clip = match self.clip {
             Some(outer) => outer
@@ -387,14 +381,15 @@ impl SceneBuilder {
                 .unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0)),
             None => clip,
         };
-        self.push(Command::PushClip(shape), self.transform)?;
+        self.push(Command::PushClip(shape), self.transform);
         self.clip = Some(clip);
-        Ok(self)
+        self
     }
 
-    fn push(&mut self, command: Command, transform: Affine) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    fn push(&mut self, command: Command, transform: Affine) -> &mut Self {
         if self.depth == MAX_SCOPE_DEPTH {
-            return Err(SceneError::ScopeLimit);
+            crate::fail(SceneError::ScopeLimit);
         }
         self.saved[self.depth] = self.transform;
         self.saved_clip[self.depth] = self.clip;
@@ -405,27 +400,29 @@ impl SceneBuilder {
         self.scene.max_depth = self.scene.max_depth.max(self.depth);
         self.scene.max_clip_depth = self.scene.max_clip_depth.max(self.clip_depth);
         self.scene.commands.push(command);
-        Ok(self)
+        self
     }
 
     /// Closes the most recent transform or clip scope.
-    pub fn pop(&mut self) -> Result<&mut Self, SceneError> {
+    #[track_caller]
+    pub fn pop(&mut self) -> &mut Self {
         if self.depth == 0 {
-            return Err(SceneError::UnexpectedPop);
+            crate::fail(SceneError::UnexpectedPop);
         }
         self.depth -= 1;
         self.clip_depth -= usize::from(self.clips[self.depth]);
         self.transform = self.saved[self.depth];
         self.clip = self.saved_clip[self.depth];
         self.scene.commands.push(Command::Pop);
-        Ok(self)
+        self
     }
 
     /// Finishes recording. Every pushed scope must have a matching pop.
-    pub fn finish(self) -> Result<Scene, SceneError> {
+    #[track_caller]
+    pub fn finish(self) -> Scene {
         if self.depth != 0 {
-            return Err(SceneError::UnclosedScope);
+            crate::fail(SceneError::UnclosedScope);
         }
-        Ok(self.scene)
+        self.scene
     }
 }

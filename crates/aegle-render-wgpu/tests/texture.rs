@@ -46,8 +46,8 @@ fn registered_textures_draw_until_unregistered() -> Result {
     );
     let id = renderer.register_texture(&texture)?;
     let mut builder = SceneBuilder::new();
-    builder.texture(id, Rect::new(0.0, 0.0, 32.0, 32.0))?;
-    let scene = builder.finish()?;
+    builder.texture(id, Rect::new(0.0, 0.0, 32.0, 32.0));
+    let scene = builder.finish();
 
     let mut frame = renderer.begin_frame(32, 32, Color::BLACK)?;
     frame.draw(&scene, Affine::IDENTITY)?;

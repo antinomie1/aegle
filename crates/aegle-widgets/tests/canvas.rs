@@ -19,7 +19,7 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     ui.root().set_padding(0.0);
     let view = ui.root().scroll_view();
     view.set_height(200.0);
-    let canvas = view.canvas(|_, _| Ok(()));
+    let canvas = view.canvas(|_, _| {});
     canvas.set_width(100.0);
     canvas.set_height(400.0);
     ui.refresh()?;
@@ -105,7 +105,7 @@ fn other_buttons_reach_canvases_and_not_default_controls() -> Result {
     ui.resize(Size::new(300.0, 300.0));
     ui.root().set_padding(0.0);
     let slider = ui.root().slider(0.0, 10.0, 0.0);
-    let canvas = ui.root().canvas(|_, _| Ok(()));
+    let canvas = ui.root().canvas(|_, _| {});
     canvas.set_width(100.0);
     canvas.set_height(100.0);
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -195,10 +195,9 @@ fn canvas_drawing_beyond_its_bounds_is_damaged() -> Result {
     let canvas = ui.root().canvas(move |builder, _| {
         let far = aegle_ui::scene::Rect::new(0.0, 0.0, painted.get(), 4.0);
         builder.fill(
-            aegle_ui::scene::RoundedRect::new(far, 0.0)?,
+            aegle_ui::scene::RoundedRect::new(far, 0.0),
             aegle_ui::Color::BLACK,
-        )?;
-        Ok(())
+        );
     });
     canvas.set_width(20.0);
     canvas.set_height(20.0);

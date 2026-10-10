@@ -5,24 +5,24 @@ use aegle_scene::{Affine, Color, FillRule, PathBuilder, Point, Rect, RoundedRect
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> Result<RoundedRect> {
-    Ok(RoundedRect::new(Rect::new(x, y, w, h), 0.0)?)
+    Ok(RoundedRect::new(Rect::new(x, y, w, h), 0.0))
 }
 
 #[test]
 fn walker_records_clips_limits_and_hands_back_commands() -> Result {
     let mut builder = SceneBuilder::new();
-    builder.fill(rect(0.0, 0.0, 10.0, 10.0)?, Color::BLACK)?;
-    builder.push_clip(rect(2.0, 2.0, 4.0, 4.0)?)?;
-    builder.fill(rect(0.0, 0.0, 10.0, 10.0)?, Color::WHITE)?;
-    builder.pop()?;
-    builder.fill(rect(0.0, 0.0, 10.0, 10.0)?, Color::TRANSPARENT)?;
+    builder.fill(rect(0.0, 0.0, 10.0, 10.0)?, Color::BLACK);
+    builder.push_clip(rect(2.0, 2.0, 4.0, 4.0)?);
+    builder.fill(rect(0.0, 0.0, 10.0, 10.0)?, Color::WHITE);
+    builder.pop();
+    builder.fill(rect(0.0, 0.0, 10.0, 10.0)?, Color::TRANSPARENT);
     let mut path = PathBuilder::new();
     path.move_to(Point::new(0.0, 0.0))
         .line_to(Point::new(4.0, 0.0))
         .line_to(Point::new(0.0, 4.0))
         .close();
-    builder.fill_path(&path.finish(FillRule::NonZero)?, Color::BLACK)?;
-    let scene = builder.finish()?;
+    builder.fill_path(&path.finish(FillRule::NonZero), Color::BLACK);
+    let scene = builder.finish();
 
     // Y flips only for WebGPU clip space, via the viewport height's sign.
     assert_eq!(viewport(8, 6, false), [8.0, 6.0]);
@@ -68,12 +68,12 @@ fn walker_records_clips_limits_and_hands_back_commands() -> Result {
     // Eight scene clips plus the external clip exceed the eight-layer limit.
     let mut builder = SceneBuilder::new();
     for _ in 0..8 {
-        builder.push_clip(rect(0.0, 0.0, 8.0, 8.0)?)?;
+        builder.push_clip(rect(0.0, 0.0, 8.0, 8.0)?);
     }
     for _ in 0..8 {
-        builder.pop()?;
+        builder.pop();
     }
-    let deep = builder.finish()?;
+    let deep = builder.finish();
     let outer = Some(Rect::new(0.0, 0.0, 8.0, 8.0));
     let result = Walker::new(
         &deep,

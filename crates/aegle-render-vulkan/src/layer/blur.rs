@@ -181,7 +181,7 @@ impl Renderer {
         self.continue_frame()?;
         let view = self.layers.scratch.as_ref().unwrap().passes[1].view;
         let page = self.bind_internal(view, clear)?;
-        let shift = Affine::translation(-(origin[0] as f32), -(origin[1] as f32))?;
+        let shift = Affine::translation(-(origin[0] as f32), -(origin[1] as f32));
         let shape = (layer.shape(), layer.transform().then(shift)?);
         let at = [sampled[0], sampled[1]];
         let view = viewport(size[0], size[1], false);

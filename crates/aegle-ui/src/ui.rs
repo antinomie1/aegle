@@ -308,7 +308,7 @@ impl Ui {
                     .is_none_or(|clip| clip.intersection(shown).is_some())
                 && !scene.commands().is_empty()
             {
-                let place = Affine::translation(element.bounds.origin.x, element.bounds.origin.y)?;
+                let place = Affine::translation(element.bounds.origin.x, element.bounds.origin.y);
                 visit(Visit::Scene {
                     scene,
                     transform: element.xf.map_or(Ok(place), |xf| place.then(xf))?,

@@ -10,7 +10,7 @@
 
 use aegle_scene::{Affine, Layer, Rect, RoundedRect, blur_boxes, blur_reach};
 
-use crate::{Error, Recording, Result, State, Textured, records::NO_CLIP};
+use crate::{Recording, Result, State, Textured, records::NO_CLIP};
 
 /// Box blur pass shader: samples `source` along one axis.
 pub const BLUR_WGSL: &str = include_str!("blur.wgsl");
@@ -152,17 +152,13 @@ pub fn composite(
         clip: NO_CLIP,
         bounds: [0.0, 0.0, f32::MAX, f32::MAX],
     };
-    recording.push_clip(
-        &mut state,
-        RoundedRect::new(scissor, 0.0)?,
-        Affine::IDENTITY,
-    )?;
+    recording.push_clip(&mut state, RoundedRect::new(scissor, 0.0), Affine::IDENTITY)?;
     if let Some((shape, transform)) = shape {
         recording.push_clip(&mut state, shape, transform)?;
     }
     let (x, y) = (at[0] as f32, at[1] as f32);
     let area = [x, y, x + size[0] as f32, y + size[1] as f32];
-    let inverse = Affine::translation(-x, -y).map_err(|_| Error::Coordinates)?;
+    let inverse = Affine::translation(-x, -y);
     recording.record(
         Textured {
             area,

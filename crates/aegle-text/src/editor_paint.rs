@@ -1,8 +1,8 @@
-use aegle_scene::{RoundedRect, SceneBuilder, SceneError};
+use aegle_scene::{RoundedRect, SceneBuilder};
 use aegle_types::{Color, Rect};
 use parley::{Affinity, Cursor, Selection};
 
-use crate::{Editor, PaintError, editor::to_rect, paint::paint_layout};
+use crate::{Editor, editor::to_rect, paint::paint_layout};
 
 /// Colors and caret width for recording an editor's current visual state.
 ///
@@ -43,26 +43,14 @@ impl Editor {
     /// Focus and blink visibility are controlled by [`EditorPaint`]. The caller
     /// supplies the same transform and clip used for hit testing and IME bounds.
     ///
-    /// Nonfinite caret widths return [`SceneError::NonFinite`]; nonpositive
-    /// widths return [`SceneError::InvalidText`]. Other errors follow
-    /// [`crate::Paragraph::paint`]. An error may leave earlier commands appended;
-    /// discard the record when atomic recording is required.
-    pub fn paint(&self, builder: &mut SceneBuilder, paint: EditorPaint) -> Result<(), PaintError> {
-        if !paint.caret_width.is_finite() {
-            return Err(SceneError::NonFinite.into());
-        }
+    /// Panics unless the caret width is finite and positive, and as
+    /// [`crate::Paragraph::paint`] does.
+    pub fn paint(&self, builder: &mut SceneBuilder, paint: EditorPaint) {
         let caret = self
             .caret_rect(paint.caret_width)
-            .map_err(|_| SceneError::InvalidText)?
-            .map(|rect| RoundedRect::new(rect, 0.0))
-            .transpose()?;
-
+            .expect("caret width must be finite and positive");
         if let Some(color) = paint.selection {
-            let mut result = Ok(());
-            self.selection_rects(|rect| {
-                result = result.and_then(|()| fill_rect(builder, rect, color));
-            });
-            result?;
+            self.selection_rects(|rect| fill_rect(builder, rect, color));
         }
         paint_layout(
             self.layout(),
@@ -70,7 +58,7 @@ impl Editor {
             builder,
             paint.foreground,
             self.weight,
-        )?;
+        );
 
         if let (Some(range), Some(color)) = (self.composition_range(), paint.preedit) {
             let layout = self.layout();
@@ -78,7 +66,6 @@ impl Editor {
                 Cursor::from_byte_index(layout, range.start, Affinity::Downstream),
                 Cursor::from_byte_index(layout, range.end, Affinity::Upstream),
             );
-            let mut result = Ok(());
             selection.geometry_with(layout, |bounds, _| {
                 let rect = to_rect(bounds);
                 let underline = Rect::new(
@@ -87,19 +74,16 @@ impl Editor {
                     rect.size.width,
                     1.0,
                 );
-                result = result.and_then(|()| fill_rect(builder, underline, color));
+                fill_rect(builder, underline, color);
             });
-            result?;
         }
 
-        if let (Some(shape), Some(color)) = (caret, paint.caret) {
-            builder.fill(shape, color)?;
+        if let (Some(rect), Some(color)) = (caret, paint.caret) {
+            fill_rect(builder, rect, color);
         }
-        Ok(())
     }
 }
 
-fn fill_rect(builder: &mut SceneBuilder, rect: Rect, color: Color) -> Result<(), PaintError> {
-    builder.fill(RoundedRect::new(rect, 0.0)?, color)?;
-    Ok(())
+fn fill_rect(builder: &mut SceneBuilder, rect: Rect, color: Color) {
+    builder.fill(RoundedRect::new(rect, 0.0), color);
 }

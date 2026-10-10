@@ -66,10 +66,9 @@ fn scrollbars_follow_the_offset_and_map_drags_back_to_fractions() {
         &mut builder,
         [Some(bar), None],
         [Color::WHITE, Color::BLACK],
-    )
-    .unwrap();
+    );
     assert_eq!(
-        builder.finish().unwrap().commands().len(),
+        builder.finish().commands().len(),
         2,
         "one track and one thumb"
     );

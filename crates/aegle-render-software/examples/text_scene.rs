@@ -86,10 +86,10 @@ fn layout(tree: &mut Nodes, root: NodeId) -> Result<usize> {
 
 fn record(tree: &mut Nodes, root: NodeId) -> Result<Scene> {
     let mut builder = SceneBuilder::new();
-    let card = RoundedRect::new(Rect::new(24.0, 24.0, 512.0, 352.0), 18.0)?;
-    builder.fill(card, Color::WHITE)?;
-    builder.stroke(card, Color::rgb(215, 222, 232), 1.0)?;
-    builder.push_clip(card)?;
+    let card = RoundedRect::new(Rect::new(24.0, 24.0, 512.0, 352.0), 18.0);
+    builder.fill(card, Color::WHITE);
+    builder.stroke(card, Color::rgb(215, 222, 232), 1.0);
+    builder.push_clip(card);
     let mut pending = vec![(root, Point::default())];
     while let Some((id, parent_origin)) = pending.pop() {
         let node = tree.get_mut(id).unwrap();
@@ -101,18 +101,18 @@ fn record(tree: &mut Nodes, root: NodeId) -> Result<Scene> {
         if let Some(paragraph) = &mut node.context {
             // Taffy may last measure with an intrinsic width. Paint at its final width.
             paragraph.reflow(Some(bounds.size.width), Alignment::Start)?;
-            builder.push_transform(Affine::translation(origin.x, origin.y)?)?;
+            builder.push_transform(Affine::translation(origin.x, origin.y));
             builder.push_clip(RoundedRect::new(
                 Rect::new(0.0, 0.0, bounds.size.width, bounds.size.height),
                 0.0,
-            )?)?;
-            paragraph.paint(&mut builder)?;
-            builder.pop()?.pop()?;
+            ));
+            paragraph.paint(&mut builder);
+            builder.pop().pop();
         }
         pending.extend(tree.children(id)?.rev().map(|child| (child, origin)));
     }
-    builder.pop()?;
-    Ok(builder.finish()?)
+    builder.pop();
+    Ok(builder.finish())
 }
 
 fn main() -> Result<()> {

@@ -116,7 +116,7 @@ target!(aegle_render_wgpu::Frame<'_>);
 
 #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
 fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
-    let scale = Affine::scale(factor, factor)?;
+    let scale = Affine::scale(factor, factor);
     // Node clips snap to whole device pixels, like a scissor rectangle; the
     // software renderer then clips without a surface-sized mask.
     let snap = |rect: Rect| {

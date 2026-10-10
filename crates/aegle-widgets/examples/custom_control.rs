@@ -71,10 +71,10 @@ impl Control for RatingControl {
             border: false,
         }
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let steps = f32::from(STEPS);
         let width = steps * CELL + (steps - 1.0) * GAP + 2.0 * cx.padding;
-        Ok(Size::new(width, CELL + 2.0 * cx.padding))
+        Size::new(width, CELL + 2.0 * cx.padding)
     }
     fn default_padding(&self, _: &Theme) -> f32 {
         2.0
@@ -82,21 +82,21 @@ impl Control for RatingControl {
     fn content_offset(&self, _: Size, padding: f32, _: Point) -> Point {
         Point::new(padding, padding)
     }
-    fn hover(&mut self, _: &mut InputCx<'_>, _: PointerId, input: Input<'_>) -> Result<Outcome> {
+    fn hover(&mut self, _: &mut InputCx<'_>, _: PointerId, input: Input<'_>) -> Outcome {
         let hover = match input {
             Input::Pointer(pointer) if pointer.inside => Some(Self::step_at(pointer.position.x)),
             _ => None,
         };
         let repaint = hover != self.hover;
         self.hover = hover;
-        Ok(Outcome {
+        Outcome {
             repaint,
             ..Default::default()
-        })
+        }
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         let (low, high) = (1, STEPS);
-        Ok(match cx.logical(input) {
+        match cx.logical(input) {
             Input::Pointer(pointer) if matches!(pointer.kind, PointerKind::Down { .. }) => {
                 let outcome = self.choose(Self::step_at(pointer.position.x));
                 Outcome {
@@ -127,22 +127,21 @@ impl Control for RatingControl {
                 ..Default::default()
             },
             _ => Outcome::default(),
-        })
+        }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let shown = self.hover.unwrap_or(self.value);
         let look = cx.appearance;
         for step in 1..=STEPS {
             let x = cx.padding + f32::from(step - 1) * (CELL + GAP);
-            let cell = RoundedRect::new(Rect::new(x, cx.padding, CELL, CELL), look.radius)?;
+            let cell = RoundedRect::new(Rect::new(x, cx.padding, CELL, CELL), look.radius);
             let color = if step <= shown {
                 look.indicator
             } else {
                 look.border_color
             };
-            cx.builder.fill(cell, color)?;
+            cx.builder.fill(cell, color);
         }
-        Ok(())
     }
     #[cfg(feature = "accessibility")]
     fn action_input(

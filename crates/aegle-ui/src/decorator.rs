@@ -26,13 +26,9 @@ pub trait Decorator: Any {
         false
     }
     /// Draws before the background and border.
-    fn under(&mut self, _cx: &mut PaintCx<'_>) -> Result {
-        Ok(())
-    }
+    fn under(&mut self, _cx: &mut PaintCx<'_>) {}
     /// Draws after the content, under the focus outline.
-    fn over(&mut self, _cx: &mut PaintCx<'_>) -> Result {
-        Ok(())
-    }
+    fn over(&mut self, _cx: &mut PaintCx<'_>) {}
 }
 
 impl Node {

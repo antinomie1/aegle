@@ -33,25 +33,27 @@ impl GlyphRun {
     ///
     /// Variation coordinates are ordered by the font's axis order and lie within
     /// -16384..=16384. An empty list selects the default instance. Font parsing
-    /// and glyph index validation belong to the rasterizer's resource boundary.
+    /// and glyph index validation belong to the rasterizer's resource boundary. Panics on a
+    /// nonpositive or nonfinite size, nonfinite positions or out-of-range coordinates.
+    #[track_caller]
     pub fn new(
         font: FontData,
         size: f32,
         color: Color,
         coords: Vec<i16>,
         glyphs: Vec<Glyph>,
-    ) -> Result<Self, SceneError> {
+    ) -> Self {
         if !size.is_finite()
             || glyphs
                 .iter()
                 .any(|g| !g.position.x.is_finite() || !g.position.y.is_finite())
         {
-            return Err(SceneError::NonFinite);
+            crate::fail(SceneError::NonFinite);
         }
         if size <= 0.0 || coords.iter().any(|v| !(-16384..=16384).contains(v)) {
-            return Err(SceneError::InvalidText);
+            crate::fail(SceneError::InvalidText);
         }
-        Ok(Self {
+        Self {
             font,
             size,
             color,
@@ -59,17 +61,19 @@ impl GlyphRun {
             glyphs,
             embolden: false,
             skew: 0,
-        })
+        }
     }
 
     /// Requests synthetic bold and a slant of `skew` degrees (positive leans right)
-    /// for fonts that lack the requested face. Skew must lie within ±89 degrees.
-    pub fn synthesized(mut self, embolden: bool, skew: i8) -> Result<Self, SceneError> {
+    /// for fonts that lack the requested face. Panics unless skew lies within
+    /// ±89 degrees.
+    #[track_caller]
+    pub fn synthesized(mut self, embolden: bool, skew: i8) -> Self {
         if !(-89..=89).contains(&skew) {
-            return Err(SceneError::InvalidText);
+            crate::fail(SceneError::InvalidText);
         }
         (self.embolden, self.skew) = (embolden, skew);
-        Ok(self)
+        self
     }
 
     /// Shared font file and face index.

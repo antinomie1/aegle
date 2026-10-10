@@ -53,25 +53,25 @@ fn geometry_text_atlas_recycling_and_failed_frames() -> Result {
     // Pixel-aligned shapes keep samples away from differing antialiased edges.
     let mut builder = SceneBuilder::new();
     builder.fill(
-        RoundedRect::new(Rect::new(8.0, 8.0, 40.0, 24.0), 4.0)?,
+        RoundedRect::new(Rect::new(8.0, 8.0, 40.0, 24.0), 4.0),
         Color::rgb(30, 90, 200),
-    )?;
+    );
     builder.fill(
-        RoundedRect::new(Rect::new(24.0, 16.0, 40.0, 24.0), 0.0)?,
+        RoundedRect::new(Rect::new(24.0, 16.0, 40.0, 24.0), 0.0),
         Color::rgba(220, 40, 40, 128),
-    )?;
+    );
     builder.stroke(
-        RoundedRect::new(Rect::new(12.0, 44.0, 48.0, 20.0), 0.0)?,
+        RoundedRect::new(Rect::new(12.0, 44.0, 48.0, 20.0), 0.0),
         Color::BLACK,
         2.0,
-    )?;
-    builder.push_clip(RoundedRect::new(Rect::new(64.0, 8.0, 24.0, 24.0), 0.0)?)?;
+    );
+    builder.push_clip(RoundedRect::new(Rect::new(64.0, 8.0, 24.0, 24.0), 0.0));
     builder.fill(
-        RoundedRect::new(Rect::new(56.0, 0.0, 40.0, 40.0), 0.0)?,
+        RoundedRect::new(Rect::new(56.0, 0.0, 40.0, 40.0), 0.0),
         Color::rgb(20, 160, 90),
-    )?;
-    builder.pop()?;
-    let shapes = builder.finish()?;
+    );
+    builder.pop();
+    let shapes = builder.finish();
     let (first, expected) = (gpu(&mut renderer, &shapes, None)?, software(&shapes, None)?);
     for (x, y) in [
         (10, 20),
@@ -112,10 +112,10 @@ fn geometry_text_atlas_recycling_and_failed_frames() -> Result {
         },
     )?;
     let mut builder = SceneBuilder::new();
-    builder.push_transform(Affine::translation(4.25, 6.5)?)?;
-    paragraph.paint(&mut builder)?;
-    builder.pop()?;
-    let text = builder.finish()?;
+    builder.push_transform(Affine::translation(4.25, 6.5));
+    paragraph.paint(&mut builder);
+    builder.pop();
+    let text = builder.finish();
     let (actual, expected) = (gpu(&mut renderer, &text, None)?, software(&text, None)?);
     let inked = actual
         .as_chunks::<4>()
@@ -131,12 +131,12 @@ fn geometry_text_atlas_recycling_and_failed_frames() -> Result {
     // Unsupported depth poisons the frame; the renderer then draws normally again.
     let mut builder = SceneBuilder::new();
     for _ in 0..9 {
-        builder.push_clip(RoundedRect::new(Rect::new(0.0, 0.0, 8.0, 8.0), 0.0)?)?;
+        builder.push_clip(RoundedRect::new(Rect::new(0.0, 0.0, 8.0, 8.0), 0.0));
     }
     for _ in 0..9 {
-        builder.pop()?;
+        builder.pop();
     }
-    let deep = builder.finish()?;
+    let deep = builder.finish();
     let mut frame = renderer.begin_frame(SIZE, SIZE, Color::WHITE)?;
     assert!(matches!(
         frame.draw(&deep, Affine::IDENTITY),

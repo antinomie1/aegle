@@ -55,9 +55,9 @@ Wayland 通常不向普通客户端公开全局窗口位置。平台能力必须
 
 ## 当前软件绘制接口
 
-已实现部分以 `SceneBuilder → Scene → Renderer::begin_frame → Frame::draw` 连接。`Scene` 为不可变局部绘制记录；重新构建时可以取回并清空 builder，复用命令分配。每次 draw 传入布局位置与设备缩放组成的 Affine，移动控件不必重建其局部图元。场景的变换/裁剪作用域只在本次 draw 内生效，不泄漏到其他记录。
+已实现部分以 `SceneBuilder → Scene → Renderer::begin_frame → Frame::draw` 连接。录制时非有限、负尺寸或变换后超出 `f32` 范围的几何以及不配对的作用域是调用方的程序错误，`SceneBuilder` 的方法、`RoundedRect::new`、`Affine::translation`/`scale`、`PathBuilder::finish` 与 `GlyphRun::new` 以 `SceneError` 的消息 panic；校验外部数据的构造（`Image::new`、渐变、`Affine::new`、`Layer::new`）仍返回 `SceneError`。`Scene` 为不可变局部绘制记录；重新构建时可以取回并清空 builder，复用命令分配。每次 draw 传入布局位置与设备缩放组成的 Affine，移动控件不必重建其局部图元。场景的变换/裁剪作用域只在本次 draw 内生效，不泄漏到其他记录。
 
-`Frame::draw_clipped(scene, transform, clip)` 接受可选设备坐标矩形，矩形不随节点 transform 再次变换，并与 scene 内部裁剪相交。它复用既有 mask 路径，增加一层预算；调用结束不影响后续 scene。Ui 的 `visit_scenes` 返回局部记录、窗口逻辑平移及可选祖先矩形；宿主必须同时缩放平移和裁剪，不能丢弃第三个参数。原生软件宿主已接入。多个 ScrollView 的祖先矩形先求交，所以嵌套滚动本身只增加一个外部 mask 层；控件自身的圆角裁剪另外计层。
+`Frame::draw_clipped(scene, transform, clip)` 接受可选设备坐标矩形，非有限或负尺寸的矩形 panic，超出设备坐标范围返回错误；矩形不随节点 transform 再次变换，并与 scene 内部裁剪相交。它复用既有 mask 路径，增加一层预算；调用结束不影响后续 scene。Ui 的 `visit_scenes` 返回局部记录、窗口逻辑平移及可选祖先矩形；宿主必须同时缩放平移和裁剪，不能丢弃第三个参数。原生软件宿主已接入。多个 ScrollView 的祖先矩形先求交，所以嵌套滚动本身只增加一个外部 mask 层；控件自身的圆角裁剪另外计层。
 
 目前支持实色矩形、统一圆角、居中边框、共享 RGBA 图像、填充/描边路径、二维仿射变换及嵌套矩形/圆角裁剪；可选 `text` 支持定位后的字形。`fill_gradient(shape, &Gradient)` 用线性或圆形渐变（2–16 个非递减色标，两端外延）填充圆角矩形，色标间在预乘线性光中插值；`shadow(shape, color, blur)` 绘制形状与标准差为 blur 的高斯卷积：x 方向用 erf 精确积分，y 方向取四行并按各区间的高斯质量加权（直角形状精确，圆角处近似，参照 Evan Wallace 的闭式解），三倍标准差之外不绘制。偏移与扩展由调用方移动或放大 shape。软件与 GPU 在像素中心用同一公式求值。builder 检查非有限几何、负尺寸、不可逆变换及作用域配对，总嵌套最多 64 层。空形状不绘制，空 clip 排除绘制；软件后端拒绝超出 ±1,048,576 的设备路径/字形坐标。Wayland 原生软件呈现与输入已接入；独立 Vulkan 几何范围见下节。
 

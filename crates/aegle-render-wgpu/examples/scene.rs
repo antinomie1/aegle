@@ -24,13 +24,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )?;
     let mut builder = SceneBuilder::new();
-    let card = RoundedRect::new(Rect::new(16.0, 16.0, 368.0, 168.0), 16.0)?;
-    builder.fill(card, Color::WHITE)?;
-    builder.stroke(card, Color::rgb(215, 222, 232), 1.0)?;
-    builder.push_transform(Affine::translation(36.0, 48.0)?)?;
-    paragraph.paint(&mut builder)?;
-    builder.pop()?;
-    let scene = builder.finish()?;
+    let card = RoundedRect::new(Rect::new(16.0, 16.0, 368.0, 168.0), 16.0);
+    builder.fill(card, Color::WHITE);
+    builder.stroke(card, Color::rgb(215, 222, 232), 1.0);
+    builder.push_transform(Affine::translation(36.0, 48.0));
+    paragraph.paint(&mut builder);
+    builder.pop();
+    let scene = builder.finish();
 
     let mut renderer = Renderer::new(Options::default())?;
     println!("device: {}", renderer.device_name());

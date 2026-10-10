@@ -29,8 +29,8 @@ pub(crate) fn fail(error: Box<dyn std::error::Error>) -> ! {
     panic!("{error}")
 }
 
-/// Unwraps internal results in handle methods, panicking like
-/// [`Node::change`] on an error; for control libraries' handles.
+/// Unwraps internal results in handle methods and [`Control`](crate::Control)
+/// methods, panicking like [`Node::change`] on an error; for control libraries.
 pub trait OrFail<T> {
     /// The value, or a panic with the error.
     fn or_fail(self) -> T;

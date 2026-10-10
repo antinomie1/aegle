@@ -7,7 +7,7 @@
 //! the viewport's rounded corners. Pressing the thumb drags it; pressing
 //! elsewhere on the strip centers the thumb there and keeps dragging. No
 //! timer, fade or animation is involved.
-use aegle_scene::{Color, Rect, RoundedRect, SceneBuilder, SceneError};
+use aegle_scene::{Color, Rect, RoundedRect, SceneBuilder};
 use aegle_types::{Point, Size};
 
 /// Pointer strip width along a scrollable edge, in logical pixels.
@@ -212,18 +212,13 @@ fn corner_clearance(radius: f32, inset: f32) -> f32 {
 }
 
 /// Paints each bar's track and thumb as pills.
-pub fn paint(
-    builder: &mut SceneBuilder,
-    bars: [Option<Bar>; 2],
-    [track, thumb]: [Color; 2],
-) -> Result<(), SceneError> {
+pub fn paint(builder: &mut SceneBuilder, bars: [Option<Bar>; 2], [track, thumb]: [Color; 2]) {
     for bar in bars.into_iter().flatten() {
         let radius = bar.thickness() * 0.5;
         for (rect, color) in [(bar.track_rect(), track), (bar.thumb_rect(), thumb)] {
             if !rect.is_empty() && color.to_rgba()[3] != 0 {
-                builder.fill(RoundedRect::new(rect, radius)?, color)?;
+                builder.fill(RoundedRect::new(rect, radius), color);
             }
         }
     }
-    Ok(())
 }

@@ -5,12 +5,12 @@ use std::time::Instant;
 
 use aegle_controls::{Input, Outcome, Range};
 use aegle_layout::{Dimension, Style};
-use aegle_scene::{Affine, SceneBuilder, SceneError};
+use aegle_scene::{Affine, SceneBuilder};
 use aegle_text::TextSystem;
 use aegle_theme::{Appearance, ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
-    Control, Result,
+    Control, OrFail,
     control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx},
 };
 
@@ -93,18 +93,18 @@ fn paint(
     slider: bool,
     appearance: Appearance,
     [vertical, rtl]: [bool; 2],
-) -> std::result::Result<(), SceneError> {
+) {
     if !vertical && rtl {
-        builder.push_transform(Affine::new([-1.0, 0.0, 0.0, 1.0, size.width, 0.0])?)?;
-        range(builder, size, padding, filled, slider, appearance)?;
-        builder.pop()?;
-        return Ok(());
+        builder.push_transform(Affine::new([-1.0, 0.0, 0.0, 1.0, size.width, 0.0]).or_fail());
+        range(builder, size, padding, filled, slider, appearance);
+        builder.pop();
+        return;
     }
     if !vertical {
         return range(builder, size, padding, filled, slider, appearance);
     }
     // Local track coordinates (u along, v across) map to (v, height - u).
-    builder.push_transform(Affine::new([0.0, -1.0, 1.0, 0.0, 0.0, size.height])?)?;
+    builder.push_transform(Affine::new([0.0, -1.0, 1.0, 0.0, 0.0, size.height]).or_fail());
     range(
         builder,
         Size::new(size.height, size.width),
@@ -112,9 +112,8 @@ fn paint(
         filled,
         slider,
         appearance,
-    )?;
-    builder.pop()?;
-    Ok(())
+    );
+    builder.pop();
 }
 
 /// The fixed cross-axis extent of a themed control, in its orientation.
@@ -244,7 +243,7 @@ impl Control for SliderControl {
             Point::new(-slider_track(size, padding).0, 0.0)
         }
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         let (start, extent) = self.track(cx.size, cx.padding);
         let input = match cx.logical(input) {
             // The behavior measures along x from the track start.
@@ -277,38 +276,38 @@ impl Control for SliderControl {
                         Input::Decrement
                     };
                     self.wheel -= WHEEL_STEP.copysign(self.wheel);
-                    let changed = self.behavior.handle(step, extent)?;
+                    let changed = self.behavior.handle(step, extent).or_fail();
                     outcome.repaint |= changed.repaint;
                     outcome.semantics |= changed.semantics;
                     outcome.action = outcome.action.or(changed.action);
                 }
                 self.glide.retarget(self.behavior.range().fraction(), false);
-                return Ok(outcome);
+                return outcome;
             }
             input => input,
         };
-        let outcome = self.behavior.handle(input, extent)?;
+        let outcome = self.behavior.handle(input, extent).or_fail();
         self.glide
             .retarget(self.behavior.range().fraction(), self.behavior.is_pressed());
-        Ok(outcome)
+        outcome
     }
     fn hover(
         &mut self,
         _: &mut InputCx<'_>,
         pointer: aegle_ui::PointerId,
         _: Input<'_>,
-    ) -> Result<Outcome> {
-        Ok(self.behavior.update_hover(pointer, true))
+    ) -> Outcome {
+        self.behavior.update_hover(pointer, true)
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        Ok(measure(cx.padding, self.vertical))
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
+        measure(cx.padding, self.vertical)
     }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(style, theme.control_height, self.vertical);
         }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let shown = self.glide.sample(cx);
         paint(
             cx.builder,
@@ -318,8 +317,7 @@ impl Control for SliderControl {
             true,
             *cx.appearance,
             [self.vertical, cx.rtl],
-        )?;
-        Ok(())
+        );
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
@@ -371,15 +369,15 @@ impl Control for ProgressControl {
             border: false,
         }
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        Ok(measure(cx.padding, self.vertical))
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
+        measure(cx.padding, self.vertical)
     }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(style, theme.control_height / 2.0, self.vertical);
         }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let filled = if !self.indeterminate {
             [0.0, self.glide.sample(cx)]
         } else if cx.reduced_motion {
@@ -400,8 +398,7 @@ impl Control for ProgressControl {
             false,
             *cx.appearance,
             [self.vertical, cx.rtl],
-        )?;
-        Ok(())
+        );
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {

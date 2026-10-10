@@ -8,7 +8,7 @@ use aegle_scene::{Rect, RoundedRect};
 use aegle_theme::ControlKind;
 use aegle_types::Cursor;
 use aegle_ui::{
-    Container, Control, Length, Node, Result, UiError,
+    Container, Control, Length, Node, UiError,
     control::{Frame, PaintCx},
     handle,
 };
@@ -37,13 +37,12 @@ impl Control for SeparatorControl {
             border: false,
         }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let rect = Rect::new(0.0, 0.0, cx.size.width, cx.size.height);
         if !rect.is_empty() {
             cx.builder
-                .fill(RoundedRect::new(rect, 0.0)?, cx.theme.border)?;
+                .fill(RoundedRect::new(rect, 0.0), cx.theme.border);
         }
-        Ok(())
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
@@ -164,10 +163,9 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Split
             Rect::new(size.width * 0.5 - 0.5, 0.0, 1.0, size.height)
         };
         builder.fill(
-            RoundedRect::new(line, 0.0)?,
+            RoundedRect::new(line, 0.0),
             aegle_scene::Color::rgba(128, 128, 128, 160),
-        )?;
-        Ok(())
+        );
     });
     let second = root.column();
     for pane in [&first, &second] {

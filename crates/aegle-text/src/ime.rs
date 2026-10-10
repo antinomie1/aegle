@@ -1,7 +1,7 @@
 use std::{borrow::Cow, ops::Range};
 
 use crate::{
-    EditorDriver, Selection, TextError,
+    Editor, EditorDriver, Selection, TextError,
     edit::raw_replace,
     editor::{Composition, validate_content, validate_selection},
     history::Edit,
@@ -38,52 +38,12 @@ impl EditorDriver<'_> {
         if self.editor.composition.is_none() {
             self.ready()?;
         }
-        validate_content(edit.preedit, self.editor.multiline)?;
-        if let Some(cursor) = edit.cursor {
-            validate_selection(edit.preedit, cursor)?;
-        }
-        if let Some(commit) = edit.commit {
-            validate_content(commit, self.editor.multiline)?;
-        }
+        let (range, commit) = self.editor.ime_plan(edit)?;
         let before = self.editor.selection();
         let selected = self
             .editor
             .composition_range()
             .unwrap_or_else(|| before.range());
-        let start = selected
-            .start
-            .checked_sub(edit.delete_before)
-            .ok_or(TextError::InvalidRange)?;
-        let end = selected
-            .end
-            .checked_add(edit.delete_after)
-            .ok_or(TextError::InvalidRange)?;
-        validate_selection(
-            self.editor.display_text(),
-            Selection {
-                anchor: start,
-                focus: end,
-            },
-        )?;
-        let range = start..end;
-        let commit = edit.commit.or_else(|| {
-            (self.editor.composition.is_some() && edit.preedit.is_empty()).then_some("")
-        });
-        // Check committed and displayed lengths separately: a composition can
-        // retain a much larger selected fragment than the visible preedit.
-        let remaining = self.editor.display_text().len() - range.len();
-        let inserted = commit.map_or(self.editor.selected_text().len(), str::len);
-        checked_length(remaining, inserted)?;
-        let displayed = if edit.preedit.is_empty() {
-            inserted
-        } else {
-            edit.preedit
-                .len()
-                .checked_add(commit.map_or(0, str::len))
-                .ok_or(TextError::TextTooLong)?
-        };
-        checked_length(remaining, displayed)?;
-
         if let Some(commit) = commit {
             self.ime_commit(range, selected, before, commit, edit);
         } else {
@@ -235,6 +195,67 @@ impl EditorDriver<'_> {
             removed.push_str(part);
         }
         Some(removed)
+    }
+}
+
+impl Editor {
+    /// Checks a native IME batch against this editor without applying it:
+    /// [`EditorDriver::apply_ime`] then succeeds on an editable, non-password
+    /// editor with a font. Hosts validate platform input with it before
+    /// routing the batch to a control.
+    pub fn check_ime(&self, edit: ImeEdit<'_>) -> Result<(), TextError> {
+        self.ime_plan(edit).map(drop)
+    }
+
+    /// The replaced range and committed text of a valid batch.
+    fn ime_plan<'a>(
+        &self,
+        edit: ImeEdit<'a>,
+    ) -> Result<(Range<usize>, Option<&'a str>), TextError> {
+        validate_content(edit.preedit, self.multiline)?;
+        if let Some(cursor) = edit.cursor {
+            validate_selection(edit.preedit, cursor)?;
+        }
+        if let Some(commit) = edit.commit {
+            validate_content(commit, self.multiline)?;
+        }
+        let selected = self
+            .composition_range()
+            .unwrap_or_else(|| self.selection().range());
+        let start = selected
+            .start
+            .checked_sub(edit.delete_before)
+            .ok_or(TextError::InvalidRange)?;
+        let end = selected
+            .end
+            .checked_add(edit.delete_after)
+            .ok_or(TextError::InvalidRange)?;
+        validate_selection(
+            self.display_text(),
+            Selection {
+                anchor: start,
+                focus: end,
+            },
+        )?;
+        let range = start..end;
+        let commit = edit
+            .commit
+            .or_else(|| (self.composition.is_some() && edit.preedit.is_empty()).then_some(""));
+        // Check committed and displayed lengths separately: a composition can
+        // retain a much larger selected fragment than the visible preedit.
+        let remaining = self.display_text().len() - range.len();
+        let inserted = commit.map_or(self.selected_text().len(), str::len);
+        checked_length(remaining, inserted)?;
+        let displayed = if edit.preedit.is_empty() {
+            inserted
+        } else {
+            edit.preedit
+                .len()
+                .checked_add(commit.map_or(0, str::len))
+                .ok_or(TextError::TextTooLong)?
+        };
+        checked_length(remaining, displayed)?;
+        Ok((range, commit))
     }
 }
 

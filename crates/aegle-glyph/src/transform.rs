@@ -89,24 +89,23 @@ impl GlyphOrigin {
     /// The renderer still clips and validates the image's mapped pixel bounds.
     pub fn image_transform(self, placement: Placement) -> Result<Affine, GlyphError> {
         if self.raster.hint {
-            Affine::translation(
+            return Ok(Affine::translation(
                 self.point.x.floor() + placement.left as f32,
                 self.point.y.floor() - placement.top as f32,
-            )
-        } else {
-            let [a, b, c, d, _, _] = self.raster.transform.coefficients();
-            let scale = self.raster.scale;
-            let left = placement.left as f32;
-            let top = -(placement.top as f32);
-            Affine::new([
-                a / scale,
-                b / scale,
-                c / scale,
-                d / scale,
-                self.point.x + (a * left + c * top) / scale,
-                self.point.y + (b * left + d * top) / scale,
-            ])
+            ));
         }
+        let [a, b, c, d, _, _] = self.raster.transform.coefficients();
+        let scale = self.raster.scale;
+        let left = placement.left as f32;
+        let top = -(placement.top as f32);
+        Affine::new([
+            a / scale,
+            b / scale,
+            c / scale,
+            d / scale,
+            self.point.x + (a * left + c * top) / scale,
+            self.point.y + (b * left + d * top) / scale,
+        ])
         .map_err(|_| GlyphError::Coordinates)
     }
 }

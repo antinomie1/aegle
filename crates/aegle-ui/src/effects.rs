@@ -1,7 +1,7 @@
 //! Node shadows and gradient backgrounds, drawn with the scene's native
 //! effect commands on every backend.
 
-use crate::{Color, Node, Point, Result, Shadow, UiError, style::Decoration};
+use crate::{Color, Node, OrFail, Point, Result, Shadow, UiError, style::Decoration};
 use crate::{ColorSlot, TokenSlot};
 use aegle_core::{Dirty, NodeId};
 use aegle_scene::{Gradient, GradientGeometry, Rect, RoundedRect, SceneBuilder};
@@ -189,9 +189,9 @@ pub(crate) fn paint_shadow(
     builder: &mut SceneBuilder,
     size: Size,
     radius: f32,
-) -> Result {
+) {
     let Some(shadow) = decoration.and_then(|d| d.shadow) else {
-        return Ok(());
+        return;
     };
     let (width, height) = (
         (size.width + shadow.spread * 2.0).max(0.0),
@@ -203,9 +203,8 @@ pub(crate) fn paint_shadow(
         width,
         height,
     );
-    let shape = RoundedRect::new(rect, (radius + shadow.spread).max(0.0))?;
-    builder.shadow(shape, shadow.color, shadow.blur)?;
-    Ok(())
+    let shape = RoundedRect::new(rect, (radius + shadow.spread).max(0.0));
+    builder.shadow(shape, shadow.color, shadow.blur);
 }
 
 /// Records a node's gradient background in place of its color; returns
@@ -214,9 +213,9 @@ pub(crate) fn paint_gradient(
     decoration: Option<&Decoration>,
     builder: &mut SceneBuilder,
     shape: RoundedRect,
-) -> Result<bool> {
+) -> bool {
     let Some(gradient) = decoration.and_then(|d| d.gradient.as_ref()) else {
-        return Ok(false);
+        return false;
     };
     let size = shape.rect().size;
     let at = |p: Point| Point::new(p.x * size.width, p.y * size.height);
@@ -232,7 +231,7 @@ pub(crate) fn paint_gradient(
     };
     // A collapsed node draws nothing, and has no extent for the gradient to span.
     if !shape.is_empty() {
-        builder.fill_gradient(shape, &gradient.with_geometry(geometry)?)?;
+        builder.fill_gradient(shape, &gradient.with_geometry(geometry).or_fail());
     }
-    Ok(true)
+    true
 }

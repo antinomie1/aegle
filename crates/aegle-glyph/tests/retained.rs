@@ -106,7 +106,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     {
         use aegle_glyph::{Placement, RasterTransform};
         use aegle_scene::{Affine, Point};
-        let raster = RasterTransform::new(Affine::scale(2.0, 2.0).unwrap(), 12.0).unwrap();
+        let raster = RasterTransform::new(Affine::scale(2.0, 2.0), 12.0).unwrap();
         assert_eq!(raster.size(), options.size);
         assert!(raster.hint());
         let origin = raster.origin(Point::new(1.12, -0.14)).unwrap();
@@ -124,7 +124,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
                     height: 6,
                 })
                 .unwrap(),
-            Affine::translation(1.0, -3.0).unwrap()
+            Affine::translation(1.0, -3.0)
         );
         assert!(matches!(
             raster.origin(Point::new(1_048_576.0, 0.0)),

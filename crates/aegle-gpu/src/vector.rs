@@ -57,7 +57,7 @@ pub fn stretch(size: [u32; 2], rect: Rect, state: State) -> Result<Option<([f32;
     ])
     .and_then(|local| local.then(state.transform))
     .map_err(|_| Error::Coordinates)?;
-    let shape = RoundedRect::new(Rect::new(0.0, 0.0, width as f32, height as f32), 0.0)?;
+    let shape = RoundedRect::new(Rect::new(0.0, 0.0, width as f32, height as f32), 0.0);
     // Edge coverage antialiases within one device pixel of the rect.
     let area = bounds(shape, transform, 0.0, 1.0)?;
     if !visible(area, state.bounds) {
@@ -86,7 +86,7 @@ pub fn path_raster(
 ) -> Result<Option<PathRaster>> {
     // Miter joins reach at most twice the width (limit 4) from the outline.
     let outset = stroke.map_or(0.0, |stroke| stroke.width * 2.0);
-    let hull = RoundedRect::new(path.bounds(), 0.0)?;
+    let hull = RoundedRect::new(path.bounds(), 0.0);
     if !visible(bounds(hull, state.transform, outset, 1.0)?, state.bounds) {
         return Ok(None);
     }

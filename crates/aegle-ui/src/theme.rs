@@ -170,7 +170,7 @@ impl State {
         let mut style = node.style().clone();
         if font_changed {
             let fonts = &mut self.fonts.borrow_mut();
-            node.context.control.restyle(fonts, &text_style)?;
+            node.context.control.restyle(fonts, &text_style);
         }
         node.context
             .control

@@ -9,7 +9,7 @@ use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::OrFail;
 use aegle_ui::{
-    Container, Control, HandlerResult, Result, UiError,
+    Container, Control, HandlerResult, UiError,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle,
 };
@@ -55,33 +55,33 @@ impl NumberFieldControl {
         }
     }
     /// Shows the value as text, selecting it while focused for quick retyping.
-    fn show(&mut self, fonts: &mut TextSystem) -> Result {
+    fn show(&mut self, fonts: &mut TextSystem) {
         let text = self.format();
         let mut editor = fonts.edit(self.field.0.editor_mut());
-        editor.set_text(&text)?;
+        editor.set_text(&text).or_fail();
         if self.focused {
-            editor.select(Selection {
+            let all = Selection {
                 anchor: 0,
                 focus: text.len(),
-            })?;
+            };
+            editor.select(all).or_fail();
         }
-        Ok(())
     }
     /// Sets the value and reports a change through the action handler.
-    fn assign(&mut self, fonts: &mut TextSystem, value: f64) -> Result<Outcome> {
-        let changed = self.range.set_value(value)?;
-        self.show(fonts)?;
-        Ok(Outcome {
+    fn assign(&mut self, fonts: &mut TextSystem, value: f64) -> Outcome {
+        let changed = self.range.set_value(value).or_fail();
+        self.show(fonts);
+        Outcome {
             handled: true,
             repaint: true,
             semantics: true,
             reset_ime: true,
             action: changed.then_some(Action::Change),
             ..Outcome::default()
-        })
+        }
     }
     /// Parses typed text; invalid text restores the current value.
-    fn commit(&mut self, fonts: &mut TextSystem) -> Result<Outcome> {
+    fn commit(&mut self, fonts: &mut TextSystem) -> Outcome {
         let typed = self.field.0.editor().text().to_string();
         match typed.trim().parse::<f64>() {
             Ok(value) if value.is_finite() => self.assign(fonts, value),
@@ -98,8 +98,8 @@ impl NumberField {
     /// Sets a finite value, clamped to the range, without a change callback.
     pub fn set_value(&self, value: f64) {
         self.edit(|control, fonts| {
-            control.range.set_value(value)?;
-            control.show(fonts)
+            control.range.set_value(value).or_fail();
+            control.show(fonts);
         })
     }
     /// Returns the inclusive bounds.
@@ -109,15 +109,15 @@ impl NumberField {
     /// Replaces finite increasing bounds, clamping the value.
     pub fn set_range(&self, min: f64, max: f64) {
         self.edit(|control, fonts| {
-            control.range.set_bounds(min, max)?;
-            control.show(fonts)
+            control.range.set_bounds(min, max).or_fail();
+            control.show(fonts);
         })
     }
     /// Sets a finite nonnegative step; zero steps by 1% of the range.
     pub fn set_step(&self, step: f64) {
         self.edit(|control, fonts| {
-            control.range.set_step(step)?;
-            control.show(fonts)
+            control.range.set_step(step).or_fail();
+            control.show(fonts);
         })
     }
     /// Shows at most 9 digits after the decimal point.
@@ -127,7 +127,7 @@ impl NumberField {
         }
         self.edit(|control, fonts| {
             control.decimals = decimals;
-            control.show(fonts)
+            control.show(fonts);
         })
     }
     /// The displayed text, which may hold uncommitted typing.
@@ -139,13 +139,13 @@ impl NumberField {
         self.on_action(move |node| callback(Self(node)).into_result())
     }
     /// Changes the control and its shown text.
-    fn edit(&self, update: impl FnOnce(&mut NumberFieldControl, &mut TextSystem) -> Result) {
+    fn edit(&self, update: impl FnOnce(&mut NumberFieldControl, &mut TextSystem)) {
         self.change(|state, id| {
             let fonts = state.fonts.clone();
             update(
                 state.control_as::<NumberFieldControl>(id).unwrap(),
                 &mut fonts.borrow_mut(),
-            )?;
+            );
             state.tree.mark_dirty(id, Dirty::ALL)?;
             Ok(())
         })
@@ -187,7 +187,7 @@ impl Control for NumberFieldControl {
         let offset = self.field.content_offset(size, padding, scroll);
         Point::new(offset.x - self.lead(), offset.y)
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         let step = self.step();
         match input {
             Input::Pointer(pointer) if matches!(pointer.kind, PointerKind::Down { .. }) => {
@@ -202,10 +202,10 @@ impl Control for NumberFieldControl {
                 if on_strip {
                     let up = y < cx.size.height * 0.5;
                     let value = self.range.value() + if up { step } else { -step };
-                    return Ok(Outcome {
+                    return Outcome {
                         focus: true,
-                        ..self.assign(cx.fonts, value)?
-                    });
+                        ..self.assign(cx.fonts, value)
+                    };
                 }
             }
             Input::Key(key) if key.pressed => {
@@ -229,10 +229,10 @@ impl Control for NumberFieldControl {
                     self.wheel -= WHEEL_STEP.copysign(self.wheel);
                 }
                 if steps == 0.0 {
-                    return Ok(Outcome {
+                    return Outcome {
                         handled: true,
                         ..Outcome::default()
-                    });
+                    };
                 }
                 return self.assign(cx.fonts, self.range.value() + steps * step);
             }
@@ -242,35 +242,35 @@ impl Control for NumberFieldControl {
             Input::Focus(focused) => {
                 self.focused = focused;
                 self.wheel = 0.0;
-                let outcome = self.field.handle(cx, input)?;
+                let outcome = self.field.handle(cx, input);
                 let committed = if focused {
-                    self.show(cx.fonts)?;
+                    self.show(cx.fonts);
                     Outcome::default()
                 } else {
-                    self.commit(cx.fonts)?
+                    self.commit(cx.fonts)
                 };
-                return Ok(Outcome {
+                return Outcome {
                     action: committed.action,
                     repaint: true,
                     reset_ime: true,
                     ..outcome
-                });
+                };
             }
             _ => {}
         }
         self.field.handle(cx, input)
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let size = self.field.measure(&MeasureCx {
             fonts: cx.fonts,
             padding: cx.padding,
             gap: cx.gap,
             width: cx.width.map(|w| (w - STRIP).max(0.0)),
             rtl: cx.rtl,
-        })?;
-        Ok(Size::new(size.width + STRIP, size.height))
+        });
+        Size::new(size.width + STRIP, size.height)
     }
-    fn finalize(&mut self, cx: &MeasureCx<'_>) -> Result {
+    fn finalize(&mut self, cx: &MeasureCx<'_>) {
         self.rtl = cx.rtl;
         self.field.finalize(&MeasureCx {
             fonts: cx.fonts,
@@ -283,7 +283,7 @@ impl Control for NumberFieldControl {
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
         self.field.retheme(theme, local, root, style);
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         self.scroll = cx.scroll;
         let (width, height) = (cx.size.width, cx.size.height);
         let shape = cx.shape;
@@ -299,17 +299,17 @@ impl Control for NumberFieldControl {
         cx.builder.push_clip(RoundedRect::new(
             Rect::new(lead, 0.0, width - STRIP, height),
             0.0,
-        )?)?;
-        cx.builder.push_transform(Affine::translation(lead, 0.0)?)?;
-        self.field.paint(cx)?;
-        cx.builder.pop()?;
-        cx.builder.pop()?;
-        cx.builder.push_clip(shape)?;
+        ));
+        cx.builder.push_transform(Affine::translation(lead, 0.0));
+        self.field.paint(cx);
+        cx.builder.pop();
+        cx.builder.pop();
+        cx.builder.push_clip(shape);
         let color = cx.appearance.foreground;
         cx.builder.fill(
-            RoundedRect::new(Rect::new(divider, 0.0, 1.0, height), 0.0)?,
+            RoundedRect::new(Rect::new(divider, 0.0, 1.0, height), 0.0),
             cx.appearance.border_color,
-        )?;
+        );
         // Up and down chevrons centered in each half of the strip.
         for (center, up) in [(height * 0.25, true), (height * 0.75, false)] {
             let mut path = PathBuilder::new();
@@ -319,13 +319,12 @@ impl Control for NumberFieldControl {
             path.line_to(ScenePoint::new(x, center + tip));
             path.line_to(ScenePoint::new(x + half, center - tip));
             cx.builder.stroke_path(
-                &path.finish(aegle_scene::FillRule::NonZero)?,
+                &path.finish(aegle_scene::FillRule::NonZero),
                 color,
                 aegle_scene::Stroke::new(1.5),
-            )?;
+            );
         }
-        cx.builder.pop()?;
-        Ok(())
+        cx.builder.pop();
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
@@ -372,7 +371,7 @@ pub(crate) fn create(container: &Container, min: f64, max: f64, value: f64) -> N
             scroll: Point::default(),
             rtl: false,
         };
-        control.show(&mut state.fonts.borrow_mut())?;
+        control.show(&mut state.fonts.borrow_mut());
         Ok((Box::new(control) as Box<dyn Control>, style))
     }))
 }

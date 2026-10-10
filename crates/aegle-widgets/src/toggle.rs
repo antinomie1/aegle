@@ -121,7 +121,7 @@ impl Control for ToggleControl {
     fn set_enabled(&mut self, _: &mut TextSystem, enabled: bool) -> Outcome {
         self.control.set_enabled(enabled)
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         let was = self.control.is_checked();
         let mut outcome = self.control.handle(input);
         if outcome.action == Some(Action::Change) {
@@ -137,14 +137,9 @@ impl Control for ToggleControl {
                 self.control.set_checked(true);
             }
         }
-        Ok(outcome)
+        outcome
     }
-    fn hover(
-        &mut self,
-        cx: &mut InputCx<'_>,
-        _: aegle_ui::PointerId,
-        input: Input<'_>,
-    ) -> Result<Outcome> {
+    fn hover(&mut self, cx: &mut InputCx<'_>, _: aegle_ui::PointerId, input: Input<'_>) -> Outcome {
         self.handle(cx, input)
     }
     fn baseline(&self, size: Size, _: f32) -> Option<f32> {
@@ -154,7 +149,7 @@ impl Control for ToggleControl {
         }
         Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let marker = if self.mark == Mark::Switch {
             36.0
         } else {
@@ -165,18 +160,18 @@ impl Control for ToggleControl {
         } else {
             cx.gap + self.text.size().width
         };
-        Ok(Size::new(
+        Size::new(
             marker + label + 2.0 * cx.padding,
             self.text.size().height.max(20.0) + 2.0 * cx.padding,
-        ))
+        )
     }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             style.size.height = Dimension::length(theme.control_height);
         }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
-        Ok(toggle(
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
+        toggle(
             cx.builder,
             &ToggleSpec {
                 size: cx.size,
@@ -190,7 +185,7 @@ impl Control for ToggleControl {
             },
             *cx.appearance,
             |builder, color| self.text.paint_with_color(builder, color),
-        )?)
+        )
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {

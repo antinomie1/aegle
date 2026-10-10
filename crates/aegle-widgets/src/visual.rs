@@ -6,7 +6,7 @@ use aegle_scene::{Image, Rect};
 use aegle_theme::ControlKind;
 use aegle_types::Size;
 use aegle_ui::{
-    Container, Control, Result,
+    Container, Control,
     control::{MeasureCx, PaintCx},
     handle,
 };
@@ -41,13 +41,12 @@ impl Control for ImageControl {
     fn kind(&self) -> &'static ControlKind {
         &aegle_ui::CONTAINER
     }
-    fn measure(&mut self, _: &MeasureCx<'_>) -> Result<Size> {
-        Ok(Size::new(self.0.width() as f32, self.0.height() as f32))
+    fn measure(&mut self, _: &MeasureCx<'_>) -> Size {
+        Size::new(self.0.width() as f32, self.0.height() as f32)
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         cx.builder
-            .image(&self.0, Rect::new(0.0, 0.0, cx.size.width, cx.size.height))?;
-        Ok(())
+            .image(&self.0, Rect::new(0.0, 0.0, cx.size.width, cx.size.height));
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {

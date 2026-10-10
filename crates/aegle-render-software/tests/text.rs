@@ -28,11 +28,11 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
     let mut warm = None;
     for color in [Color::rgb(0, 0, 255), Color::rgb(255, 0, 0)] {
         let mut builder = SceneBuilder::new();
-        builder.push_clip(RoundedRect::new(Rect::new(4.0, 4.0, 36.0, 28.0), 4.0)?)?;
-        builder.push_transform(Affine::translation(4.25, 4.5)?)?;
-        text.paint_with_color(&mut builder, color)?;
-        builder.pop()?.pop()?;
-        let scene = builder.finish()?;
+        builder.push_clip(RoundedRect::new(Rect::new(4.0, 4.0, 36.0, 28.0), 4.0));
+        builder.push_transform(Affine::translation(4.25, 4.5));
+        text.paint_with_color(&mut builder, color);
+        builder.pop().pop();
+        let scene = builder.finish();
         renderer
             .begin_frame(&mut surface, Color::TRANSPARENT)
             .draw(&scene, Affine::IDENTITY)?;
@@ -87,7 +87,7 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
             .begin_frame(&mut surface, Color::TRANSPARENT)
             .draw_clipped(
                 &scene,
-                Affine::translation(2.0, 0.0)?,
+                Affine::translation(2.0, 0.0),
                 Some(Rect::new(12.0, 0.0, 8.0, 48.0)),
             )?;
         assert!(
@@ -105,8 +105,8 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
         }
     }
     let mut builder = SceneBuilder::new();
-    text.paint(&mut builder)?;
-    let scene = builder.finish()?;
+    text.paint(&mut builder);
+    let scene = builder.finish();
     renderer
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw(&scene, Affine::new([0.0, 1.0, -1.0, 0.0, 40.0, 0.0])?)?;
@@ -166,8 +166,8 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
             id: 2,
             position: Point::new(0.0, 2.0),
         }],
-    )?)?;
-    let color_scene = builder.finish()?;
+    ));
+    let color_scene = builder.finish();
     renderer
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw(&color_scene, Affine::new([-1.0, 0.0, 0.0, 1.0, 2.5, 0.0])?)?;
@@ -212,7 +212,7 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
             .edit(&mut editor)
             .set_preedit("世界", visible.then_some(Selection::default()))?;
         let mut builder = SceneBuilder::new();
-        builder.push_transform(Affine::translation(4.0, 4.0)?)?;
+        builder.push_transform(Affine::translation(4.0, 4.0));
         editor.paint(
             &mut builder,
             EditorPaint {
@@ -220,11 +220,11 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
                 preedit: Some(Color::rgb(0, 255, 0)),
                 ..Default::default()
             },
-        )?;
-        builder.pop()?;
+        );
+        builder.pop();
         renderer
             .begin_frame(&mut surface, Color::WHITE)
-            .draw(&builder.finish()?, Affine::IDENTITY)?;
+            .draw(&builder.finish(), Affine::IDENTITY)?;
         assert_eq!(
             surface
                 .data()
@@ -255,10 +255,10 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
             caret: None,
             ..Default::default()
         },
-    )?;
+    );
     renderer
         .begin_frame(&mut surface, Color::WHITE)
-        .draw(&builder.finish()?, Affine::IDENTITY)?;
+        .draw(&builder.finish(), Affine::IDENTITY)?;
     assert!(
         surface
             .data()

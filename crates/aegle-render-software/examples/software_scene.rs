@@ -83,21 +83,21 @@ fn paint(
             let mut builder = std::mem::take(&mut visual.scene).into_builder();
             builder.clear();
             let shape =
-                RoundedRect::new(Rect::new(0.0, 0.0, size.width, size.height), visual.radius)?;
+                RoundedRect::new(Rect::new(0.0, 0.0, size.width, size.height), visual.radius);
             if visual.color != Color::TRANSPARENT {
-                builder.fill(shape, visual.color)?;
+                builder.fill(shape, visual.color);
             }
             if visual.mark {
                 builder
-                    .push_clip(shape)?
-                    .push_transform(Affine::translation(8.0, 8.0)?)?;
+                    .push_clip(shape)
+                    .push_transform(Affine::translation(8.0, 8.0));
                 builder.fill(
-                    RoundedRect::new(Rect::new(0.0, 0.0, 22.0, 22.0), 5.0)?,
+                    RoundedRect::new(Rect::new(0.0, 0.0, 22.0, 22.0), 5.0),
                     Color::rgba(255, 255, 255, 210),
-                )?;
-                builder.pop()?.pop()?;
+                );
+                builder.pop().pop();
             }
-            visual.scene = builder.finish()?;
+            visual.scene = builder.finish();
             visual.painted_size = size;
             rebuilt += 1;
         }
@@ -106,7 +106,7 @@ fn paint(
             parent_origin.y + bounds.origin.y,
         );
         bytes += visual.scene.allocated_bytes();
-        frame.draw(&visual.scene, Affine::translation(origin.x, origin.y)?)?;
+        frame.draw(&visual.scene, Affine::translation(origin.x, origin.y))?;
         tree.clear_dirty(id, Dirty::PAINT)?;
         stack.extend(tree.children(id)?.rev().map(|child| (child, origin)));
     }

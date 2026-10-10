@@ -1,7 +1,7 @@
 use aegle_layout::{Overflow, Style};
 use aegle_theme::{ControlKind, Theme};
 use aegle_ui::{
-    Container, Control, Result, bar, container_style,
+    Container, Control, bar, container_style,
     control::{Frame, PaintCx},
     scroll_padding,
 };
@@ -30,16 +30,15 @@ impl Control for ScrollControl {
             style.padding = scroll_padding(theme);
         }
     }
-    fn paint_overlay(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint_overlay(&mut self, cx: &mut PaintCx<'_>) {
         aegle_ui::paint::outline(
             cx.builder,
             cx.size,
             cx.appearance.radius,
             cx.appearance.border_width,
             cx.appearance.border_color,
-        )?;
-        bar::paint(cx.builder, cx.bars, cx.bar_color)?;
-        Ok(())
+        );
+        bar::paint(cx.builder, cx.bars, cx.bar_color);
     }
 }
 

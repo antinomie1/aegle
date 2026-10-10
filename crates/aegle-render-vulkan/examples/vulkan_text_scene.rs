@@ -18,36 +18,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec(),
     ))?;
     let mut builder = SceneBuilder::new();
-    let card = RoundedRect::new(Rect::new(24.0, 24.0, 752.0, 432.0), 24.0)?;
-    builder.fill(card, Color::WHITE)?;
-    builder.stroke(card, Color::rgb(215, 222, 232), 1.0)?;
+    let card = RoundedRect::new(Rect::new(24.0, 24.0, 752.0, 432.0), 24.0);
+    builder.fill(card, Color::WHITE);
+    builder.stroke(card, Color::rgb(215, 222, 232), 1.0);
     for (text, size, color, transform, clip) in [
         (
             "AEGLE / VULKAN TEXT",
             26.0,
             Color::rgb(32, 49, 75),
-            Affine::translation(48.0, 44.0)?,
+            Affine::translation(48.0, 44.0),
             None,
         ),
         (
             "你好世界中文 / 日本語 / 한글",
             28.0,
             Color::rgb(45, 94, 155),
-            Affine::translation(48.0, 104.0)?,
+            Affine::translation(48.0, 104.0),
             None,
         ),
         (
             "Quarter-pixel origin: 0.25 / 0.50",
             17.0,
             Color::rgb(78, 95, 115),
-            Affine::translation(48.25, 168.5)?,
+            Affine::translation(48.25, 168.5),
             None,
         ),
         (
             "Clipped text / 你好世界中文 / 日本語 / 한글",
             25.0,
             Color::rgba(32, 113, 94, 210),
-            Affine::translation(48.0, 224.0)?,
+            Affine::translation(48.0, 224.0),
             Some(Rect::new(48.0, 232.0, 308.0, 28.0)),
         ),
         (
@@ -61,14 +61,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Shared fonts. Warm atlas. Explicit readback.",
             16.0,
             Color::rgb(97, 110, 127),
-            Affine::translation(48.0, 396.0)?,
+            Affine::translation(48.0, 396.0),
             None,
         ),
     ] {
         if let Some(rect) = clip {
-            builder.push_clip(RoundedRect::new(rect, 0.0)?)?;
+            builder.push_clip(RoundedRect::new(rect, 0.0));
         }
-        builder.push_transform(transform)?;
+        builder.push_transform(transform);
         let paragraph = fonts.paragraph(
             text,
             &TextStyle {
@@ -79,17 +79,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
         )?;
         assert_eq!(paragraph.diagnostics(), Default::default());
-        paragraph.paint(&mut builder)?;
-        builder.pop()?;
+        paragraph.paint(&mut builder);
+        builder.pop();
         if clip.is_some() {
-            builder.pop()?;
+            builder.pop();
         }
     }
     builder.fill(
-        RoundedRect::new(Rect::new(48.0, 316.0, 272.0, 40.0), 12.0)?,
+        RoundedRect::new(Rect::new(48.0, 316.0, 272.0, 40.0), 12.0),
         Color::rgb(221, 235, 248),
-    )?;
-    let scene = builder.finish()?;
+    );
+    let scene = builder.finish();
     let mut renderer = Renderer::new(Options::default())?;
     let mut frame = renderer.begin_frame(800, 480, Color::rgb(240, 243, 247))?;
     frame.draw(&scene, Affine::IDENTITY)?;

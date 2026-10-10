@@ -240,14 +240,16 @@ impl PathBuilder {
         self
     }
 
-    /// Validates finite points and that every segment follows `move_to`.
-    pub fn finish(self, rule: FillRule) -> Result<Path, SceneError> {
+    /// Finishes the path. Panics on nonfinite points or a segment that does
+    /// not follow `move_to`.
+    #[track_caller]
+    pub fn finish(self, rule: FillRule) -> Path {
         let mut open = false;
         for verb in &self.verbs {
             match verb {
                 Verb::Move => open = true,
                 Verb::Close if open => open = false,
-                _ if !open => return Err(SceneError::InvalidPath),
+                _ if !open => crate::fail(SceneError::InvalidPath),
                 _ => {}
             }
         }
@@ -259,7 +261,7 @@ impl PathBuilder {
         ];
         for point in &self.points {
             if !point.x.is_finite() || !point.y.is_finite() {
-                return Err(SceneError::NonFinite);
+                crate::fail(SceneError::NonFinite);
             }
             bounds = [
                 bounds[0].min(point.x),
@@ -279,14 +281,14 @@ impl PathBuilder {
             )
         };
         if !bounds.size.width.is_finite() || !bounds.size.height.is_finite() {
-            return Err(SceneError::CoordinateRange);
+            crate::fail(SceneError::CoordinateRange);
         }
-        Ok(Path(Arc::new(PathData {
+        Path(Arc::new(PathData {
             id: next_id(),
             verbs: self.verbs.into_boxed_slice(),
             points: self.points.into_boxed_slice(),
             bounds,
             rule,
-        })))
+        }))
     }
 }

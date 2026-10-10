@@ -7,7 +7,7 @@ use aegle_text::{EditorDriver, EditorOptions, EditorPaint, Selection, TextError,
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
 use aegle_ui::{
-    Container, Control, HandlerResult, Result, bar,
+    Container, Control, HandlerResult, OrFail, Result, bar,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
@@ -112,8 +112,8 @@ impl Control for FieldControl {
     fn set_enabled(&mut self, fonts: &mut TextSystem, enabled: bool) -> Outcome {
         self.0.set_enabled(fonts, enabled)
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
-        Ok(self.0.handle(cx.fonts, input)?)
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
+        self.0.handle(cx.fonts, input).or_fail()
     }
     fn content_offset(&self, _: Size, padding: f32, scroll: Point) -> Point {
         Point::new(scroll.x - padding, scroll.y - padding)
@@ -122,23 +122,24 @@ impl Control for FieldControl {
         // The unscrolled text origin, as CSS aligns scroll containers.
         Some(padding + self.0.editor().first_baseline()?)
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let size = cx
             .fonts
             .borrow_mut()
             .edit(self.0.editor_mut())
-            .reflow(cx.content_width(), cx.alignment())?;
-        Ok(Size::new(
+            .reflow(cx.content_width(), cx.alignment())
+            .or_fail();
+        Size::new(
             size.width + 2.0 * cx.padding,
             size.height + 2.0 * cx.padding,
-        ))
+        )
     }
-    fn finalize(&mut self, cx: &MeasureCx<'_>) -> Result {
+    fn finalize(&mut self, cx: &MeasureCx<'_>) {
         cx.fonts
             .borrow_mut()
             .edit(self.0.editor_mut())
-            .reflow(cx.content_width(), cx.alignment())?;
-        Ok(())
+            .reflow(cx.content_width(), cx.alignment())
+            .or_fail();
     }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
@@ -153,12 +154,12 @@ impl Control for FieldControl {
             style.min_size.height = LengthPercentageAuto::length(theme.control_height);
         }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
-        cx.builder.push_clip(cx.shape)?;
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
+        cx.builder.push_clip(cx.shape);
         cx.builder.push_transform(Affine::translation(
             cx.padding - cx.scroll.x,
             cx.padding - cx.scroll.y,
-        )?)?;
+        ));
         self.0.editor().paint(
             cx.builder,
             EditorPaint {
@@ -168,10 +169,9 @@ impl Control for FieldControl {
                 selection: Some(cx.appearance.selection),
                 ..Default::default()
             },
-        )?;
-        cx.builder.pop()?.pop()?;
-        bar::paint(cx.builder, cx.bars, cx.bar_color)?;
-        Ok(())
+        );
+        cx.builder.pop().pop();
+        bar::paint(cx.builder, cx.bars, cx.bar_color);
     }
 }
 

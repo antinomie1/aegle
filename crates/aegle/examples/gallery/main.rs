@@ -93,7 +93,7 @@ fn gallery(
     let mut frame = renderer.begin_frame(&mut surface, theme.background);
     for (index, ui) in uis.iter().enumerate() {
         let x = index as f32 * cell.width;
-        let place = Affine::translation(x, 0.0)?.then(Affine::scale(SCALE, SCALE)?)?;
+        let place = Affine::translation(x, 0.0).then(Affine::scale(SCALE, SCALE))?;
         // Keep each state inside its own cell, together with any scroll clip.
         let cell_clip = |clip: Option<Rect>| {
             let clip = clip.unwrap_or(Rect::new(0.0, 0.0, cell.width, cell.height));
@@ -391,14 +391,12 @@ fn main() -> Result {
                 ));
             }
             star.close();
-            let star = star.finish(FillRule::NonZero).unwrap();
+            let star = star.finish(FillRule::NonZero);
             let canvas = h.canvas(move |builder, size| {
-                builder
-                    .push_transform(Affine::translation(size.width / 2.0, size.height / 2.0)?)?;
-                builder.fill_path(&star, Color::rgb(53, 92, 218))?;
-                builder.stroke_path(&star, Color::rgb(32, 36, 43), Stroke::new(1.5))?;
-                builder.pop()?;
-                Ok(())
+                builder.push_transform(Affine::translation(size.width / 2.0, size.height / 2.0));
+                builder.fill_path(&star, Color::rgb(53, 92, 218));
+                builder.stroke_path(&star, Color::rgb(32, 36, 43), Stroke::new(1.5));
+                builder.pop();
             });
             canvas.set_width(64.0);
             canvas.set_height(64.0);

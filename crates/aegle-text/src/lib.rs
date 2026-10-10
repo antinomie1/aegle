@@ -39,8 +39,6 @@ pub use editor::{EditChanges, Editor, EditorOptions, HistoryStats, Selection, Te
 #[cfg(feature = "scene")]
 pub use editor_paint::EditorPaint;
 pub use ime::ImeEdit;
-#[cfg(feature = "scene")]
-pub use paint::PaintError;
 pub use paragraph::{Paragraph, TextDiagnostics};
 pub use style::{TextError, TextStyle};
 pub use surrounding::Surrounding;

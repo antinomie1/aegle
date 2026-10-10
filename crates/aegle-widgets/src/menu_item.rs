@@ -9,7 +9,7 @@ use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
-    Control, HandlerResult, Result, State,
+    Control, HandlerResult, OrFail, Result, State,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle,
 };
@@ -52,12 +52,11 @@ impl Control for MenuItemControl {
     fn paragraph_mut(&mut self) -> Option<&mut Paragraph> {
         Some(&mut self.text)
     }
-    fn restyle(&mut self, fonts: &mut TextSystem, style: &TextStyle<'_>) -> Result {
-        fonts.restyle(&mut self.text, style)?;
+    fn restyle(&mut self, fonts: &mut TextSystem, style: &TextStyle<'_>) {
+        fonts.restyle(&mut self.text, style).or_fail();
         if let Some(shortcut) = &mut self.shortcut {
-            fonts.restyle(shortcut, style)?;
+            fonts.restyle(shortcut, style).or_fail();
         }
-        Ok(())
     }
     fn visual(&self) -> ControlVisual {
         ControlVisual {
@@ -69,7 +68,7 @@ impl Control for MenuItemControl {
     fn set_enabled(&mut self, _: &mut TextSystem, enabled: bool) -> Outcome {
         self.button.set_enabled(enabled)
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         let mut outcome = self.button.handle(input);
         if outcome.action.is_some() {
             cx.deferred.push(Box::new(crate::menu::chosen));
@@ -78,20 +77,15 @@ impl Control for MenuItemControl {
                 outcome.action = None;
             }
         }
-        Ok(outcome)
+        outcome
     }
-    fn hover(
-        &mut self,
-        cx: &mut InputCx<'_>,
-        _: aegle_ui::PointerId,
-        input: Input<'_>,
-    ) -> Result<Outcome> {
+    fn hover(&mut self, cx: &mut InputCx<'_>, _: aegle_ui::PointerId, input: Input<'_>) -> Outcome {
         self.handle(cx, input)
     }
     fn baseline(&self, size: Size, _: f32) -> Option<f32> {
         Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let mut width = self.text.size().width + 2.0 * cx.padding;
         if !self.bar {
             width += MARK + cx.gap;
@@ -102,7 +96,7 @@ impl Control for MenuItemControl {
                 width += 2.0 * cx.gap + shortcut.size().width;
             }
         }
-        Ok(Size::new(width, self.text.size().height + 2.0 * cx.padding))
+        Size::new(width, self.text.size().height + 2.0 * cx.padding)
     }
     fn retheme(
         &self,
@@ -115,10 +109,10 @@ impl Control for MenuItemControl {
             style.size.height = Dimension::length(theme.control_height);
         }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let (size, padding, gap) = (cx.size, cx.padding, cx.theme.gap);
         let color = cx.appearance.foreground;
-        cx.builder.push_clip(cx.shape)?;
+        cx.builder.push_clip(cx.shape);
         // Mirrored right to left: the check column and text start at the right.
         let mirror = |x: f32, width: f32| if cx.rtl { size.width - x - width } else { x };
         let text = self.text.size();
@@ -128,9 +122,9 @@ impl Control for MenuItemControl {
             mirror(padding + MARK + gap, text.width)
         };
         let y = (size.height - text.height) / 2.0;
-        cx.builder.push_transform(Affine::translation(x, y)?)?;
-        self.text.paint_with_color(cx.builder, color)?;
-        cx.builder.pop()?;
+        cx.builder.push_transform(Affine::translation(x, y));
+        self.text.paint_with_color(cx.builder, color);
+        cx.builder.pop();
         if let Some(shortcut) = &self.shortcut {
             let width = shortcut.size().width;
             let x = mirror(size.width - padding - width, width);
@@ -139,9 +133,9 @@ impl Control for MenuItemControl {
                 true => cx.theme.muted,
                 false => color,
             };
-            cx.builder.push_transform(Affine::translation(x, y)?)?;
-            shortcut.paint_with_color(cx.builder, color)?;
-            cx.builder.pop()?;
+            cx.builder.push_transform(Affine::translation(x, y));
+            shortcut.paint_with_color(cx.builder, color);
+            cx.builder.pop();
         }
         if self.checked == Some(true) {
             let (x, y) = (mirror(padding, MARK), (size.height - MARK) * 0.5);
@@ -149,22 +143,21 @@ impl Control for MenuItemControl {
             if self.radio {
                 let dot = Rect::new(x + MARK * 0.25, y + MARK * 0.25, MARK * 0.5, MARK * 0.5);
                 cx.builder
-                    .fill(RoundedRect::new(dot, MARK * 0.25)?, indicator)?;
+                    .fill(RoundedRect::new(dot, MARK * 0.25), indicator);
             } else {
-                check_mark(cx.builder, x, y, MARK, indicator)?;
+                check_mark(cx.builder, x, y, MARK, indicator);
             }
         }
         if !self.bar && self.submenu.is_some() {
             // The dropdown chevron turned toward the side the submenu opens on.
             let x = mirror(size.width - padding - CHEVRON, CHEVRON) + CHEVRON * 0.5;
             let turn = if cx.rtl { 1.0 } else { -1.0 };
-            let transform = Affine::new([0.0, turn, -turn, 0.0, x, size.height * 0.5])?;
-            cx.builder.push_transform(transform)?;
-            chevron(cx.builder, 0.0, 0.0, color)?;
-            cx.builder.pop()?;
+            let transform = Affine::new([0.0, turn, -turn, 0.0, x, size.height * 0.5]).or_fail();
+            cx.builder.push_transform(transform);
+            chevron(cx.builder, 0.0, 0.0, color);
+            cx.builder.pop();
         }
-        cx.builder.pop()?;
-        Ok(())
+        cx.builder.pop();
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {

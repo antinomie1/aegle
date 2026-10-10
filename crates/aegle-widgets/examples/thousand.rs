@@ -75,20 +75,19 @@ impl Control for Meter {
             border: false,
         }
     }
-    fn measure(&mut self, _: &MeasureCx<'_>) -> Result<Size> {
-        Ok(Size::new(5.0 * 12.0, 12.0))
+    fn measure(&mut self, _: &MeasureCx<'_>) -> Size {
+        Size::new(5.0 * 12.0, 12.0)
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         for step in 0..5u8 {
-            let cell = RoundedRect::new(Rect::new(f32::from(step) * 12.0, 0.0, 10.0, 10.0), 2.0)?;
+            let cell = RoundedRect::new(Rect::new(f32::from(step) * 12.0, 0.0, 10.0, 10.0), 2.0);
             let color = if step < self.value {
                 cx.appearance.indicator
             } else {
                 cx.appearance.border_color
             };
-            cx.builder.fill(cell, color)?;
+            cx.builder.fill(cell, color);
         }
-        Ok(())
     }
 }
 

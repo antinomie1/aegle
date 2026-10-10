@@ -84,9 +84,8 @@ fn images_and_canvases_record_retained_scenes() -> Result {
     let count = paints.clone();
     let canvas = ui.root().canvas(move |builder, size| {
         count.set(count.get() + 1);
-        let shape = RoundedRect::new(Rect::new(0.0, 0.0, size.width, size.height), 0.0)?;
-        builder.fill(shape, Color::BLACK)?;
-        Ok(())
+        let shape = RoundedRect::new(Rect::new(0.0, 0.0, size.width, size.height), 0.0);
+        builder.fill(shape, Color::BLACK);
     });
     canvas.set_width(Some(40.0));
     canvas.set_height(Some(10.0));

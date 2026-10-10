@@ -39,25 +39,24 @@ impl Decorator for Ripple {
             _ => false,
         }
     }
-    fn over(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn over(&mut self, cx: &mut PaintCx<'_>) {
         if let Some(at) = self.pressed.take() {
             self.started = Some((at, cx.time));
         }
         let Some((at, start)) = self.started else {
-            return Ok(());
+            return;
         };
         let progress = cx.time.duration_since(start).as_secs_f32() / SPREAD.as_secs_f32();
         if progress >= 1.0 {
             self.started = None;
-            return Ok(());
+            return;
         }
         let radius = cx.size.width.max(cx.size.height) * (0.1 + 0.9 * progress);
         let circle = Rect::new(at.x - radius, at.y - radius, radius * 2.0, radius * 2.0);
-        cx.builder.push_clip(cx.shape)?;
-        cx.builder.fill(RoundedRect::new(circle, radius)?, INK)?;
-        cx.builder.pop()?;
+        cx.builder.push_clip(cx.shape);
+        cx.builder.fill(RoundedRect::new(circle, radius), INK);
+        cx.builder.pop();
         cx.request_frame();
-        Ok(())
     }
 }
 

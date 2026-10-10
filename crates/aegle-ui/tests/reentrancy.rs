@@ -31,7 +31,7 @@ impl Control for Probe {
     fn kind(&self) -> &'static ControlKind {
         self.kind
     }
-    fn paint(&mut self, _: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, _: &mut PaintCx<'_>) {
         let ui = self.ui.upgrade().unwrap();
         let node = self.node.borrow().clone().unwrap();
         let attempts: [&dyn Fn(); 4] = [
@@ -46,7 +46,6 @@ impl Control for Probe {
             assert_eq!(message, UiError::ReentrantAccess.to_string());
             self.refused.set(self.refused.get() + 1);
         }
-        Ok(())
     }
 }
 

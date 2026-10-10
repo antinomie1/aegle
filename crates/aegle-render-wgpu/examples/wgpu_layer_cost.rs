@@ -48,19 +48,19 @@ fn scenes() -> Result<(Scene, Scene)> {
     let mut builder = SceneBuilder::new();
     for i in 0..SIZE.0 / 16 {
         let stripe = Rect::new(i as f32 * 16.0, 0.0, 8.0, SIZE.1 as f32);
-        builder.fill(RoundedRect::new(stripe, 0.0)?, Color::rgb(40, 80, 220))?;
+        builder.fill(RoundedRect::new(stripe, 0.0), Color::rgb(40, 80, 220));
     }
-    let stripes = builder.finish()?;
+    let stripes = builder.finish();
     let mut builder = SceneBuilder::new();
-    let card = RoundedRect::new(Rect::new(400.0, 240.0, 480.0, 320.0), 16.0)?;
-    builder.fill(card, Color::rgba(255, 255, 255, 140))?;
-    Ok((stripes, builder.finish()?))
+    let card = RoundedRect::new(Rect::new(400.0, 240.0, 480.0, 320.0), 16.0);
+    builder.fill(card, Color::rgba(255, 255, 255, 140));
+    Ok((stripes, builder.finish()))
 }
 
 /// The card's layer, its content range the card itself as `Ui` gives it.
 fn layer(blur: f32) -> Result<Layer> {
     let bounds = Rect::new(400.0, 240.0, 480.0, 320.0);
-    let shape = RoundedRect::new(bounds, 16.0)?;
+    let shape = RoundedRect::new(bounds, 16.0);
     Ok(Layer::new(
         shape,
         Affine::IDENTITY,

@@ -16,7 +16,7 @@ fn star() -> Result<aegle::ui::scene::Path> {
         star.line_to(Point::new(22.0 * angle.sin(), -22.0 * angle.cos()));
     }
     star.close();
-    Ok(star.finish(FillRule::NonZero)?)
+    Ok(star.finish(FillRule::NonZero))
 }
 
 /// Editors, buttons with a popup, binary and numeric choices, and the theme dropdown.
@@ -127,12 +127,12 @@ fn views(pane: &Container) -> Result {
     let angle = turn.clone();
     let canvas = media.canvas(move |builder, size| {
         let (sin, cos) = angle.get().sin_cos();
-        let center = Affine::translation(size.width / 2.0, size.height / 2.0)?;
-        builder.push_transform(Affine::new([cos, sin, -sin, cos, 0.0, 0.0])?.then(center)?)?;
-        builder.fill_path(&star, Color::rgb(53, 92, 218))?;
-        builder.stroke_path(&star, Color::rgb(32, 36, 43), Stroke::new(1.5))?;
-        builder.pop()?;
-        Ok(())
+        let center = Affine::translation(size.width / 2.0, size.height / 2.0);
+        let spin = Affine::new([cos, sin, -sin, cos, 0.0, 0.0]).unwrap();
+        builder.push_transform(spin.then(center).unwrap());
+        builder.fill_path(&star, Color::rgb(53, 92, 218));
+        builder.stroke_path(&star, Color::rgb(32, 36, 43), Stroke::new(1.5));
+        builder.pop();
     });
     canvas.set_width(Some(48.0));
     canvas.set_height(Some(48.0));

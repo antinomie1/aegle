@@ -5,7 +5,7 @@ use aegle_scene::{
 };
 
 fn shape(x: f32, y: f32, w: f32, h: f32, radius: f32) -> RoundedRect {
-    RoundedRect::new(Rect::new(x, y, w, h), radius).unwrap()
+    RoundedRect::new(Rect::new(x, y, w, h), radius)
 }
 
 fn near(pixels: &[u8], x: usize, y: usize, expected: [u8; 4]) {
@@ -22,19 +22,19 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
     let mut renderer = Renderer::new(Options::default())?;
     eprintln!("Vulkan device: {}", renderer.device_name());
     let mut builder = SceneBuilder::new();
-    builder.push_transform(Affine::translation(4.0, 4.0)?)?;
-    builder.push_clip(shape(0.0, 0.0, 24.0, 24.0, 4.0))?;
-    builder.push_transform(Affine::new([0.0, 1.0, -1.0, 0.0, 24.0, 0.0])?)?;
-    builder.push_clip(shape(4.0, 4.0, 12.0, 12.0, 2.0))?;
+    builder.push_transform(Affine::translation(4.0, 4.0));
+    builder.push_clip(shape(0.0, 0.0, 24.0, 24.0, 4.0));
+    builder.push_transform(Affine::new([0.0, 1.0, -1.0, 0.0, 24.0, 0.0])?);
+    builder.push_clip(shape(4.0, 4.0, 12.0, 12.0, 2.0));
     builder.fill(
         shape(-8.0, -8.0, 40.0, 40.0, 0.0),
         Color::rgba(0, 0, 0, 128),
-    )?;
-    builder.pop()?.pop()?;
-    builder.stroke(shape(2.0, 2.0, 20.0, 20.0, 0.0), Color::rgb(0, 0, 255), 2.0)?;
-    builder.pop()?.pop()?;
-    builder.fill(shape(0.0, 30.0, 4.0, 4.0, 0.0), Color::rgb(255, 0, 0))?;
-    let scene = builder.finish()?;
+    );
+    builder.pop().pop();
+    builder.stroke(shape(2.0, 2.0, 20.0, 20.0, 0.0), Color::rgb(0, 0, 255), 2.0);
+    builder.pop().pop();
+    builder.fill(shape(0.0, 30.0, 4.0, 4.0, 0.0), Color::rgb(255, 0, 0));
+    let scene = builder.finish();
     let mut pixels = vec![0; 64 * 64 * 4];
     for _ in 0..2 {
         let mut frame = renderer.begin_frame(64, 64, Color::WHITE)?;
@@ -48,12 +48,12 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
         near(&pixels, 1, 31, [255, 0, 0, 255]);
     }
     let mut marker = SceneBuilder::new();
-    marker.fill(shape(40.0, 40.0, 8.0, 8.0, 0.0), Color::rgb(0, 255, 0))?;
-    let marker = marker.finish()?;
+    marker.fill(shape(40.0, 40.0, 8.0, 8.0, 0.0), Color::rgb(0, 255, 0));
+    let marker = marker.finish();
     let mut frame = renderer.begin_frame(64, 64, Color::WHITE)?;
     frame.draw_clipped(
         &scene,
-        Affine::translation(2.0, 0.0)?,
+        Affine::translation(2.0, 0.0),
         Some(Rect::new(14.0, 8.0, 12.0, 10.0)),
     )?;
     frame.draw(&marker, Affine::IDENTITY)?;
@@ -69,8 +69,8 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
     blend.fill(
         shape(0.0, 0.0, 32.0, 32.0, 0.0),
         Color::rgba(220, 200, 40, 160),
-    )?;
-    let blend = blend.finish()?;
+    );
+    let blend = blend.finish();
     let mut frame = renderer.begin_frame(64, 64, base)?;
     frame.draw(&blend, Affine::IDENTITY)?;
     frame.finish()?;
@@ -104,11 +104,11 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
     );
     let mut deep = SceneBuilder::new();
     for _ in 0..9 {
-        deep.push_clip(shape(0.0, 0.0, 32.0, 32.0, 2.0))?;
+        deep.push_clip(shape(0.0, 0.0, 32.0, 32.0, 2.0));
     }
-    deep.fill(shape(0.0, 0.0, 32.0, 32.0, 0.0), Color::BLACK)?;
+    deep.fill(shape(0.0, 0.0, 32.0, 32.0, 0.0), Color::BLACK);
     for _ in 0..9 {
-        deep.pop()?;
+        deep.pop();
     }
     let mut text = SceneBuilder::new();
     text.glyphs(GlyphRun::new(
@@ -120,23 +120,11 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
             id: 1,
             position: Point::new(8.0, 16.0),
         }],
-    )?)?;
-    for rejected in [deep.finish()?, text.finish()?] {
+    ));
+    for rejected in [deep.finish(), text.finish()] {
         let mut frame = renderer.begin_frame(64, 64, Color::WHITE)?;
         assert!(frame.draw(&rejected, Affine::IDENTITY).is_err());
         assert!(matches!(frame.finish(), Err(Error::FrameFailed)));
-    }
-    {
-        let mut frame = renderer.begin_frame(64, 64, Color::WHITE)?;
-        assert!(
-            frame
-                .draw_clipped(
-                    &scene,
-                    Affine::IDENTITY,
-                    Some(Rect::new(f32::NAN, 0.0, 1.0, 1.0))
-                )
-                .is_err()
-        );
     }
     let mut frame = renderer.begin_frame(64, 64, Color::WHITE)?;
     frame.draw(&marker, Affine::IDENTITY)?;
@@ -174,7 +162,7 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
 #[ignore = "requires an explicitly selected Vulkan ICD/device"]
 fn large_frames_are_split_into_submissions() -> Result<(), Box<dyn std::error::Error>> {
     let mut builder = SceneBuilder::new();
-    builder.push_clip(shape(0.0, 0.0, 56.0, 64.0, 0.0))?;
+    builder.push_clip(shape(0.0, 0.0, 56.0, 64.0, 0.0));
     // 40,000 opaque pixels over 64×64: each pixel is painted about ten times,
     // last in pass nine (blue) before pixel 3136 and in pass eight (red) after.
     for index in 0..40_000_u32 {
@@ -185,10 +173,10 @@ fn large_frames_are_split_into_submissions() -> Result<(), Box<dyn std::error::E
             Color::rgb(255, 0, 0)
         };
         let (x, y) = ((pixel % 64) as f32, (pixel / 64) as f32);
-        builder.fill(shape(x, y, 1.0, 1.0, 0.0), color)?;
+        builder.fill(shape(x, y, 1.0, 1.0, 0.0), color);
     }
-    builder.pop()?;
-    let scene = builder.finish()?;
+    builder.pop();
+    let scene = builder.finish();
     let mut renderer = Renderer::new(Options::default())?;
     let mut frame = renderer.begin_frame(64, 64, Color::WHITE)?;
     frame.draw(&scene, Affine::IDENTITY)?;

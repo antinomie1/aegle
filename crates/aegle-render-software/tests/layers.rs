@@ -8,15 +8,15 @@ type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 const SIZE: usize = 64;
 
 fn rect(x: f32, y: f32, width: f32, height: f32) -> Result<RoundedRect> {
-    Ok(RoundedRect::new(Rect::new(x, y, width, height), 0.0)?)
+    Ok(RoundedRect::new(Rect::new(x, y, width, height), 0.0))
 }
 
 fn fills(shapes: &[(RoundedRect, Color)]) -> Result<Scene> {
     let mut builder = SceneBuilder::new();
     for &(shape, color) in shapes {
-        builder.fill(shape, color)?;
+        builder.fill(shape, color);
     }
-    Ok(builder.finish()?)
+    Ok(builder.finish())
 }
 
 fn layer(shape: RoundedRect, opacity: f32, blur: f32) -> Result<Layer> {

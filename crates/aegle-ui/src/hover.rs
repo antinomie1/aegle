@@ -69,7 +69,7 @@ impl State {
                     },
                     id,
                     input,
-                )?;
+                );
                 self.effects(hit, outcome)?;
             }
         }

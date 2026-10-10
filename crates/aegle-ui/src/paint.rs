@@ -35,7 +35,7 @@ impl State {
             let shape = RoundedRect::new(
                 Rect::new(0.0, 0.0, size.width, size.height),
                 appearance.radius,
-            )?;
+            );
             let mut decorators = match self.decorators.is_empty() {
                 true => None,
                 false => self.decorators.get_mut(&id),
@@ -57,13 +57,13 @@ impl State {
                 next_frame: false,
             };
             for decorator in decorators.iter_mut().flat_map(|list| list.iter_mut()) {
-                decorator.under(&mut cx)?;
+                decorator.under(&mut cx);
             }
-            effects::paint_shadow(decoration, cx.builder, size, appearance.radius)?;
+            effects::paint_shadow(decoration, cx.builder, size, appearance.radius);
             let gradient =
-                frame.background && effects::paint_gradient(decoration, cx.builder, shape)?;
+                frame.background && effects::paint_gradient(decoration, cx.builder, shape);
             if frame.background && !gradient && appearance.background.to_rgba()[3] != 0 {
-                cx.builder.fill(shape, appearance.background)?;
+                cx.builder.fill(shape, appearance.background);
             }
             if frame.border {
                 outline(
@@ -72,11 +72,11 @@ impl State {
                     appearance.radius,
                     appearance.border_width,
                     appearance.border_color,
-                )?;
+                );
             }
-            element.control.paint(&mut cx)?;
+            element.control.paint(&mut cx);
             for decorator in decorators.iter_mut().flat_map(|list| list.iter_mut()) {
-                decorator.over(&mut cx)?;
+                decorator.over(&mut cx);
             }
             next_frame = cx.next_frame;
             outline(
@@ -85,9 +85,9 @@ impl State {
                 appearance.radius,
                 appearance.focus_width,
                 appearance.focus_color,
-            )?;
+            );
         }
-        element.scene = builder.finish()?;
+        element.scene = builder.finish();
         if let Some(overlay) = &mut element.overlay {
             let mut builder = std::mem::take(&mut **overlay).into_builder();
             builder.clear();
@@ -103,16 +103,16 @@ impl State {
                     shape: RoundedRect::new(
                         Rect::new(0.0, 0.0, size.width, size.height),
                         appearance.radius,
-                    )?,
+                    ),
                     bars,
                     bar_color,
                     time,
                     reduced_motion,
                     rtl,
                     next_frame: false,
-                })?;
+                });
             }
-            **overlay = builder.finish()?;
+            **overlay = builder.finish();
         }
         if next_frame {
             self.animated.insert(id);
@@ -127,22 +127,15 @@ impl State {
 // saturate at half the smaller extent, preserving a drawable center rectangle.
 /// Strokes a centered border inside `size`, saturating wide widths at half the
 /// smaller extent; nothing is drawn for zero width or a transparent color.
-pub fn outline(
-    builder: &mut SceneBuilder,
-    size: Size,
-    radius: f32,
-    width: f32,
-    color: Color,
-) -> Result {
+pub fn outline(builder: &mut SceneBuilder, size: Size, radius: f32, width: f32, color: Color) {
     let width = width.min(size.width.min(size.height) * 0.5);
     if width == 0.0 || color.to_rgba()[3] == 0 {
-        return Ok(());
+        return;
     }
     let inset = width / 2.0;
     let shape = RoundedRect::new(
         Rect::new(inset, inset, size.width - width, size.height - width),
         (radius - inset).max(0.0),
-    )?;
-    builder.stroke(shape, color, width)?;
-    Ok(())
+    );
+    builder.stroke(shape, color, width);
 }

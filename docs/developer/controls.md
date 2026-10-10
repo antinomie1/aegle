@@ -382,8 +382,7 @@ let canvas = window.canvas(|builder, size| {
     path.line_to(Point::new(size.width, size.height));
     path.line_to(Point::new(0.0, size.height));
     path.close();
-    builder.fill_path(&path.finish(FillRule::NonZero)?, Color::rgb(53, 92, 218))?;
-    Ok(())
+    builder.fill_path(&path.finish(FillRule::NonZero), Color::rgb(53, 92, 218));
 });
 canvas.set_width(64.0);
 canvas.set_height(64.0);
@@ -391,7 +390,7 @@ canvas.invalidate();   // 数据变化后重新绘制
 ```
 
 - painter 用局部坐标和当前尺寸录制 scene 命令（矩形、圆角、边框、路径、图像、变换、裁剪），只在创建、尺寸变化、`invalidate` 或 `set_painter` 后重新执行，不按帧调用。
-- painter 运行时持有 UI 借用，不能使用控件句柄；默认尺寸为零，需设置尺寸或 grow；绘制不裁剪到边界。
+- painter 运行时持有 UI 借用，不能使用控件句柄；它不返回值，非法几何（NaN、负尺寸）会 panic。默认尺寸为零，需设置尺寸或 grow；绘制不裁剪到边界。
 - 默认只绘制、不接收输入；无障碍角色 Canvas。
 
 **GPU 纹理**：painter 里 `builder.texture(id, rect)` 绘制应用自己渲染的 GPU 纹理（游戏画面、3D 预览）。wgpu 后端：`app.wgpu()` 给出共享设备，在其上创建 `TEXTURE_BINDING` 纹理并 `register_texture` 得到 `TextureId`；每帧在 `on_frame` 里向同一队列提交渲染命令即可，完整示例见 `cargo run -p aegle --features wgpu --example gpu_texture`。Vulkan 后端用 `app.vulkan()` 的 `raw_device()` 与 unsafe `register_texture(view, extent)`。软件后端不支持应用纹理，画到它会使帧失败（`UnsupportedCommand`）。

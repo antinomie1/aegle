@@ -78,7 +78,6 @@ impl State {
             for pass in 0..2 {
                 let theme = &self.theme;
                 let fonts = &self.fonts;
-                let mut error = None;
                 aegle_layout::compute_with_baselines(
                     &mut self.tree,
                     self.root,
@@ -94,22 +93,16 @@ impl State {
                             AvailableSpace::MinContent => Some(0.0),
                             AvailableSpace::MaxContent => None,
                         });
-                        let measured = element.control.measure(&MeasureCx {
+                        let size = element.control.measure(&MeasureCx {
                             fonts,
                             padding,
                             gap,
                             width,
                             rtl: element.rtl,
                         });
-                        match measured {
-                            Ok(size) => Size {
-                                width: known.width.unwrap_or(size.width),
-                                height: known.height.unwrap_or(size.height),
-                            },
-                            Err(cause) => {
-                                error = Some(cause);
-                                Size::ZERO
-                            }
+                        Size {
+                            width: known.width.unwrap_or(size.width),
+                            height: known.height.unwrap_or(size.height),
                         }
                     },
                     |_, element, size| {
@@ -117,9 +110,6 @@ impl State {
                         element.control.baseline(size, element.inset(theme))
                     },
                 )?;
-                if let Some(error) = error {
-                    return Err(error);
-                }
                 if pass == 0 && self.update_gutters()? {
                     continue;
                 }
@@ -144,7 +134,7 @@ impl State {
                     width: Some(width),
                     rtl: element.rtl,
                 };
-                element.control.finalize(&cx)?;
+                element.control.finalize(&cx);
                 let scrolled = extents
                     .iter()
                     .any(|&(viewport, limit)| viewport == id && self.scroll_limit(id) != limit);

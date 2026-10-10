@@ -11,10 +11,17 @@ pub struct RoundedRect {
 }
 
 impl RoundedRect {
-    /// Validates geometry and clamps the radius to half the smaller extent.
+    /// Clamps the radius to half the smaller extent.
     ///
-    /// Negative sizes/radius, nonfinite values and overflowing far edges fail.
-    pub fn new(rect: Rect, radius: f32) -> Result<Self, SceneError> {
+    /// # Panics
+    ///
+    /// On negative sizes or radius, nonfinite values and overflowing far edges.
+    #[track_caller]
+    pub fn new(rect: Rect, radius: f32) -> Self {
+        crate::valid(Self::checked(rect, radius))
+    }
+
+    pub(crate) fn checked(rect: Rect, radius: f32) -> Result<Self, SceneError> {
         let values = [
             rect.origin.x,
             rect.origin.y,
@@ -93,14 +100,17 @@ impl Affine {
         Ok(Self(coefficients))
     }
 
-    /// Creates a translation in logical pixels.
-    pub fn translation(x: f32, y: f32) -> Result<Self, SceneError> {
-        Self::new([1.0, 0.0, 0.0, 1.0, x, y])
+    /// Creates a translation in logical pixels; panics unless both are finite.
+    #[track_caller]
+    pub fn translation(x: f32, y: f32) -> Self {
+        crate::valid(Self::new([1.0, 0.0, 0.0, 1.0, x, y]))
     }
 
-    /// Creates a scale; zero factors are rejected, negative factors reflect.
-    pub fn scale(x: f32, y: f32) -> Result<Self, SceneError> {
-        Self::new([x, 0.0, 0.0, y, 0.0, 0.0])
+    /// Creates a scale; negative factors reflect. Panics on zero or nonfinite
+    /// factors.
+    #[track_caller]
+    pub fn scale(x: f32, y: f32) -> Self {
+        crate::valid(Self::new([x, 0.0, 0.0, y, 0.0, 0.0]))
     }
 
     /// Returns coefficients in `[a, b, c, d, e, f]` order.

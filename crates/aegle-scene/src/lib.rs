@@ -123,7 +123,9 @@ pub enum Command {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TextureId(pub u64);
 
-/// Invalid geometry or scope usage at the drawing-record boundary.
+/// Invalid geometry, scope usage or resource data. Recording and shape
+/// construction panic with it; constructors validating data (images,
+/// gradients, raw transforms, layers) return it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SceneError {
@@ -171,3 +173,18 @@ impl core::fmt::Display for SceneError {
 }
 
 impl core::error::Error for SceneError {}
+
+/// Panics with `error`: invalid recording is the caller's programming error.
+#[track_caller]
+pub(crate) fn fail(error: SceneError) -> ! {
+    panic!("{error}")
+}
+
+/// The value, or a panic with the error at the caller's location.
+#[track_caller]
+pub(crate) fn valid<T>(result: Result<T, SceneError>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(error) => fail(error),
+    }
+}

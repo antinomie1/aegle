@@ -24,18 +24,18 @@ fn gradients_and_shadows_match_software() -> Result {
     let mut builder = SceneBuilder::new();
     builder
         .shadow(
-            shape(10.0, 12.0, 40.0, 24.0, 8.0)?,
+            shape(10.0, 12.0, 40.0, 24.0, 8.0),
             Color::rgba(0, 0, 80, 160),
             5.0,
-        )?
-        .fill_gradient(shape(4.0, 4.0, 56.0, 30.0, 6.0)?, &linear)?
-        .push_clip(shape(40.0, 40.0, 52.0, 52.0, 12.0)?)?
-        .push_transform(Affine::new([0.8, 0.6, -0.6, 0.8, 60.0, 34.0])?)?
-        .fill_gradient(shape(0.0, 0.0, 40.0, 40.0, 0.0)?, &radial)?
-        .shadow(shape(4.0, 44.0, 30.0, 12.0, 0.0)?, Color::BLACK, 2.5)?
-        .pop()?
-        .pop()?;
-    let scene = builder.finish()?;
+        )
+        .fill_gradient(shape(4.0, 4.0, 56.0, 30.0, 6.0), &linear)
+        .push_clip(shape(40.0, 40.0, 52.0, 52.0, 12.0))
+        .push_transform(Affine::new([0.8, 0.6, -0.6, 0.8, 60.0, 34.0])?)
+        .fill_gradient(shape(0.0, 0.0, 40.0, 40.0, 0.0), &radial)
+        .shadow(shape(4.0, 44.0, 30.0, 12.0, 0.0), Color::BLACK, 2.5)
+        .pop()
+        .pop();
+    let scene = builder.finish();
     let mut renderer = Renderer::new(Options::default())?;
     let mut frame = renderer.begin_frame(SIZE, SIZE, Color::WHITE)?;
     frame.draw(&scene, Affine::IDENTITY)?;

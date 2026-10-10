@@ -23,7 +23,7 @@ pub static RATING: ControlKind = ControlKind {
 
 ## 2. 定义控件
 
-实现 `aegle_ui::Control`：`kind` 返回上面的静态类型，`measure` 给出尺寸，`handle`/`hover` 处理输入并返回 `Outcome`，`paint` 用 `cx.appearance` 录制图元，`semantics` 与 `action_input` 提供无障碍语义和动作。用 `Container::add` 插入树中。用户改变取值时返回 `Outcome { action: Some(Action::Change), .. }`，已注册的处理器随后在 UI 借用外运行。`Control` 的方法在引擎内部运行，仍返回 `Result`，错误经 `refresh` 或输入投递交给宿主。跨节点协作（弹出层、单选组）用 `Hooks`，库数据放在 `State::ext`。契约细节见 [Rust API · 组件库作者](../rust-api.md#组件库作者)。
+实现 `aegle_ui::Control`：`kind` 返回上面的静态类型，`measure` 给出尺寸，`handle`/`hover` 处理输入并返回 `Outcome`，`paint` 用 `cx.appearance` 录制图元，`semantics` 与 `action_input` 提供无障碍语义和动作。用 `Container::add` 插入树中。用户改变取值时返回 `Outcome { action: Some(Action::Change), .. }`，已注册的处理器随后在 UI 借用外运行。`Control` 的方法在引擎内部运行，直接返回值：录制 scene 时的非法几何会 panic，其余内部结果（如按已校验样式重排文字）用 `aegle_ui::OrFail::or_fail` 展开；平台输入在 `Ui` 入口校验，例如 `Ui::ime` 先用 `Editor::check_ime` 检查输入法批次并返回错误。跨节点协作（弹出层、单选组）用 `Hooks`，库数据放在 `State::ext`。契约细节见 [Rust API · 组件库作者](../rust-api.md#组件库作者)。
 
 ## 3. 句柄
 

@@ -130,6 +130,7 @@ fn primary(parent: &Container, text: &str) -> Button {
 - 不改行为、只给已有控件（含内置控件）加绘制时实现 `aegle_ui::Decorator` 并用 `node.decorate(..)` 挂上：`input` 在控件处理完输入后以节点局部坐标观察它（不能吞掉或改变结果，返回是否重绘），`under` 在背景与边框之前、`over` 在内容之后焦点环之前，以与控件相同的 `PaintCx` 录制；动画中的装饰器每次绘制调用 `request_frame`，静止时不产生帧。例如按下涟漪：`input` 记下按下点，`over` 按 `cx.time` 画随时间扩大并裁剪到 `cx.shape` 的圆（`aegle-widgets/tests/decorators.rs`）。装饰器随节点删除。
 - `retheme(theme, local, root, style)` 在主题变化时更新跟随主题的布局；`local: LocalLayout` 标出应用设置过、需要保留的高度、内边距、间距和最小高度。
 - `paint` 与 `Hooks` 在 Ui 借用期间运行，只能使用传入的 `State`/上下文；此时调用 Ui 或句柄的方法以 `ReentrantAccess` panic；钩子返回的错误原样传给宿主。
+- `Control` 与 `Decorator` 的方法（`handle`、`hover`、`measure`、`finalize`、`restyle`、`paint`、`paint_overlay`、`under`、`over`）直接返回值，不返回 `Result`：其中的失败只能来自控件代码的错误，录制 scene 的非法几何直接 panic，其余内部结果用 `OrFail::or_fail` 展开。外部数据在 `Ui` 入口校验：指针坐标在 `Ui::pointer`，输入法批次在 `Ui::ime`（`Editor::check_ime`），出错时返回给宿主、不进入控件。
 
 - 控件出现在标记中用 `aegle::element!` 声明元素：构造参数、可绑定属性、事件与 `self` 字段，与内置元素走同一条检查与构建路径（[ADR 0004](adr/0004-element-contract.md)，写法见[编写控件库 §6](developer/library.md#6-标记元素)）。
 

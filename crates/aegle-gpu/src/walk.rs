@@ -49,7 +49,7 @@ impl<'a> Walker<'a> {
             bounds: [0.0, 0.0, extent[0] as f32, extent[1] as f32],
         };
         if let Some(rect) = clip {
-            let shape = RoundedRect::new(rect, 0.0)?;
+            let shape = RoundedRect::new(rect, 0.0);
             recording.push_clip(&mut state, shape, Affine::IDENTITY)?;
         }
         Ok(Self {

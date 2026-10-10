@@ -159,8 +159,8 @@ fn registered_images_draw_until_unregistered() -> Result {
     // shader-read layout, kept alive until after the renderer waits below.
     let id = unsafe { renderer.register_texture(image.view, [4, 4])? };
     let mut builder = SceneBuilder::new();
-    builder.texture(id, Rect::new(8.0, 8.0, 16.0, 16.0))?;
-    let scene = builder.finish()?;
+    builder.texture(id, Rect::new(8.0, 8.0, 16.0, 16.0));
+    let scene = builder.finish();
     let mut frame = renderer.begin_frame(32, 32, Color::BLACK)?;
     frame.draw(&scene, Affine::IDENTITY)?;
     frame.finish()?;
@@ -183,9 +183,9 @@ fn registered_images_draw_until_unregistered() -> Result {
         .collect::<std::result::Result<_, _>>()?;
     for (index, &extra) in ids.iter().enumerate() {
         let (x, y) = ((index % 8) as f32 * 4.0, (index / 8) as f32 * 4.0);
-        many.texture(extra, Rect::new(x, y, 4.0, 4.0))?;
+        many.texture(extra, Rect::new(x, y, 4.0, 4.0));
     }
-    let many = many.finish()?;
+    let many = many.finish();
     let mut frame = renderer.begin_frame(32, 32, Color::BLACK)?;
     frame.draw(&many, Affine::IDENTITY)?;
     frame.finish()?;

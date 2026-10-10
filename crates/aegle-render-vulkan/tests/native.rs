@@ -26,21 +26,30 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
     eprintln!("Native Vulkan device: {}", renderer.device_name());
     let mut scene = SceneBuilder::new();
     scene.fill(
-        RoundedRect::new(Rect::new(20.0, 20.0, 200.0, 100.0), 15.0)?,
+        RoundedRect::new(Rect::new(20.0, 20.0, 200.0, 100.0), 15.0),
         Color::rgb(0, 80, 230),
-    )?;
-    let scene = scene.finish()?;
+    );
+    let scene = scene.finish();
     // More primitives than one submission holds: the swapchain image is
     // acquired by the first part and presented after the last.
     let mut large = SceneBuilder::new();
     for index in 0..20_000_u16 {
         let (x, y) = (f32::from(index % 128), f32::from(index / 128));
         large.fill(
-            RoundedRect::new(Rect::new(x, y, 1.0, 1.0), 0.0)?,
+            RoundedRect::new(Rect::new(x, y, 1.0, 1.0), 0.0),
             Color::rgb(230, 40, 0),
-        )?;
+        );
     }
-    let large = large.finish()?;
+    let large = large.finish();
+    // Nine nested clips exceed the eight clip layers, so drawing it fails.
+    let mut deep = SceneBuilder::new();
+    for _ in 0..9 {
+        deep.push_clip(RoundedRect::new(Rect::new(0.0, 0.0, 32.0, 32.0), 2.0));
+    }
+    for _ in 0..9 {
+        deep.pop();
+    }
+    let deep = deep.finish();
     let deadline = Instant::now() + Duration::from_secs(12);
     let mut frames = 0;
     while Instant::now() < deadline {
@@ -56,14 +65,7 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
                     let mut bad = renderer
                         .begin_frame(size.width, size.height, Color::WHITE)?
                         .unwrap();
-                    assert!(
-                        bad.draw_clipped(
-                            &scene,
-                            Affine::IDENTITY,
-                            Some(Rect::new(f32::NAN, 0.0, 1.0, 1.0))
-                        )
-                        .is_err()
-                    );
+                    assert!(bad.draw(&deep, Affine::IDENTITY).is_err());
                     assert!(matches!(bad.finish(), Err(Error::FrameFailed)));
                 }
                 let Some(mut frame) =
@@ -150,10 +152,10 @@ fn two_windows_present_through_one_shared_device() -> Result<(), Box<dyn std::er
     let mut renderers = [Some(first), Some(second)];
     let mut scene = SceneBuilder::new();
     scene.fill(
-        RoundedRect::new(Rect::new(10.0, 10.0, 80.0, 40.0), 6.0)?,
+        RoundedRect::new(Rect::new(10.0, 10.0, 80.0, 40.0), 6.0),
         Color::rgb(200, 40, 40),
-    )?;
-    let scene = scene.finish()?;
+    );
+    let scene = scene.finish();
     let (mut presented, mut dropped) = ([0u32; 2], false);
     for id in ids {
         platform.request_redraw(id)?;

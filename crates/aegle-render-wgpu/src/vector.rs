@@ -69,7 +69,7 @@ impl Renderer {
             left + entry.placement.width as f32,
             top + entry.placement.height as f32,
         ];
-        let inverse = Affine::translation(-left, -top)?;
+        let inverse = Affine::translation(-left, -top);
         self.emit(entry, area, inverse, linear_rgba(color.to_rgba()), 1, state)
     }
 

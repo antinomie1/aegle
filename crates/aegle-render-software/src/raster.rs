@@ -223,8 +223,9 @@ impl Frame<'_, '_, '_> {
     /// The clip is axis aligned and unaffected by `transform` or scene transforms.
     /// It intersects every scene clip and applies to shapes and text, only for
     /// this draw. `None` is identical to [`Self::draw`]. Zero extent excludes all
-    /// pixels. Invalid, negative or out-of-range clip geometry returns Coordinates,
-    /// including for empty scenes. A clip whose edges lie on whole device pixels
+    /// pixels. Nonfinite or negative clip geometry panics like scene geometry;
+    /// a clip beyond the device coordinate range returns Coordinates, including
+    /// for empty scenes. A clip whose edges lie on whole device pixels
     /// only narrows the raster bounds; any other clip adds one mask layer to the
     /// draw's budget, plus the ordinary coverage mask when none was yet needed.
     pub fn draw_clipped(
@@ -268,7 +269,7 @@ impl Frame<'_, '_, '_> {
         }
         let clip = clip
             .map(|rect| {
-                let shape = RoundedRect::new(rect, 0.0).map_err(|_| RenderError::Coordinates)?;
+                let shape = RoundedRect::new(rect, 0.0);
                 if shape.is_empty() || scene.is_empty() {
                     path::validate_bounds([
                         rect.origin.x,

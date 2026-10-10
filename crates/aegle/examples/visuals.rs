@@ -22,17 +22,17 @@ fn main() -> Result<()> {
         star.line_to(Point::new(20.0 * angle.sin(), -20.0 * angle.cos()));
     }
     star.close();
-    let star = star.finish(FillRule::NonZero)?;
+    let star = star.finish(FillRule::NonZero);
     let turn = Rc::new(Cell::new(0.0f32));
     let angle = turn.clone();
     let canvas = row.canvas(move |builder, size| {
         let (sin, cos) = angle.get().sin_cos();
-        let center = Affine::translation(size.width / 2.0, size.height / 2.0)?;
-        builder.push_transform(Affine::new([cos, sin, -sin, cos, 0.0, 0.0])?.then(center)?)?;
-        builder.fill_path(&star, Color::rgb(200, 60, 90))?;
-        builder.stroke_path(&star, Color::rgb(30, 30, 30), Stroke::new(1.5))?;
-        builder.pop()?;
-        Ok(())
+        let center = Affine::translation(size.width / 2.0, size.height / 2.0);
+        let spin = Affine::new([cos, sin, -sin, cos, 0.0, 0.0]).unwrap();
+        builder.push_transform(spin.then(center).unwrap());
+        builder.fill_path(&star, Color::rgb(200, 60, 90));
+        builder.stroke_path(&star, Color::rgb(30, 30, 30), Stroke::new(1.5));
+        builder.pop();
     });
     canvas.set_width(Some(48.0));
     canvas.set_height(Some(48.0));

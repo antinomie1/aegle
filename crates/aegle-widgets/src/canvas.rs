@@ -11,13 +11,13 @@ use aegle_scene::SceneBuilder;
 use aegle_theme::ControlKind;
 use aegle_types::{Point, Size};
 use aegle_ui::{
-    Container, Control, HandlerResult, Result,
+    Container, Control, HandlerResult,
     control::{InputCx, PaintCx},
     handle,
 };
 
 /// Records custom scene commands in local coordinates for a canvas of `Size`.
-pub type Painter = dyn FnMut(&mut SceneBuilder, Size) -> Result;
+pub type Painter = dyn FnMut(&mut SceneBuilder, Size);
 
 handle! {
     /// A retained custom drawing whose painter re-records only after invalidation or resize.
@@ -143,7 +143,7 @@ impl Canvas {
         })
     }
     /// Replaces the painter and re-records it on the next refresh.
-    pub fn set_painter(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) {
+    pub fn set_painter(&self, painter: impl FnMut(&mut SceneBuilder, Size) + 'static) {
         self.update(|canvas| canvas.painter = Box::new(painter))
     }
     /// Makes the canvas interactive: it joins Tab order, shows a focus
@@ -211,20 +211,20 @@ impl Control for CanvasControl {
     fn takes_wheel(&self) -> bool {
         self.interactive
     }
-    fn hover(&mut self, cx: &mut InputCx<'_>, _: PointerId, input: Input<'_>) -> Result<Outcome> {
+    fn hover(&mut self, cx: &mut InputCx<'_>, _: PointerId, input: Input<'_>) -> Outcome {
         match input {
-            Input::Pointer(pointer) if self.pressed.is_none() => Ok(self.push(CanvasEvent::Move {
+            Input::Pointer(pointer) if self.pressed.is_none() => self.push(CanvasEvent::Move {
                 position: pointer.position,
                 pressed: false,
                 modifiers: pointer.modifiers,
                 time: cx.time,
-            })),
-            _ => Ok(Outcome::default()),
+            }),
+            _ => Outcome::default(),
         }
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         let time = cx.time;
-        Ok(match input {
+        match input {
             Input::Pointer(p) if self.pressed.is_some_and(|id| id != p.id) => Outcome::default(),
             Input::Pointer(p) => {
                 let (position, modifiers) = (p.position, p.modifiers);
@@ -234,21 +234,21 @@ impl Control for CanvasControl {
                     PointerKind::ButtonDown(button) => (2 << button as u8, true),
                     PointerKind::ButtonUp(button) => (2 << button as u8, false),
                     PointerKind::Move => {
-                        return Ok(self.push(CanvasEvent::Move {
+                        return self.push(CanvasEvent::Move {
                             position,
                             pressed: self.buttons & 1 != 0,
                             modifiers,
                             time,
-                        }));
+                        });
                     }
                     PointerKind::Leave if self.pressed.is_none() => {
-                        return Ok(self.push(CanvasEvent::Leave));
+                        return self.push(CanvasEvent::Leave);
                     }
-                    PointerKind::Cancel => return Ok(self.cancel()),
-                    PointerKind::Leave => return Ok(Outcome::default()),
+                    PointerKind::Cancel => return self.cancel(),
+                    PointerKind::Leave => return Outcome::default(),
                 };
                 if down == (self.buttons & bit != 0) {
-                    return Ok(Outcome::default());
+                    return Outcome::default();
                 }
                 let first = self.buttons == 0;
                 self.buttons ^= bit;
@@ -314,9 +314,9 @@ impl Control for CanvasControl {
                 ..self.push(CanvasEvent::Focus(focused))
             },
             _ => Outcome::default(),
-        })
+        }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         (self.painter)(cx.builder, cx.size)
     }
     #[cfg(feature = "accessibility")]
@@ -341,7 +341,7 @@ impl Control for CanvasControl {
 
 pub(crate) fn canvas(
     container: &Container,
-    painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static,
+    painter: impl FnMut(&mut SceneBuilder, Size) + 'static,
 ) -> Canvas {
     Canvas(crate::add(container, |_, _| {
         Ok((

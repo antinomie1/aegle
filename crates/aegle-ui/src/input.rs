@@ -192,10 +192,16 @@ impl Ui {
         state.scroll_by_at(position, delta, Some(modifiers))?;
         Ok(())
     }
-    /// Applies one validated native IME transaction to the focused editable field.
+    /// Applies one native IME transaction to the focused editable field.
+    /// A batch the field's editor rejects (see `Editor::check_ime`) returns
+    /// the error and changes nothing.
     pub fn ime(&self, edit: ImeEdit<'_>) -> Result {
         let mut state = self.write();
         if let Some(id) = state.focus.current(&state.tree) {
+            let control = &state.tree.get(id).unwrap().context.control;
+            if let Some(field) = control.editor().filter(|field| field.accepts_ime()) {
+                field.editor().check_ime(edit)?;
+            }
             state.dispatch(id, Input::Ime(edit))?;
             state.ime_dirty = true;
             state.input_method = true;
@@ -258,7 +264,7 @@ impl State {
                 rtl: element.rtl,
             },
             input,
-        )?;
+        );
         for work in deferred {
             work(self, target)?;
         }

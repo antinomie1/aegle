@@ -122,7 +122,7 @@ impl Renderer {
         clip: Option<Rect>,
     ) -> Result<(Affine, Option<Rect>, [u32; 2], bool)> {
         let (origin, size, hidden) = self.current();
-        let shift = Affine::translation(-(origin[0] as f32), -(origin[1] as f32))?;
+        let shift = Affine::translation(-(origin[0] as f32), -(origin[1] as f32));
         let clip = clip.map(|rect| shifted(rect, origin));
         Ok((transform.then(shift)?, clip, size, hidden))
     }

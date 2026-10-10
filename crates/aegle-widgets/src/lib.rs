@@ -165,7 +165,7 @@ pub trait Widgets {
     /// Appends a canvas drawn by `painter` with zero intrinsic size; give it a
     /// size or flex grow. The painter runs during refresh while the UI is
     /// borrowed, so it must not use UI handles. Drawing is not clipped to the bounds.
-    fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) -> Canvas;
+    fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) + 'static) -> Canvas;
     /// Appends a scrollable column. Children retain their state outside the viewport.
     /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
     /// [`Node::scroll_to`] and the other scroll methods move it.
@@ -240,7 +240,7 @@ impl Widgets for Container {
     fn image(&self, image: &Image) -> ImageView {
         visual::image(self, image)
     }
-    fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) -> Canvas {
+    fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) + 'static) -> Canvas {
         canvas::canvas(self, painter)
     }
     fn scroll_view(&self) -> Container {

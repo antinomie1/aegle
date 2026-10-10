@@ -30,18 +30,18 @@ fn ops() -> Result<Vec<Op>> {
     ];
     let gradient = Gradient::linear(Point::new(0.0, 0.0), Point::new(96.0, 0.0), &stops)?;
     let mut backdrop = SceneBuilder::new();
-    backdrop.fill_gradient(shape(0.0, 0.0, 96.0, 96.0, 0.0)?, &gradient)?;
+    backdrop.fill_gradient(shape(0.0, 0.0, 96.0, 96.0, 0.0), &gradient);
     for i in 0..6 {
         let x = 8.0 + i as f32 * 14.0;
-        backdrop.fill(shape(x, 8.0, 6.0, 80.0, 0.0)?, Color::WHITE)?;
+        backdrop.fill(shape(x, 8.0, 6.0, 80.0, 0.0), Color::WHITE);
     }
     let mut content = SceneBuilder::new();
     content
-        .fill(shape(20.0, 20.0, 40.0, 40.0, 6.0)?, Color::rgb(0, 150, 60))?
-        .fill(shape(40.0, 40.0, 40.0, 40.0, 6.0)?, Color::rgb(0, 150, 60))?;
+        .fill(shape(20.0, 20.0, 40.0, 40.0, 6.0), Color::rgb(0, 150, 60))
+        .fill(shape(40.0, 40.0, 40.0, 40.0, 6.0), Color::rgb(0, 150, 60));
     let all = Rect::new(0.0, 0.0, 96.0, 96.0);
     let frosted = Layer::new(
-        shape(12.0, 12.0, 72.0, 72.0, 10.0)?,
+        shape(12.0, 12.0, 72.0, 72.0, 10.0),
         Affine::IDENTITY,
         all,
         Some(Rect::new(0.0, 0.0, 90.0, 96.0)),
@@ -49,7 +49,7 @@ fn ops() -> Result<Vec<Op>> {
         3.0,
     )?;
     let faded = Layer::new(
-        shape(0.0, 0.0, 96.0, 96.0, 0.0)?,
+        shape(0.0, 0.0, 96.0, 96.0, 0.0),
         Affine::IDENTITY,
         Rect::new(16.0, 16.0, 70.0, 70.0),
         None,
@@ -57,10 +57,10 @@ fn ops() -> Result<Vec<Op>> {
         0.0,
     )?;
     Ok(vec![
-        Op::Draw(backdrop.finish()?),
+        Op::Draw(backdrop.finish()),
         Op::Push(frosted),
         Op::Push(faded),
-        Op::Draw(content.finish()?),
+        Op::Draw(content.finish()),
         Op::Pop,
         Op::Pop,
     ])

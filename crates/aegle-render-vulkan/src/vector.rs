@@ -100,7 +100,7 @@ impl Text {
             left + entry.placement.width as f32,
             top + entry.placement.height as f32,
         ];
-        let inverse = Affine::translation(-left, -top)?;
+        let inverse = Affine::translation(-left, -top);
         record(
             recording,
             entry,

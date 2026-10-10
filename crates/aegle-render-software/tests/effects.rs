@@ -35,10 +35,10 @@ fn gradients_and_shadows() -> Result {
     let linear = Gradient::linear(Point::new(0.0, 0.0), Point::new(64.0, 0.0), &stops)?;
     let mut builder = SceneBuilder::new();
     builder.fill_gradient(
-        RoundedRect::new(Rect::new(0.0, 0.0, 64.0, 16.0), 0.0)?,
+        RoundedRect::new(Rect::new(0.0, 0.0, 64.0, 16.0), 0.0),
         &linear,
-    )?;
-    let pixels = render(&builder.finish()?)?;
+    );
+    let pixels = render(&builder.finish())?;
     // Padded before the first and after the last stop, linear light between.
     assert_eq!(pixel(&pixels, 4, 8), [255, 0, 0, 255]);
     assert_eq!(pixel(&pixels, 60, 8), [0, 0, 255, 255]);
@@ -47,10 +47,10 @@ fn gradients_and_shadows() -> Result {
     assert!(middle[0].abs_diff(185) <= 1 && middle[2].abs_diff(190) <= 1);
 
     let mut builder = SceneBuilder::new();
-    let shape = RoundedRect::new(Rect::new(16.0, 16.0, 32.0, 32.0), 0.0)?;
-    builder.push_clip(RoundedRect::new(Rect::new(0.0, 0.0, 64.0, 40.0), 0.0)?)?;
-    builder.shadow(shape, Color::BLACK, 4.0)?.pop()?;
-    let pixels = render(&builder.finish()?)?;
+    let shape = RoundedRect::new(Rect::new(16.0, 16.0, 32.0, 32.0), 0.0);
+    builder.push_clip(RoundedRect::new(Rect::new(0.0, 0.0, 64.0, 40.0), 0.0));
+    builder.shadow(shape, Color::BLACK, 4.0).pop();
+    let pixels = render(&builder.finish())?;
     // Full strength inside, within the erf approximation.
     assert!(
         pixel(&pixels, 32, 32)[..3]
@@ -71,7 +71,7 @@ fn both_orders(scene: &Scene) -> Result<(Vec<u8>, Vec<u8>)> {
     let mut renderer = Renderer::default();
     let background = Color::rgb(30, 90, 200);
     let (mut rgba, mut bgra) = (vec![0; 96 * 64 * 4], vec![0; 96 * 64 * 4]);
-    let scale = Affine::scale(1.5, 1.5)?;
+    let scale = Affine::scale(1.5, 1.5);
     renderer
         .begin_frame(&mut Surface::new(&mut rgba, 96, 64)?, background)
         .draw(scene, scale)?;
@@ -107,30 +107,30 @@ fn bgra_surfaces_hold_the_same_pixels_with_red_and_blue_exchanged() -> Result {
     square.line_to(Point::new(56.0, 6.0));
     square.line_to(Point::new(50.0, 20.0));
     square.close();
-    let square = square.finish(aegle_scene::FillRule::NonZero)?;
+    let square = square.finish(aegle_scene::FillRule::NonZero);
     let mut builder = SceneBuilder::new();
     builder.shadow(
-        shape(4.0, 4.0, 24.0, 16.0, 4.0)?,
+        shape(4.0, 4.0, 24.0, 16.0, 4.0),
         Color::rgba(0, 0, 0, 120),
         3.0,
-    )?;
-    builder.fill(shape(4.0, 4.0, 24.0, 16.0, 0.0)?, Color::rgb(220, 40, 60))?;
+    );
+    builder.fill(shape(4.0, 4.0, 24.0, 16.0, 0.0), Color::rgb(220, 40, 60));
     builder.fill(
-        shape(10.3, 8.6, 30.0, 20.0, 3.0)?,
+        shape(10.3, 8.6, 30.0, 20.0, 3.0),
         Color::rgba(40, 180, 90, 140),
-    )?;
+    );
     builder.stroke(
-        shape(2.5, 24.5, 40.0, 14.0, 0.0)?,
+        shape(2.5, 24.5, 40.0, 14.0, 0.0),
         Color::rgb(200, 20, 120),
         1.5,
-    )?;
-    builder.fill_gradient(shape(44.0, 24.0, 16.0, 14.0, 2.0)?, &gradient)?;
-    builder.fill_path(&square, Color::rgb(255, 210, 0))?;
-    builder.push_clip(shape(30.0, 2.0, 30.0, 40.0, 5.0)?)?;
-    builder.image(&image, Rect::new(30.0, 28.0, 12.0, 12.0))?;
-    builder.pop()?;
-    builder.image(&image, Rect::new(2.0, 2.0, 2.0, 2.0))?;
-    let (rgba, bgra) = both_orders(&builder.finish()?)?;
+    );
+    builder.fill_gradient(shape(44.0, 24.0, 16.0, 14.0, 2.0), &gradient);
+    builder.fill_path(&square, Color::rgb(255, 210, 0));
+    builder.push_clip(shape(30.0, 2.0, 30.0, 40.0, 5.0));
+    builder.image(&image, Rect::new(30.0, 28.0, 12.0, 12.0));
+    builder.pop();
+    builder.image(&image, Rect::new(2.0, 2.0, 2.0, 2.0));
+    let (rgba, bgra) = both_orders(&builder.finish())?;
     for (a, b) in rgba
         .as_chunks::<4>()
         .0

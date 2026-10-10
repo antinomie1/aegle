@@ -17,9 +17,12 @@ fn explicit_font_policy_and_invalid_updates_preserve_retained_text() {
     assert_eq!(paragraph.diagnostics().unshaped_bytes, "你好 Aegle".len());
     assert_eq!(paragraph.missing_glyphs(), 0);
     #[cfg(feature = "scene")]
-    assert_eq!(
-        paragraph.paint(&mut aegle_scene::SceneBuilder::new()),
-        Err(aegle_text::PaintError::MissingFont)
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            paragraph.paint(&mut aegle_scene::SceneBuilder::new())
+        }))
+        .is_err(),
+        "painting text without a font panics"
     );
     assert_eq!(
         paragraph.reflow(Some(f32::NAN), Alignment::Start),
@@ -77,13 +80,10 @@ fn cjk_reflow_reuses_font_and_reports_missing_glyphs() {
     #[cfg(feature = "scene")]
     {
         let mut scene = aegle_scene::SceneBuilder::new();
-        paragraph
-            .paint_with_color(&mut scene, aegle_types::Color::WHITE)
-            .unwrap();
+        paragraph.paint_with_color(&mut scene, aegle_types::Color::WHITE);
         assert!(
             scene
                 .finish()
-                .unwrap()
                 .glyph_runs()
                 .iter()
                 .all(|run| run.color() == aegle_types::Color::WHITE)
@@ -108,8 +108,8 @@ fn cjk_reflow_reuses_font_and_reports_missing_glyphs() {
         let mut emboldened = |style: &TextStyle<'_>| {
             system.restyle(&mut paragraph, style).unwrap();
             let mut builder = aegle_scene::SceneBuilder::new();
-            paragraph.paint(&mut builder).unwrap();
-            let scene = builder.finish().unwrap();
+            paragraph.paint(&mut builder);
+            let scene = builder.finish();
             assert!(!scene.glyph_runs().is_empty());
             scene.glyph_runs().iter().all(|run| run.embolden())
         };

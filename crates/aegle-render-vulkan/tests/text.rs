@@ -22,8 +22,8 @@ fn text(fonts: &mut TextSystem, value: &str, size: f32) -> Result<Scene> {
     )?;
     assert_eq!(paragraph.diagnostics(), Default::default());
     let mut builder = SceneBuilder::new();
-    paragraph.paint(&mut builder)?;
-    Ok(builder.finish()?)
+    paragraph.paint(&mut builder);
+    Ok(builder.finish())
 }
 
 fn compare(
@@ -71,7 +71,7 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
         ..Options::default()
     })?;
     eprintln!("Vulkan text device: {}", renderer.device_name());
-    let transform = Affine::translation(4.25, 4.5)?;
+    let transform = Affine::translation(4.25, 4.5);
     let clip = Some(Rect::new(4.0, 4.0, 52.0, 32.0));
     let first = compare(&mut renderer, &plain, transform, clip, 64)?;
     assert!(first.as_chunks::<4>().0.iter().filter(|p| p[3] > 0).count() > 100);
@@ -88,17 +88,17 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
     let mut frame = renderer.begin_frame(64, 64, Color::TRANSPARENT)?;
     let mut shapes = SceneBuilder::new();
     shapes.fill(
-        RoundedRect::new(Rect::new(0.0, 0.0, 64.0, 64.0), 0.0)?,
+        RoundedRect::new(Rect::new(0.0, 0.0, 64.0, 64.0), 0.0),
         Color::WHITE,
-    )?;
-    frame.draw(&shapes.finish()?, Affine::IDENTITY)?;
+    );
+    frame.draw(&shapes.finish(), Affine::IDENTITY)?;
     frame.draw(&plain, transform)?;
     let mut marker = SceneBuilder::new();
     marker.fill(
-        RoundedRect::new(Rect::new(8.0, 8.0, 8.0, 8.0), 0.0)?,
+        RoundedRect::new(Rect::new(8.0, 8.0, 8.0, 8.0), 0.0),
         Color::rgb(255, 0, 0),
-    )?;
-    frame.draw(&marker.finish()?, Affine::IDENTITY)?;
+    );
+    frame.draw(&marker.finish(), Affine::IDENTITY)?;
     frame.finish()?;
     let mut pixels = vec![0; 64 * 64 * 4];
     renderer.read_pixels(&mut pixels)?;
@@ -138,8 +138,8 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
                 position: Point::new(12.0, 20.0),
             },
         ],
-    )?)?;
-    let color = color.finish()?;
+    ));
+    let color = color.finish();
     compare(
         &mut renderer,
         &color,
@@ -204,11 +204,11 @@ fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
             Color::WHITE,
             vec![],
             vec![Glyph { id: 2, position }],
-        )?)?;
+        ));
     }
     let edge_pixels = compare(
         &mut limited,
-        &edge.finish()?,
+        &edge.finish(),
         Affine::IDENTITY,
         Some(Rect::new(2.0, 0.0, 2.0, 2.0)),
         8,

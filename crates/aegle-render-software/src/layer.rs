@@ -189,7 +189,7 @@ impl Frame<'_, '_, '_> {
             return draw(self, Affine::IDENTITY);
         };
         let (left, top) = (open.bounds.left as f32, open.bounds.top as f32);
-        let shift = Affine::translation(-left, -top).map_err(|_| RenderError::Coordinates)?;
+        let shift = Affine::translation(-left, -top);
         if open.bounds.is_empty() {
             // Nothing of this layer can show: draw into an empty region.
             let mut none = [0u8; 4];

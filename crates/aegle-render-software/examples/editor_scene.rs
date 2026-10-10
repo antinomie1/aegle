@@ -24,13 +24,13 @@ fn row(
             ..Default::default()
         },
     )?;
-    builder.push_transform(Affine::translation(28.0, y)?)?;
-    label.paint(builder)?;
-    let field = RoundedRect::new(Rect::new(0.0, 28.0, 424.0, 56.0), 10.0)?;
-    builder.fill(field, Color::WHITE)?;
-    builder.stroke(field, Color::rgb(188, 201, 225), 1.0)?;
-    builder.push_clip(field)?;
-    builder.push_transform(Affine::translation(16.0, 36.0)?)?;
+    builder.push_transform(Affine::translation(28.0, y));
+    label.paint(builder);
+    let field = RoundedRect::new(Rect::new(0.0, 28.0, 424.0, 56.0), 10.0);
+    builder.fill(field, Color::WHITE);
+    builder.stroke(field, Color::rgb(188, 201, 225), 1.0);
+    builder.push_clip(field);
+    builder.push_transform(Affine::translation(16.0, 36.0));
     editor.paint(
         builder,
         EditorPaint {
@@ -38,8 +38,8 @@ fn row(
             preedit: Some(Color::rgb(50, 91, 166)),
             ..Default::default()
         },
-    )?;
-    builder.pop()?.pop()?.pop()?;
+    );
+    builder.pop().pop().pop();
     Ok(())
 }
 
@@ -98,7 +98,7 @@ fn main() -> Result<()> {
         "COMMITTED / one undo step",
         148.0,
     )?;
-    let scene = builder.finish()?;
+    let scene = builder.finish();
     fonts.edit(&mut editor).undo()?;
     assert_eq!(editor.text(), "Hello, 世界");
     fonts.edit(&mut editor).redo()?;

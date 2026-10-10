@@ -166,7 +166,7 @@ impl State {
         let mut style = face(self.theme_of(id), Some(&decoration));
         let control = &mut self.tree.get_mut(id).unwrap().context.control;
         control.text_role(&mut style);
-        control.restyle(&mut self.fonts.borrow_mut(), &style)?;
+        control.restyle(&mut self.fonts.borrow_mut(), &style);
         self.decorations.insert(id, decoration);
         self.trim_decoration(id);
         self.tree.mark_dirty(id, Dirty::ALL)?;

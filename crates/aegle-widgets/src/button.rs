@@ -107,7 +107,7 @@ impl Control for ButtonControl {
     fn set_enabled(&mut self, _: &mut TextSystem, enabled: bool) -> Outcome {
         self.button.set_enabled(enabled)
     }
-    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Result<Outcome> {
+    fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         let mut outcome = self.button.handle(input);
         if outcome.action.is_some() {
             // The behavior of composite controls built on buttons.
@@ -122,30 +122,25 @@ impl Control for ButtonControl {
                 Variant::Tab { .. } => cx.deferred.push(Box::new(crate::tabs::chosen)),
             }
         }
-        Ok(outcome)
+        outcome
     }
-    fn hover(
-        &mut self,
-        cx: &mut InputCx<'_>,
-        _: aegle_ui::PointerId,
-        input: Input<'_>,
-    ) -> Result<Outcome> {
+    fn hover(&mut self, cx: &mut InputCx<'_>, _: aegle_ui::PointerId, input: Input<'_>) -> Outcome {
         self.handle(cx, input)
     }
     fn baseline(&self, size: Size, _: f32) -> Option<f32> {
         // Painted centered vertically.
         Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let chevron = if matches!(self.variant, Variant::Dropdown { .. }) {
             cx.gap + CHEVRON
         } else {
             0.0
         };
-        Ok(Size::new(
+        Size::new(
             self.text.size().width + 2.0 * cx.padding + chevron,
             self.text.size().height + 2.0 * cx.padding,
-        ))
+        )
     }
     fn retheme(
         &self,
@@ -158,9 +153,9 @@ impl Control for ButtonControl {
             style.size.height = Dimension::length(theme.control_height);
         }
     }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let (size, padding) = (cx.size, cx.padding);
-        cx.builder.push_clip(cx.shape)?;
+        cx.builder.push_clip(cx.shape);
         // Dropdowns and their choices read as lists: text starts at the padding,
         // on the right right to left, with marks at the other end.
         let x = if self.listed() && cx.rtl {
@@ -173,17 +168,17 @@ impl Control for ButtonControl {
         cx.builder.push_transform(Affine::translation(
             x,
             (size.height - self.text.size().height) / 2.0,
-        )?)?;
+        ));
         self.text
-            .paint_with_color(cx.builder, cx.appearance.foreground)?;
-        cx.builder.pop()?;
+            .paint_with_color(cx.builder, cx.appearance.foreground);
+        cx.builder.pop();
         if matches!(self.variant, Variant::Dropdown { .. }) {
             let x = if cx.rtl {
                 padding + CHEVRON * 0.5
             } else {
                 size.width - padding - CHEVRON * 0.5
             };
-            chevron(cx.builder, x, size.height * 0.5, cx.appearance.foreground)?;
+            chevron(cx.builder, x, size.height * 0.5, cx.appearance.foreground);
         }
         if matches!(self.variant, Variant::Tab { selected: true }) {
             // The selected tab is marked by an underline, not only by color.
@@ -191,9 +186,9 @@ impl Control for ButtonControl {
                 aegle_scene::Rect::new(padding * 0.5, size.height - 2.0, size.width - padding, 2.0);
             if !line.is_empty() {
                 cx.builder.fill(
-                    aegle_scene::RoundedRect::new(line, 0.0)?,
+                    aegle_scene::RoundedRect::new(line, 0.0),
                     cx.appearance.indicator,
-                )?;
+                );
             }
         }
         if matches!(self.variant, Variant::Option { chosen: true }) {
@@ -205,10 +200,9 @@ impl Control for ButtonControl {
                 size.width - padding - mark
             };
             let y = (size.height - mark) * 0.5;
-            check_mark(cx.builder, x, y, mark, cx.appearance.indicator)?;
+            check_mark(cx.builder, x, y, mark, cx.appearance.indicator);
         }
-        cx.builder.pop()?;
-        Ok(())
+        cx.builder.pop();
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {

@@ -1,9 +1,8 @@
 //! Check boxes, radio buttons, switches, sliders, progress bars and dropdown marks.
-use aegle_scene::{
-    Affine, Color, FillRule, PathBuilder, Point, Rect, RoundedRect, SceneBuilder, SceneError,
-};
+use aegle_scene::{Affine, Color, FillRule, PathBuilder, Point, Rect, RoundedRect, SceneBuilder};
 use aegle_theme::Appearance;
 use aegle_types::Size;
+use aegle_ui::OrFail;
 
 /// Width of the dropdown chevron, shared with layout.
 pub const CHEVRON: f32 = 8.0;
@@ -43,12 +42,12 @@ pub struct ToggleSpec {
 
 /// Paints a toggle. `label` receives the builder, already translated to the
 /// label origin, and the foreground color; it runs only when the spec has a label.
-pub fn toggle<E: From<SceneError>>(
+pub fn toggle(
     builder: &mut SceneBuilder,
     spec: &ToggleSpec,
     appearance: Appearance,
-    label: impl FnOnce(&mut SceneBuilder, Color) -> Result<(), E>,
-) -> Result<(), E> {
+    label: impl FnOnce(&mut SceneBuilder, Color),
+) {
     let ToggleSpec {
         size,
         padding,
@@ -62,7 +61,7 @@ pub fn toggle<E: From<SceneError>>(
     builder.push_clip(RoundedRect::new(
         Rect::new(0.0, 0.0, size.width, size.height),
         0.0,
-    )?)?;
+    ));
     let x = padding.min(size.width * 0.5);
     let y_padding = padding.min(size.height * 0.5);
     let switch = mark == Mark::Switch;
@@ -82,13 +81,13 @@ pub fn toggle<E: From<SceneError>>(
         },
         _ => appearance,
     };
-    border(builder, marker, frame)?;
+    border(builder, marker, frame);
     if mark == Mark::Radio {
         if checked {
             let diameter = width * 0.44;
             let inset = (width - diameter) * 0.5;
             let dot = Rect::new(x + inset, y + inset, diameter, diameter);
-            fill(builder, dot, diameter * 0.5, appearance.indicator)?;
+            fill(builder, dot, diameter * 0.5, appearance.indicator);
         }
     } else if mixed {
         let thickness = width * 0.115;
@@ -98,7 +97,7 @@ pub fn toggle<E: From<SceneError>>(
             width * 0.5,
             thickness,
         );
-        fill(builder, bar, 0.0, appearance.indicator)?;
+        fill(builder, bar, 0.0, appearance.indicator);
     } else if switch {
         let inset = (appearance.border_width + 2.0 * scale).min(height * 0.5);
         let diameter = (height - 2.0 * inset).max(0.0);
@@ -116,9 +115,9 @@ pub fn toggle<E: From<SceneError>>(
             } else {
                 appearance.border_color
             },
-        )?;
+        );
     } else if checked {
-        check_mark(builder, x, y, width, appearance.indicator)?;
+        check_mark(builder, x, y, width, appearance.indicator);
     }
     if let Some(text) = label_size {
         let left = if rtl {
@@ -126,15 +125,11 @@ pub fn toggle<E: From<SceneError>>(
         } else {
             x + width + gap
         };
-        builder.push_transform(Affine::translation(
-            left,
-            (size.height - text.height) * 0.5,
-        )?)?;
-        label(builder, appearance.foreground)?;
-        builder.pop()?;
+        builder.push_transform(Affine::translation(left, (size.height - text.height) * 0.5));
+        label(builder, appearance.foreground);
+        builder.pop();
     }
-    builder.pop()?;
-    Ok(())
+    builder.pop();
 }
 
 /// Start and length of a slider's track, shared with pointer-to-value mapping.
@@ -154,11 +149,11 @@ pub fn range(
     filled: [f64; 2],
     slider: bool,
     appearance: Appearance,
-) -> Result<(), SceneError> {
+) {
     builder.push_clip(RoundedRect::new(
         Rect::new(0.0, 0.0, size.width, size.height),
         0.0,
-    )?)?;
+    ));
     let (start, length) = if slider {
         slider_track(size, padding)
     } else {
@@ -169,15 +164,15 @@ pub fn range(
     let y = (size.height - height) * 0.5;
     // A thinner resting track keeps progress legible without relying on color.
     let track = Rect::new(start, y + height * 0.25, length, height * 0.5);
-    fill(builder, track, appearance.radius, appearance.background)?;
+    fill(builder, track, appearance.radius, appearance.background);
     let [from, to] = filled.map(|f| length * f.clamp(0.0, 1.0) as f32);
     fill(
         builder,
         Rect::new(start + from, y, (to - from).max(0.0), height),
         appearance.radius,
         appearance.indicator,
-    )?;
-    border(builder, track, appearance)?;
+    );
+    border(builder, track, appearance);
     if slider {
         let diameter = 16.0_f32.min(size.width).min(size.height);
         let thumb = Rect::new(
@@ -186,30 +181,19 @@ pub fn range(
             diameter,
             diameter,
         );
-        fill(builder, thumb, appearance.radius, appearance.indicator)?;
-        border(builder, thumb, appearance)?;
+        fill(builder, thumb, appearance.radius, appearance.indicator);
+        border(builder, thumb, appearance);
     }
-    builder.pop()?;
-    Ok(())
+    builder.pop();
 }
 
-fn fill(
-    builder: &mut SceneBuilder,
-    rect: Rect,
-    radius: f32,
-    color: Color,
-) -> Result<(), SceneError> {
+fn fill(builder: &mut SceneBuilder, rect: Rect, radius: f32, color: Color) {
     if !rect.is_empty() && color.to_rgba()[3] != 0 {
-        builder.fill(RoundedRect::new(rect, radius)?, color)?;
+        builder.fill(RoundedRect::new(rect, radius), color);
     }
-    Ok(())
 }
 
-fn border(
-    builder: &mut SceneBuilder,
-    rect: Rect,
-    appearance: Appearance,
-) -> Result<(), SceneError> {
+fn border(builder: &mut SceneBuilder, rect: Rect, appearance: Appearance) {
     let width = appearance
         .border_width
         .min(rect.size.width.min(rect.size.height) * 0.5);
@@ -224,35 +208,31 @@ fn border(
                     rect.size.height - width,
                 ),
                 (appearance.radius - inset).max(0.0),
-            )?,
+            ),
             appearance.border_color,
             width,
-        )?;
+        );
     }
-    Ok(())
 }
 
 /// A check mark filling a `size`-pixel box whose corner is `(x, y)`.
-pub fn check_mark(
-    builder: &mut SceneBuilder,
-    x: f32,
-    y: f32,
-    size: f32,
-    color: Color,
-) -> Result<(), SceneError> {
+pub fn check_mark(builder: &mut SceneBuilder, x: f32, y: f32, size: f32, color: Color) {
     let half_thickness = size * 0.0575;
     let cosine = std::f32::consts::FRAC_1_SQRT_2;
     for (start_x, start_y, length, sine) in
         [(0.22, 0.49, 0.21, cosine), (0.43, 0.70, 0.37, -cosine)]
     {
-        builder.push_transform(Affine::new([
-            cosine,
-            sine,
-            -sine,
-            cosine,
-            x + start_x * size,
-            y + start_y * size,
-        ])?)?;
+        builder.push_transform(
+            Affine::new([
+                cosine,
+                sine,
+                -sine,
+                cosine,
+                x + start_x * size,
+                y + start_y * size,
+            ])
+            .or_fail(),
+        );
         fill(
             builder,
             Rect::new(
@@ -263,19 +243,17 @@ pub fn check_mark(
             ),
             half_thickness,
             color,
-        )?;
-        builder.pop()?;
+        );
+        builder.pop();
     }
-    Ok(())
 }
 
 /// A downward chevron centered at `(x, y)`, for dropdowns.
-pub fn chevron(builder: &mut SceneBuilder, x: f32, y: f32, color: Color) -> Result<(), SceneError> {
+pub fn chevron(builder: &mut SceneBuilder, x: f32, y: f32, color: Color) {
     let mut path = PathBuilder::new();
     path.move_to(Point::new(x - CHEVRON * 0.5, y - CHEVRON * 0.25));
     path.line_to(Point::new(x + CHEVRON * 0.5, y - CHEVRON * 0.25));
     path.line_to(Point::new(x, y + CHEVRON * 0.35));
     path.close();
-    builder.fill_path(&path.finish(FillRule::NonZero)?, color)?;
-    Ok(())
+    builder.fill_path(&path.finish(FillRule::NonZero), color);
 }

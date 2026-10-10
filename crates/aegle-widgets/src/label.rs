@@ -8,7 +8,7 @@ use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
 use aegle_ui::{
-    Container, Control, Result,
+    Container, Control, OrFail, Result,
     control::{MeasureCx, PaintCx},
     handle, text_style,
 };
@@ -62,24 +62,27 @@ impl Control for LabelControl {
     fn baseline(&self, _: Size, padding: f32) -> Option<f32> {
         Some(padding + self.text.first_baseline()?)
     }
-    fn measure(&mut self, cx: &MeasureCx<'_>) -> Result<Size> {
-        let size = self.text.reflow(cx.content_width(), cx.alignment())?;
-        Ok(Size::new(
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
+        let size = self
+            .text
+            .reflow(cx.content_width(), cx.alignment())
+            .or_fail();
+        Size::new(
             size.width + 2.0 * cx.padding,
             size.height + 2.0 * cx.padding,
-        ))
+        )
     }
-    fn finalize(&mut self, cx: &MeasureCx<'_>) -> Result {
-        self.text.reflow(cx.content_width(), cx.alignment())?;
-        Ok(())
-    }
-    fn paint(&mut self, cx: &mut PaintCx<'_>) -> Result {
-        cx.builder
-            .push_transform(Affine::translation(cx.padding, cx.padding)?)?;
+    fn finalize(&mut self, cx: &MeasureCx<'_>) {
         self.text
-            .paint_with_color(cx.builder, cx.appearance.foreground)?;
-        cx.builder.pop()?;
-        Ok(())
+            .reflow(cx.content_width(), cx.alignment())
+            .or_fail();
+    }
+    fn paint(&mut self, cx: &mut PaintCx<'_>) {
+        cx.builder
+            .push_transform(Affine::translation(cx.padding, cx.padding));
+        self.text
+            .paint_with_color(cx.builder, cx.appearance.foreground);
+        cx.builder.pop();
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {

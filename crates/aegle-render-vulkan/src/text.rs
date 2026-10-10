@@ -136,7 +136,7 @@ impl Text {
                     let shape = RoundedRect::new(
                         Rect::new(0.0, 0.0, placement.width as f32, placement.height as f32),
                         0.0,
-                    )?;
+                    );
                     // Bitmap filtering already contributes its half-pixel support;
                     // the analytic geometry AA fringe must not pin invisible glyphs.
                     let area =

@@ -37,7 +37,7 @@ impl Layer {
         backdrop_blur: f32,
     ) -> Result<Self, SceneError> {
         for rect in [Some(extent), clip].into_iter().flatten() {
-            RoundedRect::new(rect, 0.0)?;
+            RoundedRect::checked(rect, 0.0)?;
         }
         transform.validate_shape(shape, 0.0)?;
         if !(opacity.is_finite() && backdrop_blur.is_finite()) {
