@@ -3,9 +3,11 @@
 //!
 //! Content controls: [`Label`], [`Button`], [`TextField`] (single line and
 //! multiline), [`CheckBox`], [`Switch`], [`Radio`], [`Slider`], [`Progress`],
-//! [`ImageView`], [`Canvas`]. Containers and composites: [`ScrollView`],
-//! [`ListView`] (virtual, equal or content-sized rows), [`Table`], [`Popup`],
-//! [`Dropdown`], [`Menu`] and [`MenuBar`]. Create them through the [`Widgets`]
+//! [`ImageView`], [`Canvas`]. Containers and composites: scroll views
+//! (a `Container` whose children scroll), [`ListView`] (virtual, equal or
+//! content-sized rows), [`Table`], [`Popup`] (also menus), [`Dropdown`] and
+//! [`MenuBar`]. Composite handles dereference to their `Node`, not to a
+//! container, so their own parts are the only children. Create them through the [`Widgets`]
 //! trait on `Container`; [`NodeWidgets`] adds popups, menus and tooltips to
 //! any control. Each control owns its behavior (through `aegle-controls`),
 //! default skin (the pure painters in this crate), layout defaults and semantics;
@@ -57,14 +59,14 @@ pub use field::{FieldControl, TextField};
 pub use group::Group;
 pub use label::{Label, LabelControl};
 pub use list::{ListView, RowHeight};
-pub use menu::{Menu, MenuBar};
+pub use menu::MenuBar;
 pub use menu_item::{MenuItem, MenuItemControl};
 pub use number_field::{NumberField, NumberFieldControl};
 pub use numeric::{Progress, Slider};
 pub use paint::{CHEVRON, Mark, ToggleSpec, check_mark, chevron, range, slider_track, toggle};
 pub use popup::Popup;
 pub use range_control::{Orientation, ProgressControl, SliderControl};
-pub use scroll_view::{ScrollControl, ScrollView};
+pub use scroll_view::ScrollControl;
 pub use separator::{Separator, SeparatorControl, Splitter};
 pub use table::{Table, TableColumn};
 pub use tabs::{Tabs, TabsControl};
@@ -166,7 +168,8 @@ pub trait Widgets {
     fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) -> Canvas;
     /// Appends a scrollable column. Children retain their state outside the viewport.
     /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
-    fn scroll_view(&self) -> ScrollView;
+    /// [`Node::scroll_to`] and the other scroll methods move it.
+    fn scroll_view(&self) -> Container;
     /// Appends a virtual list of `count` rows: [`RowHeight::Fixed`] (or a plain
     /// `f32`) rows of one height, or [`RowHeight::Estimate`] rows sized to
     /// their content. `row` fills an empty row column for an index. It runs
@@ -240,7 +243,7 @@ impl Widgets for Container {
     fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) -> Result + 'static) -> Canvas {
         canvas::canvas(self, painter)
     }
-    fn scroll_view(&self) -> ScrollView {
+    fn scroll_view(&self) -> Container {
         scroll_view::create(self)
     }
     fn list_view<R: HandlerResult>(
@@ -290,13 +293,14 @@ pub trait NodeWidgets {
     /// through the popup's container methods, then [`Popup::show`] it. It uses
     /// the anchor's theme and the theme surface with a border.
     fn popup(&self) -> Popup;
-    /// Creates a hidden menu below this control, shown by [`Popup::show`],
+    /// Creates a hidden menu below this control: a popup filled through
+    /// [`Popup::item`] and the other item methods, shown by [`Popup::show`],
     /// typically from a button's click handler.
-    fn menu(&self) -> Menu;
+    fn menu(&self) -> Popup;
     /// Creates a hidden menu shown where a context menu is requested over
     /// this control: at a secondary press, or at the focused control for
     /// the Menu key and Shift+F10 (see [`Node::on_context_menu`]).
-    fn context_menu(&self) -> Menu;
+    fn context_menu(&self) -> Popup;
     /// Shows `text` after the pointer rests on this control (or a descendant
     /// without its own tooltip) and sets it as the accessible description;
     /// `None` removes it. Pressing, Escape or leaving hides it.
@@ -307,10 +311,10 @@ impl NodeWidgets for Node {
     fn popup(&self) -> Popup {
         popup::popup(self)
     }
-    fn menu(&self) -> Menu {
+    fn menu(&self) -> Popup {
         menu::menu(self)
     }
-    fn context_menu(&self) -> Menu {
+    fn context_menu(&self) -> Popup {
         menu::context_menu(self)
     }
     fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>) {

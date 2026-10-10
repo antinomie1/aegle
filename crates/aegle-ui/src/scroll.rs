@@ -7,7 +7,7 @@ use crate::{
 };
 use aegle_core::{Dirty, NodeId};
 use aegle_scene::Affine;
-use aegle_types::{Point, Rect};
+use aegle_types::{Point, Rect, Size};
 
 use crate::{Node, Result, state::State};
 
@@ -319,6 +319,56 @@ fn spin_affine(spin: crate::Transform, bounds: Rect, parent: Option<Affine>) -> 
 }
 
 impl Node {
+    /// Current nonnegative scroll offset of a scroll viewport or editor; zero
+    /// for other controls. Unlike [`Self::offset`], it moves the children, not
+    /// this control. Hiding preserves this retained value.
+    pub fn scroll_offset(&self) -> Point {
+        self.change(|state, id| Ok(state.tree.get(id).unwrap().context.scroll))
+    }
+
+    /// Maximum scroll offset from the last refreshed layout, including trailing
+    /// padding; zero for controls that do not scroll. Hidden layouts have no
+    /// extent until they are shown and refreshed again.
+    pub fn max_scroll_offset(&self) -> Point {
+        self.change(|state, id| Ok(state.scroll_limit(id)))
+    }
+
+    /// Last refreshed size plus its scrollable overflow on each axis.
+    pub fn content_size(&self) -> Size {
+        self.change(|state, id| {
+            let viewport = state.tree.get(id).unwrap().context.bounds.size;
+            let limit = state.scroll_limit(id);
+            Ok(Size::new(
+                viewport.width + limit.x,
+                viewport.height + limit.y,
+            ))
+        })
+    }
+
+    /// Refreshes layout and scrolls to a finite offset, clamped to current limits.
+    /// Negative values select the start. Hidden controls retain their offset.
+    pub fn scroll_to(&self, offset: Point) {
+        crate::require(offset.x.is_finite() && offset.y.is_finite());
+        self.change(|state, id| {
+            let repaint = state.refresh()?;
+            state.repaint |= repaint;
+            state.scroll_to(id, offset)?;
+            state.update_geometry()
+        })
+    }
+
+    /// Moves by a finite logical displacement, clamped independently on each axis.
+    pub fn scroll_by(&self, delta: Point) {
+        crate::require(delta.x.is_finite() && delta.y.is_finite());
+        self.change(|state, id| {
+            let repaint = state.refresh()?;
+            state.repaint |= repaint;
+            let old = state.tree.get(id).unwrap().context.scroll;
+            state.scroll_to(id, Point::new(old.x + delta.x, old.y + delta.y))?;
+            state.update_geometry()
+        })
+    }
+
     /// Scrolls ancestor viewports just enough to reveal this control, without changing
     /// focus. Oversized editors reveal their caret on the constrained axis. Layout
     /// is refreshed first. Hidden nodes no-op.

@@ -31,16 +31,10 @@ impl Control for TabsControl {
     }
 }
 
-/// A row of tabs above the selected page. Tabs are buttons that activate
-/// with a click, Enter or Space; Left/Right move between them.
-#[derive(Clone)]
-pub struct Tabs(pub Container);
-
-impl std::ops::Deref for Tabs {
-    type Target = Container;
-    fn deref(&self) -> &Container {
-        &self.0
-    }
+aegle_ui::handle! {
+    /// A row of tabs above the selected page. Tabs are buttons that activate
+    /// with a click, Enter or Space; Left/Right move between them.
+    pub Tabs
 }
 
 fn data(state: &mut State, root: NodeId) -> &mut TabsControl {
@@ -97,7 +91,7 @@ impl Tabs {
         });
         let selected = Variant::Tab { selected: false };
         let tab = crate::button::create_as(&bar, title, selected);
-        let page = group::add(&self.0, Role::TabPanel, false);
+        let page = group::add(&Container(self.0.clone()), Role::TabPanel, false);
         page.set_grow(1.0);
         page.set_min_width(0.0);
         page.set_min_height(0.0);
@@ -139,7 +133,7 @@ impl Tabs {
     /// Adds a handler called after the user selects another tab; handlers
     /// run in registration order.
     pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Tabs) -> R + 'static) {
-        self.on_action(move |node| callback(Tabs(Container(node))).into_result())
+        self.on_action(move |node| callback(Tabs(node)).into_result())
     }
 }
 
@@ -195,5 +189,5 @@ pub(crate) fn tabs(container: &Container) -> Tabs {
         data(state, id).bar = Some(bar.id);
         Ok(())
     });
-    Tabs(root)
+    Tabs(root.0)
 }

@@ -310,15 +310,15 @@ fn flings_decay_then_stop_at_edges_input_or_reduced_motion() -> Result {
     ui.fling(at, Point::new(0.0, 600.0));
     assert!(ui.has_animations());
     step(1000)?; // The request starts at the host's current time.
-    assert_eq!(view.offset().y, 0.0);
+    assert_eq!(view.scroll_offset().y, 0.0);
     step(1100)?;
-    let first = view.offset().y;
+    let first = view.scroll_offset().y;
     assert!(
         (45.0..58.0).contains(&first),
         "600 * 0.325 * (1 - e^-0.31): {first}"
     );
     step(11_000)?;
-    let total = view.offset().y;
+    let total = view.scroll_offset().y;
     assert!(
         (190.0..196.0).contains(&total),
         "travels velocity * 0.325: {total}"

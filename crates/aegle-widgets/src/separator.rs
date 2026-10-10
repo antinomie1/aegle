@@ -8,7 +8,7 @@ use aegle_scene::{Rect, RoundedRect};
 use aegle_theme::ControlKind;
 use aegle_types::Cursor;
 use aegle_ui::{
-    Container, Control, Length, Result, UiError,
+    Container, Control, Length, Node, Result, UiError,
     control::{Frame, PaintCx},
     handle,
 };
@@ -98,7 +98,7 @@ pub(crate) fn separator(container: &Container) -> Separator {
 /// Two panes divided by a draggable, keyboard-adjustable handle.
 #[derive(Clone)]
 pub struct Splitter {
-    root: Container,
+    root: Node,
     first: Container,
     second: Container,
     handle: Canvas,
@@ -106,8 +106,8 @@ pub struct Splitter {
 }
 
 impl std::ops::Deref for Splitter {
-    type Target = Container;
-    fn deref(&self) -> &Container {
+    type Target = Node;
+    fn deref(&self) -> &Node {
         &self.root
     }
 }
@@ -194,7 +194,7 @@ pub(crate) fn splitter(container: &Container, orientation: Orientation) -> Split
     grip.update(|grip| grip.splitter = Some((vertical, 0.5)));
     let ratio = Rc::new(Cell::new(0.5));
     let splitter = Splitter {
-        root,
+        root: root.0,
         first,
         second,
         handle: grip.clone(),

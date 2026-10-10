@@ -131,7 +131,7 @@ impl Node {
     /// (receiving the press point), or the Menu key, Shift+F10 or the
     /// accessibility ShowContextMenu action while it or a descendant has
     /// focus (receiving the focused control's top-left corner). The point is
-    /// in logical window coordinates, ready for `Menu::show_at` in
+    /// in logical window coordinates, ready for `Popup::show_at` in
     /// `aegle-widgets`. Handlers run like click handlers.
     pub fn on_context_menu<R: crate::HandlerResult>(
         &self,

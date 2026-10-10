@@ -3,7 +3,7 @@
 use std::ops::Deref;
 
 use aegle_layout::Overflow;
-use aegle_ui::{Container, Result, UiError};
+use aegle_ui::{Container, Node, Result, UiError};
 
 use crate::{
     ListView, Widgets,
@@ -21,16 +21,16 @@ pub struct TableColumn<'a> {
 }
 
 /// A bordered table: one header row and virtual rows built on demand.
-/// It dereferences to its outer column; [`Table::rows`] scrolls and resizes.
+/// It dereferences to its outer node; [`Table::rows`] scrolls and resizes.
 #[derive(Clone)]
 pub struct Table {
-    table: Container,
+    table: Node,
     rows: ListView,
 }
 
 impl Deref for Table {
-    type Target = Container;
-    fn deref(&self) -> &Container {
+    type Target = Node;
+    fn deref(&self) -> &Node {
         &self.table
     }
 }
@@ -98,5 +98,8 @@ pub(crate) fn table(
     // The table draws the border; its rows sit flush inside it.
     rows.set_border_width(0.0);
     rows.set_padding(0.0);
-    Table { table, rows }
+    Table {
+        table: table.0,
+        rows,
+    }
 }

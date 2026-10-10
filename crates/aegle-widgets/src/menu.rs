@@ -1,10 +1,8 @@
 //! Menus on popups: context menus, menus opened by a control, and menu bars.
 
-use std::ops::Deref;
-
 use aegle_core::{Dirty, NodeId};
 use aegle_layout::{Dimension, FlexDirection, Style};
-use aegle_ui::{Container, Control, Node, Result, State, text_style};
+use aegle_ui::{Container, Control, Node, Result, State, UiError, text_style};
 
 use crate::{
     NodeWidgets, Popup, Separator, Widgets,
@@ -13,45 +11,39 @@ use crate::{
     popup::{entry, focus_first, hide_popup, popups, show_popup},
 };
 
-/// A popup of menu items. Up and Down move between items, Home and End to
-/// the ends, Right opens a submenu (Left right to left), Left or Escape
-/// closes it, Enter or a click chooses. The pointer resting on an item
-/// focuses it and opens its submenu. Choosing an item closes every menu.
-#[derive(Clone)]
-pub struct Menu(Popup);
-
-impl Deref for Menu {
-    type Target = Popup;
-    fn deref(&self) -> &Popup {
-        &self.0
-    }
+fn new_menu(anchor: &Node, side: bool) -> Popup {
+    let popup = anchor.popup();
+    popup.change(|state, id| {
+        state.control_as::<Group>(id).unwrap().role = Role::Menu;
+        entry(state, id).side = side;
+        state.tree.mark_dirty(id, Dirty::ALL)?;
+        Ok(())
+    });
+    popup
 }
 
-impl Menu {
-    fn new(anchor: &Node, side: bool) -> Self {
-        let popup = anchor.popup();
-        popup.change(|state, id| {
-            state.control_as::<Group>(id).unwrap().role = Role::Menu;
-            entry(state, id).side = side;
-            state.tree.mark_dirty(id, Dirty::ALL)?;
-            Ok(())
-        });
-        Self(popup)
-    }
+/// Menus: popups of menu items made by [`NodeWidgets::menu`],
+/// [`NodeWidgets::context_menu`], [`Popup::submenu`] or [`MenuBar::menu`]. Up
+/// and Down move between items, Home and End to the ends, Right opens a
+/// submenu (Left right to left), Left or Escape closes it, Enter or a click
+/// chooses. The pointer resting on an item focuses it and opens its submenu.
+/// Choosing an item closes every menu. Each method panics with
+/// [`UiError::WrongKind`] on a popup that is not a menu.
+impl Popup {
     /// Appends a command item.
     pub fn item(&self, text: &str) -> MenuItem {
-        add_item(self, text, None, false)
+        add_item(self.items(), text, None, false)
     }
     /// Appends a check item; choosing it toggles the check before its
     /// handlers run.
     pub fn check_item(&self, text: &str, checked: bool) -> MenuItem {
-        add_item(self, text, Some(checked), false)
+        add_item(self.items(), text, Some(checked), false)
     }
     /// Appends a radio item, exclusive among the radio items next to it: a
     /// separator or another kind of item starts a new group. Choosing it
     /// checks it and unchecks the rest of its group before its handlers run.
     pub fn radio_item(&self, text: &str, checked: bool) -> MenuItem {
-        let item = add_item(self, text, Some(false), false);
+        let item = add_item(self.items(), text, Some(false), false);
         item.change(|state, id| {
             self::item(state, id).radio = true;
             menu_item::check(state, id, checked)
@@ -60,9 +52,9 @@ impl Menu {
     }
     /// Appends an item that opens a submenu beside it, and returns the
     /// submenu to fill.
-    pub fn submenu(&self, text: &str) -> Menu {
-        let item = add_item(self, text, None, false);
-        let menu = Menu::new(&item, true);
+    pub fn submenu(&self, text: &str) -> Popup {
+        let item = add_item(self.items(), text, None, false);
+        let menu = new_menu(&item, true);
         item.change(|state, id| {
             self::item(state, id).submenu = Some(menu.id);
             state.tree.mark_dirty(id, Dirty::ALL)?;
@@ -72,7 +64,14 @@ impl Menu {
     }
     /// Appends a horizontal divider between groups of items.
     pub fn separator(&self) -> Separator {
-        self.0.0.separator()
+        self.items().separator()
+    }
+    fn items(&self) -> &Container {
+        self.change(|state, id| match is_menu(state, id) {
+            true => Ok(()),
+            false => Err(UiError::WrongKind.into()),
+        });
+        &self.0
     }
 }
 
@@ -143,35 +142,29 @@ fn close_menus(state: &mut State) -> Result {
     Ok(())
 }
 
-pub(crate) fn menu(anchor: &Node) -> Menu {
-    Menu::new(anchor, false)
+pub(crate) fn menu(anchor: &Node) -> Popup {
+    new_menu(anchor, false)
 }
-pub(crate) fn context_menu(anchor: &Node) -> Menu {
-    let menu = Menu::new(anchor, false);
+pub(crate) fn context_menu(anchor: &Node) -> Popup {
+    let menu = new_menu(anchor, false);
     let shown = menu.clone();
     anchor.on_context_menu(move |_, at| shown.show_at(at));
     menu
 }
 
-/// A row of entries that each open a menu. Once one is open, resting on
-/// another switches to it, and Left/Right move between them; on a focused
-/// entry Left/Right move focus and Down opens it. F10 focuses the first
-/// entry of the first menu bar.
-#[derive(Clone)]
-pub struct MenuBar(Container);
-
-impl Deref for MenuBar {
-    type Target = Container;
-    fn deref(&self) -> &Container {
-        &self.0
-    }
+aegle_ui::handle! {
+    /// A row of entries that each open a menu. Once one is open, resting on
+    /// another switches to it, and Left/Right move between them; on a focused
+    /// entry Left/Right move focus and Down opens it. F10 focuses the first
+    /// entry of the first menu bar.
+    pub MenuBar
 }
 
 impl MenuBar {
     /// Appends an entry opening a new menu below it, and returns the menu.
-    pub fn menu(&self, text: &str) -> Menu {
-        let item = add_item(&self.0, text, None, true);
-        let menu = Menu::new(&item, false);
+    pub fn menu(&self, text: &str) -> Popup {
+        let item = add_item(&Container(self.0.clone()), text, None, true);
+        let menu = new_menu(&item, false);
         item.change(|state, id| {
             self::item(state, id).submenu = Some(menu.id);
             Ok(())
@@ -190,7 +183,7 @@ pub(crate) fn menu_bar(container: &Container) -> MenuBar {
         aegle_layout::set_style(&mut state.tree, id, style)?;
         Ok(())
     });
-    MenuBar(bar)
+    MenuBar(bar.0)
 }
 
 pub(crate) fn is_menu(state: &mut State, node: NodeId) -> bool {

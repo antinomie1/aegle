@@ -47,7 +47,7 @@ fn virtual_rows_follow_the_viewport_in_order() -> Result {
     ui.resize(Size::new(200.0, 300.0));
     assert!(ui.refresh()?);
     assert_eq!(*built.borrow(), [0, 1, 2, 3, 4]);
-    assert_eq!(list.max_offset().y, 19_900.0);
+    assert_eq!(list.max_scroll_offset().y, 19_900.0);
 
     ui.scroll_by(Point::new(10.0, 10.0), Point::new(0.0, 30.0))?;
     ui.refresh()?;
@@ -69,7 +69,7 @@ fn virtual_rows_follow_the_viewport_in_order() -> Result {
     ui.refresh()?;
     assert_eq!(*built.borrow(), [0, 1, 2]);
     list.scroll_to(Point::new(0.0, 500.0));
-    assert_eq!(list.offset().y, 0.0);
+    assert_eq!(list.scroll_offset().y, 0.0);
     list.remove();
     ui.refresh()?;
     Ok(())

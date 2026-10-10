@@ -63,7 +63,11 @@ fn right_to_left_mirrors_layout_scrolling_and_directional_controls() -> Result {
     let middle = Point::new(frame.origin.x + 50.0, frame.origin.y + 30.0);
     ui.scroll_by(middle, Point::new(-50.0, 0.0))?;
     ui.refresh()?;
-    assert_eq!(view.offset().x, 50.0, "revealing the left grows the offset");
+    assert_eq!(
+        view.scroll_offset().x,
+        50.0,
+        "revealing the left grows the offset"
+    );
     assert_eq!(content.bounds().origin.x, wide.origin.x + 50.0);
 
     // A slider's minimum is at its right end, and Right moves toward it.

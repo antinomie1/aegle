@@ -1,4 +1,4 @@
-use std::{ops::Deref, rc::Rc};
+use std::rc::Rc;
 
 use aegle_core::NodeId;
 use aegle_layout::{Dimension, Edges, LengthPercentageAuto, Overflow, Position, Style};
@@ -9,7 +9,7 @@ use aegle_ui::{
     scroll_geometry::intersection,
 };
 
-use crate::{ScrollView, Widgets};
+use crate::Widgets;
 
 /// Builds the content of one row from its index.
 type RowBuilder = Box<dyn FnMut(&Container, usize) -> Result>;
@@ -42,21 +42,16 @@ pub(crate) struct List {
     reload: bool,
 }
 
-/// A vertical list of equal-height or content-sized rows over a scroll viewport.
-///
-/// Only rows intersecting the visible viewport (also clipped by ancestor views
-/// and the window) exist as controls. A row leaving that range is removed with
-/// its focus and local state; a row entering it is rebuilt by the row callback.
-/// The list shrinks to its parent's space by default; give it a height or a
-/// constrained flex allocation.
-#[derive(Clone)]
-pub struct ListView(pub ScrollView);
-
-impl Deref for ListView {
-    type Target = ScrollView;
-    fn deref(&self) -> &ScrollView {
-        &self.0
-    }
+aegle_ui::handle! {
+    /// A vertical list of equal-height or content-sized rows over a scroll
+    /// viewport, scrolled by [`Node::scroll_to`] and the other scroll methods.
+    ///
+    /// Only rows intersecting the visible viewport (also clipped by ancestor
+    /// views and the window) exist as controls. A row leaving that range is
+    /// removed with its focus and local state; a row entering it is rebuilt by
+    /// the row callback. The list shrinks to its parent's space by default;
+    /// give it a height or a constrained flex allocation.
+    pub ListView
 }
 
 /// How tall a virtual list's rows are.
@@ -112,7 +107,7 @@ pub(crate) fn virtual_list(
         ));
         Ok(())
     });
-    ListView(view)
+    ListView(view.0)
 }
 
 impl ListView {

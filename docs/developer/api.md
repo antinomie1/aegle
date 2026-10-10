@@ -121,12 +121,12 @@ let panel = app.window_with_options("Panel", WindowOptions {
 
 ## 4. 控件树与句柄
 
-在 `Container`（列、行、ScrollView 和窗口根）上创建子控件，新控件追加到末尾：
+在 `Container`（列、行、滚动视图、Popup 和窗口根）上创建子控件，新控件追加到末尾：
 
 | 方法 | 返回 | 控件 |
 | --- | --- | --- |
 | `column()` / `row()` | `Container` | 纵向 / 横向容器 |
-| `scroll_view()` | `ScrollView` | 可滚动列 |
+| `scroll_view()` | `Container` | 可滚动列，用 `Node` 的滚动方法移动 |
 | `list_view(height, count, row)` | `ListView` | 虚拟列表；`height` 为等高行的 `f32`，或 `RowHeight::Estimate(估计)` 表示行高随内容变化 |
 | `text(s)` | `Label` | 文本 |
 | `button(s)` | `Button` | 按钮 |
@@ -143,7 +143,7 @@ let panel = app.window_with_options("Panel", WindowOptions {
 
 其他格式在可选 feature 后：`aegle::image::decode(&bytes)` 按签名识别 PNG 与已启用的 JPEG/WebP/GIF，返回直接可用的 `Image`（错误为 `image::Error::{Unsupported, Invalid, TooLarge}`，`decode_with_limit` 调整字节预算）；`aegle::image::svg::rasterize(&bytes, width, height)` 把静态 SVG 栅格到指定尺寸，`svg::size` 读取固有尺寸，SVG 文字与外部文件不支持。渐变和阴影用 `aegle::image::effects::{linear_gradient, radial_gradient, shadow}` 生成 `Image`，再用 `image(&image)` 控件或 `Canvas` 里的 `builder.image` 绘制。
 
-所有类型化句柄都解引用为 `Node`，共享以下方法：
+所有类型化句柄都解引用为 `Node`（`Container`、`Popup` 和 `Window` 经 `Container`），共享以下方法。ListView、Table、Tabs、MenuBar 与 Splitter 这类组合控件只解引用为 `Node`，不能直接添加子控件：
 
 | `Node` 方法 | 说明 |
 | --- | --- |

@@ -7,7 +7,7 @@
 //! remain independent; no macOS host is currently implemented.
 //!
 //! [`prelude`] holds the common names; everything else stays under the crate
-//! it comes from: [`ui`], [`widgets`] and [`app`].
+//! it comes from: [`ui`](mod@ui), [`widgets`] and [`app`].
 
 /// Native application host: `App`, windows, renderer selection and desktop
 /// services. Empty without a native platform or GPU renderer feature.
@@ -63,8 +63,8 @@ pub mod prelude {
     #[cfg(feature = "grid")]
     pub use aegle_ui::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
     pub use aegle_widgets::{
-        Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, Menu, MenuBar, MenuItem,
-        NodeWidgets, NumberField, Orientation, Popup, Progress, Radio, RowHeight, ScrollView,
-        Separator, Slider, Splitter, Switch, Table, TableColumn, Tabs, TextField, Widgets,
+        Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, MenuBar, MenuItem,
+        NodeWidgets, NumberField, Orientation, Popup, Progress, Radio, RowHeight, Separator,
+        Slider, Splitter, Switch, Table, TableColumn, Tabs, TextField, Widgets,
     };
 }

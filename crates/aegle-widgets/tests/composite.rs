@@ -174,14 +174,14 @@ fn tables_and_content_sized_rows() -> Result {
     list.set_height(Some(200.0));
     ui.refresh()?;
     // Rows 0..=5 measured as 50, 10, 50, 10, 50, 10: the extent follows them.
-    let extent = list.max_offset().y + 200.0;
+    let extent = list.max_scroll_offset().y + 200.0;
     assert!(extent > 20.0 * 100.0 && extent < 20.0 * 100.0 + 6.0 * 30.0 + 1.0);
     list.scroll_to(Point::new(0.0, 60.0));
     ui.refresh()?;
-    assert_eq!(list.offset().y, 60.0);
+    assert_eq!(list.scroll_offset().y, 60.0);
     list.set_count(3);
     ui.refresh()?;
-    assert_eq!(list.max_offset().y, 0.0); // 50 + 10 + 50 is within the view.
+    assert_eq!(list.max_scroll_offset().y, 0.0); // 50 + 10 + 50 is within the view.
     #[cfg(feature = "accessibility")]
     {
         use aegle_access::accesskit::Role;

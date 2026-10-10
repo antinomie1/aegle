@@ -16,11 +16,11 @@
 | [Radio](#radio) | `radio(s, checked) -> Radio` | `RadioButton` |
 | [Dropdown](#dropdown) | `dropdown(items, selected) -> Dropdown` | — |
 | [Popup](#popup) | `node.popup() -> Popup` | — |
-| [Menu / MenuBar](#menu--menubar) | `node.menu()` / `node.context_menu() -> Menu`，`menu_bar() -> MenuBar` | — |
+| [Menu / MenuBar](#menu--menubar) | `node.menu()` / `node.context_menu() -> Popup`，`menu_bar() -> MenuBar` | — |
 | [Slider](#slider) | `slider(min, max, value) -> Slider` | `Slider` |
 | [Progress](#progress) | `progress(min, max, value) -> Progress` | `Progress` |
 | [Column / Row](#column--row) | `column()` / `row() -> Container` | `Column` / `Row` |
-| [ScrollView](#scrollview) | `scroll_view() -> ScrollView` | `ScrollView` |
+| [ScrollView](#scrollview) | `scroll_view() -> Container` | `ScrollView` |
 | [ListView](#listview) | `list_view(h, n, row) -> ListView`（`h` 为行高或 `RowHeight::Estimate(估计)`） | — |
 | [Table](#table) | `table(columns, h, n, cell) -> Table` | — |
 | [ImageView](#imageview) | `image(&Image) -> ImageView` | — |
@@ -235,7 +235,7 @@ ScrollView { height: 200dp
 
 - 默认透明背景、1 dp 主题边框（圆角随主题 radius），内边距为主题 padding 的一半；可用 `set_border_width(0.0)`、`set_padding` 覆盖。ListView 继承同样外观，Table 内的行列表不另加边框。
 - 内部按列排列；限制高度/宽度或 flex 分配后，超出部分可滚动，两轴均支持。
-- 方法：`offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；子控件用 `ensure_visible` 滚动到可见，`visible_bounds` 读取可见区域。
+- `Node` 的滚动方法：`scroll_offset`、`max_scroll_offset`、`content_size`、`scroll_to`、`scroll_by`（`offset` 是控件自身的平移，不是滚动）；子控件用 `ensure_visible` 滚动到可见，`visible_bounds` 读取可见区域。
 - 滚轮、Tab 焦点和 caret 移动都会滚动；嵌套视口会把未消费的滚动传给外层。
 - 溢出时在边缘绘制滚动条：12 dp 指针带内是贴外缘的轨道与胶囊形滑块，静止时 4 dp 粗，视图悬停或拖动滑块时 8 dp；两端让开视图的圆角，滑块长度表示可见比例；可拖动滑块或点击轨道定位。轨道与滑块颜色取自外观的 `scrollbar` 字段（轨道、静止滑块、悬停或拖动时的滑块），默认为主题的 pressed、border 与 muted，皮肤可整体替换。溢出的一侧会在内边距之外为滚动条留出 14 dp（轨道、边距和 4 dp 间隙），内容也不会滚到滚动条下面：纵向溢出时右侧留白并在该处裁剪，横向溢出时底部同理；没有溢出时只占用内边距。边框画在子内容之后，滚到边缘的内容不会盖住它。
 - 无障碍角色 ScrollView，带滚动偏移与范围。
@@ -254,7 +254,7 @@ rows.reload();            // 行数据变化，重建已显示的行
 ```
 
 - 等高虚拟列表：只有与可见区域相交的行真正存在，滚出的行被删除，进入的行调用回调重建。一万行首次刷新约 0.24 ms，内存增长约 1 MB。
-- `ListView` 解引用为 `ScrollView`，滚动接口和滚动条相同；另有 `count`、`set_count`、`row_height`、`reload`。
+- `ListView` 解引用为 `Node`，滚动方法和滚动条与 ScrollView 相同；另有 `count`、`set_count`、`row_height`、`reload`。行由列表管理，不能直接添加子控件。
 - 回调在刷新期间、UI 借用之外执行，可以使用任意句柄；行内状态在行滚出后丢失，应保存在应用数据中。
 - `行高 × 行数` 不超过 16,777,216。
 
@@ -344,7 +344,7 @@ let context = editor.context_menu();      // 右键、Menu 键、Shift+F10
 context.item("Paste");
 ```
 
-- `Menu` 是角色为菜单的 Popup：`item(text)`、`check_item(text, checked)`、`radio_item(text, checked)`、`submenu(text) -> Menu`、`separator()`，也可以放任意控件。相邻的单选项构成一组，分隔线或其他种类的项开始新组；选择单选项会勾选它并取消同组其他项，再次选择已勾选的项保持勾选。`node.menu()` 显示在锚点下方，由应用调用 `show()`（如在按钮的 `on_click` 中）；`node.context_menu()` 在该控件或其后代请求上下文菜单时于请求点 `show_at`。
+- 菜单是角色为菜单的 `Popup`：`item(text)`、`check_item(text, checked)`、`radio_item(text, checked)`、`submenu(text) -> Popup`、`separator()`，也可以放任意控件；在普通 Popup 上调用这些方法会 panic。相邻的单选项构成一组，分隔线或其他种类的项开始新组；选择单选项会勾选它并取消同组其他项，再次选择已勾选的项保持勾选。`node.menu()` 显示在锚点下方，由应用调用 `show()`（如在按钮的 `on_click` 中）；`node.context_menu()` 在该控件或其后代请求上下文菜单时于请求点 `show_at`。
 - `MenuItem`：`on_click`、`set_text`、`set_shortcut`、`is_checked` / `set_checked`（单选项勾选时取消同组其他项）、`activate`，以及 `set_enabled` 等通用方法。选择一项会先关闭所有菜单、切换勾选或单选项，再按注册顺序运行处理器；打开子菜单的项不运行处理器。子菜单的打开项是 `submenu.anchor()`。
 - 键盘：Up/Down 在项间移动并跳过分隔线和禁用项，Home/End 到两端，Right 打开子菜单并聚焦其第一项（从右到左时为 Left），Left 或 Escape 关闭子菜单回到打开项，Enter/Space 选择。指针停在项上即聚焦它并打开其子菜单，同时关闭同级的子菜单。子菜单显示在打开项的结束一侧并与其顶端对齐，放不下时换到另一侧。
 - `MenuBar` 是一行入口，`menu(text)` 添加入口并返回其菜单。点击入口打开或关闭菜单；某个菜单打开时指针移到另一个入口即切换；焦点在入口上时 Left/Right 移动、Down 打开；菜单内 Left/Right 移到相邻菜单。F10 聚焦第一个菜单栏的第一个入口。

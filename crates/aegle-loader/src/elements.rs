@@ -3,8 +3,8 @@
 
 use aegle_ui::Container;
 use aegle_widgets::{
-    Button, CheckBox, Label, NumberField, Orientation, Progress, Radio, ScrollView, Separator,
-    Slider, Splitter, Switch, Tabs, TextField, Widgets,
+    Button, CheckBox, Label, NumberField, Orientation, Progress, Radio, Separator, Slider,
+    Splitter, Switch, Tabs, TextField, Widgets,
 };
 
 use crate::Elements;
@@ -39,7 +39,7 @@ aegle_macros::element! {
         create |parent| parent.row();
     }
     /// A clipped, scrollable vertical container.
-    pub ScrollView {
+    pub ScrollView(Container) {
         layout flex;
         create |parent| parent.scroll_view();
     }
@@ -158,7 +158,7 @@ aegle_macros::element! {
     pub Tab(Container) {
         layout box;
         parent Tabs;
-        create |parent, title: line| Tabs(parent.clone()).add(title);
+        create |parent, title: line| Tabs(parent.0.clone()).add(title);
     }
     /// Two panes, its two children, divided by a draggable handle.
     pub Splitter {

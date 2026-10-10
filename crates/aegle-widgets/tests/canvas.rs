@@ -25,7 +25,7 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     ui.refresh()?;
     // Without input, the wheel scrolls the enclosing view.
     ui.scroll_by(Point::new(50.0, 50.0), Point::new(0.0, 30.0))?;
-    assert_eq!(view.offset().y, 30.0);
+    assert_eq!(view.scroll_offset().y, 30.0);
     view.scroll_to(Point::default());
 
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -57,7 +57,7 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
     };
     // Focusing the canvas revealed it; the wheel itself must not scroll.
     ui.refresh()?;
-    let revealed = view.offset();
+    let revealed = view.scroll_offset();
     ui.wheel(Point::new(50.0, 50.0), Point::new(0.0, 30.0), ctrl, at)?;
     ui.key(KeyInput {
         key: Key::Character('n'),
@@ -92,7 +92,7 @@ fn canvas_input_follows_capture_wheel_and_focus() -> Result {
         CanvasEvent::Wheel { delta, modifiers, .. } if delta.y == 30.0 && modifiers.control
     ));
     assert!(matches!(&events[6], CanvasEvent::Key { text, .. } if text == "n"));
-    assert_eq!(view.offset(), revealed);
+    assert_eq!(view.scroll_offset(), revealed);
     // The key press after the pointer press shows focus.
     assert!(canvas.visual_state().focused);
     assert!(canvas.appearance().focus_width > 0.0);

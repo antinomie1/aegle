@@ -43,12 +43,15 @@ fn taps_drags_and_pans_choose_by_what_is_under_the_finger() -> Result {
     // A drag that starts on a button beyond the slop pans instead of activating.
     touch(TouchPhase::Down, 50.0, 80.0, 0)?;
     touch(TouchPhase::Move, 50.0, 70.0, 16)?; // Within the slop: still a press.
-    assert_eq!(view.offset().y, 0.0);
+    assert_eq!(view.scroll_offset().y, 0.0);
     touch(TouchPhase::Move, 50.0, 40.0, 32)?;
-    assert!(view.offset().y > 0.0, "the content follows the finger");
-    let panned = view.offset().y;
+    assert!(
+        view.scroll_offset().y > 0.0,
+        "the content follows the finger"
+    );
+    let panned = view.scroll_offset().y;
     touch(TouchPhase::Move, 50.0, 30.0, 48)?;
-    assert!(view.offset().y > panned);
+    assert!(view.scroll_offset().y > panned);
     #[cfg(feature = "motion")]
     {
         touch(TouchPhase::Up, 50.0, 30.0, 64)?;
@@ -66,7 +69,7 @@ fn taps_drags_and_pans_choose_by_what_is_under_the_finger() -> Result {
     touch(TouchPhase::Down, 20.0, 15.0, 0)?;
     touch(TouchPhase::Move, 120.0, 40.0, 16)?;
     assert!(slider.value() > 40.0, "{}", slider.value());
-    assert_eq!(view.offset().y, 0.0);
+    assert_eq!(view.scroll_offset().y, 0.0);
     touch(TouchPhase::Up, 120.0, 40.0, 32)?;
 
     // A cancelled contact ends without activating.

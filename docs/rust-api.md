@@ -56,12 +56,12 @@ button.on_click(move |_| {
 | Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
 | CheckBox / Switch / Radio | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`；CheckBox 另有 `is_mixed`、`set_mixed` |
 | Container（选择/表格） | `radio(text, checked)`、`dropdown(items, selected)`、`table(columns, row_height, rows, cell)` |
-| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeWidgets` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回 Menu（`item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
+| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeWidgets` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回菜单 Popup（另有 `item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
 | Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change` |
-| ScrollView | `offset`、`max_offset`、`content_size`、`scroll_to`、`scroll_by`；解引用到 Container |
+| Node（滚动） | `scroll_offset`、`max_scroll_offset`、`content_size`、`scroll_to`、`scroll_by`，用于 `scroll_view()` 返回的 Container、ListView 与编辑器；其他控件范围为零 |
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(height, count, row)`（`height` 为等高行的 `f32` 或 `RowHeight::Estimate`） |
 | ImageView / Canvas | ImageView 有 `image`、`set_image`；Canvas 有 `invalidate`、`set_painter`、`set_input` |
-| ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 ScrollView |
+| ListView | `count`、`set_count`、`row_height`、`reload`；解引用到 Node |
 | loader::Program / View | `load`、`load_with(path, &Elements)`、`from_sources(entry, &Elements, read)`、`build(&Container)`、`open(&App)`（`from_checked` 仅供 `ui!` 生成的代码，文档隐藏）；View 有 `root`、`handle`、`id`、`get`、`set`、`state`、`state_at`、`reload`，`Handle::typed::<T>()` 取得有类型句柄；`State<T>` 有 `get`、`set` |
 | loader::Element / Elements / element! | 标记元素契约：`element!` 声明规格与胶水并实现 `Element`；`Elements::new()` 为内置元素，`with::<E>()` 登记第三方元素 |
 | Node（生命周期） | `keep_alive(value)`：值随控件删除或窗口关闭释放 |
@@ -73,7 +73,7 @@ button.on_click(move |_| {
 
 ## 当前滚动契约
 
-`ScrollView` 是保留状态的列容器，默认透明并带 1dp 主题边框和半个主题 padding 的内边距；限制尺寸或 flex 分配后，两轴溢出均可滚动。`scroll_to(Point)` 和 `scroll_by(Point)` 接受有限逻辑坐标，先刷新布局再分别限制到各轴范围；负偏移归零。`offset` 是当前状态，`max_offset` 与 `content_size` 来自最近刷新布局，范围包含末尾 padding。隐藏保留偏移，但隐藏布局的范围需重新显示并刷新后才恢复。
+`scroll_view()` 返回保留状态的列容器（`Container`），默认透明并带 1dp 主题边框和半个主题 padding 的内边距；限制尺寸或 flex 分配后，两轴溢出均可滚动。`scroll_to(Point)` 和 `scroll_by(Point)` 接受有限逻辑坐标，先刷新布局再分别限制到各轴范围；负偏移归零。`scroll_offset` 是当前状态，`max_scroll_offset` 与 `content_size` 来自最近刷新布局，范围包含末尾 padding。隐藏保留偏移，但隐藏布局的范围需重新显示并刷新后才恢复。
 
 `ensure_visible` 先刷新布局，再逐层滚动祖先，使控件或编辑器 caret 可见，不改变焦点；隐藏节点无操作。Tab 焦点和 caret 更新也使用这条显露路径。`visible_bounds` 返回最近刷新几何与祖先滚动视口的交集；隐藏或完全裁剪时为 None，不额外裁剪到窗口边缘。移出视口不销毁控件。嵌套视口和编辑器通过 `Ui::scroll_by(position, delta)` 将未消费的双轴滚轮位移向外传递。
 

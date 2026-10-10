@@ -49,7 +49,7 @@ fn compiled_and_loaded_components_match() -> Result {
     let runtime = program.build(&loaded.root())?;
     loaded.refresh()?;
     let nodes = [
-        ("tabs", &**view.tabs),
+        ("tabs", &*view.tabs as &Node),
         ("edit", &view.edit),
         ("split", &view.split),
         ("slider", &view.slider),

@@ -243,7 +243,7 @@ impl MenuItem {
     }
     /// Checks or unchecks a check or radio item without calling the click
     /// handlers; checking a radio item unchecks the rest of its group. An item
-    /// created by [`crate::Menu::item`] becomes a check item.
+    /// created by [`crate::Popup::item`] becomes a check item.
     pub fn set_checked(&self, checked: bool) {
         self.change(|state, id| check(state, id, checked))
     }

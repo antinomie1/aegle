@@ -51,8 +51,8 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
     field.set_min_height(0.0);
     ui.resize(Size::new(240.0, 300.0));
     ui.refresh()?;
-    assert_eq!(inner.max_offset().y, 76.0);
-    assert_eq!(outer.max_offset().y, 60.0);
+    assert_eq!(inner.max_scroll_offset().y, 76.0);
+    assert_eq!(outer.max_scroll_offset().y, 60.0);
     assert!(third.visible_bounds().is_none());
     assert!(panics(|| {
         inner.scroll_to(Point::new(f32::NAN, 0.0));
@@ -60,7 +60,10 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
     let paints = PAINTS.load(Ordering::Relaxed);
     ui.scroll(Point::new(20.0, 20.0), 100.0)?;
     ui.refresh()?;
-    assert_eq!((inner.offset().y, outer.offset().y), (76.0, 24.0));
+    assert_eq!(
+        (inner.scroll_offset().y, outer.scroll_offset().y),
+        (76.0, 24.0)
+    );
     assert_eq!(
         PAINTS.load(Ordering::Relaxed),
         paints,
@@ -156,23 +159,23 @@ fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Resul
             )),
         })?);
         ui.refresh()?;
-        assert_eq!(outer.offset().y, 30.0);
+        assert_eq!(outer.scroll_offset().y, 30.0);
     }
-    let retained = inner.offset();
+    let retained = inner.scroll_offset();
     outer.set_visible(false);
     ui.refresh()?;
-    assert_eq!(inner.offset(), retained);
+    assert_eq!(inner.scroll_offset(), retained);
     outer.set_visible(true);
     ui.refresh()?;
-    assert_eq!(inner.offset(), retained);
+    assert_eq!(inner.scroll_offset(), retained);
     third.remove();
     ui.refresh()?;
-    assert!(inner.offset().y <= inner.max_offset().y);
+    assert!(inner.scroll_offset().y <= inner.max_scroll_offset().y);
     inner.set_width(Some(300.0));
     ui.refresh()?;
-    assert!(outer.max_offset().x > 0.0);
+    assert!(outer.max_scroll_offset().x > 0.0);
     outer.scroll_to(Point::new(f32::MAX, f32::MAX));
-    assert_eq!(outer.offset(), outer.max_offset());
+    assert_eq!(outer.scroll_offset(), outer.max_scroll_offset());
     ui.refresh()?;
     assert!(!ui.refresh()?, "idle scroll view kept repainting");
     Ok(())
@@ -220,11 +223,11 @@ fn overlay_scrollbar_drags_above_children_without_activating_them() -> Result {
     pointer(PointerKind::Down { clicks: 1 }, 2.0)?;
     pointer(PointerKind::Move, 1000.0)?;
     ui.refresh()?;
-    assert_eq!(view.offset(), view.max_offset());
+    assert_eq!(view.scroll_offset(), view.max_scroll_offset());
     pointer(PointerKind::Move, -1000.0)?;
     pointer(PointerKind::Up, -1000.0)?;
     ui.dispatch_callbacks()?;
-    assert_eq!((view.offset().y, clicks.get()), (0.0, 0));
+    assert_eq!((view.scroll_offset().y, clicks.get()), (0.0, 0));
     view.set_height(Some(400.0));
     ui.refresh()?;
     pointer(PointerKind::Down { clicks: 1 }, 20.0)?;
