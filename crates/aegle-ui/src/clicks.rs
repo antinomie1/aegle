@@ -118,12 +118,12 @@ impl Node {
     pub fn on_double_click<R: crate::HandlerResult>(
         &self,
         mut callback: impl FnMut(Node) -> R + 'static,
-    ) {
+    ) -> crate::Subscription {
         self.change(|state, id| {
             let callback = Box::new(move |node| callback(node).into_result());
             let version = &mut state.callback_version;
-            crate::callbacks::add(&mut state.clicks.handlers, version, id, callback);
-            Ok(())
+            let serial = crate::callbacks::add(&mut state.clicks.handlers, version, id, callback);
+            Ok(state.subscription(crate::callbacks::Slot::DoubleClick(id), serial))
         })
     }
     /// Adds a handler run when a context menu is requested over this control
@@ -136,16 +136,16 @@ impl Node {
     pub fn on_context_menu<R: crate::HandlerResult>(
         &self,
         mut callback: impl FnMut(Node, Point) -> R + 'static,
-    ) {
+    ) -> crate::Subscription {
         self.change(|state, id| {
             let callback = Box::new(move |node: Node| {
                 let at = node.change(|state, _| Ok(state.clicks.menu_at));
                 callback(node, at).into_result()
             });
             let version = &mut state.callback_version;
-            crate::callbacks::add(&mut state.clicks.menus, version, id, callback);
+            let serial = crate::callbacks::add(&mut state.clicks.menus, version, id, callback);
             state.tree.mark_dirty(id, aegle_core::Dirty::SEMANTICS)?;
-            Ok(())
+            Ok(state.subscription(crate::callbacks::Slot::ContextMenu(id), serial))
         })
     }
 }

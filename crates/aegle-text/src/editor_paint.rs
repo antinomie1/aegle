@@ -1,6 +1,5 @@
 use aegle_scene::{RoundedRect, SceneBuilder};
 use aegle_types::{Color, Rect};
-use parley::{Affinity, Cursor, Selection};
 
 use crate::{Editor, editor::to_rect, paint::paint_layout};
 
@@ -11,7 +10,7 @@ use crate::{Editor, editor::to_rect, paint::paint_layout};
 /// and widths are logical pixels; the host supplies translation and clipping.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EditorPaint {
-    /// Overrides glyph foreground without reshaping; `None` uses stored styles.
+    /// Overrides glyph foreground without reshaping; `None` uses the style's.
     pub foreground: Option<Color>,
     /// Selection background; `None` omits the highlight.
     pub selection: Option<Color>,
@@ -38,7 +37,7 @@ impl Default for EditorPaint {
 impl Editor {
     /// Appends selection, glyphs, preedit underline and caret in drawing order.
     ///
-    /// All geometry comes from the current layout, including wrapped or
+    /// All geometry comes from the current layouts, including wrapped or
     /// bidirectional composition. This never reshapes or mutates editing state.
     /// Focus and blink visibility are controlled by [`EditorPaint`]. The caller
     /// supplies the same transform and clip used for hit testing and IME bounds.
@@ -52,21 +51,21 @@ impl Editor {
         if let Some(color) = paint.selection {
             self.selection_rects(|rect| fill_rect(builder, rect, color));
         }
-        paint_layout(
-            self.layout(),
-            self.diagnostics(),
-            builder,
-            paint.foreground,
-            self.weight,
-        );
-
-        if let (Some(range), Some(color)) = (self.composition_range(), paint.preedit) {
-            let layout = self.layout();
-            let selection = Selection::new(
-                Cursor::from_byte_index(layout, range.start, Affinity::Downstream),
-                Cursor::from_byte_index(layout, range.end, Affinity::Upstream),
+        let color = paint.foreground.unwrap_or(self.doc.color);
+        let weight = self.doc.shaping.weight.value();
+        for block in &self.doc.blocks {
+            let diagnostics = block.diagnostics;
+            paint_layout(
+                &block.layout,
+                diagnostics,
+                builder,
+                color,
+                weight,
+                block.origin,
             );
-            selection.geometry_with(layout, |bounds, _| {
+        }
+        if let (Some(range), Some(color)) = (self.composition_range(), paint.preedit) {
+            self.doc.range_boxes(range, |bounds| {
                 let rect = to_rect(bounds);
                 let underline = Rect::new(
                     rect.origin.x,
@@ -77,7 +76,6 @@ impl Editor {
                 fill_rect(builder, underline, color);
             });
         }
-
         if let (Some(rect), Some(color)) = (caret, paint.caret) {
             fill_rect(builder, rect, color);
         }

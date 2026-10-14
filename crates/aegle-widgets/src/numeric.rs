@@ -57,7 +57,10 @@ impl Slider {
     }
     /// Adds a user-change handler; handlers run in registration order outside tree borrows. The handle
     /// exposes the latest value; pending notifications are not value snapshots.
-    pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Self) -> R + 'static) {
+    pub fn on_change<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Self) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(Self(node)).into_result())
     }
 }

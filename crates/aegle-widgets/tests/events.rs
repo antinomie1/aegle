@@ -107,7 +107,7 @@ fn event_handlers_accumulate_and_survive_errors() -> Result {
         button.on_click(move |_| {
             late.borrow_mut().push("late");
             Ok(())
-        })
+        });
     });
     button.activate();
     // Every handler of the event runs; the first error is reported.

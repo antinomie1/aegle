@@ -50,6 +50,8 @@ pub struct Motion {
     pub fading: HashMap<NodeId, Running<f32>>,
     /// Running shadow transitions; the presented shadow is the node's decoration.
     pub shadows: HashMap<NodeId, Running<crate::Shadow>>,
+    /// Running gradient transitions; the presented gradient is the node's decoration.
+    pub gradients: HashMap<NodeId, crate::gradient::Morph>,
     /// Momentum scrolling after a finished touchpad gesture.
     pub fling: Option<crate::fling::Fling>,
     /// Completion handlers, versioned in the shared callback sequence.
@@ -214,6 +216,7 @@ impl Motion {
         self.rotating.remove(&id);
         self.fading.remove(&id);
         self.shadows.remove(&id);
+        self.gradients.remove(&id);
         self.ends.remove(&id);
         self.paint_once.remove(&id);
     }
@@ -225,6 +228,7 @@ impl Motion {
         self.rotating.clear();
         self.fading.clear();
         self.shadows.clear();
+        self.gradients.clear();
         self.fling = None;
         self.ends.clear();
         self.paint_once.clear();
@@ -237,6 +241,7 @@ impl Motion {
             || self.rotating.contains_key(&id)
             || self.fading.contains_key(&id)
             || self.shadows.contains_key(&id)
+            || self.gradients.contains_key(&id)
     }
     pub fn any_running(&self) -> bool {
         !(self.active.is_empty()
@@ -244,7 +249,8 @@ impl Motion {
             && self.scaling.is_empty()
             && self.rotating.is_empty()
             && self.fading.is_empty()
-            && self.shadows.is_empty())
+            && self.shadows.is_empty()
+            && self.gradients.is_empty())
     }
 }
 
@@ -361,6 +367,9 @@ impl State {
         for running in self.motion.shadows.values_mut() {
             running.start.get_or_insert(now);
         }
+        for morph in self.motion.gradients.values_mut() {
+            morph.curve.start.get_or_insert(now);
+        }
         if let Some(fling) = &mut self.motion.fling {
             fling.last.get_or_insert(now);
         }
@@ -399,6 +408,7 @@ impl State {
             rotating,
             fading,
             shadows,
+            gradients,
             active,
             tracks,
             finished,
@@ -416,6 +426,7 @@ impl State {
         moved |= advance(fading, tree, now, finished, fade);
         self.repaint |= moved;
         crate::effects::advance_shadows(shadows, tree, &mut self.decorations, now, finished);
+        crate::gradient::advance(gradients, tree, &mut self.decorations, now, finished);
         active.retain(|id, active| {
             let elapsed = now - active.start;
             let next = active.tween.sample(elapsed).0;

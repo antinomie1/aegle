@@ -49,6 +49,7 @@ impl Node {
                     state.snap_spin(id);
                     state.snap_opacity(id);
                     state.snap_shadow(id);
+                    state.snap_gradient(id);
                 }
             }
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
@@ -105,6 +106,7 @@ impl Node {
             }
             state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             let moved = state.snap_offset(id) | state.snap_opacity(id) | state.snap_shadow(id);
+            let moved = state.snap_gradient(id) | moved;
             if state.snap_spin(id) || moved || painting {
                 state.complete(id);
             }
@@ -119,16 +121,16 @@ impl Node {
     pub fn on_transition_end<R: crate::HandlerResult>(
         &self,
         mut callback: impl FnMut(Node) -> R + 'static,
-    ) {
+    ) -> crate::Subscription {
         self.change(|state, id| {
             let callback = Box::new(move |node| callback(node).into_result());
-            crate::callbacks::add(
+            let serial = crate::callbacks::add(
                 &mut state.motion.ends,
                 &mut state.callback_version,
                 id,
                 callback,
             );
-            Ok(())
+            Ok(state.subscription(crate::callbacks::Slot::TransitionEnd(id), serial))
         })
     }
     /// Stops at the sampled appearance and offset, freezing them into local
@@ -142,6 +144,7 @@ impl Node {
             state.motion.rotating.remove(&id);
             state.motion.fading.remove(&id);
             state.motion.shadows.remove(&id);
+            state.motion.gradients.remove(&id);
             let value = state.presented_appearance(id)?;
             let control = &state.tree.get(id).unwrap().context.control;
             let accepts = control.kind().accepts;
@@ -335,6 +338,11 @@ impl Ui {
                 state.snap_shadow(id);
                 state.complete(id);
             }
+            let gradients: Vec<_> = state.motion.gradients.keys().copied().collect();
+            for id in gradients {
+                state.snap_gradient(id);
+                state.complete(id);
+            }
             let repaint = state.refresh().or_fail();
             // Keep the snapped frame pending for the host's next presentation.
             state.repaint |= repaint;
@@ -362,6 +370,9 @@ impl State {
         match property {
             TransitionProperty::Paint => {
                 self.motion.active.remove(&id);
+                if timing.is_none() {
+                    self.snap_gradient(id);
+                }
                 self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
             }
             TransitionProperty::Offset if timing.is_none() => {

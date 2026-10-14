@@ -1,12 +1,12 @@
-use aegle_types::{Color, Point, Size};
-use parley::{PlainEditorDriver, StyleProperty, style::FontFamily};
-use std::{borrow::Cow, ops::Range};
+use aegle_types::{Point, Size};
+use std::ops::Range;
 
 use crate::{
     Alignment, Editor, Selection, TextError, TextStyle, TextSystem,
+    document::Caret,
     editor::{validate_content, validate_selection},
     history::Edit,
-    paragraph::diagnose,
+    nav::{Selected, Unit},
 };
 
 /// Direction or destination for keyboard/assistive cursor motion.
@@ -54,51 +54,32 @@ pub struct EditorDriver<'a> {
 }
 
 impl EditorDriver<'_> {
-    pub(crate) fn engine(&mut self) -> PlainEditorDriver<'_, Color> {
-        self.editor
-            .inner
-            .driver(&mut self.system.fonts, &mut self.system.context)
-    }
-
     /// Replace styling without replacing the editor, selection or preedit.
-    /// Foreground-only drawing overrides can instead avoid reshaping entirely.
+    /// A new color alone shapes nothing; other changes shape every line.
     pub fn restyle(&mut self, style: &TextStyle<'_>) -> Result<(), TextError> {
         style.validate()?;
-        self.apply_style(style);
+        let doc = &mut self.editor.doc;
+        doc.color = style.color;
+        if doc.shaping.matches(style) {
+            self.editor.changes.paint = true;
+            return Ok(());
+        }
+        doc.shaping = self.system.shaping(style);
+        doc.reshape(self.system);
+        self.rebuilt(false);
         Ok(())
     }
 
-    pub(crate) fn apply_style(&mut self, style: &TextStyle<'_>) {
-        self.editor.weight = style.weight.value();
-        let styles = self.editor.inner.edit_styles();
-        styles.insert(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(
-            style.families.to_owned(),
-        ))));
-        for property in style.common_properties() {
-            styles.insert(property);
-        }
-        styles.insert(StyleProperty::TextWrapMode(if self.editor.multiline {
-            parley::TextWrapMode::Wrap
-        } else {
-            parley::TextWrapMode::NoWrap
-        }));
-        self.engine().refresh_layout();
-        self.rebuilt(false);
-    }
-
     /// Reflow within a finite nonnegative width; `None` disables soft wrapping.
-    /// Single-line editors keep soft wrapping disabled. Identical constraints do no work.
-    /// Parley's editor currently reshapes on changed width/alignment.
+    /// Single-line editors keep soft wrapping disabled. Identical constraints
+    /// do no work, and others only break and align lines again.
     pub fn reflow(&mut self, width: Option<f32>, alignment: Alignment) -> Result<Size, TextError> {
         if width.is_some_and(|v| !v.is_finite() || v < 0.0) {
             return Err(TextError::InvalidWidth);
         }
-        if self.editor.width != width || self.editor.alignment != alignment {
-            self.editor.width = width;
-            self.editor.alignment = alignment;
-            self.editor.inner.set_width(width);
-            self.editor.inner.set_alignment(alignment);
-            self.engine().refresh_layout();
+        let doc = &mut self.editor.doc;
+        if (doc.width, doc.alignment) != (width, alignment) {
+            doc.reflow(width, alignment);
             self.rebuilt(false);
         }
         Ok(self.editor.size())
@@ -123,14 +104,14 @@ impl EditorDriver<'_> {
         let changed = self.editor.text() != text;
         self.cancel_preedit();
         if changed {
+            let all = 0..self.editor.doc.text.len();
             if let Some(secret) = &mut self.editor.secret {
                 secret.replace_range(.., text);
-                self.editor.inner.set_text(&mask(text));
+                self.splice(all, &mask(text), None);
             } else {
-                self.editor.inner.set_text(text);
+                self.splice(all, text, None);
             }
-            self.engine().refresh_layout();
-            self.engine().move_to_text_end();
+            self.select_end();
             self.rebuilt(true);
         }
         self.editor.history.clear();
@@ -145,16 +126,16 @@ impl EditorDriver<'_> {
             return;
         }
         self.cancel_preedit();
+        let all = 0..self.editor.doc.text.len();
         if password {
             let value = self.editor.text().to_string();
-            self.editor.inner.set_text(&mask(&value));
+            self.splice(all, &mask(&value), None);
             self.editor.secret = Some(value);
         } else {
             let value = self.editor.secret.take().unwrap();
-            self.editor.inner.set_text(&value);
+            self.splice(all, &value, None);
         }
-        self.engine().refresh_layout();
-        self.engine().move_to_text_end();
+        self.select_end();
         self.rebuilt(false);
         self.editor.history.clear();
         self.editor.changes.policy = true;
@@ -175,21 +156,7 @@ impl EditorDriver<'_> {
         self.ready()?;
         let mut range = self.editor.selection().range();
         if range.is_empty() {
-            let caret = range.start;
-            let mut start = 0;
-            // Reuse Parley's ICU tables: shaping clusters can split graphemes.
-            for end in icu_segmenter::GraphemeClusterSegmenter::new()
-                .segment_str(self.editor.display_text())
-                .skip(1)
-            {
-                if end > caret || (previous && end == caret) {
-                    if !previous || caret != 0 {
-                        range = start..end;
-                    }
-                    break;
-                }
-                start = end;
-            }
+            range = self.grapheme(range.start, previous);
         }
         self.editor.history.break_group();
         if !range.is_empty() {
@@ -198,16 +165,49 @@ impl EditorDriver<'_> {
         Ok(())
     }
 
+    /// The extended grapheme before or after `caret`. Graphemes never span a
+    /// hard line break other than CRLF, so this segments one line.
+    fn grapheme(&self, caret: usize, previous: bool) -> Range<usize> {
+        let doc = &self.editor.doc;
+        let block = &doc.blocks[doc.block_at(caret)];
+        let edge = match previous {
+            true => caret == block.range.start,
+            false => caret >= block.range.end,
+        };
+        if edge {
+            // The break itself: before this line, or after it.
+            let index = doc.block_at(caret);
+            return match previous {
+                true if index > 0 => doc.blocks[index - 1].range.end..block.range.start,
+                false if index + 1 < doc.blocks.len() => {
+                    block.range.end..doc.blocks[index + 1].range.start
+                }
+                _ => caret..caret,
+            };
+        }
+        let line = &doc.text[block.range.clone()];
+        let caret = caret - block.range.start;
+        let mut start = 0;
+        // Reuse Parley's ICU tables: shaping clusters can split graphemes.
+        for end in icu_segmenter::GraphemeClusterSegmenter::new()
+            .segment_str(line)
+            .skip(1)
+        {
+            if end > caret || (previous && end == caret) {
+                return block.range.start + start..block.range.start + end;
+            }
+            start = end;
+        }
+        caret..caret
+    }
+
     /// Select UTF-8 byte endpoints. Endpoints inside shaping clusters snap to the
     /// cluster start; this method is for user selection, not raw protocol edits.
     pub fn select(&mut self, selection: Selection) -> Result<(), TextError> {
         self.no_composition()?;
         self.ready()?;
         validate_selection(self.editor.display_text(), selection)?;
-        let before = self.editor.inner.generation();
-        self.engine()
-            .select_byte_range(selection.anchor, selection.focus);
-        self.moved(before);
+        self.select_snapped(selection);
         Ok(())
     }
 
@@ -215,31 +215,20 @@ impl EditorDriver<'_> {
     pub fn move_cursor(&mut self, movement: Movement, extend: bool) -> Result<(), TextError> {
         self.no_composition()?;
         self.ready()?;
-        let before = self.editor.inner.generation();
-        let mut d = self.engine();
-        match (movement, extend) {
-            (Movement::Left, false) => d.move_left(),
-            (Movement::Left, true) => d.select_left(),
-            (Movement::Right, false) => d.move_right(),
-            (Movement::Right, true) => d.select_right(),
-            (Movement::WordLeft, false) => d.move_word_left(),
-            (Movement::WordLeft, true) => d.select_word_left(),
-            (Movement::WordRight, false) => d.move_word_right(),
-            (Movement::WordRight, true) => d.select_word_right(),
-            (Movement::Up, false) => d.move_up(),
-            (Movement::Up, true) => d.select_up(),
-            (Movement::Down, false) => d.move_down(),
-            (Movement::Down, true) => d.select_down(),
-            (Movement::LineStart, false) => d.move_to_line_start(),
-            (Movement::LineStart, true) => d.select_to_line_start(),
-            (Movement::LineEnd, false) => d.move_to_line_end(),
-            (Movement::LineEnd, true) => d.select_to_line_end(),
-            (Movement::TextStart, false) => d.move_to_text_start(),
-            (Movement::TextStart, true) => d.select_to_text_start(),
-            (Movement::TextEnd, false) => d.move_to_text_end(),
-            (Movement::TextEnd, true) => d.select_to_text_end(),
-        }
-        self.moved(before);
+        let (doc, sel) = (&self.editor.doc, self.editor.sel);
+        let moved = match movement {
+            Movement::Left => doc.horizontal(sel, false, false, extend),
+            Movement::Right => doc.horizontal(sel, true, false, extend),
+            Movement::WordLeft => doc.horizontal(sel, false, true, extend),
+            Movement::WordRight => doc.horizontal(sel, true, true, extend),
+            Movement::Up => doc.vertical(sel, false, extend),
+            Movement::Down => doc.vertical(sel, true, extend),
+            Movement::LineStart => doc.line_edge(sel, false, extend),
+            Movement::LineEnd => doc.line_edge(sel, true, extend),
+            Movement::TextStart => doc.text_edge(sel, false, extend),
+            Movement::TextEnd => doc.text_edge(sel, true, extend),
+        };
+        self.moved(moved);
         Ok(())
     }
 
@@ -250,15 +239,14 @@ impl EditorDriver<'_> {
         if !point.x.is_finite() || !point.y.is_finite() {
             return Err(TextError::InvalidPosition);
         }
-        let before = self.editor.inner.generation();
-        let mut d = self.engine();
-        match how {
-            HitSelection::Caret => d.move_to_point(point.x, point.y),
-            HitSelection::Extend => d.extend_selection_to_point(point.x, point.y),
-            HitSelection::Word => d.select_word_at_point(point.x, point.y),
-            HitSelection::Line => d.select_line_at_point(point.x, point.y),
-        }
-        self.moved(before);
+        let (doc, sel) = (&self.editor.doc, self.editor.sel);
+        let moved = match how {
+            HitSelection::Caret => Selected::collapsed(doc.hit(point)),
+            HitSelection::Extend => doc.extend_to(sel, point),
+            HitSelection::Word => doc.unit_at(point, Unit::Word),
+            HitSelection::Line => doc.unit_at(point, Unit::Line),
+        };
+        self.moved(moved);
         Ok(())
     }
 
@@ -284,33 +272,24 @@ impl EditorDriver<'_> {
     fn travel_history(&mut self, redo: bool) -> Result<bool, TextError> {
         self.writable()?;
         self.no_composition()?;
+        let editor = &mut *self.editor;
         let entry = if redo {
-            self.editor.history.redo()
+            editor.history.redo()
         } else {
-            self.editor.history.undo()
+            editor.history.undo()
         };
         let Some(entry) = entry else {
             return Ok(false);
         };
         let (range, text, selection) = if redo {
-            (
-                entry.start..entry.start + entry.removed.len(),
-                entry.inserted.as_str(),
-                entry.after,
-            )
+            let range = entry.start..entry.start + entry.removed.len();
+            (range, entry.inserted.as_str(), entry.after)
         } else {
-            (
-                entry.start..entry.start + entry.inserted.len(),
-                entry.removed.as_str(),
-                entry.before,
-            )
+            let range = entry.start..entry.start + entry.inserted.len();
+            (range, entry.removed.as_str(), entry.before)
         };
-        let mut driver = self
-            .editor
-            .inner
-            .driver(&mut self.system.fonts, &mut self.system.context);
-        raw_replace(&mut driver, range, text);
-        driver.select_byte_range(selection.anchor, selection.focus);
+        editor.doc.splice(self.system, range, text, None);
+        self.select_snapped(selection);
         self.rebuilt(true);
         Ok(true)
     }
@@ -338,7 +317,7 @@ impl EditorDriver<'_> {
         }
     }
     pub(crate) fn ready(&self) -> Result<(), TextError> {
-        if self.editor.diagnostics.unshaped_bytes != 0 {
+        if self.editor.doc.diagnostics.unshaped_bytes != 0 {
             Err(TextError::MissingFont)
         } else {
             Ok(())
@@ -365,14 +344,13 @@ impl EditorDriver<'_> {
         let text = masked.as_deref().unwrap_or(text);
         if masked.is_none() && self.editor.display_text()[range.clone()] == *text {
             if !range.is_empty() {
-                let generation = self.editor.inner.generation();
-                self.engine().move_to_byte(range.end);
-                self.moved(generation);
+                self.moved(Selected::collapsed(self.editor.doc.snap(range.end)));
             }
             return;
         }
         let removed = self.capture(&range, text);
-        self.engine().insert_or_replace_selection(text);
+        self.splice(range.clone(), text, None);
+        self.place_after(range.start, text);
         self.record(range.start, removed, text, before, merge);
         self.rebuilt(true);
     }
@@ -384,9 +362,48 @@ impl EditorDriver<'_> {
             return;
         }
         let removed = self.capture(&range, text);
-        raw_replace(&mut self.engine(), range.clone(), text);
+        self.splice(range.clone(), text, None);
+        self.place_after(range.start, text);
         self.record(range.start, removed, text, before, false);
         self.rebuilt(true);
+    }
+    /// Replaces display bytes, shaping only the lines involved.
+    pub(crate) fn splice(
+        &mut self,
+        range: Range<usize>,
+        text: &str,
+        compose: Option<Range<usize>>,
+    ) {
+        self.editor.doc.splice(self.system, range, text, compose);
+    }
+    /// Collapses the selection after `text` inserted at `start`.
+    pub(crate) fn place_after(&mut self, start: usize, text: &str) {
+        let index = start + text.len();
+        // After a line break the caret starts the next line.
+        let affinity = match text.ends_with(['\n', '\r', '\u{2028}', '\u{2029}']) {
+            true => parley::Affinity::Downstream,
+            false => parley::Affinity::Upstream,
+        };
+        self.editor.sel = Selected::collapsed(Caret { index, affinity });
+        self.editor.show_cursor = true;
+    }
+    /// Selects byte endpoints snapped to clusters, without clearing history coalescing.
+    pub(crate) fn select_snapped(&mut self, selection: Selection) {
+        let doc = &self.editor.doc;
+        let (anchor, focus) = (doc.snap(selection.anchor), doc.snap(selection.focus));
+        self.moved(Selected {
+            anchor,
+            focus,
+            ..Selected::collapsed(focus)
+        });
+    }
+    fn select_end(&mut self) {
+        let end = Caret {
+            index: self.editor.doc.text.len(),
+            affinity: parley::Affinity::Upstream,
+        };
+        self.editor.sel = Selected::collapsed(end);
+        self.editor.show_cursor = true;
     }
     fn capture(&mut self, range: &Range<usize>, text: &str) -> Option<String> {
         (!self.editor.is_password() && self.editor.history.prepare(range.len(), text.len()))
@@ -429,14 +446,15 @@ impl EditorDriver<'_> {
     pub(crate) fn rebuilt(&mut self, value: bool) {
         #[cfg(feature = "text-a11y")]
         self.editor.access_runs.clear();
-        self.editor.diagnostics = diagnose(self.editor.display_text(), self.editor.layout());
         self.editor.changes.value |= value;
         self.editor.changes.layout = true;
         self.editor.changes.selection = true;
     }
-    pub(crate) fn moved(&mut self, before: parley::Generation) {
+    /// Takes a new selection made by a user motion.
+    pub(crate) fn moved(&mut self, selection: Selected) {
         self.editor.history.break_group();
-        self.editor.changes.selection |= before != self.editor.inner.generation();
+        self.editor.changes.selection |= !selection.same(&self.editor.sel);
+        self.editor.sel = selection;
     }
 }
 
@@ -444,35 +462,4 @@ const MASK: char = '\u{2022}';
 
 fn mask(text: &str) -> String {
     std::iter::repeat_n(MASK, text.chars().count()).collect()
-}
-
-// Parley's public selection API snaps to shaping clusters. Its composition range
-// accepts exact UTF-8 boundaries, also needed when undo removes a combining mark.
-pub(crate) fn raw_replace(
-    driver: &mut PlainEditorDriver<'_, Color>,
-    range: Range<usize>,
-    text: &str,
-) {
-    // The common path uses one rebuild. Exact scalar ranges inside a shaped
-    // cluster use Parley's composition primitive instead of rounding the edit.
-    if !driver.editor.is_composing() {
-        let layout = driver.layout();
-        let exact = [range.start, range.end].into_iter().all(|index| {
-            parley::editing::Cursor::from_byte_index(layout, index, parley::Affinity::Downstream)
-                .index()
-                == index
-        });
-        if exact {
-            driver.select_byte_range(range.start, range.end);
-            driver.insert_or_replace_selection(text);
-            return;
-        }
-    }
-    driver.set_compose_byte_range(range.start, range.end);
-    if text.is_empty() {
-        driver.clear_compose();
-    } else {
-        driver.set_compose(text, Some((text.len(), text.len())));
-        driver.finish_compose();
-    }
 }

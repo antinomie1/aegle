@@ -138,7 +138,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 | 布局 | Taffy 属性、内容测量、基线、滚动和裁剪 |
 | 交互 | 指针捕获、键盘、焦点、状态、语义动作及默认行为复用 |
 | 绘制 | 文字、图像、矩形、圆角、边框、变换；可选路径/特效；装饰器（`Decorator`）在任意控件的背景之下、内容之上追加图元并观察其输入 |
-| 文本编辑 | PlainEditor 接入、选择、剪贴板、IME、密码/只读与撤销 |
+| 文本编辑 | 按段落增量排版的编辑器、选择、剪贴板、IME、密码/只读与撤销 |
 | 无障碍 | 角色、标签、值、关系、文本范围、动作和合并规则 |
 | 风格 | 自定义 token、局部主题、状态颜色和系统偏好 |
 | 动效 | 过渡、显式动画、取消/完成与可选弹簧 |
@@ -151,7 +151,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 - `Ui::fling(position, velocity)` 与 `stop_fling`：速度单位为逻辑像素/秒，τ=325 ms 的指数衰减，经 `advance_animations` 推进（需要 motion），低于 10 px/s、视口不能再动、新的滚动或按下时结束。
 - `Node::set_shadow(Some(Shadow { offset, blur, spread, color }))` 在背景下绘制随圆角的柔和阴影，可超出节点边界，不影响布局与命中，仍受祖先裁剪；完全透明的阴影等同 None。有 `TransitionProperty::Shadow` 的过渡策略时，偏移、模糊、扩展与颜色从当前呈现值补间，出现与消失按颜色淡入淡出，`shadow()` 读取目标值；`with_transition`/`snap`、减少动态效果与完成回调与其他属性相同。`Shadow` 也是 token 类型，库可用 `register_token("库.elevation.level1", |theme| Shadow { .. })` 按主题定义 elevation，`bind_shadow` 绑定，主题切换时按过渡补间。`set_background_gradient(Some(Gradient))` 以渐变代替背景色，坐标为节点尺寸的比例（x 按宽、y 按高，圆形半径按较长边），不绘制背景的控件忽略它；`bind_color(ColorSlot::GradientStop(i), token)` 让第 i 个色标跟随颜色 token，再次 `set_background_gradient` 结束这些绑定，解绑时色标保留最后的颜色。两者使用 scene 的原生渐变与阴影命令，软件、Vulkan 与 wgpu 结果一致。
 
-  渐变不做补间：`Gradient` 的色标是共享的 `Arc<[GradientStop]>`，每帧采样一个中间渐变就要分配一次新的色标数组，违背绘制热路径不新增每帧分配的约束；若改为节点内联固定 16 个色标，每个带渐变的节点多占约 128 B，而 MD3 等目标设计里渐变很少需要动画。需要渐变动画的控件可以在 `Control::paint` 中按 `cx.time` 采样，或以两层叠加并补间上层的组透明度。
+  渐变随 `TransitionProperty::Paint` 补间：有该项时序时，`set_background_gradient` 与色标 token 的变化从当前呈现的渐变出发补间色标颜色、位置与几何；从无到有、从有到无分别从背景色出发、回到背景色后移除；色标数不同时短的一方重复末尾色标；线性渐变按中心、方向（取较短的转向）与半长补间，不会中途退化；线性与径向互换时几何立即取目标、只补间色标。`background_gradient()` 返回目标。采样经 `Gradient::update` 原地写入，节点在两份色标存储间逐帧交替（上一帧的绘制记录仍共享另一份），补间期间每帧不分配；开始一次补间分配两份存储。弹簧曲线的过冲被夹到 0–1。减少动态效果、隐藏、`finish_transition`、`set_transition(None)` 与移除该项时序都直接跳到目标，`cancel_transition` 停在当前呈现值。
 - `Node::set_opacity(0..=1)` 把子树作为一张图像以该不透明度绘制：重叠的后代不会互相透出，这一点与半透明颜色不同。它不改变命中、焦点与无障碍；为 0 时不绘制。有 `TransitionProperty::Opacity` 的过渡策略时（或 `Animate::Opacity` 动画）平滑变化，`opacity()` 读取目标值。`set_backdrop_blur(σ)` 先把节点圆角边界内已绘制的内容做标准差为 σ 逻辑像素的高斯模糊，再在其上绘制节点，模糊结果也按节点不透明度绘制；只模糊本窗口画出的内容，不模糊透明窗口后的桌面。两者都经离屏层实现，软件、Vulkan 与 wgpu（后两者需 `text`）结果一致。
 
 <img src="developer/images/layers.png" width="450" alt="半透明颜色的重叠处互相透出；组透明度 0.5 的重叠处不透出；毛玻璃面板模糊其下的条纹">

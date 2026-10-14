@@ -132,7 +132,10 @@ impl Tabs {
     }
     /// Adds a handler called after the user selects another tab; handlers
     /// run in registration order.
-    pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Tabs) -> R + 'static) {
+    pub fn on_change<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Tabs) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(Tabs(node)).into_result())
     }
 }

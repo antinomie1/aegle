@@ -89,18 +89,16 @@ impl Ui {
     ) -> Result {
         self.pointer_at(id, kind, position, modifiers, std::time::Instant::now())
     }
-    pub(crate) fn dispatch_pointer(
+    /// Routes a pointer transition whose press count is counted to its
+    /// control, then double clicks and context menus.
+    pub(crate) fn route_pointer(
         &self,
         id: PointerId,
         kind: PointerKind,
         position: Point,
         modifiers: Modifiers,
     ) -> Result {
-        if !position.x.is_finite() || !position.y.is_finite() {
-            return Err(UiError::InvalidValue.into());
-        }
         let mut state = self.write();
-        state.rebuild_order();
         if matches!(kind, PointerKind::Down { .. } | PointerKind::ButtonDown(_)) {
             state.show_focus(false)?;
             #[cfg(feature = "motion")]
@@ -116,12 +114,6 @@ impl Ui {
         state.pointer =
             (!matches!(kind, PointerKind::Leave | PointerKind::Cancel)).then_some((id, position));
         let hit = state.pointer.and_then(|_| state.hit(position));
-        let kind = match kind {
-            PointerKind::Down { clicks } => PointerKind::Down {
-                clicks: state.count_click(position, clicks),
-            },
-            kind => kind,
-        };
         if state.scrollbar_pointer(id, kind, position, hit)? {
             return Ok(());
         }
@@ -183,14 +175,28 @@ impl Ui {
         {
             return Err(UiError::InvalidValue.into());
         }
+        let target = {
+            let state = self.read();
+            (!state.listeners.is_empty())
+                .then(|| state.node_at(position, false))
+                .flatten()
+        };
+        let event = crate::InputKind::Wheel {
+            position,
+            delta,
+            modifiers,
+        };
+        let (prevented, failure) = self.propagate(target, event);
         let mut state = self.write();
         #[cfg(feature = "motion")]
         {
             state.motion.fling = None;
         }
         state.input_time = time;
-        state.scroll_by_at(position, delta, Some(modifiers))?;
-        Ok(())
+        if !prevented {
+            state.scroll_by_at(position, delta, Some(modifiers))?;
+        }
+        failure
     }
     /// Applies one native IME transaction to the focused editable field.
     /// A batch the field's editor rejects (see `Editor::check_ime`) returns

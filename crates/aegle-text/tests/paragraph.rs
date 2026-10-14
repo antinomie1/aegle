@@ -121,3 +121,54 @@ fn cjk_reflow_reuses_font_and_reports_missing_glyphs() {
         assert!(!emboldened(&medium));
     }
 }
+
+#[test]
+fn color_changes_skip_shaping_and_released_layouts_are_restored() {
+    let mut system = TextSystem::new();
+    system
+        .register_fonts(Blob::new(Arc::new(
+            include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+        )))
+        .unwrap();
+    let style = TextStyle {
+        families: "Aegle Test CJK",
+        ..TextStyle::default()
+    };
+    let mut paragraph = system.paragraph("你好 Aegle", &style).unwrap();
+    let wrapped = paragraph.reflow(Some(30.0), Alignment::Center).unwrap();
+    // The layout keeps the color it was shaped with: a color alone needs none.
+    let red = aegle_types::Color::rgb(255, 0, 0);
+    let recolored = TextStyle {
+        color: red,
+        ..style
+    };
+    system.restyle(&mut paragraph, &recolored).unwrap();
+    assert_eq!(paragraph.color(), red);
+    let mut brushes = Vec::new();
+    paragraph.glyph_runs(|run| brushes.push(run.style().brush));
+    assert!(brushes.iter().all(|brush| *brush == style.color));
+
+    paragraph.release();
+    assert!(paragraph.is_released() && paragraph.layout().is_empty());
+    assert_eq!(
+        paragraph.reflow(Some(30.0), Alignment::Center),
+        Err(TextError::Released)
+    );
+    // A released paragraph stores new text and style without shaping.
+    system
+        .update(&mut paragraph, "你好 Aegle!", &recolored)
+        .unwrap();
+    assert!(paragraph.is_released());
+    system.restore(&mut paragraph);
+    assert!(!paragraph.is_released());
+    assert_eq!(paragraph.text(), "你好 Aegle!");
+    assert!(paragraph.size().height >= wrapped.height);
+
+    // Hosts report idle text against the budget shared by every window.
+    system.set_idle_budget(10);
+    system.report_idle(0, 12);
+    assert!(system.over_idle_budget());
+    system.report_idle(12, 4);
+    assert_eq!(system.idle_bytes(), 4);
+    assert!(!system.over_idle_budget());
+}

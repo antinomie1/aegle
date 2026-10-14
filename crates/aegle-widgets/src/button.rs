@@ -31,7 +31,10 @@ impl Button {
     /// Adds a click handler; handlers run in registration order after the
     /// input batch, outside every UI/tree borrow, so they may safely create or
     /// remove controls.
-    pub fn on_click<R: HandlerResult>(&self, mut callback: impl FnMut(Button) -> R + 'static) {
+    pub fn on_click<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Button) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(Button(node)).into_result())
     }
 }

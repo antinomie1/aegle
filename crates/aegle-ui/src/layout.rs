@@ -59,6 +59,9 @@ impl State {
                 if changes.layout {
                     self.tree.mark_dirty(id, Dirty::LAYOUT)?;
                 }
+                if changes.paint {
+                    self.tree.mark_dirty(id, Dirty::PAINT)?;
+                }
                 if changes.value || changes.layout || changes.selection || changes.policy {
                     self.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
                     self.ime_dirty = true;
@@ -86,6 +89,7 @@ impl State {
                         height: AvailableSpace::Definite(self.size.height),
                     },
                     |_, element, known, available| {
+                        crate::idle::restore(element, fonts);
                         let padding = element.inset(theme);
                         let gap = element.theme_or(theme).gap;
                         let width = known.width.or(match available.width {
@@ -106,6 +110,7 @@ impl State {
                         }
                     },
                     |_, element, size| {
+                        crate::idle::restore(element, fonts);
                         let size = aegle_types::Size::new(size.width, size.height);
                         element.control.baseline(size, element.inset(theme))
                     },
@@ -134,7 +139,10 @@ impl State {
                     width: Some(width),
                     rtl: element.rtl,
                 };
-                element.control.finalize(&cx);
+                // Released text is aligned when it is shown again.
+                if !crate::idle::released(element) {
+                    element.control.finalize(&cx);
+                }
                 let scrolled = extents
                     .iter()
                     .any(|&(viewport, limit)| viewport == id && self.scroll_limit(id) != limit);
@@ -210,7 +218,9 @@ impl State {
         }
         for index in 0..self.order.len() {
             let id = self.order[index];
-            if self.tree.dirty(id)?.intersects(Dirty::PAINT) {
+            let element = &self.tree.get(id).unwrap().context;
+            // Released text stays unrecorded until it is shown again.
+            if self.tree.dirty(id)?.intersects(Dirty::PAINT) && !crate::idle::released(element) {
                 self.record(id)?;
                 self.tree.clear_dirty(id, Dirty::PAINT)?;
                 self.repaint = true;
@@ -219,6 +229,7 @@ impl State {
                 self.damage_node(id, false);
             }
         }
+        self.schedule_text()?;
         self.damage_groups();
         #[cfg(feature = "motion")]
         self.settle_scoped();

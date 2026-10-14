@@ -52,7 +52,10 @@ impl TextField {
         })
     }
     /// Adds a single-line Enter handler, dispatched outside the tree borrow.
-    pub fn on_submit<R: HandlerResult>(&self, mut callback: impl FnMut(TextField) -> R + 'static) {
+    pub fn on_submit<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(TextField) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(TextField(node)).into_result())
     }
     /// Applies an editor change, then restarts a focused native IME session.

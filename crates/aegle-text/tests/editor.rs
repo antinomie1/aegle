@@ -142,7 +142,13 @@ fn composition_and_history_share_one_retained_editor() {
         .edit(&mut single)
         .reflow(Some(1.0), Alignment::Start)
         .unwrap();
-    assert_eq!(single.layout().len(), 1);
+    assert_eq!(
+        single
+            .layouts()
+            .map(|(_, layout)| layout.len())
+            .sum::<usize>(),
+        1
+    );
     assert_eq!(single.text(), "abc abc abc");
     assert!(single.ime_rect().size.width >= 0.0);
 

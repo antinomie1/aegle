@@ -1,8 +1,7 @@
-use std::{borrow::Cow, ops::Range};
+use std::ops::Range;
 
 use crate::{
     Editor, EditorDriver, Selection, TextError,
-    edit::raw_replace,
     editor::{Composition, validate_content, validate_selection},
     history::Edit,
 };
@@ -67,33 +66,26 @@ impl EditorDriver<'_> {
             .flatten();
         self.editor.history.break_group();
         self.editor.composition = None;
-        let visible = if edit.preedit.is_empty() {
-            Cow::Borrowed(text)
-        } else if text.is_empty() {
-            Cow::Borrowed(edit.preedit)
-        } else {
-            let mut visible = String::with_capacity(text.len() + edit.preedit.len());
-            visible.push_str(text);
-            visible.push_str(edit.preedit);
-            Cow::Owned(visible)
-        };
-        raw_replace(&mut self.engine(), range.clone(), &visible);
         let cursor = range.start + text.len();
         let after = Selection {
             anchor: cursor,
             focus: cursor,
         };
-        if !edit.preedit.is_empty() {
+        if edit.preedit.is_empty() {
+            self.splice(range.clone(), text, None);
+            self.place_after(range.start, text);
+        } else {
+            // One edit inserts the commit and the new preedit after it.
+            let mut visible = String::with_capacity(text.len() + edit.preedit.len());
+            visible.push_str(text);
+            visible.push_str(edit.preedit);
+            let preedit = cursor..cursor + edit.preedit.len();
+            self.splice(range.clone(), &visible, Some(preedit));
+            self.select_preedit(cursor, edit.cursor);
             self.editor.composition = Some(Composition {
                 original: after,
                 replaced: String::new(),
             });
-            let mut engine = self.engine();
-            // Never mark an empty composing range: Parley would generate an
-            // empty style run. The combined insertion also preserves exact byte
-            // positions when the commit endpoint lies inside a shaping cluster.
-            engine.set_compose_byte_range(cursor, cursor + edit.preedit.len());
-            engine.set_compose(edit.preedit, edit.cursor.map(|s| (s.anchor, s.focus)));
         }
         if let Some(removed) = removed {
             self.editor.history.record(
@@ -138,23 +130,21 @@ impl EditorDriver<'_> {
                     replaced: self.editor.selected_text().to_owned(),
                 });
             }
-            let mut engine = self.engine();
-            if deleted {
-                engine.set_compose_byte_range(range.start, range.end);
-            }
-            engine.set_compose(edit.preedit, edit.cursor.map(|s| (s.anchor, s.focus)));
+            // The preedit replaces the old one or the selection, and the two
+            // deleted sides with them.
+            let replaced = if deleted { range.clone() } else { selected };
+            self.show_preedit(replaced, edit.preedit, edit.cursor);
             self.rebuilt(deleted);
         } else if deleted {
             // No composition and no commit: delete the two sides while retaining
             // the selected fragment without allocating a replacement copy.
-            let mut engine = self.engine();
             if edit.delete_after != 0 {
-                raw_replace(&mut engine, selected.end..range.end, "");
+                self.splice(selected.end..range.end, "", None);
             }
             if edit.delete_before != 0 {
-                raw_replace(&mut engine, range.start..selected.start, "");
+                self.splice(range.start..selected.start, "", None);
             }
-            engine.select_byte_range(after.anchor, after.focus);
+            self.select_snapped(after);
             self.rebuilt(true);
         }
         if let (Some(removed), Some(inserted)) = (removed, inserted) {

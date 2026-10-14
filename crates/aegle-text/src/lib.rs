@@ -14,18 +14,21 @@
 //! synthetic bold/oblique faces until those rasterization operations are supported.
 //!
 //! [`Editor`] retains plain text, selection, IME composition and bounded delta
-//! history using the same fonts and drawing path. Platform IME and clipboard
+//! history using the same fonts and drawing path, as one layout per hard line:
+//! an edit shapes only the lines it touches. Platform IME and clipboard
 //! protocols remain the host's responsibility.
 
 #[cfg(feature = "text-a11y")]
 mod accessibility;
 mod compose;
+mod document;
 mod edit;
 mod editor;
 #[cfg(feature = "scene")]
 mod editor_paint;
 mod history;
 mod ime;
+mod nav;
 mod surrounding;
 
 #[cfg(feature = "scene")]

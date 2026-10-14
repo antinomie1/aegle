@@ -141,7 +141,7 @@ impl Node {
     pub fn on_drop<R: crate::HandlerResult>(
         &self,
         mut callback: impl FnMut(Node, DropEvent) -> R + 'static,
-    ) {
+    ) -> crate::Subscription {
         self.change(|state, id| {
             let callback = Box::new(move |node: Node| {
                 let event = node.change(|state, id| {
@@ -150,8 +150,8 @@ impl Node {
                 event.map_or(Ok(()), |event| callback(node, event).into_result())
             });
             let version = &mut state.callback_version;
-            crate::callbacks::add(&mut state.drops.handlers, version, id, callback);
-            Ok(())
+            let serial = crate::callbacks::add(&mut state.drops.handlers, version, id, callback);
+            Ok(state.subscription(crate::callbacks::Slot::Drop(id), serial))
         })
     }
 

@@ -135,7 +135,10 @@ impl NumberField {
         self.change(|state, id| state.text(id))
     }
     /// Adds a user-change handler; handlers run in registration order outside tree borrows.
-    pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Self) -> R + 'static) {
+    pub fn on_change<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Self) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(Self(node)).into_result())
     }
     /// Changes the control and its shown text.

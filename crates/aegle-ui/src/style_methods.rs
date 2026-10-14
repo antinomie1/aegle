@@ -1,6 +1,9 @@
 //! Typed-handle macros: the methods only some control kinds accept are added
 //! to those kinds' handles, so the compiler rejects, say, a caret color on a
-//! label instead of a runtime `WrongKind`.
+//! label. The rule itself holds at run time too: local styles and fonts are
+//! written only through `State::set_style` and the typeface setters, which
+//! reject a field the node's kind does not accept with `WrongKind`, so code
+//! reaching the state through `Node::change` cannot bypass it either.
 
 /// Defines a typed handle: a clonable wrapper around a [`Node`](crate::Node)
 /// that dereferences to it.
@@ -107,7 +110,7 @@ macro_rules! style_methods {
             }
             /// The local font face; `None` uses `Font::DEFAULT`.
             pub fn font(&self) -> Option<$crate::Font> {
-                self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.font)))
+                self.change(|state, id| Ok(state.font(id)))
             }
         }
     };

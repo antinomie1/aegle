@@ -2,9 +2,9 @@ use std::ops::Range;
 
 use crate::{
     EditorDriver, Selection, TextError,
-    edit::raw_replace,
     editor::{Composition, validate_selection},
     history::Edit,
+    nav::Selected,
 };
 
 impl EditorDriver<'_> {
@@ -30,13 +30,42 @@ impl EditorDriver<'_> {
             self.editor.history.break_group();
             self.editor.composition = Some(Composition {
                 original: self.editor.selection(),
-                replaced: self.editor.display_text()[range].to_owned(),
+                replaced: self.editor.display_text()[range.clone()].to_owned(),
             });
         }
-        self.engine()
-            .set_compose(text, cursor.map(|c| (c.anchor, c.focus)));
+        self.show_preedit(range, text, cursor);
         self.rebuilt(false);
         Ok(())
+    }
+
+    /// Replaces `range` with preedit `text` and selects the IME's `cursor`
+    /// in it; `None` hides the caret at its start.
+    pub(crate) fn show_preedit(
+        &mut self,
+        range: Range<usize>,
+        text: &str,
+        cursor: Option<Selection>,
+    ) {
+        let start = range.start;
+        self.splice(range, text, Some(start..start + text.len()));
+        self.select_preedit(start, cursor);
+    }
+
+    /// Selects the IME's `cursor` in preedit starting at `start`; `None`
+    /// hides the caret there.
+    pub(crate) fn select_preedit(&mut self, start: usize, cursor: Option<Selection>) {
+        let local = cursor.unwrap_or_default();
+        let doc = &self.editor.doc;
+        let (anchor, focus) = (
+            doc.snap(start + local.anchor),
+            doc.snap(start + local.focus),
+        );
+        self.editor.sel = Selected {
+            anchor,
+            focus,
+            ..Selected::collapsed(focus)
+        };
+        self.editor.show_cursor = cursor.is_some();
     }
 
     /// Cancel preedit, restoring the replaced fragment and original selection.
@@ -47,9 +76,9 @@ impl EditorDriver<'_> {
             return false;
         };
         let range = self.editor.composition_range().expect("composition range");
-        let mut driver = self.engine();
-        raw_replace(&mut driver, range, &compose.replaced);
-        driver.select_byte_range(compose.original.anchor, compose.original.focus);
+        self.splice(range, &compose.replaced, None);
+        self.editor.show_cursor = true;
+        self.select_snapped(compose.original);
         self.rebuilt(false);
         true
     }
@@ -72,7 +101,8 @@ impl EditorDriver<'_> {
             return Ok(());
         };
         let changed = compose.replaced != text;
-        raw_replace(&mut self.engine(), range.clone(), text);
+        self.splice(range.clone(), text, None);
+        self.place_after(range.start, text);
         if changed
             && self
                 .editor

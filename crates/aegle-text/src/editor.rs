@@ -1,10 +1,13 @@
 use std::{fmt, ops::Range};
 
-use aegle_types::{Color, Rect, Size};
-use parley::{BoundingBox, PlainEditor};
+use aegle_types::{Color, Point, Rect, Size};
+use parley::{Affinity, BoundingBox};
 
 use crate::{
-    Alignment, Layout, TextDiagnostics, TextError, TextStyle, TextSystem, history::History,
+    Layout, TextDiagnostics, TextError, TextStyle, TextSystem,
+    document::{Caret, Document},
+    history::History,
+    nav::Selected,
 };
 
 /// Directed UTF-8 byte selection. Reversed endpoints preserve selection direction.
@@ -34,6 +37,9 @@ pub struct EditChanges {
     pub selection: bool,
     /// Input policy changed, requiring semantic and platform IME state updates.
     pub policy: bool,
+    /// Only the drawing changed, as for a new color: record again, without
+    /// measuring.
+    pub paint: bool,
 }
 
 /// Retained undo/redo storage, excluding spare deque slots and allocator overhead.
@@ -110,45 +116,40 @@ pub(crate) struct Composition {
 
 /// Retained plain text, selection, preedit and bounded delta history.
 ///
-/// Use [`TextSystem::edit`] for changes. One Parley buffer/layout drives display,
-/// hit testing and IME geometry; composition retains only the replaced fragment.
-/// This is an editing model, not an OS input-method or clipboard connection.
+/// Use [`TextSystem::edit`] for changes. The text is kept as one Parley layout
+/// per hard line: an edit shapes only the lines it touches, a new wrap width
+/// only breaks lines again, and a new color shapes nothing. The same layouts
+/// drive display, hit testing and IME geometry; composition retains only the
+/// replaced fragment. This is an editing model, not an OS input-method or
+/// clipboard connection.
 pub struct Editor {
-    pub(crate) inner: PlainEditor<Color>,
+    pub(crate) doc: Document,
+    pub(crate) sel: Selected,
+    /// The IME can hide the caret during composition.
+    pub(crate) show_cursor: bool,
+    /// Emitted run IDs, their character counts and paragraphs.
     #[cfg(feature = "text-a11y")]
-    pub(crate) access_runs: Vec<(accesskit::NodeId, usize)>,
+    pub(crate) access_runs: Vec<(accesskit::NodeId, usize, usize)>,
     pub(crate) composition: Option<Composition>,
     pub(crate) history: History,
     pub(crate) changes: EditChanges,
-    pub(crate) diagnostics: TextDiagnostics,
     pub(crate) multiline: bool,
     pub(crate) read_only: bool,
-    /// Committed password value; the Parley buffer then holds only masks.
+    /// Committed password value; the display buffer then holds only masks.
     pub(crate) secret: Option<String>,
-    pub(crate) width: Option<f32>,
-    pub(crate) alignment: Alignment,
-    /// Requested CSS weight, which decides synthetic bold when painting.
-    pub(crate) weight: f32,
 }
 
 impl Editor {
     /// The committed value, excluding preedit and including its replaced selection.
     pub fn text(&self) -> TextValue<'_> {
+        let text = self.doc.text.as_str();
         if let Some(secret) = &self.secret {
             TextValue([secret, "", ""])
         } else if let Some(compose) = &self.composition {
-            let range = self
-                .inner
-                .raw_compose()
-                .as_ref()
-                .expect("composition range");
-            TextValue([
-                &self.inner.raw_text()[..range.start],
-                &compose.replaced,
-                &self.inner.raw_text()[range.end..],
-            ])
+            let range = self.doc.compose.as_ref().expect("composition range");
+            TextValue([&text[..range.start], &compose.replaced, &text[range.end..]])
         } else {
-            TextValue([self.inner.raw_text(), "", ""])
+            TextValue([text, "", ""])
         }
     }
 
@@ -156,7 +157,7 @@ impl Editor {
     /// Password editors display one mask per character; selections and other
     /// byte offsets always refer to this buffer.
     pub fn display_text(&self) -> &str {
-        self.inner.raw_text()
+        &self.doc.text
     }
     /// Selection in the committed value; remains stable during composition.
     pub fn selection(&self) -> Selection {
@@ -166,23 +167,22 @@ impl Editor {
     }
     /// Selection in the display buffer, including the IME's current cursor request.
     pub fn visual_selection(&self) -> Selection {
-        let s = self.inner.raw_selection();
         Selection {
-            anchor: s.anchor().index(),
-            focus: s.focus().index(),
+            anchor: self.sel.anchor.index,
+            focus: self.sel.focus.index,
         }
     }
     /// Selected committed text, or an empty slice for a collapsed selection.
     /// Password editors return the masked display slice, never the value.
     pub fn selected_text(&self) -> &str {
         self.composition.as_ref().map_or_else(
-            || &self.inner.raw_text()[self.selection().range()],
+            || &self.doc.text[self.selection().range()],
             |c| c.replaced.as_str(),
         )
     }
     /// Preedit range in display-buffer UTF-8 bytes.
     pub fn composition_range(&self) -> Option<Range<usize>> {
-        self.inner.raw_compose().clone()
+        self.doc.compose.clone()
     }
     /// Whether keyboard/IME modifications are disabled; selection remains available.
     pub fn is_read_only(&self) -> bool {
@@ -196,21 +196,25 @@ impl Editor {
     pub fn is_multiline(&self) -> bool {
         self.multiline
     }
-    /// Layout shared by painting, hit testing and accessibility consumers.
-    pub fn layout(&self) -> &Layout<Color> {
-        self.inner.try_layout().expect("editor layout is current")
+    /// The layout of each hard line with its top-left corner, in order; the
+    /// same layouts painting, hit testing and accessibility use.
+    pub fn layouts(&self) -> impl Iterator<Item = (Point, &Layout<Color>)> {
+        self.doc
+            .blocks
+            .iter()
+            .map(|block| (block.origin, &block.layout))
     }
     /// Current layout extent, excluding trailing whitespace.
     pub fn size(&self) -> Size {
-        Size::new(self.layout().width(), self.layout().height())
+        self.doc.size
     }
     /// Offset of the first line's baseline from the top, if there is a line.
     pub fn first_baseline(&self) -> Option<f32> {
-        Some(self.layout().lines().next()?.metrics().baseline)
+        Some(self.doc.blocks[0].layout.lines().next()?.metrics().baseline)
     }
     /// Font coverage of the displayed buffer, including preedit.
     pub fn diagnostics(&self) -> TextDiagnostics {
-        self.diagnostics
+        self.doc.diagnostics
     }
     /// The changes accumulated since the last [`Self::take_changes`],
     /// without draining them: a control compares them around one input to
@@ -236,53 +240,30 @@ impl Editor {
     }
     /// Visit selection rectangles without allocating an intermediate vector.
     pub fn selection_rects(&self, mut visit: impl FnMut(Rect)) {
-        self.inner
-            .selection_geometry_with(|rect, _| visit(to_rect(rect)));
+        let range = self.visual_selection().range();
+        self.doc.range_boxes(range, |rect| visit(to_rect(rect)));
     }
     /// Caret geometry in local logical pixels; hidden when requested by the IME.
     pub fn caret_rect(&self, width: f32) -> Result<Option<Rect>, TextError> {
         if !width.is_finite() || width <= 0.0 {
             return Err(TextError::InvalidPosition);
         }
-        Ok(self.inner.cursor_geometry(width).map(to_rect))
+        let caret = self
+            .show_cursor
+            .then(|| self.doc.caret_box(self.sel.focus, width));
+        Ok(caret.map(to_rect))
     }
     /// Unclipped candidate-window anchor in local logical pixels. Hosts apply
     /// their scrolling/presentation transform, as for drawing and hit testing.
     pub fn ime_rect(&self) -> Rect {
         let mut area: Option<BoundingBox> = None;
         if let Some(range) = self.composition_range() {
-            let selection = parley::Selection::new(
-                parley::Cursor::from_byte_index(
-                    self.layout(),
-                    range.start,
-                    parley::Affinity::Downstream,
-                ),
-                parley::Cursor::from_byte_index(
-                    self.layout(),
-                    range.end,
-                    parley::Affinity::Upstream,
-                ),
-            );
-            selection.geometry_with(self.layout(), |rect, _| {
-                if let Some(area) = &mut area {
-                    area.x0 = area.x0.min(rect.x0);
-                    area.y0 = area.y0.min(rect.y0);
-                    area.x1 = area.x1.max(rect.x1);
-                    area.y1 = area.y1.max(rect.y1);
-                } else {
-                    area = Some(rect);
-                }
+            self.doc.range_boxes(range, |rect| {
+                let area = area.get_or_insert(rect);
+                *area = area.union(rect);
             });
         }
-        // Parley's IME helper clamps only one edge to wrapping width; unwrapped
-        // single-line text can then produce a negative rectangle. Use actual
-        // text geometry and let the host own viewport/scroll transformation.
-        to_rect(area.unwrap_or_else(|| {
-            self.inner
-                .raw_selection()
-                .focus()
-                .geometry(self.layout(), 1.0)
-        }))
+        to_rect(area.unwrap_or_else(|| self.doc.caret_box(self.sel.focus, 1.0)))
     }
 }
 
@@ -296,30 +277,28 @@ impl TextSystem {
     ) -> Result<Editor, TextError> {
         style.validate()?;
         validate_content(text, options.multiline)?;
-        let mut editor = Editor {
-            inner: PlainEditor::new(style.size),
+        let shaping = self.shaping(style);
+        let doc = Document::new(self, text, shaping, style.color, options.multiline);
+        if doc.diagnostics.unshaped_bytes != 0 {
+            return Err(TextError::MissingFont);
+        }
+        let end = Caret {
+            index: text.len(),
+            affinity: Affinity::Upstream,
+        };
+        Ok(Editor {
+            doc,
+            sel: Selected::collapsed(end),
+            show_cursor: true,
             #[cfg(feature = "text-a11y")]
             access_runs: Vec::new(),
             composition: None,
             history: History::new(options.history_bytes),
             changes: EditChanges::default(),
-            diagnostics: TextDiagnostics::default(),
             multiline: options.multiline,
             read_only: false,
             secret: None,
-            width: None,
-            alignment: Alignment::Start,
-            weight: style.weight.value(),
-        };
-        editor.inner.set_quantize(false);
-        editor.inner.set_text(text);
-        let mut driver = self.edit(&mut editor);
-        driver.apply_style(style);
-        driver.engine().move_to_text_end();
-        if editor.diagnostics.unshaped_bytes != 0 {
-            return Err(TextError::MissingFont);
-        }
-        Ok(editor)
+        })
     }
 
     /// Borrows an editor and this system for a short imperative update sequence.

@@ -33,12 +33,15 @@ mod effects;
 mod events;
 #[cfg(feature = "motion")]
 mod fling;
+#[cfg(feature = "motion")]
+mod gradient;
 #[cfg(feature = "grid")]
 mod grid_handles;
 mod group;
 mod handles;
 mod hooks;
 mod hover;
+mod idle;
 mod input;
 mod layout;
 mod layout_handles;
@@ -47,6 +50,7 @@ mod motion;
 #[cfg(feature = "motion")]
 mod motion_handles;
 pub mod paint;
+mod propagate;
 mod scroll;
 pub mod scroll_geometry;
 mod scrollbar;
@@ -81,7 +85,7 @@ pub use aegle_theme::{
 pub use aegle_types::{
     Color, Cursor, DragData, Point, Preferences, Rect, Region, Shadow, Size, TouchPhase,
 };
-pub use callbacks::HandlerResult;
+pub use callbacks::{HandlerResult, Subscription};
 pub use control::{CONTAINER, Control, Plain};
 pub use decorator::Decorator;
 pub use drag::{DropEvent, Drops};
@@ -96,6 +100,7 @@ pub use layout_handles::LocalLayout;
 pub use motion::TransitionProperty;
 #[cfg(feature = "motion")]
 pub use motion_handles::Animate;
+pub use propagate::{InputEvent, InputKind, Phase};
 pub use state::{Element, State, focus_policy, text_style};
 pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token};
 

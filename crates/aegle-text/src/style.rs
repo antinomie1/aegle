@@ -1,6 +1,6 @@
 use crate::{FontStyle, FontWeight, FontWidth, Language, LineHeight};
 use aegle_types::Color;
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, sync::Arc};
 
 /// Styling for a display paragraph or plain text editor, in logical pixels.
 ///
@@ -50,21 +50,6 @@ impl Default for TextStyle<'_> {
 }
 
 impl TextStyle<'_> {
-    pub(crate) fn common_properties(&self) -> [parley::StyleProperty<'static, Color>; 9] {
-        use parley::StyleProperty::*;
-        [
-            FontSize(self.size),
-            FontWeight(self.weight),
-            FontWidth(self.width),
-            FontStyle(self.slant),
-            Locale(self.locale),
-            Brush(self.color),
-            LineHeight(self.line_height),
-            LetterSpacing(self.letter_spacing),
-            WordSpacing(self.word_spacing),
-        ]
-    }
-
     pub(crate) fn validate(&self) -> Result<(), TextError> {
         let line_height = match self.line_height {
             LineHeight::MetricsRelative(value)
@@ -86,6 +71,55 @@ impl TextStyle<'_> {
             return Err(TextError::InvalidStyle);
         }
         Ok(())
+    }
+}
+
+/// What shaping depends on: every [`TextStyle`] field except the color, with
+/// families interned by the [`crate::TextSystem`]. Retained text keeps it to
+/// reshape itself and to tell a color change, which needs no shaping, from
+/// the rest.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Shaping {
+    pub families: Arc<str>,
+    pub size: f32,
+    pub weight: FontWeight,
+    pub width: FontWidth,
+    pub slant: FontStyle,
+    pub locale: Option<Language>,
+    pub line_height: LineHeight,
+    pub letter_spacing: f32,
+    pub word_spacing: f32,
+}
+
+impl Shaping {
+    /// Whether `style` shapes as this does.
+    pub fn matches(&self, style: &TextStyle<'_>) -> bool {
+        *self.families == *style.families
+            && self.size == style.size
+            && self.weight == style.weight
+            && self.width == style.width
+            && self.slant == style.slant
+            && self.locale == style.locale
+            && self.line_height == style.line_height
+            && self.letter_spacing == style.letter_spacing
+            && self.word_spacing == style.word_spacing
+    }
+
+    /// Builder defaults, with `color` as every glyph's brush.
+    pub fn properties(&self, color: Color) -> [parley::StyleProperty<'_, Color>; 10] {
+        use parley::StyleProperty::*;
+        [
+            FontFamily(parley::FontFamily::Source((&*self.families).into())),
+            FontSize(self.size),
+            FontWeight(self.weight),
+            FontWidth(self.width),
+            FontStyle(self.slant),
+            Locale(self.locale),
+            Brush(color),
+            LineHeight(self.line_height),
+            LetterSpacing(self.letter_spacing),
+            WordSpacing(self.word_spacing),
+        ]
     }
 }
 
@@ -115,6 +149,9 @@ pub enum TextError {
     MissingFont,
     /// Password editors accept no input-method composition.
     Password,
+    /// The paragraph's layout was released; restore it with
+    /// [`crate::TextSystem::restore`] first.
+    Released,
 }
 
 impl fmt::Display for TextError {
@@ -131,6 +168,7 @@ impl fmt::Display for TextError {
             Self::CompositionActive => "finish or cancel preedit before this operation",
             Self::MissingFont => "text has no font-backed layout",
             Self::Password => "password editor rejects input-method composition",
+            Self::Released => "paragraph layout was released; restore it first",
         })
     }
 }

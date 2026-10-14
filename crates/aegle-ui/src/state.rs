@@ -184,8 +184,9 @@ pub struct State {
     pub ext: HashMap<std::any::TypeId, Box<dyn std::any::Any>>,
     /// Installed control-library hooks, see [`crate::Hooks`].
     pub hooks: Vec<&'static crate::Hooks>,
-    /// Visual decoration per node.
-    pub decorations: HashMap<NodeId, Decoration>,
+    /// Visual decoration per node. Only the engine writes it, so a local
+    /// style always passes the kind check of [`State::set_style`].
+    pub(crate) decorations: HashMap<NodeId, Decoration>,
     /// Decorators per node, see [`crate::Decorator`].
     pub decorators: HashMap<NodeId, Vec<Box<dyn crate::Decorator>>>,
     /// Skins set on nodes, for the node itself or a kind in its subtree.
@@ -210,7 +211,13 @@ pub struct State {
     /// Per-frame callbacks in registration order, see [`crate::Node::on_frame`].
     pub frames: Vec<crate::events::FrameHandler>,
     /// Window key handlers in registration order, see [`crate::Ui::on_key`].
-    pub key_handlers: Vec<crate::events::KeyHandler>,
+    pub key_handlers: crate::callbacks::Callbacks<crate::events::KeyHandler>,
+    /// Capture and bubble listeners, see [`crate::Node::on_input`].
+    pub(crate) listeners: crate::propagate::Listeners,
+    /// Which text this UI shows and keeps idle, see [`TextSystem::set_idle_budget`].
+    pub(crate) idle: crate::idle::Idle,
+    /// This state, for handing out subscriptions.
+    pub(crate) weak: std::rc::Weak<RefCell<State>>,
     /// When the input being dispatched was reported.
     pub input_time: std::time::Instant,
     /// Press counting and double-click handlers.
@@ -403,6 +410,8 @@ impl State {
             self.clicks.menus.remove(&node);
             self.drops.forget(node);
             self.frames.retain(|h| h.id != node);
+            self.listeners.forget(node);
+            self.idle.forget(node);
             self.animated.remove(&node);
             self.descriptions.remove(&node);
             self.decorations.remove(&node);

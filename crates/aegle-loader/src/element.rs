@@ -193,13 +193,15 @@ pub mod __private {
     pub fn get<H, T>(handle: &H, get: impl FnOnce(&H) -> T) -> T {
         get(handle)
     }
-    /// Calls an event registration with its handle type known first.
-    pub fn listen<H>(
+    /// Calls an event registration with its handle type known first; its
+    /// result, such as a `Subscription`, is dropped: the handler lives as
+    /// long as the element.
+    pub fn listen<H, R>(
         handle: &H,
         run: Box<dyn Fn() -> Result>,
-        listen: impl FnOnce(&H, Box<dyn Fn() -> Result>),
+        listen: impl FnOnce(&H, Box<dyn Fn() -> Result>) -> R,
     ) {
-        listen(handle, run)
+        listen(handle, run);
     }
     /// Calls a child placement with its handle type known first.
     pub fn place<H>(

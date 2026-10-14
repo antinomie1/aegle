@@ -186,7 +186,10 @@ impl Rating {
         self.update(|rating| rating.value = value.clamp(1, STEPS));
     }
     /// Adds a handler run after the user changes the value.
-    fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Rating) -> R + 'static) {
+    fn on_change<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Rating) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(Rating(node)).into_result())
     }
 }

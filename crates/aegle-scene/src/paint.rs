@@ -84,6 +84,30 @@ impl Gradient {
         })
     }
 
+    /// Moves it to `geometry` and replaces its stops with `stop(index)`,
+    /// keeping their number; validated like [`Self::linear`], unchanged on
+    /// error. The stop storage is reused unless a clone shares it, so an
+    /// animation can sample a gradient each frame without allocating.
+    pub fn update(
+        &mut self,
+        geometry: GradientGeometry,
+        stop: impl Fn(usize) -> GradientStop,
+    ) -> Result<(), SceneError> {
+        check(geometry)?;
+        let valid = (0..self.stops.len()).all(|index| {
+            let offset = stop(index).offset;
+            (0.0..=1.0).contains(&offset) && (index == 0 || stop(index - 1).offset <= offset)
+        });
+        if !valid {
+            return Err(SceneError::InvalidGradient);
+        }
+        self.geometry = geometry;
+        for (index, slot) in Arc::make_mut(&mut self.stops).iter_mut().enumerate() {
+            *slot = stop(index);
+        }
+        Ok(())
+    }
+
     /// Its geometry in local coordinates.
     pub fn geometry(&self) -> GradientGeometry {
         self.geometry

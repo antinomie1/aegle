@@ -355,7 +355,7 @@ save.on_click(move |_button| status.set_text("Saved"));
 | `MenuItem` | `on_click(FnMut(MenuItem))`：菜单关闭、勾选项切换之后执行 |
 
 - 回调在本批输入处理后、所有 UI 借用之外执行，可以自由创建、修改或删除控件，包括关闭窗口。
-- `on_*` 一律追加：同一事件可以注册多个处理器，按注册顺序执行，处理器与控件同生命周期，没有单独的移除方法。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。
+- `on_*` 一律追加：同一事件可以注册多个处理器，按注册顺序执行，处理器与控件同生命周期；`on_*` 返回 `Subscription`，需要时 `remove()` 撤掉这一个处理器。指针、按键与滚轮另可用 `on_input_capture`/`on_input` 在默认行为前沿祖先链捕获与冒泡，`stop_propagation`、`prevent_default` 控制传播与默认行为。标记里的 `on clicked` 与 Rust 的 `on_click` 因此可以共存。
 - 处理器可以返回 `()`，也可以返回 `Result` 以便在里面用 `?`（`HandlerResult` trait 接受两者）。回调返回错误时处理器保留，同一事件的其他处理器照常执行。原生 App 把错误交给 `app.on_error(|error| ...)`：返回 `Ok(())` 继续运行，返回错误则结束 `App::run`；没有设置时打印到 stderr 并继续。无窗口 `Ui::dispatch_callbacks` 把第一个错误返回给宿主，后续排队的回调留到下次调用。
 - 程序 setter（`set_checked`、`set_value`、`set_text` 等）不触发回调，可安全地相互同步；`activate()`、`toggle()`、`increment()`/`decrement()` 模拟用户操作并触发回调。
 - `set_*` 替换：`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。

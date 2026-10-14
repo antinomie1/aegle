@@ -34,7 +34,7 @@ button.on_click(move |_| {
 
 控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。第三方控件用 `Container::add` 加入，见[组件库作者](#组件库作者)。
 
-命名规则只有两条：`on_*` 追加处理器，`set_*` 替换值。`on_click`、`on_change`、`on_submit`、`on_transition_end`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame` 与 `Ui::on_key` 都追加，同一事件按注册顺序执行；处理器与控件同生命周期，没有单独的移除方法，需要停止时在闭包内判断（`on_frame` 返回 `false` 即停止）。`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。所有动作处理器存放在引擎的同一张表里：控件只报告激活或值变化，组合控件（Tabs、Dropdown、MenuItem）把自身行为放在按钮的延后工作中，再用 `State::queue_action` 排队自己的处理器，不另存处理器列表。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
+命名规则只有两条：`on_*` 追加处理器，`set_*` 替换值。`on_click`、`on_change`、`on_submit`、`on_transition_end`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame`、`on_input`、`on_input_capture` 与 `Ui::on_key` 都追加，同一事件按注册顺序执行；每个都返回 `Subscription`，丢弃它不影响处理器（处理器与控件同生命周期），`remove()` 则撤掉这一个处理器，即使同一事件正在派发；`on_frame` 返回 `false` 也会停止。`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。所有动作处理器存放在引擎的同一张表里：控件只报告激活或值变化，组合控件（Tabs、Dropdown、MenuItem）把自身行为放在按钮的延后工作中，再用 `State::queue_action` 排队自己的处理器，不另存处理器列表。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
 
 句柄的创建、修改与读取方法直接返回值。误用句柄是程序错误，因此以 `UiError` 的消息 panic，而不是让每个调用都返回 `Result`：控件已删除或窗口已关闭（`DeadHandle`，先用 `is_alive()` 判断）、在 painter、钩子或 scene 访问中使用（`ReentrantAccess`）、文档排除的参数（`InvalidValue`、`WrongKind`、`ForeignUi`、`RootMutation`、`Token`）。`Result` 只留给会因环境或应用代码失败的操作：创建 App 与窗口、`Window::close`、加载与构建标记、标记状态更新（重新求值绑定可能出错）、按名查找 token，以及宿主驱动的 `refresh`、输入投递和 `dispatch_callbacks`。处理器返回 `()` 或 `Result`（`HandlerResult`），逐帧与按键处理器返回 `bool`；处理器出错时保留，同一事件的其他处理器照常执行，此前合法修改保留；无窗口 `Ui::dispatch_callbacks` 返回第一个错误。原生 App 把回调、代理与输入处理的错误交给 `App::on_error`，返回错误才结束 `run`，未设置时打印到 stderr 并继续；绘制与平台失败仍结束 `run`。
 
@@ -44,7 +44,7 @@ button.on_click(move |_| {
 
 | 类型 | 已有接口 |
 | --- | --- |
-| Node / 所有控件句柄 | `decorate`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame`、`start_drag`、`is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
+| Node / 所有控件句柄 | `decorate`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame`、`on_input`/`on_input_capture`（`InputEvent` 的 `phase`、`stop_propagation`、`prevent_default`）、`start_drag`、`is_alive`、`bounds`、`visible_bounds`、`ensure_visible`、`remove`、`reparent`、`set_visible`、`set_enabled`、`focus`、`set_accessible_label` |
 | 布局（Node） | 逐轴的 `set_width`、`set_height`、`set_min_width`、`set_min_height`、`set_max_width`、`set_max_height`，`set_aspect_ratio`、`set_grow`、`set_shrink`、`set_basis`、`set_align_self`、`set_margin`、`set_absolute`、`set_padding`、`set_gap(行, 列)`、`set_layout_direction`、`layout_direction`、`baseline`；`grid` 另有 `set_grid_column`、`set_grid_row`（`Placement` 或可用线名/区域名的 `GridLines`）、`set_grid_area`、`set_justify_self` |
 | 布局（Container） | `row`、`column`、`contents`、`set_direction`、`set_wrap`、`set_align_items`、`set_justify_content`、`set_align_content`；`grid` 另有 `grid`、`stack`、`set_columns`、`set_rows`（`Track` 列表，或含线名与 `Repeat` 的 `TemplateItem` 列表）、`set_areas`、`set_auto_columns`、`set_auto_rows`、`set_flow`、`set_justify_items` |
 | 外观（Node） | `set_style`、`style`、`set_skin`（本节点）、`set_kind_skin`（子树中某类型的全部控件）、`appearance`、`visual_state`；所有控件都接受的 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground` |
@@ -113,7 +113,7 @@ fn primary(parent: &Container, text: &str) -> Button {
 | 布局 | 尺寸约束、内外边距、gap、Flex、对齐、滚动；可选 Grid |
 | 视觉 | 颜色、边框、圆角、透明度、二维变换、裁剪；可选路径/阴影/模糊 |
 | 状态 | enabled、checked、selected、expanded、value、编辑只读/密码模式 |
-| 事件 | 指针、键盘、焦点、控件动作、值变化；停止传播与阻止默认动作 |
+| 事件 | 指针、键盘、焦点、控件动作、值变化（捕获/冒泡、停止传播、阻止默认动作与处理器移除已实现） |
 | 语义 | role、label、description、关系、范围和动作；自定义语义合并 |
 | 主题与动画 | 选择主题、局部覆盖、类型化 token、过渡、显式动画和取消 |
 | 平台 | 窗口属性、可用能力、显示输出、剪贴板、拖放、关闭；可选 layer-shell |
@@ -144,6 +144,6 @@ Ui 拥有控件树；App 持有各窗口 Ui，控件句柄为弱引用和代数 
 
 ## 当前可用的底层接口
 
-`Tree` 保存实际状态，`Focus::set/advance` 按宿主策略处理焦点；这不是第二套函数式 UI 入口。输入只交给命中、捕获或聚焦的目标控件，没有捕获或冒泡阶段。`Button::handle(Input)` 返回激活、capture、焦点和绘制效果，`TextField::handle(&mut TextSystem, Input)` 在同一个 Editor 上实现编辑行为。控件不隐式获取平台服务。
+`Tree` 保存实际状态，`Focus::set/advance` 按宿主策略处理焦点；这不是第二套函数式 UI 入口。输入先经路由目标祖先链上的捕获/冒泡监听器，未被阻止时交给命中、捕获或聚焦的目标控件。`Button::handle(Input)` 返回激活、capture、焦点和绘制效果，`TextField::handle(&mut TextSystem, Input)` 在同一个 Editor 上实现编辑行为。控件不隐式获取平台服务。
 
 IME 数据通过 `EditorDriver::apply_ime` 一次验证并应用，`Editor::surrounding` 借出有界周边文字。调用方消费 `Outcome` 与 `Editor::take_changes` 后同步布局、平台和绘制。`aegle --example controls` 展示应用层创建、编辑、按钮回调、主题切换与关闭窗口，使用上面的统一接口。

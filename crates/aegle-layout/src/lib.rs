@@ -56,7 +56,7 @@ pub fn compute_with_baselines<C>(
     root: NodeId,
     available: Size<AvailableSpace>,
     measure: impl FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
-    baseline: impl FnMut(NodeId, &C, Size<f32>) -> Option<f32>,
+    baseline: impl FnMut(NodeId, &mut C, Size<f32>) -> Option<f32>,
 ) -> Result<(), TreeError> {
     tree.get(root).ok_or(TreeError::DeadNode)?;
     let mut adapter = adapter::Adapter {

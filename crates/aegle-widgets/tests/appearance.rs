@@ -304,3 +304,22 @@ fn kind_skins_cascade_through_subtrees() -> Result {
 fn panics(change: impl FnOnce()) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
 }
+
+#[test]
+fn style_groups_hold_for_code_reaching_the_engine_state() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    let label = ui.root().text("");
+    let column = ui.root().column();
+    // A typed handle has no caret setter for a label; the engine state the
+    // generic `Node::change` exposes refuses the field too.
+    let caret = Style {
+        caret: Some(Color::BLACK),
+        ..Style::default()
+    };
+    let refused = label.change(|state, id| Ok(state.set_style(id, caret).is_err()));
+    assert!(refused);
+    let font = column.change(|state, id| Ok(state.set_font_size(id, Some(20.0)).is_err()));
+    assert!(font);
+    assert_eq!(label.style(), Style::default());
+    Ok(())
+}

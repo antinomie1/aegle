@@ -1,4 +1,4 @@
-use crate::{Alignment, ContentWidths, GlyphRun, Layout, TextError};
+use crate::{Alignment, ContentWidths, GlyphRun, Layout, TextError, style::Shaping};
 use aegle_types::{Color, Size};
 use parley::{AlignmentOptions, PositionedLayoutItem};
 
@@ -17,8 +17,12 @@ pub struct TextDiagnostics {
 /// A retained display paragraph with owned UTF-8 text and shared font resources.
 ///
 /// Reflow does not query fonts or shape text again. Replace text and styles with
-/// [`crate::TextSystem::update`] or [`crate::TextSystem::restyle`]. Font changes in
-/// the collection affect this paragraph only after such an explicit rebuild.
+/// [`crate::TextSystem::update`] or [`crate::TextSystem::restyle`]; a new color
+/// alone needs no shaping. Font changes in the collection affect this
+/// paragraph only after such an explicit rebuild.
+///
+/// A paragraph nobody shows can [`release`](Self::release) its layout and be
+/// shaped again by [`crate::TextSystem::restore`] when it is needed.
 #[derive(Debug)]
 pub struct Paragraph {
     pub(crate) text: String,
@@ -27,8 +31,13 @@ pub struct Paragraph {
     pub(crate) alignment: Alignment,
     pub(crate) diagnostics: TextDiagnostics,
     pub(crate) content_widths: ContentWidths,
-    /// Requested CSS weight, which decides synthetic bold when painting.
-    pub(crate) weight: f32,
+    /// What the layout was shaped with; its weight decides synthetic bold.
+    pub(crate) shaping: Shaping,
+    /// Foreground color, applied when painting so that changing it needs no
+    /// shaping.
+    pub(crate) color: Color,
+    /// [`Self::release`] emptied the layout.
+    pub(crate) released: bool,
 }
 
 impl Paragraph {
@@ -37,9 +46,29 @@ impl Paragraph {
         &self.text
     }
 
-    /// Returns the retained layout for text geometry, rendering, or accessibility.
+    /// Returns the retained layout for text geometry, rendering, or accessibility;
+    /// empty while released.
     pub fn layout(&self) -> &Layout<Color> {
         &self.layout
+    }
+
+    /// The foreground color painting uses.
+    pub fn color(&self) -> Color {
+        self.color
+    }
+
+    /// Frees the layout, keeping text, style, width, alignment, content widths
+    /// and diagnostics; [`crate::TextSystem::restore`] shapes it again. Layout
+    /// queries see an empty layout meanwhile, reflowing returns
+    /// [`TextError::Released`] and painting panics. For text no one shows.
+    pub fn release(&mut self) {
+        self.layout = Layout::new();
+        self.released = true;
+    }
+
+    /// Whether [`Self::release`] emptied the layout.
+    pub fn is_released(&self) -> bool {
+        self.released
     }
 
     /// Changes wrapping and alignment, returning the new logical size.
@@ -49,6 +78,9 @@ impl Paragraph {
     pub fn reflow(&mut self, width: Option<f32>, alignment: Alignment) -> Result<Size, TextError> {
         if width.is_some_and(|value| !value.is_finite() || value < 0.0) {
             return Err(TextError::InvalidWidth);
+        }
+        if self.released {
+            return Err(TextError::Released);
         }
         if self.width != width {
             self.width = width;

@@ -23,13 +23,13 @@ pub(crate) trait Host<C> {
         known: Size<Option<f32>>,
         available: Size<AvailableSpace>,
     ) -> Size<f32>;
-    fn baseline(&mut self, id: NodeId, context: &C, size: Size<f32>) -> Option<f32>;
+    fn baseline(&mut self, id: NodeId, context: &mut C, size: Size<f32>) -> Option<f32>;
 }
 
 impl<C, M, B> Host<C> for (M, B)
 where
     M: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
-    B: FnMut(NodeId, &C, Size<f32>) -> Option<f32>,
+    B: FnMut(NodeId, &mut C, Size<f32>) -> Option<f32>,
 {
     fn measure(
         &mut self,
@@ -40,7 +40,7 @@ where
     ) -> Size<f32> {
         (self.0)(id, context, known, available)
     }
-    fn baseline(&mut self, id: NodeId, context: &C, size: Size<f32>) -> Option<f32> {
+    fn baseline(&mut self, id: NodeId, context: &mut C, size: Size<f32>) -> Option<f32> {
         (self.1)(id, context, size)
     }
 }
@@ -218,7 +218,7 @@ where
                 if inputs.run_mode == taffy::RunMode::PerformLayout {
                     output.baselines.first =
                         this.measure
-                            .baseline(from_taffy(id), &node.context, output.size);
+                            .baseline(from_taffy(id), &mut node.context, output.size);
                 }
                 return output;
             }

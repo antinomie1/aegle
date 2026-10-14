@@ -124,6 +124,11 @@ impl State {
         Ok(())
     }
 
+    /// The local font face of `id`; `None` uses `Font::DEFAULT`.
+    pub fn font(&self, id: NodeId) -> Option<Font> {
+        self.decorations.get(&id).and_then(|d| d.font)
+    }
+
     /// Replaces local paint overrides through `edit`.
     pub fn edit_style(&mut self, id: NodeId, edit: impl FnOnce(&mut Style)) -> Result {
         let mut style = self

@@ -161,7 +161,10 @@ impl Dropdown {
     }
     /// Adds a handler run when the user chooses a different item. Handlers
     /// run in registration order outside UI borrows; programmatic selection does not invoke it.
-    pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Dropdown) -> R + 'static) {
+    pub fn on_change<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(Dropdown) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(Dropdown(node)).into_result())
     }
 }

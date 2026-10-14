@@ -53,7 +53,7 @@ macro_rules! toggles {
         /// Adds a user-change handler. Handlers run in registration order
         /// outside tree borrows and can query the latest value; programmatic
         /// setters do not invoke them.
-        pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Self) -> R + 'static) {
+        pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Self) -> R + 'static) -> aegle_ui::Subscription {
             self.on_action(move |node| callback(Self(node)).into_result())
         }
     })* };

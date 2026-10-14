@@ -247,7 +247,10 @@ impl MenuItem {
     /// Adds a handler run when the user chooses the item, after its menus
     /// closed and a check item toggled. Items that open a submenu do not run
     /// handlers. Handlers run in registration order outside UI borrows.
-    pub fn on_click<R: HandlerResult>(&self, mut callback: impl FnMut(MenuItem) -> R + 'static) {
+    pub fn on_click<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(MenuItem) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(MenuItem(node)).into_result())
     }
 }

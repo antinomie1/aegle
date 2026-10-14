@@ -4,16 +4,17 @@ use aegle_types::{Color, Point};
 use parley::PositionedLayoutItem;
 
 impl Paragraph {
-    /// Appends positioned text to a scene, preserving each run's foreground color.
+    /// Appends positioned text to a scene in the paragraph's color.
     ///
     /// Positions are relative to the paragraph origin. Use the builder's transform
     /// and clip scopes to position text within its retained control. Only glyph
     /// positions and variation coordinates are copied; font bytes stay shared.
     ///
     /// Missing `.notdef` glyphs are drawn. Panics when some text has no font at
-    /// all (see [`Paragraph::diagnostics`]): register a font before painting.
+    /// all (see [`Paragraph::diagnostics`]): register a font before painting;
+    /// and while released.
     pub fn paint(&self, builder: &mut SceneBuilder) {
-        paint_layout(&self.layout, self.diagnostics, builder, None, self.weight)
+        self.paint_with_color(builder, self.color)
     }
 
     /// Appends text using one foreground color without reshaping the paragraph.
@@ -21,22 +22,28 @@ impl Paragraph {
     /// This supports foreground-only theme changes. Geometry, font selection and
     /// the paragraph's original styling are unchanged. Panics as [`Self::paint`].
     pub fn paint_with_color(&self, builder: &mut SceneBuilder, color: Color) {
+        assert!(!self.released, "paragraph layout was released");
+        let weight = self.shaping.weight.value();
+        let origin = Point::default();
         paint_layout(
             &self.layout,
             self.diagnostics,
             builder,
-            Some(color),
-            self.weight,
+            color,
+            weight,
+            origin,
         )
     }
 }
 
+/// Records `layout`'s glyphs at `origin`, all in `color`.
 pub(crate) fn paint_layout(
     layout: &Layout<Color>,
     diagnostics: TextDiagnostics,
     builder: &mut SceneBuilder,
-    color: Option<Color>,
+    color: Color,
     weight: f32,
+    origin: Point,
 ) {
     assert!(
         diagnostics.unshaped_bytes == 0,
@@ -58,13 +65,13 @@ pub(crate) fn paint_layout(
                 .positioned_glyphs()
                 .map(|glyph| Glyph {
                     id: glyph.id as u16,
-                    position: Point::new(glyph.x, glyph.y),
+                    position: Point::new(origin.x + glyph.x, origin.y + glyph.y),
                 })
                 .collect();
             let run = GlyphRun::new(
                 run.font().clone(),
                 run.font_size(),
-                color.unwrap_or(positioned.style().brush),
+                color,
                 run.normalized_coords().to_vec(),
                 glyphs,
             )

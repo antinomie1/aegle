@@ -53,10 +53,15 @@ impl Node {
     /// fractions of the node's size: x of its width and y of its height, with a
     /// radial radius in fractions of its larger side. Controls that paint no
     /// background ignore it. Ends the bindings of its stop colors.
+    ///
+    /// With a `TransitionProperty::Paint` timing (the `motion` feature), stops
+    /// and geometry tween from the shown gradient, a gradient appears from and
+    /// goes back to the background color, and switching between linear and
+    /// radial takes the target's geometry at once while the stops tween.
     pub fn set_background_gradient(&self, gradient: impl Into<Option<Gradient>>) {
         let gradient = gradient.into();
         self.change(|state, id| {
-            state.set_gradient(id, gradient);
+            state.set_gradient(id, gradient)?;
             state.tokens.unbind(id, |slot| {
                 matches!(slot, TokenSlot::Color(ColorSlot::GradientStop(_)))
             });
@@ -64,25 +69,36 @@ impl Node {
         })
     }
 
-    /// The gradient set by [`Self::set_background_gradient`].
+    /// The gradient set by [`Self::set_background_gradient`], past any
+    /// running transition.
     pub fn background_gradient(&self) -> Option<Gradient> {
-        self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.gradient.clone())))
+        self.change(|state, id| Ok(state.target_gradient(id)))
     }
 }
 
 impl crate::State {
-    fn set_gradient(&mut self, id: NodeId, gradient: Option<Gradient>) {
-        self.decorations.entry(id).or_default().gradient = gradient;
-        self.trim_decoration(id);
-        self.tree
-            .mark_dirty(id, Dirty::PAINT)
-            .expect("callers hold a live node");
+    fn set_gradient(&mut self, id: NodeId, gradient: Option<Gradient>) -> Result {
+        #[cfg(feature = "motion")]
+        return self.transition_gradient(id, gradient);
+        #[cfg(not(feature = "motion"))]
+        {
+            self.decorations.entry(id).or_default().gradient = gradient;
+            self.trim_decoration(id);
+            self.tree.mark_dirty(id, Dirty::PAINT)?;
+            Ok(())
+        }
+    }
+
+    /// The gradient a node rests at.
+    #[cfg(not(feature = "motion"))]
+    pub(crate) fn target_gradient(&self, id: NodeId) -> Option<Gradient> {
+        self.decorations.get(&id).and_then(|d| d.gradient.clone())
     }
 
     /// Recolors stop `index` of the node's gradient, as a token binding does.
     pub(crate) fn set_gradient_stop(&mut self, id: NodeId, index: u8, color: Color) -> Result {
-        let gradient = self.decorations.get(&id).and_then(|d| d.gradient.as_ref());
-        let gradient = gradient.ok_or(UiError::InvalidValue)?;
+        let gradient = self.target_gradient(id);
+        let gradient = gradient.as_ref().ok_or(UiError::InvalidValue)?;
         let mut stops = gradient.stops().to_vec();
         let stop = stops
             .get_mut(usize::from(index))
@@ -95,8 +111,7 @@ impl crate::State {
             GradientGeometry::Linear { start, end } => Gradient::linear(start, end, &stops),
             GradientGeometry::Radial { center, radius } => Gradient::radial(center, radius, &stops),
         };
-        self.set_gradient(id, Some(gradient?));
-        Ok(())
+        self.set_gradient(id, Some(gradient?))
     }
 
     /// Starts, retargets or snaps a shadow, like `transition_offset`; a fully

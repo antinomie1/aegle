@@ -49,18 +49,21 @@ impl Node {
     /// display, so use it for playheads and other continuously moving content
     /// and return false when idle. It runs before layout and painting, outside
     /// every UI borrow.
-    pub fn on_frame(&self, callback: impl FnMut(Node, Instant) -> bool + 'static) {
+    pub fn on_frame(
+        &self,
+        callback: impl FnMut(Node, Instant) -> bool + 'static,
+    ) -> crate::Subscription {
         self.change(|state, id| {
-            state.callback_version += 1;
+            let version = crate::callbacks::serial(&mut state.callback_version);
             let handler = FrameHandler {
                 id,
-                version: state.callback_version,
+                version,
                 callback: Some(Box::new(callback)),
             };
             state.frames.push(handler);
             // Starts the frame cycle on an otherwise idle window.
             state.repaint = true;
-            Ok(())
+            Ok(state.subscription(crate::callbacks::Slot::Frame, version))
         })
     }
 }
@@ -144,13 +147,20 @@ impl Ui {
     /// control and Tab traversal, in registration order, outside the UI
     /// borrow; the first to return true consumes the key. Check
     /// [`KeyEvent::editing`] before taking plain keys a text field would type.
-    pub fn on_key(&self, handler: impl FnMut(KeyEvent<'_>) -> bool + 'static) {
-        self.write().key_handlers.push(Box::new(handler));
+    pub fn on_key(
+        &self,
+        handler: impl FnMut(KeyEvent<'_>) -> bool + 'static,
+    ) -> crate::Subscription {
+        let mut state = self.write();
+        let serial = crate::callbacks::serial(&mut state.callback_version);
+        state.key_handlers.push((serial, Some(Box::new(handler))));
+        state.subscription(crate::callbacks::Slot::Key, serial)
     }
     /// Delivers a key that the platform reported at `time`: first to the
-    /// window key handler, then like [`Ui::key`].
+    /// window key handlers, then down and up the focused control's path
+    /// ([`Node::on_input`]), then like [`Ui::key`].
     pub fn key_at(&self, key: KeyInput<'_>, time: Instant) -> Result {
-        let (mut handlers, editing) = {
+        let (editing, until) = {
             let mut state = self.write();
             state.input_time = time;
             let editing = state.focus.current(&state.tree).is_some_and(|id| {
@@ -163,7 +173,7 @@ impl Ui {
                     .editor()
                     .is_some()
             });
-            (std::mem::take(&mut state.key_handlers), editing)
+            (editing, state.callback_version)
         };
         let event = KeyEvent {
             key: key.key,
@@ -174,17 +184,33 @@ impl Ui {
             time,
             editing,
         };
-        let consumed = handlers.iter_mut().any(|handler| handler(event));
-        {
-            // Handlers added while these ran follow them.
+        // Handlers added while these run follow them, from the next key.
+        let mut after = 0;
+        loop {
+            let next = {
+                let mut state = self.state.borrow_mut();
+                crate::callbacks::take(&mut state.key_handlers, after, until)
+            };
+            let Some((serial, mut handler)) = next else {
+                break;
+            };
+            after = serial;
+            let consumed = handler(event);
             let mut state = self.state.borrow_mut();
-            handlers.append(&mut state.key_handlers);
-            state.key_handlers = handlers;
+            crate::callbacks::restore(&mut state.key_handlers, serial, handler);
+            if consumed {
+                return Ok(());
+            }
         }
-        if consumed {
-            return Ok(());
+        let target = {
+            let state = self.read();
+            Some(state.focus.current(&state.tree).unwrap_or(state.root))
+        };
+        let (prevented, failure) = self.propagate(target, crate::InputKind::Key(event));
+        if !prevented {
+            self.dispatch_key(key)?;
         }
-        self.dispatch_key(key)
+        failure
     }
     /// Delivers a pointer transition that the platform reported at `time`, like [`Ui::pointer`].
     pub fn pointer_at(
