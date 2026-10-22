@@ -79,8 +79,9 @@ pub mod prelude {
     /// type names, and marker types for the other element names.
     #[cfg(feature = "markup")]
     pub use aegle_loader::{
-        Button, CheckBox, Column, Grid, NumberField, Progress, RadioButton, Row, ScrollView,
-        Separator, Slider, Splitter, Stack, Switch, Tab, Tabs, Text, TextArea, TextField,
+        Button, CheckBox, Column, Dialog, Drawer, Grid, NumberField, Progress, RadioButton, Row,
+        ScrollView, Separator, Slider, Splitter, Stack, Switch, Tab, Tabs, Text, TextArea,
+        TextField, TreeNode, TreeView,
     };
     pub use aegle_ui::{
         Align, Appearance, Color, ColorSlot, Container, ControlKind, Cursor, Direction, DragData,

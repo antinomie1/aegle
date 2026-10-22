@@ -71,7 +71,9 @@ impl Def {
         });
         let place = match &self.place {
             Some(place) => quote! { #p::place(handle, child, #place) },
-            None => quote! { #p::Container(::core::clone::Clone::clone(Self::node(handle))) },
+            None => {
+                quote! { #p::Container(::core::clone::Clone::clone(<Self as #l::Element>::node(handle))) }
+            }
         };
         let tokens = &self.tokens;
         quote! {
@@ -156,10 +158,7 @@ fn spec_tokens(spec: &ElementSpec<'_>, m: &TokenStream) -> TokenStream {
         Children::Only(name) => quote! { Only(#name) },
         Children::Exactly(count) => quote! { Exactly(#count) },
     };
-    let parent = match spec.parent {
-        Some(parent) => quote! { ::core::option::Option::Some(#parent) },
-        None => quote! { ::core::option::Option::None },
-    };
+    let parents = spec.parents;
     let styles = spec.styles.0;
     let ty = |ty: &ValueType<'_>| match ty {
         ValueType::Int(min, max) => quote! { #m::ValueType::Int(#min, #max) },
@@ -186,7 +185,7 @@ fn spec_tokens(spec: &ElementSpec<'_>, m: &TokenStream) -> TokenStream {
             name: #name,
             layout: #m::Layout::#layout,
             children: #m::Children::#children,
-            parent: #parent,
+            parents: &[#(#parents),*],
             styles: #m::Styles(#styles),
             properties: &[#(#properties),*],
             events: &[#(#events),*],

@@ -60,18 +60,22 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | Tabs | 盒容器，只接受 Tab | — | `changed`；`selected: int` |
 | Tab | 盒容器，只能直接写在 Tabs 中 | `title`*! 单行字符串 | — |
 | Splitter | 盒容器，恰好两个直接写出的元素，依次放入两个窗格 | `orientation`* `horizontal`/`vertical`；`ratio` 0 到 1 的数或百分比 | — |
-| Text | 叶 | `text`* 字符串 | — |
+| TreeView | 盒容器，只接受 TreeNode | — | — |
+| TreeNode | 盒容器，只能直接写在 TreeView 或 TreeNode 中，只接受 TreeNode（作为下一层） | `text`* 单行字符串；`expanded`、`selected` bool | `selected`（点击或 Enter/Space 选中，也在展开/收起时触发）；`text: string`、`expanded: bool`、`selected: bool` |
+| Dialog | 盒容器，子元素放入对话框正文；遮罩覆盖父容器 | `title`* 单行字符串；`open` bool；`dismissible` bool | `closed`；`open: bool` |
+| Drawer | 盒容器，子元素放入抽屉面板；停靠父容器边缘 | `side`* `left`/`right`；`open` bool；`width` dp 长度 | `closed`；`open: bool` |
+| Text | 叶 | `text`* 字符串；`wrap` bool | — |
 | Button | 叶 | `text`* 字符串 | `clicked` |
 | TextField | 叶 | `text`* 单行字符串；`read_only`、`password` bool | `submitted`；`text: string` |
 | TextArea | 叶 | `text`* 字符串；`read_only` bool | — |
-| CheckBox | 叶 | `text`* 字符串；`checked`* bool；`mixed` bool | `changed`；`checked: bool`、`text: string` |
-| Switch、RadioButton | 叶 | `text`* 字符串；`checked`* bool；同一父容器中的 RadioButton 互斥 | `changed`；`checked: bool`、`text: string` |
+| CheckBox | 叶 | `text`* 字符串；`checked`* bool；`mixed`、`wrap` bool | `changed`；`checked: bool`、`text: string` |
+| Switch、RadioButton | 叶 | `text`* 字符串；`checked`* bool；`wrap` bool；同一父容器中的 RadioButton 互斥 | `changed`；`checked: bool`、`text: string` |
 | Slider | 叶 | `min`*、`max`*、`value`* 有限数（默认 0/1/0）；`step` 非负数；`orientation` | `changed`；`value: float` |
 | Progress | 叶 | `min`*、`max`*、`value`*；`orientation`；`indeterminate` bool | — |
 | NumberField | 叶 | `min`*、`max`*、`value`*；`step` 非负数；`decimals` 0 到 9 的整数 | `changed`；`value: float` |
 | Separator | 叶 | — | — |
 
-元素属性的名称遮蔽同名的节点属性（如 Tab 的 `title`）。构造参数为字面量时交给构造器，不依赖源码顺序；写成表达式时构造器取默认值，随后由绑定设置。必填参数只能写字面量；只有构造参数而没有 setter 的属性（如 Splitter 的 `orientation`、数值元素的 `min`/`max`）也只能写字面量。数值元素的 `min` 须小于 `max`、`value` 按共享 Range 契约 clamp，由构造器在构建时检查，违反时构建失败并移除本次子树。标记数字以有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。文本默认为空字符串，窗口标题默认为 `Aegle`。
+元素属性的名称遮蔽同名的节点属性（如 Tab 的 `title`、Text 的 `wrap`）。Dialog 与 Drawer 的 `open` 只在与当前状态不同时打开或关闭，用户经 Escape、遮罩或关闭按钮关闭时触发 `closed`，绑定的状态需在 `on closed` 中同步，例如 `open: shown; on closed { shown = false }`。构造参数为字面量时交给构造器，不依赖源码顺序；写成表达式时构造器取默认值，随后由绑定设置。必填参数只能写字面量；只有构造参数而没有 setter 的属性（如 Splitter 的 `orientation`、数值元素的 `min`/`max`）也只能写字面量。数值元素的 `min` 须小于 `max`、`value` 按共享 Range 契约 clamp，由构造器在构建时检查，违反时构建失败并移除本次子树。标记数字以有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。文本默认为空字符串，窗口标题默认为 `Aegle`。
 
 ### 节点属性
 

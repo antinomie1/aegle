@@ -110,8 +110,8 @@ pub struct ElementSpec<'a> {
     pub layout: Layout,
     /// Children a container accepts; ignored for a leaf.
     pub children: Children<'a>,
-    /// The element it must be written directly inside, if any.
-    pub parent: Option<&'a str>,
+    /// The elements it must be written directly inside; empty allows any parent.
+    pub parents: &'a [&'a str],
     /// Optional style groups.
     pub styles: Styles,
     /// Element properties, after the properties every node has.

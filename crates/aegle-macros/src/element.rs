@@ -26,7 +26,7 @@ pub(crate) struct Def {
     handle: Option<Type>,
     layout: Layout,
     children: Children<'static>,
-    parent: Option<&'static str>,
+    parents: Vec<&'static str>,
     styles: Styles,
     create: (Ident, Expr),
     /// Properties in spec order, with their constructor default and setter.
@@ -149,7 +149,7 @@ impl Parse for Def {
             handle,
             layout: Layout::Leaf,
             children: Children::Any,
-            parent: None,
+            parents: Vec::new(),
             styles: Styles::NONE,
             create: (
                 Ident::new("parent", Span::call_site()),
@@ -194,7 +194,11 @@ impl Parse for Def {
                         }
                     }
                 }
-                "parent" => def.parent = Some(leak(word(&body)?)),
+                "parent" => {
+                    while !body.peek(Token![;]) {
+                        def.parents.push(leak(word(&body)?));
+                    }
+                }
                 "style" => {
                     while !body.peek(Token![;]) {
                         let group = word(&body)?;
@@ -330,7 +334,7 @@ impl Def {
             name: leak(self.name.to_string()),
             layout: self.layout,
             children: self.children,
-            parent: self.parent,
+            parents: Vec::leak(self.parents.clone()),
             styles: self.styles,
             properties: Vec::leak(properties.collect()),
             events: Vec::leak(events.collect()),

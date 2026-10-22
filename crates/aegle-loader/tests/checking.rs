@@ -202,3 +202,54 @@ fn layout_properties_accept_lists_units_and_enums_and_reject_misuse() {
         assert!(parse(body).and_then(check).is_err(), "accepted {body}");
     }
 }
+
+#[test]
+fn trees_overlays_and_wrapping_check_placement_and_values() {
+    let source = r#"Column {
+        state open: bool = false
+        state picked: string = ""
+        Text { text: "长说明"; wrap: true }
+        CheckBox { text: "同意"; wrap: open }
+        TreeView { gap: 2dp
+            TreeNode { text: "根"; expanded: true
+                TreeNode { text: "叶"; selected: open; on selected { picked = self.text } }
+            }
+        }
+        Dialog { title: "确认"; open: open; dismissible: false
+            on closed { open = self.open }
+            Text { text: picked }
+        }
+        Drawer { side: right; width: 200dp; open: !open; on closed { open = true }
+            Button { text: "首页" }
+        }
+    }"#;
+    let program = check(parse(source).unwrap()).unwrap();
+    for name in ["TreeView", "TreeNode", "Dialog", "Drawer"] {
+        assert!(program.elements.iter().any(|used| used == name), "{name}");
+    }
+    for body in [
+        "Column { TreeNode {} }",
+        "TreeNode {}",
+        "TreeView { Text {} }",
+        "TreeView { TreeNode { Text {} } }",
+        "TreeView { TreeNode { on clicked {} } }",
+        "TreeView { TreeNode { expanded: 1 } }",
+        "TreeView { TreeNode { text: \"a\nb\" } }",
+        "Dialog { open: 1 }",
+        "Dialog { on selected {} }",
+        "Drawer { side: top }",
+        "Drawer { width: 10 }",
+        "Button { wrap: true }",
+        "Text { wrap: wrap }",
+    ] {
+        assert!(parse(body).and_then(check).is_err(), "accepted {body}");
+    }
+    let error = check(parse("Column { TreeNode {} }").unwrap()).unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("only allowed inside TreeView or TreeNode"),
+        "{}",
+        error.message
+    );
+}

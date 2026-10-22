@@ -1,0 +1,20 @@
+Column {
+    state dialog_open: bool = false
+    state drawer_open: bool = false
+    state picked: string = ""
+    state closes: int = 0
+    Button { id: show; text: "打开"; on clicked { dialog_open = true } }
+    TreeView {
+        TreeNode { id: folder; text: "根"; expanded: true
+            TreeNode { id: leaf; text: "叶"; on selected { picked = self.text; drawer_open = true } }
+        }
+    }
+    Dialog { id: dialog; title: "确认"; open: dialog_open
+        on closed { dialog_open = false; closes += 1 }
+        Text { text: "已选 " + picked }
+    }
+    Drawer { id: drawer; side: right; width: 180dp; open: drawer_open
+        on closed { drawer_open = false }
+        Button { id: home; text: "首页"; on clicked { drawer_open = false } }
+    }
+}

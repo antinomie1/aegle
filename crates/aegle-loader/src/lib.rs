@@ -74,7 +74,7 @@ pub use view::{State, StateValue, View};
 /// Items, each ending with `;`:
 /// - `layout leaf | box | flex | grid` (default `leaf`), and for containers
 ///   `children any | only Name | exactly N` (default `any`);
-/// - `parent Name`: it may only be written directly inside `Name`;
+/// - `parent Name ...`: it may only be written directly inside one of these;
 /// - `style` followed by the groups `text interactive pressed indicator editor`;
 /// - `create |parent, name: type = default, ...| expr` returning the handle;
 ///   a constructor argument without a default is required and literal;

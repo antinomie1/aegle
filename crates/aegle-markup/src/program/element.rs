@@ -49,12 +49,14 @@ impl Checker<'_> {
         };
         let specs = self.specs;
         let target = spec.map_or(Target::Window, |spec| Target::Element(&specs[spec]));
-        if let Some(required) = spec.and_then(|spec| specs[spec].parent)
-            && parent.map(|parent| specs[parent].name) != Some(required)
+        if let Some(required) = spec.map(|spec| specs[spec].parents)
+            && !required.is_empty()
+            && !parent.is_some_and(|parent| required.contains(&specs[parent].name))
         {
             return Err(error(format!(
-                "{} is only allowed inside {required}",
-                node.name
+                "{} is only allowed inside {}",
+                node.name,
+                required.join(" or ")
             )));
         }
         self.children_fit(&node, target)?;

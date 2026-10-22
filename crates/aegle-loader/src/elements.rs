@@ -3,8 +3,8 @@
 
 use aegle_ui::Container;
 use aegle_widgets::{
-    Button, CheckBox, Label, NumberField, Orientation, Progress, Radio, Separator, Slider,
-    Splitter, Switch, Tabs, TextField, Widgets,
+    Button, CheckBox, Dialog, Drawer, DrawerSide, Label, NumberField, Orientation, Progress, Radio,
+    Separator, Slider, Splitter, Switch, Tabs, TextField, TreeNode, TreeView, Widgets,
 };
 
 use crate::Elements;
@@ -14,6 +14,14 @@ fn axis(name: &str) -> Orientation {
         "horizontal" => Orientation::Horizontal,
         "vertical" => Orientation::Vertical,
         other => unreachable!("checked orientation `{other}`"),
+    }
+}
+
+fn drawer_side(name: &str) -> DrawerSide {
+    match name {
+        "left" => DrawerSide::Left,
+        "right" => DrawerSide::Right,
+        other => unreachable!("checked side `{other}`"),
     }
 }
 
@@ -58,6 +66,7 @@ crate::element! {
         style text;
         create |parent, text: string = ""| parent.text(text);
         set text: string => |label, text| label.set_text(text);
+        set wrap: bool => |label, on| label.set_wrap(on);
     }
     /// A push button.
     pub Button {
@@ -88,6 +97,7 @@ crate::element! {
         style text interactive pressed indicator;
         create |parent, text: string = "", checked: bool = false| parent.check_box(text, checked);
         set text: string => |toggle, text| toggle.set_text(text);
+        set wrap: bool => |toggle, on| toggle.set_wrap(on);
         set checked: bool => |toggle, on| toggle.set_checked(on);
         set mixed: bool => |toggle, on| toggle.set_mixed(on);
         event changed => |toggle, run| toggle.on_change(move |_| run());
@@ -99,6 +109,7 @@ crate::element! {
         style text interactive pressed indicator;
         create |parent, text: string = "", checked: bool = false| parent.switch(text, checked);
         set text: string => |toggle, text| toggle.set_text(text);
+        set wrap: bool => |toggle, on| toggle.set_wrap(on);
         set checked: bool => |toggle, on| toggle.set_checked(on);
         event changed => |toggle, run| toggle.on_change(move |_| run());
         get checked: bool => |toggle| toggle.is_checked();
@@ -109,6 +120,7 @@ crate::element! {
         style text interactive pressed indicator;
         create |parent, text: string = "", checked: bool = false| parent.radio(text, checked);
         set text: string => |toggle, text| toggle.set_text(text);
+        set wrap: bool => |toggle, on| toggle.set_wrap(on);
         set checked: bool => |toggle, on| toggle.set_checked(on);
         event changed => |toggle, run| toggle.on_change(move |_| run());
         get checked: bool => |toggle| toggle.is_checked();
@@ -168,6 +180,56 @@ crate::element! {
         set ratio: fraction => |splitter, ratio| splitter.set_ratio(ratio);
         children => |splitter, child| (if child == 0 { splitter.first() } else { splitter.second() }).clone();
     }
+    /// A hierarchical list whose children are `TreeNode`s.
+    pub TreeView {
+        layout box;
+        children only TreeNode;
+        create |parent| parent.tree_view();
+    }
+    /// One expandable node of a `TreeView`; its children are nested nodes.
+    pub TreeNode {
+        layout box;
+        parent TreeView TreeNode;
+        children only TreeNode;
+        create |parent, text: line = ""| TreeNode::append_to(parent, text);
+        set text: line => |node, text| node.set_text(text);
+        set expanded: bool => |node, on| node.set_expanded(on);
+        set selected: bool => |node, on| node.set_selected(on);
+        event selected => |node, run| node.on_select(move |_| run());
+        get text: string => |node| node.text();
+        get expanded: bool => |node| node.is_expanded();
+        get selected: bool => |node| node.is_selected();
+        children => |node, _| node.children_container();
+    }
+    /// A modal dialog over its parent; children go in its body.
+    pub Dialog {
+        layout box;
+        create |parent, title: line = ""| parent.dialog(title);
+        set title: line => |dialog, title| dialog.set_title(title);
+        set open: bool => |dialog, on| match (on, dialog.is_open()) {
+            (true, false) => dialog.show(),
+            (false, true) => dialog.close(),
+            _ => {}
+        };
+        set dismissible: bool => |dialog, on| dialog.set_dismissible(on);
+        event closed => |dialog, run| dialog.on_close(run);
+        get open: bool => |dialog| dialog.is_open();
+        children => |dialog, _| dialog.body();
+    }
+    /// A navigation panel docked to an edge of its parent; children go in its panel.
+    pub Drawer {
+        layout box;
+        create |parent, side: choice(left, right) = "left"| parent.drawer_on(drawer_side(side));
+        set open: bool => |drawer, on| match (on, drawer.is_open()) {
+            (true, false) => drawer.open(),
+            (false, true) => drawer.close(),
+            _ => {}
+        };
+        set width: length => |drawer, width| drawer.set_width(width);
+        event closed => |drawer, run| drawer.on_close(run);
+        get open: bool => |drawer| drawer.is_open();
+        children => |drawer, _| drawer.content();
+    }
 }
 
 /// Every built-in element.
@@ -193,4 +255,8 @@ pub(crate) fn builtin() -> Elements {
         .with::<Tabs>()
         .with::<Tab>()
         .with::<Splitter>()
+        .with::<TreeView>()
+        .with::<TreeNode>()
+        .with::<Dialog>()
+        .with::<Drawer>()
 }
