@@ -56,6 +56,27 @@ macro_rules! toggles {
         pub fn on_change<R: HandlerResult>(&self, mut callback: impl FnMut(Self) -> R + 'static) -> aegle_ui::Subscription {
             self.on_action(move |node| callback(Self(node)).into_result())
         }
+        /// Enables or disables label text wrapping.
+        pub fn set_wrap(&self, wrap: bool) {
+            self.update(|toggle| toggle.wrap = wrap);
+            self.set_shrink(if wrap { 1.0 } else { 0.0 });
+            self.change(|state, id| {
+                let theme = *state.theme_of(id);
+                let mut style = state.tree.get(id).unwrap().style().clone();
+                style.size.height = if wrap {
+                    Dimension::auto()
+                } else {
+                    Dimension::length(theme.control_height)
+                };
+                aegle_layout::set_style(&mut state.tree, id, style)?;
+                state.tree.mark_dirty(id, aegle_core::Dirty::LAYOUT)?;
+                Ok(())
+            });
+        }
+        /// Whether label text wrapping is enabled.
+        pub fn is_wrap(&self) -> bool {
+            self.read(|toggle| toggle.wrap)
+        }
     })* };
 }
 toggles!(CheckBox, Switch, Radio);
@@ -79,6 +100,7 @@ pub struct ToggleControl {
     mark: Mark,
     /// A check box shown as partially checked until the user changes it.
     mixed: bool,
+    wrap: bool,
 }
 
 impl Control for ToggleControl {
@@ -150,24 +172,48 @@ impl Control for ToggleControl {
         Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
+        use aegle_ui::OrFail;
         let marker = if self.mark == Mark::Switch {
             36.0
         } else {
             18.0
         };
-        let label = if self.text.text().is_empty() {
+        let label_width = if self.text.text().is_empty() {
             0.0
+        } else if self.wrap {
+            let available = cx
+                .content_width()
+                .map(|w| (w - marker - cx.gap - 2.0 * cx.padding).max(0.0));
+            self.text.reflow(available, cx.alignment()).or_fail().width + cx.gap
         } else {
-            cx.gap + self.text.size().width
+            self.text.reflow(None, cx.alignment()).or_fail().width + cx.gap
         };
         Size::new(
-            marker + label + 2.0 * cx.padding,
+            marker + label_width + 2.0 * cx.padding,
             self.text.size().height.max(20.0) + 2.0 * cx.padding,
         )
     }
+    fn finalize(&mut self, cx: &MeasureCx<'_>) {
+        use aegle_ui::OrFail;
+        if self.wrap {
+            let marker = if self.mark == Mark::Switch {
+                36.0
+            } else {
+                18.0
+            };
+            let available = cx
+                .content_width()
+                .map(|w| (w - marker - cx.gap - 2.0 * cx.padding).max(0.0));
+            self.text.reflow(available, cx.alignment()).or_fail();
+        }
+    }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
-            style.size.height = Dimension::length(theme.control_height);
+            style.size.height = if self.wrap {
+                Dimension::auto()
+            } else {
+                Dimension::length(theme.control_height)
+            };
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
@@ -314,6 +360,7 @@ fn create(container: &Container, text: &str, checked: bool, mark: Mark) -> Node 
                 text,
                 mark,
                 mixed: false,
+                wrap: false,
             }) as Box<dyn Control>,
             control_style(theme.control_height),
         ))

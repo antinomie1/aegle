@@ -24,6 +24,8 @@
 
 mod button;
 mod canvas;
+mod dialog;
+mod drawer;
 mod dropdown;
 mod field;
 mod group;
@@ -44,6 +46,7 @@ mod table;
 mod tabs;
 mod toggle;
 mod tooltip;
+mod tree;
 mod visual;
 
 use aegle_layout::Style;
@@ -54,6 +57,8 @@ use aegle_ui::{Container, Control, HandlerResult, Hooks, Node, Result, State};
 
 pub use button::{Button, ButtonControl};
 pub use canvas::{Canvas, CanvasControl, CanvasEvent, Painter};
+pub use dialog::Dialog;
+pub use drawer::{Drawer, DrawerSide};
 pub use dropdown::Dropdown;
 pub use field::{FieldControl, TextField};
 pub use group::Group;
@@ -63,7 +68,10 @@ pub use menu::MenuBar;
 pub use menu_item::{MenuItem, MenuItemControl};
 pub use number_field::{NumberField, NumberFieldControl};
 pub use numeric::{Progress, Slider};
-pub use paint::{CHEVRON, Mark, ToggleSpec, check_mark, chevron, range, slider_track, toggle};
+pub use paint::{
+    CHEVRON, ChevronDirection, Mark, ToggleSpec, check_mark, chevron, chevron_dir, range,
+    slider_track, toggle,
+};
 pub use popup::Popup;
 pub use range_control::{Orientation, ProgressControl, SliderControl};
 pub use scroll_view::ScrollControl;
@@ -72,6 +80,7 @@ pub use table::{Table, TableColumn};
 pub use tabs::{Tabs, TabsControl};
 pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
 pub use tooltip::TOOLTIP_DELAY;
+pub use tree::{TreeNode, TreeNodeControl, TreeView};
 pub use visual::{ImageControl, ImageView};
 
 /// The engine hooks the controls need: popups (overlay placement, dismissal and
@@ -93,6 +102,8 @@ pub static HOOKS: Hooks = Hooks {
 fn keys(state: &mut State, key: &aegle_ui::KeyInput<'_>) -> Result<bool> {
     Ok(tooltip::tooltip_key(state, key)?
         || menu_nav::menu_key(state, key)?
+        || dialog::dialog_key(state, key)?
+        || drawer::drawer_key(state, key)?
         || popup::popup_key(state, key)?
         || toggle::radio_key(state, key)?
         || tabs::tab_key(state, key)?)
@@ -105,15 +116,23 @@ fn hover(state: &mut State, hit: Option<aegle_core::NodeId>) -> Result {
 
 fn press(state: &mut State, position: aegle_types::Point) -> Result {
     tooltip::hide(state)?;
+    if dialog::dismiss_dialog(state, position)? {
+        return Ok(());
+    }
+    if drawer::dismiss_drawer(state, position)? {
+        return Ok(());
+    }
     popup::dismiss_popups(state, position)
 }
 
 fn place(state: &mut State) -> bool {
-    // Both run: each moves its own overlays.
+    // All run: each moves its own overlays.
     popup::place_popups(state) | tooltip::place(state)
 }
 
 fn removed(state: &mut State, node: aegle_core::NodeId) {
+    dialog::removed(state, node);
+    drawer::removed(state, node);
     popup::removed(state, node);
     list::removed(state, node);
     tooltip::removed(state, node);
@@ -207,6 +226,17 @@ pub trait Widgets {
     /// Appends two panes divided by a draggable, keyboard-adjustable handle:
     /// side by side when horizontal, stacked when vertical. It grows to fill.
     fn splitter(&self, orientation: Orientation) -> Splitter;
+    /// Appends a modal dialog overlaid on the window. Populate with [`Dialog::body`]
+    /// and show with [`Dialog::show`].
+    fn dialog(&self, title: &str) -> Dialog;
+    /// Appends a slide-out navigation drawer docked to `side`.
+    fn drawer_on(&self, side: DrawerSide) -> Drawer;
+    /// Appends a slide-out navigation drawer docked to the left edge.
+    fn drawer(&self) -> Drawer {
+        self.drawer_on(DrawerSide::Left)
+    }
+    /// Appends a hierarchical tree view; add top-level nodes with [`TreeView::node`].
+    fn tree_view(&self) -> TreeView;
 }
 
 impl Widgets for Container {
@@ -284,6 +314,15 @@ impl Widgets for Container {
     fn splitter(&self, orientation: Orientation) -> Splitter {
         separator::splitter(self, orientation)
     }
+    fn dialog(&self, title: &str) -> Dialog {
+        dialog::create_dialog(self, title)
+    }
+    fn drawer_on(&self, side: DrawerSide) -> Drawer {
+        drawer::create_drawer(self, side)
+    }
+    fn tree_view(&self) -> TreeView {
+        tree::tree_view(self)
+    }
 }
 
 /// The default controls' additions to every control, like [`Widgets`] for
@@ -305,6 +344,10 @@ pub trait NodeWidgets {
     /// without its own tooltip) and sets it as the accessible description;
     /// `None` removes it. Pressing, Escape or leaving hides it.
     fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>);
+    /// Creates a modal dialog anchored to this control's window.
+    fn dialog(&self, title: &str) -> Dialog;
+    /// Creates a slide-out navigation drawer docked to the left edge of this control's window.
+    fn drawer(&self) -> Drawer;
 }
 
 impl NodeWidgets for Node {
@@ -319,5 +362,11 @@ impl NodeWidgets for Node {
     }
     fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>) {
         tooltip::set_tooltip(self, text.into())
+    }
+    fn dialog(&self, title: &str) -> Dialog {
+        dialog::create_dialog(&Container(self.clone()), title)
+    }
+    fn drawer(&self) -> Drawer {
+        drawer::create_drawer(&Container(self.clone()), DrawerSide::Left)
     }
 }

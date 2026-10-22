@@ -53,6 +53,14 @@ kinds! {
     MENU_BAR = "MenuBar", menu_bar, Accepts::NONE, true;
     /// A tooltip's text, in inverted colors.
     TOOLTIP = "Tooltip", tooltip, TEXT, false;
+    /// A tree view container: a surface for hierarchical tree nodes.
+    TREE_VIEW = "TreeView", scroll_view, Accepts::NONE, true;
+    /// A single selectable tree row with hover and press highlights.
+    TREE_NODE = "TreeNode", menu_item, TEXT.with(PRESSABLE), true;
+    /// An in-window modal dialog card.
+    DIALOG = "Dialog", panel, Accepts::NONE, true;
+    /// An edge-docked navigation drawer panel.
+    DRAWER = "Drawer", panel, Accepts::NONE, true;
 }
 
 /// The pressed or hovered fill of an enabled control, else `rest`.

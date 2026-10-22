@@ -248,12 +248,41 @@ pub fn check_mark(builder: &mut SceneBuilder, x: f32, y: f32, size: f32, color: 
     }
 }
 
-/// A downward chevron centered at `(x, y)`, for dropdowns.
-pub fn chevron(builder: &mut SceneBuilder, x: f32, y: f32, color: Color) {
+/// Direction for a chevron arrow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChevronDirection {
+    /// Pointing downwards (expanded).
+    Down,
+    /// Pointing to the right (collapsed in LTR).
+    Right,
+}
+
+/// A chevron arrow pointing in `direction` centered at `(x, y)`.
+pub fn chevron_dir(
+    builder: &mut SceneBuilder,
+    x: f32,
+    y: f32,
+    direction: ChevronDirection,
+    color: Color,
+) {
     let mut path = PathBuilder::new();
-    path.move_to(Point::new(x - CHEVRON * 0.5, y - CHEVRON * 0.25));
-    path.line_to(Point::new(x + CHEVRON * 0.5, y - CHEVRON * 0.25));
-    path.line_to(Point::new(x, y + CHEVRON * 0.35));
+    match direction {
+        ChevronDirection::Down => {
+            path.move_to(Point::new(x - CHEVRON * 0.5, y - CHEVRON * 0.25));
+            path.line_to(Point::new(x + CHEVRON * 0.5, y - CHEVRON * 0.25));
+            path.line_to(Point::new(x, y + CHEVRON * 0.35));
+        }
+        ChevronDirection::Right => {
+            path.move_to(Point::new(x - CHEVRON * 0.25, y - CHEVRON * 0.5));
+            path.line_to(Point::new(x + CHEVRON * 0.35, y));
+            path.line_to(Point::new(x - CHEVRON * 0.25, y + CHEVRON * 0.5));
+        }
+    }
     path.close();
     builder.fill_path(&path.finish(FillRule::NonZero), color);
+}
+
+/// A downward chevron centered at `(x, y)`, for dropdowns.
+pub fn chevron(builder: &mut SceneBuilder, x: f32, y: f32, color: Color) {
+    chevron_dir(builder, x, y, ChevronDirection::Down, color)
 }

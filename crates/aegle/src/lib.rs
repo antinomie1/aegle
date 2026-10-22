@@ -95,8 +95,9 @@ pub mod prelude {
     #[cfg(feature = "grid")]
     pub use aegle_ui::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
     pub use aegle_widgets::{
-        Button, Canvas, CheckBox, Dropdown, ImageView, Label, ListView, MenuBar, MenuItem,
-        NodeWidgets, NumberField, Orientation, Popup, Progress, Radio, RowHeight, Separator,
-        Slider, Splitter, Switch, Table, TableColumn, Tabs, TextField, Widgets,
+        Button, Canvas, CheckBox, Dialog, Drawer, DrawerSide, Dropdown, ImageView, Label, ListView,
+        MenuBar, MenuItem, NodeWidgets, NumberField, Orientation, Popup, Progress, Radio,
+        RowHeight, Separator, Slider, Splitter, Switch, Table, TableColumn, Tabs, TextField,
+        TreeNode, TreeView, Widgets,
     };
 }

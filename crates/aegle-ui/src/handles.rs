@@ -144,6 +144,10 @@ impl Node {
     pub fn set_visible(&self, visible: bool) {
         self.change(|state, id| state.set_visible(id, visible))
     }
+    /// Whether this node is currently visible.
+    pub fn is_visible(&self) -> bool {
+        self.change(|state, id| Ok(state.tree.get(id).unwrap().context.visible))
+    }
     /// Disables interaction throughout this subtree, preserving its displayed values.
     pub fn set_enabled(&self, enabled: bool) {
         self.change(|state, id| {

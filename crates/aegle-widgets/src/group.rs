@@ -20,6 +20,8 @@ pub(crate) enum Role {
     TableHeader,
     TabList,
     TabPanel,
+    Dialog,
+    Drawer,
 }
 
 /// A plain container with a semantic role.
@@ -31,6 +33,8 @@ impl Control for Group {
     fn kind(&self) -> &'static ControlKind {
         match self.role {
             Role::Popup { .. } | Role::Menu | Role::Table => &crate::kinds::PANEL,
+            Role::Dialog => &crate::kinds::DIALOG,
+            Role::Drawer => &crate::kinds::DRAWER,
             Role::MenuBar => &crate::kinds::MENU_BAR,
             _ => &aegle_ui::CONTAINER,
         }
@@ -72,6 +76,8 @@ impl Control for Group {
             Role::TableHeader => cx.node.set_role(Access::ColumnHeader),
             Role::TabList => cx.node.set_role(Access::TabList),
             Role::TabPanel => cx.node.set_role(Access::TabPanel),
+            Role::Dialog => cx.node.set_role(Access::Dialog),
+            Role::Drawer => cx.node.set_role(Access::Navigation),
         }
     }
 }
