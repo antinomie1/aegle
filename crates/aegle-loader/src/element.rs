@@ -46,6 +46,43 @@ pub enum Arg<'a> {
     Str(&'a str),
     /// `color`.
     Color(Color),
+    /// `lines`.
+    Lines(Lines<'a>),
+}
+
+/// A checked `lines` value: a nonempty list of strings without hard line
+/// separators.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lines<'a>(Items<'a>);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Items<'a> {
+    Literal(&'a [Value]),
+    Static(&'a [&'a str]),
+}
+
+impl<'a> Lines<'a> {
+    /// Lines `ui!` checked at compile time.
+    #[doc(hidden)]
+    pub const fn from_static(items: &'a [&'a str]) -> Self {
+        Self(Items::Static(items))
+    }
+    /// The strings in order.
+    pub fn iter(self) -> impl Iterator<Item = &'a str> {
+        let (literal, fixed) = match self.0 {
+            Items::Literal(items) => (items, &[][..]),
+            Items::Static(items) => (&[][..], items),
+        };
+        let literal = literal.iter().map(|item| match item {
+            Value::String(text) => text.as_str(),
+            _ => unreachable!("checked lines"),
+        });
+        literal.chain(fixed.iter().copied())
+    }
+    /// The strings in order, as constructors such as `dropdown` take them.
+    pub fn to_vec(self) -> Vec<&'a str> {
+        self.iter().collect()
+    }
 }
 
 macro_rules! read {
@@ -71,12 +108,14 @@ read! {
     f32 -> f32: Arg::Float(value) => value as f32;
     str -> &'a str: Arg::Str(value) => value;
     color -> Color: Arg::Color(value) => value;
+    lines -> Lines<'a>: Arg::Lines(value) => value;
 }
 
 impl<'a> Arg<'a> {
     /// A checked literal of type `ty`; integers arrive as numbers.
     pub(crate) fn literal(ty: ValueType<'_>, value: &'a Value) -> Self {
         match (ty, value) {
+            (ValueType::Lines, Value::List(items)) => Self::Lines(Lines(Items::Literal(items))),
             (_, Value::Bool(value)) => Self::Bool(*value),
             (ValueType::Int(..), Value::Number(value)) => Self::Int(*value as i64),
             (_, Value::Number(value) | Value::Length(value)) => Self::Float(f64::from(*value)),
@@ -183,6 +222,7 @@ impl<E: Element> Glue for Erase<E> {
 pub mod __private {
     pub use aegle_ui::{Color, Container, Node, Result};
 
+    pub use super::Lines;
     pub use crate::handle::{apply, transitions};
 
     /// Calls a setter with its handle and value types known first.

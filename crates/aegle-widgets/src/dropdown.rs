@@ -133,6 +133,10 @@ impl Dropdown {
         }
         self.change(|state, id| select(state, id, index, false))
     }
+    /// Copies the selected choice.
+    pub fn text(&self) -> String {
+        self.change(|state, id| state.text(id))
+    }
     /// Copies the choices.
     pub fn items(&self) -> Vec<String> {
         self.change(|state, id| Ok(popups(state).dropdowns[&id].items.clone()))

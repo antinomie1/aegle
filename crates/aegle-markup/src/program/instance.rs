@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use super::{Checker, Scope};
 use crate::checked::{Child, Element, ElementKind, Handler};
-use crate::{Error, Expr, ExprKind, Item, Limits, Node, Span, Type, Value};
+use crate::{Children, Error, Expr, ExprKind, Item, Limits, Node, Span, Type, Value};
 
 impl Checker<'_> {
     pub(super) fn instance(
@@ -89,7 +89,12 @@ impl Checker<'_> {
         let slot = if node.children.is_empty() {
             None
         } else if self.slots[template] {
-            Some(self.block(node.children, scope)?)
+            // Content placed exactly once may name its controls.
+            let previous = self.in_block;
+            self.in_block |= !self.slot_once[template];
+            let children = self.items(node.children, scope, None);
+            self.in_block = previous;
+            Some(children?)
         } else {
             return Err(Error::new(
                 node.span,
@@ -128,12 +133,15 @@ impl Checker<'_> {
     }
 
     fn nested(&mut self, item: Item, scope: &mut Scope) -> Result<Child, Error> {
+        // Blocks pass their parent on to elements that accept blocks.
+        let parent = (self.parent)
+            .filter(|&parent| matches!(self.specs[parent].children, Children::Blocks(_)));
         Ok(match item {
             Item::Node(node) => Child::Element(self.element(node, scope, false)?),
             Item::If(mut condition, then, otherwise) => {
                 self.expr(&mut condition, scope, Some(&Type::Bool))?;
-                let then = self.block(then, scope)?;
-                let otherwise = self.block(otherwise, scope)?;
+                let then = self.block(then, scope, parent)?;
+                let otherwise = self.block(otherwise, scope, parent)?;
                 Child::If(Rc::new(condition), then, otherwise)
             }
             Item::For(name, mut list, key, body) => {
@@ -162,7 +170,7 @@ impl Checker<'_> {
                     }
                     None => None,
                 };
-                let body = self.block(body, scope);
+                let body = self.block(body, scope, parent);
                 scope.items.pop();
                 Child::For(Rc::new(list), key, body?)
             }
@@ -179,20 +187,33 @@ impl Checker<'_> {
         })
     }
 
+    /// Checks the items of an `if` branch or a `for` body, whose controls
+    /// come and go; `parent` is the spec its elements are direct children of.
     pub(super) fn block(
         &mut self,
         items: Vec<Item>,
         scope: &mut Scope,
+        parent: Option<usize>,
     ) -> Result<Rc<[Child]>, Error> {
         let previous = std::mem::replace(&mut self.in_block, true);
+        let children = self.items(items, scope, parent);
+        self.in_block = previous;
+        children
+    }
+
+    fn items(
+        &mut self,
+        items: Vec<Item>,
+        scope: &mut Scope,
+        parent: Option<usize>,
+    ) -> Result<Rc<[Child]>, Error> {
         let children: Result<Vec<_>, _> = items
             .into_iter()
             .map(|item| {
-                self.parent = None;
+                self.parent = parent;
                 self.child(item, scope)
             })
             .collect();
-        self.in_block = previous;
         Ok(children?.into())
     }
 }

@@ -43,6 +43,7 @@ pub struct Handler {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Slot {
     Action(NodeId),
+    Edit(NodeId),
     #[cfg(feature = "motion")]
     TransitionEnd(NodeId),
     DoubleClick(NodeId),
@@ -171,6 +172,23 @@ impl State {
         );
         self.subscription(Slot::Action(id), serial)
     }
+    /// Adds a handler to `id` run after user input changed the committed text
+    /// of its editor: typing, deletion, paste, cut, undo, redo or an IME
+    /// commit, but not preedit or programmatic text. It runs like an action
+    /// handler, once per changing input.
+    pub fn on_edit(
+        &mut self,
+        id: NodeId,
+        callback: impl FnMut(Node) -> Result + 'static,
+    ) -> Subscription {
+        let serial = add(
+            &mut self.edits,
+            &mut self.callback_version,
+            id,
+            Box::new(callback),
+        );
+        self.subscription(Slot::Edit(id), serial)
+    }
     /// A subscription to handler `serial` in `slot`.
     pub(crate) fn subscription(&self, slot: Slot, serial: u64) -> Subscription {
         Subscription {
@@ -187,10 +205,17 @@ impl State {
             self.pending.push_back((id, handler.version));
         }
     }
+    /// Queues the edit handlers of `id`, if it has any, like [`Self::queue_action`].
+    pub(crate) fn queue_edit(&mut self, id: NodeId) {
+        if let Some(handler) = self.edits.get(&id) {
+            self.pending.push_back((id, handler.version));
+        }
+    }
     /// Unregisters the handler `serial` in `slot`.
     pub(crate) fn unsubscribe(&mut self, slot: Slot, serial: u64) {
         match slot {
             Slot::Action(id) => unregister(&mut self.callbacks, id, serial),
+            Slot::Edit(id) => unregister(&mut self.edits, id, serial),
             #[cfg(feature = "motion")]
             Slot::TransitionEnd(id) => unregister(&mut self.motion.ends, id, serial),
             Slot::DoubleClick(id) => unregister(&mut self.clicks.handlers, id, serial),
@@ -211,6 +236,9 @@ impl State {
     fn handler(&mut self, id: NodeId, version: u64) -> Option<&mut Handler> {
         let current = |h: &&mut Handler| h.version == version;
         if let Some(handler) = self.callbacks.get_mut(&id).filter(current) {
+            return Some(handler);
+        }
+        if let Some(handler) = self.edits.get_mut(&id).filter(current) {
             return Some(handler);
         }
         #[cfg(feature = "motion")]

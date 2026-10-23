@@ -259,6 +259,10 @@ impl State {
         let theme = self.theme;
         let element = &mut self.tree.get_mut(target).unwrap().context;
         let (size, padding) = (element.bounds.size, element.inset(&theme));
+        let revision = |element: &crate::state::Element| {
+            (element.control.editor()).map(|field| field.editor().revision())
+        };
+        let before = revision(element);
         let mut deferred = Vec::new();
         let outcome = element.control.handle(
             &mut InputCx {
@@ -271,6 +275,9 @@ impl State {
             },
             input,
         );
+        if revision(element) != before {
+            self.queue_edit(target);
+        }
         for work in deferred {
             work(self, target)?;
         }

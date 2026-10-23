@@ -177,6 +177,13 @@ fn arg(ty: ValueType<'_>, value: &Value, loader: &TokenStream) -> TokenStream {
         (_, Value::Color([r, g, b, a])) => {
             quote! { #arg::Color(#loader::__private::Color::rgba(#r, #g, #b, #a)) }
         }
+        (ValueType::Lines, Value::List(items)) => {
+            let items = items.iter().map(|item| match item {
+                Value::String(text) => text,
+                _ => unreachable!("checked lines"),
+            });
+            quote! { #arg::Lines(#loader::Lines::from_static(&[#(#items),*])) }
+        }
         _ => unreachable!("checked element literal"),
     }
 }

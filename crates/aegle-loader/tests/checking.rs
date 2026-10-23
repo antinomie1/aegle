@@ -253,3 +253,58 @@ fn trees_overlays_and_wrapping_check_placement_and_values() {
         error.message
     );
 }
+
+#[test]
+fn dropdowns_tree_blocks_and_slot_ids_check_their_rules() {
+    let source = r#"component Pair(label: string) { Row { Text { text: label }; slot } }
+    component Outer() { Pair { label: "外"; slot } }
+    component Maybe(shown: bool) { Column { if shown { slot } } }
+    Column {
+        state names: list<string> = ["甲"]
+        state size: int = 0
+        Dropdown { id: sizes; items: ["小", "中"]; selected: size; on changed { size = self.selected } }
+        TextField { on changed { if self.text == "" { size = 0 } } }
+        TreeView { for name in names { TreeNode { text: name; if size > 0 { TreeNode {} } } } }
+        Outer { TextField { id: inner } }
+        Maybe { shown: true; Text {} }
+    }"#;
+    let program = check(parse(source).unwrap()).unwrap();
+    let ids: Vec<_> = program.ids.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(ids, ["sizes", "inner"]);
+    for (body, message) in [
+        ("Dropdown {}", "Dropdown requires `items`"),
+        ("Dropdown { items: [] }", "nonempty list"),
+        ("Dropdown { items: [\"a\\nb\"] }", "nonempty list"),
+        ("Dropdown { items: [1] }", "nonempty list"),
+        ("Dropdown { items: names }", "accepts only literal values"),
+        ("Dropdown { items: [\"a\"]; selected: -1 }", "whole number"),
+        (
+            "TreeView { for name in names { Text {} } }",
+            "in if and for blocks",
+        ),
+        (
+            "TreeView { if true { TreeNode {} } else { Text {} } }",
+            "in if and for blocks",
+        ),
+        (
+            "Tabs { for name in names { Tab { title: \"t\" } } }",
+            "accepts only Tab",
+        ),
+        (
+            "Column { for name in names { TreeNode {} } }",
+            "only allowed inside",
+        ),
+        (
+            "Maybe { shown: true; Text { id: lost } }",
+            "ids are only available",
+        ),
+        ("TextArea { on submitted {} }", "no event"),
+    ] {
+        let source = format!(
+            "component Maybe(shown: bool) {{ Column {{ if shown {{ slot }} }} }}\n\
+             Column {{ state names: list<string> = []\n{body} }}"
+        );
+        let error = check(parse(&source).unwrap()).unwrap_err();
+        assert!(error.message.contains(message), "{body}: {}", error.message);
+    }
+}

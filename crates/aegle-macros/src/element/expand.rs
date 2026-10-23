@@ -145,6 +145,7 @@ fn rust(ty: ValueType<'_>, p: &TokenStream) -> (TokenStream, Ident) {
         ValueType::Float(..) => (quote! { f64 }, "f64"),
         ValueType::Fraction | ValueType::Length => (quote! { f32 }, "f32"),
         ValueType::Color => (quote! { #p::Color }, "color"),
+        ValueType::Lines => (quote! { #p::Lines<'_> }, "lines"),
         _ => (quote! { &str }, "str"),
     };
     (ty, Ident::new(read, Span::call_site()))
@@ -156,6 +157,7 @@ fn spec_tokens(spec: &ElementSpec<'_>, m: &TokenStream) -> TokenStream {
     let children = match spec.children {
         Children::Any => quote! { Any },
         Children::Only(name) => quote! { Only(#name) },
+        Children::Blocks(name) => quote! { Blocks(#name) },
         Children::Exactly(count) => quote! { Exactly(#count) },
     };
     let parents = spec.parents;

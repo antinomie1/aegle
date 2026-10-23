@@ -58,6 +58,18 @@ impl TextField {
     ) -> aegle_ui::Subscription {
         self.on_action(move |node| callback(TextField(node)).into_result())
     }
+    /// Adds a handler run after each user edit of the committed text: typing,
+    /// deletion, paste, cut, undo, redo or an IME commit. Preedit and
+    /// [`Self::set_text`] do not invoke it. Handlers run in registration order
+    /// outside UI borrows.
+    pub fn on_change<R: HandlerResult>(
+        &self,
+        mut callback: impl FnMut(TextField) -> R + 'static,
+    ) -> aegle_ui::Subscription {
+        self.change(|state, id| {
+            Ok(state.on_edit(id, move |node| callback(TextField(node)).into_result()))
+        })
+    }
     /// Applies an editor change, then restarts a focused native IME session.
     fn edit(
         &self,

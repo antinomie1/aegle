@@ -60,14 +60,15 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | Tabs | 盒容器，只接受 Tab | — | `changed`；`selected: int` |
 | Tab | 盒容器，只能直接写在 Tabs 中 | `title`*! 单行字符串 | — |
 | Splitter | 盒容器，恰好两个直接写出的元素，依次放入两个窗格 | `orientation`* `horizontal`/`vertical`；`ratio` 0 到 1 的数或百分比 | — |
-| TreeView | 盒容器，只接受 TreeNode | — | — |
-| TreeNode | 盒容器，只能直接写在 TreeView 或 TreeNode 中，只接受 TreeNode（作为下一层） | `text`* 单行字符串；`expanded`、`selected` bool | `selected`（点击或 Enter/Space 选中，也在展开/收起时触发）；`text: string`、`expanded: bool`、`selected: bool` |
+| TreeView | 盒容器，只接受 TreeNode，可直接写或写在 `if`/`for` 块中 | — | — |
+| TreeNode | 盒容器，只能写在 TreeView 或 TreeNode 中（直接或经 `if`/`for` 块），只接受 TreeNode（作为下一层，同样可经块） | `text`* 单行字符串；`expanded`、`selected` bool | `selected`（点击或 Enter/Space 选中，也在展开/收起时触发）；`text: string`、`expanded: bool`、`selected: bool` |
 | Dialog | 盒容器，子元素放入对话框正文；遮罩覆盖父容器 | `title`* 单行字符串；`open` bool；`dismissible` bool | `closed`；`open: bool` |
 | Drawer | 盒容器，子元素放入抽屉面板；停靠父容器边缘 | `side`* `left`/`right`；`open` bool；`width` dp 长度 | `closed`；`open: bool` |
 | Text | 叶 | `text`* 字符串；`wrap` bool | — |
 | Button | 叶 | `text`* 字符串 | `clicked` |
-| TextField | 叶 | `text`* 单行字符串；`read_only`、`password` bool | `submitted`；`text: string` |
-| TextArea | 叶 | `text`* 字符串；`read_only` bool | — |
+| TextField | 叶 | `text`* 单行字符串；`read_only`、`password` bool | `submitted`、`changed`；`text: string` |
+| TextArea | 叶 | `text`* 字符串；`read_only` bool | `changed`；`text: string` |
+| Dropdown | 叶 | `items`*! 非空的单行字符串列表字面量；`selected`* 非负整数（默认 0） | `changed`；`selected: int`、`text: string` |
 | CheckBox | 叶 | `text`* 字符串；`checked`* bool；`mixed`、`wrap` bool | `changed`；`checked: bool`、`text: string` |
 | Switch、RadioButton | 叶 | `text`* 字符串；`checked`* bool；`wrap` bool；同一父容器中的 RadioButton 互斥 | `changed`；`checked: bool`、`text: string` |
 | Slider | 叶 | `min`*、`max`*、`value`* 有限数（默认 0/1/0）；`step` 非负数；`orientation` | `changed`；`value: float` |
@@ -76,6 +77,8 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | Separator | 叶 | — | — |
 
 元素属性的名称遮蔽同名的节点属性（如 Tab 的 `title`、Text 的 `wrap`）。Dialog 与 Drawer 的 `open` 只在与当前状态不同时打开或关闭，用户经 Escape、遮罩或关闭按钮关闭时触发 `closed`，绑定的状态需在 `on closed` 中同步，例如 `open: shown; on closed { shown = false }`。构造参数为字面量时交给构造器，不依赖源码顺序；写成表达式时构造器取默认值，随后由绑定设置。必填参数只能写字面量；只有构造参数而没有 setter 的属性（如 Splitter 的 `orientation`、数值元素的 `min`/`max`）也只能写字面量。数值元素的 `min` 须小于 `max`、`value` 按共享 Range 契约 clamp，由构造器在构建时检查，违反时构建失败并移除本次子树。标记数字以有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。文本默认为空字符串，窗口标题默认为 `Aegle`。
+
+TextField 与 TextArea 的 `changed` 在用户改变已提交文字后触发：键入、删除、粘贴、剪切、撤销/重做或输入法提交，每次改变一次；输入法预编辑与 `text` 的绑定或 `set_text` 不触发，处理块用 `self.text` 读取新值，例如 `on changed { query = self.text }`。Dropdown 的 `items` 是检查期验证的字面量列表，如 `items: ["小", "中", "大"]`，当前不能绑定表达式（动态选项仍用 Rust 的 `set_items`）；`selected` 可绑定 int，与 `items` 一起交给构造器，越界时与数值元素一样由构造器或 setter 拒绝（panic）。用户选择不同项时触发 `changed`，程序设置不触发，`self.selected` 与 `self.text` 给出当前项。TreeView/TreeNode 中的 `if`/`for` 块生成的 TreeNode 与直接写出的节点同层：块的透明分组位于外层节点的子节点容器内，块内节点按外层节点计算缩进并使其显示展开箭头；块清空后外层节点仍保留箭头。
 
 ### 节点属性
 
@@ -157,7 +160,7 @@ Window {
 
 `if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点放在一个透明的 contents 分组中，直接参与父容器的布局：在 Row/Column 中与兄弟共享对齐、换行、gap 和 grow，在 Grid 中各自占一格，在 Stack 中叠放。release 测量（本机 CJK 测试字体，7 次中位数）：1000 行 `for` 首次构建加刷新 3.6 ms，追加一行 0.8 ms，整体反序 5.8 ms；大数据仍应使用 ListView。
 
-`component Name(p: type = literal, q: type) { state ...; Root { ... } }` 声明组件，组件体只有一个根节点；`Name { p: expr }` 实例化，参数随调用方表达式读取的 state 更新，组件 state 每个实例独立。实例不接受 `id`；子节点只能放入组件的 `slot`，事件只能是组件声明的 `event`（见下文）；递归实例化、与元素同名或重复组件名均为错误。`use "relative.aegle"` 导入另一文件声明的所有组件：路径相对于导入方文件、以 `/` 分隔且不能为绝对路径；导入环为错误，重复导入只加载一次，被导入文件只能声明组件，一个程序最多 256 个文件。组件名在已加载文件间全局可见。
+`component Name(p: type = literal, q: type) { state ...; Root { ... } }` 声明组件，组件体只有一个根节点；`Name { p: expr }` 实例化，参数随调用方表达式读取的 state 更新，组件 state 每个实例独立。实例本身不接受 `id`；子节点只能放入组件的 `slot`，事件只能是组件声明的 `event`（见下文）；递归实例化、与元素同名或重复组件名均为错误。`use "relative.aegle"` 导入另一文件声明的所有组件：路径相对于导入方文件、以 `/` 分隔且不能为绝对路径；导入环为错误，重复导入只加载一次，被导入文件只能声明组件，一个程序最多 256 个文件。组件名在已加载文件间全局可见。
 
 **record、key、let、宿主动作、slot、组件事件与限额**：
 
@@ -185,12 +188,12 @@ Column {
 - `for item in list key expression { }`：key 表达式可读本次循环项，类型为 int 或 string；record 列表必须写 key，标量列表默认以项值为 key。同一 key 的行在项值不变时保留控件与本地状态，项值变化则就地重建；重复 key 仍为错误并保留原有行。
 - `let name = expression` 在事件块内声明局部，作用到所在块结束；`on name(value)` 把组件事件携带的值绑定为局部。
 - `host.name(args)`：调用宿主注册的动作。动作用 `aegle::loader::action(name, &[Type], f)` 注册，对本线程的所有程序与 `ui!` 视图生效，`f` 返回 `()` 或 `Result`；构建视图时校验每个调用有同名动作且参数类型一致，缺失或不符在挂载前报错。动作在 UI 借用外运行，返回的错误停止本次处理；动作不返回值，结果通过更新 state 带回。
-- `slot` 写在组件体中，放置实例的子节点：`Card { title: "x"; Text {} }`；子节点在调用方的环境里求值，不可带 `id`，每个组件至多一个 slot，没有 slot 的组件不接受子节点。
+- `slot` 写在组件体中，放置实例的子节点：`Card { title: "x"; Text {} }`；子节点在调用方的环境里求值；组件把 slot 恰好放置一次时（slot 不在组件体的 `if`/`for` 块内，经内层组件的 slot 转放时内层也恰好放置一次），入口文档中块外实例的 slot 内容可以带 `id`，否则不可带，每个组件至多一个 slot，没有 slot 的组件不接受子节点。
 - 组件事件：组件体内 `event name` 或 `event name(type)` 声明，事件块里 `emit name` / `emit name(expr)` 触发，实例上 `on name { }` / `on name(v) { }` 在调用方的环境里处理。
 - 限额：`Program::set_limits(Limits { steps, rows, emit_depth })`，默认每次处理最多 10,000 条语句、单个 `for` 最多 10,000 行、嵌套 emit 最多 64 层；超限是运行时错误，保留此前的赋值与旧的行。运行时错误带文件路径与字节跨度。
 - Rust 一侧：record 与 record 列表的 state 以 `State<Data>` 访问（`Data::Record`），设置时检查形状；`StateValue::accepts` 取代旧的 `ty()`。
 
-`id` 只能用于入口文档中不在块、slot 内容或组件体内的控件。`ui!` 的 View 在 `root` 和各 `id` 外，为入口根的每个 state 生成 `loader::State<T>` 字段（bool、i64、f32、String、Vec<i64>、Vec<String>），`get`/`set` 读写并触发绑定。`id` 与入口 state 同名由共享检查器拒绝（“names both a control and a state”），`ui!` 与运行时加载给出同一诊断。绑定和块由控件通过 `Node::keep_alive` 持有，丢弃 View 不影响更新。
+`id` 只能用于入口文档中不在块或组件体内的控件，包括恰好放置一次的 slot 内容（见上）。`ui!` 的 View 在 `root` 和各 `id` 外，为入口根的每个 state 生成 `loader::State<T>` 字段（bool、i64、f32、String、Vec<i64>、Vec<String>），`get`/`set` 读写并触发绑定。`id` 与入口 state 同名由共享检查器拒绝（“names both a control and a state”），`ui!` 与运行时加载给出同一诊断。绑定和块由控件通过 `Node::keep_alive` 持有，丢弃 View 不影响更新。
 
 运行时加载使用 `aegle::loader::Program::load(path)`、`load_with(path, &elements)` 或 `from_sources(entry, &elements, read)`，再 `build(&container)` 片段或 `open(&app)` Window 文档；`View` 提供 `root`、`handle(id)`（`Handle::typed::<T>()` 取得有类型句柄）、`get`/`set`、`state::<T>(name)` 和 `reload`。加载复用同一解析、检查和诊断，因此携带解析器；示例文档解析并检查约 0.1 ms。`reload` 与首次构建一样先校验宿主动作，再完整构建新界面、移除旧界面，失败保留旧界面；同名同类型的入口 state 保留取值，其余控件本地状态重置。Window 文档保留原生窗口、标题和尺寸并重建内容，新版本省略的窗口属性保留原值。没有文件监视器。可执行示例：`cargo run -p aegle --example dynamic`，其中面板运行时从磁盘加载并可重载。
 

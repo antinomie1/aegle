@@ -211,11 +211,26 @@ impl Checker<'_> {
                 _ => false,
             })
         };
+        // Elements of this name, here or nested in blocks.
+        fn blocks(items: &[Item], name: &str, checker: &Checker<'_>) -> bool {
+            items.iter().all(|item| match item {
+                Item::Node(child) => !checker.names.contains_key(&child.name) && child.name == name,
+                Item::If(_, then, otherwise) => {
+                    blocks(then, name, checker) && blocks(otherwise, name, checker)
+                }
+                Item::For(.., body) => blocks(body, name, checker),
+                Item::Slot => false,
+            })
+        }
         match spec.children {
             Children::Any => Ok(()),
             Children::Only(name) if !direct(Some(name)) => {
                 error(format!("{} accepts only {name} children", spec.name))
             }
+            Children::Blocks(name) if !blocks(&node.children, name, self) => error(format!(
+                "{} accepts only {name} children, directly or in if and for blocks",
+                spec.name
+            )),
             Children::Exactly(count) if node.children.len() != count.into() || !direct(None) => {
                 error(format!(
                     "{} requires exactly {count} controls as children",

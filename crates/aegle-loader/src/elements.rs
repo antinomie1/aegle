@@ -3,8 +3,9 @@
 
 use aegle_ui::Container;
 use aegle_widgets::{
-    Button, CheckBox, Dialog, Drawer, DrawerSide, Label, NumberField, Orientation, Progress, Radio,
-    Separator, Slider, Splitter, Switch, Tabs, TextField, TreeNode, TreeView, Widgets,
+    Button, CheckBox, Dialog, Drawer, DrawerSide, Dropdown, Label, NumberField, Orientation,
+    Progress, Radio, Separator, Slider, Splitter, Switch, Tabs, TextField, TreeNode, TreeView,
+    Widgets,
 };
 
 use crate::Elements;
@@ -83,6 +84,7 @@ crate::element! {
         set read_only: bool => |field, on| field.set_read_only(on);
         set password: bool => |field, on| field.set_password(on);
         event submitted => |field, run| field.on_submit(move |_| run());
+        event changed => |field, run| field.on_change(move |_| run());
         get text: string => |field| field.text();
     }
     /// A multiline editor.
@@ -91,6 +93,8 @@ crate::element! {
         create |parent, text: string = ""| parent.text_area(text);
         set text: string => |field, text| field.set_text(text);
         set read_only: bool => |field, on| field.set_read_only(on);
+        event changed => |field, run| field.on_change(move |_| run());
+        get text: string => |field| field.text();
     }
     /// A labelled two-state check box.
     pub CheckBox {
@@ -144,6 +148,16 @@ crate::element! {
         set orientation: choice(horizontal, vertical) => |progress, name| progress.set_orientation(axis(name));
         set indeterminate: bool => |progress, on| progress.set_indeterminate(on);
     }
+    /// A button opening a list of `items`; the constructor requires `selected`
+    /// to index them.
+    pub Dropdown {
+        style text interactive pressed;
+        create |parent, items: lines, selected: int(0, 4294967295) = 0| parent.dropdown(&items.to_vec(), selected as usize);
+        set selected: int(0, 4294967295) => |dropdown, index| dropdown.set_selected(index as usize);
+        event changed => |dropdown, run| dropdown.on_change(move |_| run());
+        get selected: int => |dropdown| dropdown.selected() as i64;
+        get text: string => |dropdown| dropdown.text();
+    }
     /// A numeric text field with steppers.
     pub NumberField {
         style text interactive editor;
@@ -183,14 +197,14 @@ crate::element! {
     /// A hierarchical list whose children are `TreeNode`s.
     pub TreeView {
         layout box;
-        children only TreeNode;
+        children blocks TreeNode;
         create |parent| parent.tree_view();
     }
     /// One expandable node of a `TreeView`; its children are nested nodes.
     pub TreeNode {
         layout box;
         parent TreeView TreeNode;
-        children only TreeNode;
+        children blocks TreeNode;
         create |parent, text: line = ""| TreeNode::append_to(parent, text);
         set text: line => |node, text| node.set_text(text);
         set expanded: bool => |node, on| node.set_expanded(on);
@@ -250,6 +264,7 @@ pub(crate) fn builtin() -> Elements {
         .with::<RadioButton>()
         .with::<Slider>()
         .with::<Progress>()
+        .with::<Dropdown>()
         .with::<NumberField>()
         .with::<Separator>()
         .with::<Tabs>()

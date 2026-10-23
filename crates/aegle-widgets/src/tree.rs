@@ -272,9 +272,13 @@ impl TreeNode {
 
     /// Appends a node to `parent`: a [`TreeView`], or the
     /// [`children_container`](Self::children_container) of the node it then
-    /// nests under. Markup elements receive only that container.
+    /// nests under, directly or through transparent contents groups such as
+    /// markup `if` and `for` blocks. Markup elements receive only that container.
     pub fn append_to(parent: &Container, text: &str) -> TreeNode {
-        let owner = parent.change(|state, id| {
+        let owner = parent.change(|state, mut id| {
+            while state.tree.get(id).unwrap().is_contents() {
+                id = state.tree.parent(id)?.unwrap();
+            }
             let Some(item) = state.tree.parent(id)? else {
                 return Ok(None);
             };
@@ -286,14 +290,15 @@ impl TreeNode {
                 .is_some_and(|control| control.children == Some(id));
             Ok(owns.then_some(header))
         });
-        match owner {
-            Some(id) => TreeNode(Node {
+        let depth = owner.map_or(0, |id| {
+            let owner = TreeNode(Node {
                 state: parent.state.clone(),
                 id,
-            })
-            .node(text),
-            None => create_tree_node(parent, text, 0),
-        }
+            });
+            owner.update(|control| control.has_children = true);
+            owner.read(|control| control.depth) + 1
+        });
+        create_tree_node(parent, text, depth)
     }
 
     /// Adds a selection handler invoked when the node is clicked or chosen.

@@ -28,6 +28,10 @@ pub enum Children<'a> {
     Any,
     /// Only elements of this name, written directly.
     Only(&'a str),
+    /// Only elements of this name, written directly or inside `if` and `for`
+    /// blocks. The element's constructor must then also accept the blocks'
+    /// transparent contents groups as parents.
+    Blocks(&'a str),
     /// Exactly this many elements, written directly.
     Exactly(u8),
 }
@@ -82,6 +86,8 @@ pub enum ValueType<'a> {
     Color,
     /// One of these bare identifiers.
     Choice(&'a [&'a str]),
+    /// A nonempty literal list of strings without hard line separators.
+    Lines,
 }
 
 /// One element property.
@@ -130,7 +136,7 @@ impl ValueType<'_> {
             Self::Int(..) => Type::Int,
             Self::Float(..) | Self::Fraction | Self::Length => Type::Float,
             Self::String | Self::Line => Type::String,
-            Self::Color | Self::Choice(_) => return None,
+            Self::Color | Self::Choice(_) | Self::Lines => return None,
         })
     }
 
@@ -148,9 +154,12 @@ impl ValueType<'_> {
             (Self::Fraction, Value::Number(n)) => (0.0..=1.0).contains(n),
             (Self::Fraction, Value::Percent(n)) => (0.0..=100.0).contains(n),
             (Self::Length, Value::Length(n)) => n.is_finite() && *n >= 0.0,
-            (Self::Line, Value::String(text)) => !text.contains([
-                '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
-            ]),
+            (Self::Line, Value::String(text)) => single_line(text),
+            (Self::Lines, Value::List(items)) => {
+                !items.is_empty()
+                    && (items.iter())
+                        .all(|item| matches!(item, Value::String(text) if single_line(text)))
+            }
             (Self::Choice(choices), Value::Identifier(name)) => choices.contains(&name.as_str()),
             _ => false,
         };
@@ -171,8 +180,15 @@ impl ValueType<'_> {
             Self::Line => "a string without hard line separators".into(),
             Self::Color => "a #RRGGBB or #RRGGBBAA color".into(),
             Self::Choice(choices) => choices.join(", "),
+            Self::Lines => "a nonempty list of strings without hard line separators".into(),
         })
     }
+}
+
+fn single_line(text: &str) -> bool {
+    !text.contains([
+        '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
+    ])
 }
 
 impl<'a> ElementSpec<'a> {

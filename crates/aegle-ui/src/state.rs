@@ -180,6 +180,8 @@ pub struct State {
     pub repaint: bool,
     /// Event callbacks by node.
     pub callbacks: HashMap<NodeId, Handler>,
+    /// Committed-text edit callbacks by node, see [`State::on_edit`].
+    pub edits: HashMap<NodeId, Handler>,
     /// Per-library data keyed by type, see [`State::ext`].
     pub ext: HashMap<std::any::TypeId, Box<dyn std::any::Any>>,
     /// Installed control-library hooks, see [`crate::Hooks`].
@@ -406,6 +408,7 @@ impl State {
         self.tree.remove_with(id, |node, _| {
             removed.push(node);
             self.callbacks.remove(&node);
+            self.edits.remove(&node);
             self.clicks.handlers.remove(&node);
             self.clicks.menus.remove(&node);
             self.drops.forget(node);

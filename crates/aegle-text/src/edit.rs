@@ -447,6 +447,7 @@ impl EditorDriver<'_> {
         #[cfg(feature = "text-a11y")]
         self.editor.access_runs.clear();
         self.editor.changes.value |= value;
+        self.editor.revision += u64::from(value);
         self.editor.changes.layout = true;
         self.editor.changes.selection = true;
     }

@@ -74,6 +74,7 @@ let name = window.text_field("");
 name.on_submit(|field| {
     println!("submitted {}", field.text());
 });
+name.on_change(|field| println!("now {}", field.text()));
 let notes = window.text_area("First line\nSecond line");
 notes.select(aegle::ui::Selection { anchor: 0, focus: 5 });
 let secret = window.text_field("");
@@ -81,11 +82,11 @@ secret.set_password(true);
 ```
 
 ```text
-TextField { id: name; text: ""; on submitted { submitted = self.text } }
+TextField { id: name; text: ""; on submitted { submitted = self.text }; on changed { draft = self.text } }
 TextArea { text: "First line\nSecond line"; read_only: true }
 ```
 
-- 方法：`text`、`set_text`（清空撤销历史并结束输入法预编辑）、`select(Selection)`（UTF-8 字节偏移；与 `set_text` 一样先结束进行中的输入法组合）、`set_read_only`、`set_password`、`on_submit`（仅单行，Enter 触发）。
+- 方法：`text`、`set_text`（清空撤销历史并结束输入法预编辑）、`select(Selection)`（UTF-8 字节偏移；与 `set_text` 一样先结束进行中的输入法组合）、`set_read_only`、`set_password`、`on_submit`（仅单行，Enter 触发）、`on_change`（用户每次改变已提交文字后触发，含粘贴、剪切、撤销/重做与输入法提交；预编辑与 `set_text` 不触发）。
 - 编辑：选择、按词/行移动、按字素删除、撤销/重做（Ctrl+Z / Ctrl+Y）、全选（Ctrl+A）、复制/剪切/粘贴（Ctrl+C / X / V，macOS 用 Cmd）；原生宿主处理剪贴板，自有宿主用 `take_clipboard` / `paste`。
 - 输入法：Wayland text-input-v3、Windows TSF；预编辑不改变已提交的值。
 - 只读可选择和复制；密码模式显示 `•`，拒绝复制、输入法组合并不保留撤销历史。
@@ -300,8 +301,12 @@ color.on_change(|dropdown| {
 color.set_items(&["One", "Two"], 0);   // 程序设置，不触发 on_change
 ```
 
+```text
+Dropdown { items: ["Red", "Green", "Blue"]; selected: shade; on changed { shade = self.selected } }
+```
+
 - 类输入框的方框显示当前选项和细线下拉箭头；激活（点击、Space、Enter）在下方弹出选项列表，焦点位于当前选项，当前选项带前置强调色竖条。Up/Down 移动，Enter 或点击选择并关闭；Escape 或点击外部关闭且不改变选择。
-- 方法：`selected`、`set_selected`、`items`、`set_items`、`on_change`。
+- 方法：`selected`、`set_selected`、`text`（当前选项）、`items`、`set_items`、`on_change`。标记中 `items` 只能写字面量列表。
 - 无障碍角色 ComboBox（带展开状态）、ListBox 与 ListBoxOption（带选中状态）。
 
 ## Popup

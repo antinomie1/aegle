@@ -1,0 +1,27 @@
+// A dropdown, text-change events, tree nodes from blocks and named slot content.
+component Labeled(label: string) {
+    Column {
+        Text { text: label }
+        slot
+    }
+}
+Column {
+    state size: int = 1
+    state picked: string = ""
+    state typed: string = ""
+    state edits: int = 0
+    state folders: list<string> = ["文档", "示例"]
+    Dropdown {
+        id: sizes; items: ["小", "中", "大"]; selected: size
+        on changed { size = self.selected; picked = self.text }
+    }
+    Labeled { label: "名称"; TextField { id: name; on changed { typed = self.text; edits += 1 } } }
+    TreeView {
+        TreeNode {
+            id: top; text: "根"; expanded: true
+            for folder in folders {
+                TreeNode { text: folder; if folder == "文档" { TreeNode { text: "指南" } } }
+            }
+        }
+    }
+}

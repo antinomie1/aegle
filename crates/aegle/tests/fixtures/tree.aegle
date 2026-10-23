@@ -9,5 +9,6 @@ Column {
         TreeNode { id: samples; text: "示例"; TreeNode { text: "隐藏" } }
     }
     Text { id: note; text: "一段需要在窄列中折行显示的较长说明文字"; wrap: true }
+    Dropdown { id: color; items: ["红", "绿", "蓝"]; selected: 1 }
     CheckBox { id: agree; text: "我已阅读并同意上面这段很长的条款说明"; wrap: true }
 }

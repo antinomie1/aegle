@@ -346,6 +346,7 @@ save.on_click(move |_button| status.set_text("Saved"));
 | --- | --- |
 | `Button` | `on_click(FnMut(Button))` |
 | `TextField`（单行） | `on_submit(FnMut(TextField))`，Enter 触发 |
+| `TextField`（单/多行） | `on_change(FnMut(TextField))`：用户改变已提交文字后（键入、删除、粘贴、剪切、撤销/重做、输入法提交）；预编辑与 `set_text` 不触发 |
 | `CheckBox` / `Switch` / `Radio` / `Slider` / `NumberField` / `Dropdown` / `Tabs` | `on_change(FnMut(Self))` |
 | 任意控件（`motion`） | `on_transition_end(FnMut(Node))` |
 | `Canvas` | `set_input(FnMut(Canvas, CanvasEvent))`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) |

@@ -133,6 +133,8 @@ pub struct Editor {
     pub(crate) composition: Option<Composition>,
     pub(crate) history: History,
     pub(crate) changes: EditChanges,
+    /// Committed value changes so far, programmatic or not.
+    pub(crate) revision: u64,
     pub(crate) multiline: bool,
     pub(crate) read_only: bool,
     /// Committed password value; the display buffer then holds only masks.
@@ -226,6 +228,12 @@ impl Editor {
     pub fn take_changes(&mut self) -> EditChanges {
         std::mem::take(&mut self.changes)
     }
+    /// Counts committed value changes, unlike [`Self::changes`] never reset:
+    /// comparing two readings tells whether the value changed in between.
+    /// Preedit alone never advances it.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
     /// Retained delta history accounting.
     pub fn history_stats(&self) -> HistoryStats {
         self.history.stats()
@@ -295,6 +303,7 @@ impl TextSystem {
             composition: None,
             history: History::new(options.history_bytes),
             changes: EditChanges::default(),
+            revision: 0,
             multiline: options.multiline,
             read_only: false,
             secret: None,

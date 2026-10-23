@@ -154,6 +154,7 @@ impl Ui {
                     clipboard: None,
                     repaint: true,
                     callbacks: HashMap::new(),
+                    edits: HashMap::new(),
                     ext: HashMap::new(),
                     hooks: Vec::new(),
                     decorations: HashMap::new(),

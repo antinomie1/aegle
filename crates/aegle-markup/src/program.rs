@@ -39,6 +39,8 @@ pub(crate) struct Checker<'s> {
     /// Declared events and whether a `slot` exists, per template.
     event_sigs: Vec<Vec<(String, Option<Type>)>>,
     slots: Vec<bool>,
+    /// Per template, whether each instance places its slot content exactly once.
+    slot_once: Vec<bool>,
     host_calls: Vec<HostCall>,
     /// File of the template being checked.
     file: usize,
@@ -145,6 +147,15 @@ pub fn check_program(
                 .collect(),
         );
     }
+    let roots: Vec<&Node> = declared.iter().map(|(_, c)| &c.root).collect();
+    let mut slot_once = vec![None; declared.len() + 1];
+    for template in 1..slot_once.len() {
+        placed_once(template, &roots, &names, &mut slot_once);
+    }
+    let slot_once = slot_once
+        .into_iter()
+        .map(|once| once == Some(true))
+        .collect();
     let mut checker = Checker {
         names,
         signatures,
@@ -158,6 +169,7 @@ pub fn check_program(
         record_index,
         event_sigs,
         slots,
+        slot_once,
         host_calls: Vec::new(),
         file: 0,
         slot_used: false,
@@ -224,15 +236,55 @@ pub fn check_program(
 
 /// Whether a component body places its instance's children.
 fn has_slot(node: &Node) -> bool {
-    fn any(list: &[Item]) -> bool {
-        list.iter().any(|item| match item {
-            Item::Slot => true,
-            Item::Node(node) => has_slot(node),
-            Item::If(_, then, otherwise) => any(then) || any(otherwise),
-            Item::For(_, _, _, body) => any(body),
+    slot_in(&node.children)
+}
+
+fn slot_in(items: &[Item]) -> bool {
+    items.iter().any(|item| match item {
+        Item::Slot => true,
+        Item::Node(node) => has_slot(node),
+        Item::If(_, then, otherwise) => slot_in(then) || slot_in(otherwise),
+        Item::For(_, _, _, body) => slot_in(body),
+    })
+}
+
+/// Whether component `template` places its slot exactly once per instance:
+/// outside `if` and `for` blocks, and through the slots of inner instances
+/// only where those are placed once too. Recursive components, an error
+/// reported later, count as not placing it once.
+fn placed_once(
+    template: usize,
+    roots: &[&Node],
+    names: &HashMap<String, usize>,
+    memo: &mut [Option<bool>],
+) -> bool {
+    // Some(once) when the slot is in `node`'s subtree.
+    fn find(
+        node: &Node,
+        roots: &[&Node],
+        names: &HashMap<String, usize>,
+        memo: &mut [Option<bool>],
+    ) -> Option<bool> {
+        node.children.iter().find_map(|item| match item {
+            Item::Slot => Some(true),
+            Item::Node(child) => {
+                let once = find(child, roots, names, memo)?;
+                Some(match names.get(&child.name) {
+                    Some(&inner) => once && placed_once(inner, roots, names, memo),
+                    None => once,
+                })
+            }
+            Item::If(_, then, otherwise) => (slot_in(then) || slot_in(otherwise)).then_some(false),
+            Item::For(.., body) => slot_in(body).then_some(false),
         })
     }
-    any(&node.children)
+    if let Some(once) = memo[template] {
+        return once;
+    }
+    memo[template] = Some(false);
+    let once = find(roots[template - 1], roots, names, memo) == Some(true);
+    memo[template] = Some(once);
+    once
 }
 
 /// Rejects a record type that is not declared.

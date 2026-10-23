@@ -78,6 +78,8 @@ fn a_static_tree_and_wrapping_text_build_alike_from_both_paths() -> Result {
     assert!(view.guide.bounds().origin.y > docs.bounds().origin.y);
     let label: &Label = &view.note;
     assert!(label.is_wrap() && view.agree.is_wrap());
+    let color: &Dropdown = &view.color;
+    assert_eq!((color.selected(), color.items().len()), (1, 3));
 
     let loaded = ui_with(&fonts)?;
     let runtime = Program::load(fixture("tree.aegle"))?.build(&loaded.root())?;

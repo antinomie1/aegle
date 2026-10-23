@@ -34,7 +34,7 @@ button.on_click(move |_| {
 
 控件创建一次。`Window` 解引用到根 `Container`；容器提供 `row`、`column`、`scroll_view`、`text`、`button`、`text_field`、`text_area`，返回相应弱句柄。多行与单行编辑器共用 `TextField` 句柄。设置是直接命令，不要求嵌套函数、消息枚举或 builder 链。第三方控件用 `Container::add` 加入，见[组件库作者](#组件库作者)。
 
-命名规则只有两条：`on_*` 追加处理器，`set_*` 替换值。`on_click`、`on_change`、`on_submit`、`on_transition_end`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame`、`on_input`、`on_input_capture` 与 `Ui::on_key` 都追加，同一事件按注册顺序执行；每个都返回 `Subscription`，丢弃它不影响处理器（处理器与控件同生命周期），`remove()` 则撤掉这一个处理器，即使同一事件正在派发；`on_frame` 返回 `false` 也会停止。`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。所有动作处理器存放在引擎的同一张表里：控件只报告激活或值变化，组合控件（Tabs、Dropdown、MenuItem）把自身行为放在按钮的延后工作中，再用 `State::queue_action` 排队自己的处理器，不另存处理器列表。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
+命名规则只有两条：`on_*` 追加处理器，`set_*` 替换值。`on_click`、`on_change`、`on_submit`、`on_transition_end`、`on_double_click`、`on_context_menu`、`on_drop`、`on_frame`、`on_input`、`on_input_capture` 与 `Ui::on_key` 都追加，同一事件按注册顺序执行；每个都返回 `Subscription`，丢弃它不影响处理器（处理器与控件同生命周期），`remove()` 则撤掉这一个处理器，即使同一事件正在派发；`on_frame` 返回 `false` 也会停止。`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。所有动作处理器存放在引擎的同一张表里：控件只报告激活或值变化，组合控件（Tabs、Dropdown、MenuItem）把自身行为放在按钮的延后工作中，再用 `State::queue_action` 排队自己的处理器，不另存处理器列表。编辑器的文字改变是另一张表（`State::on_edit`，TextField 的 `on_change`），与提交动作分开：引擎在把输入交给控件前后比较编辑器的已提交值修订号（`Editor::revision`），改变时排队，因此键入、粘贴、剪切、撤销与输入法提交走同一条路径，预编辑与程序 `set_text` 不经过它。处理器在树和原生宿主借用之外执行，可修改其他控件、删除自己或关闭窗口；执行中新增的处理器从下一次事件起生效。回调中产生的新动作留待下一轮；控件销毁清理处理器，丢弃普通句柄不销毁控件。
 
 句柄的创建、修改与读取方法直接返回值。误用句柄是程序错误，因此以 `UiError` 的消息 panic，而不是让每个调用都返回 `Result`：控件已删除或窗口已关闭（`DeadHandle`，先用 `is_alive()` 判断）、在 painter、钩子或 scene 访问中使用（`ReentrantAccess`）、文档排除的参数（`InvalidValue`、`WrongKind`、`ForeignUi`、`RootMutation`、`Token`）。`Result` 只留给会因环境或应用代码失败的操作：创建 App 与窗口、`Window::close`、加载与构建标记、标记状态更新（重新求值绑定可能出错）、按名查找 token，以及宿主驱动的 `refresh`、输入投递和 `dispatch_callbacks`。处理器返回 `()` 或 `Result`（`HandlerResult`），逐帧与按键处理器返回 `bool`；处理器出错时保留，同一事件的其他处理器照常执行，此前合法修改保留；无窗口 `Ui::dispatch_callbacks` 返回第一个错误。原生 App 把回调、代理与输入处理的错误交给 `App::on_error`，返回错误才结束 `run`，未设置时打印到 stderr 并继续；绘制与平台失败仍结束 `run`。
 
@@ -51,12 +51,12 @@ button.on_click(move |_| {
 | 外观（按控件） | 由 `aegle_ui::handle!` 的样式组生成在相应句柄上：文字控件的 `set_font_size`/`set_font`/`font`，交互控件的 `set_hover_background`/`set_focus_color`/`set_focus_width`，按钮/切换/滑块的 `set_pressed_background`，切换/滑块/进度条的 `set_indicator_color`，编辑器的 `set_selection_color`/`set_caret_color`；分布见[API 指南](developer/api.md#6-外观主题样式与皮肤) |
 | 局部主题与位移 | `set_theme`、`set_theme_override`、`theme`；`set_offset(Point)`、`offset` |
 | 过渡与动画（motion） | `set_transition`、`set_property_transition`、`property_transition`、`with_transition`、`snap`、`animate(Animate)`、`presented_appearance`、`is_animating`、`finish_transition`、`cancel_transition`、`on_transition_end`；曲线与关键帧见 `aegle-motion` 的 `Easing`、`Spring`、`Animation`、`Keyframe`、`Cycles` |
-| Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`set_password`、`on_submit` |
+| Label / TextField | `text`、`set_text`；TextField 另有 `select`、`set_read_only`、`set_password`、`on_submit`、`on_change`（用户改变已提交文字后） |
 | Button | `set_text`、`activate`、`on_click` |
 | Container（值控件） | `check_box(text, checked)`、`switch(text, checked)`、`slider(min, max, value)`、`progress(min, max, value)` |
 | CheckBox / Switch / Radio | `is_checked`、`set_checked`、`toggle`、`text`、`set_text`、`on_change`；CheckBox 另有 `is_mixed`、`set_mixed` |
 | Container（选择/表格） | `radio(text, checked)`、`dropdown(items, selected)`、`table(columns, row_height, rows, cell)` |
-| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeWidgets` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回菜单 Popup（另有 `item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
+| Dropdown / Popup / Table | Dropdown 有 `selected`、`set_selected`、`text`、`items`、`set_items`、`on_change`；`Node::popup()` 返回 Popup（`show`、`show_at`、`hide`、`is_shown`、`anchor`）；`NodeWidgets` 的 `menu()`/`context_menu()` 与 `menu_bar().menu(text)` 返回菜单 Popup（另有 `item`、`check_item`、`radio_item`、`submenu`、`separator`），MenuItem 有 `on_click`、`set_shortcut`、`set_checked`、`is_checked`；Table 有 `rows()` |
 | Slider / Progress | `value`、`range`、`set_value`、`set_range`；Slider 另有 `step`、`set_step`、`increment`、`decrement`、`on_change` |
 | Node（滚动） | `scroll_offset`、`max_scroll_offset`、`content_size`、`scroll_to`、`scroll_by`，用于 `scroll_view()` 返回的 Container、ListView 与编辑器；其他控件范围为零 |
 | Container（绘制/列表） | `image(&Image)`、`canvas(painter)`、`list_view(height, count, row)`（`height` 为等高行的 `f32` 或 `RowHeight::Estimate`） |

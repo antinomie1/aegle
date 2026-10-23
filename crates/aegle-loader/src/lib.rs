@@ -43,7 +43,7 @@ pub use aegle_macros::__element;
 pub use aegle_markup as markup;
 #[doc(hidden)]
 pub use element::__private;
-pub use element::{Arg, Element, Elements};
+pub use element::{Arg, Element, Elements, Lines};
 pub use elements::{Column, Grid, RadioButton, Row, ScrollView, Stack, Tab, Text, TextArea};
 pub use handle::Handle;
 pub use view::{State, StateValue, View};
@@ -73,20 +73,25 @@ pub use view::{State, StateValue, View};
 ///
 /// Items, each ending with `;`:
 /// - `layout leaf | box | flex | grid` (default `leaf`), and for containers
-///   `children any | only Name | exactly N` (default `any`);
+///   `children any | only Name | blocks Name | exactly N` (default `any`);
+///   `blocks Name` also admits `if`/`for` blocks of `Name`, whose
+///   constructor then receives the blocks' transparent contents groups;
 /// - `parent Name ...`: it may only be written directly inside one of these;
 /// - `style` followed by the groups `text interactive pressed indicator editor`;
 /// - `create |parent, name: type = default, ...| expr` returning the handle;
 ///   a constructor argument without a default is required and literal;
-/// - `set name: type => |handle, value| ...` for a settable, bindable property;
+/// - `set name: type => |handle, value| ...` for a settable property, bindable
+///   unless it is `color`, `choice` or `lines`;
 /// - `event name => |handle, run| ...` registering `run` as a handler;
 /// - `get name: type => |handle| ...` for a `self.name` field;
 /// - `children => |handle, index| container` where child `index` goes.
 ///
 /// Types are `bool`, `int`, `int(min, max)`, `float`, `float(min)`,
-/// `float(min, max)`, `fraction`, `length`, `string`, `line`, `color` and
-/// `choice(a, b, ...)`, arriving as `bool`, `i64`, `f64`, `f32`, `f32`,
-/// `&str`, `&str`, `Color` and `&str`.
+/// `float(min, max)`, `fraction`, `length`, `string`, `line`, `color`,
+/// `choice(a, b, ...)` and `lines` (a nonempty literal list of single-line
+/// strings, without a default), arriving as `bool`, `i64`, `f64`, `f32`,
+/// `f32`, `&str`, `&str`, `Color`, `&str` and [`Lines`]. A `get` field is
+/// none of the last three.
 #[macro_export]
 macro_rules! element {
     ($($input:tt)*) => {

@@ -108,6 +108,7 @@ fn value_type(input: ParseStream<'_>) -> syn::Result<ValueType<'static>> {
         "string" => ValueType::String,
         "line" => ValueType::Line,
         "color" => ValueType::Color,
+        "lines" => ValueType::Lines,
         "choice" => {
             let inner;
             parenthesized!(inner in input);
@@ -185,11 +186,12 @@ impl Parse for Def {
                     def.children = match word(&body)?.as_str() {
                         "any" => Children::Any,
                         "only" => Children::Only(leak(word(&body)?)),
+                        "blocks" => Children::Blocks(leak(word(&body)?)),
                         "exactly" => Children::Exactly(body.parse::<LitInt>()?.base10_parse()?),
                         _ => {
                             return Err(syn::Error::new(
                                 span,
-                                "children are any, only Name or exactly N",
+                                "children are any, only Name, blocks Name or exactly N",
                             ));
                         }
                     }
@@ -226,6 +228,9 @@ impl Parse for Def {
                         body.parse::<Token![:]>()?;
                         let ty = value_type(&body)?;
                         let default = if body.parse::<Option<Token![=]>>()?.is_some() {
+                            if ty == ValueType::Lines {
+                                return Err(syn::Error::new(name.span(), "lines has no default"));
+                            }
                             let negative = body.parse::<Option<Token![-]>>()?;
                             let literal: syn::Lit = body.parse()?;
                             Some(syn::parse_quote!(#negative #literal))
@@ -273,6 +278,15 @@ impl Parse for Def {
                     let name = body.parse()?;
                     body.parse::<Token![:]>()?;
                     let ty = value_type(&body)?;
+                    if matches!(
+                        ty,
+                        ValueType::Color | ValueType::Choice(_) | ValueType::Lines
+                    ) {
+                        return Err(syn::Error::new(
+                            span,
+                            "a field is bool, int, float, fraction, length, string or line",
+                        ));
+                    }
                     body.parse::<Token![=>]>()?;
                     def.fields.push((name, ty, body.parse()?));
                 }
