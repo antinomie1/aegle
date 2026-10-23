@@ -25,6 +25,7 @@ aegle-layout.workspace = true
 aegle-controls = { workspace = true, features = ["text"] }
 aegle-text = { workspace = true, features = ["scene"] }
 aegle-ui.workspace = true
+aegle-image.workspace = true
 aegle-access = { workspace = true, optional = true }
 
 [dev-dependencies]

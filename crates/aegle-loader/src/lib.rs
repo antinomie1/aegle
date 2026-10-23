@@ -44,7 +44,7 @@ pub use aegle_markup as markup;
 #[doc(hidden)]
 pub use element::__private;
 pub use element::{Arg, Element, Elements, Lines};
-pub use elements::{Column, Grid, RadioButton, Row, ScrollView, Stack, Tab, Text, TextArea};
+pub use elements::{Column, Grid, Image, RadioButton, Row, ScrollView, Stack, Tab, Text, TextArea};
 pub use handle::Handle;
 pub use view::{State, StateValue, View};
 

@@ -74,6 +74,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | Slider | 叶 | `min`*、`max`*、`value`* 有限数（默认 0/1/0）；`step` 非负数；`orientation` | `changed`；`value: float` |
 | Progress | 叶 | `min`*、`max`*、`value`*；`orientation`；`indeterminate` bool | — |
 | NumberField | 叶 | `min`*、`max`*、`value`*；`step` 非负数；`decimals` 0 到 9 的整数 | `changed`；`value: float` |
+| Image | 叶 | `source` 单行字符串，图像文件路径（相对工作目录，空串为空视图）；`fit` `fill`/`contain`/`cover`（默认 `fill`） | `failed`（读取或解码失败，视图被清空）；`error: string` |
 | Separator | 叶 | — | — |
 
 元素属性的名称遮蔽同名的节点属性（如 Tab 的 `title`、Text 的 `wrap`）。Dialog 与 Drawer 的 `open` 只在与当前状态不同时打开或关闭，用户经 Escape、遮罩或关闭按钮关闭时触发 `closed`，绑定的状态需在 `on closed` 中同步，例如 `open: shown; on closed { shown = false }`。构造参数为字面量时交给构造器，不依赖源码顺序；写成表达式时构造器取默认值（必填参数取该类型的占位值，如 `lines` 为一项空串），随后由绑定设置。元素属性的字面量与绑定按元素规格中的声明顺序应用，同样不依赖源码顺序（如 Dropdown 先 `items` 后 `selected`）。没有 setter 的必填参数只能写字面量；只有构造参数而没有 setter 的属性（如 Splitter 的 `orientation`、数值元素的 `min`/`max`）也只能写字面量。数值元素的 `min` 须小于 `max`、`value` 按共享 Range 契约 clamp，由构造器在构建时检查，违反时构建失败并移除本次子树。标记数字以有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。文本默认为空字符串，窗口标题默认为 `Aegle`。

@@ -23,7 +23,7 @@
 | [ScrollView](#scrollview) | `scroll_view() -> Container` | `ScrollView` |
 | [ListView](#listview) | `list_view(h, n, row) -> ListView`（`h` 为行高或 `RowHeight::Estimate(估计)`） | — |
 | [Table](#table) | `table(columns, h, n, cell) -> Table` | — |
-| [ImageView](#imageview) | `image(&Image) -> ImageView` | — |
+| [ImageView](#imageview) | `image(&Image) -> ImageView`、`image_view() -> ImageView` | `Image` |
 | [Canvas](#canvas) | `canvas(painter) -> Canvas` | — |
 
 ## Text
@@ -367,12 +367,25 @@ use aegle::ui::scene::Image;
 let pixels = vec![255u8; 48 * 48 * 4];             // 非预乘 sRGB RGBA8，首行在前
 let image = Image::new(48, 48, pixels)?;
 let view = window.image(&image);
-view.set_width(96.0);                             // 按边界拉伸，不保持宽高比
+view.set_width(96.0);                             // 默认按边界拉伸
 view.set_height(48.0);
+view.set_fit(Fit::Contain);                       // 保持宽高比放入并居中
+
+let skin = window.image_view();                   // 空视图，尺寸为 0
+skin.on_error(|view| eprintln!("{:?}", view.error()));
+skin.load("skins/steve.png")?;                    // 读文件并解码
 ```
 
-- 默认尺寸为图像像素尺寸（逻辑像素），交叉轴不拉伸。`image()` 读取、`set_image()` 替换。
-- `Image` 克隆共享像素；renderer 按图像 id 缓存上传结果。应用自行解码 PNG/JPEG。
+```text
+Image { source: skin_path; fit: contain; width: 128dp; height: 128dp
+        on failed { status = self.error } }
+```
+
+- 默认尺寸为图像像素尺寸（逻辑像素），交叉轴不拉伸；空视图尺寸为 0、不绘制。`image()` 读取（空视图为 `None`）、`set_image()` 替换、`clear()` 清空。
+- `set_fit`：`Fill`（默认，拉伸到边界）、`Contain`（等比放入并居中）、`Cover`（等比铺满并居中，超出部分按控件形状裁剪，可配合圆角做头像）。
+- `load(path)` 在 UI 线程上读取并解码文件（相对工作目录；PNG 总是支持，JPEG/WebP/GIF 随 `aegle-image` 的 feature），文件与像素都受 `aegle_image::DEFAULT_MAX_BYTES` 限制。失败时清空视图、`error()` 给出原因、运行 `on_error` 处理器并返回错误；失败发生在任何处理器注册之前时，由之后第一次注册的处理器收到，因此标记的 `on failed` 能收到构建期间的首次加载失败。设置图像或清空会清除错误。
+- 标记元素 `Image`：`source` 单行字符串路径（可绑定，空串清空），`fit` `fill`/`contain`/`cover`；事件 `failed`，`self.error` 为原因。
+- `Image` 克隆共享像素；renderer 按图像 id 缓存上传结果，双线性采样（像素画放大会变模糊，尚无最近邻采样）。
 - 无障碍角色 Image，名称用 `set_accessible_label` 设置。
 
 ## Canvas

@@ -81,7 +81,7 @@ pub use tabs::{Tabs, TabsControl};
 pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
 pub use tooltip::TOOLTIP_DELAY;
 pub use tree::{TreeNode, TreeNodeControl, TreeView};
-pub use visual::{ImageControl, ImageView};
+pub use visual::{Fit, ImageControl, ImageView};
 
 /// The engine hooks the controls need: popups (overlay placement, dismissal and
 /// Escape/arrow keys), radio groups (arrow keys), and virtual lists (row
@@ -181,6 +181,9 @@ pub trait Widgets {
     /// that size on the cross axis instead of stretching; `set_width` and
     /// `set_height` override it.
     fn image(&self, image: &Image) -> ImageView;
+    /// Appends an empty image view, sized zero until [`ImageView::set_image`]
+    /// or [`ImageView::load`] gives it an image.
+    fn image_view(&self) -> ImageView;
     /// Appends a canvas drawn by `painter` with zero intrinsic size; give it a
     /// size or flex grow. The painter runs during refresh while the UI is
     /// borrowed, so it must not use UI handles. Drawing is not clipped to the bounds.
@@ -268,7 +271,10 @@ impl Widgets for Container {
         numeric::progress(self, min, max, value)
     }
     fn image(&self, image: &Image) -> ImageView {
-        visual::image(self, image)
+        visual::image(self, Some(image))
+    }
+    fn image_view(&self) -> ImageView {
+        visual::image(self, None)
     }
     fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) + 'static) -> Canvas {
         canvas::canvas(self, painter)

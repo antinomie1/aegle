@@ -28,6 +28,7 @@ aegle-access.workspace = true
 aegle-ui = { workspace = true, features = ["accessibility"] }
 aegle-widgets = { workspace = true, features = ["accessibility"] }
 aegle-text.workspace = true
+aegle-scene.workspace = true
 
 [lints]
 workspace = true

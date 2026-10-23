@@ -92,7 +92,7 @@ fn images_and_canvases_record_retained_scenes() -> Result {
     ui.resize(Size::new(200.0, 100.0));
     ui.refresh()?;
     assert_eq!(view.bounds().size, Size::new(3.0, 2.0));
-    assert_eq!(view.image().id(), image.id());
+    assert_eq!(view.image().unwrap().id(), image.id());
     assert_eq!(paints.get(), 1);
     let mut images = 0;
     ui.visit_scenes(|visit| {

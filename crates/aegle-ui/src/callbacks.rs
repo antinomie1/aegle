@@ -200,10 +200,13 @@ impl State {
     /// Queues the action handlers of `id`, if it has any, to run after the
     /// current input batch. Controls call it when the user activated them or
     /// changed their value, including from a handler of another control.
-    pub fn queue_action(&mut self, id: NodeId) {
-        if let Some(handler) = self.callbacks.get(&id) {
+    /// Returns whether `id` had handlers to queue.
+    pub fn queue_action(&mut self, id: NodeId) -> bool {
+        let handler = self.callbacks.get(&id);
+        if let Some(handler) = handler {
             self.pending.push_back((id, handler.version));
         }
+        handler.is_some()
     }
     /// Queues the edit handlers of `id`, if it has any, like [`Self::queue_action`].
     pub(crate) fn queue_edit(&mut self, id: NodeId) {

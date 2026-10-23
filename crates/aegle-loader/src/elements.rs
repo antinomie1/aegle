@@ -3,9 +3,9 @@
 
 use aegle_ui::Container;
 use aegle_widgets::{
-    Button, CheckBox, Dialog, Drawer, DrawerSide, Dropdown, Label, NumberField, Orientation,
-    Progress, Radio, Separator, Slider, Splitter, Switch, Tabs, TextField, TreeNode, TreeView,
-    Widgets,
+    Button, CheckBox, Dialog, Drawer, DrawerSide, Dropdown, Fit, ImageView, Label, NumberField,
+    Orientation, Progress, Radio, Separator, Slider, Splitter, Switch, Tabs, TextField, TreeNode,
+    TreeView, Widgets,
 };
 
 use crate::Elements;
@@ -23,6 +23,25 @@ fn drawer_side(name: &str) -> DrawerSide {
         "left" => DrawerSide::Left,
         "right" => DrawerSide::Right,
         other => unreachable!("checked side `{other}`"),
+    }
+}
+
+fn fit(name: &str) -> Fit {
+    match name {
+        "fill" => Fit::Fill,
+        "contain" => Fit::Contain,
+        "cover" => Fit::Cover,
+        other => unreachable!("checked fit `{other}`"),
+    }
+}
+
+/// An empty source empties the view; a failed load is reported through the
+/// view's `failed` event and `error` field, not to the binding.
+fn source(view: &ImageView, path: &str) {
+    if path.is_empty() {
+        view.clear();
+    } else {
+        let _ = view.load(path);
     }
 }
 
@@ -175,6 +194,17 @@ crate::element! {
         event changed => |field, run| field.on_change(move |_| run());
         get value: float => |field| field.value();
     }
+    /// The image file at `source`, a path relative to the working directory
+    /// (PNG; JPEG, WebP and GIF by feature), placed by `fit`. An empty source
+    /// shows nothing. A file that cannot be read or decoded empties the view
+    /// and raises `failed`, with the reason in `self.error`.
+    pub Image(ImageView) {
+        create |parent| parent.image_view();
+        set source: line => source;
+        set fit: choice(fill, contain, cover) => |view, name| view.set_fit(fit(name));
+        event failed => |view, run| view.on_error(move |_| run());
+        get error: string => |view| view.error().unwrap_or_default();
+    }
     /// A one-pixel divider.
     pub Separator {
         create |parent| parent.separator();
@@ -273,6 +303,7 @@ pub(crate) fn builtin() -> Elements {
         .with::<Progress>()
         .with::<Dropdown>()
         .with::<NumberField>()
+        .with::<Image>()
         .with::<Separator>()
         .with::<Tabs>()
         .with::<Tab>()
