@@ -30,7 +30,7 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 - `separator()`：1 逻辑像素的主题 divider 色分隔线，在 Row 中为竖线、在其他容器中为横线，沿交叉轴拉伸；不可聚焦，语义为带方向的 separator。
 - `number_field(min, max, value)`：复用单行编辑器的数值输入，右侧 20dp 宽的上下步进区（细线箭头，与编辑区以 divider 色竖线分隔）；`set_step`、`set_decimals(0..=9)`、`set_range`、`set_value`，上/下键与 PageUp/PageDown 按步长或十步调整，聚焦时滚轮调整。Enter 或失焦时解析文本，越界 clamp，不能解析时恢复上次值；值真正改变才调用 `on_change`。语义为 SpinButton 并报告数值与范围。
-- `tabs()` 与 `Tabs::add(title)`：每页为一列，只显示选中页；标签为按钮变体（`Variant::Tab`），未选中为 muted 文字、悬停或选中为前景色，选中项在文字下方画 3dp 强调色下划线，标签列表底部有 1dp divider 基线，可单击、Enter/Space 激活，聚焦标签时 Left/Right 循环移动并选中。`select` 不回调，用户切换才调用 `on_change`。语义为 TabList/Tab（selected）/TabPanel。
+- `tabs()` 与 `Tabs::add(title)`：每页为一列，只显示选中页；标签为按钮变体（`Variant::Tab`），未选中为 muted 文字、悬停或选中为前景色，选中项在文字下方画 3dp 强调色下划线，标签列表底部有 1dp divider 基线，窗口放不下的标签换到下一行，可单击、Enter/Space 激活，聚焦标签时 Left/Right 循环移动并选中。`select` 不回调，用户切换才调用 `on_change`。语义为 TabList/Tab（selected）/TabPanel。
 - `splitter(Orientation)`：两个窗格加 6dp 可拖动把手；`first()`/`second()` 返回窗格，`set_ratio(0..=1)` 设置首窗格占比。把手可聚焦，方向键每次 2%，Home/End 到端点；拖动时按把手中心换算比例。
 - `NodeWidgets::set_tooltip(Some(text))`：任意控件可设提示；指针在该控件（或没有自己提示的子孙）上停留 `TOOLTIP_DELAY`（500 ms）后，在指针右下方以带 divider 边线与主题阴影的 surface 小面板显示，空间不足时翻到上方并保持在窗口内。按下、Escape、移开或删除控件时隐藏；文字同时作为无障碍描述。延时由 `State::wake` 驱动，原生循环按最近的唤醒时间限定等待，不轮询。
 

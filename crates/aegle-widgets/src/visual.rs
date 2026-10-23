@@ -139,10 +139,16 @@ impl Control for ImageControl {
     fn kind(&self) -> &'static ControlKind {
         &aegle_ui::CONTAINER
     }
-    fn measure(&mut self, _: &MeasureCx<'_>) -> Size {
-        self.image.as_ref().map_or(Size::default(), |image| {
-            Size::new(image.width() as f32, image.height() as f32)
-        })
+    /// The pixel size, scaled down with its aspect ratio to the offered width.
+    fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
+        let Some(image) = &self.image else {
+            return Size::default();
+        };
+        let (width, height) = (image.width() as f32, image.height() as f32);
+        match cx.width {
+            Some(offered) if offered < width => Size::new(offered, height * offered / width),
+            _ => Size::new(width, height),
+        }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let Some(image) = &self.image else {

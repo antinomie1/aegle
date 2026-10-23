@@ -179,8 +179,9 @@ pub trait Widgets {
     fn slider(&self, min: f64, max: f64, value: f64) -> Slider;
     /// Appends a determinate progress bar with finite increasing bounds.
     fn progress(&self, min: f64, max: f64, value: f64) -> Progress;
-    /// Appends an image whose intrinsic logical size is its pixel size. It keeps
-    /// that size on the cross axis instead of stretching; `set_width` and
+    /// Appends an image whose intrinsic logical size is its pixel size, scaled
+    /// down with its aspect ratio where less width is offered. It keeps that
+    /// size on the cross axis instead of stretching; `set_width` and
     /// `set_height` override it.
     fn image(&self, image: &Image) -> ImageView;
     /// Appends an empty image view, sized zero until [`ImageView::set_image`]

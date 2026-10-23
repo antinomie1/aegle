@@ -256,6 +256,26 @@ fn a_growing_table_shrinks_to_the_space_left() -> Result {
     Ok(())
 }
 
+#[test]
+fn tab_bars_and_images_fit_a_narrow_window() -> Result {
+    let ui = ui()?;
+    let tabs = ui.root().tabs();
+    for title in ["账户", "设置", "皮肤", "下载", "关于", "日志"] {
+        tabs.add(title);
+    }
+    let pixels = vec![0; 400 * 100 * 4];
+    let image = ui.root().image(&aegle_scene::Image::new(400, 100, pixels)?);
+    ui.resize(aegle_ui::Size::new(200.0, 400.0));
+    ui.refresh()?;
+    let right = |node: &aegle_ui::Node| node.bounds().origin.x + node.bounds().size.width;
+    // Tabs that do not fit continue on another line.
+    assert!(right(&tabs.tab(5)) <= 192.0);
+    assert!(tabs.tab(5).bounds().origin.y > tabs.tab(0).bounds().origin.y);
+    // The image scales down to the offered width, keeping its aspect ratio.
+    assert_eq!(image.bounds().size, aegle_ui::Size::new(184.0, 46.0));
+    Ok(())
+}
+
 /// Whether `change` panics, as handle methods do on rejected values.
 fn panics(change: impl FnOnce()) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
