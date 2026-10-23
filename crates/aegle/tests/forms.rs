@@ -50,11 +50,12 @@ struct Forms {
     typed: State<String>,
     edits: State<i64>,
     folders: State<Vec<String>>,
+    choices: State<Vec<String>>,
 }
 
 fn drive(ui: &Ui, view: Forms) -> Result {
     ui.refresh()?;
-    // The bound selection applied after the literal items.
+    // The bound selection applied after the bound items, though written first.
     assert_eq!((view.sizes.selected(), view.sizes.text()), (1, "中".into()));
     view.sizes.focus();
     key(ui, Key::Enter, "")?;
@@ -64,6 +65,23 @@ fn drive(ui: &Ui, view: Forms) -> Result {
     assert_eq!((view.size.get(), view.picked.get()), (2, "大".into()));
     view.size.set(0)?;
     assert_eq!(view.sizes.text(), "小");
+
+    // New choices keep a still-valid index, else select the first; an empty
+    // list is a located error that leaves the dropdown as it was.
+    view.choices.set(vec!["S".into(), "M".into()])?;
+    view.size.set(1)?;
+    assert_eq!(
+        (view.sizes.items(), view.sizes.text()),
+        (vec!["S".into(), "M".into()], "M".into())
+    );
+    view.choices.set(vec!["XS".into()])?;
+    assert_eq!((view.sizes.selected(), view.sizes.text()), (0, "XS".into()));
+    let error = view.choices.set(Vec::new()).unwrap_err().to_string();
+    assert!(
+        error.contains("`items` requires a nonempty list") && error.contains("forms.aegle"),
+        "{error}"
+    );
+    assert_eq!(view.sizes.items(), ["XS"]);
 
     // Typing, an IME commit and deletion each raise `changed`; preedit and
     // programmatic text do not.
@@ -116,6 +134,7 @@ fn dropdowns_text_changes_tree_blocks_and_slot_ids_from_both_paths() -> Result {
             typed: view.typed.clone(),
             edits: view.edits.clone(),
             folders: view.folders.clone(),
+            choices: view.choices.clone(),
         },
     )?;
 
@@ -134,6 +153,7 @@ fn dropdowns_text_changes_tree_blocks_and_slot_ids_from_both_paths() -> Result {
             typed: runtime.state("typed").unwrap(),
             edits: runtime.state("edits").unwrap(),
             folders: runtime.state("folders").unwrap(),
+            choices: runtime.state("choices").unwrap(),
         },
     )
 }

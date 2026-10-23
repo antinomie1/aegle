@@ -4,7 +4,7 @@ use aegle_loader::{
     Elements,
     markup::{
         Bound, Child, ElementKind, ElementSpec, ExprKind, File, Item, Limits, Program,
-        ProgramError, Ref, check_program, parse, parse_with_limits,
+        ProgramError, Prop, PropertyName, Ref, check_program, parse, parse_with_limits,
     },
 };
 
@@ -65,7 +65,9 @@ Window {
     let Child::Element(status) = &root.children[0] else {
         panic!()
     };
-    let Bound::Expr(visible) = &status.properties[1].1 else {
+    let mut visible = status.properties.iter();
+    let visible = visible.find(|(prop, _)| *prop == Prop::Node(PropertyName::Visible));
+    let Some((_, Bound::Expr(visible))) = visible else {
         panic!()
     };
     assert_eq!(visible.kind, ExprKind::Ref(Ref::State(0)));

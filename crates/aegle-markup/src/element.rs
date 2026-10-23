@@ -86,7 +86,8 @@ pub enum ValueType<'a> {
     Color,
     /// One of these bare identifiers.
     Choice(&'a [&'a str]),
-    /// A nonempty literal list of strings without hard line separators.
+    /// A nonempty list of strings without hard line separators; binds to
+    /// `list<string>`, whose values the engine checks when they change.
     Lines,
 }
 
@@ -102,7 +103,9 @@ pub struct PropertySpec<'a> {
     pub new: bool,
     /// Has a setter, so it may also be bound to an expression.
     pub set: bool,
-    /// A constructor argument without a default; markup must write it as a literal.
+    /// A constructor argument without a default that markup must write: as a
+    /// literal, or, with a setter, as an expression the setter applies after
+    /// the constructor received a placeholder.
     pub required: bool,
 }
 
@@ -136,7 +139,8 @@ impl ValueType<'_> {
             Self::Int(..) => Type::Int,
             Self::Float(..) | Self::Fraction | Self::Length => Type::Float,
             Self::String | Self::Line => Type::String,
-            Self::Color | Self::Choice(_) | Self::Lines => return None,
+            Self::Lines => Type::List(Box::new(Type::String)),
+            Self::Color | Self::Choice(_) => return None,
         })
     }
 
@@ -154,11 +158,11 @@ impl ValueType<'_> {
             (Self::Fraction, Value::Number(n)) => (0.0..=1.0).contains(n),
             (Self::Fraction, Value::Percent(n)) => (0.0..=100.0).contains(n),
             (Self::Length, Value::Length(n)) => n.is_finite() && *n >= 0.0,
-            (Self::Line, Value::String(text)) => single_line(text),
+            (Self::Line, Value::String(text)) => Self::single_line(text),
             (Self::Lines, Value::List(items)) => {
                 !items.is_empty()
                     && (items.iter())
-                        .all(|item| matches!(item, Value::String(text) if single_line(text)))
+                        .all(|item| matches!(item, Value::String(text) if Self::single_line(text)))
             }
             (Self::Choice(choices), Value::Identifier(name)) => choices.contains(&name.as_str()),
             _ => false,
@@ -185,10 +189,13 @@ impl ValueType<'_> {
     }
 }
 
-fn single_line(text: &str) -> bool {
-    !text.contains([
-        '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
-    ])
+impl ValueType<'_> {
+    /// Whether `text` has no hard line separators, as `line` and `lines` require.
+    pub fn single_line(text: &str) -> bool {
+        !text.contains([
+            '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
+        ])
+    }
 }
 
 impl<'a> ElementSpec<'a> {

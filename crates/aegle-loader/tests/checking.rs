@@ -263,6 +263,7 @@ fn dropdowns_tree_blocks_and_slot_ids_check_their_rules() {
         state names: list<string> = ["甲"]
         state size: int = 0
         Dropdown { id: sizes; items: ["小", "中"]; selected: size; on changed { size = self.selected } }
+        Dropdown { selected: 1; items: names + ["乙"] }
         TextField { on changed { if self.text == "" { size = 0 } } }
         TreeView { for name in names { TreeNode { text: name; if size > 0 { TreeNode {} } } } }
         Outer { TextField { id: inner } }
@@ -276,7 +277,11 @@ fn dropdowns_tree_blocks_and_slot_ids_check_their_rules() {
         ("Dropdown { items: [] }", "nonempty list"),
         ("Dropdown { items: [\"a\\nb\"] }", "nonempty list"),
         ("Dropdown { items: [1] }", "nonempty list"),
-        ("Dropdown { items: names }", "accepts only literal values"),
+        ("Dropdown { items: names; selected: names }", "expected int"),
+        (
+            "state n: list<int> = []; Dropdown { items: n }",
+            "expected list<string>",
+        ),
         ("Dropdown { items: [\"a\"]; selected: -1 }", "whole number"),
         (
             "TreeView { for name in names { Text {} } }",

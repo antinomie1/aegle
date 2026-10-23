@@ -58,6 +58,7 @@ pub struct Lines<'a>(Items<'a>);
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Items<'a> {
     Literal(&'a [Value]),
+    Bound(&'a [Data]),
     Static(&'a [&'a str]),
 }
 
@@ -69,15 +70,28 @@ impl<'a> Lines<'a> {
     }
     /// The strings in order.
     pub fn iter(self) -> impl Iterator<Item = &'a str> {
-        let (literal, fixed) = match self.0 {
-            Items::Literal(items) => (items, &[][..]),
-            Items::Static(items) => (&[][..], items),
+        let count = match self.0 {
+            Items::Literal(items) => items.len(),
+            Items::Bound(items) => items.len(),
+            Items::Static(items) => items.len(),
         };
-        let literal = literal.iter().map(|item| match item {
-            Value::String(text) => text.as_str(),
-            _ => unreachable!("checked lines"),
-        });
-        literal.chain(fixed.iter().copied())
+        (0..count).map(move |index| match self.0 {
+            Items::Literal(items) => match &items[index] {
+                Value::String(text) => text.as_str(),
+                _ => unreachable!("checked lines"),
+            },
+            Items::Bound(items) => match &items[index] {
+                Data::String(text) => text,
+                _ => unreachable!("checked lines"),
+            },
+            Items::Static(items) => items[index],
+        })
+    }
+    /// Whether a bound `list<string>` is valid `lines`.
+    pub(crate) fn admits(items: &[Data]) -> bool {
+        !items.is_empty()
+            && (items.iter())
+                .all(|item| matches!(item, Data::String(text) if ValueType::single_line(text)))
     }
     /// The strings in order, as constructors such as `dropdown` take them.
     pub fn to_vec(self) -> Vec<&'a str> {
@@ -133,7 +147,8 @@ impl<'a> Arg<'a> {
             Data::Int(value) => Self::Int(*value),
             Data::Float(value) => Self::Float(f64::from(*value)),
             Data::String(value) => Self::Str(value),
-            Data::List(_) | Data::Record(_) => unreachable!("checked binding types"),
+            Data::List(items) => Self::Lines(Lines(Items::Bound(items))),
+            Data::Record(_) => unreachable!("checked binding types"),
         }
     }
 }

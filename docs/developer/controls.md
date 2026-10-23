@@ -303,10 +303,11 @@ color.set_items(&["One", "Two"], 0);   // 程序设置，不触发 on_change
 
 ```text
 Dropdown { items: ["Red", "Green", "Blue"]; selected: shade; on changed { shade = self.selected } }
+Dropdown { items: colors; selected: 0 }   // colors: list<string> state
 ```
 
 - 类输入框的方框显示当前选项和细线下拉箭头；激活（点击、Space、Enter）在下方弹出选项列表，焦点位于当前选项，当前选项带前置强调色竖条。Up/Down 移动，Enter 或点击选择并关闭；Escape 或点击外部关闭且不改变选择。
-- 方法：`selected`、`set_selected`、`text`（当前选项）、`items`、`set_items`、`on_change`。标记中 `items` 只能写字面量列表。
+- 方法：`selected`、`set_selected`、`text`（当前选项）、`items`、`set_items`、`on_change`。标记中 `items` 可写字面量列表或绑定 `list<string>` state，见[标记语言](../markup.md#内置元素)。
 - 无障碍角色 ComboBox（带展开状态）、ListBox 与 ListBoxOption（带选中状态）。
 
 ## Popup

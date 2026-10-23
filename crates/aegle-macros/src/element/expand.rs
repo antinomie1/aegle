@@ -40,6 +40,10 @@ impl Def {
                     Some(default) => {
                         quote! { __find(#index).map_or(#default as #ty, |a| a.#read()) }
                     }
+                    None if property.set.is_some() => {
+                        let placeholder = placeholder(property.ty, &p);
+                        quote! { __find(#index).map_or(#placeholder, |a| a.#read()) }
+                    }
                     None => quote! { __find(#index).unwrap().#read() },
                 };
                 Some(quote! { let #name: #ty = #value; })
@@ -149,6 +153,30 @@ fn rust(ty: ValueType<'_>, p: &TokenStream) -> (TokenStream, Ident) {
         _ => (quote! { &str }, "str"),
     };
     (ty, Ident::new(read, Span::call_site()))
+}
+
+/// What the constructor receives for a required argument markup bound to an
+/// expression, which the setter then replaces.
+fn placeholder(ty: ValueType<'_>, p: &TokenStream) -> TokenStream {
+    match ty {
+        ValueType::Bool => quote! { false },
+        ValueType::Int(min, max) => {
+            let value = 0i64.clamp(min, max);
+            quote! { #value }
+        }
+        ValueType::Float(min, max) => {
+            let value = 0f64.clamp(min, max);
+            quote! { #value }
+        }
+        ValueType::Fraction | ValueType::Length => quote! { 0.0f32 },
+        ValueType::String | ValueType::Line => quote! { "" },
+        ValueType::Color => quote! { #p::Color::rgba(0, 0, 0, 0) },
+        ValueType::Choice(choices) => {
+            let first = choices[0];
+            quote! { #first }
+        }
+        ValueType::Lines => quote! { #p::Lines::from_static(&[""]) },
+    }
 }
 
 fn spec_tokens(spec: &ElementSpec<'_>, m: &TokenStream) -> TokenStream {

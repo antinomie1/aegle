@@ -11,8 +11,9 @@ Column {
     state typed: string = ""
     state edits: int = 0
     state folders: list<string> = ["文档", "示例"]
+    state choices: list<string> = ["小", "中", "大"]
     Dropdown {
-        id: sizes; items: ["小", "中", "大"]; selected: size
+        id: sizes; selected: size; items: choices
         on changed { size = self.selected; picked = self.text }
     }
     Labeled { label: "名称"; TextField { id: name; on changed { typed = self.text; edits += 1 } } }

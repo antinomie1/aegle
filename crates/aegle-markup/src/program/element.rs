@@ -138,7 +138,7 @@ impl Checker<'_> {
                         Prop::Node(name) => bindable(name).filter(|_| allowed(target, name)),
                         Prop::Element(_) => {
                             let spec = element_property().unwrap().1;
-                            spec.ty.binding().filter(|_| spec.set && !spec.required)
+                            spec.ty.binding().filter(|_| spec.set)
                         }
                     };
                     let ty = ty.ok_or_else(|| {
@@ -188,6 +188,12 @@ impl Checker<'_> {
             self.parent = spec;
             element.children.push(self.child(item, scope)?);
         }
+        // Element properties apply in spec order whatever the source order, so
+        // a setter such as Dropdown's `selected` follows the `items` before it.
+        element.properties.sort_by_key(|(prop, _)| match prop {
+            Prop::Node(_) => None,
+            Prop::Element(index) => Some(*index),
+        });
         Ok(element)
     }
 

@@ -26,6 +26,13 @@ fn drawer_side(name: &str) -> DrawerSide {
     }
 }
 
+/// New choices keep the selected index while it remains valid, else the first.
+fn set_items(dropdown: &Dropdown, items: crate::Lines<'_>) {
+    let items = items.to_vec();
+    let selected = Some(dropdown.selected()).filter(|&index| index < items.len());
+    dropdown.set_items(&items, selected.unwrap_or(0))
+}
+
 #[cfg(feature = "grid")]
 fn grid(parent: &Container, stack: bool) -> Container {
     if stack { parent.stack() } else { parent.grid() }
@@ -148,11 +155,11 @@ crate::element! {
         set orientation: choice(horizontal, vertical) => |progress, name| progress.set_orientation(axis(name));
         set indeterminate: bool => |progress, on| progress.set_indeterminate(on);
     }
-    /// A button opening a list of `items`; the constructor requires `selected`
-    /// to index them.
+    /// A button opening a list of `items`; `selected` must index them.
     pub Dropdown {
         style text interactive pressed;
-        create |parent, items: lines, selected: int(0, 4294967295) = 0| parent.dropdown(&items.to_vec(), selected as usize);
+        create |parent, items: lines| parent.dropdown(&items.to_vec(), 0);
+        set items: lines => |dropdown, items| set_items(dropdown, items);
         set selected: int(0, 4294967295) => |dropdown, index| dropdown.set_selected(index as usize);
         event changed => |dropdown, run| dropdown.on_change(move |_| run());
         get selected: int => |dropdown| dropdown.selected() as i64;

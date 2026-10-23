@@ -83,7 +83,7 @@ aegle::element! {
 }
 ```
 
-`create` 的参数是构造属性（有默认值可省略，没有默认值的必填且只能写字面量），`set` 声明可设置、可绑定表达式的属性，`event` 注册处理块，`get` 声明处理块里的 `self.value`。各闭包直接调用句柄方法、返回值本身，不返回 `Result`；`event` 收到的 `run` 返回标记处理块的 `Result`，交给句柄的 `on_*` 即可。容器元素加 `layout box|flex|grid`，可用 `children only Name|blocks Name|exactly N`（`blocks` 另允许只含该元素的 `if`/`for` 块，构造器此时也会收到块的透明 contents 分组作父容器，如 TreeNode 的 `TreeNode::append_to`）、`parent Name ...`（可列出多个父元素，如 TreeNode 的 `parent TreeView TreeNode`）和 `children => |handle, index| container` 约束和放置子节点。完整语法见 `aegle::element!` 的文档，值类型与 Rust 类型的对应也在那里。
+`create` 的参数是构造属性（有默认值可省略，没有默认值的必填；必填且有 `set` 的可写表达式，构造器先收到该类型的占位值，否则只能写字面量；元素属性按声明顺序应用），`set` 声明可设置、可绑定表达式的属性，`event` 注册处理块，`get` 声明处理块里的 `self.value`。各闭包直接调用句柄方法、返回值本身，不返回 `Result`；`event` 收到的 `run` 返回标记处理块的 `Result`，交给句柄的 `on_*` 即可。容器元素加 `layout box|flex|grid`，可用 `children only Name|blocks Name|exactly N`（`blocks` 另允许只含该元素的 `if`/`for` 块，构造器此时也会收到块的透明 contents 分组作父容器，如 TreeNode 的 `TreeNode::append_to`）、`parent Name ...`（可列出多个父元素，如 TreeNode 的 `parent TreeView TreeNode`）和 `children => |handle, index| container` 约束和放置子节点。完整语法见 `aegle::element!` 的文档，值类型与 Rust 类型的对应也在那里。
 
 `element!` 为句柄类型实现 `aegle::loader::Element`，并在 crate 根定义同名的隐藏宏；在 crate 根重导出句柄类型，使用者一次 `use rating_lib::Rating;` 就同时得到两者：
 

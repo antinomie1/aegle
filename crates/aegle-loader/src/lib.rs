@@ -79,17 +79,19 @@ pub use view::{State, StateValue, View};
 /// - `parent Name ...`: it may only be written directly inside one of these;
 /// - `style` followed by the groups `text interactive pressed indicator editor`;
 /// - `create |parent, name: type = default, ...| expr` returning the handle;
-///   a constructor argument without a default is required and literal;
+///   a constructor argument without a default is required, and literal
+///   unless it also has a setter: an expression then reaches the constructor
+///   as a placeholder of its type, such as `[""]` for `lines`, before binding;
 /// - `set name: type => |handle, value| ...` for a settable property, bindable
-///   unless it is `color`, `choice` or `lines`;
+///   unless it is `color` or `choice`; setters apply in declaration order;
 /// - `event name => |handle, run| ...` registering `run` as a handler;
 /// - `get name: type => |handle| ...` for a `self.name` field;
 /// - `children => |handle, index| container` where child `index` goes.
 ///
 /// Types are `bool`, `int`, `int(min, max)`, `float`, `float(min)`,
 /// `float(min, max)`, `fraction`, `length`, `string`, `line`, `color`,
-/// `choice(a, b, ...)` and `lines` (a nonempty literal list of single-line
-/// strings, without a default), arriving as `bool`, `i64`, `f64`, `f32`,
+/// `choice(a, b, ...)` and `lines` (a nonempty list of single-line strings,
+/// without a default; it binds to `list<string>`, checked as it changes), arriving as `bool`, `i64`, `f64`, `f32`,
 /// `f32`, `&str`, `&str`, `Color`, `&str` and [`Lines`]. A `get` field is
 /// none of the last three.
 #[macro_export]

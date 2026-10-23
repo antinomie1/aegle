@@ -9,7 +9,7 @@ use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Prop, Value};
 use aegle_ui::{Container, Result};
 
 use crate::{
-    Arg, Data, RuntimeError,
+    Arg, Data, Lines, RuntimeError,
     eval::{Emit, Env, Param, Slot, eval, handle as run, truth},
     handle::{Handle, apply, consumed},
     reactive::Effect,
@@ -322,9 +322,16 @@ fn binding(handle: Handle, prop: Prop, expr: Rc<Expr>, env: Env) -> Result<Rc<Ef
         }
         let value = eval(&expr, &env, Some(effect), None).map_err(|e| env.locate(e))?;
         if last.as_ref() != Some(&value) {
-            match prop {
-                Prop::Node(name) => apply(handle.node(), name, &node_value(&value))?,
-                Prop::Element(index) => handle.glue().set(&handle, index, Arg::data(&value)),
+            match (prop, &value) {
+                (Prop::Element(index), Data::List(items)) if !Lines::admits(items) => {
+                    let name = handle.glue().spec().properties[index].name;
+                    let message = format!(
+                        "`{name}` requires a nonempty list of strings without hard line separators; it is unchanged"
+                    );
+                    return Err(env.locate(RuntimeError::new(expr.span, message).into()));
+                }
+                (Prop::Node(name), _) => apply(handle.node(), name, &node_value(&value))?,
+                (Prop::Element(index), _) => handle.glue().set(&handle, index, Arg::data(&value)),
             }
             last = Some(value);
         }

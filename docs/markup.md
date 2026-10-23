@@ -68,7 +68,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | Button | 叶 | `text`* 字符串 | `clicked` |
 | TextField | 叶 | `text`* 单行字符串；`read_only`、`password` bool | `submitted`、`changed`；`text: string` |
 | TextArea | 叶 | `text`* 字符串；`read_only` bool | `changed`；`text: string` |
-| Dropdown | 叶 | `items`*! 非空的单行字符串列表字面量；`selected`* 非负整数（默认 0） | `changed`；`selected: int`、`text: string` |
+| Dropdown | 叶 | `items`*! 非空的单行字符串列表，字面量或 `list<string>` 表达式；`selected` 非负整数（默认 0） | `changed`；`selected: int`、`text: string` |
 | CheckBox | 叶 | `text`* 字符串；`checked`* bool；`mixed`、`wrap` bool | `changed`；`checked: bool`、`text: string` |
 | Switch、RadioButton | 叶 | `text`* 字符串；`checked`* bool；`wrap` bool；同一父容器中的 RadioButton 互斥 | `changed`；`checked: bool`、`text: string` |
 | Slider | 叶 | `min`*、`max`*、`value`* 有限数（默认 0/1/0）；`step` 非负数；`orientation` | `changed`；`value: float` |
@@ -76,9 +76,9 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | NumberField | 叶 | `min`*、`max`*、`value`*；`step` 非负数；`decimals` 0 到 9 的整数 | `changed`；`value: float` |
 | Separator | 叶 | — | — |
 
-元素属性的名称遮蔽同名的节点属性（如 Tab 的 `title`、Text 的 `wrap`）。Dialog 与 Drawer 的 `open` 只在与当前状态不同时打开或关闭，用户经 Escape、遮罩或关闭按钮关闭时触发 `closed`，绑定的状态需在 `on closed` 中同步，例如 `open: shown; on closed { shown = false }`。构造参数为字面量时交给构造器，不依赖源码顺序；写成表达式时构造器取默认值，随后由绑定设置。必填参数只能写字面量；只有构造参数而没有 setter 的属性（如 Splitter 的 `orientation`、数值元素的 `min`/`max`）也只能写字面量。数值元素的 `min` 须小于 `max`、`value` 按共享 Range 契约 clamp，由构造器在构建时检查，违反时构建失败并移除本次子树。标记数字以有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。文本默认为空字符串，窗口标题默认为 `Aegle`。
+元素属性的名称遮蔽同名的节点属性（如 Tab 的 `title`、Text 的 `wrap`）。Dialog 与 Drawer 的 `open` 只在与当前状态不同时打开或关闭，用户经 Escape、遮罩或关闭按钮关闭时触发 `closed`，绑定的状态需在 `on closed` 中同步，例如 `open: shown; on closed { shown = false }`。构造参数为字面量时交给构造器，不依赖源码顺序；写成表达式时构造器取默认值（必填参数取该类型的占位值，如 `lines` 为一项空串），随后由绑定设置。元素属性的字面量与绑定按元素规格中的声明顺序应用，同样不依赖源码顺序（如 Dropdown 先 `items` 后 `selected`）。没有 setter 的必填参数只能写字面量；只有构造参数而没有 setter 的属性（如 Splitter 的 `orientation`、数值元素的 `min`/`max`）也只能写字面量。数值元素的 `min` 须小于 `max`、`value` 按共享 Range 契约 clamp，由构造器在构建时检查，违反时构建失败并移除本次子树。标记数字以有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。文本默认为空字符串，窗口标题默认为 `Aegle`。
 
-TextField 与 TextArea 的 `changed` 在用户改变已提交文字后触发：键入、删除、粘贴、剪切、撤销/重做或输入法提交，每次改变一次；输入法预编辑与 `text` 的绑定或 `set_text` 不触发，处理块用 `self.text` 读取新值，例如 `on changed { query = self.text }`。Dropdown 的 `items` 是检查期验证的字面量列表，如 `items: ["小", "中", "大"]`，当前不能绑定表达式（动态选项仍用 Rust 的 `set_items`）；`selected` 可绑定 int，与 `items` 一起交给构造器，越界时与数值元素一样由构造器或 setter 拒绝（panic）。用户选择不同项时触发 `changed`，程序设置不触发，`self.selected` 与 `self.text` 给出当前项。TreeView/TreeNode 中的 `if`/`for` 块生成的 TreeNode 与直接写出的节点同层：块的透明分组位于外层节点的子节点容器内，块内节点按外层节点计算缩进并使其显示展开箭头；块清空后外层节点仍保留箭头。
+TextField 与 TextArea 的 `changed` 在用户改变已提交文字后触发：键入、删除、粘贴、剪切、撤销/重做或输入法提交，每次改变一次；输入法预编辑与 `text` 的绑定或 `set_text` 不触发，处理块用 `self.text` 读取新值，例如 `on changed { query = self.text }`。Dropdown 的 `items` 可写字面量列表（如 `items: ["小", "中", "大"]`，检查期验证非空且每项单行），也可绑定 `list<string>` 表达式（如 `items: sizes`）；绑定值在每次变化时检查，空列表或含换行的项返回带位置的 `RuntimeError`，选项保持不变。新选项在原索引仍有效时保留它，否则选中第一项，不触发 `changed`。`selected` 可绑定 int，越界时由 setter 拒绝（panic），因此同一处理块中先改 `items` 再改 `selected`。用户选择不同项时触发 `changed`，程序设置不触发，`self.selected` 与 `self.text` 给出当前项。TreeView/TreeNode 中的 `if`/`for` 块生成的 TreeNode 与直接写出的节点同层：块的透明分组位于外层节点的子节点容器内，块内节点按外层节点计算缩进并使其显示展开箭头；块清空后外层节点仍保留箭头。
 
 ### 节点属性
 
@@ -156,7 +156,7 @@ Window {
 
 `state name: type = value` 只能写在文档根节点或组件体顶层；类型为 bool、int（i64）、float（有限 f32）、string、`list<int>`、`list<string>`。初始值可读参数和此前声明的 state，每个实例求值一次。表达式包含字面量、名称（内层 for 项 → state → 参数）、事件块中元素声明的 `self` 字段、`!`、一元 `-`、`|| && == != < <= > >= + - * / %`、列表字面量，以及 `str`、`len`、`int`、`float`。除整数字面量可按上下文转为 float 外没有隐式转换；`+` 也连接字符串和同类列表，比较只用于数值和字符串。未知名称、类型不符、不适用属性等在编译或加载时报告文件、行、Unicode 列和源码片段。
 
-属性值写表达式即为单向绑定：节点属性中可绑定 label/tooltip（string）、visible/enabled（bool）与 offset_x/offset_y/scale/rotation（float）；元素属性中有 setter、非必填且类型为 bool、int、float、fraction、length、string 或 line 的可绑定。其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。元素的事件见其规格（内置元素见上表），事件不携带值，处理块用 `self.字段` 读取元素声明的字段；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受 `Limits` 约束（见下文限额）。标记事件块与 Rust 的 `on_*` 处理器一样追加到控件上，两者共存、按注册顺序执行。
+属性值写表达式即为单向绑定：节点属性中可绑定 label/tooltip（string）、visible/enabled（bool）与 offset_x/offset_y/scale/rotation（float）；元素属性中有 setter 且类型为 bool、int、float、fraction、length、string、line（各自对应的表达式类型）或 lines（`list<string>`）的可绑定。其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。元素的事件见其规格（内置元素见上表），事件不携带值，处理块用 `self.字段` 读取元素声明的字段；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受 `Limits` 约束（见下文限额）。标记事件块与 Rust 的 `on_*` 处理器一样追加到控件上，两者共存、按注册顺序执行。
 
 `if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点放在一个透明的 contents 分组中，直接参与父容器的布局：在 Row/Column 中与兄弟共享对齐、换行、gap 和 grow，在 Grid 中各自占一格，在 Stack 中叠放。release 测量（本机 CJK 测试字体，7 次中位数）：1000 行 `for` 首次构建加刷新 3.6 ms，追加一行 0.8 ms，整体反序 5.8 ms；大数据仍应使用 ListView。
 
