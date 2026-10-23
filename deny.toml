@@ -1,6 +1,18 @@
 [graph]
 all-features = true
 
+[advisories]
+ignore = [
+    # zvariant, zvariant_derive and zbus_names are unmaintained as standalone
+    # crates since zbus 6 absorbed them. They reach us only through
+    # accesskit_unix (unix-accessibility) via zbus 5, and even the latest
+    # accesskit_unix (0.24) still depends on zbus 5. Drop these once
+    # accesskit_unix moves to zbus 6.
+    { id = "RUSTSEC-2026-0370", reason = "accesskit_unix's zbus 5; no upgrade available" },
+    { id = "RUSTSEC-2026-0371", reason = "accesskit_unix's zbus 5; no upgrade available" },
+    { id = "RUSTSEC-2026-0372", reason = "accesskit_unix's zbus 5; no upgrade available" },
+]
+
 [licenses]
 allow = [
     "MIT",
