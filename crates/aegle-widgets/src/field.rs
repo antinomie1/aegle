@@ -216,7 +216,6 @@ pub(crate) fn control(
                 width: LengthPercentageAuto::length(0.0),
                 height: LengthPercentageAuto::length(theme.control_height),
             },
-            flex_shrink: 0.0,
             ..Default::default()
         },
     ))

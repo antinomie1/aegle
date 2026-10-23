@@ -86,9 +86,6 @@ pub(crate) fn virtual_list(
     let view = container.scroll_view();
     view.change(|state, id| {
         state.install(&crate::HOOKS);
-        let mut style = state.tree.get(id).unwrap().style().clone();
-        style.flex_shrink = 1.0;
-        aegle_layout::set_style(&mut state.tree, id, style)?;
         let mut style = container_style(state.theme_of(id), false);
         style.size.height = Dimension::length(height);
         style.flex_shrink = 0.0;

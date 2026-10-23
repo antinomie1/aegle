@@ -133,7 +133,7 @@ TextField 与 TextArea 的 `changed` 在用户改变已提交文字后触发：�
 
 Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
 
-ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`、`width` 或 flex 分配约束视口即可产生滚动溢出。它没有可选样式组，因此不接受 font_size、hover/pressed/focus 等交互状态属性。当前没有初始滚动偏移属性；通过具名 ScrollView 句柄调用 `scroll_to`，或对子控件调用 `ensure_visible`。布局刷新、裁剪、嵌套滚轮和保留状态遵守同一套 [Rust 滚动契约](rust-api.md#当前滚动契约)；完整示例为 `crates/aegle/examples/scrolling.aegle`。
+ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`、`width` 或 flex 分配约束视口即可产生滚动溢出。放在 `grow: 1` 的位置或任意层行/列、Tab 中时，它收缩到窗口给的空间而不是被内容撑开，中间容器不需要 `min_height: 0dp`；滚动方向上的直接子项保持自身尺寸。它没有可选样式组，因此不接受 font_size、hover/pressed/focus 等交互状态属性。当前没有初始滚动偏移属性；通过具名 ScrollView 句柄调用 `scroll_to`，或对子控件调用 `ensure_visible`。布局刷新、裁剪、嵌套滚轮和保留状态遵守同一套 [Rust 滚动契约](rust-api.md#当前滚动契约)；完整示例为 `crates/aegle/examples/scrolling.aegle`。
 
 声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性与 `shadow`、渐变色标。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知属性、重复属性/ID、不适用属性、错误类型及未实现语法在 `ui!` 的编译期、运行时加载的挂载前拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
 

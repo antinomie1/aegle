@@ -295,6 +295,51 @@ fn overflowing_viewports_reserve_the_bar_and_draw_their_border_last() -> Result 
     Ok(())
 }
 
+#[test]
+fn scroll_views_fit_the_window_and_their_content_scrolls() -> Result {
+    let mut fonts = TextSystem::new();
+    let families = fonts.register_fonts(Blob::new(Arc::new(
+        include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+    )))?;
+    fonts
+        .collection_mut()
+        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
+    // No `min_height` anywhere: a viewport's content does not enlarge its
+    // ancestors, whether the view sits on a column's main axis or a row's
+    // cross axis.
+    let column = ui.root().column();
+    column.text("Header");
+    let tabs = column.tabs();
+    let account = tabs.add("Account").row().scroll_view();
+    account.set_grow(1.0);
+    let settings = tabs.add("Settings").scroll_view();
+    let fields: Vec<_> = (0..30).map(|_| settings.text_area("")).collect();
+    for i in 0..30 {
+        account.button(&format!("{i}"));
+    }
+    ui.resize(Size::new(300.0, 240.0));
+    ui.refresh()?;
+    let fits = |bounds: aegle_ui::Rect| bounds.origin.y + bounds.size.height <= 240.0;
+    assert!(fits(column.bounds()) && fits(account.bounds()));
+    assert!(account.max_scroll_offset().y > 0.0);
+    tabs.select(1);
+    ui.refresh()?;
+    assert!(fits(settings.bounds()) && settings.max_scroll_offset().y > 0.0);
+    // Items of a scrolling axis keep their size and scroll instead of shrinking.
+    assert_eq!(fields[0].bounds().size.height, 128.0);
+
+    // A row too narrow for a field and a button shrinks the field, not the window.
+    let row = ui.root().row();
+    let field = row.text_field("/a/rather/long/path/to/a/file/that/does/not/fit.png");
+    field.set_grow(1.0);
+    let browse = row.button("Browse");
+    ui.refresh()?;
+    let right = browse.bounds().origin.x + browse.bounds().size.width;
+    assert!(right <= 300.0 && field.bounds().size.width < 200.0);
+    Ok(())
+}
+
 /// Whether `change` panics, as handle methods do on rejected values.
 fn panics(change: impl FnOnce()) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()

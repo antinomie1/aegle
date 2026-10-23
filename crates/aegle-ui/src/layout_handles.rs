@@ -82,8 +82,9 @@ impl Node {
         })
     }
     /// Sets the minimum height, overriding the corresponding theme default.
-    /// Zero lets a flex item shrink below its content, for example a column
-    /// holding a scroll view or table.
+    /// Zero lets a flex item shrink below its content. Containers holding a
+    /// scroll view or table need none: a scrolling axis does not pass its
+    /// content up as a minimum.
     pub fn set_min_height(&self, height: impl Into<Length>) {
         let height = size(height);
         self.layout(LocalLayout::MIN_HEIGHT, |s| {

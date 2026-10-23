@@ -48,7 +48,6 @@ pub(crate) fn create(container: &Container) -> Container {
         style.padding = scroll_padding(theme);
         style.overflow.x = Overflow::Scroll;
         style.overflow.y = Overflow::Scroll;
-        style.flex_shrink = 0.0;
         Ok((Box::new(ScrollControl) as Box<dyn Control>, style))
     }))
 }

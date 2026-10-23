@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::node::LayoutNode;
+use crate::{item::ItemStyle, node::LayoutNode};
 use aegle_core::{Children, Dirty, NodeId, Tree};
 use taffy::{
     AvailableSpace, CacheTree, Display, Layout, LayoutInput, LayoutOutput, LayoutPartialTree, Size,
@@ -201,36 +201,98 @@ where
             return taffy::compute_hidden_layout(self, id);
         }
         compute_cached_layout(self, id, inputs, |this, id, inputs| {
-            if this.child_count(id) == 0 {
-                let node = this.tree.get_mut(from_taffy(id)).unwrap();
-                let style = &*node.style;
-                let mut output = compute_leaf_layout(
-                    inputs,
-                    style,
-                    crate::values::resolve_calc,
-                    |known, available| {
-                        this.measure
-                            .measure(from_taffy(id), &mut node.context, known, available)
-                    },
-                );
-                // Parents read baselines only from a performed layout, whose
-                // final size places the text.
-                if inputs.run_mode == taffy::RunMode::PerformLayout {
-                    output.baselines.first =
-                        this.measure
-                            .baseline(from_taffy(id), &mut node.context, output.size);
-                }
-                return output;
-            }
-            match this.node(id).style().display {
-                Display::Flex => taffy::compute_flexbox_layout(this, id, inputs),
-                Display::Block => taffy::compute_block_layout(this, id, inputs, block_ctx),
-                Display::FlowRoot => taffy::compute_block_layout(this, id, inputs, None),
-                #[cfg(feature = "grid")]
-                Display::Grid => taffy::compute_grid_layout(this, id, inputs),
-                Display::None => unreachable!(),
-            }
+            let mut output = this.compute_uncached(id, inputs, block_ctx);
+            scroll_minimum(this.node(id).style(), &inputs, &mut output);
+            output
         })
+    }
+
+    fn compute_uncached(
+        &mut self,
+        id: taffy::NodeId,
+        inputs: LayoutInput,
+        block_ctx: Option<&mut taffy::BlockContext<'_>>,
+    ) -> LayoutOutput {
+        if self.child_count(id) == 0 {
+            let node = self.tree.get_mut(from_taffy(id)).unwrap();
+            let style = &*node.style;
+            let mut output = compute_leaf_layout(
+                inputs,
+                style,
+                crate::values::resolve_calc,
+                |known, available| {
+                    self.measure
+                        .measure(from_taffy(id), &mut node.context, known, available)
+                },
+            );
+            // Parents read baselines only from a performed layout, whose
+            // final size places the text.
+            if inputs.run_mode == taffy::RunMode::PerformLayout {
+                output.baselines.first =
+                    self.measure
+                        .baseline(from_taffy(id), &mut node.context, output.size);
+            }
+            return output;
+        }
+        match self.node(id).style().display {
+            Display::Flex => taffy::compute_flexbox_layout(self, id, inputs),
+            Display::Block => taffy::compute_block_layout(self, id, inputs, block_ctx),
+            Display::FlowRoot => taffy::compute_block_layout(self, id, inputs, None),
+            #[cfg(feature = "grid")]
+            Display::Grid => taffy::compute_grid_layout(self, id, inputs),
+            Display::None => unreachable!(),
+        }
+    }
+}
+
+/// A scrolling axis keeps its content to itself: measured under a min-content
+/// constraint without a definite size, the node is only as large as its
+/// padding, border and minimum size. Ancestors' automatic minimum sizes then
+/// stop at the viewport, so a grown scroll view shrinks to the space it is
+/// given and scrolls, instead of enlarging every ancestor up to the window.
+fn scroll_minimum(style: &Style, inputs: &LayoutInput, output: &mut LayoutOutput) {
+    use taffy::{MaybeResolve, ResolveOrZero};
+    if inputs.run_mode != taffy::RunMode::ComputeSize {
+        return;
+    }
+    let calc = crate::values::resolve_calc;
+    let width = inputs.parent_size.width;
+    let padding = style.padding.resolve_or_zero(width, calc);
+    let border = style.border.resolve_or_zero(width, calc);
+    let axes = [
+        (
+            style.overflow.x,
+            inputs.known_dimensions.width,
+            inputs.available_space.width,
+            style.size.width.maybe_resolve(width, calc),
+            style.min_size.width.maybe_resolve(width, calc),
+            padding.horizontal_axis_sum() + border.horizontal_axis_sum(),
+            &mut output.size.width,
+        ),
+        (
+            style.overflow.y,
+            inputs.known_dimensions.height,
+            inputs.available_space.height,
+            style
+                .size
+                .height
+                .maybe_resolve(inputs.parent_size.height, calc),
+            style
+                .min_size
+                .height
+                .maybe_resolve(inputs.parent_size.height, calc),
+            padding.vertical_axis_sum() + border.vertical_axis_sum(),
+            &mut output.size.height,
+        ),
+    ];
+    for (overflow, known, available, size, min, edges, out) in axes {
+        if overflow == taffy::Overflow::Scroll
+            && known.is_none()
+            && available == AvailableSpace::MinContent
+            && (size.is_none() || inputs.sizing_mode == taffy::SizingMode::ContentSize)
+        {
+            *out = min.unwrap_or(0.0).max(edges);
+        }
     }
 }
 
@@ -263,14 +325,29 @@ where
     where
         Self: 'a;
     type FlexboxItemStyle<'a>
-        = &'a Style
+        = ItemStyle<'a>
     where
         Self: 'a;
     fn get_flexbox_container_style(&self, id: taffy::NodeId) -> &Style {
         self.node(id).style()
     }
-    fn get_flexbox_child_style(&self, id: taffy::NodeId) -> &Style {
-        self.node(id).style()
+    fn get_flexbox_child_style(&self, id: taffy::NodeId) -> ItemStyle<'_> {
+        let mut parent = self.tree.parent(from_taffy(id)).unwrap();
+        while let Some(contents) = parent.filter(|&p| self.transparent(p)) {
+            parent = self.tree.parent(contents).unwrap();
+        }
+        let fixed = parent.is_some_and(|parent| {
+            let style = self.tree.get(parent).unwrap().style();
+            let overflow = match style.flex_direction {
+                taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => style.overflow.x,
+                _ => style.overflow.y,
+            };
+            overflow == taffy::Overflow::Scroll
+        });
+        ItemStyle {
+            style: self.node(id).style(),
+            fixed,
+        }
     }
 }
 impl<C, F> taffy::LayoutBlockContainer for Adapter<'_, C, F>

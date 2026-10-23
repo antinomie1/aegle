@@ -235,11 +235,10 @@ fn table_and_popup_surfaces_follow_theme_changes() -> Result {
 fn a_growing_table_shrinks_to_the_space_left() -> Result {
     let ui = ui()?;
     ui.resize(aegle_ui::Size::new(320.0, 240.0));
-    // Like CSS flex, a container's minimum height follows its content; zero
-    // lets this column shrink, and the table itself needs no such setting.
+    // Neither the table nor the column holding it needs a minimum height:
+    // the table's rows scroll instead of enlarging the column.
     let column = ui.root().column();
     column.set_grow(1.0);
-    column.set_min_height(0.0);
     column.text("Above");
     let column_spec = [TableColumn {
         title: "Name",

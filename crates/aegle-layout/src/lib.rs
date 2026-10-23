@@ -6,6 +6,7 @@
 mod adapter;
 #[cfg(feature = "grid")]
 mod grid;
+mod item;
 mod node;
 #[cfg(feature = "grid")]
 mod template;
@@ -39,6 +40,11 @@ use aegle_core::{Dirty, NodeId, Tree, TreeError};
 /// alone need not invalidate layout. Leaves have no baseline here; see
 /// [`compute_with_baselines`]. Taffy `calc` values must come from
 /// [`Length::Calc`]; other handles are read as packed numbers, never dereferenced.
+///
+/// Two rules depart from CSS so content scrolls instead of growing the
+/// window: an axis with `Overflow::Scroll` and no definite size measures, under
+/// a min-content constraint, as only its padding, border and minimum size; and
+/// the items of a flex container that scrolls along its main axis do not shrink.
 pub fn compute<C>(
     tree: &mut Tree<LayoutNode<C>>,
     root: NodeId,
