@@ -217,8 +217,12 @@ fn table_and_popup_surfaces_follow_theme_changes() -> Result {
         ui.refresh()?;
         for panel in [table.appearance(), popup.appearance()] {
             assert_eq!(panel.background, theme.surface);
-            assert_eq!(panel.border_color, theme.border);
+            assert_eq!(panel.border_color, theme.divider);
         }
+        // Floating surfaces cast the theme's shadow; high contrast has none.
+        let shadow = Some(theme.shadow).filter(|s| s.color.to_rgba()[3] != 0);
+        assert_eq!(popup.shadow(), shadow);
+        assert_eq!(table.shadow(), None);
         // The popup keeps its zero gap and half-padding inset across themes.
         let (a, b, outer) = (first.bounds(), second.bounds(), popup.bounds());
         assert_eq!(b.origin.y, a.origin.y + a.size.height);

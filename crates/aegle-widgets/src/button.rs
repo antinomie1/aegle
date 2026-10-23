@@ -12,7 +12,9 @@ use aegle_ui::{
     handle, text_style,
 };
 
-use crate::paint::{CHEVRON, check_mark, chevron};
+use aegle_scene::{Rect, RoundedRect};
+
+use crate::paint::{CHEVRON, chevron, chosen_bar};
 
 handle! {
     /// A retained button with shared pointer, keyboard and semantic activation.
@@ -23,6 +25,22 @@ impl Button {
     /// Replaces the button label.
     pub fn set_text(&self, text: &str) {
         self.change(|state, id| state.set_text(id, text))
+    }
+    /// Makes this the emphasized button of its group, filled with the theme
+    /// accent ([`crate::kinds::ACCENT_BUTTON`]), or a plain one again.
+    pub fn set_accent(&self, accent: bool) {
+        self.change(|state, id| {
+            let button = state.control_as::<ButtonControl>(id).expect("a button");
+            if button.accent != accent {
+                button.accent = accent;
+                state.dirty_visual_state(id)?;
+            }
+            Ok(())
+        })
+    }
+    /// Whether this is an accent button.
+    pub fn is_accent(&self) -> bool {
+        self.read(|button| button.accent)
     }
     /// Queues semantic activation using the normal enabled/visible behavior.
     pub fn activate(&self) {
@@ -57,6 +75,7 @@ pub struct ButtonControl {
     button: aegle_controls::Button,
     text: Paragraph,
     pub(crate) variant: Variant,
+    accent: bool,
 }
 
 impl ButtonControl {
@@ -69,6 +88,7 @@ impl ButtonControl {
             button: aegle_controls::Button::new(),
             text: fonts.borrow_mut().paragraph(text, &text_style(theme))?,
             variant: Variant::Plain,
+            accent: false,
         })
     }
 
@@ -83,7 +103,9 @@ impl ButtonControl {
 impl Control for ButtonControl {
     fn kind(&self) -> &'static ControlKind {
         match self.variant {
-            Variant::Plain | Variant::Dropdown { .. } => &crate::kinds::BUTTON,
+            Variant::Plain if self.accent => &crate::kinds::ACCENT_BUTTON,
+            Variant::Plain => &crate::kinds::BUTTON,
+            Variant::Dropdown { .. } => &crate::kinds::DROPDOWN,
             Variant::Option { .. } => &crate::kinds::MENU_ITEM,
             Variant::Tab { .. } => &crate::kinds::TAB,
         }
@@ -104,6 +126,7 @@ impl Control for ButtonControl {
         ControlVisual {
             pressed: self.button.is_pressed(),
             hovered: Some(self.button.is_hovered()),
+            checked: matches!(self.variant, Variant::Tab { selected: true }),
             ..Default::default()
         }
     }
@@ -135,13 +158,16 @@ impl Control for ButtonControl {
         Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
-        let chevron = if matches!(self.variant, Variant::Dropdown { .. }) {
-            cx.gap + CHEVRON
-        } else {
-            0.0
+        // Commands get twice the padding beside their text; lists start
+        // their text at the padding.
+        let inset = match self.variant {
+            Variant::Plain => 4.0 * cx.padding,
+            Variant::Tab { .. } => 3.0 * cx.padding,
+            Variant::Dropdown { .. } => 2.0 * cx.padding + cx.gap + CHEVRON,
+            Variant::Option { .. } => 2.0 * cx.padding,
         };
         Size::new(
-            self.text.size().width + 2.0 * cx.padding + chevron,
+            self.text.size().width + inset,
             self.text.size().height + 2.0 * cx.padding,
         )
     }
@@ -183,27 +209,22 @@ impl Control for ButtonControl {
             };
             chevron(cx.builder, x, size.height * 0.5, cx.appearance.foreground);
         }
-        if matches!(self.variant, Variant::Tab { selected: true }) {
-            // The selected tab is marked by an underline, not only by color.
-            let line =
-                aegle_scene::Rect::new(padding * 0.5, size.height - 2.0, size.width - padding, 2.0);
-            if !line.is_empty() {
-                cx.builder.fill(
-                    aegle_scene::RoundedRect::new(line, 0.0),
-                    cx.appearance.indicator,
-                );
+        match self.variant {
+            Variant::Tab { selected: true } => {
+                // The selected tab is marked by an underline below its text,
+                // not only by color.
+                let text = self.text.size().width;
+                let line = Rect::new((size.width - text) / 2.0, size.height - 3.0, text, 3.0);
+                if !line.is_empty() {
+                    cx.builder
+                        .fill(RoundedRect::new(line, 0.0), cx.appearance.indicator);
+                }
             }
-        }
-        if matches!(self.variant, Variant::Option { chosen: true }) {
-            // The current choice is marked by shape, not only color.
-            let mark = 12.0_f32.min(size.height);
-            let x = if cx.rtl {
-                padding
-            } else {
-                size.width - padding - mark
-            };
-            let y = (size.height - mark) * 0.5;
-            check_mark(cx.builder, x, y, mark, cx.appearance.indicator);
+            // The current choice is marked by a leading bar, not only color.
+            Variant::Option { chosen: true } => {
+                chosen_bar(cx.builder, size, cx.rtl, cx.appearance.indicator)
+            }
+            _ => {}
         }
         cx.builder.pop();
     }

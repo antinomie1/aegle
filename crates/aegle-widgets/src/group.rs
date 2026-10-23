@@ -62,6 +62,15 @@ impl Control for Group {
             };
         }
     }
+    fn paint(&mut self, cx: &mut aegle_ui::control::PaintCx<'_>) {
+        // A tab list stands on a divider line its selected tab's underline
+        // covers; table rows are ruled off by the same line.
+        if matches!(self.role, Role::TabList | Role::TableRow) {
+            let line = aegle_scene::Rect::new(0.0, cx.size.height - 1.0, cx.size.width, 1.0);
+            cx.builder
+                .fill(aegle_scene::RoundedRect::new(line, 0.0), cx.theme.divider);
+        }
+    }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
         use aegle_ui::accesskit::Role as Access;
@@ -88,6 +97,12 @@ pub(crate) fn header(theme: &Theme, state: VisualState) -> Appearance {
         background: theme.background,
         ..Appearance::base(theme, state)
     }
+}
+
+/// Binds a floating surface's shadow to [`Theme::shadow`], so it follows
+/// theme changes; an application's `set_shadow` replaces the binding.
+pub(crate) fn elevate(state: &mut aegle_ui::State, id: aegle_core::NodeId) -> aegle_ui::Result {
+    state.bind_token(id, aegle_ui::TokenSlot::Shadow, Theme::SHADOW.index())
 }
 
 /// Appends a column or row (by `style`) with `role`.

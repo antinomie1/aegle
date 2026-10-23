@@ -52,8 +52,14 @@ pub struct Appearance {
     pub selection: Color,
     /// Text caret and preedit indicator color.
     pub caret: Color,
-    /// Check mark, selected switch thumb, range fill and slider thumb color.
+    /// Fill of what is chosen: a checked box or radio, an on switch track, a
+    /// range's filled part and slider thumb, a selected tab's underline and the
+    /// chosen entry's leading bar.
     pub indicator: Color,
+    /// Marks painted on the indicator fill: a check, a radio dot, an on
+    /// switch's thumb and the slider thumb's body. Skins set it; it has no
+    /// local style override.
+    pub on_indicator: Color,
     /// Overlay scrollbar colors of a viewport or editor: the track, the thumb
     /// at rest, and the thumb while the viewport is hovered or the thumb dragged.
     pub scrollbar: [Color; 3],
@@ -62,9 +68,10 @@ pub struct Appearance {
 impl Appearance {
     /// The common starting point of skins: transparent and borderless, with
     /// the theme foreground (muted while disabled), the 2 dp accent focus
-    /// outline while enabled and focused, the theme selection, an accent
-    /// caret, an accent indicator (muted while disabled), and scrollbars with
-    /// a pressed-fill track and a border thumb that turns muted when active.
+    /// outline while enabled and focused, [`Theme::selection`], a foreground
+    /// caret, an accent indicator carrying on-accent marks (border and surface
+    /// while disabled), and scrollbars with a hover-layer track and a border
+    /// thumb that turns muted when active.
     pub fn base(theme: &Theme, state: VisualState) -> Self {
         Self {
             background: Color::TRANSPARENT,
@@ -82,14 +89,19 @@ impl Appearance {
             } else {
                 0.0
             },
-            selection: theme.selection,
-            caret: theme.accent,
+            selection: theme.selection(),
+            caret: theme.foreground,
             indicator: if state.enabled {
                 theme.accent
             } else {
-                theme.muted
+                theme.border
             },
-            scrollbar: [theme.pressed, theme.border, theme.muted],
+            on_indicator: if state.enabled {
+                theme.on_accent
+            } else {
+                theme.surface
+            },
+            scrollbar: [theme.hover, theme.border, theme.muted],
         }
     }
 

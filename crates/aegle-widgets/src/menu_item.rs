@@ -14,7 +14,7 @@ use aegle_ui::{
     handle,
 };
 
-use crate::paint::{CHEVRON, check_mark, chevron};
+use crate::paint::{CHEVRON, ChevronDirection, check_mark, chevron_dir};
 
 /// Width of the check column every menu item reserves.
 const MARK: f32 = 12.0;
@@ -86,7 +86,12 @@ impl Control for MenuItemControl {
         Some((size.height - self.text.size().height) / 2.0 + self.text.first_baseline()?)
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
+        // Menu bar entries are commands with wider sides; menu items line up
+        // their text after a check column.
         let mut width = self.text.size().width + 2.0 * cx.padding;
+        if self.bar {
+            width += cx.padding;
+        }
         if !self.bar {
             width += MARK + cx.gap;
             if self.submenu.is_some() {
@@ -149,13 +154,13 @@ impl Control for MenuItemControl {
             }
         }
         if !self.bar && self.submenu.is_some() {
-            // The dropdown chevron turned toward the side the submenu opens on.
+            // A chevron pointing toward the side the submenu opens on.
             let x = mirror(size.width - padding - CHEVRON, CHEVRON) + CHEVRON * 0.5;
-            let turn = if cx.rtl { 1.0 } else { -1.0 };
-            let transform = Affine::new([0.0, turn, -turn, 0.0, x, size.height * 0.5]).or_fail();
-            cx.builder.push_transform(transform);
-            chevron(cx.builder, 0.0, 0.0, color);
-            cx.builder.pop();
+            let direction = match cx.rtl {
+                true => ChevronDirection::Left,
+                false => ChevronDirection::Right,
+            };
+            chevron_dir(cx.builder, x, size.height * 0.5, direction, color);
         }
         cx.builder.pop();
     }

@@ -349,6 +349,7 @@ pub(crate) fn create_drawer(container: &Container, side: DrawerSide) -> Drawer {
     };
 
     overlay_node.change(|state, _| {
+        crate::group::elevate(state, panel_node.id)?;
         drawers(state).entries.push(DrawerEntry {
             drawer: overlay_node.id,
             panel: panel_node.id,

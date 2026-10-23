@@ -127,6 +127,7 @@ pub(crate) fn wake(state: &mut State, _: Instant) -> Result {
         Box::new(control) as Box<dyn Control>,
         style,
     )?;
+    crate::group::elevate(state, label)?;
     let element = &mut state.tree.get_mut(label).unwrap().context;
     element.padding = Some(theme.padding / 2.0);
     element.offset = at;

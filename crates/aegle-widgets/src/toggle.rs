@@ -12,7 +12,10 @@ use aegle_ui::{
     handle, text_style,
 };
 
-use crate::paint::{Mark, ToggleSpec, toggle};
+use crate::{
+    paint::{Mark, ToggleSpec, toggle},
+    range_control::Glide,
+};
 
 handle! {
     /// A retained binary checkbox with a text label and shared activation.
@@ -101,6 +104,18 @@ pub struct ToggleControl {
     /// A check box shown as partially checked until the user changes it.
     mixed: bool,
     wrap: bool,
+    /// A switch thumb's travel easing toward the checked side.
+    travel: Glide,
+}
+
+impl ToggleControl {
+    /// Moves a switch's thumb toward its value, at once when `jump`.
+    fn slide(&mut self, jump: bool) {
+        if self.mark == Mark::Switch {
+            let to = if self.control.is_checked() { 1.0 } else { 0.0 };
+            self.travel.retarget(to, jump);
+        }
+    }
 }
 
 impl Control for ToggleControl {
@@ -121,8 +136,9 @@ impl Control for ToggleControl {
         true
     }
     fn frame(&self) -> aegle_ui::control::Frame {
+        // The appearance background and border belong to the marker.
         aegle_ui::control::Frame {
-            background: true,
+            background: false,
             border: false,
         }
     }
@@ -158,6 +174,7 @@ impl Control for ToggleControl {
             } else if std::mem::take(&mut self.mixed) {
                 self.control.set_checked(true);
             }
+            self.slide(false);
         }
         outcome
     }
@@ -173,11 +190,7 @@ impl Control for ToggleControl {
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         use aegle_ui::OrFail;
-        let marker = if self.mark == Mark::Switch {
-            36.0
-        } else {
-            18.0
-        };
+        let marker = self.mark.width();
         let label_width = if self.text.text().is_empty() {
             0.0
         } else if self.wrap {
@@ -196,11 +209,7 @@ impl Control for ToggleControl {
     fn finalize(&mut self, cx: &MeasureCx<'_>) {
         use aegle_ui::OrFail;
         if self.wrap {
-            let marker = if self.mark == Mark::Switch {
-                36.0
-            } else {
-                18.0
-            };
+            let marker = self.mark.width();
             let available = cx
                 .content_width()
                 .map(|w| (w - marker - cx.gap - 2.0 * cx.padding).max(0.0));
@@ -217,6 +226,7 @@ impl Control for ToggleControl {
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
+        let travel = self.travel.sample(cx) as f32;
         toggle(
             cx.builder,
             &ToggleSpec {
@@ -226,6 +236,7 @@ impl Control for ToggleControl {
                 mark: self.mark,
                 checked: self.control.is_checked(),
                 mixed: self.mixed,
+                travel,
                 label: (!self.text.text().is_empty()).then(|| self.text.size()),
                 rtl: cx.rtl,
             },
@@ -271,6 +282,14 @@ fn set_checked(state: &mut State, id: NodeId, checked: bool) -> Result {
         .control_as::<ToggleControl>(id)
         .expect("a toggle node");
     let mut outcome = toggle.control.set_checked(checked);
+    #[cfg(feature = "motion")]
+    let jump = state.snapping(id);
+    #[cfg(not(feature = "motion"))]
+    let jump = true;
+    let toggle = state
+        .control_as::<ToggleControl>(id)
+        .expect("a toggle node");
+    toggle.slide(jump);
     if std::mem::take(&mut toggle.mixed) {
         outcome.repaint = true;
         outcome.semantics = true;
@@ -295,6 +314,7 @@ pub(crate) fn select_radio(state: &mut State, id: NodeId) -> Result {
             && toggle.control.is_checked()
         {
             let outcome = toggle.control.set_checked(false);
+            toggle.slide(false);
             state.effects(sibling, outcome)?;
         }
     }
@@ -361,6 +381,7 @@ fn create(container: &Container, text: &str, checked: bool, mark: Mark) -> Node 
                 mark,
                 mixed: false,
                 wrap: false,
+                travel: Glide::new(if checked { 1.0 } else { 0.0 }),
             }) as Box<dyn Control>,
             control_style(theme.control_height),
         ))

@@ -44,7 +44,7 @@ pub(crate) struct Glide {
 }
 
 impl Glide {
-    fn new(fraction: f64) -> Self {
+    pub(crate) fn new(fraction: f64) -> Self {
         Self {
             from: fraction,
             to: fraction,
@@ -63,7 +63,7 @@ impl Glide {
         self.moving = !jump && cfg!(feature = "motion");
     }
     /// The fraction to draw at `now`, requesting another frame while easing.
-    fn sample(&mut self, cx: &mut PaintCx<'_>) -> f64 {
+    pub(crate) fn sample(&mut self, cx: &mut PaintCx<'_>) -> f64 {
         if !self.moving || cx.reduced_motion {
             self.moving = false;
             self.shown = self.to;
@@ -90,7 +90,7 @@ fn paint(
     size: Size,
     padding: f32,
     filled: [f64; 2],
-    slider: bool,
+    slider: Option<f32>,
     appearance: Appearance,
     [vertical, rtl]: [bool; 2],
 ) {
@@ -196,7 +196,7 @@ fn orientation(node: &mut aegle_ui::accesskit::Node, vertical: bool) {
 }
 
 fn measure(padding: f32, vertical: bool) -> Size {
-    let (along, across) = (160.0, 20.0 + 2.0 * padding);
+    let (along, across) = (160.0, crate::paint::THUMB + 2.0 * padding);
     if vertical {
         Size::new(across, along)
     } else {
@@ -309,12 +309,19 @@ impl Control for SliderControl {
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let shown = self.glide.sample(cx);
+        // The thumb's accent dot grows under the pointer and shrinks pressed.
+        let visual = cx.visual;
+        let dot = match visual.enabled {
+            true if visual.pressed => 8.0,
+            true if visual.hovered => 12.0,
+            _ => 10.0,
+        };
         paint(
             cx.builder,
             cx.size,
             cx.padding,
             [0.0, shown],
-            true,
+            Some(dot),
             *cx.appearance,
             [self.vertical, cx.rtl],
         );
@@ -395,7 +402,7 @@ impl Control for ProgressControl {
             cx.size,
             cx.padding,
             filled,
-            false,
+            None,
             *cx.appearance,
             [self.vertical, cx.rtl],
         );

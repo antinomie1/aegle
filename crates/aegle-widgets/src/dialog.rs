@@ -334,6 +334,7 @@ pub(crate) fn create_dialog(container: &Container, title: &str) -> Dialog {
 
     // 6. Record dialog entry.
     overlay_node.change(|state, _| {
+        crate::group::elevate(state, card_node.id)?;
         dialogs(state).entries.push(DialogEntry {
             dialog: overlay_node.id,
             card: card_node.id,

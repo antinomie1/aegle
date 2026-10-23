@@ -273,16 +273,19 @@ macro_rules! builtin {
 builtin! {
     0 BACKGROUND background Color Color;
     1 SURFACE surface Color Color;
-    2 FOREGROUND foreground Color Color;
-    3 MUTED muted Color Color;
-    4 ACCENT accent Color Color;
+    2 CONTROL control Color Color;
+    3 FOREGROUND foreground Color Color;
+    4 MUTED muted Color Color;
     5 BORDER border Color Color;
-    6 HOVER hover Color Color;
-    7 PRESSED pressed Color Color;
-    8 SELECTION selection Color Color;
-    9 FONT_SIZE font_size Length f32;
-    10 PADDING padding Length f32;
-    11 GAP gap Length f32;
-    12 RADIUS radius Length f32;
-    13 CONTROL_HEIGHT control_height Length f32;
+    6 DIVIDER divider Color Color;
+    7 ACCENT accent Color Color;
+    8 ON_ACCENT on_accent Color Color;
+    9 HOVER hover Color Color;
+    10 PRESSED pressed Color Color;
+    11 SHADOW shadow Shadow Shadow;
+    12 FONT_SIZE font_size Length f32;
+    13 PADDING padding Length f32;
+    14 GAP gap Length f32;
+    15 RADIUS radius Length f32;
+    16 CONTROL_HEIGHT control_height Length f32;
 }

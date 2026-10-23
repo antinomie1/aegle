@@ -74,6 +74,7 @@ pub(crate) fn popup(anchor: &Node) -> Popup {
         group.retheme(&theme, aegle_ui::LocalLayout::NONE, false, &mut style);
         let id = state.insert(root, usize::MAX, Box::new(group), style)?;
         state.set_visible(id, false)?;
+        crate::group::elevate(state, id)?;
         let anchor_element = &state.tree.get(anchor).unwrap().context;
         if anchor_element.theme.is_some() {
             let local = anchor_element.theme.clone();

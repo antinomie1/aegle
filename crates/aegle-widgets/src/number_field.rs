@@ -311,7 +311,7 @@ impl Control for NumberFieldControl {
         let color = cx.appearance.foreground;
         cx.builder.fill(
             RoundedRect::new(Rect::new(divider, 0.0, 1.0, height), 0.0),
-            cx.appearance.border_color,
+            cx.theme.divider,
         );
         // Up and down chevrons centered in each half of the strip.
         for (center, up) in [(height * 0.25, true), (height * 0.75, false)] {

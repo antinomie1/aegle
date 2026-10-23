@@ -27,35 +27,41 @@ macro_rules! kinds {
 kinds! {
     /// Display text.
     LABEL = "Label", Appearance::base, TEXT, false;
-    /// A push button, also a dropdown's face.
+    /// A push button: a flat block of the control fill.
     BUTTON = "Button", button, TEXT.with(PRESSABLE), false;
-    /// A tab of a tab list: no box, a tint while hovered or pressed.
+    /// The emphasized button of a group: a block of the accent fill.
+    ACCENT_BUTTON = "AccentButton", accent_button, TEXT.with(PRESSABLE), false;
+    /// A dropdown's face: a field-like box with a chevron.
+    DROPDOWN = "Dropdown", dropdown, TEXT.with(PRESSABLE), false;
+    /// A tab of a tab list: muted text, the selected one underlined.
     TAB = "Tab", tab, TEXT.with(PRESSABLE), false;
-    /// A menu entry or a dropdown choice: a button without a border.
+    /// A menu entry or a dropdown choice: borderless, layered while hovered,
+    /// pressed or keyboard focused.
     MENU_ITEM = "MenuItem", menu_item, TEXT.with(PRESSABLE), false;
     /// A single-line or multiline text editor.
     TEXT_FIELD = "TextField", text_field, TEXT.with(Accepts::INTERACTIVE).with(Accepts::EDITOR), false;
-    /// A labeled check box.
+    /// A labeled check box; background and border are the box's.
     CHECK_BOX = "CheckBox", toggle, TEXT.with(PRESSABLE).with(Accepts::INDICATOR), false;
-    /// A labeled switch.
+    /// A labeled switch; background and border are the track's.
     SWITCH = "Switch", toggle, TEXT.with(PRESSABLE).with(Accepts::INDICATOR), false;
-    /// A labeled radio button.
+    /// A labeled radio button; background and border are the ring's.
     RADIO_BUTTON = "RadioButton", toggle, TEXT.with(PRESSABLE).with(Accepts::INDICATOR), false;
-    /// A slider; the background is its track.
+    /// A slider; the background is its track, the border its thumb's ring.
     SLIDER = "Slider", range, PRESSABLE.with(Accepts::INDICATOR), false;
     /// A progress bar; the background is its track.
     PROGRESS = "Progress", range, Accepts::INDICATOR, false;
-    /// A scrollable container with a border.
+    /// A scrollable container with a quiet edge.
     SCROLL_VIEW = "ScrollView", scroll_view, Accepts::NONE, true;
-    /// The bordered surface of popups, menus and tables.
+    /// The surface of popups, menus, tables, dialogs and drawers.
     PANEL = "Panel", panel, Accepts::NONE, true;
     /// A menu bar: a strip of the surface its entries sit on.
     MENU_BAR = "MenuBar", menu_bar, Accepts::NONE, true;
-    /// A tooltip's text, in inverted colors.
-    TOOLTIP = "Tooltip", tooltip, TEXT, false;
+    /// A tooltip's text on a small raised surface.
+    TOOLTIP = "Tooltip", panel, TEXT, false;
     /// A tree view container: a surface for hierarchical tree nodes.
     TREE_VIEW = "TreeView", scroll_view, Accepts::NONE, true;
-    /// A single selectable tree row with hover and press highlights.
+    /// A single selectable tree row with hover and press layers; the
+    /// selected row has a leading accent bar.
     TREE_NODE = "TreeNode", menu_item, TEXT.with(PRESSABLE), true;
     /// An in-window modal dialog card.
     DIALOG = "Dialog", panel, Accepts::NONE, true;
@@ -63,66 +69,154 @@ kinds! {
     DRAWER = "Drawer", panel, Accepts::NONE, true;
 }
 
-/// The pressed or hovered fill of an enabled control, else `rest`.
+/// `rest` under the theme's pressed or hover layer while enabled and pressed
+/// or hovered.
 fn pressable(theme: &Theme, state: VisualState, rest: Color) -> Color {
     match state.enabled {
-        true if state.pressed => theme.pressed,
-        true if state.hovered => theme.hover,
+        true if state.pressed => theme.pressed.over(rest),
+        true if state.hovered => theme.hover.over(rest),
         _ => rest,
     }
 }
 
-/// A rounded, bordered box with `background`.
-fn framed(theme: &Theme, state: VisualState, background: Color) -> Appearance {
+/// A rectangle filled with `background` and edged with `border`.
+fn framed(theme: &Theme, state: VisualState, background: Color, border: Color) -> Appearance {
     Appearance {
         background,
-        border_color: theme.border,
+        border_color: border,
         border_width: 1.0,
         radius: theme.radius,
         ..Appearance::base(theme, state)
     }
 }
 
-/// The neutral button: the surface, tinted while hovered or pressed.
-pub fn button(theme: &Theme, state: VisualState) -> Appearance {
-    framed(theme, state, pressable(theme, state, theme.surface))
-}
-
-fn tab(theme: &Theme, state: VisualState) -> Appearance {
-    Appearance {
-        background: pressable(theme, state, Color::TRANSPARENT),
-        radius: theme.radius,
-        ..Appearance::base(theme, state)
+/// The input outline: the border, darkening to muted while hovered.
+fn input_border(theme: &Theme, state: VisualState) -> Color {
+    match state.enabled {
+        true if state.hovered || state.pressed => theme.muted,
+        true => theme.border,
+        false => theme.divider,
     }
 }
 
-fn menu_item(theme: &Theme, state: VisualState) -> Appearance {
+/// A flat block of the control fill with a quiet edge, layered while
+/// hovered or pressed.
+pub fn button(theme: &Theme, state: VisualState) -> Appearance {
+    framed(
+        theme,
+        state,
+        pressable(theme, state, theme.control),
+        theme.divider,
+    )
+}
+
+/// A block of the accent fill with on-accent text; its focus outline uses the
+/// foreground, which the accent fill would hide. Disabled, it reads as a
+/// disabled [`button`].
+pub fn accent_button(theme: &Theme, state: VisualState) -> Appearance {
+    if !state.enabled {
+        return button(theme, state);
+    }
+    let background = pressable(theme, state, theme.accent);
     Appearance {
-        background: pressable(theme, state, theme.surface),
+        foreground: theme.on_accent,
+        focus_color: theme.foreground,
+        ..framed(theme, state, background, background)
+    }
+}
+
+fn dropdown(theme: &Theme, state: VisualState) -> Appearance {
+    let rest = if state.enabled {
+        theme.surface
+    } else {
+        Color::TRANSPARENT
+    };
+    framed(
+        theme,
+        state,
+        pressable(theme, state, rest),
+        input_border(theme, state),
+    )
+}
+
+/// A tab is checked while selected: selected or hovered tabs read in the
+/// foreground, others muted.
+fn tab(theme: &Theme, state: VisualState) -> Appearance {
+    let base = Appearance::base(theme, state);
+    Appearance {
+        foreground: match state.enabled && (state.checked || state.hovered || state.pressed) {
+            true => theme.foreground,
+            false => theme.muted,
+        },
         radius: theme.radius,
+        ..base
+    }
+}
+
+/// Menu entries show keyboard focus as the hover layer rather than an outline.
+fn menu_item(theme: &Theme, state: VisualState) -> Appearance {
+    let hovered = state.hovered || state.focused;
+    Appearance {
+        background: pressable(theme, VisualState { hovered, ..state }, Color::TRANSPARENT),
+        radius: theme.radius,
+        focus_width: 0.0,
         ..Appearance::base(theme, state)
     }
 }
 
 fn text_field(theme: &Theme, state: VisualState) -> Appearance {
-    framed(theme, state, theme.surface)
+    let background = if state.enabled && !state.read_only {
+        theme.surface
+    } else {
+        Color::TRANSPARENT
+    };
+    let border = if state.read_only && state.enabled {
+        theme.divider
+    } else {
+        input_border(theme, state)
+    };
+    framed(theme, state, background, border)
 }
 
+/// The marker of a check box, radio button or switch: an outlined surface
+/// while off, an accent fill while checked.
 fn toggle(theme: &Theme, state: VisualState) -> Appearance {
-    framed(theme, state, pressable(theme, state, Color::TRANSPARENT))
+    let base = Appearance::base(theme, state);
+    let (background, border) = match (state.enabled, state.checked) {
+        (true, true) => {
+            let fill = pressable(theme, state, theme.accent);
+            (fill, fill)
+        }
+        (true, false) => (
+            pressable(theme, state, theme.surface),
+            input_border(theme, state),
+        ),
+        (false, true) => (base.indicator, base.indicator),
+        (false, false) => (Color::TRANSPARENT, theme.divider),
+    };
+    Appearance {
+        background,
+        border_color: border,
+        border_width: 1.0,
+        radius: theme.radius,
+        ..base
+    }
 }
 
+/// A divider track, an accent fill and, on a slider, a surface thumb with a
+/// border ring.
 fn range(theme: &Theme, state: VisualState) -> Appearance {
     Appearance {
-        background: theme.border,
-        radius: theme.radius,
+        background: theme.divider,
+        border_color: theme.border,
+        on_indicator: theme.surface,
         ..Appearance::base(theme, state)
     }
 }
 
 fn scroll_view(theme: &Theme, state: VisualState) -> Appearance {
     Appearance {
-        border_color: theme.border,
+        border_color: theme.divider,
         border_width: 1.0,
         radius: theme.radius,
         ..Appearance::base(theme, state)
@@ -130,25 +224,12 @@ fn scroll_view(theme: &Theme, state: VisualState) -> Appearance {
 }
 
 fn panel(theme: &Theme, state: VisualState) -> Appearance {
-    Appearance {
-        background: theme.surface,
-        border_color: theme.border,
-        border_width: 1.0,
-        ..Appearance::base(theme, state)
-    }
+    framed(theme, state, theme.surface, theme.divider)
 }
 
 fn menu_bar(theme: &Theme, state: VisualState) -> Appearance {
     Appearance {
         background: theme.surface,
-        ..Appearance::base(theme, state)
-    }
-}
-
-fn tooltip(theme: &Theme, state: VisualState) -> Appearance {
-    Appearance {
-        background: theme.foreground,
-        foreground: theme.background,
         ..Appearance::base(theme, state)
     }
 }

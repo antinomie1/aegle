@@ -29,6 +29,7 @@ fn toggles_paint_markers_and_call_the_label_only_when_present() {
         mark,
         checked: true,
         mixed,
+        travel: 1.0,
         label: label.map(|height| Size::new(40.0, height)),
         rtl: false,
     };
@@ -49,7 +50,7 @@ fn toggles_paint_markers_and_call_the_label_only_when_present() {
         plain + 2,
         "the label adds only a transform push and pop"
     );
-    // A mixed box draws a bar where a checked one draws two rotated strokes.
+    // A mixed box draws a bar where a checked one draws a two-segment stroke.
     let (mixed, _) = commands(&spec(Mark::Check, true, None));
     let (checked, _) = commands(&spec(Mark::Check, false, None));
     assert!(mixed < checked);

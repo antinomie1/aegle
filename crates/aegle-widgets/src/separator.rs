@@ -41,7 +41,7 @@ impl Control for SeparatorControl {
         let rect = Rect::new(0.0, 0.0, cx.size.width, cx.size.height);
         if !rect.is_empty() {
             cx.builder
-                .fill(RoundedRect::new(rect, 0.0), cx.theme.border);
+                .fill(RoundedRect::new(rect, 0.0), cx.theme.divider);
         }
     }
     #[cfg(feature = "accessibility")]

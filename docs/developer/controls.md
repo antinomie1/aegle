@@ -4,7 +4,7 @@
 
 截图由 `cargo run -p aegle --example gallery` 生成：每个状态是一个独立的无窗口 `Ui`，经与原生窗口相同的软件 renderer 以 2 倍设备缩放渲染，使用仓库自带的测试字体（Noto Sans CJK 子集）和浅色主题；控件安装与原生 App 相同的默认 120 ms 过渡，在过渡结束后截取，与原生窗口静止时一致。修改控件外观后重新运行该命令即可更新本页图片。
 
-默认外观是中性直角风格：边框 1 dp，焦点环 2 dp 使用主题 `accent`；悬停和按下使用主题 `hover`/`pressed` 底色；禁用时文字使用 `muted`。焦点环只在键盘焦点时出现：指针按下获得的焦点不显示（编辑器除外），之后任一按键恢复显示。所有控件都可以用局部样式、皮肤或主题修改外观，见 [API 指南第 6 节](api.md#6-外观主题样式与皮肤)。
+默认外观是克制的类 Metro 风格：命令与容器为直角矩形，状态与数值标记为圆或胶囊；边框 1 dp，焦点环 2 dp 使用主题 `accent`；悬停和按下是叠在控件底色上的半透明 `hover`/`pressed` 层；选中项用唯一的强调色标记；浮层带主题阴影；禁用时文字使用 `muted`。焦点环只在键盘焦点时出现：指针按下获得的焦点不显示（编辑器除外），之后任一按键恢复显示。所有控件都可以用局部样式、皮肤或主题修改外观，见 [API 指南第 6 节](api.md#6-外观主题样式与皮肤)。
 
 | 控件 | Rust 创建 | 标记 |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ Button { id: save; text: "Save"; on clicked { saved = true } }
 
 - 方法：`set_text`、`on_click`、`activate`。
 - 指针在按钮上按下并在按钮上释放才激活；Space 在释放时激活，Enter 在首次按下时激活，按键重复不重复触发。失焦、禁用或指针取消时不激活。
-- 默认高度为主题 `control_height`（36），宽度为文字加两侧内边距；`set_width`、`set_grow` 可改变。
+- 默认高度为主题 `control_height`（32），宽度为文字加两侧各两倍内边距；底色为主题 `control`，`set_accent(true)` 使其成为强调色填充的强调按钮；`set_width`、`set_grow` 可改变。
 - 无障碍角色 Button，名称默认为按钮文字，支持 Focus/Click 动作。
 
 ## TextField / TextArea
@@ -110,7 +110,7 @@ CheckBox { text: "I agree"; checked: agree; on changed { agree = self.checked } 
 ```
 
 - 方法：`is_checked`、`set_checked`、`is_mixed`、`set_mixed`、`toggle`（按用户操作规则切换并触发回调）、`text`、`set_text`、`on_change`。
-- 标志 18 dp，选中绘制对勾、部分选中绘制横线，不只依靠颜色区分；激活规则与 Button 相同。用户从部分选中状态切换后变为选中；`set_checked` 也会结束部分选中。标记写 `mixed: true`。
+- 标志 20 dp，选中为强调色填充上的 on_accent 对勾、部分选中绘制横线，不只依靠颜色区分；激活规则与 Button 相同。用户从部分选中状态切换后变为选中；`set_checked` 也会结束部分选中。标记写 `mixed: true`。
 - 无障碍角色 CheckBox，Toggled 为 True / False / Mixed。
 
 ## Switch
@@ -128,7 +128,7 @@ wifi.on_change(|control| {
 Switch { text: "Wi-Fi"; checked: true }
 ```
 
-- 方法与 CheckBox 相同。开关 36×20 dp，滑块位置表示状态：开在右侧，关在左侧。
+- 方法与 CheckBox 相同。开关 40×20 dp 胶囊，滑块位置表示状态：开在右侧（强调色轨道），关在左侧（border 轮廓）；启用过渡时滑块滑动到位。
 - 无障碍角色 Switch。
 
 ## Radio
@@ -152,7 +152,7 @@ Row { RadioButton { text: "Small" }; RadioButton { text: "Medium"; checked: true
 - 同一父容器中的单选按钮构成一组：用户或 `set_checked(true)` 选中一个时其余取消。再次激活已选中的按钮不产生变化。
 - 方法与 CheckBox 相同（无 mixed）；`on_change` 只在该按钮被用户选中时触发。
 - 聚焦时方向键在组内移动并选择上一个/下一个可用按钮（循环）。
-- 圆形标志 18 dp，选中时绘制实心圆点，与方形复选框可按形状区分。无障碍角色 RadioButton。
+- 圆形标志 20 dp，选中时为强调色填充上的 on_accent 圆点，与方形复选框可按形状区分。无障碍角色 RadioButton。
 
 ## Slider
 
@@ -172,7 +172,7 @@ Slider { min: 0; max: 100; value: 30; step: 5; on changed { volume = self.value 
 
 - 方法：`value`、`range`、`set_value`、`set_range`、`step`、`set_step`（0 为连续）、`increment` / `decrement`、`on_change`。越界的有限值会被限制到范围内。
 - 键盘：方向键移动一步（连续时为跨度的 1%），PageUp/PageDown 十步（或 10%），Home/End 到端点。指针按下轨道直接设值并可拖动。
-- 手柄 16 dp，轨道 2 dp，已完成部分 4 dp；宽度不足时缩小。
+- 手柄 20 dp 圆盘（表面色、边框色描边、强调色圆点），轨道与已完成部分均为 4 dp 胶囊；宽度不足时缩小。
 - 无障碍角色 Slider，带数值、范围与步长。
 
 ## Progress
@@ -233,11 +233,11 @@ ScrollView { height: 200dp
 }
 ```
 
-- 默认透明背景、1 dp 主题边框（圆角随主题 radius），内边距为主题 padding 的一半；可用 `set_border_width(0.0)`、`set_padding` 覆盖。ListView 继承同样外观，Table 内的行列表不另加边框。
+- 默认透明背景、1 dp 主题 divider 色边线（圆角随主题 radius），内边距为主题 padding 的一半；可用 `set_border_width(0.0)`、`set_padding` 覆盖。ListView 继承同样外观，Table 内的行列表不另加边框。
 - 内部按列排列；限制高度/宽度或 flex 分配后，超出部分可滚动，两轴均支持。
 - `Node` 的滚动方法：`scroll_offset`、`max_scroll_offset`、`content_size`、`scroll_to`、`scroll_by`（`offset` 是控件自身的平移，不是滚动）；子控件用 `ensure_visible` 滚动到可见，`visible_bounds` 读取可见区域。
 - 滚轮、Tab 焦点和 caret 移动都会滚动；嵌套视口会把未消费的滚动传给外层。
-- 溢出时在边缘绘制滚动条：12 dp 指针带内是贴外缘的轨道与胶囊形滑块，静止时 4 dp 粗，视图悬停或拖动滑块时 8 dp；两端让开视图的圆角，滑块长度表示可见比例；可拖动滑块或点击轨道定位。轨道与滑块颜色取自外观的 `scrollbar` 字段（轨道、静止滑块、悬停或拖动时的滑块），默认为主题的 pressed、border 与 muted，皮肤可整体替换。溢出的一侧会在内边距之外为滚动条留出 14 dp（轨道、边距和 4 dp 间隙），内容也不会滚到滚动条下面：纵向溢出时右侧留白并在该处裁剪，横向溢出时底部同理；没有溢出时只占用内边距。边框画在子内容之后，滚到边缘的内容不会盖住它。
+- 溢出时在边缘绘制滚动条：12 dp 指针带内是贴外缘的轨道与胶囊形滑块，静止时 4 dp 粗，视图悬停或拖动滑块时 8 dp；两端让开视图的圆角，滑块长度表示可见比例；可拖动滑块或点击轨道定位。轨道与滑块颜色取自外观的 `scrollbar` 字段（轨道、静止滑块、悬停或拖动时的滑块），默认为主题的 hover、border 与 muted，皮肤可整体替换。溢出的一侧会在内边距之外为滚动条留出 14 dp（轨道、边距和 4 dp 间隙），内容也不会滚到滚动条下面：纵向溢出时右侧留白并在该处裁剪，横向溢出时底部同理；没有溢出时只占用内边距。边框画在子内容之后，滚到边缘的内容不会盖住它。
 - 无障碍角色 ScrollView，带滚动偏移与范围。
 
 ## ListView
@@ -284,7 +284,7 @@ table.set_height(Some(240.0));
 table.rows().set_count(200);
 ```
 
-- 带边框的表头行加等高虚拟行（基于 ListView）；`fill(cell, row, column)` 在行进入可见区域时填充单元格列，可放任意控件。`rows()` 返回行列表，用于 `set_count`、`reload` 和滚动。
+- 带 divider 边线的表格：画布底色的表头行加等高虚拟行（基于 ListView），每行底部有 1 dp divider 分隔线；`fill(cell, row, column)` 在行进入可见区域时填充单元格列，可放任意控件。`rows()` 返回行列表，用于 `set_count`、`reload` 和滚动。
 - 表格的最小高度不随行数增长，可以收缩到父容器给它的空间；与其他控件分享剩余空间时用 `set_basis(0.0)` 加 `set_grow(1.0)`，见 [API 指南的最小尺寸说明](api.md#5-布局)。表格、表头和弹出列表的背景按当前主题解析，切换主题后随之更新。
 - 无障碍角色 Table / Row / Cell / ColumnHeader。不内置排序、列宽拖动或单元格选择，可在表头和单元格中放按钮实现。
 
@@ -300,7 +300,7 @@ color.on_change(|dropdown| {
 color.set_items(&["One", "Two"], 0);   // 程序设置，不触发 on_change
 ```
 
-- 按钮显示当前选项和下拉箭头；激活（点击、Space、Enter）在下方弹出选项列表，焦点位于当前选项，当前选项带对勾。Up/Down 移动，Enter 或点击选择并关闭；Escape 或点击外部关闭且不改变选择。
+- 类输入框的方框显示当前选项和细线下拉箭头；激活（点击、Space、Enter）在下方弹出选项列表，焦点位于当前选项，当前选项带前置强调色竖条。Up/Down 移动，Enter 或点击选择并关闭；Escape 或点击外部关闭且不改变选择。
 - 方法：`selected`、`set_selected`、`items`、`set_items`、`on_change`。
 - 无障碍角色 ComboBox（带展开状态）、ListBox 与 ListBoxOption（带选中状态）。
 

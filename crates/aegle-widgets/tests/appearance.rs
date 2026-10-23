@@ -172,20 +172,20 @@ fn local_themes_inherit_nest_and_follow_reparenting() -> Result {
     ui.refresh()?;
     assert_eq!(inside.bounds().size.height, 50.0);
     assert_eq!(later.bounds().size.height, 50.0);
-    assert_eq!(inside.appearance().background, Theme::dark().surface);
+    assert_eq!(inside.appearance().background, Theme::dark().control);
     assert_eq!(deep.theme(), Theme::high_contrast());
     assert_eq!(outside.theme(), Theme::light());
     // The UI theme reaches only nodes without a local theme.
     ui.set_theme(Theme::dark());
     ui.refresh()?;
-    assert_eq!(outside.appearance().background, Theme::dark().surface);
+    assert_eq!(outside.appearance().background, Theme::dark().control);
     assert_eq!(inside.theme(), tall);
     outside.reparent(&nested);
     ui.refresh()?;
     assert_eq!(outside.theme(), Theme::high_contrast());
     panel.set_theme(None);
     ui.refresh()?;
-    assert_eq!(inside.bounds().size.height, 36.0);
+    assert_eq!(inside.bounds().size.height, 32.0);
     assert_eq!(deep.theme(), Theme::high_contrast());
     assert!(panics(|| {
         panel.set_theme(Some(Theme { gap: -1.0, ..tall }));
@@ -266,7 +266,7 @@ fn kind_skins_cascade_through_subtrees() -> Result {
     let deep = nested.button("deep");
     let label = panel.text("label");
     let background = |node: &aegle_ui::Node| node.appearance().background;
-    let neutral = Theme::light().surface;
+    let neutral = Theme::light().control;
     assert_eq!(background(&first), neutral);
 
     root.set_kind_skin(&kinds::BUTTON, Some(outer));
@@ -296,7 +296,7 @@ fn kind_skins_cascade_through_subtrees() -> Result {
     nested.set_kind_skin(&kinds::BUTTON, None);
     assert_eq!(background(&created), Theme::dark().accent);
     root.set_kind_skin(&kinds::BUTTON, None);
-    assert_eq!(background(&created), Theme::dark().surface);
+    assert_eq!(background(&created), Theme::dark().control);
     Ok(())
 }
 

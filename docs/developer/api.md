@@ -233,13 +233,13 @@ badge.set_justify_self(Align::End);
 
 **最小尺寸**：与 CSS flex 一样，容器在主轴上的最小尺寸默认由内容决定。滚动视图、虚拟列表和表格本身可以收缩，但若它们放在一个中间行/列里，要让这个中间容器也能缩小，需对它 `set_min_height(0.0)`（行中为 `set_min_width`）。要让一个内容很多的子项只占剩余空间，用 `set_basis(0.0)` 加 `set_grow(1.0)`，否则它会从完整内容尺寸开始参与收缩。
 
-默认值来自主题：控件高 36、间距 8、窗口根内边距 8，文字 14。显式设置的高度、最小高度、内边距和间距在切换主题后保留。文字按父宽度自动换行。内容超出时放进 `ScrollView` 或 `ListView`。标记中的对应写法见[标记语言](../markup.md)。
+默认值来自主题：控件高 32、间距 8、窗口根内边距 8，文字 14。显式设置的高度、最小高度、内边距和间距在切换主题后保留。文字按父宽度自动换行。内容超出时放进 `ScrollView` 或 `ListView`。标记中的对应写法见[标记语言](../markup.md)。
 
 <img src="images/layout.png" width="690" alt="列、行与 grow 布局">
 
 ## 6. 外观：主题、样式与皮肤
 
-**主题** `Theme` 是一组颜色与尺寸：`background`、`surface`、`foreground`、`muted`、`accent`、`border`、`hover`、`pressed`、`selection`、`font_size`、`padding`、`gap`、`radius`（默认 0，直角）、`control_height`。内置 `Theme::light()`、`dark()`、`high_contrast()`，可修改字段后用 `validate()` 检查。
+**主题** `Theme` 是一组颜色、阴影与尺寸：`background`、`surface`、`control`（按钮底色）、`foreground`、`muted`、`border`（输入轮廓）、`divider`（安静线条）、`accent`、`on_accent`、`hover`/`pressed`（半透明叠层）、`shadow`（浮层阴影）、`font_size`、`padding`、`gap`、`radius`（默认 0，直角）、`control_height`（默认 32）；文本选择色由 `Theme::selection()` 派生。内置 `Theme::light()`、`dark()`、`high_contrast()`，可修改字段后用 `validate()` 检查。
 
 ```rust
 window.set_theme(Theme { radius: 6.0, ..Theme::dark() });  // 整个窗口：根节点的局部主题
@@ -285,7 +285,7 @@ card.set_border_width(1.0);   // 等同于只改 Style::border_width
 
 三层皮肤是同一机制的不同作用范围：每个节点只缓存解析出的那一个皮肤，设置、reparent 或新建控件时只重新解析受影响的子树，绘制时不查找祖先。本地值和皮肤内部再按控件状态取值：disabled → pressed → hover → 基础值，某状态没有指定时用基础值；焦点环单独绘制。“后写者生效”意味着：setter 写一个字段并结束该字段的 token 绑定；`set_style` 写全部字段，因此结束全部样式绑定；`bind_*` 让该字段改为跟随 token。
 
-**Token** 是登记过名称的类型化值（`Color`、`f32` 长度、`Duration` 或 `Font`），默认值随主题变化；14 个 Theme 字段即内置 token（`Theme::ACCENT` 等，名为 `theme.accent`）。属性绑定 token 后随主题、覆盖与 reparent 自动更新：
+**Token** 是登记过名称的类型化值（`Color`、`f32` 长度、`Duration`、`Font` 或 `Shadow`），默认值随主题变化；17 个 Theme 字段即内置 token（`Theme::ACCENT` 等，名为 `theme.accent`）。属性绑定 token 后随主题、覆盖与 reparent 自动更新：
 
 ```rust
 fn lane(theme: &Theme) -> Color { theme.accent }

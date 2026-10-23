@@ -15,7 +15,7 @@ use aegle_ui::{
     handle, text_style,
 };
 
-use crate::paint::{CHEVRON, ChevronDirection, chevron_dir};
+use crate::paint::{CHEVRON, ChevronDirection, chevron_dir, chosen_bar};
 
 /// The control inside a [`TreeNode`] header row.
 pub struct TreeNodeControl {
@@ -150,10 +150,13 @@ impl Control for TreeNodeControl {
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
         let size = cx.size;
         cx.builder.push_clip(cx.shape);
-        // Paint hover or selection highlight background.
+        // The selected row is tinted and marked by a leading accent bar, not
+        // only by color; hover and press layer over either.
         if self.selected {
             cx.builder.fill(cx.shape, cx.appearance.selection);
-        } else if cx.appearance.background != Color::TRANSPARENT {
+            chosen_bar(cx.builder, size, cx.rtl, cx.appearance.indicator);
+        }
+        if cx.appearance.background != Color::TRANSPARENT {
             cx.builder.fill(cx.shape, cx.appearance.background);
         }
 

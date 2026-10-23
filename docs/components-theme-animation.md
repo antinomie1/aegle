@@ -22,17 +22,17 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 `on_change(|control| ...)` 与按钮回调共用版本化队列，在树借用外执行。用户/语义操作真正改变值才排队；`set_checked` / `set_value` / `set_range` / `set_step` 是模型更新，不回调，方便多个控件同步且不会形成循环。处理器读取执行时的最新值，通知不保存每次中间值；替换处理器或销毁节点会丢弃旧通知。显式 `toggle`、`increment`、`decrement` 走用户行为并检查有效可见/启用状态。
 
-默认标志为18dp复选框或36×20dp开关；滑块手柄16dp，轨道2dp、完成部分4dp，以粗细差异辅助表达数值。小尺寸时缩小标志并裁剪至自身范围，布局宽度优先容纳可见标签；当前不做标签自动换行。字号/主题切换复用同一段落，值变化不重排文字。外观可用 Skin/Style 和 `indicator_color` 修改；checked 与开关位置即时更新，配色/焦点轮廓沿用现有外观过渡。启用 `motion` 时，Slider/Progress 的程序化数值变化以 120 ms ease-out 滑向新值（用户拖动直接跟手），减少动态效果偏好下立即到位；开关位仍无位移动画。聚焦的 Slider 消费滚轮，每 16 逻辑像素移动一步，未聚焦时滚轮照常滚动外层视图。
+默认标志为 20dp 复选框/单选钮或 40×20dp 开关；滑块手柄 20dp（表面色圆盘、边框色描边环、强调色圆点，圆点悬停时变大、按下时变小），轨道与完成部分均为 4dp 胶囊，以颜色与手柄位置表达数值。小尺寸时缩小标志并裁剪至自身范围，布局宽度优先容纳可见标签；当前不做标签自动换行。字号/主题切换复用同一段落，值变化不重排文字。外观可用 Skin/Style 和 `indicator_color` 修改；checked 即时更新，配色/焦点轮廓沿用现有外观过渡。启用 `motion` 时，Slider/Progress 的程序化数值变化以 120 ms ease-out 滑向新值（用户拖动直接跟手），减少动态效果偏好下立即到位；开关滑块在用户切换或可过渡的 `set_checked` 时同样以 120 ms 滑到另一端并由边框色渐变为 on_indicator 色，快照（snap）与减少动态效果时立即到位。聚焦的 Slider 消费滚轮，每 16 逻辑像素移动一步，未聚焦时滚轮照常滚动外层视图。
 
 `widgets` 示例用 `.aegle` 构造四种控件和 CJK 编辑器，通过简短 Rust 回调实现互相同步、启禁编辑、进度更新、主题切换与窗口关闭。
 
 ## 当前分隔、数值输入、标签页、分割与提示
 
-- `separator()`：1 逻辑像素的主题边框色分隔线，在 Row 中为竖线、在其他容器中为横线，沿交叉轴拉伸；不可聚焦，语义为带方向的 separator。
-- `number_field(min, max, value)`：复用单行编辑器的数值输入，右侧 20dp 宽的上下步进区；`set_step`、`set_decimals(0..=9)`、`set_range`、`set_value`，上/下键与 PageUp/PageDown 按步长或十步调整，聚焦时滚轮调整。Enter 或失焦时解析文本，越界 clamp，不能解析时恢复上次值；值真正改变才调用 `on_change`。语义为 SpinButton 并报告数值与范围。
-- `tabs()` 与 `Tabs::add(title)`：每页为一列，只显示选中页；标签为按钮变体（`Variant::Tab`），选中项画下划线，可单击、Enter/Space 激活，聚焦标签时 Left/Right 循环移动并选中。`select` 不回调，用户切换才调用 `on_change`。语义为 TabList/Tab（selected）/TabPanel。
+- `separator()`：1 逻辑像素的主题 divider 色分隔线，在 Row 中为竖线、在其他容器中为横线，沿交叉轴拉伸；不可聚焦，语义为带方向的 separator。
+- `number_field(min, max, value)`：复用单行编辑器的数值输入，右侧 20dp 宽的上下步进区（细线箭头，与编辑区以 divider 色竖线分隔）；`set_step`、`set_decimals(0..=9)`、`set_range`、`set_value`，上/下键与 PageUp/PageDown 按步长或十步调整，聚焦时滚轮调整。Enter 或失焦时解析文本，越界 clamp，不能解析时恢复上次值；值真正改变才调用 `on_change`。语义为 SpinButton 并报告数值与范围。
+- `tabs()` 与 `Tabs::add(title)`：每页为一列，只显示选中页；标签为按钮变体（`Variant::Tab`），未选中为 muted 文字、悬停或选中为前景色，选中项在文字下方画 3dp 强调色下划线，标签列表底部有 1dp divider 基线，可单击、Enter/Space 激活，聚焦标签时 Left/Right 循环移动并选中。`select` 不回调，用户切换才调用 `on_change`。语义为 TabList/Tab（selected）/TabPanel。
 - `splitter(Orientation)`：两个窗格加 6dp 可拖动把手；`first()`/`second()` 返回窗格，`set_ratio(0..=1)` 设置首窗格占比。把手可聚焦，方向键每次 2%，Home/End 到端点；拖动时按把手中心换算比例。
-- `NodeWidgets::set_tooltip(Some(text))`：任意控件可设提示；指针在该控件（或没有自己提示的子孙）上停留 `TOOLTIP_DELAY`（500 ms）后，在指针右下方以反色标签显示，空间不足时翻到上方并保持在窗口内。按下、Escape、移开或删除控件时隐藏；文字同时作为无障碍描述。延时由 `State::wake` 驱动，原生循环按最近的唤醒时间限定等待，不轮询。
+- `NodeWidgets::set_tooltip(Some(text))`：任意控件可设提示；指针在该控件（或没有自己提示的子孙）上停留 `TOOLTIP_DELAY`（500 ms）后，在指针右下方以带 divider 边线与主题阴影的 surface 小面板显示，空间不足时翻到上方并保持在窗口内。按下、Escape、移开或删除控件时隐藏；文字同时作为无障碍描述。延时由 `State::wake` 驱动，原生循环按最近的唤醒时间限定等待，不轮询。
 
 这些组件都通过公开的 `Hooks`（press/place/removed/key 以及新增的 hover、wake）与 `PaintCx::request_frame` 实现，没有私有引擎入口；第三方控件可用同样方式获得悬停、延时与逐帧绘制。
 
@@ -60,33 +60,47 @@ Slider 为水平连续滑块；`set_step(step)` 可选有限非负步长，零�
 
 ## 视觉规范
 
-| `Theme` 字段 | 浅色 | 深色 |
-| --- | --- | --- |
-| background | #F6F7F9 | #15181D |
-| surface | #FFFFFF | #1E232B |
-| foreground | #20242B | #F0F2F5 |
-| muted | #5B6472 | #ADB6C4 |
-| accent（焦点与标记） | #355CDA | #9EB5FF |
-| border | #737D8C | #788596 |
-| hover | #ECEFF5 | #2A313C |
-| pressed | #DEE5F0 | #2F3744 |
-| selection | #D5DFFF | #2D4076 |
+默认外观是克制、极简的类 Metro 风格：
 
-尺寸采用 dp；主题只有一个正文字号 14 dp，padding 与 gap 8 dp，控件高 36 dp，字体族使用带 locale 的系统 sans-serif 回退。没有紧凑或触摸尺寸模式；其他排版角色由组件库经 `Control::text_role` 定义。默认控件、面板、标志、开关、滑块和进度条均为直角（主题圆角 0）；应用设置正的主题 radius 时这些默认控件统一圆化。边框 1 dp，焦点环 2 dp。
+- 矩形承载命令与内容：按钮、输入框、下拉框、面板、菜单、对话框、抽屉默认直角，主题 `radius` 为正时统一圆化。
+- 圆与胶囊承载状态与数值：单选钮、开关轨道与滑块、滑块手柄、范围轨道与完成部分、选中项前置条，不随 `radius` 变化；复选框按 `radius` 处理。
+- 只有一个强调色（accent）标明当前：复选/单选选中填充、开关开启、范围完成部分、选中标签下划线、菜单/下拉/树中选中项的 3×16dp 前置胶囊条、焦点环，以及 `Button::set_accent(true)` 的强调按钮（`kinds::ACCENT_BUTTON`，on_accent 文字，焦点环改用前景色）。
+- 悬停与按下是半透明的 `hover`/`pressed` 层，以 `Color::over` 叠在控件自身底色上，在 control、surface、accent 或透明底上都能自然显示；菜单项与树节点把键盘焦点也显示为悬停层，而不画焦点环。
+- 输入框、下拉框、复选框、单选环与开关轨道使用 `border` 轮廓（与 surface 至少 3:1），悬停时加深为 muted；按钮、面板、表格行、分隔线、范围轨道使用更安静的 `divider`。禁用时输入轮廓降为 divider、底色透明，文字为 muted。
+- 浮层（Popup、Menu、Dropdown 列表、Tooltip、Dialog 卡片、Drawer 面板）是带 divider 边线的 surface，并绑定 `Theme::SHADOW` token 投射柔和阴影（y 偏移 4dp、模糊 8dp），主题切换时跟随；应用 `set_shadow` 结束该绑定。高对比主题的阴影透明，即不绘制。
 
-默认不使用背景模糊、大面积阴影或持续装饰动画。hover/pressed 用轻度叠色，拖动响应直接；disabled 不只靠变淡区分，语义同步不可用状态。选中、错误和焦点不能仅靠颜色，应有形状/标记或文字反馈。
+| `Theme` 字段 | 浅色 | 深色 | 高对比 |
+| --- | --- | --- | --- |
+| background（窗口画布） | #F3F3F3 | #1C1C1C | #000000 |
+| surface（输入框、面板、浮层） | #FFFFFF | #262626 | #000000 |
+| control（按钮静止底色） | #E5E5E5 | #363636 | #000000 |
+| foreground | #1A1A1A | #F2F2F2 | #FFFFFF |
+| muted（次要与禁用文字） | #616161 | #A6A6A6 | #A0A0A0 |
+| border（输入轮廓） | #8A8A8A | #8C8C8C | #FFFFFF |
+| divider（安静线条） | #D9D9D9 | #404040 | #FFFFFF |
+| accent | #2E6BDB | #3570E0 | #FFFF00 |
+| on_accent（强调底上的文字与标记） | #FFFFFF | #FFFFFF | #000000 |
+| hover（半透明层） | 黑色 α13 | 白色 α15 | 黄色 α72 |
+| pressed（半透明层） | 黑色 α28 | 白色 α30 | 黄色 α112 |
+| shadow（浮层阴影） | (0,4) 模糊 8，黑色 α40 | 同几何，黑色 α140 | 透明 |
+
+文本选择色不是字段，而是 `Theme::selection()`：accent 以 30% 混入 surface，与普通 foreground 配对；`Appearance` 的 caret 为前景色。`Appearance::on_indicator` 是画在 indicator 填充上的标记色（勾、单选圆点、开启的开关滑块、滑块手柄圆盘），由皮肤给出，无本地样式覆盖。
+
+尺寸采用 dp；主题只有一个正文字号 14 dp，padding 与 gap 8 dp，控件高 32 dp，字体族使用带 locale 的系统 sans-serif 回退。按钮两侧各留两倍 padding，标签页 1.5 倍，列表/菜单项 1 倍。没有紧凑或触摸尺寸模式；其他排版角色由组件库经 `Control::text_role` 定义。边框 1 dp，焦点环 2 dp。
+
+默认不使用背景模糊、大面积阴影或持续装饰动画；阴影只用于浮层。hover/pressed 用半透明叠层，拖动响应直接；disabled 不只靠变淡区分，语义同步不可用状态。选中、错误和焦点不能仅靠颜色，应有形状/标记或文字反馈（勾、圆点、滑块位置、下划线、前置条）。
 
 普通文字对比度目标至少 4.5:1，交互轮廓/焦点目标至少 3:1。此处是内置主题的设计要求，不是认证声明；框架不检查应用自定义颜色的对比度。高对比模式把默认 token 调整为系统或黑白高对比配色；内置 `high_contrast()` 为黑底白字与白色轮廓、黄色焦点和标记，禁用与次要文字使用对黑底 8:1 的灰色，使禁用控件与启用控件可区分。显式本地覆盖仍由应用负责。
 
 ## 主题契约
 
-当前可用的 `aegle-theme::Theme` 是公开字段的无分配快照：颜色为 `background/surface/foreground/muted/accent/border/hover/pressed/selection`，尺寸为 `font_size/padding/gap/radius/control_height`。`light()`、`dark()`、`high_contrast()` 提供显式配色；`Default` 为浅色。三种配色共用正文 14、padding 8、gap 8、圆角 0、控件高 36 的逻辑像素尺寸；窗口可用 `set_padding` 独立增加外侧留白。`validate()` 拒绝非有限或负尺寸，并要求正文大小和控件高度大于零。accent 用于焦点/标记，selection 与普通 foreground 配对，不隐含另一套文本颜色。
+当前可用的 `aegle-theme::Theme` 是公开字段的无分配快照：颜色为 `background/surface/control/foreground/muted/border/divider/accent/on_accent/hover/pressed`，阴影为 `shadow`，尺寸为 `font_size/padding/gap/radius/control_height`。`light()`、`dark()`、`high_contrast()` 提供显式配色；`Default` 为浅色。三种配色共用正文 14、padding 8、gap 8、圆角 0、控件高 32 的逻辑像素尺寸；窗口可用 `set_padding` 独立增加外侧留白。`validate()` 拒绝非有限或负尺寸与无效阴影，并要求正文大小和控件高度大于零。accent 用于焦点/标记，on_accent 用于其上的文字与标记；`selection()` 由 accent 与 surface 派生，与普通 foreground 配对，不隐含另一套文本颜色。`ThemeOverride` 为每个字段提供同名可选替换。
 
 `Ui::set_theme`（没有局部主题的节点的基础主题）与 `Node::set_theme`（含 `window.set_theme`，即根节点的局部主题）都更新现有控件，不重新创建编辑器。颜色切换更新外观；字体或尺寸变化使相应布局失效。焦点、文本、选择及预编辑保留。本地布局、字号和视觉覆盖优先于主题，自定义皮肤按新 Theme 解析。
 
 `Node::set_theme(Some(theme))` 给该节点及其子树一份完整主题快照，`None` 恢复父级解析结果；嵌套局部主题优先于祖先，`Ui::set_theme` 只更新没有局部主题的节点。每个节点缓存共享快照的 `Rc`，绘制、布局、命中、滚动条、IME 和语义按同一解析结果读取，不在热路径上逐级查找祖先。新建和 reparent 的控件继承新父级的主题，变化只重排受影响节点。窗口清屏色取根节点的解析主题。`Node::set_theme_override(Some(ThemeOverride))` 则只替换指定字段，其余沿父级解析主题；它随父级或 `Ui::set_theme` 的变化重新解析，嵌套覆盖逐层叠加，`set_theme` 的快照会替换它。
 
-主题使用类型化 token：类型为 Color、Length（有限非负逻辑像素，圆角也用它）、Duration、Font（`Font { families, weight, italic }`，不含字号；families 不能为空，weight 为 1–1000）与 Shadow（`aegle-types` 的 `Shadow`，几何有限、模糊非负）。`aegle-theme` 定义 `Token<T>`（只含 u16 索引）、`TokenKind`/`TokenValue` 与 `TokenType`（Color、f32、Duration、Font、Shadow），14 个 Theme 字段即内置 token `Theme::ACCENT` 等，名为 `theme.<字段>`，占索引 0–13。`aegle-ui::register_token(name, default)` 在每线程一份、所有 Ui 共享的注册表中登记 `包.名称` 形式的组件 token（点分 ASCII 字母、数字、`_`、`-`，`theme.` 保留），默认值是纯函数 `fn(&Theme) -> T`，随主题变化；同名同类型再次登记返回原句柄，类型不同返回 `UiError::Token`。`token::<T>(name)` 按名查找。名称只在登记/查找时解析为索引，节点和绑定只存索引。
+主题使用类型化 token：类型为 Color、Length（有限非负逻辑像素，圆角也用它）、Duration、Font（`Font { families, weight, italic }`，不含字号；families 不能为空，weight 为 1–1000）与 Shadow（`aegle-types` 的 `Shadow`，几何有限、模糊非负）。`aegle-theme` 定义 `Token<T>`（只含 u16 索引）、`TokenKind`/`TokenValue` 与 `TokenType`（Color、f32、Duration、Font、Shadow），17 个 Theme 字段即内置 token `Theme::ACCENT`、`Theme::SHADOW` 等，名为 `theme.<字段>`，占索引 0–16。`aegle-ui::register_token(name, default)` 在每线程一份、所有 Ui 共享的注册表中登记 `包.名称` 形式的组件 token（点分 ASCII 字母、数字、`_`、`-`，`theme.` 保留），默认值是纯函数 `fn(&Theme) -> T`，随主题变化；同名同类型再次登记返回原句柄，类型不同返回 `UiError::Token`。`token::<T>(name)` 按名查找。名称只在登记/查找时解析为索引，节点和绑定只存索引。
 
 全局主题是共享不可变快照，局部主题只保存稀疏覆盖。查找顺序为最近局部覆盖到全局默认；作用范围沿逻辑控件树继承。`Ui::set_token` 设全局覆盖，`Node::set_token` 设子树覆盖，`None` 移除；自定义 token 依次取最近祖先的覆盖、Ui 覆盖、按节点解析主题求默认值，局部主题快照不遮蔽自定义 token。内置 token 的覆盖就是主题本身：`Ui::set_token` 替换 Ui 主题的该字段（不能为 None），`Node::set_token` 写入该节点的 `ThemeOverride`。绑定让属性跟随 token：`Node::bind_color(ColorSlot, Token<Color>)` 绑定 Style 的 11 个颜色或背景渐变的色标（`ColorSlot::GradientStop(i)`）；`bind_length(LengthSlot, Token<f32>)` 绑定边框宽度、圆角、焦点宽度、文字控件字号、统一 padding 或 gap；`bind_font(Token<Font>)` 绑定文字控件的字体（等同 `set_font`）；`bind_shadow(Token<Shadow>)` 绑定阴影（等同 `set_shadow`）；启用 `motion` 时 `bind_transition(TransitionProperty, Token<Duration>, Easing)` 绑定该项过渡的时长，曲线在绑定时给定。绑定时立即写入，`Ui::set_theme`、局部主题/覆盖、reparent 与 token 改变后重新解析同一子树内的绑定。任一绑定拒绝新值（例如字号为零）时，`set_token`、`Ui::set_theme`、`Node::set_theme`/`set_theme_override` 与 `reparent` 都恢复改变前的状态（含原父节点与位置）并返回错误。绑定和子树覆盖随节点删除。
 
