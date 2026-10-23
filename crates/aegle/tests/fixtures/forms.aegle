@@ -1,4 +1,5 @@
-// A dropdown, text-change events, tree nodes from blocks and named slot content.
+// A dropdown, text-change events, tree nodes from blocks, named slot content,
+// a file picker and an image.
 component Labeled(label: string) {
     Column {
         Text { text: label }
@@ -17,6 +18,8 @@ Column {
         on changed { size = self.selected; picked = self.text }
     }
     Labeled { label: "名称"; TextField { id: name; on changed { typed = self.text; edits += 1 } } }
+    FilePicker { id: export; mode: save; title: "导出"; filters: ["*.png"]; button_text: "浏览" }
+    Image { id: preview; source: ""; fit: cover; width: 16dp; height: 16dp }
     TreeView {
         TreeNode {
             id: top; text: "根"; expanded: true

@@ -1,11 +1,11 @@
 //! The built-in elements, declared with [`element!`](crate::element) exactly
 //! like a control library's.
 
-use aegle_ui::Container;
+use aegle_ui::{Container, FileDialog, FileMode};
 use aegle_widgets::{
-    Button, CheckBox, Dialog, Drawer, DrawerSide, Dropdown, Fit, ImageView, Label, NumberField,
-    Orientation, Progress, Radio, Separator, Slider, Splitter, Switch, Tabs, TextField, TreeNode,
-    TreeView, Widgets,
+    Button, CheckBox, Dialog, Drawer, DrawerSide, Dropdown, FilePicker, Fit, ImageView, Label,
+    NumberField, Orientation, Progress, Radio, Separator, Slider, Splitter, Switch, Tabs,
+    TextField, TreeNode, TreeView, Widgets,
 };
 
 use crate::Elements;
@@ -43,6 +43,38 @@ fn source(view: &ImageView, path: &str) {
     } else {
         let _ = view.load(path);
     }
+}
+
+fn file_mode(name: &str) -> FileMode {
+    match name {
+        "open" => FileMode::Open,
+        "save" => FileMode::Save,
+        "folder" => FileMode::Folder,
+        other => unreachable!("checked mode `{other}`"),
+    }
+}
+
+/// Changes one part of a picker's dialog.
+fn dialog(picker: &FilePicker, change: impl FnOnce(&mut FileDialog)) {
+    let mut dialog = picker.dialog();
+    change(&mut dialog);
+    picker.set_dialog(dialog)
+}
+
+/// Each filter is `name|pattern pattern`, or only patterns, which then name it.
+fn filters(items: crate::Lines<'_>) -> Vec<(String, Vec<String>)> {
+    items
+        .iter()
+        .filter(|item| !item.trim().is_empty())
+        .map(|item| {
+            let (name, patterns) = item.split_once('|').unwrap_or((item, item));
+            let patterns = patterns.split([' ', ';', ',']).filter(|p| !p.is_empty());
+            (
+                name.trim().to_owned(),
+                patterns.map(str::to_owned).collect(),
+            )
+        })
+        .collect()
 }
 
 /// New choices keep the selected index while it remains valid, else the first.
@@ -205,6 +237,19 @@ crate::element! {
         event failed => |view, run| view.on_error(move |_| run());
         get error: string => |view| view.error().unwrap_or_default();
     }
+    /// A path field and a button opening the native file dialog; dropping a
+    /// file on it chooses that file too.
+    pub FilePicker {
+        style text;
+        create |parent, mode: choice(open, save, folder) = "open"| parent.file_picker(file_mode(mode));
+        set path: line => |picker, path| picker.set_path(path);
+        set title: line => |picker, title| dialog(picker, |d| d.title = title.to_owned());
+        set filters: lines => |picker, items| dialog(picker, |d| d.filters = filters(items));
+        set button_text: line => |picker, text| picker.button().set_text(text);
+        set read_only: bool => |picker, on| picker.field().set_read_only(on);
+        event changed => |picker, run| picker.on_change(move |_| run());
+        get path: string => |picker| picker.path();
+    }
     /// A one-pixel divider.
     pub Separator {
         create |parent| parent.separator();
@@ -303,6 +348,7 @@ pub(crate) fn builtin() -> Elements {
         .with::<Progress>()
         .with::<Dropdown>()
         .with::<NumberField>()
+        .with::<FilePicker>()
         .with::<Image>()
         .with::<Separator>()
         .with::<Tabs>()

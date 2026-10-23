@@ -31,6 +31,7 @@ mod direction;
 mod drag;
 mod effects;
 mod events;
+mod files;
 #[cfg(feature = "motion")]
 mod fling;
 #[cfg(feature = "motion")]
@@ -90,6 +91,7 @@ pub use control::{CONTAINER, Control, Plain};
 pub use decorator::Decorator;
 pub use drag::{DropEvent, Drops};
 pub use events::KeyEvent;
+pub use files::{FileDialog, FileMode, FileRequest};
 #[cfg(feature = "grid")]
 pub use grid_handles::Stack;
 pub use group::Visit;

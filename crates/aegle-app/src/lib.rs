@@ -33,6 +33,11 @@ mod native_access;
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
 ))]
+mod native_files;
+#[cfg(any(
+    all(feature = "wayland", target_os = "linux"),
+    all(feature = "windows", target_os = "windows")
+))]
 #[cfg_attr(target_os = "windows", path = "native_input_windows.rs")]
 mod native_input;
 #[cfg(any(

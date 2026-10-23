@@ -560,6 +560,7 @@ if ui.refresh()? {
 | `window_focus(b)` | 窗口获得/失去键盘焦点 |
 | `ime(ImeEdit { .. })`、`ime_left()`、`take_ime_state(max)` | 输入法事务与需要同步给平台的状态 |
 | `take_clipboard()` / `paste(text)` | 编辑器发出的复制/粘贴请求 |
+| `take_file_dialogs()` / `files_chosen(request, paths)` | 控件（如 FilePicker）请求的原生文件对话框；宿主显示后回答所选路径，不能显示时回答 `None` |
 | `drag_motion(point)` / `drag_leave()` / `drop_data(point, data)` / `take_drag()` | 原生拖动经过、离开、放下（前者返回该点是否有放置目标，用于接受或拒绝）；控件 `start_drag` 发起的拖动 |
 | `dispatch_callbacks()` | 执行排队的回调 |
 | `advance_animations(now)`、`has_animations()` | 宿主时钟驱动动画 |

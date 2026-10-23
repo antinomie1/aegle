@@ -100,3 +100,77 @@ fn images_load_from_files_and_report_failures() -> Result {
     std::fs::remove_dir_all(&dir)?;
     Ok(())
 }
+
+#[test]
+fn file_pickers_ask_the_host_and_report_the_chosen_path() -> Result {
+    let dir = std::env::temp_dir().join(format!("aegle-picker-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    let skin = dir.join("skin.png");
+    std::fs::write(&skin, PNG)?;
+    let ui = ui()?;
+    let view = program(
+        r#"Column {
+            state skin: string = ""
+            state changes: int = 0
+            FilePicker { id: picker; title: "选择皮肤"; filters: ["皮肤|*.png", "*.jpg *.jpeg"]
+                button_text: "浏览"; on changed { skin = self.path; changes += 1 } }
+            Image { id: preview; source: skin; width: 64dp; height: 64dp }
+        }"#,
+    )?
+    .build(&ui.root())?;
+    ui.refresh()?;
+    common::click(&ui, "浏览")?;
+    let dialogs = ui.take_file_dialogs();
+    let [(request, dialog)] = dialogs.as_slice() else {
+        panic!("one dialog, not {dialogs:?}")
+    };
+    assert_eq!(dialog.title, "选择皮肤");
+    assert_eq!(dialog.mode, aegle_ui::FileMode::Open);
+    let filters = [
+        ("皮肤", vec!["*.png"]),
+        ("*.jpg *.jpeg", vec!["*.jpg", "*.jpeg"]),
+    ];
+    let filters = filters.map(|(name, patterns)| {
+        (
+            name.into(),
+            patterns.into_iter().map(String::from).collect(),
+        )
+    });
+    assert_eq!(dialog.filters, filters);
+    ui.files_chosen(*request, Some(vec![skin.clone()]))?;
+    // Answered once: a repeated answer is ignored.
+    ui.files_chosen(*request, Some(vec![dir.clone()]))?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(
+        view.get("skin"),
+        Some(Data::String(skin.to_str().unwrap().into()))
+    );
+    let image = view
+        .handle("preview")
+        .unwrap()
+        .typed::<ImageView>()
+        .unwrap();
+    assert!(image.image().is_some());
+
+    // A cancelled dialog changes nothing; the next one starts in the folder.
+    common::click(&ui, "浏览")?;
+    let [(request, dialog)] = ui.take_file_dialogs().try_into().unwrap();
+    assert_eq!(dialog.folder.as_deref(), Some(dir.as_path()));
+    ui.files_chosen(request, None)?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(view.get("changes"), Some(Data::Int(1)));
+
+    // A file dropped on the picker is chosen too.
+    let picker = view.handle("picker").unwrap().node().bounds();
+    let inside = aegle_ui::Point::new(picker.origin.x + 4.0, picker.origin.y + 4.0);
+    ui.drop_data(
+        inside,
+        aegle_ui::DragData::Files(vec![dir.join("dropped.png")]),
+    );
+    ui.dispatch_callbacks()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(view.get("changes"), Some(Data::Int(2)));
+    assert!(matches!(view.get("skin"), Some(Data::String(s)) if s.ends_with("dropped.png")));
+    std::fs::remove_dir_all(&dir)?;
+    Ok(())
+}

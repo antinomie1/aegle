@@ -8,7 +8,7 @@ use aegle_scene::{Image, Rect};
 use aegle_theme::ControlKind;
 use aegle_types::Size;
 use aegle_ui::{
-    Container, Control, HandlerResult, Subscription,
+    Container, Control, HandlerResult, Result, Subscription,
     control::{MeasureCx, PaintCx},
     handle,
 };
@@ -62,7 +62,7 @@ impl ImageView {
     /// On failure the view is emptied, [`Self::error`] holds the reason and
     /// the [`Self::on_error`] handlers run; a failure before any handler is
     /// registered runs the first ones registered.
-    pub fn load(&self, path: impl AsRef<Path>) -> Result<(), String> {
+    pub fn load(&self, path: impl AsRef<Path>) -> Result {
         let path = path.as_ref();
         match read(path) {
             Ok(image) => {
@@ -77,7 +77,7 @@ impl ImageView {
                     state.control_as::<ImageControl>(id).unwrap().reported = queued;
                     Ok(())
                 });
-                Err(message)
+                Err(message.into())
             }
         }
     }
@@ -114,7 +114,7 @@ impl ImageView {
 
 /// Reads at most the decoding budget, so an oversized file fails before
 /// it is held in memory.
-fn read(path: &Path) -> Result<Image, String> {
+fn read(path: &Path) -> std::result::Result<Image, String> {
     let limit = aegle_image::DEFAULT_MAX_BYTES;
     let mut bytes = Vec::new();
     std::fs::File::open(path)

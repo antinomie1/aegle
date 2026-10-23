@@ -24,6 +24,7 @@
 | [ListView](#listview) | `list_view(h, n, row) -> ListView`（`h` 为行高或 `RowHeight::Estimate(估计)`） | — |
 | [Table](#table) | `table(columns, h, n, cell) -> Table` | — |
 | [ImageView](#imageview) | `image(&Image) -> ImageView`、`image_view() -> ImageView` | `Image` |
+| [FilePicker](#filepicker) | `file_picker(mode) -> FilePicker` | `FilePicker` |
 | [Canvas](#canvas) | `canvas(painter) -> Canvas` | — |
 
 ## Text
@@ -387,6 +388,32 @@ Image { source: skin_path; fit: contain; width: 128dp; height: 128dp
 - 标记元素 `Image`：`source` 单行字符串路径（可绑定，空串清空），`fit` `fill`/`contain`/`cover`；事件 `failed`，`self.error` 为原因。
 - `Image` 克隆共享像素；renderer 按图像 id 缓存上传结果，双线性采样（像素画放大会变模糊，尚无最近邻采样）。
 - 无障碍角色 Image，名称用 `set_accessible_label` 设置。
+
+## FilePicker
+
+```rust
+use aegle::ui::{FileDialog, FileMode};
+
+let picker = window.file_picker(FileMode::Open);
+picker.set_dialog(FileDialog {
+    title: "选择皮肤".into(),
+    filters: vec![("PNG 图片".into(), vec!["*.png".into()])],
+    ..Default::default()
+});
+picker.button().set_text("浏览");
+picker.on_change(move |picker| preview.load(picker.path()));
+```
+
+```text
+FilePicker { title: "选择皮肤"; filters: ["PNG 图片|*.png"]; button_text: "浏览"
+             on changed { skin = self.path } }
+Image { source: skin; fit: contain; width: 128dp; height: 128dp }
+```
+
+- 一行：可编辑的路径文本框（`grow`，窄时收缩）加一个按钮；`field()`、`button()` 取得两部分以设置文字、只读或样式。`path()` 读取、`set_path()` 设置（不触发 change）。
+- 点击按钮（或调用 `browse()`）经 `Node::choose_files` 向宿主请求原生文件对话框：标题、过滤器、`FileMode::Open`/`Save`/`Folder`（`OpenMany` 不接受，选择器只保存一个路径），从当前路径所在文件夹开始，保存时建议当前文件名。选中后替换路径并调用 `on_change`；取消不改变任何东西。把文件拖放到选择器上同样选中它；在文本框中编辑也调用 `on_change`。非 UTF-8 路径按有损方式显示。
+- 原生 App 用自己的桌面连接（`AppOptions::app_id`）显示对话框：Linux 为 portal FileChooser，Windows 为 `IFileOpenDialog`/`IFileSaveDialog`；需要 `desktop-services` feature（facade 默认开启）。显示失败或 feature 未开启时把错误交给 `App::on_error`，并按取消处理。不经 App 的宿主用 `Ui::take_file_dialogs` 取得请求、以 `Ui::files_chosen` 回答。
+- 标记元素 `FilePicker`：`mode`* `open`/`save`/`folder`，`path`、`title`、`button_text` 单行字符串，`filters` 字符串列表（每项 `名称|*.png *.jpg`，只写模式时以模式作名称），`read_only` bool；事件 `changed`，`self.path`。
 
 ## Canvas
 

@@ -7,7 +7,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use aegle::loader::{Program, State};
 use aegle::prelude::*;
-use aegle::ui::{ImeEdit, Key, KeyInput, Modifiers, Size, TextSystem, Ui};
+use aegle::ui::{FileMode, ImeEdit, Key, KeyInput, Modifiers, Size, TextSystem, Ui};
 use aegle_text::{Blob, GenericFamily};
 
 fn fonts() -> Result<Rc<RefCell<TextSystem>>> {
@@ -123,6 +123,12 @@ fn dropdowns_text_changes_tree_blocks_and_slot_ids_from_both_paths() -> Result {
     let fonts = fonts()?;
     let compiled = ui(&fonts)?;
     let view = aegle::ui!(compiled.root(), "tests/fixtures/forms.aegle")?;
+    let export = view.export.dialog();
+    assert_eq!(
+        (export.mode, export.title.as_str()),
+        (FileMode::Save, "导出")
+    );
+    assert_eq!(view.preview.fit(), Fit::Cover);
     drive(
         &compiled,
         Forms {

@@ -74,6 +74,7 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | Slider | 叶 | `min`*、`max`*、`value`* 有限数（默认 0/1/0）；`step` 非负数；`orientation` | `changed`；`value: float` |
 | Progress | 叶 | `min`*、`max`*、`value`*；`orientation`；`indeterminate` bool | — |
 | NumberField | 叶 | `min`*、`max`*、`value`*；`step` 非负数；`decimals` 0 到 9 的整数 | `changed`；`value: float` |
+| FilePicker | 叶（路径文本框加按钮） | `mode`* `open`/`save`/`folder`；`path`、`title`、`button_text` 单行字符串；`filters` 非空字符串列表，每项 `名称|模式 模式` 或只写模式；`read_only` bool | `changed`（对话框选中、拖放文件或编辑路径）；`path: string` |
 | Image | 叶 | `source` 单行字符串，图像文件路径（相对工作目录，空串为空视图）；`fit` `fill`/`contain`/`cover`（默认 `fill`） | `failed`（读取或解码失败，视图被清空）；`error: string` |
 | Separator | 叶 | — | — |
 

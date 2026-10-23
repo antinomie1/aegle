@@ -192,6 +192,7 @@ impl App {
         );
         for ui in scratch.drain(..) {
             self.report(ui.dispatch_callbacks())?;
+            self.file_dialogs(&ui)?;
         }
         Ok(())
     }

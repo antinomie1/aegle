@@ -176,6 +176,8 @@ pub struct State {
     pub input_method: bool,
     /// Pending host clipboard request.
     pub clipboard: Option<crate::ClipboardRequest>,
+    /// File dialogs for the host and their requesters.
+    pub(crate) files: crate::files::Files,
     /// A repaint was requested.
     pub repaint: bool,
     /// Event callbacks by node.

@@ -152,6 +152,7 @@ impl Ui {
                     ime_reset: false,
                     input_method: false,
                     clipboard: None,
+                    files: Default::default(),
                     repaint: true,
                     callbacks: HashMap::new(),
                     edits: HashMap::new(),
@@ -440,6 +441,7 @@ impl Ui {
         state.fingers.clear();
         state.kept.clear();
         state.ext.clear();
+        state.files = Default::default();
         #[cfg(feature = "motion")]
         state.motion.clear();
         state.capture = None;

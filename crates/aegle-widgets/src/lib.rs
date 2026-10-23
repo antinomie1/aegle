@@ -28,6 +28,7 @@ mod dialog;
 mod drawer;
 mod dropdown;
 mod field;
+mod file_picker;
 mod group;
 pub mod kinds;
 mod label;
@@ -53,7 +54,7 @@ use aegle_layout::Style;
 use aegle_scene::{Image, SceneBuilder};
 use aegle_theme::Theme;
 use aegle_types::Size;
-use aegle_ui::{Container, Control, HandlerResult, Hooks, Node, Result, State};
+use aegle_ui::{Container, Control, FileMode, HandlerResult, Hooks, Node, Result, State};
 
 pub use button::{Button, ButtonControl};
 pub use canvas::{Canvas, CanvasControl, CanvasEvent, Painter};
@@ -61,6 +62,7 @@ pub use dialog::Dialog;
 pub use drawer::{Drawer, DrawerSide};
 pub use dropdown::Dropdown;
 pub use field::{FieldControl, TextField};
+pub use file_picker::{FilePicker, FilePickerControl};
 pub use group::Group;
 pub use label::{Label, LabelControl};
 pub use list::{ListView, RowHeight};
@@ -184,6 +186,9 @@ pub trait Widgets {
     /// Appends an empty image view, sized zero until [`ImageView::set_image`]
     /// or [`ImageView::load`] gives it an image.
     fn image_view(&self) -> ImageView;
+    /// Appends a path field and a button that opens the host's native file
+    /// dialog in `mode`, which must not be [`FileMode::OpenMany`].
+    fn file_picker(&self, mode: FileMode) -> FilePicker;
     /// Appends a canvas drawn by `painter` with zero intrinsic size; give it a
     /// size or flex grow. The painter runs during refresh while the UI is
     /// borrowed, so it must not use UI handles. Drawing is not clipped to the bounds.
@@ -275,6 +280,9 @@ impl Widgets for Container {
     }
     fn image_view(&self) -> ImageView {
         visual::image(self, None)
+    }
+    fn file_picker(&self, mode: FileMode) -> FilePicker {
+        file_picker::file_picker(self, mode)
     }
     fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) + 'static) -> Canvas {
         canvas::canvas(self, painter)

@@ -144,6 +144,9 @@ pub struct App {
     pub(crate) runtime: Rc<RefCell<Runtime>>,
     pub(crate) dispatching: Cell<bool>,
     pub(crate) on_error: RefCell<Option<crate::native_loop::ErrorHandler>>,
+    /// The desktop connection for controls' file dialogs, made on first use.
+    #[cfg(feature = "desktop-services")]
+    pub(crate) files: RefCell<Option<crate::native_files::Service>>,
 }
 
 pub(crate) struct Runtime {
@@ -290,6 +293,8 @@ impl App {
             runtime: Rc::new(RefCell::new(runtime)),
             dispatching: Cell::new(false),
             on_error: RefCell::new(None),
+            #[cfg(feature = "desktop-services")]
+            files: RefCell::new(None),
         })
     }
 
