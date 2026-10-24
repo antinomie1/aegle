@@ -86,8 +86,8 @@ pub use tree::{TreeNode, TreeNodeControl, TreeView};
 pub use visual::{Fit, ImageControl, ImageView};
 
 /// The engine hooks the controls need: popups (overlay placement, dismissal and
-/// Escape/arrow keys), radio groups (arrow keys), and virtual lists (row
-/// realization and measurement). Every constructor installs them on first use.
+/// Escape/arrow keys), radio groups (arrow keys), virtual lists (row
+/// realization and measurement) and dialog cards (fitting narrow windows). Every constructor installs them on first use.
 pub static HOOKS: Hooks = Hooks {
     key: Some(keys),
     press: Some(press),
@@ -95,7 +95,7 @@ pub static HOOKS: Hooks = Hooks {
     place: Some(place),
     removed: Some(removed),
     removed_after: Some(pruned),
-    measure: Some(list::measure_rows),
+    measure: Some(measure),
     realize: Some(list::realize_rows),
     hover: Some(hover),
     wake: Some(tooltip::wake),
@@ -130,6 +130,10 @@ fn press(state: &mut State, position: aegle_types::Point) -> Result {
 fn place(state: &mut State) -> bool {
     // All run: each moves its own overlays.
     popup::place_popups(state) | tooltip::place(state)
+}
+
+fn measure(state: &mut State) -> Result<bool> {
+    Ok(list::measure_rows(state)? | dialog::fit(state))
 }
 
 fn removed(state: &mut State, node: aegle_core::NodeId) {

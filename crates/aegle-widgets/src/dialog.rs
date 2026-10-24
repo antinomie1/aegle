@@ -3,14 +3,15 @@
 use aegle_controls::{Key, KeyInput};
 use aegle_core::NodeId;
 use aegle_layout::{
-    Align, Dimension, Display, Edges, Justify, LengthPercentage, LengthPercentageAuto, Position,
+    Align, Dimension, Display, Edges, Justify, LengthPercentage, LengthPercentageAuto, Overflow,
+    Position,
 };
 use aegle_scene::RoundedRect;
 use aegle_theme::ControlKind;
 use aegle_types::{Color, Point, Rect};
 use aegle_ui::{
-    Container, Control, HandlerResult, Node, Result, State, container_style, control::PaintCx,
-    handle,
+    Container, Control, HandlerResult, Node, OrFail, Result, State, container_style,
+    control::PaintCx, handle,
 };
 
 use crate::{Button, Label, Widgets};
@@ -239,6 +240,35 @@ pub(crate) fn dialog_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> 
     Ok(true)
 }
 
+/// The card's preferred minimum width.
+const MIN_WIDTH: f32 = 320.0;
+/// Space between the card and the edges of the area its scrim covers.
+const MARGIN: f32 = 16.0;
+
+/// After layout: lowers each open card's minimum width to the space its scrim
+/// leaves, so a narrow window keeps the whole card. Returns whether any changed.
+pub(crate) fn fit(state: &mut State) -> bool {
+    let Some(dialogs) = state.ext_ref::<Dialogs>() else {
+        return false;
+    };
+    let open: Vec<_> = (dialogs.entries.iter())
+        .filter(|e| e.shown)
+        .map(|e| (e.dialog, e.card))
+        .collect();
+    let mut changed = false;
+    for (dialog, card) in open {
+        let room = state.tree.get(dialog).unwrap().bounds().size.width - 2.0 * MARGIN;
+        let width = LengthPercentageAuto::length(MIN_WIDTH.min(room).max(0.0));
+        let mut style = state.tree.get(card).unwrap().style().clone();
+        if style.min_size.width != width {
+            style.min_size.width = width;
+            aegle_layout::set_style(&mut state.tree, card, style).or_fail();
+            changed = true;
+        }
+    }
+    changed
+}
+
 /// Cleans up dialog on node removal.
 pub(crate) fn removed(state: &mut State, node: NodeId) {
     dialogs(state)
@@ -267,11 +297,13 @@ pub(crate) fn create_dialog(container: &Container, title: &str) -> Dialog {
             width: LengthPercentage::length(0.0),
             height: LengthPercentage::length(0.0),
         };
+        // The card keeps this margin from the covered area's edges.
+        let margin = LengthPercentage::length(MARGIN);
         overlay_style.padding = Edges {
-            left: LengthPercentage::length(0.0),
-            right: LengthPercentage::length(0.0),
-            top: LengthPercentage::length(0.0),
-            bottom: LengthPercentage::length(0.0),
+            left: margin,
+            right: margin,
+            top: margin,
+            bottom: margin,
         };
         overlay_style.align_items = Some(Align::Center.items());
         overlay_style.justify_content = Some(Justify::Center.content());
@@ -287,8 +319,11 @@ pub(crate) fn create_dialog(container: &Container, title: &str) -> Dialog {
     };
     let card_node = crate::add(&overlay_container, |_state, theme| {
         let mut card_style = container_style(theme, false);
-        card_style.min_size.width = LengthPercentageAuto::length(320.0);
+        card_style.min_size.width = LengthPercentageAuto::length(MIN_WIDTH);
         card_style.max_size.width = LengthPercentageAuto::length(560.0);
+        // Content taller or wider than the covered area scrolls in the card.
+        card_style.overflow.x = Overflow::Scroll;
+        card_style.overflow.y = Overflow::Scroll;
         let p = LengthPercentage::length(theme.padding * 1.5);
         card_style.padding = Edges {
             left: p,

@@ -4,7 +4,7 @@ use std::{collections::HashMap, ops::Deref};
 
 use aegle_controls::{Key, KeyInput};
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{Edges, LengthPercentageAuto, Position};
+use aegle_layout::{Edges, LengthPercentageAuto, Overflow, Position};
 use aegle_types::{Point, Rect};
 use aegle_ui::{Container, Control, Node, Result, State, container_style};
 
@@ -67,6 +67,13 @@ pub(crate) fn popup(anchor: &Node) -> Popup {
             right: LengthPercentageAuto::auto(),
             bottom: LengthPercentageAuto::auto(),
         };
+        // At most the window's size; a longer list scrolls.
+        style.max_size = aegle_layout::Size {
+            width: LengthPercentageAuto::percent(1.0),
+            height: LengthPercentageAuto::percent(1.0),
+        };
+        style.overflow.x = Overflow::Scroll;
+        style.overflow.y = Overflow::Scroll;
         let root = state.root;
         let group = Group {
             role: Role::Popup { list: false },
@@ -321,7 +328,8 @@ pub(crate) fn place_popups(state: &mut State) -> bool {
             } else {
                 above
             };
-            (x, y)
+            // Over the anchor rather than past the window when neither fits.
+            (x, y.min(window.height - size.height).max(0.0))
         };
         let element = &mut state.tree.get_mut(popup).unwrap().context;
         if element.offset != Point::new(x, y) {

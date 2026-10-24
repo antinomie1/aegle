@@ -29,7 +29,9 @@ fn inputs(window: &Window, column: &Container, status: &Label) {
     column.text_field("secret").set_password(true);
     column.text_area("Multiline editor\nwith IME, selection and undo.\n多行编辑");
 
+    // Rows of controls wrap in a narrow window instead of running past it.
     let buttons = column.row();
+    buttons.set_wrap(Wrap::Wrap);
     let shown = status.clone();
     let button = buttons.button("Button");
     button.set_tooltip(Some("Shows a message below"));
@@ -46,6 +48,7 @@ fn inputs(window: &Window, column: &Container, status: &Label) {
     });
 
     let toggles = column.row();
+    toggles.set_wrap(Wrap::Wrap);
     let check = toggles.check_box("Check box", true);
     let mixed = toggles.check_box("Mixed", true);
     mixed.set_mixed(true);
@@ -55,6 +58,7 @@ fn inputs(window: &Window, column: &Container, status: &Label) {
     let shown = status.clone();
     switch.on_change(move |switch| shown.set_text(&format!("Switch: {}", switch.is_checked())));
     let radios = column.row();
+    radios.set_wrap(Wrap::Wrap);
     for (text, checked) in [("Small", false), ("Medium", true), ("Large", false)] {
         let shown = status.clone();
         radios
@@ -67,6 +71,7 @@ fn inputs(window: &Window, column: &Container, status: &Label) {
     slider.set_accessible_label("Progress");
     let progress = column.progress(0.0, 100.0, 60.0);
     let numbers = column.row();
+    numbers.set_wrap(Wrap::Wrap);
     numbers.set_align_items(Some(Align::Center));
     let amount = numbers.number_field(0.0, 100.0, 60.0);
     amount.set_accessible_label("Amount");
@@ -93,6 +98,7 @@ fn inputs(window: &Window, column: &Container, status: &Label) {
     column.separator();
 
     let themes = column.row();
+    themes.set_wrap(Wrap::Wrap);
     themes.set_align_items(Some(Align::Center));
     themes.text("Theme");
     let theme = themes.dropdown(&THEMES, 0);
@@ -107,17 +113,29 @@ fn inputs(window: &Window, column: &Container, status: &Label) {
     });
 }
 
+/// A borderless scroll view filling `pane`, for content taller than the window.
+fn scrolling(pane: &Container) -> Container {
+    let view = pane.scroll_view();
+    view.set_grow(1.0);
+    view.set_border_width(0.0);
+    view.set_padding(0.0);
+    view.set_gap(10.0, 10.0);
+    view
+}
+
 /// Image, canvas and the scrolling family on one tab, a table on another.
 fn views(pane: &Container) -> Result {
     let tabs = pane.tabs();
     tabs.set_grow(1.0);
     tabs.set_min_height(0.0);
-    let column = tabs.add("Views");
+    // The views scroll when the window is too short for all of them.
+    let column = scrolling(&tabs.add("Views"));
     let data = tabs.add("Table");
     for page in [&column, &data] {
         page.set_gap(10.0, 10.0);
     }
     let media = column.row();
+    media.set_wrap(Wrap::Wrap);
     let pixels = (0..48 * 48)
         .flat_map(|i| [(i % 48 * 5) as u8, (i / 48 * 5) as u8, 160, 255])
         .collect();
@@ -167,6 +185,8 @@ fn views(pane: &Container) -> Result {
     scroll.set_width(None);
     scroll.set_height(Some(120.0));
     scroll.set_grow(1.0);
+    // The two lists share the row equally, whatever their content.
+    scroll.set_basis(0.0);
     for i in 1..=12 {
         scroll.text(&format!("Scroll item {i}"));
     }
@@ -176,6 +196,7 @@ fn views(pane: &Container) -> Result {
     list.set_width(None);
     list.set_height(Some(120.0));
     list.set_grow(1.0);
+    list.set_basis(0.0);
     let words = ["Short row.", "A longer row that wraps onto a second line."];
     let variable = column.list_view(RowHeight::Estimate(24.0), 200, move |row, index| {
         row.set_padding(4.0);
@@ -252,7 +273,7 @@ fn main() -> Result<()> {
         pane.set_gap(10.0, 10.0);
     }
     let status = window.text("Interact with any control.");
-    inputs(&window, left, &status);
+    inputs(&window, &scrolling(left), &status);
     views(right)?;
     app.run()
 }

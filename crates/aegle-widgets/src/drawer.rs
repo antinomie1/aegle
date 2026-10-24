@@ -3,7 +3,7 @@
 use aegle_controls::{Key, KeyInput};
 use aegle_core::NodeId;
 use aegle_layout::{
-    Dimension, Display, Edges, Length, LengthPercentage, LengthPercentageAuto, Position,
+    Dimension, Display, Edges, Length, LengthPercentage, LengthPercentageAuto, Overflow, Position,
 };
 use aegle_scene::RoundedRect;
 use aegle_theme::ControlKind;
@@ -309,6 +309,10 @@ pub(crate) fn create_drawer(container: &Container, side: DrawerSide) -> Drawer {
                 width: Dimension::length(280.0),
                 height: Dimension::percent(1.0),
             };
+            // Never wider than the covered area; content that does not fit scrolls.
+            panel_style.max_size.width = LengthPercentageAuto::percent(1.0);
+            panel_style.overflow.x = Overflow::Scroll;
+            panel_style.overflow.y = Overflow::Scroll;
             let p = LengthPercentage::length(theme.padding);
             panel_style.padding = Edges {
                 left: p,

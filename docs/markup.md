@@ -62,8 +62,8 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | Splitter | 盒容器，恰好两个直接写出的元素，依次放入两个窗格 | `orientation`* `horizontal`/`vertical`；`ratio` 0 到 1 的数或百分比 | — |
 | TreeView | 盒容器，只接受 TreeNode，可直接写或写在 `if`/`for` 块中 | — | — |
 | TreeNode | 盒容器，只能写在 TreeView 或 TreeNode 中（直接或经 `if`/`for` 块），只接受 TreeNode（作为下一层，同样可经块） | `text`* 单行字符串；`expanded`、`selected` bool | `selected`（点击或 Enter/Space 选中，也在展开/收起时触发）；`text: string`、`expanded: bool`、`selected: bool` |
-| Dialog | 盒容器，子元素放入对话框正文；遮罩覆盖父容器 | `title`* 单行字符串；`open` bool；`dismissible` bool | `closed`；`open: bool` |
-| Drawer | 盒容器，子元素放入抽屉面板；停靠父容器边缘 | `side`* `left`/`right`；`open` bool；`width` dp 长度 | `closed`；`open: bool` |
+| Dialog | 盒容器，子元素放入对话框正文；遮罩覆盖父容器，卡片不超出遮罩，内容过多时在卡片内滚动 | `title`* 单行字符串；`open` bool；`dismissible` bool | `closed`；`open: bool` |
+| Drawer | 盒容器，子元素放入抽屉面板；停靠父容器边缘，面板不宽于父容器，内容过多时在面板内滚动 | `side`* `left`/`right`；`open` bool；`width` dp 长度 | `closed`；`open: bool` |
 | Text | 叶 | `text`* 字符串；`wrap` bool | — |
 | Button | 叶 | `text`* 字符串 | `clicked` |
 | TextField | 叶 | `text`* 单行字符串；`read_only`、`password` bool | `submitted`、`changed`；`text: string` |

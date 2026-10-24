@@ -3,10 +3,10 @@
 use aegle_controls::{Input, Range, RangeError};
 use aegle_core::Dirty;
 use aegle_layout::Style;
-use aegle_ui::OrFail;
 use aegle_ui::{Container, Control, HandlerResult, Node, UiError, handle};
+use aegle_ui::{LocalLayout, OrFail};
 
-use crate::range_control::{Orientation, ProgressControl, SliderControl, sized};
+use crate::range_control::{Orientation, ProgressControl, SliderControl, shrinks_along, sized};
 
 handle! {
     /// A numeric slider with pointer, keyboard, wheel (while focused) and semantic adjustment.
@@ -137,8 +137,9 @@ fn orient(node: &Node, orientation: Orientation) {
         };
         let mut style = state.tree.get(id).unwrap().style().clone();
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
-            sized(&mut style, extent, vertical);
+            sized(&mut style, extent, vertical, local);
         }
+        shrinks_along(&mut style, vertical);
         aegle_layout::set_style(&mut state.tree, id, style)?;
         Ok(())
     });
@@ -174,11 +175,9 @@ impl Slider {
 pub(crate) fn slider(container: &Container, min: f64, max: f64, value: f64) -> Slider {
     let range = Range::new(min, max, value, 0.0).or_fail();
     Slider(crate::add(container, |_, theme| {
-        let mut style = Style {
-            flex_shrink: 0.0,
-            ..Default::default()
-        };
-        sized(&mut style, theme.control_height, false);
+        let mut style = Style::default();
+        sized(&mut style, theme.control_height, false, LocalLayout::NONE);
+        shrinks_along(&mut style, false);
         Ok((
             Box::new(SliderControl::new(range)) as Box<dyn Control>,
             style,
@@ -189,11 +188,14 @@ pub(crate) fn slider(container: &Container, min: f64, max: f64, value: f64) -> S
 pub(crate) fn progress(container: &Container, min: f64, max: f64, value: f64) -> Progress {
     let range = Range::new(min, max, value, 0.0).or_fail();
     Progress(crate::add(container, |_, theme| {
-        let mut style = Style {
-            flex_shrink: 0.0,
-            ..Default::default()
-        };
-        sized(&mut style, theme.control_height / 2.0, false);
+        let mut style = Style::default();
+        sized(
+            &mut style,
+            theme.control_height / 2.0,
+            false,
+            LocalLayout::NONE,
+        );
+        shrinks_along(&mut style, false);
         Ok((
             Box::new(ProgressControl::new(range)) as Box<dyn Control>,
             style,
