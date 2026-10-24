@@ -1,4 +1,5 @@
-//! Event statements: assignments, conditionals, locals, host calls and emits.
+//! Event statements: assignments, conditionals, locals, host calls, emits
+//! and clipboard copies.
 
 use super::{Checker, Scope};
 use crate::checked::{HostCall, Step};
@@ -12,7 +13,9 @@ impl Checker<'_> {
         scope: &mut Scope,
     ) -> Result<Vec<Step>, Error> {
         let depth = scope.locals.len();
+        let handler = std::mem::replace(&mut self.in_handler, true);
         let result = self.steps_in(statements, scope);
+        self.in_handler = handler;
         scope.locals.truncate(depth);
         result
     }
@@ -115,6 +118,10 @@ impl Checker<'_> {
                         }
                     };
                     Step::Emit(index, value)
+                }
+                Statement::Copy { mut value, .. } => {
+                    self.expr(&mut value, scope, Some(&Type::String))?;
+                    Step::Copy(value)
                 }
             });
         }

@@ -115,6 +115,22 @@ impl Checker<'_> {
                 expr.kind = ExprKind::Record(index, values);
                 record
             }
+            ExprKind::Field(base, field) if self.control(base, scope).is_some() => {
+                let index = self.control(base, scope).unwrap();
+                if !self.in_handler {
+                    return error("named controls can only be read in event handlers".into());
+                }
+                let (id, spec) = &self.named[index];
+                let Some(spec) = spec.map(|spec| &self.specs[spec]) else {
+                    return error(format!("`{id}` is the window, which has no fields"));
+                };
+                let found = spec.fields.iter().find(|(name, _)| name == field);
+                let Some(ty) = found.and_then(|(_, ty)| ty.binding()) else {
+                    return error(format!("{} `{id}` has no field `{field}`", spec.name));
+                };
+                expr.kind = ExprKind::Control(index, std::mem::take(field));
+                ty
+            }
             ExprKind::Field(base, field) => {
                 let Type::Record(record) = self.expr(base, scope, None)? else {
                     return error(format!("`.{field}` needs a record value"));
@@ -170,10 +186,30 @@ impl Checker<'_> {
                 }
                 Type::List(Box::new(item))
             }
-            ExprKind::Ref(_) | ExprKind::FieldAt(..) | ExprKind::Record(..) => {
+            ExprKind::Ref(_)
+            | ExprKind::FieldAt(..)
+            | ExprKind::Record(..)
+            | ExprKind::Control(..) => {
                 return error("unexpected pre-resolved expression".into());
             }
         })
+    }
+
+    /// The entry id index `base` names when it is a bare name that no local,
+    /// loop item, state or parameter takes, in the entry document.
+    fn control(&self, base: &Expr, scope: &Scope) -> Option<usize> {
+        let ExprKind::Name(name) = &base.kind else {
+            return None;
+        };
+        let taken = (scope.locals.iter())
+            .chain(&scope.items)
+            .chain(&scope.states)
+            .chain(&scope.params)
+            .any(|(n, _)| n == name);
+        if taken || scope.template != 0 {
+            return None;
+        }
+        self.named.iter().position(|(id, _)| id == name)
     }
 
     /// Types both operands alike, converting one integer literal against a float.

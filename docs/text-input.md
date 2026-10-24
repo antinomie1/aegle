@@ -48,7 +48,7 @@ Editor 自己保存显示缓冲与每个硬换行段落的 Parley 布局（段�
 
 `set_password(true)` 把已提交值移入 Editor 自己的字符串，显示缓冲只排版等量 `•`；选择、命中、`display_text` 与 `selected_text` 都是遮盖缓冲的字节偏移，替换按遮盖字符索引同步到明文。`text()` 返回明文。切换时取消组合、光标移到末尾并清空撤销历史；密码模式不记录历史、拒绝 IME 组合（`TextError::Password`），TextField 不向宿主请求 IME 会话。
 
-TextField 在 Ctrl（macOS 为 Command）+C/X/V 时只返回 `Outcome::clipboard` 请求，不访问系统服务；密码模式或空选区不复制/剪切，只读不剪切/粘贴。App 在刷新前把请求交给平台：Wayland 每 seat 一个 `wl_data_device`，以最近按键/按钮 serial 设置选区，写出与读取都是 calloop 非阻塞管道，读取上限 `CLIPBOARD_LIMIT` 4 MiB，结果作为 `Event::Clipboard` 回到原 seat 的焦点控件；Win32 同步读写 `CF_UNICODETEXT`。粘贴作为一次独立撤销，单行编辑器丢弃换行类字符。辅助技术编辑动作仍待集成。
+TextField 在 Ctrl（macOS 为 Command）+C/X/V 时只返回 `Outcome::clipboard` 请求，不访问系统服务；应用经 `Node::copy_text` 发出的写入请求（标记的 `copy(e)` 同此）走同一条路径；密码模式或空选区不复制/剪切，只读不剪切/粘贴。App 在刷新前把请求交给平台：Wayland 每 seat 一个 `wl_data_device`，以最近按键/按钮 serial 设置选区，写出与读取都是 calloop 非阻塞管道，读取上限 `CLIPBOARD_LIMIT` 4 MiB，结果作为 `Event::Clipboard` 回到原 seat 的焦点控件；Win32 同步读写 `CF_UNICODETEXT`。粘贴作为一次独立撤销，单行编辑器丢弃换行类字符。辅助技术编辑动作仍待集成。
 
 ## 当前 Wayland 原生接口
 

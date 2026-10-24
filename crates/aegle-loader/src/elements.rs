@@ -126,6 +126,7 @@ crate::element! {
         create |parent, text: string = ""| parent.text(text);
         set text: string => |label, text| label.set_text(text);
         set wrap: bool => |label, on| label.set_wrap(on);
+        get text: string => |label| label.text();
     }
     /// A push button.
     pub Button {
@@ -133,6 +134,7 @@ crate::element! {
         create |parent, text: string = ""| parent.button(text);
         set text: string => |button, text| button.set_text(text);
         event clicked => |button, run| button.on_click(move |_| run());
+        get text: string => |button| button.text();
     }
     /// A single-line editor.
     pub TextField {
@@ -205,6 +207,7 @@ crate::element! {
         set value: float => |progress, value| progress.set_value(value);
         set orientation: choice(horizontal, vertical) => |progress, name| progress.set_orientation(axis(name));
         set indeterminate: bool => |progress, on| progress.set_indeterminate(on);
+        get value: float => |progress| progress.value();
     }
     /// A button opening a list of `items`; `selected` must index them.
     pub Dropdown {

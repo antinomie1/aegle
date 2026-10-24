@@ -145,4 +145,6 @@ pub enum Step {
     Host(String, Vec<Expr>, Span),
     /// Raises the component's declared event with this index, carrying a value.
     Emit(usize, Option<Expr>),
+    /// Offers the string value as the window's clipboard contents.
+    Copy(Expr),
 }

@@ -1,0 +1,27 @@
+// Buttons that copy what other controls show: a label, an edited field, the
+// button itself, a control declared later, and from a component's event.
+component Section(title: string) {
+    event done
+    Column {
+        Text { text: title }
+        slot
+        Button { text: "完成"; on clicked { emit done } }
+    }
+}
+Column {
+    state copies: int = 0
+    Text { id: order; text: "订单号 A-42" }
+    TextField { id: name; text: "Ada" }
+    Button { id: copy_order; text: "复制订单号"; on clicked { copy(order.text); copies += 1 } }
+    Button { id: copy_name; text: "Copy name"; on clicked { copy("Name: " + name.text) } }
+    Button { id: copy_self; text: "Copy me"; on clicked { copy(self.text) } }
+    for suffix in ["?", "!"] {
+        Button { text: suffix; on clicked { copy(note.text + suffix) } }
+    }
+    Section {
+        title: "Section"
+        on done { copy(str(amount.value) + " / " + order.text) }
+        Slider { id: amount; min: 0; max: 10; value: 3 }
+    }
+    Text { id: note; text: "later" }
+}

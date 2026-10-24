@@ -89,7 +89,8 @@ pub struct ImeState {
     pub request: Option<ImeRequest>,
 }
 
-/// Clipboard work requested by an editor shortcut; see [`Ui::take_clipboard`].
+/// Clipboard work requested by an editor shortcut or [`Node::copy_text`](crate::Node::copy_text);
+/// see [`Ui::take_clipboard`].
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClipboardRequest {
     /// Store this text as the native clipboard selection.
@@ -374,7 +375,8 @@ impl Ui {
         Ok(())
     }
 
-    /// Consumes the latest copy, cut or paste request. Password fields never
+    /// Consumes the latest copy, cut or paste request, from an editor or
+    /// [`Node::copy_text`](crate::Node::copy_text). Password fields never
     /// request a write; cut has already deleted its selection.
     pub fn take_clipboard(&self) -> Option<ClipboardRequest> {
         self.write().clipboard.take()
