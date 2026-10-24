@@ -1,4 +1,5 @@
-//! Event handler statements: assignments, conditionals, locals, host calls and emits.
+//! Event handler statements: assignments, conditionals, locals, host calls,
+//! emits and clipboard copies.
 
 use super::Parser;
 use crate::lexer::Kind;
@@ -56,7 +57,15 @@ impl Parser<'_, '_> {
                 false
             } else {
                 let (target, _) = self.identifier()?;
-                if target == "host" && matches!(self.current.kind, Kind::Punct(".")) {
+                if target == "copy" && matches!(self.current.kind, Kind::Punct("(")) {
+                    self.advance()?;
+                    let value = self.expr()?;
+                    self.expect(")", "expected ')' after the copied text")?;
+                    statements.push(Statement::Copy {
+                        value,
+                        span: self.span(start),
+                    });
+                } else if target == "host" && matches!(self.current.kind, Kind::Punct(".")) {
                     self.advance()?;
                     let (name, _) = self.identifier()?;
                     self.expect("(", "expected '(' after the host action name")?;

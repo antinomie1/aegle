@@ -176,6 +176,16 @@ impl Node {
             Ok(())
         })
     }
+    /// Offers `text` as the clipboard contents of this node's window, as a copy
+    /// shortcut in an editor does; the host writes it after the current input
+    /// or callback (see [`Ui::take_clipboard`](crate::Ui::take_clipboard)). A
+    /// later copy, cut or paste before then replaces the request.
+    pub fn copy_text(&self, text: &str) {
+        self.change(|state, _| {
+            state.clipboard = Some(crate::ClipboardRequest::Write(text.to_owned()));
+            Ok(())
+        })
+    }
     /// Requests logical focus using the same enabled/visible policy as keyboard traversal.
     pub fn focus(&self) {
         self.change(|state, id| state.set_focus(Some(id)))

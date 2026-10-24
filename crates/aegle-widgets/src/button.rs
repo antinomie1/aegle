@@ -26,6 +26,10 @@ impl Button {
     pub fn set_text(&self, text: &str) {
         self.change(|state, id| state.set_text(id, text))
     }
+    /// Copies the button label.
+    pub fn text(&self) -> String {
+        self.change(|state, id| state.text(id))
+    }
     /// Makes this the emphasized button of its group, filled with the theme
     /// accent ([`crate::kinds::ACCENT_BUTTON`]), or a plain one again.
     pub fn set_accent(&self, accent: bool) {

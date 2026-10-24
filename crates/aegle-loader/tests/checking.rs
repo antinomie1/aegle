@@ -313,3 +313,49 @@ fn dropdowns_tree_blocks_and_slot_ids_check_their_rules() {
         assert!(error.message.contains(message), "{body}: {}", error.message);
     }
 }
+
+#[test]
+fn named_controls_are_read_and_copied_only_in_entry_handlers() {
+    let source = r#"component Pair(label: string) { Row { Text { text: label }; slot } }
+    Column {
+        state names: list<string> = ["甲"]
+        Button { on clicked { copy(order.text + str(level.value) + str(agree.checked)) } }
+        for name in names { Button { on clicked { copy(name + order.text) } } }
+        Pair { label: "p"; Button { on clicked { copy(inner.text) } }; TextField { id: inner } }
+        Text { id: order; text: "A-42" }
+        Progress { id: level }
+        CheckBox { id: agree }
+    }"#;
+    check(parse(source).unwrap()).unwrap();
+    for (body, message) in [
+        (
+            "Text { id: a }; Text { text: a.text }",
+            "only be read in event handlers",
+        ),
+        (
+            "Text { id: a }; Button { on clicked { copy(a.value) } }",
+            "Text `a` has no field `value`",
+        ),
+        (
+            "Separator { id: a }; Button { on clicked { copy(a.text) } }",
+            "Separator `a` has no field `text`",
+        ),
+        ("Button { on clicked { copy(1) } }", "expected string"),
+        (
+            "Button { on clicked { copy(missing.text) } }",
+            "unknown name",
+        ),
+        // Component bodies do not see the entry document's ids.
+        ("Text { id: a }; Inner {}", "unknown name `a`"),
+    ] {
+        let source = format!(
+            "component Inner() {{ Button {{ on clicked {{ copy(a.text) }} }} }}\n\
+             Column {{ {body} }}"
+        );
+        let error = check(parse(&source).unwrap()).unwrap_err();
+        assert!(error.message.contains(message), "{body}: {}", error.message);
+    }
+    let window = r#"Window { id: main; Button { on clicked { copy(main.text) } } }"#;
+    let error = check(parse(window).unwrap()).unwrap_err();
+    assert!(error.message.contains("is the window"), "{}", error.message);
+}

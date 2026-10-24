@@ -37,6 +37,9 @@ pub(crate) struct Scope {
     pub params: Vec<Param>,
     /// One entry per declared event of the template.
     pub emits: Vec<Option<Emit>>,
+    /// The entry document's named controls, set once its view is built;
+    /// handlers read their fields.
+    pub named: std::cell::OnceCell<Rc<[Option<Handle>]>>,
 }
 
 /// Everything an expression can read.
@@ -86,6 +89,7 @@ impl Env {
                 states: cells,
                 params,
                 emits,
+                named: Default::default(),
             }),
             items: Rc::from([]),
             slot: None,
@@ -149,6 +153,13 @@ pub(crate) fn eval(
             .expect("checked: self only in handlers")
             .source
             .field(field),
+        ExprKind::Control(index, field) => {
+            let named = env.scope.named.get().expect("handlers run on built views");
+            named[*index]
+                .as_ref()
+                .expect("entry ids are built with the view")
+                .field(field)
+        }
         ExprKind::Unary("!", operand) => Data::Bool(!truth(eval(operand)?)),
         ExprKind::Unary(_, operand) => match eval(operand)? {
             Data::Int(n) => Data::Int(n.checked_neg().ok_or_else(|| overflow(expr.span))?),
@@ -236,6 +247,12 @@ fn run_steps(steps: &[Step], env: &Env, source: &Handle, run: &mut Run) -> Resul
                     .map(|argument| value_of(argument, run))
                     .collect::<Result<Vec<_>>>()?;
                 crate::actions::call(name, &values, *span)?;
+            }
+            Step::Copy(expr) => {
+                let Data::String(text) = value_of(expr, run)? else {
+                    unreachable!("checked copied string")
+                };
+                source.node().copy_text(&text);
             }
             Step::Emit(index, value) => {
                 let value = value.as_ref().map(|v| value_of(v, run)).transpose()?;

@@ -59,7 +59,20 @@ save.activate();            // 按用户激活的规则排队回调
 Button { id: save; text: "Save"; on clicked { saved = true } }
 ```
 
-- 方法：`set_text`、`on_click`、`activate`。
+点击按钮复制另一个控件的内容：
+
+```rust
+let order = window.text("订单号 A-42");
+let label = order.clone();
+window.button("复制").on_click(move |button| button.copy_text(&label.text()));
+```
+
+```text
+Text { id: order; text: "订单号 A-42" }
+Button { text: "复制"; on clicked { copy(order.text) } }
+```
+
+- 方法：`text`、`set_text`、`on_click`、`activate`；任意句柄的 `copy_text` 把文字交给所在窗口的剪贴板。标记中 `self.text` 与具名按钮的 `id.text` 读取按钮文字。
 - 指针在按钮上按下并在按钮上释放才激活；Space 在释放时激活，Enter 在首次按下时激活，按键重复不重复触发。失焦、禁用或指针取消时不激活。
 - 默认高度为主题 `control_height`（32），宽度为文字加两侧各两倍内边距；底色为主题 `control`，`set_accent(true)` 使其成为强调色填充的强调按钮；`set_width`、`set_grow` 可改变。
 - 无障碍角色 Button，名称默认为按钮文字，支持 Focus/Click 动作。

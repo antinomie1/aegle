@@ -231,6 +231,13 @@ pub enum Statement {
         /// The whole statement.
         span: Span,
     },
+    /// `copy(text)`, offering a string as the window's clipboard contents.
+    Copy {
+        /// The copied text.
+        value: Expr,
+        /// The whole statement.
+        span: Span,
+    },
 }
 
 /// One property assignment.
@@ -307,8 +314,11 @@ pub enum ExprKind {
     Call(String, Vec<Expr>),
     /// `[a, b, ...]`.
     List(Vec<Expr>),
-    /// `value.field` before checking.
+    /// `value.field` before checking, including `id.field` of a named control.
     Field(Box<Expr>, String),
+    /// A checked read, inside an event handler, of a field of the entry
+    /// control whose id has this index in `Program::ids`.
+    Control(usize, String),
     /// A checked field read: field number of a record value.
     FieldAt(Box<Expr>, usize),
     /// A checked record construction: record number and one value per field.

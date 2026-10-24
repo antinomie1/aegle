@@ -50,6 +50,7 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
         return Err(error);
     }
     let root = created.swap_remove(0);
+    let _ = env.scope.named.set(ids.as_slice().into());
     let effects = Rc::new(RefCell::new(block));
     root.node().keep_alive(effects.clone());
     Ok(View {
@@ -250,6 +251,7 @@ impl View {
             &mut ids,
         )?;
         *self.effects.borrow_mut() = block;
+        let _ = env.scope.named.set(ids.as_slice().into());
         self.program = program.clone();
         self.env = env;
         self.ids = ids;

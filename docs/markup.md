@@ -64,15 +64,15 @@ view.done.on_click(move |_| view.status.set_text("已完成"));
 | TreeNode | 盒容器，只能写在 TreeView 或 TreeNode 中（直接或经 `if`/`for` 块），只接受 TreeNode（作为下一层，同样可经块） | `text`* 单行字符串；`expanded`、`selected` bool | `selected`（点击或 Enter/Space 选中，也在展开/收起时触发）；`text: string`、`expanded: bool`、`selected: bool` |
 | Dialog | 盒容器，子元素放入对话框正文；遮罩覆盖父容器，卡片不超出遮罩，内容过多时在卡片内滚动 | `title`* 单行字符串；`open` bool；`dismissible` bool | `closed`；`open: bool` |
 | Drawer | 盒容器，子元素放入抽屉面板；停靠父容器边缘，面板不宽于父容器，内容过多时在面板内滚动 | `side`* `left`/`right`；`open` bool；`width` dp 长度 | `closed`；`open: bool` |
-| Text | 叶 | `text`* 字符串；`wrap` bool | — |
-| Button | 叶 | `text`* 字符串 | `clicked` |
+| Text | 叶 | `text`* 字符串；`wrap` bool | —；`text: string` |
+| Button | 叶 | `text`* 字符串 | `clicked`；`text: string` |
 | TextField | 叶 | `text`* 单行字符串；`read_only`、`password` bool | `submitted`、`changed`；`text: string` |
 | TextArea | 叶 | `text`* 字符串；`read_only` bool | `changed`；`text: string` |
 | Dropdown | 叶 | `items`*! 非空的单行字符串列表，字面量或 `list<string>` 表达式；`selected` 非负整数（默认 0） | `changed`；`selected: int`、`text: string` |
 | CheckBox | 叶 | `text`* 字符串；`checked`* bool；`mixed`、`wrap` bool | `changed`；`checked: bool`、`text: string` |
 | Switch、RadioButton | 叶 | `text`* 字符串；`checked`* bool；`wrap` bool；同一父容器中的 RadioButton 互斥 | `changed`；`checked: bool`、`text: string` |
 | Slider | 叶 | `min`*、`max`*、`value`* 有限数（默认 0/1/0）；`step` 非负数；`orientation` | `changed`；`value: float` |
-| Progress | 叶 | `min`*、`max`*、`value`*；`orientation`；`indeterminate` bool | — |
+| Progress | 叶 | `min`*、`max`*、`value`*；`orientation`；`indeterminate` bool | —；`value: float` |
 | NumberField | 叶 | `min`*、`max`*、`value`*；`step` 非负数；`decimals` 0 到 9 的整数 | `changed`；`value: float` |
 | FilePicker | 叶（路径文本框加按钮） | `mode`* `open`/`save`/`folder`；`path`、`title`、`button_text` 单行字符串；`filters` 非空字符串列表，每项 `名称|模式 模式` 或只写模式；`read_only` bool | `changed`（对话框选中、拖放文件或编辑路径）；`path: string` |
 | Image | 叶 | `source` 单行字符串，图像文件路径（相对工作目录，空串为空视图）；`fit` `fill`/`contain`/`cover`（默认 `fill`） | `failed`（读取或解码失败，视图被清空）；`error: string` |
@@ -158,7 +158,7 @@ Window {
 
 `state name: type = value` 只能写在文档根节点或组件体顶层；类型为 bool、int（i64）、float（有限 f32）、string、`list<int>`、`list<string>`。初始值可读参数和此前声明的 state，每个实例求值一次。表达式包含字面量、名称（内层 for 项 → state → 参数）、事件块中元素声明的 `self` 字段、`!`、一元 `-`、`|| && == != < <= > >= + - * / %`、列表字面量，以及 `str`、`len`、`int`、`float`。除整数字面量可按上下文转为 float 外没有隐式转换；`+` 也连接字符串和同类列表，比较只用于数值和字符串。未知名称、类型不符、不适用属性等在编译或加载时报告文件、行、Unicode 列和源码片段。
 
-属性值写表达式即为单向绑定：节点属性中可绑定 label/tooltip（string）、visible/enabled（bool）与 offset_x/offset_y/scale/rotation（float）；元素属性中有 setter 且类型为 bool、int、float、fraction、length、string、line（各自对应的表达式类型）或 lines（`list<string>`）的可绑定。其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。元素的事件见其规格（内置元素见上表），事件不携带值，处理块用 `self.字段` 读取元素声明的字段；语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）及 `if/else if/else`，只能赋值本文档或组件的 state。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受 `Limits` 约束（见下文限额）。标记事件块与 Rust 的 `on_*` 处理器一样追加到控件上，两者共存、按注册顺序执行。
+属性值写表达式即为单向绑定：节点属性中可绑定 label/tooltip（string）、visible/enabled（bool）与 offset_x/offset_y/scale/rotation（float）；元素属性中有 setter 且类型为 bool、int、float、fraction、length、string、line（各自对应的表达式类型）或 lines（`list<string>`）的可绑定。其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。元素的事件见其规格（内置元素见上表），事件不携带值，处理块用 `self.字段` 读取元素声明的字段，入口文档中的处理块（含 `for`/`if` 块、slot 内容与组件实例的 `on` 处理块）还可用 `id.字段` 读取任一具名控件声明的字段，取点击时的当前值，具名控件可以写在处理块之后；绑定中不能读具名控件（它们不随控件变化而更新），组件体内看不到入口文档的 id。语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）、`if/else if/else` 及 `copy(e)`，只能赋值本文档或组件的 state；`copy` 把字符串交给所在窗口的剪贴板（同 Rust 的 `Node::copy_text`），原生 App 在本次输入处理后写入系统剪贴板。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受 `Limits` 约束（见下文限额）。标记事件块与 Rust 的 `on_*` 处理器一样追加到控件上，两者共存、按注册顺序执行。
 
 `if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点放在一个透明的 contents 分组中，直接参与父容器的布局：在 Row/Column 中与兄弟共享对齐、换行、gap 和 grow，在 Grid 中各自占一格，在 Stack 中叠放。release 测量（本机 CJK 测试字体，7 次中位数）：1000 行 `for` 首次构建加刷新 3.6 ms，追加一行 0.8 ms，整体反序 5.8 ms；大数据仍应使用 ListView。
 
@@ -191,6 +191,7 @@ Column {
 - `let name = expression` 在事件块内声明局部，作用到所在块结束；`on name(value)` 把组件事件携带的值绑定为局部。
 - `host.name(args)`：调用宿主注册的动作。动作用 `aegle::loader::action(name, &[Type], f)` 注册，对本线程的所有程序与 `ui!` 视图生效，`f` 返回 `()` 或 `Result`；构建视图时校验每个调用有同名动作且参数类型一致，缺失或不符在挂载前报错。动作在 UI 借用外运行，返回的错误停止本次处理；动作不返回值，结果通过更新 state 带回。
 - `slot` 写在组件体中，放置实例的子节点：`Card { title: "x"; Text {} }`；子节点在调用方的环境里求值；组件把 slot 恰好放置一次时（slot 不在组件体的 `if`/`for` 块内，经内层组件的 slot 转放时内层也恰好放置一次），入口文档中块外实例的 slot 内容可以带 `id`，否则不可带，每个组件至多一个 slot，没有 slot 的组件不接受子节点。
+- 复制控件内容：`Text { id: order; text: "订单号 A-42" }` 旁写 `Button { text: "复制"; on clicked { copy(order.text) } }`，点击时复制标签当前的文字；同样可写 `copy("姓名：" + name.text)` 读文本框，或 `copy(self.text)` 复制按钮自身。可执行示例见 `crates/aegle/tests/fixtures/copy.aegle`。
 - 组件事件：组件体内 `event name` 或 `event name(type)` 声明，事件块里 `emit name` / `emit name(expr)` 触发，实例上 `on name { }` / `on name(v) { }` 在调用方的环境里处理。
 - 限额：`Program::set_limits(Limits { steps, rows, emit_depth })`，默认每次处理最多 10,000 条语句、单个 `for` 最多 10,000 行、嵌套 emit 最多 64 层；超限是运行时错误，保留此前的赋值与旧的行。运行时错误带文件路径与字节跨度。
 - Rust 一侧：record 与 record 列表的 state 以 `State<Data>` 访问（`Data::Record`），设置时检查形状；`StateValue::accepts` 取代旧的 `ty()`。
@@ -224,7 +225,7 @@ Window {
 
 整数溢出和除零为带源位置的错误，两条执行路径一致。float 计算结果非有限时也报错。字符串是 UTF-8，用户可见字符操作遵守文本模块的 grapheme 规则，不按字节切割。
 
-属性表达式当前读取 state、组件参数、`for` 项与事件块里的 `self` 字段，编译/加载时建立依赖；`text: str(count)` 在 count 改变时更新，不每帧求值。读取已命名节点的公开属性和宿主导出的只读数据仍是目标。赋值和动画优先级见[架构](architecture.md)。
+属性表达式当前读取 state、组件参数、`for` 项与事件块里的 `self` 字段和具名控件字段，编译/加载时建立依赖；`text: str(count)` 在 count 改变时更新，不每帧求值。在绑定中读取具名节点的属性（需要控件变化通知）和宿主导出的只读数据仍是目标。赋值和动画优先级见[架构](architecture.md)。
 
 ## 后续目标：事件与宿主
 

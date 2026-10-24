@@ -47,6 +47,11 @@ pub(crate) struct Checker<'s> {
     slot_used: bool,
     /// Nesting below the template root being checked.
     depth: usize,
+    /// Entry ids in declaration order with the spec each names (`None` for
+    /// the window), so handlers can read controls declared after them.
+    pub(crate) named: Vec<(String, Option<usize>)>,
+    /// Checking event statements, where named controls can be read.
+    pub(crate) in_handler: bool,
 }
 
 /// Checks a program against the elements described by `specs`. `files[0]`
@@ -156,6 +161,9 @@ pub fn check_program(
         .into_iter()
         .map(|once| once == Some(true))
         .collect();
+    let root = entry.unwrap();
+    let mut named = Vec::new();
+    entry_ids(&root, specs, &mut named);
     let mut checker = Checker {
         names,
         signatures,
@@ -174,8 +182,9 @@ pub fn check_program(
         file: 0,
         slot_used: false,
         depth: 0,
+        named,
+        in_handler: false,
     };
-    let root = entry.unwrap();
     let name = root.name.clone();
     let mut templates = vec![
         checker
@@ -220,6 +229,14 @@ pub fn check_program(
             })?;
         }
     }
+    debug_assert!(
+        checker
+            .ids
+            .iter()
+            .map(|(id, _)| id)
+            .eq(checker.named.iter().map(|(id, _)| id)),
+        "entry ids are collected in checking order"
+    );
     Ok(Program {
         templates,
         elements: checker
@@ -232,6 +249,23 @@ pub fn check_program(
         host_calls: checker.host_calls,
         files: Vec::new(),
     })
+}
+
+/// Collects the ids of an entry document in the order the checker assigns
+/// them: each node before its children, outside blocks, including slot
+/// content. Invalid ids are reported when their node is checked.
+fn entry_ids(node: &Node, specs: &[ElementSpec<'_>], ids: &mut Vec<(String, Option<usize>)>) {
+    for property in &node.properties {
+        if let (true, crate::Value::Identifier(id)) = (property.name == "id", &property.value) {
+            let spec = specs.iter().position(|spec| spec.name == node.name);
+            ids.push((id.clone(), spec));
+        }
+    }
+    for item in &node.children {
+        if let Item::Node(child) = item {
+            entry_ids(child, specs, ids);
+        }
+    }
 }
 
 /// Whether a component body places its instance's children.

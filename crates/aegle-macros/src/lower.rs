@@ -218,6 +218,10 @@ fn step(step: &Step, m: &TokenStream) -> TokenStream {
             let value = option(value.as_ref().map(|v| expr(v, m)));
             quote! { #m::Step::Emit(#event, #value) }
         }
+        Step::Copy(value) => {
+            let value = expr(value, m);
+            quote! { #m::Step::Copy(#value) }
+        }
     }
 }
 
@@ -233,6 +237,9 @@ fn expr(expr: &Expr, m: &TokenStream) -> TokenStream {
         }
         ExprKind::SelfField(field) => {
             quote! { #m::ExprKind::SelfField(::std::string::String::from(#field)) }
+        }
+        ExprKind::Control(index, field) => {
+            quote! { #m::ExprKind::Control(#index, ::std::string::String::from(#field)) }
         }
         ExprKind::Unary(operator, operand) => {
             let operand = boxed(operand);
