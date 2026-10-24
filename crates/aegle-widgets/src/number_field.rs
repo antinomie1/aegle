@@ -299,8 +299,9 @@ impl Control for NumberFieldControl {
         );
         // A one-pixel line on the strip's inner edge.
         let divider = if self.rtl { STRIP - 1.0 } else { width - STRIP };
+        // A field squeezed narrower than the strip shows no text.
         cx.builder.push_clip(RoundedRect::new(
-            Rect::new(lead, 0.0, width - STRIP, height),
+            Rect::new(lead, 0.0, (width - STRIP).max(0.0), height),
             0.0,
         ));
         cx.builder.push_transform(Affine::translation(lead, 0.0));

@@ -29,6 +29,17 @@ pub struct Group {
     pub(crate) role: Role,
 }
 
+impl Group {
+    /// Popups, menus, dialog cards and drawer panels float over the window and
+    /// scroll their content when it does not fit there.
+    fn floats(&self) -> bool {
+        matches!(
+            self.role,
+            Role::Popup { .. } | Role::Menu | Role::Dialog | Role::Drawer
+        )
+    }
+}
+
 impl Control for Group {
     fn kind(&self) -> &'static ControlKind {
         match self.role {
@@ -61,6 +72,27 @@ impl Control for Group {
                 height: zero,
             };
         }
+    }
+    fn viewport(&self) -> bool {
+        self.floats()
+    }
+    fn frame(&self) -> aegle_ui::control::Frame {
+        // A floating surface's border draws after its children, so scrolled
+        // content cannot cover it.
+        aegle_ui::control::Frame {
+            background: true,
+            border: !self.floats(),
+        }
+    }
+    fn paint_overlay(&mut self, cx: &mut aegle_ui::control::PaintCx<'_>) {
+        aegle_ui::paint::outline(
+            cx.builder,
+            cx.size,
+            cx.appearance.radius,
+            cx.appearance.border_width,
+            cx.appearance.border_color,
+        );
+        aegle_ui::bar::paint(cx.builder, cx.bars, cx.bar_color);
     }
     fn paint(&mut self, cx: &mut aegle_ui::control::PaintCx<'_>) {
         // A tab list stands on a divider line its selected tab's underline

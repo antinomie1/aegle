@@ -4,11 +4,12 @@
 use std::time::Instant;
 
 use aegle_controls::{Input, Outcome, Range};
-use aegle_layout::{Dimension, Style};
+use aegle_layout::{Dimension, LengthPercentageAuto, Style};
 use aegle_scene::{Affine, SceneBuilder};
 use aegle_text::TextSystem;
 use aegle_theme::{Appearance, ControlKind, Theme};
 use aegle_types::{Point, Size};
+use aegle_ui::LocalLayout;
 use aegle_ui::{
     Control, OrFail,
     control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx},
@@ -117,14 +118,38 @@ fn paint(
 }
 
 /// The fixed cross-axis extent of a themed control, in its orientation.
-pub(crate) fn sized(style: &mut Style, extent: f32, vertical: bool) {
-    let (fixed, free) = if vertical {
-        (&mut style.size.width, &mut style.size.height)
+pub(crate) fn sized(style: &mut Style, extent: f32, vertical: bool, local: LocalLayout) {
+    let (fixed, free, least) = if vertical {
+        (
+            &mut style.size.width,
+            &mut style.size.height,
+            &mut style.min_size.width,
+        )
     } else {
-        (&mut style.size.height, &mut style.size.width)
+        (
+            &mut style.size.height,
+            &mut style.size.width,
+            &mut style.min_size.height,
+        )
     };
     *fixed = Dimension::length(extent);
     *free = Dimension::auto();
+    // A crowded column or row does not thin the bar; like a text field's
+    // height, a local minimum height overrides this.
+    if vertical || !local.contains(LocalLayout::MIN_HEIGHT) {
+        *least = LengthPercentageAuto::length(extent);
+    }
+}
+
+/// Lets a range control shrink along its axis, below its default length,
+/// so a narrow row or a short column keeps it inside the window.
+pub(crate) fn shrinks_along(style: &mut Style, vertical: bool) {
+    let along = if vertical {
+        &mut style.min_size.height
+    } else {
+        &mut style.min_size.width
+    };
+    *along = LengthPercentageAuto::length(0.0);
 }
 
 /// The control inside a [`crate::Slider`] node.
@@ -304,7 +329,7 @@ impl Control for SliderControl {
     }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
-            sized(style, theme.control_height, self.vertical);
+            sized(style, theme.control_height, self.vertical, local);
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
@@ -381,7 +406,7 @@ impl Control for ProgressControl {
     }
     fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
-            sized(style, theme.control_height / 2.0, self.vertical);
+            sized(style, theme.control_height / 2.0, self.vertical, local);
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {

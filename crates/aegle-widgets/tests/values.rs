@@ -83,6 +83,8 @@ fn value_controls_share_lifecycle_and_system_actions() -> Result {
     ui.dispatch_callbacks()?;
     assert_eq!(changes.get(), 1); // Model updates do not loop through user callbacks.
     slider.focus();
+    // Like a text field's, a slider's theme minimum height yields only to a local one.
+    slider.set_min_height(0.0);
     slider.set_height(Some(1.0));
     ui.refresh()?;
     let mut tiny_focus = false;
