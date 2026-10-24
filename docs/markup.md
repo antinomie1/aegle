@@ -121,7 +121,7 @@ TextField 与 TextArea 的 `changed` 在用户改变已提交文字后触发：�
 | `selection_color`、`caret_color` | 编辑器的选择与 caret/预编辑颜色 |
 | `font_size` | 正 `dp` |
 | `token("包.名称")` | 上述颜色属性及 `border_width`、`radius`、`focus_width`、`font_size`、`padding`、`gap`、`shadow` 和渐变色标也可绑定已登记的 token（如 `token("theme.accent")`；padding 与 gap 取统一值）；构建时按名查找，此后随主题和 token 覆盖更新。字体与过渡时长 token 只能在 Rust 中绑定 |
-| `shadow` | 除 Window 外任意控件：`[x, y, 模糊, 扩展, 颜色]`，四个 `dp` 长度（模糊非负）加一个颜色，如 `[0dp, 1dp, 3dp, 0dp, #0000004D]`；或整个阴影绑定 `Shadow` token，如 `token("am3.elevation.level1")` |
+| `shadow` | 除 Window 外任意控件：`[x, y, 模糊, 扩展, 颜色]`，四个 `dp` 长度（模糊非负）加一个颜色，如 `[0dp, 1dp, 3dp, 0dp, #0000004D]`；或整个阴影绑定 `Shadow` token，如 `token("theme.shadow")` |
 | `background_gradient` | 以渐变代替背景色：`linear(角度, 色标…)` 或 `radial(色标…)`，2–16 个色标，每个是颜色、`token("包.名称")` 或 `[颜色, 百分比]`；要么全部带位置（0%–100%，不递减），要么都不带（均匀分布）。角度为度数，0 指向上方，90 指向右方，在归一化的单位盒中度量，45 总是从左下角到右上角；radial 以中心为圆心，半径为较长边的一半 |
 | `opacity` | 除 Window 外任意控件的组透明度，[0, 1] 的数，子树作为一张图像合成；可绑定 float |
 | `backdrop_blur` | 除 Window 外任意控件，非负 `dp` 标准差，先模糊其圆角边界内已绘制的内容 |
