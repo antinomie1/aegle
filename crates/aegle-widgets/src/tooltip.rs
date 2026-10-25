@@ -108,7 +108,7 @@ pub(crate) fn wake(state: &mut State, _: Instant) -> Result {
     style
         .set_absolute(Some(Insets::new(0.0, Length::Auto, Length::Auto, 0.0)))
         .set_max_width(320.0);
-    let mut control = LabelControl::new(&state.fonts(), &text, &theme)?;
+    let mut control = LabelControl::new(state.fonts(), &text, &theme)?;
     control.kind = &crate::kinds::TOOLTIP;
     let root = state.root();
     let label = state.insert(

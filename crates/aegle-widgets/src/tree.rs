@@ -324,7 +324,7 @@ fn create_tree_node(parent: &Container, text: &str, depth: usize) -> TreeNode {
     let item_col = parent.column();
 
     let header_node = crate::add(&item_col, |state, theme| {
-        let control = TreeNodeControl::new(&state.fonts(), text, depth, theme)?;
+        let control = TreeNodeControl::new(state.fonts(), text, depth, theme)?;
         let mut style = LayoutStyle::default();
         style
             .set_width(Length::Percent(100.0))

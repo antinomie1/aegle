@@ -106,7 +106,10 @@ fn reentrant_calls_and_hook_failures_are_errors() -> Result {
     let message = *panic.downcast::<String>().unwrap();
     assert_eq!(message, UiError::WrongKind.to_string());
 
-    ui.with_state(|state| Ok(state.install(&FAILING)))?;
+    ui.with_state(|state| {
+        state.install(&FAILING);
+        Ok(())
+    })?;
     let key = KeyInput {
         key: Key::Enter,
         text: "",

@@ -73,7 +73,7 @@ pub(crate) fn table(
     table.change(|state, id| {
         let mut style = state.layout_style(id).clone();
         style.set_overflow(Overflow::Hidden, Overflow::Hidden);
-        Ok(state.set_layout_style(id, style)?)
+        state.set_layout_style(id, style)
     });
     let header = group::add(&table, Role::TableRow, true);
     header.set_gap(0.0, 0.0);

@@ -28,6 +28,6 @@ pub struct Hooks {
     pub realize: Option<fn(&crate::Ui) -> Result<bool>>,
     /// The hovered control changed (to `None` when the pointer left).
     pub hover: Option<fn(&mut State, Option<NodeId>) -> Result>,
-    /// [`State::wake`] passed: delayed work such as showing a tooltip.
+    /// The time asked for with [`State::wake_at`] passed: delayed work such as showing a tooltip.
     pub wake: Option<fn(&mut State, std::time::Instant) -> Result>,
 }
