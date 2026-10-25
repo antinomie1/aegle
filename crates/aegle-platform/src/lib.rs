@@ -75,6 +75,10 @@ pub trait Platform: Sized {
     /// [`Event::Redraw`] when the window can present.
     fn request_redraw(&mut self, window: WindowId) -> Result<()>;
 
+    /// Retitles a window: at most 4000 bytes without NUL. Layer surfaces have
+    /// no title and fail with [`Error::Unsupported`].
+    fn set_title(&mut self, window: WindowId, title: &str) -> Result<()>;
+
     /// Sets the pointer shape over a window's content, applied to pointers
     /// inside it now and on every later entry.
     fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()>;

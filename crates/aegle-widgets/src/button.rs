@@ -272,7 +272,7 @@ pub(crate) fn create(container: &Container, text: &str) -> Button {
 /// Appends a button reading as `variant`, which fixes its kind.
 pub(crate) fn create_as(container: &Container, text: &str, variant: Variant) -> Button {
     Button(crate::add(container, |state, theme| {
-        let mut control = ButtonControl::new(&state.fonts, text, theme)?;
+        let mut control = ButtonControl::new(&state.fonts(), text, theme)?;
         control.variant = variant;
         Ok((Box::new(control), {
             let mut style = LayoutStyle::default();

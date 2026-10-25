@@ -16,7 +16,7 @@ fn new_menu(anchor: &Node, side: bool) -> Popup {
     popup.change(|state, id| {
         state.control_as::<Group>(id).unwrap().role = Role::Menu;
         entry(state, id).side = side;
-        state.tree.mark_dirty(id, Dirty::ALL)?;
+        state.invalidate(id, Dirty::ALL)?;
         Ok(())
     });
     popup
@@ -56,8 +56,8 @@ impl Popup {
         let item = add_item(self.items(), text, None, false);
         let menu = new_menu(&item, true);
         item.change(|state, id| {
-            self::item(state, id).submenu = Some(menu.id);
-            state.tree.mark_dirty(id, Dirty::ALL)?;
+            self::item(state, id).submenu = Some(menu.id());
+            state.invalidate(id, Dirty::ALL)?;
             Ok(())
         });
         menu
@@ -80,7 +80,7 @@ fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) ->
         let control = MenuItemControl {
             button: aegle_controls::Button::new(),
             text: state
-                .fonts
+                .fonts()
                 .borrow_mut()
                 .paragraph(text, &text_style(theme))?,
             checked,
@@ -160,7 +160,7 @@ impl MenuBar {
         let item = add_item(&Container(self.0.clone()), text, None, true);
         let menu = new_menu(&item, false);
         item.change(|state, id| {
-            self::item(state, id).submenu = Some(menu.id);
+            self::item(state, id).submenu = Some(menu.id());
             Ok(())
         });
         menu
@@ -171,9 +171,9 @@ pub(crate) fn menu_bar(container: &Container) -> MenuBar {
     let bar = crate::group::add(container, Role::MenuBar, true);
     bar.change(|state, id| {
         popups(state).bars.push(id);
-        let mut style = state.tree.get(id).unwrap().style().clone();
+        let mut style = state.layout_style(id).clone();
         style.set_direction(Direction::Row).set_shrink(0.0);
-        aegle_layout::set_style(&mut state.tree, id, style)?;
+        state.set_layout_style(id, style)?;
         Ok(())
     });
     MenuBar(bar.0)

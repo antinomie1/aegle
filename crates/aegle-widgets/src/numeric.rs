@@ -67,7 +67,7 @@ impl Slider {
 
 fn read_range<T>(node: &Node, read: impl FnOnce(&Range) -> T) -> T {
     node.change(|state, id| {
-        let control = &mut state.tree.get_mut(id).unwrap().context.control;
+        let control = &mut state.element_mut(id).control_mut();
         let range = if let Some(slider) =
             (&mut **control as &mut dyn std::any::Any).downcast_mut::<SliderControl>()
         {
@@ -94,7 +94,7 @@ fn update_range(
         let jump = state.snapping(id);
         #[cfg(not(feature = "motion"))]
         let jump = true;
-        let control = &mut state.tree.get_mut(id).unwrap().context.control;
+        let control = &mut state.element_mut(id).control_mut();
         let changed = if let Some(slider) =
             (&mut **control as &mut dyn std::any::Any).downcast_mut::<SliderControl>()
         {
@@ -112,7 +112,7 @@ fn update_range(
             return Err(UiError::WrongKind.into());
         };
         if changed {
-            state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+            state.invalidate(id, Dirty::PAINT | Dirty::SEMANTICS)?;
         }
         Ok(())
     })
@@ -123,9 +123,9 @@ fn orient(node: &Node, orientation: Orientation) {
     node.change(|state, id| {
         let vertical = orientation == Orientation::Vertical;
         let theme = *state.theme_of(id);
-        let element = &mut state.tree.get_mut(id).unwrap().context;
-        let local = element.local_layout;
-        let control: &mut dyn std::any::Any = &mut *element.control;
+        let element = state.element_mut(id);
+        let local = element.local_layout();
+        let control: &mut dyn std::any::Any = element.control_mut();
         let extent = if let Some(slider) = control.downcast_mut::<SliderControl>() {
             slider.vertical = vertical;
             theme.control_height
@@ -135,12 +135,12 @@ fn orient(node: &Node, orientation: Orientation) {
         } else {
             return Err(UiError::WrongKind.into());
         };
-        let mut style = state.tree.get(id).unwrap().style().clone();
+        let mut style = state.layout_style(id).clone();
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(&mut style, extent, vertical, local);
         }
         shrinks_along(&mut style, vertical);
-        aegle_layout::set_style(&mut state.tree, id, style)?;
+        state.set_layout_style(id, style)?;
         Ok(())
     });
 }

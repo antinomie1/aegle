@@ -110,11 +110,8 @@ impl FilePicker {
         })
     }
     fn part(&self, index: usize) -> Node {
-        let id = self.change(|state, id| Ok(state.tree.child(id, index)?.unwrap()));
-        Node {
-            state: self.state.clone(),
-            id,
-        }
+        let id = self.change(|state, id| Ok(state.child(id, index).unwrap()));
+        self.handle(id)
     }
 }
 

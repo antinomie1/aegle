@@ -1,11 +1,8 @@
-use std::rc::Rc;
-
 use aegle_core::NodeId;
 use aegle_theme::Theme;
 use aegle_types::Rect;
 use aegle_ui::{
-    Container, Node, Plain, Result, State, Ui, UiError, container_style,
-    scroll_geometry::intersection,
+    Container, Plain, Result, State, Ui, UiError, container_style, scroll_geometry::intersection,
 };
 use aegle_ui::{Insets, LayoutStyle, Length, Overflow};
 
@@ -137,10 +134,10 @@ impl ListView {
                 height = offsets[count];
             }
             list.count = count;
-            let mut style = state.tree.get(list.spacer).unwrap().style().clone();
+            let mut style = state.layout_style(list.spacer).clone();
             style.set_height(height);
-            aegle_layout::set_style(&mut state.tree, list.spacer, style)?;
-            state.repaint = true;
+            state.set_layout_style(list.spacer, style)?;
+            state.request_repaint();
             Ok(())
         })
     }
@@ -148,7 +145,7 @@ impl ListView {
     pub fn reload(&self) {
         self.list(|state, list| {
             list.reload = true;
-            state.repaint = true;
+            state.request_repaint();
             Ok(())
         })
     }
@@ -212,12 +209,12 @@ fn plan(state: &mut State, id: NodeId, list: &mut List) -> Result<(Vec<(usize, N
     let (row_height, spacer, reload) = (list.row_height, list.spacer, list.reload);
     list.reload = false;
     let mut rows = std::mem::take(&mut list.rows);
-    let view = &state.tree.get(id).unwrap().context;
-    let top = state.tree.get(spacer).unwrap().context.bounds.origin.y;
-    let window = Rect::new(0.0, 0.0, state.size.width, state.size.height);
+    let view = &state.element(id);
+    let top = state.element(spacer).bounds().origin.y;
+    let window = Rect::new(0.0, 0.0, state.size().width, state.size().height);
     let visible = intersection(
-        view.clip
-            .map_or(view.bounds, |clip| intersection(clip, view.bounds)),
+        view.clip()
+            .map_or(view.bounds(), |clip| intersection(clip, view.bounds())),
         window,
     );
     let count = list.count;
@@ -225,7 +222,7 @@ fn plan(state: &mut State, id: NodeId, list: &mut List) -> Result<(Vec<(usize, N
         visible.origin.y - top,
         visible.origin.y + visible.size.height - top,
     );
-    let range = if !view.effective_visible || visible.is_empty() {
+    let range = if !view.is_shown() || visible.is_empty() {
         0..0
     } else if let Some(offsets) = &list.offsets {
         let first = offsets.partition_point(|&o| o <= start).saturating_sub(1);
@@ -246,7 +243,7 @@ fn plan(state: &mut State, id: NodeId, list: &mut List) -> Result<(Vec<(usize, N
     let mut i = 0;
     while i < rows.len() {
         let (row, node) = rows[i];
-        let alive = state.tree.get(node).is_some();
+        let alive = state.is_alive(node);
         if alive && !reload && range.contains(&row) {
             i += 1;
             continue;
@@ -298,7 +295,7 @@ pub(crate) fn measure_rows(state: &mut State) -> Result<bool> {
         }
         let heights: Vec<_> = rows
             .iter()
-            .map(|&(row, node)| (row, state.tree.get(node).unwrap().bounds().size.height))
+            .map(|&(row, node)| (row, state.layout_bounds(node).size.height))
             .collect();
         let list = &mut lists(state).items[index].1;
         let offsets = list.offsets.as_mut().unwrap();
@@ -326,13 +323,13 @@ pub(crate) fn measure_rows(state: &mut State) -> Result<bool> {
             .map(|&(row, node)| (node, offsets[row]))
             .collect();
         let spacer = list.spacer;
-        let mut style = state.tree.get(spacer).unwrap().style().clone();
+        let mut style = state.layout_style(spacer).clone();
         style.set_height(total);
-        aegle_layout::set_style(&mut state.tree, spacer, style)?;
+        state.set_layout_style(spacer, style)?;
         for (node, top) in tops {
-            let mut style = state.tree.get(node).unwrap().style().clone();
+            let mut style = state.layout_style(node).clone();
             style.set_absolute(Some(row_insets(top)));
-            aegle_layout::set_style(&mut state.tree, node, style)?;
+            state.set_layout_style(node, style)?;
         }
     }
     Ok(changed)
@@ -344,35 +341,30 @@ pub(crate) fn realize_rows(ui: &Ui) -> Result<bool> {
     let mut changed = false;
     let mut index = 0;
     loop {
-        let (id, created, builder) = {
-            let mut state = ui
-                .state
-                .try_borrow_mut()
-                .map_err(|_| UiError::ReentrantAccess)?;
+        let step = ui.with_state(|state| {
             let Some(&(id, _)) = state.ext_ref::<Lists>().and_then(|l| l.items.get(index)) else {
-                break;
+                return Ok(None);
             };
-            index += 1;
-            let (created, removed) = plan_rows(&mut state, id)?;
-            changed |= removed || !created.is_empty();
-            if created.is_empty() {
-                continue;
-            }
-            let list = lists(&mut state)
-                .items
-                .iter_mut()
-                .find(|(list, _)| *list == id);
-            (id, created, list.unwrap().1.builder.take())
+            let (created, removed) = plan_rows(state, id)?;
+            let builder = if created.is_empty() {
+                None
+            } else {
+                let list = lists(state).items.iter_mut().find(|(list, _)| *list == id);
+                list.unwrap().1.builder.take()
+            };
+            Ok(Some((id, created, removed, builder)))
+        })?;
+        let Some((id, created, removed, builder)) = step else {
+            break;
         };
+        index += 1;
+        changed |= removed || !created.is_empty();
         let Some(mut builder) = builder else {
             continue;
         };
         let mut result = Ok(());
         for (row, node) in created {
-            let container = Container(Node {
-                state: Rc::downgrade(&ui.state),
-                id: node,
-            });
+            let container = Container(ui.root().handle(node));
             if container.is_alive() {
                 result = builder(&container, row);
             }
@@ -380,14 +372,13 @@ pub(crate) fn realize_rows(ui: &Ui) -> Result<bool> {
                 break;
             }
         }
-        let mut state = ui.state.borrow_mut();
-        if let Some((_, list)) = lists(&mut state)
-            .items
-            .iter_mut()
-            .find(|(list, _)| *list == id)
-        {
-            list.builder = Some(builder);
-        }
+        ui.with_state(|state| {
+            let list = lists(state).items.iter_mut().find(|(list, _)| *list == id);
+            if let Some((_, list)) = list {
+                list.builder = Some(builder);
+            }
+            Ok(())
+        })?;
         result?;
     }
     Ok(changed)

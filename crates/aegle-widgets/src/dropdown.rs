@@ -1,7 +1,7 @@
 //! Dropdown: a button that opens a popup list of choices.
 
 use aegle_core::{Dirty, NodeId};
-use aegle_ui::{Container, HandlerResult, Node, Result, State, UiError, handle};
+use aegle_ui::{Container, HandlerResult, Result, State, UiError, handle};
 
 use crate::{
     NodeWidgets, Popup, Widgets,
@@ -31,15 +31,15 @@ pub(crate) fn dropdown(container: &Container, items: &[&str], selected: usize) -
         if let Some(control) = state.control_as::<crate::button::ButtonControl>(id) {
             control.variant = Variant::Dropdown { expanded: false };
         }
-        if let Some(group) = state.control_as::<Group>(popup.id) {
+        if let Some(group) = state.control_as::<Group>(popup.id()) {
             group.role = Role::Popup { list: true };
         }
-        state.tree.mark_dirty(id, Dirty::ALL)?;
+        state.invalidate(id, Dirty::ALL)?;
         let items = items.iter().map(|&item| item.to_owned()).collect();
         let data = DropdownData {
             items,
             selected,
-            popup: popup.id,
+            popup: popup.id(),
         };
         popups(state).dropdowns.insert(id, data);
         Ok(())
@@ -60,23 +60,20 @@ pub(crate) fn toggle(state: &mut State, id: NodeId) -> Result {
     }
     entry(state, popup).at = None;
     show_popup(state, popup, true)?;
-    let option = state.tree.child(popup, selected)?;
+    let option = state.child(popup, selected);
     state.set_focus(option)
 }
 
 /// Choosing an option, run as its button's deferred work.
 pub(crate) fn chosen(state: &mut State, option: NodeId) -> Result {
-    let Some(popup) = state.tree.parent(option)? else {
+    let Some(popup) = state.parent(option) else {
         return Ok(());
     };
     let dropdown = popups(state)
         .dropdowns
         .iter()
         .find_map(|(&id, data)| (data.popup == popup).then_some(id));
-    let index = state
-        .tree
-        .children(popup)?
-        .position(|child| child == option);
+    let index = state.children(popup).position(|child| child == option);
     match (dropdown, index) {
         (Some(id), Some(index)) => select(state, id, index, true),
         _ => Ok(()),
@@ -92,8 +89,7 @@ fn select(state: &mut State, id: NodeId, index: usize, user: bool) -> Result {
     let (popup, text) = (data.popup, data.items[index].clone());
     // Options draw and export their selected state.
     for (position, option) in state
-        .tree
-        .children(popup)?
+        .children(popup)
         .collect::<Vec<_>>()
         .into_iter()
         .enumerate()
@@ -103,9 +99,7 @@ fn select(state: &mut State, id: NodeId, index: usize, user: bool) -> Result {
                 chosen: position == index,
             };
         }
-        state
-            .tree
-            .mark_dirty(option, Dirty::PAINT | Dirty::SEMANTICS)?;
+        state.invalidate(option, Dirty::PAINT | Dirty::SEMANTICS)?;
     }
     hide_popup(state, popup)?;
     if user && changed {
@@ -149,17 +143,14 @@ impl Dropdown {
         let popup = self.change(|state, id| {
             let popup = popups(state).dropdowns[&id].popup;
             hide_popup(state, popup)?;
-            for option in state.tree.children(popup)?.collect::<Vec<_>>() {
+            for option in state.children(popup).collect::<Vec<_>>() {
                 state.remove_subtree(option)?;
             }
             let data = popups(state).dropdowns.get_mut(&id).unwrap();
             data.items = items.iter().map(|&item| item.to_owned()).collect();
             Ok(popup)
         });
-        let popup = Popup(Container(Node {
-            state: self.state.clone(),
-            id: popup,
-        }));
+        let popup = Popup(Container(self.handle(popup)));
         self.options(&popup, items, selected);
         self.change(|state, id| select(state, id, selected, false))
     }

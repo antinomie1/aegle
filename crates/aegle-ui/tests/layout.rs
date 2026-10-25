@@ -230,3 +230,16 @@ fn hiding_and_showing_a_stack_keeps_its_layout_mode() -> Result {
 fn panics(change: impl FnOnce()) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
 }
+
+#[test]
+fn handles_walk_the_tree_in_order() -> Result {
+    let ui = ui()?;
+    let root = ui.root();
+    let first = boxed(&root, 10.0, 10.0);
+    let second = boxed(&root, 10.0, 10.0);
+    let children: Vec<_> = root.children().iter().map(Node::id).collect();
+    assert_eq!(children, [first.id(), second.id()]);
+    assert_eq!(second.parent().map(|parent| parent.id()), Some(root.id()));
+    assert!(root.parent().is_none());
+    Ok(())
+}

@@ -57,20 +57,13 @@ fn drive(
 
 /// The buttons of `root` in document order.
 fn buttons(root: &aegle::ui::Node) -> [Button; 6] {
-    let state = root.state.upgrade().unwrap();
-    let state = state.borrow();
     let mut found = Vec::new();
-    let mut stack = vec![root.id];
-    while let Some(id) = stack.pop() {
-        let element = &state.tree.get(id).unwrap().context;
-        if element.control.kind().name == "Button" {
-            found.push(Button(aegle::ui::Node {
-                state: root.state.clone(),
-                id,
-            }));
+    let mut stack = vec![root.clone()];
+    while let Some(node) = stack.pop() {
+        if node.change(|state, id| Ok(state.element(id).control().kind().name == "Button")) {
+            found.push(Button(node.clone()));
         }
-        let children: Vec<_> = state.tree.children(id).unwrap().collect();
-        stack.extend(children.into_iter().rev());
+        stack.extend(node.children().into_iter().rev());
     }
     found.try_into().ok().expect("six buttons")
 }

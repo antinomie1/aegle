@@ -16,7 +16,7 @@ pub(crate) fn hovered(state: &mut State, hit: Option<NodeId>) -> Result {
     let Some(id) = hit.filter(|&h| state.control_as::<MenuItemControl>(h).is_some()) else {
         return Ok(());
     };
-    let parent = state.tree.parent(id)?.unwrap();
+    let parent = state.parent(id).unwrap();
     let MenuItemControl { bar, submenu, .. } = *item(state, id);
     let open: Vec<_> = popups(state)
         .entries
@@ -26,7 +26,7 @@ pub(crate) fn hovered(state: &mut State, hit: Option<NodeId>) -> Result {
         .collect();
     let siblings: Vec<_> = open
         .into_iter()
-        .filter(|&(_, anchor)| state.tree.parent(anchor).ok().flatten() == Some(parent))
+        .filter(|&(_, anchor)| state.parent(anchor) == Some(parent))
         .map(|(popup, _)| popup)
         .collect();
     if bar {
@@ -54,21 +54,21 @@ pub(crate) fn menu_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
     let plain = key.modifiers == aegle_controls::Modifiers::default();
     if key.key == Key::Function(10) && plain {
         let bar = popups(state).bars.first().copied();
-        let first = bar.and_then(|bar| state.tree.children(bar).ok()?.next());
+        let first = bar.and_then(|bar| state.children(bar).next());
         if let Some(first) = first.filter(|&f| state.usable(f)) {
             state.set_focus(Some(first))?;
             return Ok(true);
         }
         return Ok(false);
     }
-    let Some(id) = state.focus.current(&state.tree) else {
+    let Some(id) = state.focused() else {
         return Ok(false);
     };
     let Some(&mut MenuItemControl { bar, submenu, .. }) = state.control_as::<MenuItemControl>(id)
     else {
         return Ok(false);
     };
-    let parent = state.tree.parent(id)?.unwrap();
+    let parent = state.parent(id).unwrap();
     let (forward, back) = if state.rtl(id) {
         (Key::Left, Key::Right)
     } else {
@@ -125,13 +125,13 @@ pub(crate) fn menu_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
     };
     let mut root = parent;
     while let Some(opener) = opener(state, root) {
-        root = state.tree.parent(opener)?.unwrap();
+        root = state.parent(opener).unwrap();
     }
     let anchor = entry(state, root).anchor;
     if !is_bar_item(state, anchor) {
         return Ok(false);
     }
-    let bar = state.tree.parent(anchor)?.unwrap();
+    let bar = state.parent(anchor).unwrap();
     let next = sibling(state, bar, anchor, step)?;
     hide_popup(state, root)?;
     let menu = item(state, next).submenu.unwrap();
@@ -142,7 +142,7 @@ pub(crate) fn menu_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
 /// The menu item that opened `menu` as its submenu.
 fn opener(state: &mut State, menu: NodeId) -> Option<NodeId> {
     let anchor = entry(state, menu).anchor;
-    let parent = state.tree.parent(anchor).ok().flatten()?;
+    let parent = state.parent(anchor)?;
     (!is_bar_item(state, anchor) && is_menu(state, parent)).then_some(anchor)
 }
 
@@ -154,7 +154,7 @@ fn is_bar_item(state: &mut State, node: NodeId) -> bool {
 
 /// The usable menu bar entry `step` places after `from`, wrapping.
 fn sibling(state: &mut State, bar: NodeId, from: NodeId, step: isize) -> Result<NodeId> {
-    let children: Vec<_> = state.tree.children(bar)?.collect();
+    let children: Vec<_> = state.children(bar).collect();
     let entries: Vec<_> = children
         .into_iter()
         .filter(|&n| state.usable(n) && is_bar_item(state, n))

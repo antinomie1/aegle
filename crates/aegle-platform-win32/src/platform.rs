@@ -54,6 +54,10 @@ impl Platform for Win32 {
         Ok(self.request_redraw(window)?)
     }
 
+    fn set_title(&mut self, window: WindowId, title: &str) -> Result<()> {
+        Ok(self.set_title(window, title)?)
+    }
+
     fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()> {
         Ok(self.set_cursor(window, cursor)?)
     }

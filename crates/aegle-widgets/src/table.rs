@@ -71,9 +71,9 @@ pub(crate) fn table(
     // A clipping box has no content-based minimum size, so the virtual rows'
     // full extent never stops the table from shrinking to the space it is given.
     table.change(|state, id| {
-        let mut style = state.tree.get(id).unwrap().style().clone();
+        let mut style = state.layout_style(id).clone();
         style.set_overflow(Overflow::Hidden, Overflow::Hidden);
-        Ok(aegle_layout::set_style(&mut state.tree, id, style)?)
+        Ok(state.set_layout_style(id, style)?)
     });
     let header = group::add(&table, Role::TableRow, true);
     header.set_gap(0.0, 0.0);

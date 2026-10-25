@@ -144,12 +144,12 @@ impl NumberField {
     /// Changes the control and its shown text.
     fn edit(&self, update: impl FnOnce(&mut NumberFieldControl, &mut TextSystem)) {
         self.change(|state, id| {
-            let fonts = state.fonts.clone();
+            let fonts = state.fonts().clone();
             update(
                 state.control_as::<NumberFieldControl>(id).unwrap(),
                 &mut fonts.borrow_mut(),
             );
-            state.tree.mark_dirty(id, Dirty::ALL)?;
+            state.invalidate(id, Dirty::ALL)?;
             Ok(())
         })
     }
@@ -377,7 +377,7 @@ pub(crate) fn create(container: &Container, min: f64, max: f64, value: f64) -> N
             scroll: Point::default(),
             rtl: false,
         };
-        control.show(&mut state.fonts.borrow_mut());
+        control.show(&mut state.fonts().borrow_mut());
         Ok((Box::new(control) as Box<dyn Control>, style))
     }))
 }

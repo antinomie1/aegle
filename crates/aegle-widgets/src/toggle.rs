@@ -65,14 +65,14 @@ macro_rules! toggles {
             self.set_shrink(if wrap { 1.0 } else { 0.0 });
             self.change(|state, id| {
                 let theme = *state.theme_of(id);
-                let mut style = state.tree.get(id).unwrap().style().clone();
+                let mut style = state.layout_style(id).clone();
                 style.set_height(if wrap {
                     Length::Auto
                 } else {
                     Length::Px(theme.control_height)
                 });
-                aegle_layout::set_style(&mut state.tree, id, style)?;
-                state.tree.mark_dirty(id, aegle_core::Dirty::LAYOUT)?;
+                state.set_layout_style(id, style)?;
+                state.invalidate(id, aegle_core::Dirty::LAYOUT)?;
                 Ok(())
             });
         }
@@ -310,10 +310,10 @@ fn set_checked(state: &mut State, id: NodeId, checked: bool) -> Result {
 
 /// Unchecks the other radio buttons sharing this one's parent.
 pub(crate) fn select_radio(state: &mut State, id: NodeId) -> Result {
-    let Some(parent) = state.tree.parent(id)? else {
+    let Some(parent) = state.parent(id) else {
         return Ok(());
     };
-    let siblings: Vec<_> = state.tree.children(parent)?.filter(|&n| n != id).collect();
+    let siblings: Vec<_> = state.children(parent).filter(|&n| n != id).collect();
     for sibling in siblings {
         if let Some(toggle) = state.control_as::<ToggleControl>(sibling)
             && toggle.mark == Mark::Radio
@@ -331,7 +331,7 @@ pub(crate) fn select_radio(state: &mut State, id: NodeId) -> Result {
 /// enabled radio sibling, wrapping; Left moves forward right to left. Returns
 /// whether the key was used.
 pub(crate) fn radio_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
-    let Some(id) = state.focus.current(&state.tree) else {
+    let Some(id) = state.focused() else {
         return Ok(false);
     };
     let forward = match key.key {
@@ -347,10 +347,10 @@ pub(crate) fn radio_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
             .is_some_and(|toggle| toggle.mark == Mark::Radio)
             && state.usable(node)
     };
-    let Some(parent) = state.tree.parent(id)?.filter(|_| radio(state, id)) else {
+    let Some(parent) = state.parent(id).filter(|_| radio(state, id)) else {
         return Ok(false);
     };
-    let children: Vec<_> = state.tree.children(parent)?.collect();
+    let children: Vec<_> = state.children(parent).collect();
     let group: Vec<_> = children.into_iter().filter(|&n| radio(state, n)).collect();
     let index = group.iter().position(|&n| n == id).unwrap();
     let next = if forward {
@@ -372,7 +372,7 @@ fn control_style(height: f32) -> LayoutStyle {
 fn create(container: &Container, text: &str, checked: bool, mark: Mark) -> Node {
     crate::add(container, |state, theme| {
         let text = state
-            .fonts
+            .fonts()
             .borrow_mut()
             .paragraph(text, &text_style(theme))?;
         Ok((

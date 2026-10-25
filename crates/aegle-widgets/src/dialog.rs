@@ -7,8 +7,8 @@ use aegle_theme::ControlKind;
 use aegle_types::{Color, Point, Rect};
 use aegle_ui::{Align, Display, Insets, Justify, Length, Overflow};
 use aegle_ui::{
-    Container, Control, HandlerResult, Node, OrFail, Result, State, container_style,
-    control::PaintCx, handle,
+    Container, Control, HandlerResult, OrFail, Result, State, container_style, control::PaintCx,
+    handle,
 };
 
 use crate::{Button, Label, Widgets};
@@ -59,7 +59,7 @@ impl Dialog {
     /// Shows the modal dialog and traps focus within its card.
     pub fn show(&self) {
         self.0.change(|state, id| {
-            let focus = state.focus.current(&state.tree);
+            let focus = state.focused();
             {
                 let entries = &mut dialogs(state).entries;
                 let Some(entry) = entries.iter_mut().find(|e| e.dialog == id) else {
@@ -115,10 +115,7 @@ impl Dialog {
                 .map(|e| e.title_label))
         });
         if let Some(label_id) = label_id {
-            let label = Label(Node {
-                state: self.0.state.clone(),
-                id: label_id,
-            });
+            let label = Label(self.0.handle(label_id));
             label.set_text(title);
         }
     }
@@ -143,10 +140,7 @@ impl Dialog {
                 .map(|e| e.body)
                 .unwrap())
         });
-        Container(Node {
-            state: self.0.state.clone(),
-            id: body_id,
-        })
+        Container(self.0.handle(body_id))
     }
 
     /// Returns the footer container for action buttons.
@@ -159,10 +153,7 @@ impl Dialog {
                 .map(|e| e.footer)
                 .unwrap())
         });
-        Container(Node {
-            state: self.0.state.clone(),
-            id: footer_id,
-        })
+        Container(self.0.handle(footer_id))
     }
 
     /// Adds an action button to the dialog footer.
@@ -189,10 +180,7 @@ pub(crate) fn dismiss_dialog(state: &mut State, position: Point) -> Result<bool>
         (entry.card, entry.dialog, entry.dismissible)
     };
 
-    let inside = state
-        .tree
-        .get(card)
-        .is_some_and(|n| n.context.bounds.contains(position));
+    let inside = state.is_alive(card) && state.element(card).bounds().contains(position);
 
     if !inside {
         if dismissible {
@@ -254,12 +242,12 @@ pub(crate) fn fit(state: &mut State) -> bool {
         .collect();
     let mut changed = false;
     for (dialog, card) in open {
-        let room = state.tree.get(dialog).unwrap().bounds().size.width - 2.0 * MARGIN;
-        let old = state.tree.get(card).unwrap().style();
+        let room = state.layout_bounds(dialog).size.width - 2.0 * MARGIN;
+        let old = state.layout_style(card);
         let mut style = old.clone();
         style.set_min_width(MIN_WIDTH.min(room).max(0.0));
         if style != *old {
-            aegle_layout::set_style(&mut state.tree, card, style).or_fail();
+            state.set_layout_style(card, style).or_fail();
             changed = true;
         }
     }
@@ -339,13 +327,13 @@ pub(crate) fn create_dialog(container: &Container, title: &str) -> Dialog {
 
     // 6. Record dialog entry.
     overlay_node.change(|state, _| {
-        crate::group::elevate(state, card_node.id)?;
+        crate::group::elevate(state, card_node.id())?;
         dialogs(state).entries.push(DialogEntry {
-            dialog: overlay_node.id,
-            card: card_node.id,
-            body: body_col.0.id,
-            footer: footer_node.id,
-            title_label: title_label.0.id,
+            dialog: overlay_node.id(),
+            card: card_node.id(),
+            body: body_col.0.id(),
+            footer: footer_node.id(),
+            title_label: title_label.0.id(),
             shown: false,
             dismissible: true,
             restore_focus: None,

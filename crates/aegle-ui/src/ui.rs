@@ -104,8 +104,8 @@ pub enum ClipboardRequest {
 /// This owner is deliberately not `Clone`: handles hold weak references, so
 /// dropping the UI destroys its controls even if application callbacks retain handles.
 pub struct Ui {
-    /// The shared engine state, for control libraries' hooks.
-    pub state: Rc<RefCell<State>>,
+    /// The shared engine state.
+    pub(crate) state: Rc<RefCell<State>>,
     /// The root column, fixed for the UI's lifetime.
     root: NodeId,
 }
@@ -206,6 +206,16 @@ impl Ui {
     pub(crate) fn write(&self) -> std::cell::RefMut<'_, State> {
         let state = self.state.try_borrow_mut();
         state.unwrap_or_else(|_| crate::handles::fail(UiError::ReentrantAccess.into()))
+    }
+
+    /// Runs `change` on the engine state, for control libraries' hooks; fails
+    /// with [`UiError::ReentrantAccess`] while the state is borrowed.
+    pub fn with_state<T>(&self, change: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| UiError::ReentrantAccess)?;
+        change(&mut state)
     }
 
     /// The root column; all public handles remain weak.

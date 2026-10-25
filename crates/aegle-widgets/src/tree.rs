@@ -9,7 +9,7 @@ use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Color, Size};
 use aegle_ui::{
-    Container, Control, HandlerResult, Node, OrFail, Result,
+    Container, Control, HandlerResult, OrFail, Result,
     control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
@@ -263,11 +263,8 @@ impl TreeNode {
 
     /// Returns the children container where nested tree nodes are stored.
     pub fn children_container(&self) -> Container {
-        let children_id = self.read(|control| control.children).unwrap_or(self.0.id);
-        Container(Node {
-            state: self.0.state.clone(),
-            id: children_id,
-        })
+        let children_id = self.read(|control| control.children).unwrap_or(self.0.id());
+        Container(self.0.handle(children_id))
     }
 
     /// Appends a node to `parent`: a [`TreeView`], or the
@@ -276,13 +273,13 @@ impl TreeNode {
     /// markup `if` and `for` blocks. Markup elements receive only that container.
     pub fn append_to(parent: &Container, text: &str) -> TreeNode {
         let owner = parent.change(|state, mut id| {
-            while state.tree.get(id).unwrap().is_contents() {
-                id = state.tree.parent(id)?.unwrap();
+            while state.is_contents(id) {
+                id = state.parent(id).unwrap();
             }
-            let Some(item) = state.tree.parent(id)? else {
+            let Some(item) = state.parent(id) else {
                 return Ok(None);
             };
-            let Some(header) = state.tree.child(item, 0)? else {
+            let Some(header) = state.child(item, 0) else {
                 return Ok(None);
             };
             let owns = state
@@ -291,10 +288,7 @@ impl TreeNode {
             Ok(owns.then_some(header))
         });
         let depth = owner.map_or(0, |id| {
-            let owner = TreeNode(Node {
-                state: parent.state.clone(),
-                id,
-            });
+            let owner = TreeNode(parent.handle(id));
             owner.update(|control| control.has_children = true);
             owner.read(|control| control.depth) + 1
         });
@@ -330,7 +324,7 @@ fn create_tree_node(parent: &Container, text: &str, depth: usize) -> TreeNode {
     let item_col = parent.column();
 
     let header_node = crate::add(&item_col, |state, theme| {
-        let control = TreeNodeControl::new(&state.fonts, text, depth, theme)?;
+        let control = TreeNodeControl::new(&state.fonts(), text, depth, theme)?;
         let mut style = LayoutStyle::default();
         style
             .set_width(Length::Percent(100.0))
@@ -344,7 +338,7 @@ fn create_tree_node(parent: &Container, text: &str, depth: usize) -> TreeNode {
 
     let tree_node = TreeNode(header_node);
     tree_node.update(|control| {
-        control.children = Some(children_col.0.id);
+        control.children = Some(children_col.0.id());
     });
 
     tree_node

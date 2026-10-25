@@ -58,7 +58,7 @@ macro_rules! handle {
                 self.change(|state, id| {
                     let control = state.control_as::<$control>(id).ok_or($crate::UiError::WrongKind)?;
                     let value = update(control);
-                    state.tree.mark_dirty(id, $crate::Dirty::PAINT | $crate::Dirty::SEMANTICS)?;
+                    state.invalidate(id, $crate::Dirty::PAINT | $crate::Dirty::SEMANTICS)?;
                     Ok(value)
                 })
             }

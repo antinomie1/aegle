@@ -138,7 +138,7 @@ impl Canvas {
     /// Re-records the painter on the next refresh, for example after its data changed.
     pub fn invalidate(&self) {
         self.change(|state, id| {
-            state.tree.mark_dirty(id, Dirty::PAINT)?;
+            state.invalidate(id, Dirty::PAINT)?;
             Ok(())
         })
     }
@@ -158,8 +158,8 @@ impl Canvas {
     ) {
         self.change(|state, id| {
             state.control_as::<CanvasControl>(id).unwrap().interactive = true;
-            state.tree.mark_dirty(id, Dirty::ALL)?;
-            state.callbacks.remove(&id);
+            state.invalidate(id, Dirty::ALL)?;
+            state.clear_actions(id);
             state.on_action(id, move |node| {
                 let events = node.change(|state, id| {
                     Ok(std::mem::take(

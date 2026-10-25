@@ -6,8 +6,7 @@ use aegle_scene::RoundedRect;
 use aegle_theme::ControlKind;
 use aegle_types::{Color, Point, Rect};
 use aegle_ui::{
-    Container, Control, HandlerResult, Node, Result, State, container_style, control::PaintCx,
-    handle,
+    Container, Control, HandlerResult, Result, State, container_style, control::PaintCx, handle,
 };
 use aegle_ui::{Direction, Display, Insets, Length, Overflow};
 
@@ -67,7 +66,7 @@ impl Drawer {
     /// Opens the drawer and reveals its contents.
     pub fn open(&self) {
         self.0.change(|state, id| {
-            let focus = state.focus.current(&state.tree);
+            let focus = state.focused();
             {
                 let entries = &mut drawers(state).entries;
                 let Some(entry) = entries.iter_mut().find(|e| e.drawer == id) else {
@@ -154,10 +153,7 @@ impl Drawer {
                 .map(|e| e.panel))
         });
         if let Some(panel_id) = panel_id {
-            let panel = Node {
-                state: self.0.state.clone(),
-                id: panel_id,
-            };
+            let panel = self.0.handle(panel_id);
             panel.set_width(Length::Px(width));
         }
     }
@@ -172,10 +168,7 @@ impl Drawer {
                 .map(|e| e.content)
                 .unwrap())
         });
-        Container(Node {
-            state: self.0.state.clone(),
-            id: content_id,
-        })
+        Container(self.0.handle(content_id))
     }
 
     /// Adds a navigation button to the drawer.
@@ -209,10 +202,7 @@ pub(crate) fn dismiss_drawer(state: &mut State, position: Point) -> Result<bool>
         (entry.panel, entry.drawer)
     };
 
-    let inside = state
-        .tree
-        .get(panel)
-        .is_some_and(|n| n.context.bounds.contains(position));
+    let inside = state.is_alive(panel) && state.element(panel).bounds().contains(position);
 
     if !inside {
         close_drawer_by_id(state, drawer_id)?;
@@ -324,11 +314,11 @@ pub(crate) fn create_drawer(container: &Container, side: DrawerSide) -> Drawer {
     };
 
     overlay_node.change(|state, _| {
-        crate::group::elevate(state, panel_node.id)?;
+        crate::group::elevate(state, panel_node.id())?;
         drawers(state).entries.push(DrawerEntry {
-            drawer: overlay_node.id,
-            panel: panel_node.id,
-            content: panel_node.id,
+            drawer: overlay_node.id(),
+            panel: panel_node.id(),
+            content: panel_node.id(),
             side,
             shown: false,
             restore_focus: None,

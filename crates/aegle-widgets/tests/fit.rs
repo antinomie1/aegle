@@ -25,15 +25,6 @@ fn inside(node: &Node) -> bool {
         && b.origin.y + b.size.height <= WINDOW.height
 }
 
-fn parent(node: &Node) -> Node {
-    let state = node.state.upgrade().unwrap();
-    let id = state.borrow().tree.parent(node.id).unwrap().unwrap();
-    Node {
-        state: node.state.clone(),
-        id,
-    }
-}
-
 fn lines(container: &Container, count: usize) {
     for i in 0..count {
         container.text(&format!("Line {i} of a long list"));
@@ -67,7 +58,7 @@ fn overlays_and_rows_fit_a_small_window() -> Result {
     dialog.button("OK");
     dialog.show();
     ui.refresh()?;
-    let card = parent(&dialog.body());
+    let card = dialog.body().parent().unwrap();
     assert!(inside(&card));
     assert_eq!(card.bounds().size.width, WINDOW.width - 32.0);
     assert!(card.max_scroll_offset().y > 0.0);

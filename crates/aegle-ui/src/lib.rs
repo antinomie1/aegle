@@ -59,6 +59,7 @@ mod scrollbar;
 mod semantics;
 mod skins;
 mod state;
+mod state_api;
 mod style;
 mod style_handles;
 mod style_methods;
@@ -114,7 +115,7 @@ pub use motion::TransitionProperty;
 #[cfg(feature = "motion")]
 pub use motion_handles::Animate;
 pub use propagate::{InputEvent, InputKind, Phase};
-pub use state::{Element, State, focus_policy, text_style};
+pub use state::{Element, State, text_style};
 pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token};
 
 pub use transform::Transform;

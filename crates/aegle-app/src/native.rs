@@ -399,6 +399,22 @@ impl Window {
         Ok(())
     }
 
+    /// Retitles the window, also for assistive technology: at most 4000
+    /// bytes without NUL. Layer surfaces have no title and fail.
+    pub fn set_title(&self, title: &str) -> Result<()> {
+        let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
+        let mut runtime = runtime.borrow_mut();
+        runtime.backend.set_title(self.id, title)?;
+        #[cfg(access)]
+        {
+            let entry = runtime.windows.iter_mut().find(|entry| entry.id == self.id);
+            entry.ok_or(UiError::DeadHandle)?.title = title.into();
+            self.root
+                .change(|state, id| state.invalidate(id, aegle_ui::Dirty::SEMANTICS));
+        }
+        Ok(())
+    }
+
     /// This window's engine, for what concerns the whole window rather than
     /// one control: key handlers, reduced motion, tokens and default
     /// transitions. Controls keep using their handles; the window's root is

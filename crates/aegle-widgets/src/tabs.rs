@@ -3,7 +3,7 @@
 use aegle_controls::{Input, Key, KeyInput};
 use aegle_core::{Dirty, NodeId};
 use aegle_theme::ControlKind;
-use aegle_ui::{Container, Control, HandlerResult, Node, Result, State, UiError, control::Frame};
+use aegle_ui::{Container, Control, HandlerResult, Result, State, UiError, control::Frame};
 
 use crate::{
     Button,
@@ -44,11 +44,7 @@ fn data(state: &mut State, root: NodeId) -> &mut TabsControl {
 /// Activating a tab, run as its button's deferred work: shows its page and,
 /// when the selection changed, queues the tab list's change handlers.
 pub(crate) fn chosen(state: &mut State, tab: NodeId) -> Result {
-    let Some(root) = state
-        .tree
-        .parent(tab)?
-        .and_then(|bar| state.tree.parent(bar).ok()?)
-    else {
+    let Some(root) = state.parent(tab).and_then(|bar| state.parent(bar)) else {
         return Ok(());
     };
     let index = data(state, root).entries.iter().position(|e| e.0 == tab);
@@ -72,9 +68,7 @@ fn show(state: &mut State, root: NodeId, index: usize) -> Result<bool> {
             button.variant = Variant::Tab { selected };
         }
         state.set_visible(page, selected)?;
-        state
-            .tree
-            .mark_dirty(tab, Dirty::PAINT | Dirty::SEMANTICS)?;
+        state.invalidate(tab, Dirty::PAINT | Dirty::SEMANTICS)?;
     }
     Ok(previous != index)
 }
@@ -85,10 +79,7 @@ impl Tabs {
     pub fn add(&self, title: &str) -> Container {
         let bar =
             self.change(|state, id| Ok(data(state, id).bar.expect("created with its tab list")));
-        let bar = Container(Node {
-            state: self.state.clone(),
-            id: bar,
-        });
+        let bar = Container(self.handle(bar));
         let selected = Variant::Tab { selected: false };
         let tab = crate::button::create_as(&bar, title, selected);
         let page = group::add(&Container(self.0.clone()), Role::TabPanel, false);
@@ -97,7 +88,7 @@ impl Tabs {
         page.set_min_height(0.0);
         self.change(|state, id| {
             let tabs = data(state, id);
-            tabs.entries.push((tab.id, page.id));
+            tabs.entries.push((tab.id(), page.id()));
             let selected = tabs.selected.min(tabs.entries.len() - 1);
             show(state, id, selected).map(drop)
         });
@@ -125,10 +116,7 @@ impl Tabs {
                 .map(|entry| entry.0)
                 .ok_or(UiError::InvalidValue.into())
         });
-        Button(Node {
-            state: self.state.clone(),
-            id: tab,
-        })
+        Button(self.handle(tab))
     }
     /// Adds a handler called after the user selects another tab; handlers
     /// run in registration order.
@@ -148,7 +136,7 @@ pub(crate) fn tab_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
         Key::Left => false,
         _ => return Ok(false),
     };
-    let Some(id) = state.focus.current(&state.tree) else {
+    let Some(id) = state.focused() else {
         return Ok(false);
     };
     let forward = right != state.rtl(id);
@@ -158,10 +146,10 @@ pub(crate) fn tab_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
             .is_some_and(|b| matches!(b.variant, Variant::Tab { .. }))
             && state.usable(node)
     };
-    let Some(bar) = state.tree.parent(id)?.filter(|_| tab(state, id)) else {
+    let Some(bar) = state.parent(id).filter(|_| tab(state, id)) else {
         return Ok(false);
     };
-    let children: Vec<_> = state.tree.children(bar)?.collect();
+    let children: Vec<_> = state.children(bar).collect();
     let row: Vec<_> = children.into_iter().filter(|&n| tab(state, n)).collect();
     let index = row.iter().position(|&n| n == id).unwrap();
     let next = if forward {
@@ -191,7 +179,7 @@ pub(crate) fn tabs(container: &Container) -> Tabs {
     // Tabs that do not fit the window's width continue on another line.
     bar.set_wrap(aegle_ui::Wrap::Wrap);
     root.change(|state, id| {
-        data(state, id).bar = Some(bar.id);
+        data(state, id).bar = Some(bar.id());
         Ok(())
     });
     Tabs(root.0)

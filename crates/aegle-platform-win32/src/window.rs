@@ -298,6 +298,16 @@ impl Win32 {
     pub fn buffer_bytes(&self, id: WindowId) -> aegle_platform::Result<usize> {
         Ok(self.window(id)?.pixels.borrow().capacity())
     }
+    /// Retitles a window.
+    pub(crate) fn set_title(&mut self, id: WindowId, title: &str) -> Result<(), Error> {
+        if title.len() > 4000 || title.contains('\0') {
+            return Err(Error::InvalidString);
+        }
+        let title: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
+        // SAFETY: the window is live and `title` is NUL-terminated and outlives the call.
+        unsafe { SetWindowTextW(self.window(id)?.hwnd.get(), PCWSTR(title.as_ptr())) }?;
+        Ok(())
+    }
     /// Sets the shape shown over a window's client area. It takes effect at once
     /// while the mouse is over the window, and on every later WM_SETCURSOR.
     pub(crate) fn set_cursor(

@@ -225,12 +225,12 @@ impl MenuItem {
             let shortcut = match shortcut {
                 Some(text) => {
                     let style = state.text_style(id);
-                    Some(state.fonts.borrow_mut().paragraph(text, &style)?)
+                    Some(state.fonts().borrow_mut().paragraph(text, &style)?)
                 }
                 None => None,
             };
             item(state, id).shortcut = shortcut;
-            state.tree.mark_dirty(id, Dirty::ALL)?;
+            state.invalidate(id, Dirty::ALL)?;
             Ok(())
         })
     }
@@ -269,12 +269,12 @@ pub(crate) fn check(state: &mut State, id: NodeId, checked: bool) -> Result {
     let control = item(state, id);
     control.checked = Some(checked);
     let radio = control.radio;
-    state.tree.mark_dirty(id, Dirty::PAINT | Dirty::SEMANTICS)?;
+    state.invalidate(id, Dirty::PAINT | Dirty::SEMANTICS)?;
     if !(radio && checked) {
         return Ok(());
     }
-    let parent = state.tree.parent(id)?.expect("menu items live in menus");
-    let siblings: Vec<_> = state.tree.children(parent)?.collect();
+    let parent = state.parent(id).expect("menu items live in menus");
+    let siblings: Vec<_> = state.children(parent).collect();
     let at = siblings.iter().position(|&n| n == id).unwrap();
     let mut radio = |n: &&NodeId| {
         state
@@ -288,9 +288,7 @@ pub(crate) fn check(state: &mut State, id: NodeId, checked: bool) -> Result {
         .filter(|&&n| n != id)
     {
         if item(state, sibling).checked.replace(false) == Some(true) {
-            state
-                .tree
-                .mark_dirty(sibling, Dirty::PAINT | Dirty::SEMANTICS)?;
+            state.invalidate(sibling, Dirty::PAINT | Dirty::SEMANTICS)?;
         }
     }
     Ok(())

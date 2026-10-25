@@ -105,10 +105,12 @@ impl Control for LabelControl {
 
 pub(crate) fn create(container: &Container, text: &str) -> Label {
     Label(crate::add(container, |state, theme| {
-        Ok((Box::new(LabelControl::new(&state.fonts, text, theme)?), {
-            let mut style = LayoutStyle::default();
-            style.set_shrink(0.0);
-            style
-        }))
+        Ok(
+            (Box::new(LabelControl::new(&state.fonts(), text, theme)?), {
+                let mut style = LayoutStyle::default();
+                style.set_shrink(0.0);
+                style
+            }),
+        )
     }))
 }

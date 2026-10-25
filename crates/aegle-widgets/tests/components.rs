@@ -224,10 +224,7 @@ fn tabs_splitters_and_tooltips() -> Result {
     button.set_tooltip(Some("Shows a hint"));
     ui.pointer(id, PointerKind::Move, center(&button), m)?;
     let due = ui.next_wake().expect("a pending tooltip");
-    let children = || {
-        ui.root()
-            .change(|state, id| Ok(state.tree.children(id)?.count()))
-    };
+    let children = || ui.root().change(|state, id| Ok(state.children(id).count()));
     let before = children();
     ui.wake(due + Duration::from_millis(1))?;
     ui.refresh()?;

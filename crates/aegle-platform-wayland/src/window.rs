@@ -284,6 +284,17 @@ impl Wayland {
         Ok(())
     }
 
+    /// Retitles a toplevel; layer surfaces have no title.
+    pub(crate) fn set_title(&mut self, id: WindowId, title: &str) -> Result<(), Error> {
+        if title.len() > 4000 || title.contains('\0') {
+            return Err(Error::InvalidString);
+        }
+        match &self.window_mut(id)?.window {
+            Shell::Xdg(window) => Ok(window.set_title(title)),
+            Shell::Layer(_) => Err(Error::Unsupported("title of a layer surface")),
+        }
+    }
+
     /// Sets the shape shown over a window. It applies immediately to every pointer
     /// inside the window and again whenever a pointer enters it, so the host only
     /// needs to call this when the desired shape changes.

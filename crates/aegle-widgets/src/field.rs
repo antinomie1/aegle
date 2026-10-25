@@ -76,20 +76,15 @@ impl TextField {
         apply: impl FnOnce(&mut EditorDriver<'_>) -> std::result::Result<(), TextError>,
     ) {
         self.change(|state, id| {
-            let fonts = state.fonts.clone();
+            let fonts = state.fonts().clone();
             let field = state
-                .tree
-                .get_mut(id)
-                .unwrap()
-                .context
-                .control
+                .element_mut(id)
+                .control_mut()
                 .editor_mut()
                 .expect("a text field node holds an editor");
             apply(&mut fonts.borrow_mut().edit(field.editor_mut()))?;
-            if state.focus.current(&state.tree) == Some(id) {
-                state.ime_dirty = true;
-                state.ime_reset = true;
-                state.input_method = false;
+            if state.focused() == Some(id) {
+                state.reset_ime();
             }
             Ok(())
         })
@@ -203,7 +198,7 @@ pub(crate) fn control(
     text: &str,
     multiline: bool,
 ) -> Result<(FieldControl, LayoutStyle)> {
-    let editor = state.fonts.borrow_mut().editor(
+    let editor = state.fonts().borrow_mut().editor(
         text,
         &text_style(theme),
         EditorOptions {

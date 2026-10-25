@@ -107,7 +107,7 @@ Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该�
 
 ## 平台契约
 
-`aegle-platform` 是每个原生平台实现的唯一契约：`Platform` trait（连接、偏好、wake、窗口创建/移除/几何、`dispatch`/`next_event`、重绘请求、光标、IME、剪贴板、拖放与软件 `present`）与 `SurfacePlatform`（给 GPU presenter 和无障碍 adapter 的原生句柄租约及 `present_external`），以及它们共用的词汇：`Event`（窗口、seat、逻辑坐标、平台毫秒时间）、`PointerKind`、`ImeRequest`/`ImeEvent`/`ImeUpdate`、`WindowOptions`（含可选 `LayerOptions`）、`WindowInfo`（逻辑尺寸、物理 `buffer` 尺寸、scale、active、configured）、`SeatId`、`WakeHandle` 与统一的 `Error`。`Key`、`Modifiers`、`PointerButton`、`Cursor`、`Preferences`、`TouchPhase`、`DragData` 来自 aegle-types，控件行为与平台用同一套键值，不再在宿主中翻译。
+`aegle-platform` 是每个原生平台实现的唯一契约：`Platform` trait（连接、偏好、wake、窗口创建/移除/几何与标题、`dispatch`/`next_event`、重绘请求、光标、IME、剪贴板、拖放与软件 `present`）与 `SurfacePlatform`（给 GPU presenter 和无障碍 adapter 的原生句柄租约及 `present_external`），以及它们共用的词汇：`Event`（窗口、seat、逻辑坐标、平台毫秒时间）、`PointerKind`、`ImeRequest`/`ImeEvent`/`ImeUpdate`、`WindowOptions`（含可选 `LayerOptions`）、`WindowInfo`（逻辑尺寸、物理 `buffer` 尺寸、scale、active、configured）、`SeatId`、`WakeHandle` 与统一的 `Error`。`Key`、`Modifiers`、`PointerButton`、`Cursor`、`Preferences`、`TouchPhase`、`DragData` 来自 aegle-types，控件行为与平台用同一套键值，不再在宿主中翻译。
 
 平台在自己的 crate 内把原生值翻译成契约：XKB keysym 与 Win32 虚拟键都变成 `Key`，evdev 与 Win32 按钮变成 `PointerKind`，Wayland 的 seat 以协议对象 id 作 `SeatId`，单 seat 平台（Windows）恒用 `SeatId(0)`；AltGr 在按键事件里不报告 Control；只随指针消息得到修饰键的平台在变化时先发 `Event::Modifiers`。按键文字随按键给出（`Key { text }`，Wayland）或单独给出（`Event::Text`，Win32 的 WM_CHAR）。剪贴板一律异步：`request_clipboard` 的结果作为 `Event::Clipboard` 进入同一队列（Win32 同步读出后立即入队）。平台没有的能力返回 `Error::Unsupported`（如 Windows 上的 layer-shell）或 `ImeUnavailable`，不伪装成功；已消失 seat 的请求被忽略，其移除已由事件报告。
 

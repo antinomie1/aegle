@@ -106,7 +106,7 @@ impl ImageView {
             view.image = image;
             view.error = error;
             view.reported = false;
-            state.tree.mark_dirty(id, Dirty::ALL)?;
+            state.invalidate(id, Dirty::ALL)?;
             Ok(())
         })
     }

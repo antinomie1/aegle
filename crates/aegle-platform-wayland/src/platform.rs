@@ -51,6 +51,10 @@ impl Platform for Wayland {
         self.request_redraw(window)
     }
 
+    fn set_title(&mut self, window: WindowId, title: &str) -> Result<()> {
+        self.set_title(window, title)
+    }
+
     fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()> {
         self.set_cursor(window, cursor)
     }

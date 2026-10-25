@@ -47,6 +47,7 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
     };
     let first = app.window_with_options("First", options)?;
     let second = app.window_with_options("Second", options)?;
+    first.set_title("First, retitled")?;
     let label = first.text("Hello, 世界");
     let start = first.button("Start");
     let finish = second.button("Finish");

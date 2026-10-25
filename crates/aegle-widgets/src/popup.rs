@@ -66,7 +66,7 @@ pub(crate) fn popup(anchor: &Node) -> Popup {
             .set_max_width(Length::Percent(100.0))
             .set_max_height(Length::Percent(100.0))
             .set_overflow(Overflow::Scroll, Overflow::Scroll);
-        let root = state.root;
+        let root = state.root();
         let group = Group {
             role: Role::Popup { list: false },
         };
@@ -74,10 +74,8 @@ pub(crate) fn popup(anchor: &Node) -> Popup {
         let id = state.insert(root, usize::MAX, Box::new(group), style)?;
         state.set_visible(id, false)?;
         crate::group::elevate(state, id)?;
-        let anchor_element = &state.tree.get(anchor).unwrap().context;
-        if anchor_element.theme.is_some() {
-            let local = anchor_element.theme.clone();
-            state.propagate_theme(id, local)?;
+        if let Some(local) = state.element(anchor).local_theme().cloned() {
+            state.propagate_theme(id, Some(local))?;
         }
         popups(state).entries.push(PopupEntry {
             popup: id,
@@ -89,10 +87,7 @@ pub(crate) fn popup(anchor: &Node) -> Popup {
         });
         Ok(id)
     });
-    Popup(Container(Node {
-        state: anchor.state.clone(),
-        id,
-    }))
+    Popup(Container(anchor.handle(id)))
 }
 
 impl Popup {
@@ -114,7 +109,7 @@ impl Popup {
         }
         self.change(|state, id| {
             entry(state, id).at = Some(at);
-            state.geometry_dirty = true;
+            state.invalidate_layout();
             show_popup(state, id, true)
         })
     }
@@ -127,10 +122,7 @@ impl Popup {
     /// menu bar's menu its entry.
     pub fn anchor(&self) -> Node {
         let id = self.change(|state, id| Ok(entry(state, id).anchor));
-        Node {
-            state: self.state.clone(),
-            id,
-        }
+        self.handle(id)
     }
     /// Whether the popup is currently shown.
     pub fn is_shown(&self) -> bool {
@@ -168,30 +160,28 @@ pub(crate) fn show_popup(state: &mut State, id: NodeId, focus: bool) -> Result {
         return Ok(());
     }
     // The root's last child paints over, and is hit before, everything else.
-    let root = state.root;
-    state.tree.reparent(id, Some(root))?;
-    state.invalidate_structure();
+    let root = state.root();
+    state.reparent(id, root)?;
     let PopupEntry {
         anchor, side, at, ..
     } = *entry(state, id);
-    let mut style = state.tree.get(id).unwrap().style().clone();
+    let mut style = state.layout_style(id).clone();
     style.set_min_width(if side || at.is_some() {
         Length::Auto
     } else {
-        Length::Px(state.tree.get(anchor).unwrap().context.bounds.size.width)
+        Length::Px(state.element(anchor).bounds().size.width)
     });
-    aegle_layout::set_style(&mut state.tree, id, style)?;
+    state.set_layout_style(id, style)?;
     // It lives under the root but reads in its anchor's direction.
-    let direction = state.tree.get(anchor).unwrap().style().layout_direction();
-    state.tree.get_mut(id).unwrap().context.direction = Some(direction);
-    state.propagate_direction(id)?;
+    let direction = state.layout_style(anchor).layout_direction();
+    state.set_layout_direction(id, Some(direction))?;
     state.set_visible(id, true)?;
-    let restore = state.focus.current(&state.tree);
+    let restore = state.focused();
     let e = entry(state, id);
     e.shown = true;
     e.restore = restore;
     set_expanded(state, anchor, true);
-    state.tree.mark_dirty(anchor, Dirty::SEMANTICS)?;
+    state.invalidate(anchor, Dirty::SEMANTICS)?;
     state.rebuild_order();
     if focus {
         focus_first(state, id)?;
@@ -209,19 +199,19 @@ pub(crate) fn focus_first(state: &mut State, popup: NodeId) -> Result {
 }
 
 /// The usable interactive controls of a popup in focus order.
-pub(crate) fn controls(state: &mut State, popup: NodeId) -> Vec<NodeId> {
-    state.rebuild_order();
-    state
-        .order
-        .iter()
-        .copied()
-        .filter(|&n| {
-            n != popup
-                && state.contains(popup, n)
-                && state.tree.get(n).unwrap().context.control.interactive()
-                && state.usable(n)
-        })
-        .collect()
+pub(crate) fn controls(state: &State, popup: NodeId) -> Vec<NodeId> {
+    let mut found = Vec::new();
+    let mut stack: Vec<_> = state.children(popup).collect();
+    stack.reverse();
+    while let Some(n) = stack.pop() {
+        if state.element(n).control().interactive() && state.usable(n) {
+            found.push(n);
+        }
+        let start = stack.len();
+        stack.extend(state.children(n));
+        stack[start..].reverse();
+    }
+    found
 }
 
 pub(crate) fn hide_popup(state: &mut State, id: NodeId) -> Result {
@@ -242,16 +232,13 @@ pub(crate) fn hide_popup(state: &mut State, id: NodeId) -> Result {
     let e = entry(state, id);
     e.shown = false;
     let (anchor, restore) = (e.anchor, e.restore.take());
-    let inside = state
-        .focus
-        .current(&state.tree)
-        .is_some_and(|f| state.contains(id, f));
+    let inside = state.focused().is_some_and(|f| state.contains(id, f));
     state.set_visible(id, false)?;
     if inside && restore.is_some_and(|r| state.usable(r)) {
         state.set_focus(restore)?;
     }
     set_expanded(state, anchor, false);
-    state.tree.mark_dirty(anchor, Dirty::SEMANTICS)?;
+    state.invalidate(anchor, Dirty::SEMANTICS)?;
     Ok(())
 }
 
@@ -278,11 +265,11 @@ pub(crate) fn place_popups(state: &mut State) -> bool {
         };
         start.min(limit - size).max(0.0)
     };
-    let window = state.size;
+    let window = state.size();
     for (popup, anchor, side, at) in shown {
         let rtl = state.rtl(anchor);
-        let anchor = state.tree.get(anchor).unwrap().context.bounds;
-        let size = state.tree.get(popup).unwrap().bounds().size;
+        let anchor = state.element(anchor).bounds();
+        let size = state.layout_bounds(popup).size;
         let (x, y) = if let Some(at) = at {
             // The start corner at the point, else the end corner.
             let (start, end) = (at.x, at.x - size.width);
@@ -322,9 +309,9 @@ pub(crate) fn place_popups(state: &mut State) -> bool {
             // Over the anchor rather than past the window when neither fits.
             (x, y.min(window.height - size.height).max(0.0))
         };
-        let element = &mut state.tree.get_mut(popup).unwrap().context;
-        if element.offset != Point::new(x, y) {
-            element.offset = Point::new(x, y);
+        let element = state.element_mut(popup);
+        if element.offset() != Point::new(x, y) {
+            element.set_offset(Point::new(x, y));
             moved = true;
         }
     }
@@ -339,7 +326,7 @@ pub(crate) fn popup_at(state: &State, position: Point) -> Option<NodeId> {
         .rev()
         .filter(|e| e.shown)
         .map(|e| e.popup)
-        .find(|&p| state.tree.get(p).unwrap().context.bounds.contains(position))
+        .find(|&p| state.element(p).bounds().contains(position))
 }
 
 /// Hides shown popups unless a press lands in them, their anchor, or a
@@ -355,7 +342,7 @@ pub(crate) fn dismiss_popups(state: &mut State, position: Point) -> Result {
         return Ok(());
     };
     let inside = |state: &State, node: NodeId| {
-        let bounds: Rect = state.tree.get(node).unwrap().context.bounds;
+        let bounds: Rect = state.element(node).bounds();
         bounds.contains(position)
     };
     let hit = popup_at(state, position);
@@ -404,7 +391,7 @@ pub(crate) fn popup_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
     if controls.is_empty() {
         return Ok(false);
     }
-    let current = state.focus.current(&state.tree);
+    let current = state.focused();
     let index = controls.iter().position(|&n| Some(n) == current);
     let next = match (index, forward) {
         (Some(i), true) => (i + 1) % controls.len(),
@@ -433,12 +420,12 @@ pub(crate) fn prune_popups(state: &mut State) -> Result {
         };
         let Some(index) = entries
             .iter()
-            .position(|e| state.tree.get(e.anchor).is_none() || state.tree.get(e.popup).is_none())
+            .position(|e| !state.is_alive(e.anchor) || !state.is_alive(e.popup))
         else {
             return Ok(());
         };
         let entry = popups(state).entries.remove(index);
-        if state.tree.get(entry.popup).is_some() {
+        if state.is_alive(entry.popup) {
             state.remove_subtree(entry.popup)?;
         }
     }

@@ -1,5 +1,5 @@
-// The engine state's fields and methods are the authoring surface for control
-// libraries; the contract is described in `control` and on `State`.
+// The engine state; control libraries use it through the methods here and in
+// `state_api`, the contract is described in `control` and on `State`.
 
 use std::{
     cell::RefCell,
@@ -20,61 +20,61 @@ use crate::{Result, callbacks::Handler, control::Control, style::Decoration};
 /// A node's engine-side data. Controls keep their own state in `control`.
 pub struct Element {
     /// The control implementation; it keeps its own state.
-    pub control: Box<dyn Control>,
+    pub(crate) control: Box<dyn Control>,
     /// The control's own painted records, in local coordinates.
-    pub scene: Scene,
+    pub(crate) scene: Scene,
     /// What a viewport draws over its children, when the control is one.
-    pub overlay: Option<Box<Scene>>,
-    /// Layout rectangle in the parent's space.
-    pub bounds: Rect,
+    pub(crate) overlay: Option<Box<Scene>>,
+    /// Layout rectangle in window space, with offsets and scrolling applied.
+    pub(crate) bounds: Rect,
     /// Clip inherited from scrolling ancestors, in window space.
-    pub clip: Option<Rect>,
+    pub(crate) clip: Option<Rect>,
     /// Clips its children's painting and hit testing to its bounds.
-    pub clips: bool,
+    pub(crate) clips: bool,
     /// Current scroll offset of a viewport.
-    pub scroll: Point,
+    pub(crate) scroll: Point,
     /// Whether the node itself is shown.
-    pub visible: bool,
+    pub(crate) visible: bool,
     /// Layout mode to restore when a hidden node is shown again.
-    pub shown_display: aegle_layout::Display,
+    pub(crate) shown_display: aegle_layout::Display,
     /// Whether the node and every ancestor are shown.
-    pub effective_visible: bool,
+    pub(crate) effective_visible: bool,
     /// Whether the node accepts input.
-    pub enabled: bool,
+    pub(crate) enabled: bool,
     /// Accessible label.
-    pub label: String,
+    pub(crate) label: String,
     /// Scroll the caret into view on the next refresh.
-    pub ensure_caret: bool,
+    pub(crate) ensure_caret: bool,
     /// Layout properties set on this node, preserved across theme changes.
-    pub local_layout: crate::LocalLayout,
+    pub(crate) local_layout: crate::LocalLayout,
     /// Local content padding; `None` uses the control's default.
-    pub padding: Option<f32>,
+    pub(crate) padding: Option<f32>,
     /// Presented translation after layout, inherited by the subtree.
-    pub offset: Point,
+    pub(crate) offset: Point,
     /// Presented scale and rotation (radians) about the bounds center, inherited
     /// by the subtree.
-    pub spin: crate::Transform,
+    pub(crate) spin: crate::Transform,
     /// Layout space to presented space for this node, set only inside a spun subtree.
-    pub xf: Option<aegle_scene::Affine>,
+    pub(crate) xf: Option<aegle_scene::Affine>,
     /// Window area this node's records covered when last refreshed.
-    pub painted: Option<Rect>,
+    pub(crate) painted: Option<Rect>,
     /// The skin set on this node or inherited for its kind; `None` uses the
     /// kind's default.
-    pub skin: Option<aegle_theme::Skin>,
+    pub(crate) skin: Option<aegle_theme::Skin>,
     /// Presented group opacity and backdrop blur of the subtree.
-    pub group: crate::group::Group,
+    pub(crate) group: crate::group::Group,
     /// Nearest local theme of this node or an ancestor; `None` uses the UI theme.
-    pub theme: Option<Rc<Theme>>,
+    pub(crate) theme: Option<Rc<Theme>>,
     /// Whether `theme` was set on this node rather than inherited.
-    pub local_theme: bool,
+    pub(crate) local_theme: bool,
     /// Layout direction set on this node; `None` inherits the parent's. The
     /// resolved direction is the layout style's `direction`.
-    pub direction: Option<aegle_layout::LayoutDirection>,
+    pub(crate) direction: Option<aegle_layout::LayoutDirection>,
     /// The resolved direction is right to left.
-    pub rtl: bool,
+    pub(crate) rtl: bool,
     /// Accessibility id of this node.
     #[cfg(feature = "accessibility")]
-    pub access_id: aegle_access::accesskit::NodeId,
+    pub(crate) access_id: aegle_access::accesskit::NodeId,
 }
 
 impl Element {
@@ -130,92 +130,93 @@ impl Element {
 }
 
 /// The engine state behind a [`crate::Ui`], also the authoring surface for control
-/// libraries: fields and methods are public so a control can use the tree, focus,
-/// themes and invalidation directly. Prefer the typed handles in application code.
+/// libraries: its methods let a control read the tree, focus and themes and
+/// invalidate what it changed. Prefer the typed handles in application code.
 pub struct State {
     /// The retained tree of nodes with their layout.
-    pub tree: Tree<LayoutNode<Element>>,
+    pub(crate) tree: Tree<LayoutNode<Element>>,
     /// The root node.
-    pub root: NodeId,
+    pub(crate) root: NodeId,
     /// Nodes in paint order.
-    pub order: Vec<NodeId>,
+    pub(crate) order: Vec<NodeId>,
     /// Scroll views in post-order with the end of their subtree in `order`.
-    pub overlays: Vec<(usize, NodeId)>,
+    pub(crate) overlays: Vec<(usize, NodeId)>,
     /// The tree structure changed since the last refresh.
-    pub topology_dirty: bool,
+    pub(crate) topology_dirty: bool,
     /// Layout must be recomputed.
-    pub geometry_dirty: bool,
+    pub(crate) geometry_dirty: bool,
     /// Node to scroll into view on the next refresh.
-    pub reveal_target: Option<NodeId>,
+    pub(crate) reveal_target: Option<NodeId>,
     /// Shared text system.
-    pub fonts: Rc<RefCell<TextSystem>>,
+    pub(crate) fonts: Rc<RefCell<TextSystem>>,
     /// The UI theme (fields on `Element` hold local themes).
-    pub theme: Theme,
+    pub(crate) theme: Theme,
     /// Window size in logical pixels.
-    pub size: Size,
+    pub(crate) size: Size,
     /// Logical focus state.
-    pub focus: Focus,
+    pub(crate) focus: Focus,
     /// Last focused node, restored when focus returns to the window.
-    pub last_focus: Option<NodeId>,
+    pub(crate) last_focus: Option<NodeId>,
     /// Whether focus shows its indicator: a key press turns it on, a pointer
     /// press off. Editors show their focus either way.
-    pub focus_visible: bool,
+    pub(crate) focus_visible: bool,
     /// Pointer capture: the pointer and its target.
-    pub capture: Option<(PointerId, NodeId)>,
+    pub(crate) capture: Option<(PointerId, NodeId)>,
     /// Scrollbar drag in progress.
-    pub drag: Option<crate::scrollbar::Drag>,
+    pub(crate) drag: Option<crate::scrollbar::Drag>,
     /// Node under the pointer.
-    pub hover: Option<NodeId>,
+    pub(crate) hover: Option<NodeId>,
     /// Last pointer and its window position.
-    pub pointer: Option<(PointerId, Point)>,
+    pub(crate) pointer: Option<(PointerId, Point)>,
     /// The input-method state changed and must be re-reported.
-    pub ime_dirty: bool,
+    pub(crate) ime_dirty: bool,
     /// The input method must drop its current composition.
-    pub ime_reset: bool,
+    pub(crate) ime_reset: bool,
     /// An input method is active for the focused editor.
-    pub input_method: bool,
+    pub(crate) input_method: bool,
     /// Pending host clipboard request.
-    pub clipboard: Option<crate::ClipboardRequest>,
+    pub(crate) clipboard: Option<crate::ClipboardRequest>,
     /// File dialogs for the host and their requesters.
     pub(crate) files: crate::files::Files,
     /// A repaint was requested.
-    pub repaint: bool,
+    pub(crate) repaint: bool,
     /// Event callbacks by node.
-    pub callbacks: HashMap<NodeId, Handler>,
+    pub(crate) callbacks: HashMap<NodeId, Handler>,
     /// Committed-text edit callbacks by node, see [`State::on_edit`].
-    pub edits: HashMap<NodeId, Handler>,
+    pub(crate) edits: HashMap<NodeId, Handler>,
     /// Per-library data keyed by type, see [`State::ext`].
-    pub ext: HashMap<std::any::TypeId, Box<dyn std::any::Any>>,
+    pub(crate) ext: HashMap<std::any::TypeId, Box<dyn std::any::Any>>,
     /// Installed control-library hooks, see [`crate::Hooks`].
-    pub hooks: Vec<&'static crate::Hooks>,
+    pub(crate) hooks: Vec<&'static crate::Hooks>,
     /// Visual decoration per node. Only the engine writes it, so a local
     /// style always passes the kind check of [`State::set_style`].
     pub(crate) decorations: HashMap<NodeId, Decoration>,
     /// Decorators per node, see [`crate::Decorator`].
-    pub decorators: HashMap<NodeId, Vec<Box<dyn crate::Decorator>>>,
+    pub(crate) decorators: HashMap<NodeId, Vec<Box<dyn crate::Decorator>>>,
     /// Skins set on nodes, for the node itself or a kind in its subtree.
-    pub skins: HashMap<NodeId, Vec<(Option<&'static aegle_theme::ControlKind>, aegle_theme::Skin)>>,
+    pub(crate) skins:
+        HashMap<NodeId, Vec<(Option<&'static aegle_theme::ControlKind>, aegle_theme::Skin)>>,
     /// Token overrides re-applied to the parent's theme whenever it changes.
-    pub overrides: HashMap<NodeId, aegle_theme::ThemeOverride>,
+    pub(crate) overrides: HashMap<NodeId, aegle_theme::ThemeOverride>,
     /// Custom token overrides and token bindings.
-    pub tokens: crate::Tokens,
+    pub(crate) tokens: crate::Tokens,
     /// Fingers currently in contact.
-    pub fingers: Vec<crate::touch::Finger>,
+    pub(crate) fingers: Vec<crate::touch::Finger>,
     /// Application values living exactly as long as their control.
-    pub kept: HashMap<NodeId, Vec<Box<dyn std::any::Any>>>,
+    pub(crate) kept: HashMap<NodeId, Vec<Box<dyn std::any::Any>>>,
     /// Transition tracks and the animation clock.
     #[cfg(feature = "motion")]
-    pub motion: crate::motion::Motion,
+    pub(crate) motion: crate::motion::Motion,
     /// Callbacks queued to run outside the engine borrow.
-    pub pending: VecDeque<(NodeId, u64)>,
+    pub(crate) pending: VecDeque<(NodeId, u64)>,
     /// A callback queue is being drained.
-    pub dispatching: bool,
+    pub(crate) dispatching: bool,
     /// Source of handler versions; a queued invocation names the version it targets.
-    pub callback_version: u64,
+    pub(crate) callback_version: u64,
     /// Per-frame callbacks in registration order, see [`crate::Node::on_frame`].
-    pub frames: Vec<crate::events::FrameHandler>,
+    pub(crate) frames: Vec<crate::events::FrameHandler>,
     /// Window key handlers in registration order, see [`crate::Ui::on_key`].
-    pub key_handlers: crate::callbacks::Callbacks<crate::events::KeyHandler>,
+    pub(crate) key_handlers: crate::callbacks::Callbacks<crate::events::KeyHandler>,
     /// Capture and bubble listeners, see [`crate::Node::on_input`].
     pub(crate) listeners: crate::propagate::Listeners,
     /// Which text this UI shows and keeps idle, see [`TextSystem::set_idle_budget`].
@@ -223,28 +224,28 @@ pub struct State {
     /// This state, for handing out subscriptions.
     pub(crate) weak: std::rc::Weak<RefCell<State>>,
     /// When the input being dispatched was reported.
-    pub input_time: std::time::Instant,
+    pub(crate) input_time: std::time::Instant,
     /// Press counting and double-click handlers.
-    pub clicks: crate::clicks::Clicks,
+    pub(crate) clicks: crate::clicks::Clicks,
     /// Drop targets and a drag waiting for the host.
-    pub drops: crate::drag::Drops,
+    pub(crate) drops: crate::drag::Drops,
     /// Nodes with a group effect and what their layer last drew.
-    pub groups: HashMap<NodeId, crate::group::Drawn>,
+    pub(crate) groups: HashMap<NodeId, crate::group::Drawn>,
     /// The time of the frame being produced, see [`crate::Ui::run_frame`].
-    pub frame_time: std::time::Instant,
+    pub(crate) frame_time: std::time::Instant,
     /// Controls that asked to repaint on the next frame.
-    pub animated: std::collections::HashSet<NodeId>,
+    pub(crate) animated: std::collections::HashSet<NodeId>,
     /// Changed area not yet presented, see [`crate::Ui::damage`].
-    pub damage: aegle_types::Region<aegle_types::Rect>,
+    pub(crate) damage: aegle_types::Region<aegle_types::Rect>,
     /// The whole window changed since the last present.
-    pub damage_full: bool,
+    pub(crate) damage_full: bool,
     /// When a control library wants its [`crate::Hooks::wake`] called; see [`crate::Ui::next_wake`].
-    pub wake: Option<std::time::Instant>,
+    pub(crate) wake: Option<std::time::Instant>,
     /// Accessible descriptions, see [`crate::Node::set_accessible_description`].
-    pub descriptions: HashMap<NodeId, String>,
+    pub(crate) descriptions: HashMap<NodeId, String>,
     /// Next accessibility node id to hand out.
     #[cfg(feature = "accessibility")]
-    pub next_access_id: u64,
+    pub(crate) next_access_id: u64,
 }
 
 /// Default paragraph style for a theme.
@@ -483,7 +484,7 @@ impl State {
 }
 
 /// Focus traversal policy: hidden or disabled nodes prune their subtree.
-pub fn focus_policy(_: NodeId, node: &LayoutNode<Element>) -> aegle_core::FocusPolicy {
+pub(crate) fn focus_policy(_: NodeId, node: &LayoutNode<Element>) -> aegle_core::FocusPolicy {
     use aegle_core::FocusPolicy;
     if !node.context.visible || !node.context.enabled {
         return FocusPolicy::Prune;

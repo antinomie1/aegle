@@ -18,9 +18,9 @@ use crate::{
 #[derive(Clone)]
 pub struct Node {
     /// The owning UI's state.
-    pub state: Weak<RefCell<State>>,
+    pub(crate) state: Weak<RefCell<State>>,
     /// The node's identity in that state's tree.
-    pub id: NodeId,
+    pub(crate) id: NodeId,
 }
 
 /// Panics with a misuse error; see [`Node::change`].
@@ -63,6 +63,27 @@ impl Node {
             fail(UiError::DeadHandle.into());
         }
         change(&mut state, self.id).unwrap_or_else(|error| fail(error))
+    }
+    /// The node's identity in its UI's tree.
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
+    /// A handle to node `id` of the same UI, for control libraries.
+    pub fn handle(&self, id: NodeId) -> Node {
+        Node {
+            state: self.state.clone(),
+            id,
+        }
+    }
+    /// The parent container; `None` for the root.
+    pub fn parent(&self) -> Option<Container> {
+        let parent = self.change(|state, id| Ok(state.parent(id)));
+        parent.map(|id| Container(self.handle(id)))
+    }
+    /// The children in order.
+    pub fn children(&self) -> Vec<Node> {
+        let children = self.change(|state, id| Ok(state.children(id).collect::<Vec<_>>()));
+        children.into_iter().map(|id| self.handle(id)).collect()
     }
     /// Whether this node and its owning UI still exist.
     pub fn is_alive(&self) -> bool {

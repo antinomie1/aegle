@@ -9,7 +9,7 @@ use aegle_widgets::Widgets;
 
 fn released(node: &Node) -> bool {
     node.change(|state, id| {
-        let control = &state.tree.get(id).unwrap().context.control;
+        let control = &state.element(id).control();
         Ok(control.paragraph().unwrap().is_released())
     })
 }

@@ -66,9 +66,9 @@ fn line(vertical: bool) -> LayoutStyle {
 pub(crate) fn separator(container: &Container) -> Separator {
     Separator(crate::add(container, |state, _| {
         // Across a row the divider is vertical, across a column horizontal.
-        let parent = container.id;
+        let parent = container.id();
         let vertical = matches!(
-            state.tree.get(parent).unwrap().style().direction(),
+            state.layout_style(parent).direction(),
             Direction::Row | Direction::RowReverse
         );
         Ok((

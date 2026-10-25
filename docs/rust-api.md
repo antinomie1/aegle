@@ -118,13 +118,23 @@ fn primary(parent: &Container, text: &str) -> Button {
 | 主题与动画 | 选择主题、局部覆盖、类型化 token、过渡、显式动画和取消 |
 | 平台 | 窗口属性、可用能力、显示输出、剪贴板、拖放、关闭；可选 layer-shell |
 
-`get_*` 返回逻辑目标值；动画呈现值通过 `presented_*` 查询。几何默认是最近提交的布局结果；需要立即读取新布局时使用显式 `flush_layout()`，该调用可有较高成本且禁止在布局/绘制回调内重入。
+`get_*` 返回逻辑目标值；动画呈现值通过 `presented_*` 查询。几何是最近一次刷新的布局结果；需要立即读取新布局时调用 `Ui::refresh()`，它同时更新已失效的绘制记录，不能在布局/绘制回调内重入，因此不另设 `flush_layout`。修改在下一次刷新前本来就合并，不另设 `batch` 或事务回滚。运行模型详见[架构](architecture.md)。
 
-`app.batch(|| ...)` 合并失效提交，不提供事务回滚；回调内修改本来就会合并。运行模型详见[架构](architecture.md)。
+上表与现有接口的对应：子节点遍历为 `Node::parent()`/`children()`；按显式 ID 查询由标记的 `id:` 名称（生成视图的同名字段）提供，命令式代码直接持有句柄；tooltip 为 `NodeWidgets::set_tooltip`；窗口属性为 `Window::set_title`（layer surface 没有标题，返回错误）。跨线程消息经 `UiProxy::send`，窗口关闭后返回 `Err` 退回消息，不另设取消句柄。
+
+## 稳定边界
+
+公开接口只使用 Aegle 自己的类型：布局为 `LayoutStyle`、`Length`、`Insets` 等，文字为 `TextStyle`、`Alignment`、`LineHeight`、`Slant`、`FontFamily`/`GenericFamily`，语义为 `SemanticsCx`、`Role`、`SemanticAction`、`Toggled`，平台为 `aegle-platform` 的事件、窗口与输入法契约。Taffy、Parley、Fontique、AccessKit、Swash 与 SCTK 只在实现内部，升级它们不改变这些签名。`State`、`Element`、`Node` 与 `Ui` 的字段私有：控件库经 `State` 的方法（`root`、`focused`、`parent`/`children`、`element`/`element_mut`、`layout_style`/`set_layout_style`、`invalidate`、`ext` 等）、`Element` 的访问器与 `Node::id`/`handle` 访问引擎，钩子经 `Ui::with_state`。
+
+有意保留第三方类型的例外，它们跟随所依赖库的版本，不属于稳定词汇：
+
+- GPU 互操作：`aegle-render-vulkan` 的 `ash` 句柄、`RawDevice` 与 `SharedDevice`，`aegle-render-wgpu` 的 `wgpu` 类型与 `SharedGpu`，以及 `App::vulkan`/`App::wgpu`；供宿主共享设备。
+- 自带无障碍适配器的宿主：`aegle_ui::accesskit` 重导出，及 `Ui::accessibility`、`publish_accessibility`、`access_action`。控件只用 `SemanticsCx`。
+- 渲染器作者：`aegle_scene` 字形记录中的 `Blob`/`FontData`（`linebender_resource_handle`），与文字栈共享字体数据而不复制。
 
 ## 组件库作者
 
-自定义控件实现 `aegle_ui::Control`，经 `Container::add(|state, theme| Ok((Box::new(control), style)))` 加入树；输入、测量、绘制与语义分别经 `InputCx`、`MeasureCx`、`PaintCx`、`SemanticsCx` 访问，段落、编辑器与视口以能力方法（`paragraph`、`editor`、`viewport` 等）暴露；字号或字体变化时引擎调用 `restyle`，默认重排段落或编辑器，显示更多文字的控件（如菜单项的快捷键提示）覆盖它一并重排。文字有自己排版角色的控件（如 Material 的 label/title 角色）实现 `text_role`，把节点文字样式换算为角色的字号、行高、字重与字距；引擎在设置文字、字体变化与主题变化时都先经它换算，控件无需覆盖这些路径。在编辑器周围绘制标签或图标的控件用 `content_offset` 给出文字原点、用 `text_viewport` 给出可见文字区域，滚动据此保持插入点可见。需要跨节点协作的行为安装 `Hooks`，库数据放在 `State::ext`。
+自定义控件实现 `aegle_ui::Control`，经 `Container::add(|state, theme| Ok((Box::new(control), style)))` 加入树；输入、测量、绘制与语义分别经 `InputCx`、`MeasureCx`、`PaintCx`、`SemanticsCx` 访问，段落、编辑器与视口以能力方法（`paragraph`、`editor`、`viewport` 等）暴露；字号或字体变化时引擎调用 `restyle`，默认重排段落或编辑器，显示更多文字的控件（如菜单项的快捷键提示）覆盖它一并重排。文字有自己排版角色的控件（如 Material 的 label/title 角色）实现 `text_role`，把节点文字样式换算为角色的字号、行高、字重与字距；引擎在设置文字、字体变化与主题变化时都先经它换算，控件无需覆盖这些路径。在编辑器周围绘制标签或图标的控件用 `content_offset` 给出文字原点、用 `text_viewport` 给出可见文字区域，滚动据此保持插入点可见。需要跨节点协作的行为安装 `Hooks`，库数据放在 `State::ext`；引擎状态只经方法访问，见[稳定边界](#稳定边界)。
 
 - `kind()` 返回控件类型 `&'static ControlKind`：控件库为自己的每种控件声明一个 `static`（名称、默认皮肤、接受的样式组 `Accepts`、是否为布局容器），与 `aegle_widgets::kinds` 中的内置类型完全同一形式；类型在节点存活期间不变。默认皮肤即该类型的第一方皮肤，`set_kind_skin` 与 `set_skin` 在子树或单个节点上替换它（优先级见[API 指南](developer/api.md#6-外观主题样式与皮肤)）。类型化句柄用 `aegle_ui::handle! { pub Name(NameControl): text, interactive, pressed, indicator, editor }` 定义：声明控件类型后句柄得到 `read(|c| ..)` 与 `update(|c| ..)`（修改后自动请求重绘并更新语义；尺寸变化走布局），列出的样式组（与类型的 `accepts` 相符）生成对应 setter；Rust 1.86 起 trait 对象可直接向上转型为 `dyn Any`，`Control` 不需要 `as_any`；文字读写用 `State::text`/`State::set_text`；句柄的 `on_*` 方法用 `Node::on_action` 登记处理器，控件用 `State::queue_action` 报告用户操作。句柄方法经 `Node::change` 访问状态，内部的 `Result` 在那里变成 panic；参数检查用 `aegle_ui::require`，其余内部结果用 `OrFail::or_fail`。接受 `Accepts::EDITOR` 的类型必须提供 `editor()`，其他类型不能提供；不一致时 `Container::add` 以 `WrongKind` panic。
 - 不改行为、只给已有控件（含内置控件）加绘制时实现 `aegle_ui::Decorator` 并用 `node.decorate(..)` 挂上：`input` 在控件处理完输入后以节点局部坐标观察它（不能吞掉或改变结果，返回是否重绘），`under` 在背景与边框之前、`over` 在内容之后焦点环之前，以与控件相同的 `PaintCx` 录制；动画中的装饰器每次绘制调用 `request_frame`，静止时不产生帧。例如按下涟漪：`input` 记下按下点，`over` 按 `cx.time` 画随时间扩大并裁剪到 `cx.shape` 的圆（`aegle-widgets/tests/decorators.rs`）。装饰器随节点删除。
