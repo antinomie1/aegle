@@ -46,13 +46,9 @@ impl Control for SeparatorControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        // AccessKit's Splitter role is ARIA's separator.
-        cx.node.set_role(aegle_ui::accesskit::Role::Splitter);
-        cx.node.set_orientation(if self.vertical {
-            aegle_ui::accesskit::Orientation::Vertical
-        } else {
-            aegle_ui::accesskit::Orientation::Horizontal
-        });
+        // The Splitter role is ARIA's separator.
+        cx.set_role(aegle_ui::Role::Splitter);
+        cx.set_vertical(self.vertical);
     }
 }
 

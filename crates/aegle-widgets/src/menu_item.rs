@@ -165,43 +165,43 @@ impl Control for MenuItemControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::{Action, HasPopup, Role, Toggled};
+        use aegle_ui::{Role, SemanticAction as Action, Toggled};
         match self.checked {
             Some(checked) => {
-                cx.node.set_role(match self.radio {
+                cx.set_role(match self.radio {
                     true => Role::MenuItemRadio,
                     false => Role::MenuItemCheckBox,
                 });
-                cx.node.set_toggled(if checked {
+                cx.set_toggled(if checked {
                     Toggled::True
                 } else {
                     Toggled::False
                 });
             }
-            None => cx.node.set_role(Role::MenuItem),
+            None => cx.set_role(Role::MenuItem),
         }
         if self.submenu.is_some() {
-            cx.node.set_has_popup(HasPopup::Menu);
-            cx.node.set_expanded(self.expanded);
+            cx.set_opens_menu();
+            cx.set_expanded(self.expanded);
         }
         if !cx.labelled {
-            cx.node.set_label(self.text.text());
+            cx.set_label(self.text.text());
         }
         if let Some(shortcut) = &self.shortcut {
-            cx.node.set_keyboard_shortcut(shortcut.text());
+            cx.set_keyboard_shortcut(shortcut.text());
         }
         if cx.enabled {
-            cx.node.add_action(Action::Focus);
-            cx.node.add_action(Action::Click);
+            cx.add_action(Action::Focus);
+            cx.add_action(Action::Click);
         }
     }
     #[cfg(feature = "accessibility")]
     fn action_input(
         &self,
-        action: aegle_ui::accesskit::Action,
-        _: Option<&aegle_ui::accesskit::ActionData>,
+        action: aegle_ui::SemanticAction,
+        _: Option<f64>,
     ) -> Option<Input<'static>> {
-        (action == aegle_ui::accesskit::Action::Click).then_some(Input::Activate)
+        (action == aegle_ui::SemanticAction::Click).then_some(Input::Activate)
     }
 }
 

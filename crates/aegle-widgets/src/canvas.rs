@@ -321,21 +321,15 @@ impl Control for CanvasControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::{Orientation, Role};
+        use aegle_ui::Role;
         let Some((vertical, ratio)) = self.splitter else {
-            cx.node.set_role(Role::Canvas);
+            cx.set_role(Role::Canvas);
             return;
         };
         // A focusable separator: the orientation is the divider line's.
-        cx.node.set_role(Role::Splitter);
-        cx.node.set_orientation(if vertical {
-            Orientation::Horizontal
-        } else {
-            Orientation::Vertical
-        });
-        cx.node.set_numeric_value(f64::from(ratio) * 100.0);
-        cx.node.set_min_numeric_value(0.0);
-        cx.node.set_max_numeric_value(100.0);
+        cx.set_role(Role::Splitter);
+        cx.set_vertical(!vertical);
+        cx.set_numeric(f64::from(ratio) * 100.0, 0.0, 100.0);
     }
 }
 

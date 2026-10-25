@@ -4,9 +4,9 @@
 use aegle_glyph::CacheLimits;
 use aegle_render_vulkan::{Error, Options, Renderer, TextOptions};
 use aegle_scene::{
-    Affine, Color, FontData, Glyph, GlyphRun, Point, Rect, RoundedRect, Scene, SceneBuilder,
+    Affine, Blob, Color, FontData, Glyph, GlyphRun, Point, Rect, RoundedRect, Scene, SceneBuilder,
 };
-use aegle_text::{Blob, TextStyle, TextSystem};
+use aegle_text::{TextStyle, TextSystem};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -56,7 +56,7 @@ fn compare(
 #[ignore = "requires an explicitly selected Vulkan ICD/device"]
 fn cjk_residency_color_filtering_and_atlas_recovery() -> Result {
     let mut fonts = TextSystem::new();
-    fonts.register_fonts(Blob::from(
+    fonts.register_fonts(std::sync::Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec(),
     ))?;
     let plain = text(&mut fonts, "中文 A", 20.0)?;

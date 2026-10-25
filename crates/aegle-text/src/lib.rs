@@ -36,6 +36,7 @@ mod paint;
 mod paragraph;
 mod style;
 mod system;
+mod values;
 
 pub use edit::{EditorDriver, HitSelection, Movement};
 pub use editor::{EditChanges, Editor, EditorOptions, HistoryStats, Selection, TextValue};
@@ -47,10 +48,4 @@ pub use style::{TextError, TextStyle};
 pub use surrounding::Surrounding;
 pub use system::TextSystem;
 
-pub use parley::fontique::{
-    Blob, Collection, FallbackKey, FamilyId, FontInfo, GenericFamily, Language, Script,
-};
-pub use parley::{
-    Alignment, ContentWidths, FontData, FontStyle, FontWeight, FontWidth, GlyphRun, Layout,
-    LineHeight,
-};
+pub use values::{Alignment, ContentWidths, FontFamily, GenericFamily, LineHeight, Slant};

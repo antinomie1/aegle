@@ -1,16 +1,16 @@
 //! Times editing a 2,000-line document: typing in its middle, rewrapping and
 //! recoloring. Run with `cargo run -p aegle-text --release --example large_document`.
 
-use aegle_text::{Alignment, Blob, EditorOptions, Selection, TextStyle, TextSystem};
+use aegle_text::{Alignment, EditorOptions, Selection, TextStyle, TextSystem};
 use aegle_types::Color;
 use std::{sync::Arc, time::Instant};
 
 fn main() {
     let mut system = TextSystem::new();
     system
-        .register_fonts(Blob::new(Arc::new(
+        .register_fonts(Arc::new(
             include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-        )))
+        ))
         .unwrap();
     let style = TextStyle {
         families: "Aegle Test CJK",

@@ -146,23 +146,21 @@ impl Control for RatingControl {
     #[cfg(feature = "accessibility")]
     fn action_input(
         &self,
-        action: aegle_ui::accesskit::Action,
-        _: Option<&aegle_ui::accesskit::ActionData>,
+        action: aegle_ui::SemanticAction,
+        _: Option<f64>,
     ) -> Option<Input<'static>> {
         match action {
-            aegle_ui::accesskit::Action::Increment => Some(Input::Increment),
-            aegle_ui::accesskit::Action::Decrement => Some(Input::Decrement),
+            aegle_ui::SemanticAction::Increment => Some(Input::Increment),
+            aegle_ui::SemanticAction::Decrement => Some(Input::Decrement),
             _ => None,
         }
     }
     #[cfg(feature = "accessibility")]
-    fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        cx.node.set_role(aegle_ui::accesskit::Role::Slider);
-        cx.node.set_numeric_value(f64::from(self.value));
-        cx.node.set_min_numeric_value(1.0);
-        cx.node.set_max_numeric_value(f64::from(STEPS));
-        cx.node.add_action(aegle_ui::accesskit::Action::Increment);
-        cx.node.add_action(aegle_ui::accesskit::Action::Decrement);
+    fn semantics(&self, cx: &mut aegle_ui::SemanticsCx<'_>) {
+        cx.set_role(aegle_ui::Role::Slider);
+        cx.set_numeric(f64::from(self.value), 1.0, f64::from(STEPS));
+        cx.add_action(aegle_ui::SemanticAction::Increment);
+        cx.add_action(aegle_ui::SemanticAction::Decrement);
     }
 }
 

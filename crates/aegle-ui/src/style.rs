@@ -4,7 +4,7 @@
 use crate::state::State;
 use crate::{Appearance, Result, Style, Theme, UiError, VisualState};
 use aegle_core::{Dirty, NodeId};
-use aegle_text::{FontStyle, FontWeight, TextStyle};
+use aegle_text::{Slant, TextStyle};
 use aegle_theme::Accepts;
 use aegle_theme::Font;
 
@@ -205,10 +205,10 @@ fn face(theme: &Theme, decoration: Option<&Decoration>) -> TextStyle<'static> {
         size: decoration
             .and_then(|d| d.font_size)
             .unwrap_or(theme.font_size),
-        weight: FontWeight::new(f32::from(font.weight)),
+        weight: f32::from(font.weight),
         slant: match font.italic {
-            true => FontStyle::Italic,
-            false => FontStyle::Normal,
+            true => Slant::Italic,
+            false => Slant::Normal,
         },
         ..crate::state::text_style(theme)
     }

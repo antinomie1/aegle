@@ -1,5 +1,5 @@
 //! The cursor follows the control under the pointer, or the one that captured it.
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use aegle_ui::{
     Cursor, Modifiers, Node, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui,
 };
@@ -26,12 +26,10 @@ fn cursor_at(ui: &Ui, position: Point) -> Cursor {
 #[test]
 fn cursor_tracks_text_fields_overrides_capture_and_scrollbars() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let root = ui.root();
     root.set_padding(0.0);

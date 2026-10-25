@@ -7,7 +7,7 @@
 #![allow(unsafe_code)]
 
 use aegle_app::{App, AppOptions, WindowOptions};
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use aegle_ui::{Result, TextSystem};
 use aegle_widgets::Widgets;
 use std::{
@@ -83,13 +83,10 @@ fn microsoft_pinyin_commits_into_the_focused_text_field() -> Result {
         Ok("private")
     );
     let mut fonts = TextSystem::new();
-    let family = fonts.register_fonts(Blob::new(Arc::new(
+    let family = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?[0]
-        .0;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, [family].into_iter());
+    ))?[0];
+    fonts.set_generic_families(GenericFamily::SansSerif, [family]);
     let app = App::with_fonts(fonts, AppOptions::default())?;
     let window = app.window_with_options(
         "Aegle IME field",

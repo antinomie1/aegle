@@ -234,34 +234,34 @@ impl Control for ButtonControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::{Action, Role};
-        cx.node.set_role(match self.variant {
+        use aegle_ui::{Role, SemanticAction as Action};
+        cx.set_role(match self.variant {
             Variant::Plain => Role::Button,
             Variant::Dropdown { .. } => Role::ComboBox,
             Variant::Option { .. } => Role::ListBoxOption,
             Variant::Tab { .. } => Role::Tab,
         });
         match self.variant {
-            Variant::Dropdown { expanded } => cx.node.set_expanded(expanded),
-            Variant::Option { chosen } => cx.node.set_selected(chosen),
-            Variant::Tab { selected } => cx.node.set_selected(selected),
+            Variant::Dropdown { expanded } => cx.set_expanded(expanded),
+            Variant::Option { chosen } => cx.set_selected(chosen),
+            Variant::Tab { selected } => cx.set_selected(selected),
             Variant::Plain => {}
         }
         if !cx.labelled {
-            cx.node.set_label(self.text.text());
+            cx.set_label(self.text.text());
         }
         if cx.enabled {
-            cx.node.add_action(Action::Focus);
-            cx.node.add_action(Action::Click);
+            cx.add_action(Action::Focus);
+            cx.add_action(Action::Click);
         }
     }
     #[cfg(feature = "accessibility")]
     fn action_input(
         &self,
-        action: aegle_ui::accesskit::Action,
-        _: Option<&aegle_ui::accesskit::ActionData>,
+        action: aegle_ui::SemanticAction,
+        _: Option<f64>,
     ) -> Option<Input<'static>> {
-        (action == aegle_ui::accesskit::Action::Click).then_some(Input::Activate)
+        (action == aegle_ui::SemanticAction::Click).then_some(Input::Activate)
     }
 }
 

@@ -2,7 +2,7 @@
 #![cfg(feature = "text-a11y")]
 
 use accesskit::{Node, NodeId, Role, TextPosition, TextSelection, TreeUpdate};
-use aegle_text::{Blob, Editor, EditorOptions, Selection, TextError, TextStyle, TextSystem};
+use aegle_text::{Editor, EditorOptions, Selection, TextError, TextStyle, TextSystem};
 use aegle_types::Point;
 use std::sync::Arc;
 
@@ -33,9 +33,9 @@ fn export(system: &mut TextSystem, editor: &mut Editor, id: &mut u64) -> (Node, 
 fn selection_round_trip_obeys_run_boundaries_readonly_and_composition() {
     let mut system = TextSystem::new();
     system
-        .register_fonts(Blob::new(Arc::new(
+        .register_fonts(Arc::new(
             include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-        )))
+        ))
         .unwrap();
     let style = TextStyle {
         families: "Aegle Test CJK",

@@ -52,7 +52,7 @@ impl Editor {
             self.selection_rects(|rect| fill_rect(builder, rect, color));
         }
         let color = paint.foreground.unwrap_or(self.doc.color);
-        let weight = self.doc.shaping.weight.value();
+        let weight = self.doc.shaping.weight;
         for block in &self.doc.blocks {
             let diagnostics = block.diagnostics;
             paint_layout(

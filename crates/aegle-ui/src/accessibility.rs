@@ -132,11 +132,15 @@ impl State {
         action: Action,
         data: Option<&ActionData>,
     ) -> Option<Input<'static>> {
+        let value = match data {
+            Some(ActionData::NumericValue(value)) => Some(*value),
+            _ => None,
+        };
         self.tree
             .get(id)?
             .context
             .control
-            .action_input(action, data)
+            .action_input(crate::SemanticAction::from_schema(action)?, value)
     }
 
     fn prepare_accessibility(&self) -> Result {

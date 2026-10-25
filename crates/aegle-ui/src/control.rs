@@ -166,16 +166,8 @@ impl PaintCx<'_> {
     }
 }
 
-/// Semantic export context for controls without an editor or viewport.
 #[cfg(feature = "accessibility")]
-pub struct SemanticsCx<'a> {
-    /// The node to describe; its bounds and transform are already set.
-    pub node: &'a mut aegle_access::accesskit::Node,
-    /// Whether the control can currently be used.
-    pub enabled: bool,
-    /// Whether the application set an explicit accessible label.
-    pub labelled: bool,
-}
+pub use crate::semantics::SemanticsCx;
 
 /// One control inside a node. See the [module docs](self).
 pub trait Control: Any {
@@ -310,12 +302,12 @@ pub trait Control: Any {
     /// Records what a viewport draws over its children: border and scrollbars.
     fn paint_overlay(&mut self, _cx: &mut PaintCx<'_>) {}
     /// The input a semantic action (click, increment, set value) stands for, if
-    /// this control supports it.
+    /// this control supports it; `value` is the number a `SetValue` carries.
     #[cfg(feature = "accessibility")]
     fn action_input(
         &self,
-        _action: aegle_access::accesskit::Action,
-        _data: Option<&aegle_access::accesskit::ActionData>,
+        _action: crate::SemanticAction,
+        _value: Option<f64>,
     ) -> Option<Input<'static>> {
         None
     }

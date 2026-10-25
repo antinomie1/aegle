@@ -1,6 +1,6 @@
 //! Paint transitions share lifecycle, semantics and retained editing state.
 #![cfg(feature = "motion")]
-use aegle_text::{Blob, GenericFamily, Selection};
+use aegle_text::{GenericFamily, Selection};
 use aegle_ui::{Color, Easing, ImeEdit, Result, Size, TextSystem, Theme, Transition, Ui};
 use aegle_widgets::*;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
@@ -8,12 +8,10 @@ use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 #[test]
 fn transitions_retarget_and_stop_without_disturbing_editing() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let timing = Transition::new(Duration::from_millis(100), Easing::Linear);
     ui.set_default_transition(Some(timing));

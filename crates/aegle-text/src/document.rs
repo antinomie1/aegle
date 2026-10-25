@@ -5,9 +5,9 @@
 use std::ops::Range;
 
 use aegle_types::{Color, Point, Size};
-use parley::{Affinity, AlignmentOptions, BoundingBox, Cursor, Layout};
+use parley::{Affinity, Alignment, AlignmentOptions, BoundingBox, Cursor, Layout};
 
-use crate::{Alignment, TextDiagnostics, TextSystem, paragraph::diagnose, style::Shaping};
+use crate::{TextDiagnostics, TextSystem, paragraph::diagnose, style::Shaping};
 
 /// A caret in the whole buffer: a byte index and the side it binds to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

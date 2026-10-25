@@ -212,13 +212,13 @@ fn toggles_and_ranges_share_changes_capture_and_numeric_boundaries() {
 #[cfg(feature = "text")]
 fn field_keeps_editor_state_across_pointer_ime_focus_and_read_only_changes() {
     use aegle_controls::TextField;
-    use aegle_text::{Blob, EditorOptions, ImeEdit, Selection, TextStyle, TextSystem};
+    use aegle_text::{EditorOptions, ImeEdit, Selection, TextStyle, TextSystem};
     use std::sync::Arc;
     let mut fonts = TextSystem::new();
     fonts
-        .register_fonts(Blob::new(Arc::new(
+        .register_fonts(Arc::new(
             include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-        )))
+        ))
         .unwrap();
     let editor = fonts
         .editor(

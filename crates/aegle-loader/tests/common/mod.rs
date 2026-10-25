@@ -1,20 +1,18 @@
 //! Shared helpers: drive a headless UI through its accessibility tree.
 #![allow(dead_code)]
 use aegle_access::accesskit::{Action, ActionRequest, NodeId, TreeId};
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use aegle_ui::{Result, Size, TextSystem, Theme, Ui};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 /// A 300 × 400 UI with the CJK test font as its only font.
 pub fn ui() -> Result<Ui> {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    let families = families.iter().map(|(id, _)| *id);
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families);
+    ))?;
+    let families = families.iter().copied();
+    fonts.set_generic_families(GenericFamily::SansSerif, families);
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     ui.resize(Size::new(300.0, 400.0));
     Ok(ui)

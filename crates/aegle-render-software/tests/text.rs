@@ -3,14 +3,14 @@
 
 use aegle_render_software::{Renderer, Surface};
 use aegle_scene::{
-    Affine, Color, FontData, Glyph, GlyphRun, Point, Rect, RoundedRect, SceneBuilder,
+    Affine, Blob, Color, FontData, Glyph, GlyphRun, Point, Rect, RoundedRect, SceneBuilder,
 };
-use aegle_text::{Blob, TextStyle, TextSystem};
+use aegle_text::{TextStyle, TextSystem};
 
 #[test]
 fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::error::Error>> {
     let mut fonts = TextSystem::new();
-    fonts.register_fonts(Blob::from(
+    fonts.register_fonts(std::sync::Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec(),
     ))?;
     let text = fonts.paragraph(
@@ -188,7 +188,7 @@ fn editor_decorations_follow_composition_and_hidden_caret() -> Result<(), Box<dy
 {
     use aegle_text::{EditorOptions, EditorPaint, Selection};
     let mut fonts = TextSystem::new();
-    fonts.register_fonts(Blob::from(
+    fonts.register_fonts(std::sync::Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec(),
     ))?;
     let mut editor = fonts.editor(

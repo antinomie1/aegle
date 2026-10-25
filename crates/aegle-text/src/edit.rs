@@ -78,6 +78,7 @@ impl EditorDriver<'_> {
             return Err(TextError::InvalidWidth);
         }
         let doc = &mut self.editor.doc;
+        let alignment = alignment.parley();
         if (doc.width, doc.alignment) != (width, alignment) {
             doc.reflow(width, alignment);
             self.rebuilt(false);

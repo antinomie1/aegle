@@ -15,7 +15,7 @@ default = []
 motion = ["aegle-ui/motion"]
 system-fonts = ["aegle-ui/system-fonts"]
 accessibility = ["aegle-ui/accessibility"]
-wayland = ["dep:aegle-platform-wayland", "dep:wayland-client"]
+wayland = ["dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
 software = ["dep:aegle-render-software"]
 vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
@@ -39,7 +39,6 @@ aegle-render-wgpu = { workspace = true, features = ["text", "window"], optional 
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aegle-platform-wayland = { workspace = true, optional = true }
-wayland-client = { version = "0.31.15", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 aegle-platform-win32 = { path = "../aegle-platform-win32", version = "0.1.0", optional = true }

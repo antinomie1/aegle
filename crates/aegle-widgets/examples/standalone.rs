@@ -11,7 +11,7 @@ use std::{cell::RefCell, fs, rc::Rc, sync::Arc, time::Duration};
 
 use aegle_motion::{Spring, Transition};
 use aegle_render_software::{Renderer, Surface};
-use aegle_text::{Blob, GenericFamily, TextSystem};
+use aegle_text::{GenericFamily, TextSystem};
 use aegle_theme::Theme;
 use aegle_ui::{Modifiers, Point, PointerId, PointerKind, Result, Size, Ui, Visit};
 use aegle_widgets::Widgets;
@@ -20,10 +20,9 @@ fn main() -> Result {
     // Fonts are explicit; `aegle-ui/system-fonts` would add system discovery.
     let mut text = TextSystem::new();
     let font = include_bytes!("../../../tests/assets/aegle-test-cjk.otf");
-    let families = text.register_fonts(Blob::new(Arc::new(font.as_slice())))?;
-    let ids = families.iter().map(|(id, _)| *id);
-    text.collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, ids);
+    let families = text.register_fonts(Arc::new(font.as_slice()))?;
+    let ids = families.iter().copied();
+    text.set_generic_families(GenericFamily::SansSerif, ids);
     let theme = Theme {
         radius: 6.0,
         ..Theme::light()

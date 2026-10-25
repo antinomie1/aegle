@@ -1,15 +1,15 @@
 //! Integrated editing, composition and bounded-history lifecycle.
 
-use aegle_text::{Alignment, Blob, EditorOptions, Selection, TextError, TextStyle, TextSystem};
+use aegle_text::{Alignment, EditorOptions, Selection, TextError, TextStyle, TextSystem};
 use std::sync::Arc;
 
 #[test]
 fn composition_and_history_share_one_retained_editor() {
     let mut system = TextSystem::new();
     system
-        .register_fonts(Blob::new(Arc::new(
+        .register_fonts(Arc::new(
             include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-        )))
+        ))
         .unwrap();
     let style = TextStyle {
         families: "Aegle Test CJK",
@@ -142,13 +142,7 @@ fn composition_and_history_share_one_retained_editor() {
         .edit(&mut single)
         .reflow(Some(1.0), Alignment::Start)
         .unwrap();
-    assert_eq!(
-        single
-            .layouts()
-            .map(|(_, layout)| layout.len())
-            .sum::<usize>(),
-        1
-    );
+    assert_eq!(single.line_count(), 1);
     assert_eq!(single.text(), "abc abc abc");
     assert!(single.ime_rect().size.width >= 0.0);
 

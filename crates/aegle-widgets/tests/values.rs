@@ -1,5 +1,5 @@
 //! Shared value behavior connects pointer/keyboard input, callbacks and semantics.
-use aegle_text::{Blob, GenericFamily, Selection};
+use aegle_text::{GenericFamily, Selection};
 use aegle_ui::{
     ImeEdit, Key, KeyInput, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem,
     Theme, Ui,
@@ -14,12 +14,10 @@ use std::{
 #[test]
 fn value_controls_share_lifecycle_and_system_actions() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let group = ui.root().column();
     let toggles = group.row();

@@ -17,7 +17,7 @@ use aegle::{
     widgets::Widgets,
 };
 use aegle_render_software::{Renderer, Surface};
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use aegle_ui::OrFail;
 use std::{
     cell::RefCell, fs::File, io::BufWriter, ops::Deref, path::Path, rc::Rc, sync::Arc,
@@ -159,11 +159,10 @@ fn main() -> Result {
     let dir = Path::new(&output);
     std::fs::create_dir_all(dir)?;
     let mut text = TextSystem::new();
-    let families = text.register_fonts(Blob::new(Arc::new(
+    let families = text.register_fonts(Arc::new(
         include_bytes!("../../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    text.collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    text.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let fonts = Rc::new(RefCell::new(text));
     let light = Theme::light();
     let shot = |name: &str, cell: (f32, f32), cells: &[(&str, Setup)]| {

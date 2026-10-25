@@ -338,31 +338,27 @@ impl Control for NumberFieldControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::{Action, Role};
-        cx.node.set_role(Role::SpinButton);
-        cx.node.set_numeric_value(self.range.value());
-        cx.node.set_min_numeric_value(self.range.min());
-        cx.node.set_max_numeric_value(self.range.max());
-        cx.node.set_numeric_value_step(self.step());
+        use aegle_ui::{Role, SemanticAction as Action};
+        cx.set_role(Role::SpinButton);
+        cx.set_numeric(self.range.value(), self.range.min(), self.range.max());
+        cx.set_numeric_step(self.step());
         if cx.enabled {
-            cx.node.add_action(Action::Increment);
-            cx.node.add_action(Action::Decrement);
-            cx.node.add_action(Action::SetValue);
+            cx.add_action(Action::Increment);
+            cx.add_action(Action::Decrement);
+            cx.add_action(Action::SetValue);
         }
     }
     #[cfg(feature = "accessibility")]
     fn action_input(
         &self,
-        action: aegle_ui::accesskit::Action,
-        data: Option<&aegle_ui::accesskit::ActionData>,
+        action: aegle_ui::SemanticAction,
+        value: Option<f64>,
     ) -> Option<Input<'static>> {
-        use aegle_ui::accesskit::{Action, ActionData};
-        match (action, data) {
+        use aegle_ui::SemanticAction as Action;
+        match (action, value) {
             (Action::Increment, _) => Some(Input::Increment),
             (Action::Decrement, _) => Some(Input::Decrement),
-            (Action::SetValue, Some(ActionData::NumericValue(value))) if value.is_finite() => {
-                Some(Input::SetValue(*value))
-            }
+            (Action::SetValue, Some(value)) if value.is_finite() => Some(Input::SetValue(value)),
             _ => None,
         }
     }

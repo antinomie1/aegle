@@ -2,18 +2,16 @@
 
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use aegle_ui::{Result, Size, TextSystem, Theme, Ui};
 use aegle_widgets::Widgets;
 
 fn test_ui() -> Result<Ui> {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())
 }
 

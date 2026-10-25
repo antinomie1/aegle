@@ -1,5 +1,5 @@
 //! Nested scroll boundaries share paint clips, capture, focus and composition.
-use aegle_text::{Blob, GenericFamily, Selection};
+use aegle_text::{GenericFamily, Selection};
 use aegle_ui::{
     ImeEdit, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme, Ui,
 };
@@ -18,12 +18,10 @@ static PAINTS: AtomicUsize = AtomicUsize::new(0);
 #[test]
 fn nested_viewports_preserve_records_and_editing_while_clipping_input() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     ui.root().set_padding(0.0);
     let outer = ui.root().scroll_view();
@@ -298,12 +296,10 @@ fn overflowing_viewports_reserve_the_bar_and_draw_their_border_last() -> Result 
 #[test]
 fn scroll_views_fit_the_window_and_their_content_scrolls() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     // No `min_height` anywhere: a viewport's content does not enlarge its
     // ancestors, whether the view sits on a column's main axis or a row's

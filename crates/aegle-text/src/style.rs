@@ -1,5 +1,6 @@
-use crate::{FontStyle, FontWeight, FontWidth, Language, LineHeight};
+use crate::{LineHeight, Slant};
 use aegle_types::Color;
+use parley::fontique::Language;
 use std::{error::Error, fmt, sync::Arc};
 
 /// Styling for a display paragraph or plain text editor, in logical pixels.
@@ -13,15 +14,14 @@ pub struct TextStyle<'a> {
     pub families: &'a str,
     /// Font size, finite and strictly positive.
     pub size: f32,
-    /// Font weight, in the inclusive CSS range 1–1000.
-    pub weight: FontWeight,
-    /// Condensed or expanded face selection; ratio must be finite and positive.
-    pub width: FontWidth,
-    /// Upright, italic, or oblique face selection. Explicit oblique angles must
-    /// be finite and strictly between -90 and 90 degrees.
-    pub slant: FontStyle,
-    /// Language hint for shaping and fallback, such as `zh-Hans` or `ja`.
-    pub locale: Option<Language>,
+    /// Font weight, in the inclusive CSS range 1–1000; 400 is normal, 700 bold.
+    pub weight: f32,
+    /// Condensed or expanded face selection as a finite positive ratio; 1 is normal.
+    pub width: f32,
+    /// Upright, italic, or oblique face selection.
+    pub slant: Slant,
+    /// BCP 47 language hint for shaping and fallback, such as `zh-Hans` or `ja`.
+    pub locale: Option<&'a str>,
     /// Unpremultiplied sRGB foreground color.
     pub color: Color,
     /// Positive line height, relative to metrics, size, or absolute pixels.
@@ -37,9 +37,9 @@ impl Default for TextStyle<'_> {
         Self {
             families: "sans-serif",
             size: 16.0,
-            weight: FontWeight::NORMAL,
-            width: FontWidth::NORMAL,
-            slant: FontStyle::Normal,
+            weight: 400.0,
+            width: 1.0,
+            slant: Slant::Normal,
             locale: None,
             color: Color::BLACK,
             line_height: LineHeight::default(),
@@ -51,26 +51,29 @@ impl Default for TextStyle<'_> {
 
 impl TextStyle<'_> {
     pub(crate) fn validate(&self) -> Result<(), TextError> {
-        let line_height = match self.line_height {
-            LineHeight::MetricsRelative(value)
-            | LineHeight::FontSizeRelative(value)
-            | LineHeight::Absolute(value) => value,
-        };
         let valid_slant = match self.slant {
-            FontStyle::Oblique(Some(angle)) => angle.is_finite() && angle.abs() < 90.0,
+            Slant::Oblique(Some(angle)) => angle.is_finite() && angle.abs() < 90.0,
             _ => true,
         };
-        if ![self.size, self.width.ratio(), line_height]
+        if ![self.size, self.width, self.line_height.value()]
             .into_iter()
             .all(|value| value.is_finite() && value > 0.0)
-            || !(1.0..=1000.0).contains(&self.weight.value())
+            || !(1.0..=1000.0).contains(&self.weight)
             || !self.letter_spacing.is_finite()
             || !self.word_spacing.is_finite()
             || !valid_slant
+            || self
+                .locale
+                .is_some_and(|locale| Language::parse(locale).is_err())
         {
             return Err(TextError::InvalidStyle);
         }
         Ok(())
+    }
+
+    /// The parsed language hint of a validated style.
+    pub(crate) fn language(&self) -> Option<Language> {
+        self.locale.and_then(|locale| Language::parse(locale).ok())
     }
 }
 
@@ -82,9 +85,9 @@ impl TextStyle<'_> {
 pub(crate) struct Shaping {
     pub families: Arc<str>,
     pub size: f32,
-    pub weight: FontWeight,
-    pub width: FontWidth,
-    pub slant: FontStyle,
+    pub weight: f32,
+    pub width: f32,
+    pub slant: Slant,
     pub locale: Option<Language>,
     pub line_height: LineHeight,
     pub letter_spacing: f32,
@@ -99,7 +102,7 @@ impl Shaping {
             && self.weight == style.weight
             && self.width == style.width
             && self.slant == style.slant
-            && self.locale == style.locale
+            && self.locale == style.language()
             && self.line_height == style.line_height
             && self.letter_spacing == style.letter_spacing
             && self.word_spacing == style.word_spacing
@@ -111,12 +114,12 @@ impl Shaping {
         [
             FontFamily(parley::FontFamily::Source((&*self.families).into())),
             FontSize(self.size),
-            FontWeight(self.weight),
-            FontWidth(self.width),
-            FontStyle(self.slant),
+            FontWeight(parley::FontWeight::new(self.weight)),
+            FontWidth(parley::FontWidth::from_ratio(self.width)),
+            FontStyle(self.slant.parley()),
             Locale(self.locale),
             Brush(color),
-            LineHeight(self.line_height),
+            LineHeight(self.line_height.parley()),
             LetterSpacing(self.letter_spacing),
             WordSpacing(self.word_spacing),
         ]

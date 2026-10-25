@@ -11,18 +11,16 @@ use aegle::{
     ui::{Result, Size, TextSystem, Theme, Ui, accesskit::Role},
     widgets::Widgets,
 };
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[test]
 fn stock_widgets_export_roles_and_names() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let root = ui.root();
     root.text("Title");

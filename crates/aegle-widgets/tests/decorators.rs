@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 
 use aegle_ui::{
     Color, Decorator, Modifiers, Point, PointerId, PointerKind, Result, Size, TextSystem, Theme,
@@ -78,12 +78,10 @@ fn ink_fills(ui: &Ui) -> Result<usize> {
 #[test]
 fn a_ripple_decorates_a_button_without_changing_it() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families.iter().map(|(id, _)| *id));
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     let button = ui.root().button("Ripple");
     let clicks = Rc::new(Cell::new(0));

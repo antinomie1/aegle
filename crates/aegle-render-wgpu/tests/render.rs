@@ -4,7 +4,7 @@
 
 use aegle_render_wgpu::{Error, Options, Renderer};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, Scene, SceneBuilder};
-use aegle_text::{Blob, TextStyle, TextSystem};
+use aegle_text::{TextStyle, TextSystem};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 const SIZE: u32 = 96;
@@ -99,7 +99,7 @@ fn geometry_text_atlas_recycling_and_failed_frames() -> Result {
 
     // Text takes the shared glyph rasterizer, so bytes agree beyond edge rounding.
     let mut fonts = TextSystem::new();
-    fonts.register_fonts(Blob::from(
+    fonts.register_fonts(std::sync::Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec(),
     ))?;
     let paragraph = fonts.paragraph(

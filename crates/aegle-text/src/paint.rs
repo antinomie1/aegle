@@ -1,6 +1,7 @@
-use crate::{Layout, Paragraph, TextDiagnostics};
+use crate::{Paragraph, TextDiagnostics};
 use aegle_scene::{Glyph, GlyphRun, SceneBuilder};
 use aegle_types::{Color, Point};
+use parley::Layout;
 use parley::PositionedLayoutItem;
 
 impl Paragraph {
@@ -23,7 +24,7 @@ impl Paragraph {
     /// the paragraph's original styling are unchanged. Panics as [`Self::paint`].
     pub fn paint_with_color(&self, builder: &mut SceneBuilder, color: Color) {
         assert!(!self.released, "paragraph layout was released");
-        let weight = self.shaping.weight.value();
+        let weight = self.shaping.weight;
         let origin = Point::default();
         paint_layout(
             &self.layout,

@@ -6,7 +6,7 @@ use std::{
 
 use aegle_render_vulkan::{Options, Renderer};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
-use aegle_text::{Blob, TextStyle, TextSystem};
+use aegle_text::{TextStyle, TextSystem};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = std::env::args_os()
@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "/tmp/aegle-vulkan-text.ppm".into());
     let mut fonts = TextSystem::new();
     // The OFL subset is an example/test fixture, never embedded by the library.
-    fonts.register_fonts(Blob::from(
+    fonts.register_fonts(std::sync::Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec(),
     ))?;
     let mut builder = SceneBuilder::new();

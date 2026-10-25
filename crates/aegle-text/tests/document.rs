@@ -2,17 +2,15 @@
 //! its geometry equals that of an editor freshly built from the same text,
 //! and motion, deletion and selection cross line breaks as in one layout.
 
-use aegle_text::{
-    Alignment, Blob, Editor, EditorOptions, Movement, Selection, TextStyle, TextSystem,
-};
+use aegle_text::{Alignment, Editor, EditorOptions, Movement, Selection, TextStyle, TextSystem};
 use std::sync::Arc;
 
 fn system() -> TextSystem {
     let mut system = TextSystem::new();
     system
-        .register_fonts(Blob::new(Arc::new(
+        .register_fonts(Arc::new(
             include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-        )))
+        ))
         .unwrap();
     system
 }
@@ -44,8 +42,7 @@ fn same_as_fresh(system: &mut TextSystem, editor: &Editor, width: Option<f32>) {
         rects
     };
     assert_eq!(rects(editor), rects(&fresh), "{text:?}");
-    let lines = |editor: &Editor| editor.layouts().map(|(_, l)| l.len()).sum::<usize>();
-    assert_eq!(lines(editor), lines(&fresh), "{text:?}");
+    assert_eq!(editor.line_count(), fresh.line_count(), "{text:?}");
 }
 
 #[test]

@@ -2,7 +2,7 @@
 
 use aegle_access::accesskit::NodeId;
 use aegle_loader::{Data, Program};
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use aegle_ui::{Result, Size, TextSystem, Theme, Ui};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
@@ -39,13 +39,11 @@ fn program(main: &str) -> Result<Program> {
 #[test]
 fn bindings_blocks_rows_and_components_follow_state() -> Result {
     let mut fonts = TextSystem::new();
-    let families = fonts.register_fonts(Blob::new(Arc::new(
+    let families = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
-    let families = families.iter().map(|(id, _)| *id);
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, families);
+    ))?;
+    let families = families.iter().copied();
+    fonts.set_generic_families(GenericFamily::SansSerif, families);
     let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
     ui.resize(Size::new(300.0, 400.0));
     let view = program(MAIN)?.build(&ui.root())?;

@@ -55,6 +55,8 @@ mod propagate;
 mod scroll;
 pub mod scroll_geometry;
 mod scrollbar;
+#[cfg(feature = "accessibility")]
+mod semantics;
 mod skins;
 mod state;
 mod style;
@@ -69,6 +71,12 @@ mod transform;
 mod ui;
 
 #[cfg(feature = "accessibility")]
+pub use semantics::{Role, SemanticAction, SemanticsCx, Toggled};
+
+/// The accessibility schema [`Ui::publish_accessibility`] produces, for hosts
+/// that run their own platform adapter; controls describe themselves with
+/// [`SemanticsCx`] instead.
+#[cfg(feature = "accessibility")]
 pub use aegle_access::accesskit;
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerButton, PointerId, PointerKind};
 pub use aegle_core::{Dirty, NodeId};
@@ -81,7 +89,7 @@ pub use aegle_layout::{Flow, GridLine, GridLines, Placement, Repeat, TemplateIte
 #[cfg(feature = "motion")]
 pub use aegle_motion::{Animation, CubicBezier, Cycles, Easing, Keyframe, Spring, Transition};
 pub use aegle_scene as scene;
-pub use aegle_text::{ImeEdit, Selection, TextSystem};
+pub use aegle_text::{FontFamily, GenericFamily, ImeEdit, Selection, TextSystem};
 pub use aegle_theme::{
     Accepts, Appearance, ControlKind, Font, Skin, Style, Theme, ThemeOverride, Token, TokenKind,
     TokenType, TokenValue, VisualState,

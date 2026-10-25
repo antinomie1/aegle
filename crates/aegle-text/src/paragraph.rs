@@ -1,6 +1,7 @@
-use crate::{Alignment, ContentWidths, GlyphRun, Layout, TextError, style::Shaping};
+use crate::{Alignment, ContentWidths, TextError, style::Shaping};
 use aegle_types::{Color, Size};
-use parley::{AlignmentOptions, PositionedLayoutItem};
+use parley::AlignmentOptions;
+use parley::Layout;
 
 /// Visible missing-glyph and omitted-text diagnostics for a shaped paragraph.
 ///
@@ -28,9 +29,9 @@ pub struct Paragraph {
     pub(crate) text: String,
     pub(crate) layout: Layout<Color>,
     pub(crate) width: Option<f32>,
-    pub(crate) alignment: Alignment,
+    pub(crate) alignment: parley::Alignment,
     pub(crate) diagnostics: TextDiagnostics,
-    pub(crate) content_widths: ContentWidths,
+    pub(crate) content_widths: parley::ContentWidths,
     /// What the layout was shaped with; its weight decides synthetic bold.
     pub(crate) shaping: Shaping,
     /// Foreground color, applied when painting so that changing it needs no
@@ -44,12 +45,6 @@ impl Paragraph {
     /// Returns the original UTF-8 text.
     pub fn text(&self) -> &str {
         &self.text
-    }
-
-    /// Returns the retained layout for text geometry, rendering, or accessibility;
-    /// empty while released.
-    pub fn layout(&self) -> &Layout<Color> {
-        &self.layout
     }
 
     /// The foreground color painting uses.
@@ -82,6 +77,7 @@ impl Paragraph {
         if self.released {
             return Err(TextError::Released);
         }
+        let alignment = alignment.parley();
         if self.width != width {
             self.width = width;
             self.alignment = alignment;
@@ -98,6 +94,11 @@ impl Paragraph {
         Size::new(self.layout.width(), self.layout.height())
     }
 
+    /// Number of laid out lines; zero while released.
+    pub fn line_count(&self) -> usize {
+        self.layout.len()
+    }
+
     /// Offset of the first line's baseline from the top, if there is a line.
     pub fn first_baseline(&self) -> Option<f32> {
         Some(self.layout.lines().next()?.metrics().baseline)
@@ -107,21 +108,9 @@ impl Paragraph {
     ///
     /// Parley currently documents imperfect estimates for mixed-direction text.
     pub fn content_widths(&self) -> ContentWidths {
-        self.content_widths
-    }
-
-    /// Visits positioned glyph runs without copying glyphs or font data.
-    ///
-    /// [`GlyphRun::positioned_glyphs`] includes the baseline and horizontal run
-    /// offset. Font bytes, face index, variation coordinates and synthetic style
-    /// are available through [`GlyphRun::run`].
-    pub fn glyph_runs(&self, mut visit: impl FnMut(GlyphRun<'_, Color>)) {
-        for line in self.layout.lines() {
-            for item in line.items() {
-                if let PositionedLayoutItem::GlyphRun(run) = item {
-                    visit(run);
-                }
-            }
+        ContentWidths {
+            min: self.content_widths.min,
+            max: self.content_widths.max,
         }
     }
 

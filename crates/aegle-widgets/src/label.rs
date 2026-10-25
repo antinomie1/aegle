@@ -98,8 +98,8 @@ impl Control for LabelControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        cx.node.set_role(aegle_ui::accesskit::Role::Label);
-        cx.node.set_value(self.text.text());
+        cx.set_role(aegle_ui::Role::Label);
+        cx.set_value(self.text.text());
     }
 }
 

@@ -193,13 +193,13 @@ impl Control for TreeNodeControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::Role;
-        cx.node.set_role(Role::TreeItem);
-        cx.node.set_selected(self.selected);
+        use aegle_ui::Role;
+        cx.set_role(Role::TreeItem);
+        cx.set_selected(self.selected);
         if self.has_children {
-            cx.node.set_expanded(self.expanded);
+            cx.set_expanded(self.expanded);
         }
-        cx.node.set_value(self.text.text());
+        cx.set_value(self.text.text());
     }
 }
 

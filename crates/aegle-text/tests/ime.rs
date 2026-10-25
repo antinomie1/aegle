@@ -1,14 +1,14 @@
 //! Atomic native input transactions and borrowed surrounding text.
-use aegle_text::{Blob, EditorOptions, ImeEdit, Selection, TextError, TextStyle, TextSystem};
+use aegle_text::{EditorOptions, ImeEdit, Selection, TextError, TextStyle, TextSystem};
 use std::sync::Arc;
 
 #[test]
 fn atomic_ime_batches_share_selection_history_and_bounded_surrounding() {
     let mut system = TextSystem::new();
     system
-        .register_fonts(Blob::new(Arc::new(
+        .register_fonts(Arc::new(
             include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-        )))
+        ))
         .unwrap();
     let style = TextStyle {
         families: "Aegle Test CJK",

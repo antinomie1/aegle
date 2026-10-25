@@ -183,7 +183,7 @@ impl Control for ImageControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        cx.node.set_role(aegle_ui::accesskit::Role::Image);
+        cx.set_role(aegle_ui::Role::Image);
     }
 }
 

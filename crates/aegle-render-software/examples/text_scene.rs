@@ -3,7 +3,7 @@ use aegle_core::{NodeId, Tree};
 use aegle_layout::{Available, LayoutNode, LayoutStyle, Space, compute};
 use aegle_render_software::{Renderer, Surface};
 use aegle_scene::{Affine, Color, Point, Rect, RoundedRect, Scene, SceneBuilder};
-use aegle_text::{Alignment, Blob, LineHeight, Paragraph, TextStyle, TextSystem};
+use aegle_text::{Alignment, LineHeight, Paragraph, TextStyle, TextSystem};
 use aegle_types::Size;
 use std::{error::Error, fs::File, io::BufWriter, sync::Arc, time::Instant};
 
@@ -117,7 +117,7 @@ fn main() -> Result<()> {
     // This tiny OFL fixture belongs only to examples/tests, not the library.
     let bytes: Arc<dyn AsRef<[u8]> + Send + Sync> =
         Arc::new(include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice());
-    fonts.register_fonts(Blob::new(bytes))?;
+    fonts.register_fonts(bytes)?;
     let mut tree = Nodes::with_capacity(6);
     let root = tree.insert(
         None,

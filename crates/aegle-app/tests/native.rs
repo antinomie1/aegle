@@ -5,7 +5,7 @@
 ))]
 
 use aegle_app::{App, AppOptions, WindowOptions};
-use aegle_text::{Blob, GenericFamily};
+use aegle_text::GenericFamily;
 use aegle_ui::{Result, TextSystem, UiError};
 use aegle_widgets::Widgets;
 use std::{
@@ -17,13 +17,10 @@ use std::{
 
 fn test_fonts() -> Result<TextSystem> {
     let mut fonts = TextSystem::new();
-    let family = fonts.register_fonts(Blob::new(Arc::new(
+    let family = fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?[0]
-        .0;
-    fonts
-        .collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, [family].into_iter());
+    ))?[0];
+    fonts.set_generic_families(GenericFamily::SansSerif, [family]);
     Ok(fonts)
 }
 

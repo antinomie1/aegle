@@ -197,20 +197,8 @@ impl ProgressControl {
 }
 
 #[cfg(feature = "accessibility")]
-fn numeric(node: &mut aegle_ui::accesskit::Node, range: &Range) {
-    node.set_numeric_value(range.value());
-    node.set_min_numeric_value(range.min());
-    node.set_max_numeric_value(range.max());
-}
-
-#[cfg(feature = "accessibility")]
-fn orientation(node: &mut aegle_ui::accesskit::Node, vertical: bool) {
-    use aegle_ui::accesskit::Orientation;
-    node.set_orientation(if vertical {
-        Orientation::Vertical
-    } else {
-        Orientation::Horizontal
-    });
+fn numeric(cx: &mut aegle_ui::SemanticsCx<'_>, range: &Range) {
+    cx.set_numeric(range.value(), range.min(), range.max());
 }
 
 fn measure(padding: f32, vertical: bool) -> Size {
@@ -352,36 +340,34 @@ impl Control for SliderControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::{Action, Role};
-        cx.node.set_role(Role::Slider);
-        orientation(cx.node, self.vertical);
+        use aegle_ui::{Role, SemanticAction as Action};
+        cx.set_role(Role::Slider);
+        cx.set_vertical(self.vertical);
         let range = self.behavior.range();
-        numeric(cx.node, range);
-        cx.node.set_numeric_value_step(if range.step() == 0.0 {
+        numeric(cx, range);
+        cx.set_numeric_step(if range.step() == 0.0 {
             (range.max() - range.min()) / 100.0
         } else {
             range.step()
         });
         if cx.enabled {
-            cx.node.add_action(Action::Focus);
-            cx.node.add_action(Action::SetValue);
-            cx.node.add_action(Action::Increment);
-            cx.node.add_action(Action::Decrement);
+            cx.add_action(Action::Focus);
+            cx.add_action(Action::SetValue);
+            cx.add_action(Action::Increment);
+            cx.add_action(Action::Decrement);
         }
     }
     #[cfg(feature = "accessibility")]
     fn action_input(
         &self,
-        action: aegle_ui::accesskit::Action,
-        data: Option<&aegle_ui::accesskit::ActionData>,
+        action: aegle_ui::SemanticAction,
+        value: Option<f64>,
     ) -> Option<Input<'static>> {
-        use aegle_ui::accesskit::{Action, ActionData};
-        match (action, data) {
+        use aegle_ui::SemanticAction as Action;
+        match (action, value) {
             (Action::Increment, _) => Some(Input::Increment),
             (Action::Decrement, _) => Some(Input::Decrement),
-            (Action::SetValue, Some(ActionData::NumericValue(value))) if value.is_finite() => {
-                Some(Input::SetValue(*value))
-            }
+            (Action::SetValue, Some(value)) if value.is_finite() => Some(Input::SetValue(value)),
             _ => None,
         }
     }
@@ -439,12 +425,11 @@ impl Control for ProgressControl {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        cx.node
-            .set_role(aegle_ui::accesskit::Role::ProgressIndicator);
-        orientation(cx.node, self.vertical);
+        cx.set_role(aegle_ui::Role::ProgressIndicator);
+        cx.set_vertical(self.vertical);
         // An indeterminate indicator reports no value.
         if !self.indeterminate {
-            numeric(cx.node, &self.range);
+            numeric(cx, &self.range);
         }
     }
 }

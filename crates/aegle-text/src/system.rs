@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use crate::{
-    Alignment, Blob, Collection, ContentWidths, FamilyId, FontInfo, Paragraph, TextDiagnostics,
-    TextError, TextStyle, style::Shaping,
+    FontFamily, GenericFamily, Paragraph, TextDiagnostics, TextError, TextStyle, style::Shaping,
 };
 use aegle_types::Color;
-use parley::fontique::{CollectionOptions, SourceCache};
+use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
+use parley::{Alignment, ContentWidths};
 use parley::{FontContext, LayoutContext};
 
 /// Font collection and reusable shaping scratch for one UI thread.
@@ -60,29 +60,35 @@ impl TextSystem {
         }
     }
 
-    /// Registers all readable faces from shared font bytes, without copying them.
-    ///
-    /// Returns family IDs and registered face information. Supplying the same
-    /// [`Blob`] to a rasterizer preserves its resource identity. Unsupported or
-    /// invalid faces are ignored by Fontique; zero registered faces is an error.
+    /// Registers all readable faces from shared font bytes, without copying
+    /// them, and returns the families they belong to. Glyph records keep the
+    /// bytes shared. Unsupported or invalid faces are ignored; zero
+    /// registered faces is an error.
     pub fn register_fonts(
         &mut self,
-        data: Blob<u8>,
-    ) -> Result<Vec<(FamilyId, Vec<FontInfo>)>, TextError> {
-        let registered = self.fonts.collection.register_fonts(data, None);
+        data: Arc<dyn AsRef<[u8]> + Send + Sync>,
+    ) -> Result<Vec<FontFamily>, TextError> {
+        let registered = self.fonts.collection.register_fonts(Blob::new(data), None);
         if registered.is_empty() {
             return Err(TextError::InvalidFont);
         }
-        Ok(registered)
+        Ok(registered
+            .into_iter()
+            .map(|(id, _)| FontFamily(id))
+            .collect())
     }
 
-    /// Accesses family metadata and explicit generic/script/locale fallback maps.
-    ///
-    /// For example, use [`Collection::set_generic_families`] to associate an
-    /// application font with `sans-serif`. Collection changes do not rebuild
-    /// existing paragraphs; call [`Self::restyle`] after changing their fonts.
-    pub fn collection_mut(&mut self) -> &mut Collection {
-        &mut self.fonts.collection
+    /// Makes `families`, in order, what a generic family such as
+    /// `sans-serif` resolves to, for example to use an application font as
+    /// the default. Existing paragraphs keep their fonts until restyled.
+    pub fn set_generic_families(
+        &mut self,
+        generic: GenericFamily,
+        families: impl IntoIterator<Item = FontFamily>,
+    ) {
+        self.fonts
+            .collection
+            .set_generic_families(generic.fontique(), families.into_iter().map(|f| f.0));
     }
 
     /// Shapes text once and lays it out without soft wrapping.
@@ -224,7 +230,7 @@ impl TextSystem {
             weight: style.weight,
             width: style.width,
             slant: style.slant,
-            locale: style.locale,
+            locale: style.language(),
             line_height: style.line_height,
             letter_spacing: style.letter_spacing,
             word_spacing: style.word_spacing,

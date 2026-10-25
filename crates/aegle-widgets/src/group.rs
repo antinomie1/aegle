@@ -100,20 +100,20 @@ impl Control for Group {
     }
     #[cfg(feature = "accessibility")]
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
-        use aegle_ui::accesskit::Role as Access;
+        use aegle_ui::Role as Access;
         match self.role {
-            Role::Popup { list: true } => cx.node.set_role(Access::ListBox),
+            Role::Popup { list: true } => cx.set_role(Access::ListBox),
             Role::Popup { list: false } => {}
-            Role::Menu => cx.node.set_role(Access::Menu),
-            Role::MenuBar => cx.node.set_role(Access::MenuBar),
-            Role::Table => cx.node.set_role(Access::Table),
-            Role::TableRow => cx.node.set_role(Access::Row),
-            Role::TableCell => cx.node.set_role(Access::Cell),
-            Role::TableHeader => cx.node.set_role(Access::ColumnHeader),
-            Role::TabList => cx.node.set_role(Access::TabList),
-            Role::TabPanel => cx.node.set_role(Access::TabPanel),
-            Role::Dialog => cx.node.set_role(Access::Dialog),
-            Role::Drawer => cx.node.set_role(Access::Navigation),
+            Role::Menu => cx.set_role(Access::Menu),
+            Role::MenuBar => cx.set_role(Access::MenuBar),
+            Role::Table => cx.set_role(Access::Table),
+            Role::TableRow => cx.set_role(Access::Row),
+            Role::TableCell => cx.set_role(Access::Cell),
+            Role::TableHeader => cx.set_role(Access::ColumnHeader),
+            Role::TabList => cx.set_role(Access::TabList),
+            Role::TabPanel => cx.set_role(Access::TabPanel),
+            Role::Dialog => cx.set_role(Access::Dialog),
+            Role::Drawer => cx.set_role(Access::Navigation),
         }
     }
 }

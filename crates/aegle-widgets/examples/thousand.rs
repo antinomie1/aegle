@@ -19,7 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use aegle_text::{Blob, GenericFamily, TextSystem};
+use aegle_text::{GenericFamily, TextSystem};
 use aegle_ui::{
     Accepts, Appearance, Color, Container, Control, ControlKind, Modifiers, Point, PointerId,
     PointerKind, Result, Size, Theme, Ui, VisualState, container_style,
@@ -128,10 +128,9 @@ fn frame(ui: &Ui) -> Result {
 fn main() -> Result {
     let mut text = TextSystem::new();
     let font = include_bytes!("../../../tests/assets/aegle-test-cjk.otf");
-    let families = text.register_fonts(Blob::new(Arc::new(font.as_slice())))?;
-    let ids = families.iter().map(|(id, _)| *id);
-    text.collection_mut()
-        .set_generic_families(GenericFamily::SansSerif, ids);
+    let families = text.register_fonts(Arc::new(font.as_slice()))?;
+    let ids = families.iter().copied();
+    text.set_generic_families(GenericFamily::SansSerif, ids);
     let fonts = Rc::new(RefCell::new(text));
 
     let (ui, meters, buttons) = {

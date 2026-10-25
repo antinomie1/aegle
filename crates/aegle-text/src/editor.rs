@@ -1,10 +1,10 @@
 use std::{fmt, ops::Range};
 
-use aegle_types::{Color, Point, Rect, Size};
+use aegle_types::{Rect, Size};
 use parley::{Affinity, BoundingBox};
 
 use crate::{
-    Layout, TextDiagnostics, TextError, TextStyle, TextSystem,
+    TextDiagnostics, TextError, TextStyle, TextSystem,
     document::{Caret, Document},
     history::History,
     nav::Selected,
@@ -198,13 +198,9 @@ impl Editor {
     pub fn is_multiline(&self) -> bool {
         self.multiline
     }
-    /// The layout of each hard line with its top-left corner, in order; the
-    /// same layouts painting, hit testing and accessibility use.
-    pub fn layouts(&self) -> impl Iterator<Item = (Point, &Layout<Color>)> {
-        self.doc
-            .blocks
-            .iter()
-            .map(|block| (block.origin, &block.layout))
+    /// Number of laid out lines, counting soft wraps.
+    pub fn line_count(&self) -> usize {
+        self.doc.blocks.iter().map(|block| block.layout.len()).sum()
     }
     /// Current layout extent, excluding trailing whitespace.
     pub fn size(&self) -> Size {

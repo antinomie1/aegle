@@ -1,7 +1,7 @@
 //! Headless retained editor: selection, transient preedit, commit and delta undo.
 use aegle_render_software::{Renderer, Surface};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
-use aegle_text::{Blob, Editor, EditorOptions, EditorPaint, Selection, TextStyle, TextSystem};
+use aegle_text::{Editor, EditorOptions, EditorPaint, Selection, TextStyle, TextSystem};
 use std::{error::Error, fs::File, io::BufWriter, sync::Arc, time::Instant};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -45,9 +45,9 @@ fn row(
 
 fn main() -> Result<()> {
     let mut fonts = TextSystem::new();
-    fonts.register_fonts(Blob::new(Arc::new(
+    fonts.register_fonts(Arc::new(
         include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
-    )))?;
+    ))?;
     let mut editor = fonts.editor(
         "Hello, 世界",
         &TextStyle {
