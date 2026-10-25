@@ -290,7 +290,10 @@ impl Wayland {
             return Err(Error::InvalidString);
         }
         match &self.window_mut(id)?.window {
-            Shell::Xdg(window) => Ok(window.set_title(title)),
+            Shell::Xdg(window) => {
+                window.set_title(title);
+                Ok(())
+            }
             Shell::Layer(_) => Err(Error::Unsupported("title of a layer surface")),
         }
     }
