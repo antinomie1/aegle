@@ -1,11 +1,11 @@
 //! Single-line and multiline plain text editors.
 
 use aegle_controls::{Input, Outcome};
-use aegle_layout::{Dimension, LengthPercentageAuto, Style};
 use aegle_scene::Affine;
 use aegle_text::{EditorDriver, EditorOptions, EditorPaint, Selection, TextError, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
+use aegle_ui::LayoutStyle;
 use aegle_ui::{
     Container, Control, HandlerResult, OrFail, Result, bar,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
@@ -156,17 +156,23 @@ impl Control for FieldControl {
             .reflow(cx.content_width(), cx.alignment())
             .or_fail();
     }
-    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+    fn retheme(
+        &self,
+        theme: &Theme,
+        local: aegle_ui::LocalLayout,
+        _: bool,
+        style: &mut LayoutStyle,
+    ) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             let lines = if self.0.editor().is_multiline() {
                 4.0
             } else {
                 1.0
             };
-            style.size.height = Dimension::length(theme.control_height * lines);
+            style.set_height(theme.control_height * lines);
         }
         if !local.contains(aegle_ui::LocalLayout::MIN_HEIGHT) {
-            style.min_size.height = LengthPercentageAuto::length(theme.control_height);
+            style.set_min_height(theme.control_height);
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
@@ -196,7 +202,7 @@ pub(crate) fn control(
     theme: &Theme,
     text: &str,
     multiline: bool,
-) -> Result<(FieldControl, Style)> {
+) -> Result<(FieldControl, LayoutStyle)> {
     let editor = state.fonts.borrow_mut().editor(
         text,
         &text_style(theme),
@@ -207,16 +213,14 @@ pub(crate) fn control(
     )?;
     Ok((
         FieldControl(Box::new(aegle_controls::TextField::new(editor))),
-        Style {
-            size: aegle_layout::Size {
-                width: Dimension::auto(),
-                height: Dimension::length(theme.control_height * if multiline { 4.0 } else { 1.0 }),
-            },
-            min_size: aegle_layout::Size {
-                width: LengthPercentageAuto::length(0.0),
-                height: LengthPercentageAuto::length(theme.control_height),
-            },
-            ..Default::default()
+        {
+            let lines = if multiline { 4.0 } else { 1.0 };
+            let mut style = LayoutStyle::default();
+            style
+                .set_height(theme.control_height * lines)
+                .set_min_width(0.0)
+                .set_min_height(theme.control_height);
+            style
         },
     ))
 }

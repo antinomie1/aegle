@@ -6,10 +6,10 @@ use aegle_controls::{
     Capture, Input, Key, Modifiers, Outcome, PointerButton, PointerId, PointerKind,
 };
 use aegle_core::Dirty;
-use aegle_layout::Style;
 use aegle_scene::SceneBuilder;
 use aegle_theme::ControlKind;
 use aegle_types::{Point, Size};
+use aegle_ui::LayoutStyle;
 use aegle_ui::{
     Container, Control, HandlerResult,
     control::{InputCx, PaintCx},
@@ -353,9 +353,10 @@ pub(crate) fn canvas(
                 events: Vec::new(),
                 splitter: None,
             }) as Box<dyn Control>,
-            Style {
-                flex_shrink: 0.0,
-                ..Default::default()
+            {
+                let mut style = LayoutStyle::default();
+                style.set_shrink(0.0);
+                style
             },
         ))
     }))

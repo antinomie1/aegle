@@ -4,7 +4,7 @@ use std::{
 };
 
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{FlexDirection, Style};
+use aegle_layout::LayoutStyle;
 use aegle_types::Rect;
 
 use crate::{
@@ -230,7 +230,7 @@ impl Container {
     /// the parent's resolved theme. The way control libraries add their controls.
     pub fn add(
         &self,
-        create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, Style)>,
+        create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, LayoutStyle)>,
     ) -> Node {
         self.change(|state, parent| {
             let theme = *state.theme_of(parent);
@@ -250,7 +250,7 @@ impl Container {
     pub fn row(&self) -> Container {
         Container(self.add(|_, theme| {
             let mut style = container_style(theme, false);
-            style.flex_direction = FlexDirection::Row;
+            style.set_direction(aegle_layout::Direction::Row);
             Ok((Box::new(Plain), style))
         }))
     }
@@ -259,7 +259,7 @@ impl Container {
     /// children, so they can be shown, hidden or replaced as a unit. Its own
     /// layout settings are ignored; hiding it hides its children.
     pub fn contents(&self) -> Container {
-        let group = self.add(|_, _| Ok((Box::new(Plain), Style::default())));
+        let group = self.add(|_, _| Ok((Box::new(Plain), LayoutStyle::default())));
         group.change(|state, id| Ok(aegle_layout::set_contents(&mut state.tree, id, true)?));
         Container(group)
     }

@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use aegle_layout::{AlignItems, FlexDirection};
 use aegle_theme::ControlKind;
 use aegle_types::DragData;
+use aegle_ui::{Align, Direction};
 use aegle_ui::{
     Container, Control, DropEvent, FileDialog, FileMode, HandlerResult, Node, Subscription,
     container_style, control::Frame, require,
@@ -121,8 +121,9 @@ impl FilePicker {
 pub(crate) fn file_picker(container: &Container, mode: FileMode) -> FilePicker {
     let root = Container(crate::add(container, |_, theme| {
         let mut style = container_style(theme, false);
-        style.flex_direction = FlexDirection::Row;
-        style.align_items = Some(AlignItems::CENTER);
+        style
+            .set_direction(Direction::Row)
+            .set_align_items(Some(Align::Center));
         let dialog = FileDialog {
             mode,
             ..Default::default()

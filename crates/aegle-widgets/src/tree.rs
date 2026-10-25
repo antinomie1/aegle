@@ -4,7 +4,6 @@ use std::cell::RefCell;
 
 use aegle_controls::{Action, Button, Input, Key, Outcome, PointerKind};
 use aegle_core::NodeId;
-use aegle_layout::{Dimension, Style};
 use aegle_scene::Affine;
 use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
@@ -14,6 +13,7 @@ use aegle_ui::{
     control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
+use aegle_ui::{LayoutStyle, Length};
 
 use crate::paint::{CHEVRON, ChevronDirection, chevron_dir, chosen_bar};
 
@@ -331,13 +331,10 @@ fn create_tree_node(parent: &Container, text: &str, depth: usize) -> TreeNode {
 
     let header_node = crate::add(&item_col, |state, theme| {
         let control = TreeNodeControl::new(&state.fonts, text, depth, theme)?;
-        let style = Style {
-            size: aegle_layout::Size {
-                width: Dimension::percent(1.0),
-                height: Dimension::length(theme.control_height),
-            },
-            ..Default::default()
-        };
+        let mut style = LayoutStyle::default();
+        style
+            .set_width(Length::Percent(100.0))
+            .set_height(theme.control_height);
         Ok((Box::new(control) as Box<dyn Control>, style))
     });
 

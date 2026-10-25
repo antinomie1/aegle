@@ -4,9 +4,9 @@ use std::{collections::HashMap, ops::Deref};
 
 use aegle_controls::{Key, KeyInput};
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{Edges, LengthPercentageAuto, Overflow, Position};
 use aegle_types::{Point, Rect};
 use aegle_ui::{Container, Control, Node, Result, State, container_style};
+use aegle_ui::{Insets, Length, Overflow};
 
 use crate::{
     button::Variant,
@@ -60,20 +60,12 @@ pub(crate) fn popup(anchor: &Node) -> Popup {
         state.install(&crate::HOOKS);
         let theme = *state.theme_of(anchor);
         let mut style = container_style(&theme, false);
-        style.position = Position::Absolute;
-        style.inset = Edges {
-            left: LengthPercentageAuto::length(0.0),
-            top: LengthPercentageAuto::length(0.0),
-            right: LengthPercentageAuto::auto(),
-            bottom: LengthPercentageAuto::auto(),
-        };
-        // At most the window's size; a longer list scrolls.
-        style.max_size = aegle_layout::Size {
-            width: LengthPercentageAuto::percent(1.0),
-            height: LengthPercentageAuto::percent(1.0),
-        };
-        style.overflow.x = Overflow::Scroll;
-        style.overflow.y = Overflow::Scroll;
+        style
+            .set_absolute(Some(Insets::new(0.0, Length::Auto, Length::Auto, 0.0)))
+            // At most the window's size; a longer list scrolls.
+            .set_max_width(Length::Percent(100.0))
+            .set_max_height(Length::Percent(100.0))
+            .set_overflow(Overflow::Scroll, Overflow::Scroll);
         let root = state.root;
         let group = Group {
             role: Role::Popup { list: false },
@@ -183,15 +175,14 @@ pub(crate) fn show_popup(state: &mut State, id: NodeId, focus: bool) -> Result {
         anchor, side, at, ..
     } = *entry(state, id);
     let mut style = state.tree.get(id).unwrap().style().clone();
-    style.min_size.width = if side || at.is_some() {
-        LengthPercentageAuto::auto()
+    style.set_min_width(if side || at.is_some() {
+        Length::Auto
     } else {
-        let width = state.tree.get(anchor).unwrap().context.bounds.size.width;
-        LengthPercentageAuto::length(width)
-    };
+        Length::Px(state.tree.get(anchor).unwrap().context.bounds.size.width)
+    });
     aegle_layout::set_style(&mut state.tree, id, style)?;
     // It lives under the root but reads in its anchor's direction.
-    let direction = state.tree.get(anchor).unwrap().style().direction;
+    let direction = state.tree.get(anchor).unwrap().style().layout_direction();
     state.tree.get_mut(id).unwrap().context.direction = Some(direction);
     state.propagate_direction(id)?;
     state.set_visible(id, true)?;

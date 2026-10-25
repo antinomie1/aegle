@@ -334,10 +334,10 @@ impl State {
         self.tree.get_mut(id).unwrap().context.visible = visible;
         let mut style = self.tree.get(id).unwrap().style().clone();
         if visible {
-            style.display = self.tree.get(id).unwrap().context.shown_display;
+            style.set_display(self.tree.get(id).unwrap().context.shown_display);
         } else {
-            self.tree.get_mut(id).unwrap().context.shown_display = style.display;
-            style.display = aegle_layout::Display::None;
+            self.tree.get_mut(id).unwrap().context.shown_display = style.display();
+            style.set_display(aegle_layout::Display::None);
         }
         aegle_layout::set_style(&mut self.tree, id, style)?;
         self.repaint = true;
@@ -359,7 +359,7 @@ impl State {
         parent: NodeId,
         position: usize,
         control: Box<dyn Control>,
-        mut style: aegle_layout::Style,
+        mut style: aegle_layout::LayoutStyle,
     ) -> Result<NodeId> {
         let editor = control
             .kind()
@@ -371,12 +371,12 @@ impl State {
         // Self-clipping controls manage any text scrolling internally; their
         // intrinsic overflow must not enlarge an ancestor view.
         if control.self_clipping() {
-            style.overflow.x = aegle_layout::Overflow::Hidden;
-            style.overflow.y = aegle_layout::Overflow::Hidden;
+            use aegle_layout::Overflow::Hidden;
+            style.set_overflow(Hidden, Hidden);
         }
         #[cfg(feature = "grid")]
         crate::grid_handles::stack_child(self, parent, &mut style);
-        style.direction = self.tree.get(parent).unwrap().style().direction;
+        style.set_layout_direction(self.tree.get(parent).unwrap().style().layout_direction());
         let mut element = Element::new(control);
         element.theme = self.tree.get(parent).unwrap().context.theme.clone();
         element.rtl = self.tree.get(parent).unwrap().context.rtl;

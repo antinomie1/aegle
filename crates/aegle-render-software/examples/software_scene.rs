@@ -1,10 +1,9 @@
 //! Retained layout and software pixels; shapes only, without a window or text.
 use aegle_core::{Dirty, NodeId, Tree};
-use aegle_layout::{
-    AvailableSpace, Dimension, Edges, FlexDirection, LayoutNode, Size, Style, compute,
-};
+use aegle_layout::{Direction, LayoutNode, LayoutStyle, Space, compute};
 use aegle_render_software::{Renderer, Surface};
 use aegle_scene::{Affine, Color, Point, Rect, RoundedRect, Scene};
+use aegle_types::Size;
 use std::{error::Error, fs::File, io::BufWriter, time::Instant};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -16,31 +15,30 @@ struct Visual {
     color: Color,
     radius: f32,
     mark: bool,
-    painted_size: Size<f32>,
+    painted_size: Size,
     scene: Scene,
 }
 
-fn style([width, height]: [u16; 2], column: bool, padding: u16, gap: u16) -> Style {
-    Style {
-        size: Size {
-            width: Dimension::length(f32::from(width)),
-            height: Dimension::length(f32::from(height)),
-        },
-        flex_direction: if column {
-            FlexDirection::Column
+fn style([width, height]: [u16; 2], column: bool, padding: u16, gap: u16) -> LayoutStyle {
+    let (gap, padding) = (f32::from(gap), f32::from(padding));
+    let mut style = LayoutStyle::default();
+    style
+        .set_width(f32::from(width))
+        .set_height(f32::from(height))
+        .set_direction(if column {
+            Direction::Column
         } else {
-            FlexDirection::Row
-        },
-        padding: Edges::length(padding),
-        gap: Size::length(gap),
-        ..Style::default()
-    }
+            Direction::Row
+        })
+        .set_padding(padding)
+        .set_gap(gap, gap);
+    style
 }
 
 fn add(
     tree: &mut Nodes,
     parent: Option<NodeId>,
-    style: Style,
+    style: LayoutStyle,
     color: Color,
     radius: f32,
 ) -> Result<NodeId> {
@@ -52,7 +50,7 @@ fn add(
                 color,
                 radius,
                 mark: false,
-                painted_size: Size::ZERO,
+                painted_size: Size::default(),
                 scene: Scene::default(),
             },
         ),
@@ -74,10 +72,7 @@ fn paint(
         let dirty = tree.dirty(id)?.intersects(Dirty::PAINT);
         let node = tree.get_mut(id).unwrap();
         let bounds = node.bounds();
-        let size = Size {
-            width: bounds.size.width,
-            height: bounds.size.height,
-        };
+        let size = bounds.size;
         let visual = &mut node.context;
         if dirty || visual.painted_size != size {
             let mut builder = std::mem::take(&mut visual.scene).into_builder();
@@ -161,11 +156,8 @@ fn main() -> Result<()> {
         9.0,
     )?;
     tree.get_mut(icon).unwrap().context.mark = true;
-    let available = Size {
-        width: AvailableSpace::Definite(WIDTH as f32),
-        height: AvailableSpace::Definite(HEIGHT as f32),
-    };
-    compute(&mut tree, root, available, |_, _, _, _| Size::ZERO)?;
+    let available = Space::definite(Size::new(WIDTH as f32, HEIGHT as f32));
+    compute(&mut tree, root, available, |_, _, _, _| Size::default())?;
     let mut pixels = vec![0; WIDTH as usize * HEIGHT as usize * 4];
     let mut surface = Surface::new(&mut pixels, WIDTH, HEIGHT)?;
     let mut renderer = Renderer::new(WIDTH as usize * HEIGHT as usize * 2);
@@ -174,7 +166,7 @@ fn main() -> Result<()> {
     tree.update(button, Dirty::PAINT, |node| {
         node.context.color = Color::rgb(53, 80, 195)
     })?;
-    compute(&mut tree, root, available, |_, _, _, _| Size::ZERO)?;
+    compute(&mut tree, root, available, |_, _, _, _| Size::default())?;
     let (changed, scene_bytes) = paint(&mut tree, root, &mut renderer, &mut surface, &mut stack)?;
     let start = Instant::now();
     for _ in 0..100 {

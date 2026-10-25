@@ -1,8 +1,7 @@
-//! A small, validated vocabulary over the Taffy style fields Aegle uses.
+//! A small, validated vocabulary for the layout style fields Aegle uses.
 //!
-//! Hosts accept these values at their public boundary, check them with the
-//! `is_valid` methods once, and convert them into [`taffy::Style`] fields. Raw Taffy
-//! types stay available for hosts that need the full style.
+//! [`crate::LayoutStyle`] setters check these values once and convert them
+//! into the layout engine's fields, which stay inside this crate.
 
 use taffy::{
     AlignContent, AlignItems, Dimension, FlexDirection, FlexWrap, LengthPercentage,
@@ -58,7 +57,7 @@ impl Length {
     }
 
     /// As a size, basis or other dimension.
-    pub fn dimension(self) -> Dimension {
+    pub(crate) fn dimension(self) -> Dimension {
         match self.simplified() {
             Self::Auto => Dimension::auto(),
             Self::Px(v) => Dimension::length(v),
@@ -68,7 +67,7 @@ impl Length {
     }
 
     /// As a minimum/maximum size, margin or inset.
-    pub fn auto_length(self) -> LengthPercentageAuto {
+    pub(crate) fn auto_length(self) -> LengthPercentageAuto {
         match self.simplified() {
             Self::Auto => LengthPercentageAuto::auto(),
             Self::Px(v) => LengthPercentageAuto::length(v),
@@ -78,7 +77,7 @@ impl Length {
     }
 
     /// As padding or gap, which have no automatic value: `None` for `Auto`.
-    pub fn definite(self) -> Option<LengthPercentage> {
+    pub(crate) fn definite(self) -> Option<LengthPercentage> {
         match self.simplified() {
             Self::Auto => None,
             Self::Px(v) => Some(LengthPercentage::length(v)),
@@ -96,6 +95,22 @@ impl Length {
 fn calc_handle(percent: f32, px: f32) -> *const () {
     let fraction = u64::from((percent / 100.0).to_bits()) & !0b111;
     std::ptr::without_provenance((u64::from(px.to_bits()) << 32 | fraction) as usize)
+}
+
+/// The length a padding or gap value was set from.
+pub(crate) fn from_definite(value: LengthPercentage) -> Length {
+    let raw = value.into_raw();
+    if raw.is_calc() {
+        let bits = raw.calc_value().addr() as u64;
+        Length::Calc {
+            percent: f32::from_bits(bits as u32) * 100.0,
+            px: f32::from_bits((bits >> 32) as u32),
+        }
+    } else if raw.tag() == taffy::CompactLength::PERCENT_TAG {
+        Length::Percent(raw.value() * 100.0)
+    } else {
+        Length::Px(raw.value())
+    }
 }
 
 /// Resolves a handle from [`calc_handle`] against the percentage basis.
@@ -174,7 +189,7 @@ impl Insets {
     }
 
     /// As margins or insets.
-    pub fn auto_lengths(self) -> taffy::Rect<LengthPercentageAuto> {
+    pub(crate) fn auto_lengths(self) -> taffy::Rect<LengthPercentageAuto> {
         taffy::Rect {
             left: self.left.auto_length(),
             right: self.right.auto_length(),
@@ -184,7 +199,7 @@ impl Insets {
     }
 
     /// As padding; `Auto` edges (rejected by [`Self::is_valid`]) become zero.
-    pub fn definite(self) -> taffy::Rect<LengthPercentage> {
+    pub(crate) fn definite(self) -> taffy::Rect<LengthPercentage> {
         let edge = |length: Length| length.definite().unwrap_or(LengthPercentage::length(0.0));
         taffy::Rect {
             left: edge(self.left),
@@ -224,7 +239,7 @@ pub enum Align {
 
 impl Align {
     /// As Taffy's item alignment.
-    pub fn items(self) -> AlignItems {
+    pub(crate) fn items(self) -> AlignItems {
         match self {
             Self::Start => AlignItems::START,
             Self::End => AlignItems::END,
@@ -256,7 +271,7 @@ pub enum Justify {
 
 impl Justify {
     /// As Taffy's content alignment.
-    pub fn content(self) -> AlignContent {
+    pub(crate) fn content(self) -> AlignContent {
         match self {
             Self::Start => AlignContent::START,
             Self::End => AlignContent::END,
@@ -284,7 +299,7 @@ pub enum Direction {
 
 impl Direction {
     /// As Taffy's flex direction.
-    pub fn flex(self) -> FlexDirection {
+    pub(crate) fn flex(self) -> FlexDirection {
         match self {
             Self::Row => FlexDirection::Row,
             Self::Column => FlexDirection::Column,
@@ -308,7 +323,7 @@ pub enum Wrap {
 
 impl Wrap {
     /// As Taffy's flex wrap.
-    pub fn flex(self) -> FlexWrap {
+    pub(crate) fn flex(self) -> FlexWrap {
         match self {
             Self::NoWrap => FlexWrap::NoWrap,
             Self::Wrap => FlexWrap::Wrap,

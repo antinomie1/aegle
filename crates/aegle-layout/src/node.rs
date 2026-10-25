@@ -1,18 +1,20 @@
-use aegle_types::Rect;
-use taffy::{Cache, Layout, Style};
+use aegle_types::{Rect, Size};
+use taffy::{Cache, Layout};
+
+use crate::LayoutStyle;
 
 use std::rc::Rc;
 
 thread_local! {
-    static DEFAULT_STYLE: Rc<Style> = Rc::new(Style::DEFAULT);
+    static DEFAULT_STYLE: Rc<LayoutStyle> = Rc::new(LayoutStyle::default());
 }
 
 /// Layout state and caller-owned measurement data for one retained node.
 ///
-/// Styles identical to Taffy's default share one thread-local object. The context can
+/// Default styles share one thread-local object. The context can
 /// contain a text resource ID, an intrinsic image size, or the caller's own data.
 pub struct LayoutNode<C> {
-    pub(crate) style: Rc<Style>,
+    pub(crate) style: Rc<LayoutStyle>,
     pub(crate) cache: Cache,
     pub(crate) layout: Layout,
     /// Transparent: children take part in the nearest non-contents ancestor's layout.
@@ -34,15 +36,20 @@ impl<C> LayoutNode<C> {
     }
 
     /// Creates a node with explicit style.
-    pub fn with_style(style: Style, context: C) -> Self {
+    pub fn with_style(style: LayoutStyle, context: C) -> Self {
         let mut node = Self::new(context);
         node.set_style(style);
         node
     }
 
     /// The node's layout style.
-    pub fn style(&self) -> &Style {
+    pub fn style(&self) -> &LayoutStyle {
         &self.style
+    }
+
+    /// The layout engine's style.
+    pub(crate) fn taffy_style(&self) -> &taffy::Style {
+        &self.style.0
     }
 
     /// Whether this node is transparent to layout; see [`crate::set_contents`].
@@ -60,13 +67,14 @@ impl<C> LayoutNode<C> {
         )
     }
 
-    /// Complete layout result, including borders, padding and content size.
-    pub fn layout(&self) -> &Layout {
-        &self.layout
+    /// How far the content, including padding, extends beyond the node's
+    /// box on each axis as of the last layout: the scroll range of a viewport.
+    pub fn scroll_size(&self) -> Size {
+        Size::new(self.layout.scroll_width(), self.layout.scroll_height())
     }
 
-    pub(crate) fn set_style(&mut self, style: Style) {
-        self.style = if style == Style::DEFAULT {
+    pub(crate) fn set_style(&mut self, style: LayoutStyle) {
+        self.style = if style == LayoutStyle::default() {
             DEFAULT_STYLE.with(Rc::clone)
         } else {
             Rc::new(style)

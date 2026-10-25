@@ -3,10 +3,10 @@
 use std::{cell::Cell, rc::Rc};
 
 use aegle_controls::Key;
-use aegle_layout::{AlignItems, Dimension, FlexDirection, Style};
 use aegle_scene::{Rect, RoundedRect};
 use aegle_theme::ControlKind;
 use aegle_types::Cursor;
+use aegle_ui::{Align, Direction, LayoutStyle};
 use aegle_ui::{
     Container, Control, Length, Node, UiError,
     control::{Frame, PaintCx},
@@ -56,24 +56,15 @@ impl Control for SeparatorControl {
     }
 }
 
-fn line(vertical: bool) -> Style {
-    let one = Dimension::length(1.0);
-    Style {
-        size: if vertical {
-            aegle_layout::Size {
-                width: one,
-                height: Dimension::auto(),
-            }
-        } else {
-            aegle_layout::Size {
-                width: Dimension::auto(),
-                height: one,
-            }
-        },
-        align_self: Some(AlignItems::STRETCH),
-        flex_shrink: 0.0,
-        ..Default::default()
+fn line(vertical: bool) -> LayoutStyle {
+    let mut style = LayoutStyle::default();
+    if vertical {
+        style.set_width(1.0).set_height(Length::Auto);
+    } else {
+        style.set_width(Length::Auto).set_height(1.0);
     }
+    style.set_align_self(Some(Align::Stretch)).set_shrink(0.0);
+    style
 }
 
 pub(crate) fn separator(container: &Container) -> Separator {
@@ -81,8 +72,8 @@ pub(crate) fn separator(container: &Container) -> Separator {
         // Across a row the divider is vertical, across a column horizontal.
         let parent = container.id;
         let vertical = matches!(
-            state.tree.get(parent).unwrap().style().flex_direction,
-            FlexDirection::Row | FlexDirection::RowReverse
+            state.tree.get(parent).unwrap().style().direction(),
+            Direction::Row | Direction::RowReverse
         );
         Ok((
             Box::new(SeparatorControl {

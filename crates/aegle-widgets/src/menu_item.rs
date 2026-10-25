@@ -3,7 +3,6 @@
 
 use aegle_controls::{Input, Outcome};
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::Dimension;
 use aegle_scene::{Affine, Rect, RoundedRect};
 use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{ControlKind, Theme};
@@ -108,10 +107,10 @@ impl Control for MenuItemControl {
         theme: &Theme,
         local: aegle_ui::LocalLayout,
         _: bool,
-        style: &mut aegle_layout::Style,
+        style: &mut aegle_ui::LayoutStyle,
     ) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
-            style.size.height = Dimension::length(theme.control_height);
+            style.set_height(theme.control_height);
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {

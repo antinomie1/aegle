@@ -1,8 +1,8 @@
 //! Menus on popups: context menus, menus opened by a control, and menu bars.
 
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{Dimension, FlexDirection, Style};
 use aegle_ui::{Container, Control, Node, Result, State, UiError, text_style};
+use aegle_ui::{Direction, LayoutStyle};
 
 use crate::{
     NodeWidgets, Popup, Separator, Widgets,
@@ -90,14 +90,8 @@ fn add_item(parent: &Container, text: &str, checked: Option<bool>, bar: bool) ->
             expanded: false,
             bar,
         };
-        let style = Style {
-            size: aegle_layout::Size {
-                width: Dimension::auto(),
-                height: Dimension::length(theme.control_height),
-            },
-            flex_shrink: 0.0,
-            ..Default::default()
-        };
+        let mut style = LayoutStyle::default();
+        style.set_height(theme.control_height).set_shrink(0.0);
         Ok((Box::new(control) as Box<dyn Control>, style))
     });
     MenuItem(node)
@@ -178,8 +172,7 @@ pub(crate) fn menu_bar(container: &Container) -> MenuBar {
     bar.change(|state, id| {
         popups(state).bars.push(id);
         let mut style = state.tree.get(id).unwrap().style().clone();
-        style.flex_direction = FlexDirection::Row;
-        style.flex_shrink = 0.0;
+        style.set_direction(Direction::Row).set_shrink(0.0);
         aegle_layout::set_style(&mut state.tree, id, style)?;
         Ok(())
     });

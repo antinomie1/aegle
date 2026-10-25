@@ -4,7 +4,7 @@
 use crate::bar::FOOTPRINT;
 use crate::{Result, control::MeasureCx, state::State};
 use aegle_core::Dirty;
-use aegle_layout::{AvailableSpace, LengthPercentage, Size};
+use aegle_layout::{Available, Length, Space};
 
 impl State {
     /// Reserves each overflowing viewport's scrollbar footprint beyond its padding,
@@ -22,22 +22,23 @@ impl State {
             let limit = self.scroll_limit(id);
             let rtl = self.rtl(id);
             let mut style = self.tree.get(id).unwrap().style().clone();
-            let padding = &mut style.padding;
+            let mut padding = style.padding();
             let (start, bar) = if rtl {
                 (padding.right, &mut padding.left)
             } else {
                 (padding.left, &mut padding.right)
             };
-            let reserve =
-                |base: LengthPercentage, needed: bool| match (needed, base.into_raw().value()) {
-                    (true, value) => LengthPercentage::length(value.max(FOOTPRINT)),
-                    _ => base,
-                };
+            let reserve = |base: Length, needed: bool| match (needed, base) {
+                (true, Length::Px(value)) => Length::Px(value.max(FOOTPRINT)),
+                (true, _) => Length::Px(FOOTPRINT),
+                (false, base) => base,
+            };
             let side = reserve(start, limit.y > 0.0);
             let bottom = reserve(padding.top, limit.x > 0.0);
             if *bar != side || padding.bottom != bottom {
                 *bar = side;
                 padding.bottom = bottom;
+                style.set_padding(padding);
                 aegle_layout::set_style(&mut self.tree, id, style)?;
                 changed = true;
             }
@@ -84,18 +85,15 @@ impl State {
                 aegle_layout::compute_with_baselines(
                     &mut self.tree,
                     self.root,
-                    Size {
-                        width: AvailableSpace::Definite(self.size.width),
-                        height: AvailableSpace::Definite(self.size.height),
-                    },
+                    Space::definite(self.size),
                     |_, element, known, available| {
                         crate::idle::restore(element, fonts);
                         let padding = element.inset(theme);
                         let gap = element.theme_or(theme).gap;
                         let width = known.width.or(match available.width {
-                            AvailableSpace::Definite(w) => Some(w),
-                            AvailableSpace::MinContent => Some(0.0),
-                            AvailableSpace::MaxContent => None,
+                            Available::Definite(w) => Some(w),
+                            Available::MinContent => Some(0.0),
+                            Available::MaxContent => None,
                         });
                         let size = element.control.measure(&MeasureCx {
                             fonts,
@@ -104,14 +102,13 @@ impl State {
                             width,
                             rtl: element.rtl,
                         });
-                        Size {
-                            width: known.width.unwrap_or(size.width),
-                            height: known.height.unwrap_or(size.height),
-                        }
+                        aegle_types::Size::new(
+                            known.width.unwrap_or(size.width),
+                            known.height.unwrap_or(size.height),
+                        )
                     },
                     |_, element, size| {
                         crate::idle::restore(element, fonts);
-                        let size = aegle_types::Size::new(size.width, size.height);
                         element.control.baseline(size, element.inset(theme))
                     },
                 )?;

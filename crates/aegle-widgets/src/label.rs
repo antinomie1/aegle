@@ -2,11 +2,11 @@
 
 use std::cell::RefCell;
 
-use aegle_layout::Style;
 use aegle_scene::Affine;
 use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
+use aegle_ui::LayoutStyle;
 use aegle_ui::{
     Container, Control, OrFail, Result,
     control::{MeasureCx, PaintCx},
@@ -105,12 +105,10 @@ impl Control for LabelControl {
 
 pub(crate) fn create(container: &Container, text: &str) -> Label {
     Label(crate::add(container, |state, theme| {
-        Ok((
-            Box::new(LabelControl::new(&state.fonts, text, theme)?),
-            Style {
-                flex_shrink: 0.0,
-                ..Default::default()
-            },
-        ))
+        Ok((Box::new(LabelControl::new(&state.fonts, text, theme)?), {
+            let mut style = LayoutStyle::default();
+            style.set_shrink(0.0);
+            style
+        }))
     }))
 }

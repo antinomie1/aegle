@@ -1,11 +1,10 @@
 //! Retained paragraphs measured by Taffy and rendered without a window or GPU.
 use aegle_core::{NodeId, Tree};
-use aegle_layout::{
-    AvailableSpace, Dimension, Edges, FlexDirection, LayoutNode, Size, Style, compute,
-};
+use aegle_layout::{Available, LayoutNode, LayoutStyle, Space, compute};
 use aegle_render_software::{Renderer, Surface};
 use aegle_scene::{Affine, Color, Point, Rect, RoundedRect, Scene, SceneBuilder};
 use aegle_text::{Alignment, Blob, LineHeight, Paragraph, TextStyle, TextSystem};
+use aegle_types::Size;
 use std::{error::Error, fs::File, io::BufWriter, sync::Arc, time::Instant};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -36,9 +35,10 @@ fn add_text(
     tree.insert(
         Some(parent),
         LayoutNode::with_style(
-            Style {
-                flex_shrink: 0.0,
-                ..Style::default()
+            {
+                let mut style = LayoutStyle::default();
+                style.set_shrink(0.0);
+                style
             },
             Some(paragraph),
         ),
@@ -52,28 +52,25 @@ fn layout(tree: &mut Nodes, root: NodeId) -> Result<usize> {
     compute(
         tree,
         root,
-        Size {
-            width: AvailableSpace::Definite(WIDTH as f32),
-            height: AvailableSpace::Definite(HEIGHT as f32),
-        },
+        Space::definite(Size::new(WIDTH as f32, HEIGHT as f32)),
         |_, text, known, available| {
             let Some(paragraph) = text else {
-                return Size::ZERO;
+                return Size::default();
             };
             measurements += 1;
             let width = known.width.or(match available.width {
-                AvailableSpace::Definite(width) => Some(width),
-                AvailableSpace::MinContent => Some(paragraph.content_widths().min),
-                AvailableSpace::MaxContent => None,
+                Available::Definite(width) => Some(width),
+                Available::MinContent => Some(paragraph.content_widths().min),
+                Available::MaxContent => None,
             });
             match paragraph.reflow(width, Alignment::Start) {
-                Ok(size) => Size {
-                    width: known.width.unwrap_or(size.width),
-                    height: known.height.unwrap_or(size.height),
-                },
+                Ok(size) => Size::new(
+                    known.width.unwrap_or(size.width),
+                    known.height.unwrap_or(size.height),
+                ),
                 Err(failure) => {
                     error = Some(failure);
-                    Size::ZERO
+                    Size::default()
                 }
             }
         },
@@ -125,15 +122,14 @@ fn main() -> Result<()> {
     let root = tree.insert(
         None,
         LayoutNode::with_style(
-            Style {
-                size: Size {
-                    width: Dimension::length(WIDTH as f32),
-                    height: Dimension::length(HEIGHT as f32),
-                },
-                flex_direction: FlexDirection::Column,
-                padding: Edges::length(48),
-                gap: Size::length(10),
-                ..Style::default()
+            {
+                let mut style = LayoutStyle::column();
+                style
+                    .set_width(WIDTH as f32)
+                    .set_height(HEIGHT as f32)
+                    .set_padding(48.0)
+                    .set_gap(10.0, 10.0);
+                style
             },
             None,
         ),

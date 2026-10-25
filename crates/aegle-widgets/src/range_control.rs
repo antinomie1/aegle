@@ -4,7 +4,6 @@
 use std::time::Instant;
 
 use aegle_controls::{Input, Outcome, Range};
-use aegle_layout::{Dimension, LengthPercentageAuto, Style};
 use aegle_scene::{Affine, SceneBuilder};
 use aegle_text::TextSystem;
 use aegle_theme::{Appearance, ControlKind, Theme};
@@ -14,6 +13,7 @@ use aegle_ui::{
     Control, OrFail,
     control::{ControlVisual, Frame, InputCx, MeasureCx, PaintCx},
 };
+use aegle_ui::{LayoutStyle, Length};
 
 use crate::paint::{range, slider_track};
 
@@ -118,38 +118,31 @@ fn paint(
 }
 
 /// The fixed cross-axis extent of a themed control, in its orientation.
-pub(crate) fn sized(style: &mut Style, extent: f32, vertical: bool, local: LocalLayout) {
-    let (fixed, free, least) = if vertical {
-        (
-            &mut style.size.width,
-            &mut style.size.height,
-            &mut style.min_size.width,
-        )
-    } else {
-        (
-            &mut style.size.height,
-            &mut style.size.width,
-            &mut style.min_size.height,
-        )
-    };
-    *fixed = Dimension::length(extent);
-    *free = Dimension::auto();
+pub(crate) fn sized(style: &mut LayoutStyle, extent: f32, vertical: bool, local: LocalLayout) {
     // A crowded column or row does not thin the bar; like a text field's
     // height, a local minimum height overrides this.
-    if vertical || !local.contains(LocalLayout::MIN_HEIGHT) {
-        *least = LengthPercentageAuto::length(extent);
+    let least = vertical || !local.contains(LocalLayout::MIN_HEIGHT);
+    if vertical {
+        style.set_width(extent).set_height(Length::Auto);
+        if least {
+            style.set_min_width(extent);
+        }
+    } else {
+        style.set_height(extent).set_width(Length::Auto);
+        if least {
+            style.set_min_height(extent);
+        }
     }
 }
 
 /// Lets a range control shrink along its axis, below its default length,
 /// so a narrow row or a short column keeps it inside the window.
-pub(crate) fn shrinks_along(style: &mut Style, vertical: bool) {
-    let along = if vertical {
-        &mut style.min_size.height
+pub(crate) fn shrinks_along(style: &mut LayoutStyle, vertical: bool) {
+    if vertical {
+        style.set_min_height(0.0);
     } else {
-        &mut style.min_size.width
-    };
-    *along = LengthPercentageAuto::length(0.0);
+        style.set_min_width(0.0);
+    }
 }
 
 /// The control inside a [`crate::Slider`] node.
@@ -327,7 +320,13 @@ impl Control for SliderControl {
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         measure(cx.padding, self.vertical)
     }
-    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+    fn retheme(
+        &self,
+        theme: &Theme,
+        local: aegle_ui::LocalLayout,
+        _: bool,
+        style: &mut LayoutStyle,
+    ) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(style, theme.control_height, self.vertical, local);
         }
@@ -404,7 +403,13 @@ impl Control for ProgressControl {
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         measure(cx.padding, self.vertical)
     }
-    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+    fn retheme(
+        &self,
+        theme: &Theme,
+        local: aegle_ui::LocalLayout,
+        _: bool,
+        style: &mut LayoutStyle,
+    ) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             sized(style, theme.control_height / 2.0, self.vertical, local);
         }

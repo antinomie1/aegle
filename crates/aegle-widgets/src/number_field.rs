@@ -2,11 +2,11 @@
 
 use aegle_controls::{Action, Input, Key, Outcome, PointerKind, Range};
 use aegle_core::Dirty;
-use aegle_layout::Style;
 use aegle_scene::{Affine, PathBuilder, Point as ScenePoint, Rect, RoundedRect};
 use aegle_text::{Selection, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::{Point, Size};
+use aegle_ui::LayoutStyle;
 use aegle_ui::OrFail;
 use aegle_ui::{
     Container, Control, HandlerResult, UiError,
@@ -283,7 +283,13 @@ impl Control for NumberFieldControl {
             rtl: cx.rtl,
         })
     }
-    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
+    fn retheme(
+        &self,
+        theme: &Theme,
+        local: aegle_ui::LocalLayout,
+        root: bool,
+        style: &mut LayoutStyle,
+    ) {
         self.field.retheme(theme, local, root, style);
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {

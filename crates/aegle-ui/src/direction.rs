@@ -29,7 +29,7 @@ impl Node {
 
     /// The resolved direction: this node's, the nearest ancestor's or left to right.
     pub fn layout_direction(&self) -> LayoutDirection {
-        self.change(|state, id| Ok(state.tree.get(id).unwrap().style().direction))
+        self.change(|state, id| Ok(state.tree.get(id).unwrap().style().layout_direction()))
     }
 }
 
@@ -50,20 +50,22 @@ impl State {
                 break;
             }
             let inherited = self.tree.parent(n)?.map_or(LayoutDirection::Ltr, |p| {
-                self.tree.get(p).unwrap().style().direction
+                self.tree.get(p).unwrap().style().layout_direction()
             });
             let node = self.tree.get_mut(n).unwrap();
             let direction = node.context.direction.unwrap_or(inherited);
-            if node.style().direction == direction {
+            if node.style().layout_direction() == direction {
                 continue;
             }
             node.context.rtl = direction == LayoutDirection::Rtl;
             let mut style = node.style().clone();
-            style.direction = direction;
+            style.set_layout_direction(direction);
             if node.context.control.viewport() {
                 // The bar side's padding derives from the other side, which
                 // keeps the application's value; see `update_gutters`.
-                std::mem::swap(&mut style.padding.left, &mut style.padding.right);
+                let mut padding = style.padding();
+                std::mem::swap(&mut padding.left, &mut padding.right);
+                style.set_padding(padding);
             }
             aegle_layout::set_style(&mut self.tree, n, style)?;
         }

@@ -1,8 +1,8 @@
 //! Grid tracks and item placement, available with the `grid` feature.
 
 use taffy::{
-    GridAutoFlow, GridPlacement, GridTemplateComponent, Line, MaxTrackSizingFunction,
-    MinTrackSizingFunction, TrackSizingFunction,
+    GridAutoFlow, GridTemplateComponent, MaxTrackSizingFunction, MinTrackSizingFunction,
+    TrackSizingFunction,
 };
 
 /// The size of one grid row or column.
@@ -40,7 +40,7 @@ impl Track {
     }
 
     /// As an explicit or implicit Taffy track.
-    pub fn sizing(self) -> TrackSizingFunction {
+    pub(crate) fn sizing(self) -> TrackSizingFunction {
         let both = |min, max| TrackSizingFunction { min, max };
         match self {
             Self::Px(v) => both(
@@ -80,7 +80,7 @@ impl Track {
     }
 
     /// As a `grid-template-*` component.
-    pub fn template(self) -> GridTemplateComponent<String> {
+    pub(crate) fn template(self) -> GridTemplateComponent<String> {
         GridTemplateComponent::Single(self.sizing())
     }
 }
@@ -124,16 +124,6 @@ impl Placement {
     pub fn is_valid(self) -> bool {
         self.line != Some(0) && self.span > 0
     }
-
-    /// As Taffy's start/end placement.
-    pub fn lines(self) -> Line<GridPlacement<String>> {
-        Line {
-            start: self
-                .line
-                .map_or(GridPlacement::Auto, |line| GridPlacement::Line(line.into())),
-            end: GridPlacement::Span(self.span),
-        }
-    }
 }
 
 /// The order in which automatically placed items fill the grid.
@@ -152,7 +142,7 @@ pub enum Flow {
 
 impl Flow {
     /// As Taffy's auto-flow.
-    pub fn auto_flow(self) -> GridAutoFlow {
+    pub(crate) fn auto_flow(self) -> GridAutoFlow {
         match self {
             Self::Row => GridAutoFlow::Row,
             Self::Column => GridAutoFlow::Column,

@@ -72,7 +72,10 @@ mod ui;
 pub use aegle_access::accesskit;
 pub use aegle_controls::{Key, KeyInput, Modifiers, PointerButton, PointerId, PointerKind};
 pub use aegle_core::{Dirty, NodeId};
-pub use aegle_layout::{Align, Direction, Insets, Justify, LayoutDirection, Length, Wrap};
+pub use aegle_layout::{
+    Align, Direction, Display, Insets, Justify, LayoutDirection, LayoutStyle, Length, Overflow,
+    Wrap,
+};
 #[cfg(feature = "grid")]
 pub use aegle_layout::{Flow, GridLine, GridLines, Placement, Repeat, TemplateItem, Track};
 #[cfg(feature = "motion")]

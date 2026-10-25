@@ -1,7 +1,7 @@
 //! Containers that carry a semantic role for tables and popup lists.
 
-use aegle_layout::Style;
 use aegle_theme::{Appearance, ControlKind, Theme, VisualState};
+use aegle_ui::LayoutStyle;
 use aegle_ui::{Container, Control, container_style};
 
 /// The role a [`Group`] exports to assistive technology.
@@ -50,27 +50,22 @@ impl Control for Group {
             _ => &aegle_ui::CONTAINER,
         }
     }
-    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, root: bool, style: &mut Style) {
-        use aegle_layout::{Edges, LengthPercentage, Size};
+    fn retheme(
+        &self,
+        theme: &Theme,
+        local: aegle_ui::LocalLayout,
+        root: bool,
+        style: &mut LayoutStyle,
+    ) {
         aegle_ui::Plain.retheme(theme, local, root, style);
         let popup = matches!(self.role, Role::Popup { .. } | Role::Menu);
         if (popup || matches!(self.role, Role::TableCell | Role::TableHeader))
             && !local.contains(aegle_ui::LocalLayout::PADDING)
         {
-            let p = LengthPercentage::length(theme.padding / 2.0);
-            style.padding = Edges {
-                left: p,
-                right: p,
-                top: p,
-                bottom: p,
-            };
+            style.set_padding(theme.padding / 2.0);
         }
         if (popup || self.role == Role::MenuBar) && !local.contains(aegle_ui::LocalLayout::GAP) {
-            let zero = LengthPercentage::length(0.0);
-            style.gap = Size {
-                width: zero,
-                height: zero,
-            };
+            style.set_gap(0.0, 0.0);
         }
     }
     fn viewport(&self) -> bool {
@@ -142,7 +137,7 @@ pub(crate) fn add(container: &Container, role: Role, row: bool) -> Container {
     Container(crate::add(container, |_, theme| {
         let mut style = container_style(theme, false);
         if row {
-            style.flex_direction = aegle_layout::FlexDirection::Row;
+            style.set_direction(aegle_ui::Direction::Row);
         }
         let group = Group { role };
         group.retheme(theme, aegle_ui::LocalLayout::NONE, false, &mut style);

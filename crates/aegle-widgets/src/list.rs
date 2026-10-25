@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
 use aegle_core::NodeId;
-use aegle_layout::{Dimension, Edges, LengthPercentageAuto, Overflow, Position, Style};
 use aegle_theme::Theme;
 use aegle_types::Rect;
 use aegle_ui::{
     Container, Node, Plain, Result, State, Ui, UiError, container_style,
     scroll_geometry::intersection,
 };
+use aegle_ui::{Insets, LayoutStyle, Length, Overflow};
 
 use crate::Widgets;
 
@@ -87,8 +87,7 @@ pub(crate) fn virtual_list(
     view.change(|state, id| {
         state.install(&crate::HOOKS);
         let mut style = container_style(state.theme_of(id), false);
-        style.size.height = Dimension::length(height);
-        style.flex_shrink = 0.0;
+        style.set_height(height).set_shrink(0.0);
         let spacer = state.insert(id, usize::MAX, Box::new(Plain), style)?;
         lists(state).items.push((
             id,
@@ -139,7 +138,7 @@ impl ListView {
             }
             list.count = count;
             let mut style = state.tree.get(list.spacer).unwrap().style().clone();
-            style.size.height = Dimension::length(height);
+            style.set_height(height);
             aegle_layout::set_style(&mut state.tree, list.spacer, style)?;
             state.repaint = true;
             Ok(())
@@ -162,20 +161,19 @@ fn extent(row_height: f32, count: usize) -> f32 {
 }
 
 /// A row at `top`, of a fixed height or sized to its content.
-fn row_style(theme: &Theme, top: f32, height: Option<f32>) -> Style {
+fn row_style(theme: &Theme, top: f32, height: Option<f32>) -> LayoutStyle {
     let mut style = container_style(theme, false);
-    style.position = Position::Absolute;
-    style.inset = Edges {
-        left: LengthPercentageAuto::length(0.0),
-        right: LengthPercentageAuto::length(0.0),
-        top: LengthPercentageAuto::length(top),
-        bottom: LengthPercentageAuto::auto(),
-    };
-    style.size.height = height.map_or(Dimension::auto(), Dimension::length);
-    // Row contents never widen the list's scrollable overflow.
-    style.overflow.x = Overflow::Hidden;
-    style.overflow.y = Overflow::Hidden;
     style
+        .set_absolute(Some(row_insets(top)))
+        .set_height(height)
+        // Row contents never widen the list's scrollable overflow.
+        .set_overflow(Overflow::Hidden, Overflow::Hidden);
+    style
+}
+
+/// A row spanning the list's width at `top`.
+fn row_insets(top: f32) -> Insets {
+    Insets::new(top, 0.0, Length::Auto, 0.0)
 }
 
 /// Takes a list out of storage, remembering where it was.
@@ -329,11 +327,11 @@ pub(crate) fn measure_rows(state: &mut State) -> Result<bool> {
             .collect();
         let spacer = list.spacer;
         let mut style = state.tree.get(spacer).unwrap().style().clone();
-        style.size.height = Dimension::length(total);
+        style.set_height(total);
         aegle_layout::set_style(&mut state.tree, spacer, style)?;
         for (node, top) in tops {
             let mut style = state.tree.get(node).unwrap().style().clone();
-            style.inset.top = LengthPercentageAuto::length(top);
+            style.set_absolute(Some(row_insets(top)));
             aegle_layout::set_style(&mut state.tree, node, style)?;
         }
     }

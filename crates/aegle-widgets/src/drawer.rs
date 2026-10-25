@@ -2,9 +2,6 @@
 
 use aegle_controls::{Key, KeyInput};
 use aegle_core::NodeId;
-use aegle_layout::{
-    Dimension, Display, Edges, Length, LengthPercentage, LengthPercentageAuto, Overflow, Position,
-};
 use aegle_scene::RoundedRect;
 use aegle_theme::ControlKind;
 use aegle_types::{Color, Point, Rect};
@@ -12,6 +9,7 @@ use aegle_ui::{
     Container, Control, HandlerResult, Node, Result, State, container_style, control::PaintCx,
     handle,
 };
+use aegle_ui::{Direction, Display, Insets, Length, Overflow};
 
 use crate::{Button, Separator, Widgets};
 
@@ -268,29 +266,14 @@ pub(crate) fn create_drawer(container: &Container, side: DrawerSide) -> Drawer {
     // 1. Overlay node covering full window in a flex row.
     let overlay_node = crate::add(container, |_state, theme| {
         let mut overlay_style = container_style(theme, false);
-        overlay_style.position = Position::Absolute;
-        overlay_style.inset = Edges {
-            left: LengthPercentageAuto::length(0.0),
-            top: LengthPercentageAuto::length(0.0),
-            right: LengthPercentageAuto::length(0.0),
-            bottom: LengthPercentageAuto::length(0.0),
-        };
-        overlay_style.display = Display::Flex;
-        overlay_style.flex_direction = aegle_layout::FlexDirection::Row;
-        overlay_style.size = aegle_layout::Size {
-            width: Dimension::percent(1.0),
-            height: Dimension::percent(1.0),
-        };
-        overlay_style.gap = aegle_layout::Size {
-            width: LengthPercentage::length(0.0),
-            height: LengthPercentage::length(0.0),
-        };
-        overlay_style.padding = Edges {
-            left: LengthPercentage::length(0.0),
-            right: LengthPercentage::length(0.0),
-            top: LengthPercentage::length(0.0),
-            bottom: LengthPercentage::length(0.0),
-        };
+        overlay_style
+            .set_absolute(Some(Insets::all(0.0)))
+            .set_display(Display::Flex)
+            .set_direction(Direction::Row)
+            .set_width(Length::Percent(100.0))
+            .set_height(Length::Percent(100.0))
+            .set_gap(0.0, 0.0)
+            .set_padding(0.0);
         Ok((Box::new(aegle_ui::Plain) as Box<dyn Control>, overlay_style))
     });
     overlay_node.set_visible(false);
@@ -305,25 +288,14 @@ pub(crate) fn create_drawer(container: &Container, side: DrawerSide) -> Drawer {
     let make_panel = |c: &Container| {
         crate::add(c, |_state, theme| {
             let mut panel_style = container_style(theme, false);
-            panel_style.size = aegle_layout::Size {
-                width: Dimension::length(280.0),
-                height: Dimension::percent(1.0),
-            };
-            // Never wider than the covered area; content that does not fit scrolls.
-            panel_style.max_size.width = LengthPercentageAuto::percent(1.0);
-            panel_style.overflow.x = Overflow::Scroll;
-            panel_style.overflow.y = Overflow::Scroll;
-            let p = LengthPercentage::length(theme.padding);
-            panel_style.padding = Edges {
-                left: p,
-                right: p,
-                top: p,
-                bottom: p,
-            };
-            panel_style.gap = aegle_layout::Size {
-                width: LengthPercentage::length(0.0),
-                height: LengthPercentage::length(theme.gap),
-            };
+            panel_style
+                .set_width(280.0)
+                .set_height(Length::Percent(100.0))
+                // Never wider than the covered area; content that does not fit scrolls.
+                .set_max_width(Length::Percent(100.0))
+                .set_overflow(Overflow::Scroll, Overflow::Scroll)
+                .set_padding(theme.padding)
+                .set_gap(theme.gap, 0.0);
             Ok((Box::new(panel_group) as Box<dyn Control>, panel_style))
         })
     };
@@ -331,8 +303,7 @@ pub(crate) fn create_drawer(container: &Container, side: DrawerSide) -> Drawer {
     let make_scrim = |c: &Container| {
         crate::add(c, |_state, theme| {
             let mut scrim_style = container_style(theme, false);
-            scrim_style.flex_grow = 1.0;
-            scrim_style.size.height = Dimension::percent(1.0);
+            scrim_style.set_grow(1.0).set_height(Length::Percent(100.0));
             Ok((
                 Box::new(DrawerScrimControl) as Box<dyn Control>,
                 scrim_style,

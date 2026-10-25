@@ -4,10 +4,10 @@
 
 use taffy::{
     GridPlacement, GridTemplateArea, GridTemplateAreas, GridTemplateComponent,
-    GridTemplateRepetition, Line, RepetitionCount,
+    GridTemplateRepetition, Line, RepetitionCount, TrackSizingFunction,
 };
 
-use crate::{Placement, Track};
+use crate::{Align, Flow, Placement, Track};
 
 /// How often a [`TemplateItem::Repeat`] repeats its tracks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,7 +40,7 @@ impl From<Track> for TemplateItem {
 }
 
 /// Taffy's track components and line names for one axis.
-pub type Template = (Vec<GridTemplateComponent<String>>, Vec<Vec<String>>);
+pub(crate) type Template = (Vec<GridTemplateComponent<String>>, Vec<Vec<String>>);
 
 fn fixed(track: Track) -> bool {
     matches!(track, Track::Px(_) | Track::Percent(_) | Track::MinMax(..))
@@ -66,7 +66,7 @@ fn lines(items: &[TemplateItem]) -> Option<(Vec<Track>, Vec<Vec<String>>)> {
 }
 
 /// Converts a track list, or `None` if it breaks a rule of [`TemplateItem`].
-pub fn template(items: &[TemplateItem]) -> Option<Template> {
+pub(crate) fn template(items: &[TemplateItem]) -> Option<Template> {
     let (mut components, mut names) = (Vec::new(), vec![Vec::new()]);
     let mut automatic = false;
     let mut all_fixed = true;
@@ -119,7 +119,7 @@ pub fn template(items: &[TemplateItem]) -> Option<Template> {
 /// Parses CSS `grid-template-areas` rows: whitespace-separated cell names, the
 /// same count in every row, `.` for an unnamed cell; each name must cover a
 /// rectangle. `None` for an empty, ragged or non-rectangular template.
-pub fn areas<S: AsRef<str>>(rows: &[S]) -> Option<GridTemplateAreas<String>> {
+pub(crate) fn areas<S: AsRef<str>>(rows: &[S]) -> Option<GridTemplateAreas<String>> {
     let mut found: Vec<(&str, [usize; 4], usize)> = Vec::new();
     let mut columns = None;
     for (row, text) in rows.iter().enumerate() {
@@ -228,7 +228,7 @@ impl GridLines {
     }
 
     /// As Taffy's start/end placement.
-    pub fn lines(&self) -> Line<GridPlacement<String>> {
+    pub(crate) fn lines(&self) -> Line<GridPlacement<String>> {
         Line {
             start: self.start.placement(),
             end: self.end.placement(),
@@ -243,4 +243,97 @@ impl From<Placement> for GridLines {
             end: GridLine::Span(placement.span),
         }
     }
+}
+
+/// Grid containers and items, with the `grid` feature. Invalid tracks,
+/// templates, areas or placements panic like the other setters.
+impl crate::LayoutStyle {
+    /// Replaces the explicit columns, like CSS `grid-template-columns`: plain
+    /// [`Track`]s, or [`TemplateItem`]s that also name lines and repeat tracks.
+    pub fn set_columns<T: Clone + Into<TemplateItem>>(&mut self, columns: &[T]) -> &mut Self {
+        let (columns, names) = checked_template(columns);
+        self.0.grid_template_columns = columns;
+        self.0.grid_template_column_names = names;
+        self
+    }
+
+    /// Replaces the explicit rows like [`Self::set_columns`].
+    pub fn set_rows<T: Clone + Into<TemplateItem>>(&mut self, rows: &[T]) -> &mut Self {
+        let (rows, names) = checked_template(rows);
+        self.0.grid_template_rows = rows;
+        self.0.grid_template_row_names = names;
+        self
+    }
+
+    /// Names rectangular areas, like CSS `grid-template-areas`: one string per
+    /// row of whitespace-separated cell names, `.` for an unnamed cell; an
+    /// empty slice clears them.
+    pub fn set_areas(&mut self, rows: &[&str]) -> &mut Self {
+        self.0.grid_template_areas = match rows {
+            [] => None,
+            rows => Some(areas(rows).unwrap_or_else(|| panic!("invalid layout value: areas"))),
+        };
+        self
+    }
+
+    /// Sizes rows the grid adds beyond its explicit tracks, cycling through
+    /// `rows`; empty restores automatic rows.
+    pub fn set_auto_rows(&mut self, rows: &[Track]) -> &mut Self {
+        self.0.grid_auto_rows = sizing(rows);
+        self
+    }
+
+    /// Sizes columns the grid adds beyond its explicit tracks.
+    pub fn set_auto_columns(&mut self, columns: &[Track]) -> &mut Self {
+        self.0.grid_auto_columns = sizing(columns);
+        self
+    }
+
+    /// Sets the order in which the grid places children without a position.
+    pub fn set_flow(&mut self, flow: Flow) -> &mut Self {
+        self.0.grid_auto_flow = flow.auto_flow();
+        self
+    }
+
+    /// Aligns children horizontally within their areas; `None` stretches.
+    pub fn set_justify_items(&mut self, align: Option<Align>) -> &mut Self {
+        self.0.justify_items = align.map(Align::items);
+        self
+    }
+
+    /// Overrides the grid's horizontal alignment for this item.
+    pub fn set_justify_self(&mut self, align: Option<Align>) -> &mut Self {
+        self.0.justify_self = align.map(Align::items);
+        self
+    }
+
+    /// Places this item on the column axis.
+    pub fn set_grid_column(&mut self, lines: impl Into<GridLines>) -> &mut Self {
+        self.0.grid_column = checked_lines(lines.into());
+        self
+    }
+
+    /// Places this item on the row axis.
+    pub fn set_grid_row(&mut self, lines: impl Into<GridLines>) -> &mut Self {
+        self.0.grid_row = checked_lines(lines.into());
+        self
+    }
+}
+
+fn checked_template<T: Clone + Into<TemplateItem>>(items: &[T]) -> Template {
+    let items: Vec<TemplateItem> = items.iter().cloned().map(Into::into).collect();
+    template(&items).unwrap_or_else(|| panic!("invalid layout value: grid template"))
+}
+
+fn sizing(tracks: &[Track]) -> Vec<TrackSizingFunction> {
+    assert!(
+        tracks.iter().all(|track| track.is_valid()),
+        "invalid layout value: grid track"
+    );
+    tracks.iter().map(|track| track.sizing()).collect()
+}
+
+fn checked_lines(lines: GridLines) -> Line<GridPlacement<String>> {
+    assert!(lines.is_valid(), "invalid layout value: grid placement");
+    lines.lines()
 }

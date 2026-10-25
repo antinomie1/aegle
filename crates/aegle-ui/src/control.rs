@@ -16,7 +16,7 @@ use std::{any::Any, cell::RefCell};
 use aegle_controls::TextField;
 pub use aegle_controls::{Action, Capture, Input, Outcome, PointerInput};
 use aegle_core::NodeId;
-use aegle_layout::Style;
+use aegle_layout::LayoutStyle;
 use aegle_scene::{Color, RoundedRect, SceneBuilder};
 use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{Accepts, Appearance, ControlKind, Theme, VisualState};
@@ -303,7 +303,7 @@ pub trait Control: Any {
     fn finalize(&mut self, _cx: &MeasureCx<'_>) {}
     /// Adjusts the layout style that follows the theme when it changes, leaving
     /// fields in `local` (bits the application set) alone.
-    fn retheme(&self, _theme: &Theme, _local: LocalLayout, _root: bool, _style: &mut Style) {}
+    fn retheme(&self, _theme: &Theme, _local: LocalLayout, _root: bool, _style: &mut LayoutStyle) {}
 
     /// Records the control's content.
     fn paint(&mut self, _cx: &mut PaintCx<'_>) {}
@@ -331,23 +331,12 @@ impl Control for Plain {
     fn kind(&self) -> &'static ControlKind {
         &CONTAINER
     }
-    fn retheme(&self, theme: &Theme, local: LocalLayout, root: bool, style: &mut Style) {
-        use aegle_layout::{Edges, LengthPercentage, Size as LayoutSize};
+    fn retheme(&self, theme: &Theme, local: LocalLayout, root: bool, style: &mut LayoutStyle) {
         if !local.contains(LocalLayout::GAP) {
-            let gap = LengthPercentage::length(theme.gap);
-            style.gap = LayoutSize {
-                width: gap,
-                height: gap,
-            };
+            style.set_gap(theme.gap, theme.gap);
         }
         if root && !local.contains(LocalLayout::PADDING) {
-            let p = LengthPercentage::length(theme.padding);
-            style.padding = Edges {
-                left: p,
-                right: p,
-                top: p,
-                bottom: p,
-            };
+            style.set_padding(theme.padding);
         }
     }
 }

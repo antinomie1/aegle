@@ -3,10 +3,10 @@
 use std::{io::Read, path::Path};
 
 use aegle_core::Dirty;
-use aegle_layout::{AlignItems, Style};
 use aegle_scene::{Image, Rect};
 use aegle_theme::ControlKind;
 use aegle_types::Size;
+use aegle_ui::{Align, LayoutStyle};
 use aegle_ui::{
     Container, Control, HandlerResult, Result, Subscription,
     control::{MeasureCx, PaintCx},
@@ -196,10 +196,10 @@ pub(crate) fn image(container: &Container, image: Option<&Image>) -> ImageView {
                 error: None,
                 reported: false,
             }) as Box<dyn Control>,
-            Style {
-                align_self: Some(AlignItems::START),
-                flex_shrink: 0.0,
-                ..Default::default()
+            {
+                let mut style = LayoutStyle::default();
+                style.set_align_self(Some(Align::Start)).set_shrink(0.0);
+                style
             },
         ))
     }))

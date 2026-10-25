@@ -8,9 +8,9 @@ use std::{
 
 use aegle_controls::{Key, KeyInput};
 use aegle_core::NodeId;
-use aegle_layout::{Edges, LengthPercentageAuto, Position, Style};
 use aegle_types::Point;
 use aegle_ui::{Control, Node, Result, State};
+use aegle_ui::{Insets, LayoutStyle, Length};
 
 use crate::label::LabelControl;
 
@@ -104,20 +104,10 @@ pub(crate) fn wake(state: &mut State, _: Instant) -> Result {
     let theme = *state.theme_of(target);
     let pointer = state.pointer.map_or(Point::default(), |(_, p)| p);
     let at = Point::new(pointer.x + OFFSET.x, pointer.y + OFFSET.y);
-    let style = Style {
-        position: Position::Absolute,
-        inset: Edges {
-            left: LengthPercentageAuto::length(0.0),
-            top: LengthPercentageAuto::length(0.0),
-            right: LengthPercentageAuto::auto(),
-            bottom: LengthPercentageAuto::auto(),
-        },
-        max_size: aegle_layout::Size {
-            width: LengthPercentageAuto::length(320.0),
-            height: LengthPercentageAuto::auto(),
-        },
-        ..Default::default()
-    };
+    let mut style = LayoutStyle::default();
+    style
+        .set_absolute(Some(Insets::new(0.0, Length::Auto, Length::Auto, 0.0)))
+        .set_max_width(320.0);
     let mut control = LabelControl::new(&state.fonts, &text, &theme)?;
     control.kind = &crate::kinds::TOOLTIP;
     let root = state.root;

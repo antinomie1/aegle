@@ -50,10 +50,10 @@ mod tooltip;
 mod tree;
 mod visual;
 
-use aegle_layout::Style;
 use aegle_scene::{Image, SceneBuilder};
 use aegle_theme::Theme;
 use aegle_types::Size;
+use aegle_ui::LayoutStyle;
 use aegle_ui::{Container, Control, FileMode, HandlerResult, Hooks, Node, Result, State};
 
 pub use button::{Button, ButtonControl};
@@ -152,7 +152,7 @@ fn pruned(state: &mut State) -> Result {
 /// Appends a node after installing [`HOOKS`].
 pub(crate) fn add(
     container: &Container,
-    create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, Style)>,
+    create: impl FnOnce(&mut State, &Theme) -> Result<(Box<dyn Control>, LayoutStyle)>,
 ) -> Node {
     container.add(|state, theme| {
         state.install(&HOOKS);

@@ -2,7 +2,7 @@
 
 use aegle_controls::{Input, Range, RangeError};
 use aegle_core::Dirty;
-use aegle_layout::Style;
+use aegle_ui::LayoutStyle;
 use aegle_ui::{Container, Control, HandlerResult, Node, UiError, handle};
 use aegle_ui::{LocalLayout, OrFail};
 
@@ -175,7 +175,7 @@ impl Slider {
 pub(crate) fn slider(container: &Container, min: f64, max: f64, value: f64) -> Slider {
     let range = Range::new(min, max, value, 0.0).or_fail();
     Slider(crate::add(container, |_, theme| {
-        let mut style = Style::default();
+        let mut style = LayoutStyle::default();
         sized(&mut style, theme.control_height, false, LocalLayout::NONE);
         shrinks_along(&mut style, false);
         Ok((
@@ -188,7 +188,7 @@ pub(crate) fn slider(container: &Container, min: f64, max: f64, value: f64) -> S
 pub(crate) fn progress(container: &Container, min: f64, max: f64, value: f64) -> Progress {
     let range = Range::new(min, max, value, 0.0).or_fail();
     Progress(crate::add(container, |_, theme| {
-        let mut style = Style::default();
+        let mut style = LayoutStyle::default();
         sized(
             &mut style,
             theme.control_height / 2.0,

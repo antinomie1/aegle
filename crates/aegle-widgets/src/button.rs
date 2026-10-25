@@ -1,11 +1,11 @@
 //! Buttons, and the dropdown and option variants the popup module builds on them.
 
 use aegle_controls::{Input, Outcome};
-use aegle_layout::{Dimension, Style};
 use aegle_scene::Affine;
 use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
+use aegle_ui::LayoutStyle;
 use aegle_ui::{
     Container, Control, HandlerResult, Result,
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
@@ -180,10 +180,10 @@ impl Control for ButtonControl {
         theme: &Theme,
         local: aegle_ui::LocalLayout,
         _: bool,
-        style: &mut aegle_layout::Style,
+        style: &mut LayoutStyle,
     ) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
-            style.size.height = Dimension::length(theme.control_height);
+            style.set_height(theme.control_height);
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
@@ -274,16 +274,10 @@ pub(crate) fn create_as(container: &Container, text: &str, variant: Variant) -> 
     Button(crate::add(container, |state, theme| {
         let mut control = ButtonControl::new(&state.fonts, text, theme)?;
         control.variant = variant;
-        Ok((
-            Box::new(control),
-            Style {
-                size: aegle_layout::Size {
-                    width: Dimension::auto(),
-                    height: Dimension::length(theme.control_height),
-                },
-                flex_shrink: 0.0,
-                ..Default::default()
-            },
-        ))
+        Ok((Box::new(control), {
+            let mut style = LayoutStyle::default();
+            style.set_height(theme.control_height).set_shrink(0.0);
+            style
+        }))
     }))
 }

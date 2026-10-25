@@ -16,7 +16,8 @@ impl State {
     pub fn scroll_limit(&self, id: NodeId) -> Point {
         let node = self.tree.get(id).unwrap();
         if node.context.control.viewport() {
-            return Point::new(node.layout().scroll_width(), node.layout().scroll_height());
+            let scroll = node.scroll_size();
+            return Point::new(scroll.width, scroll.height);
         }
         match node.context.control.editor() {
             Some(field) => {

@@ -8,7 +8,7 @@ use std::{
 };
 
 use aegle_core::{Focus, NodeId, Tree};
-use aegle_layout::{Dimension, Edges, FlexDirection, LayoutNode, LengthPercentage, Style};
+use aegle_layout::{LayoutNode, LayoutStyle};
 use aegle_scene::Affine;
 use aegle_text::{Selection, TextSystem};
 use aegle_theme::Theme;
@@ -242,10 +242,7 @@ impl Ui {
         state.size = size;
         let root = state.root;
         let mut style = state.tree.get(root).unwrap().style().clone();
-        style.size = aegle_layout::Size {
-            width: Dimension::length(size.width),
-            height: Dimension::length(size.height),
-        };
+        style.set_width(size.width).set_height(size.height);
         aegle_layout::set_style(&mut state.tree, root, style).or_fail();
         state.damage_full = true;
         state.repaint = true;
@@ -455,32 +452,15 @@ impl Ui {
 }
 
 /// Scroll views keep content clear of their default border.
-pub fn scroll_padding(theme: &Theme) -> Edges<LengthPercentage> {
-    let p = LengthPercentage::length(theme.padding / 2.0);
-    Edges {
-        left: p,
-        right: p,
-        top: p,
-        bottom: p,
-    }
+pub fn scroll_padding(theme: &Theme) -> crate::Insets {
+    crate::Insets::all(theme.padding / 2.0)
 }
 
 /// The default layout style of a plain row or column under `theme`.
-pub fn container_style(theme: &Theme, root: bool) -> Style {
-    let gap = LengthPercentage::length(theme.gap);
-    let padding = LengthPercentage::length(if root { theme.padding } else { 0.0 });
-    Style {
-        flex_direction: FlexDirection::Column,
-        gap: aegle_layout::Size {
-            width: gap,
-            height: gap,
-        },
-        padding: Edges {
-            left: padding,
-            right: padding,
-            top: padding,
-            bottom: padding,
-        },
-        ..Default::default()
-    }
+pub fn container_style(theme: &Theme, root: bool) -> LayoutStyle {
+    let mut style = LayoutStyle::column();
+    style
+        .set_gap(theme.gap, theme.gap)
+        .set_padding(if root { theme.padding } else { 0.0 });
+    style
 }

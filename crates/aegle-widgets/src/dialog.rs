@@ -2,13 +2,10 @@
 
 use aegle_controls::{Key, KeyInput};
 use aegle_core::NodeId;
-use aegle_layout::{
-    Align, Dimension, Display, Edges, Justify, LengthPercentage, LengthPercentageAuto, Overflow,
-    Position,
-};
 use aegle_scene::RoundedRect;
 use aegle_theme::ControlKind;
 use aegle_types::{Color, Point, Rect};
+use aegle_ui::{Align, Display, Insets, Justify, Length, Overflow};
 use aegle_ui::{
     Container, Control, HandlerResult, Node, OrFail, Result, State, container_style,
     control::PaintCx, handle,
@@ -258,10 +255,10 @@ pub(crate) fn fit(state: &mut State) -> bool {
     let mut changed = false;
     for (dialog, card) in open {
         let room = state.tree.get(dialog).unwrap().bounds().size.width - 2.0 * MARGIN;
-        let width = LengthPercentageAuto::length(MIN_WIDTH.min(room).max(0.0));
-        let mut style = state.tree.get(card).unwrap().style().clone();
-        if style.min_size.width != width {
-            style.min_size.width = width;
+        let old = state.tree.get(card).unwrap().style();
+        let mut style = old.clone();
+        style.set_min_width(MIN_WIDTH.min(room).max(0.0));
+        if style != *old {
             aegle_layout::set_style(&mut state.tree, card, style).or_fail();
             changed = true;
         }
@@ -281,32 +278,16 @@ pub(crate) fn create_dialog(container: &Container, title: &str) -> Dialog {
     // 1. Full-window overlay with dark backdrop scrim.
     let overlay_node = crate::add(container, |_state, theme| {
         let mut overlay_style = container_style(theme, false);
-        overlay_style.position = Position::Absolute;
-        overlay_style.inset = Edges {
-            left: LengthPercentageAuto::length(0.0),
-            top: LengthPercentageAuto::length(0.0),
-            right: LengthPercentageAuto::length(0.0),
-            bottom: LengthPercentageAuto::length(0.0),
-        };
-        overlay_style.display = Display::Flex;
-        overlay_style.size = aegle_layout::Size {
-            width: Dimension::percent(1.0),
-            height: Dimension::percent(1.0),
-        };
-        overlay_style.gap = aegle_layout::Size {
-            width: LengthPercentage::length(0.0),
-            height: LengthPercentage::length(0.0),
-        };
-        // The card keeps this margin from the covered area's edges.
-        let margin = LengthPercentage::length(MARGIN);
-        overlay_style.padding = Edges {
-            left: margin,
-            right: margin,
-            top: margin,
-            bottom: margin,
-        };
-        overlay_style.align_items = Some(Align::Center.items());
-        overlay_style.justify_content = Some(Justify::Center.content());
+        overlay_style
+            .set_absolute(Some(Insets::all(0.0)))
+            .set_display(Display::Flex)
+            .set_width(Length::Percent(100.0))
+            .set_height(Length::Percent(100.0))
+            .set_gap(0.0, 0.0)
+            // The card keeps this margin from the covered area's edges.
+            .set_padding(MARGIN)
+            .set_align_items(Some(Align::Center))
+            .set_justify_content(Some(Justify::Center));
         Ok((Box::new(ScrimControl) as Box<dyn Control>, overlay_style))
     });
     overlay_node.set_visible(false);
@@ -319,22 +300,13 @@ pub(crate) fn create_dialog(container: &Container, title: &str) -> Dialog {
     };
     let card_node = crate::add(&overlay_container, |_state, theme| {
         let mut card_style = container_style(theme, false);
-        card_style.min_size.width = LengthPercentageAuto::length(MIN_WIDTH);
-        card_style.max_size.width = LengthPercentageAuto::length(560.0);
-        // Content taller or wider than the covered area scrolls in the card.
-        card_style.overflow.x = Overflow::Scroll;
-        card_style.overflow.y = Overflow::Scroll;
-        let p = LengthPercentage::length(theme.padding * 1.5);
-        card_style.padding = Edges {
-            left: p,
-            right: p,
-            top: p,
-            bottom: p,
-        };
-        card_style.gap = aegle_layout::Size {
-            width: LengthPercentage::length(0.0),
-            height: LengthPercentage::length(theme.gap * 1.25),
-        };
+        card_style
+            .set_min_width(MIN_WIDTH)
+            .set_max_width(560.0)
+            // Content taller or wider than the covered area scrolls in the card.
+            .set_overflow(Overflow::Scroll, Overflow::Scroll)
+            .set_padding(theme.padding * 1.5)
+            .set_gap(theme.gap * 1.25, 0.0);
         Ok((Box::new(card_group) as Box<dyn Control>, card_style))
     });
 
@@ -359,11 +331,9 @@ pub(crate) fn create_dialog(container: &Container, title: &str) -> Dialog {
     // 5. Footer row.
     let footer_node = crate::add(&card_container, |_state, theme| {
         let mut footer_style = container_style(theme, true);
-        footer_style.justify_content = Some(Justify::End.content());
-        footer_style.gap = aegle_layout::Size {
-            width: LengthPercentage::length(theme.gap),
-            height: LengthPercentage::length(0.0),
-        };
+        footer_style
+            .set_justify_content(Some(Justify::End))
+            .set_gap(0.0, theme.gap);
         Ok((Box::new(aegle_ui::Plain) as Box<dyn Control>, footer_style))
     });
 

@@ -7,7 +7,7 @@
 
 use crate::require;
 use aegle_core::{Dirty, NodeId};
-use aegle_layout::{Align, Direction, Insets, Justify, Length, Position, Style, Wrap};
+use aegle_layout::{Align, Direction, Insets, Justify, LayoutStyle, Length, Wrap};
 
 use crate::{Container, LengthSlot, Node, Result, State, UiError};
 
@@ -42,14 +42,12 @@ impl LocalLayout {
     }
 }
 
-fn size(length: impl Into<Length>) -> Length {
-    let length = length.into();
-    require(length.is_valid(true));
-    length
-}
-
 impl Node {
-    pub(crate) fn layout(&self, local: LocalLayout, change: impl FnOnce(&mut Style)) {
+    pub(crate) fn layout(
+        &self,
+        local: LocalLayout,
+        change: impl FnOnce(&mut LayoutStyle) -> &mut LayoutStyle,
+    ) {
         self.change(|state, id| {
             let mut style = state.tree.get(id).unwrap().style().clone();
             change(&mut style);
@@ -66,100 +64,76 @@ impl Node {
     }
     /// Sets the width, preserving height and its theme default.
     pub fn set_width(&self, width: impl Into<Length>) {
-        let width = size(width);
-        self.layout(LocalLayout::NONE, |s| s.size.width = width.dimension())
+        let width = width.into();
+        self.layout(LocalLayout::NONE, |s| s.set_width(width))
     }
     /// Sets the height; automatic replaces the control's themed height.
     pub fn set_height(&self, height: impl Into<Length>) {
-        let height = size(height);
-        self.layout(LocalLayout::HEIGHT, |s| s.size.height = height.dimension())
+        let height = height.into();
+        self.layout(LocalLayout::HEIGHT, |s| s.set_height(height))
     }
     /// Sets the minimum width without changing the minimum height.
     pub fn set_min_width(&self, width: impl Into<Length>) {
-        let width = size(width);
-        self.layout(LocalLayout::NONE, |s| {
-            s.min_size.width = width.auto_length()
-        })
+        let width = width.into();
+        self.layout(LocalLayout::NONE, |s| s.set_min_width(width))
     }
     /// Sets the minimum height, overriding the corresponding theme default.
     /// Zero lets a flex item shrink below its content. Containers holding a
     /// scroll view or table need none: a scrolling axis does not pass its
     /// content up as a minimum.
     pub fn set_min_height(&self, height: impl Into<Length>) {
-        let height = size(height);
-        self.layout(LocalLayout::MIN_HEIGHT, |s| {
-            s.min_size.height = height.auto_length()
-        })
+        let height = height.into();
+        self.layout(LocalLayout::MIN_HEIGHT, |s| s.set_min_height(height))
     }
     /// Sets the maximum width; automatic removes the limit.
     pub fn set_max_width(&self, width: impl Into<Length>) {
-        let width = size(width);
-        self.layout(LocalLayout::NONE, |s| {
-            s.max_size.width = width.auto_length()
-        })
+        let width = width.into();
+        self.layout(LocalLayout::NONE, |s| s.set_max_width(width))
     }
     /// Sets the maximum height; automatic removes the limit.
     pub fn set_max_height(&self, height: impl Into<Length>) {
-        let height = size(height);
-        self.layout(LocalLayout::NONE, |s| {
-            s.max_size.height = height.auto_length()
-        })
+        let height = height.into();
+        self.layout(LocalLayout::NONE, |s| s.set_max_height(height))
     }
     /// Keeps width divided by height at a positive ratio when one dimension
     /// is automatic; `None` removes the constraint.
     pub fn set_aspect_ratio(&self, ratio: impl Into<Option<f32>>) {
         let ratio = ratio.into();
-        require(ratio.is_none_or(|r| r.is_finite() && r > 0.0));
-        self.layout(LocalLayout::NONE, |s| s.aspect_ratio = ratio)
+        self.layout(LocalLayout::NONE, |s| s.set_aspect_ratio(ratio))
     }
     /// Sets a finite nonnegative flex grow factor; zero keeps intrinsic sizing.
     pub fn set_grow(&self, grow: f32) {
-        require(grow.is_finite() && grow >= 0.0);
-        self.layout(LocalLayout::NONE, |s| s.flex_grow = grow)
+        self.layout(LocalLayout::NONE, |s| s.set_grow(grow))
     }
     /// Sets how much this item gives up when its line overflows; zero keeps
     /// its basis. The default is one.
     pub fn set_shrink(&self, shrink: f32) {
-        require(shrink.is_finite() && shrink >= 0.0);
-        self.layout(LocalLayout::NONE, |s| s.flex_shrink = shrink)
+        self.layout(LocalLayout::NONE, |s| s.set_shrink(shrink))
     }
     /// Sets the main-axis size before growing and shrinking; automatic uses
     /// the size or content. Zero with a grow factor shares space by factor only.
     pub fn set_basis(&self, basis: impl Into<Length>) {
-        let basis = size(basis);
-        self.layout(LocalLayout::NONE, |s| s.flex_basis = basis.dimension())
+        let basis = basis.into();
+        self.layout(LocalLayout::NONE, |s| s.set_basis(basis))
     }
     /// Overrides the parent's cross-axis alignment for this item; in a grid,
     /// its vertical alignment within its area. `None` follows the parent.
     pub fn set_align_self(&self, align: impl Into<Option<Align>>) {
         let align = align.into();
-        self.layout(LocalLayout::NONE, |s| {
-            s.align_self = align.map(Align::items)
-        })
+        self.layout(LocalLayout::NONE, |s| s.set_align_self(align))
     }
     /// Sets outer spacing. Edges may be negative; `Auto` edges absorb free
     /// space, so automatic left and right margins center an item.
     pub fn set_margin(&self, margin: impl Into<Insets>) {
         let margin = margin.into();
-        require(margin.is_valid(false, true));
-        self.layout(LocalLayout::NONE, |s| s.margin = margin.auto_lengths())
+        self.layout(LocalLayout::NONE, |s| s.set_margin(margin))
     }
     /// Takes this item out of its parent's flow and places it by `insets`
     /// from the parent's padding box, over its siblings; `None` returns it to
     /// the flow. With opposite insets set and an automatic size, it stretches between them.
     pub fn set_absolute(&self, insets: impl Into<Option<Insets>>) {
         let insets = insets.into();
-        require(insets.is_none_or(|i| i.is_valid(false, true)));
-        self.layout(LocalLayout::NONE, |s| match insets {
-            Some(insets) => {
-                s.position = Position::Absolute;
-                s.inset = insets.auto_lengths();
-            }
-            None => {
-                s.position = Position::Relative;
-                s.inset = Insets::default().auto_lengths();
-            }
-        })
+        self.layout(LocalLayout::NONE, |s| s.set_absolute(insets))
     }
     /// Sets inner spacing. Containers accept any [`Insets`]; text-bearing
     /// controls accept only one nonnegative pixel value on every edge.
@@ -177,7 +151,7 @@ impl Node {
     /// CSS `gap`. Ends a gap token binding.
     pub fn set_gap(&self, row: impl Into<Length>, column: impl Into<Length>) {
         let (row, column) = (row.into(), column.into());
-        require(row.definite().is_some() && column.definite().is_some());
+        require(row != Length::Auto && column != Length::Auto);
         require(row.is_valid(true) && column.is_valid(true));
         self.change(|state, id| {
             state.set_gap(id, Some((row, column)))?;
@@ -199,11 +173,11 @@ impl State {
             match padding {
                 Some(padding) => {
                     node.context.local_layout.insert(LocalLayout::PADDING);
-                    style.padding = padding.definite();
+                    style.set_padding(padding);
                 }
                 None => {
                     node.context.local_layout.remove(LocalLayout::PADDING);
-                    style.padding = Insets::all(0.0).definite();
+                    style.set_padding(0.0);
                     let local = node.context.local_layout;
                     node.context
                         .control
@@ -239,18 +213,11 @@ impl State {
         match gap {
             Some((row, column)) => {
                 node.context.local_layout.insert(LocalLayout::GAP);
-                style.gap = aegle_layout::Size {
-                    width: column.definite().unwrap(),
-                    height: row.definite().unwrap(),
-                };
+                style.set_gap(row, column);
             }
             None => {
                 node.context.local_layout.remove(LocalLayout::GAP);
-                let zero = Length::Px(0.0).definite().unwrap();
-                style.gap = aegle_layout::Size {
-                    width: zero,
-                    height: zero,
-                };
+                style.set_gap(0.0, 0.0);
                 let local = node.context.local_layout;
                 node.context
                     .control
@@ -265,34 +232,28 @@ impl State {
 impl Container {
     /// Sets the main axis and child order.
     pub fn set_direction(&self, direction: Direction) {
-        self.layout(LocalLayout::NONE, |s| s.flex_direction = direction.flex())
+        self.layout(LocalLayout::NONE, |s| s.set_direction(direction))
     }
     /// Breaks children into several lines when they do not fit, like QML's `Flow`.
     pub fn set_wrap(&self, wrap: Wrap) {
-        self.layout(LocalLayout::NONE, |s| s.flex_wrap = wrap.flex())
+        self.layout(LocalLayout::NONE, |s| s.set_wrap(wrap))
     }
     /// Aligns children on the cross axis (vertically in a row); `None`
     /// restores the default stretch. In a grid, the vertical alignment in each area.
     pub fn set_align_items(&self, align: impl Into<Option<Align>>) {
         let align = align.into();
-        self.layout(LocalLayout::NONE, |s| {
-            s.align_items = align.map(Align::items)
-        })
+        self.layout(LocalLayout::NONE, |s| s.set_align_items(align))
     }
     /// Distributes free main-axis space between children (horizontally in a
     /// row); in a grid, between columns. `None` packs at the start.
     pub fn set_justify_content(&self, justify: impl Into<Option<Justify>>) {
         let justify = justify.into();
-        self.layout(LocalLayout::NONE, |s| {
-            s.justify_content = justify.map(Justify::content)
-        })
+        self.layout(LocalLayout::NONE, |s| s.set_justify_content(justify))
     }
     /// Distributes free cross-axis space between wrapped lines; in a grid,
     /// between rows. `None` restores the default stretch.
     pub fn set_align_content(&self, align: impl Into<Option<Justify>>) {
         let align = align.into();
-        self.layout(LocalLayout::NONE, |s| {
-            s.align_content = align.map(Justify::content)
-        })
+        self.layout(LocalLayout::NONE, |s| s.set_align_content(align))
     }
 }

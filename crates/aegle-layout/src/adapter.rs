@@ -28,8 +28,8 @@ pub(crate) trait Host<C> {
 
 impl<C, M, B> Host<C> for (M, B)
 where
-    M: FnMut(NodeId, &mut C, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32>,
-    B: FnMut(NodeId, &mut C, Size<f32>) -> Option<f32>,
+    M: FnMut(NodeId, &mut C, crate::Known, crate::Space) -> aegle_types::Size,
+    B: FnMut(NodeId, &mut C, aegle_types::Size) -> Option<f32>,
 {
     fn measure(
         &mut self,
@@ -38,10 +38,27 @@ where
         known: Size<Option<f32>>,
         available: Size<AvailableSpace>,
     ) -> Size<f32> {
-        (self.0)(id, context, known, available)
+        let axis = |space| match space {
+            AvailableSpace::Definite(value) => crate::Available::Definite(value),
+            AvailableSpace::MinContent => crate::Available::MinContent,
+            AvailableSpace::MaxContent => crate::Available::MaxContent,
+        };
+        let known = crate::Known {
+            width: known.width,
+            height: known.height,
+        };
+        let space = crate::Space {
+            width: axis(available.width),
+            height: axis(available.height),
+        };
+        let size = (self.0)(id, context, known, space);
+        Size {
+            width: size.width,
+            height: size.height,
+        }
     }
     fn baseline(&mut self, id: NodeId, context: &mut C, size: Size<f32>) -> Option<f32> {
-        (self.1)(id, context, size)
+        (self.1)(id, context, aegle_types::Size::new(size.width, size.height))
     }
 }
 
@@ -64,7 +81,7 @@ impl<C, F> Adapter<'_, C, F> {
     /// ordinary hidden children and hide their subtree.
     fn transparent(&self, id: NodeId) -> bool {
         let node = self.tree.get(id).unwrap();
-        node.contents && node.style.display != Display::None
+        node.contents && node.style.0.display != Display::None
     }
     fn push_flat(&self, id: NodeId, out: &mut Vec<NodeId>) {
         for child in self.tree.children(id).unwrap() {
@@ -168,7 +185,7 @@ where
     where
         Self: 'a;
     fn get_core_container_style(&self, id: taffy::NodeId) -> &Style {
-        self.node(id).style()
+        self.node(id).taffy_style()
     }
     fn set_unrounded_layout(&mut self, id: taffy::NodeId, layout: &Layout) {
         self.node_mut(id).layout = *layout;
@@ -196,13 +213,13 @@ where
         block_ctx: Option<&mut taffy::BlockContext<'_>>,
     ) -> LayoutOutput {
         if inputs.run_mode == taffy::RunMode::PerformHiddenLayout
-            || self.node(id).style().display == Display::None
+            || self.node(id).taffy_style().display == Display::None
         {
             return taffy::compute_hidden_layout(self, id);
         }
         compute_cached_layout(self, id, inputs, |this, id, inputs| {
             let mut output = this.compute_uncached(id, inputs, block_ctx);
-            scroll_minimum(this.node(id).style(), &inputs, &mut output);
+            scroll_minimum(this.node(id).taffy_style(), &inputs, &mut output);
             output
         })
     }
@@ -215,7 +232,7 @@ where
     ) -> LayoutOutput {
         if self.child_count(id) == 0 {
             let node = self.tree.get_mut(from_taffy(id)).unwrap();
-            let style = &*node.style;
+            let style = &node.style.0;
             let mut output = compute_leaf_layout(
                 inputs,
                 style,
@@ -234,7 +251,7 @@ where
             }
             return output;
         }
-        match self.node(id).style().display {
+        match self.node(id).taffy_style().display {
             Display::Flex => taffy::compute_flexbox_layout(self, id, inputs),
             Display::Block => taffy::compute_block_layout(self, id, inputs, block_ctx),
             Display::FlowRoot => taffy::compute_block_layout(self, id, inputs, None),
@@ -329,7 +346,7 @@ where
     where
         Self: 'a;
     fn get_flexbox_container_style(&self, id: taffy::NodeId) -> &Style {
-        self.node(id).style()
+        self.node(id).taffy_style()
     }
     fn get_flexbox_child_style(&self, id: taffy::NodeId) -> ItemStyle<'_> {
         let mut parent = self.tree.parent(from_taffy(id)).unwrap();
@@ -337,7 +354,7 @@ where
             parent = self.tree.parent(contents).unwrap();
         }
         let fixed = parent.is_some_and(|parent| {
-            let style = self.tree.get(parent).unwrap().style();
+            let style = self.tree.get(parent).unwrap().taffy_style();
             let overflow = match style.flex_direction {
                 taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => style.overflow.x,
                 _ => style.overflow.y,
@@ -345,7 +362,7 @@ where
             overflow == taffy::Overflow::Scroll
         });
         ItemStyle {
-            style: self.node(id).style(),
+            style: self.node(id).taffy_style(),
             fixed,
         }
     }
@@ -363,10 +380,10 @@ where
     where
         Self: 'a;
     fn get_block_container_style(&self, id: taffy::NodeId) -> &Style {
-        self.node(id).style()
+        self.node(id).taffy_style()
     }
     fn get_block_child_style(&self, id: taffy::NodeId) -> &Style {
-        self.node(id).style()
+        self.node(id).taffy_style()
     }
     fn compute_block_child_layout(
         &mut self,
@@ -391,9 +408,9 @@ where
     where
         Self: 'a;
     fn get_grid_container_style(&self, id: taffy::NodeId) -> &Style {
-        self.node(id).style()
+        self.node(id).taffy_style()
     }
     fn get_grid_child_style(&self, id: taffy::NodeId) -> &Style {
-        self.node(id).style()
+        self.node(id).taffy_style()
     }
 }

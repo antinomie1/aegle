@@ -2,7 +2,6 @@
 
 use aegle_controls::{Action, Input, Key, KeyInput, Outcome};
 use aegle_core::NodeId;
-use aegle_layout::{Dimension, Style};
 use aegle_text::{Paragraph, TextSystem};
 use aegle_theme::{ControlKind, Theme};
 use aegle_types::Size;
@@ -11,6 +10,7 @@ use aegle_ui::{
     control::{ControlVisual, InputCx, MeasureCx, PaintCx},
     handle, text_style,
 };
+use aegle_ui::{LayoutStyle, Length};
 
 use crate::{
     paint::{Mark, ToggleSpec, toggle},
@@ -66,11 +66,11 @@ macro_rules! toggles {
             self.change(|state, id| {
                 let theme = *state.theme_of(id);
                 let mut style = state.tree.get(id).unwrap().style().clone();
-                style.size.height = if wrap {
-                    Dimension::auto()
+                style.set_height(if wrap {
+                    Length::Auto
                 } else {
-                    Dimension::length(theme.control_height)
-                };
+                    Length::Px(theme.control_height)
+                });
                 aegle_layout::set_style(&mut state.tree, id, style)?;
                 state.tree.mark_dirty(id, aegle_core::Dirty::LAYOUT)?;
                 Ok(())
@@ -216,13 +216,19 @@ impl Control for ToggleControl {
             self.text.reflow(available, cx.alignment()).or_fail();
         }
     }
-    fn retheme(&self, theme: &Theme, local: aegle_ui::LocalLayout, _: bool, style: &mut Style) {
+    fn retheme(
+        &self,
+        theme: &Theme,
+        local: aegle_ui::LocalLayout,
+        _: bool,
+        style: &mut LayoutStyle,
+    ) {
         if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
-            style.size.height = if self.wrap {
-                Dimension::auto()
+            style.set_height(if self.wrap {
+                Length::Auto
             } else {
-                Dimension::length(theme.control_height)
-            };
+                Length::Px(theme.control_height)
+            });
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
@@ -357,15 +363,10 @@ pub(crate) fn radio_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
     Ok(true)
 }
 
-fn control_style(height: f32) -> Style {
-    Style {
-        size: aegle_layout::Size {
-            width: Dimension::auto(),
-            height: Dimension::length(height),
-        },
-        flex_shrink: 0.0,
-        ..Default::default()
-    }
+fn control_style(height: f32) -> LayoutStyle {
+    let mut style = LayoutStyle::default();
+    style.set_height(height).set_shrink(0.0);
+    style
 }
 
 fn create(container: &Container, text: &str, checked: bool, mark: Mark) -> Node {

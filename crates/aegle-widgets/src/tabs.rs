@@ -189,7 +189,7 @@ pub(crate) fn tabs(container: &Container) -> Tabs {
     let bar = group::add(&root, Role::TabList, true);
     bar.set_gap(0.0, 0.0);
     // Tabs that do not fit the window's width continue on another line.
-    bar.set_wrap(aegle_layout::Wrap::Wrap);
+    bar.set_wrap(aegle_ui::Wrap::Wrap);
     root.change(|state, id| {
         data(state, id).bar = Some(bar.id);
         Ok(())
