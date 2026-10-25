@@ -40,7 +40,7 @@ pub(crate) unsafe extern "system" fn procedure(
             Ok(Some(result)) => result,
             Ok(None) => unsafe { DefWindowProcW(hwnd, msg, w, l) },
             Err(error) => {
-                native.emit(Event::Error(error));
+                native.emit(Event::Error(error.into()));
                 LRESULT(0)
             }
         }
@@ -122,15 +122,17 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
             let info = native.info.get();
             // SAFETY: returns the actual per-monitor DPI associated with this HWND.
             let scale = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
-            native.configure(info.physical, scale, focused, info.configured);
+            native.configure(info.buffer, scale, focused, info.configured);
             native.emit(Event::KeyboardFocus {
                 window: native.id,
+                seat: crate::SEAT,
                 focused,
             });
             let enabled = native.tsf.borrow().as_ref().is_some_and(Session::enabled);
             if focused && enabled {
                 native.emit(Event::Ime {
                     window: native.id,
+                    seat: crate::SEAT,
                     event: ImeEvent::Entered,
                 });
             } else if !focused {
@@ -142,6 +144,7 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
                 }
                 native.emit(Event::Ime {
                     window: native.id,
+                    seat: crate::SEAT,
                     event: ImeEvent::Left,
                 });
             }
@@ -161,6 +164,7 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
             if !ch.is_control() {
                 native.emit(Event::Text {
                     window: native.id,
+                    seat: crate::SEAT,
                     text: ch.to_string(),
                 });
             }

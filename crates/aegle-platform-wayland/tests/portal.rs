@@ -6,7 +6,8 @@
 use std::time::{Duration, Instant};
 
 use aegle_dbus::{Connection, Message, Value};
-use aegle_platform_wayland::{Event, Wayland};
+use aegle_platform::{Event, Platform};
+use aegle_platform_wayland::Wayland;
 
 const SETTINGS: &str = "org.freedesktop.portal.Settings";
 

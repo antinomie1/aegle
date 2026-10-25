@@ -1,40 +1,35 @@
 //! Event-driven Wayland windows with bounded, directly borrowed SHM framebuffers.
 //!
-//! This backend owns one connection and dispatch queue. It does not own widgets,
-//! a renderer, fonts or an editor. Call [`Wayland::dispatch`] when idle and drain
-//! [`Wayland::next_event`]; present only after a [`Event::Redraw`] notification.
-//! [`WindowOptions::layer`] creates a wlr layer surface on the same path.
+//! [`Wayland`] implements the [`aegle_platform::Platform`] contract on one
+//! connection and dispatch queue, and [`aegle_platform::SurfacePlatform`]
+//! with the `gpu` feature. It does not own widgets, a renderer, fonts or an
+//! editor. `WindowOptions::layer` creates a wlr layer surface on the same path;
+//! text input uses text-input-v3 and the clipboard and drag and drop one data
+//! device per seat.
 
 mod buffers;
 mod clipboard;
 mod drag;
-mod error;
 mod events;
 #[cfg(feature = "gpu")]
 mod gpu;
 mod ime;
 mod ime_types;
 mod input;
+mod platform;
 mod portal;
 mod scale;
 mod state;
 mod window;
 
-pub use aegle_types::{DragData, Preferences, TouchPhase};
 pub use clipboard::CLIPBOARD_LIMIT;
-pub use error::{Error, PresentError};
-pub use events::{Event, LayerOptions, PixelSize, WindowId, WindowInfo, WindowOptions};
 #[cfg(feature = "gpu")]
 pub use gpu::WindowSurface;
-pub use ime_types::{ImeCause, ImeEvent, ImeHints, ImePurpose, ImeRequest, ImeUpdate, Preedit};
-pub use smithay_client_toolkit::{
-    seat::{
-        keyboard::{KeyEvent, Keysym, Modifiers},
-        pointer::PointerEventKind,
-    },
-    shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer},
-};
-pub use wayland_client::protocol::wl_seat::WlSeat;
-pub use window::{WakeHandle, Wayland};
+pub use window::Wayland;
 
+use aegle_platform::{
+    Error, Event, ImeEvent, PixelSize, Preferences, SeatId, TouchPhase, WindowId, WindowInfo,
+    WindowOptions,
+};
 use state::State;
+use wayland_client::protocol::wl_seat::WlSeat;

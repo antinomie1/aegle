@@ -20,9 +20,10 @@
 | aegle-render-wgpu | 可选的最小跨平台 GPU 后端：几何、字形图集、裁剪、离屏读回与原生 surface 呈现 | types、scene；glyph 按 text feature 接入 |
 | aegle-dbus | Linux 会话总线：认证、Hello、消息编解码（无 Unix fd 与 16 位整数），任意线程发送，阻塞或非阻塞读取 | 无 |
 | aegle-desktop | 桌面服务：文件选择对话框、通知、托盘及其菜单、全局快捷键；Linux 走会话总线（portal FileChooser/GlobalShortcuts、`org.freedesktop.Notifications`、StatusNotifierItem + dbusmenu），Windows 走 `IFileDialog`、`Shell_NotifyIconW`、`RegisterHotKey`；结果经一个线程安全回调送出，不依赖窗口或 UI | Linux 为 dbus |
-| aegle-platform-wayland | Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板与拖放、输出与平台偏好 | types、dbus |
-| aegle-platform-win32 | Win32 窗口、TSF 文本存储输入法、DPI、OLE 拖放、GDI 软件与 GPU 句柄、外观偏好 | types |
-| aegle-platform-appkit | 计划中，**尚未实现**：AppKit 窗口、NSTextInputClient 及平台偏好 | types |
+| aegle-platform | 平台契约：`Platform`/`SurfacePlatform` trait 与共用的事件、指针、IME、窗口选项与几何、seat、wake 和错误；不含实现 | types |
+| aegle-platform-wayland | 以契约提供 Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板与拖放、输出与平台偏好 | types、platform、dbus |
+| aegle-platform-win32 | 以契约提供 Win32 窗口、TSF 文本存储输入法、DPI、OLE 拖放、GDI 软件与 GPU 句柄、外观偏好 | types、platform |
+| aegle-platform-appkit | 计划中，**尚未实现**：以契约提供 AppKit 窗口、NSTextInputClient 及平台偏好 | types、platform |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
 | aegle-theme | 无分配的 Theme、控件类型 `ControlKind`（默认皮肤与可接受样式组）、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；类型化 `Token<T>` 与内置 token（注册表与绑定在 aegle-ui） | types |
 | aegle-motion | 补间、过渡、关键帧动画与 Bézier/弹簧曲线；可无窗口独立推进 | types |
@@ -33,7 +34,7 @@
 | aegle-macros | ui! 文件编译与有类型 View 生成，仅编译期运行；动态文档生成已检查程序的构造代码 | markup |
 | aegle-loader | 动态标记执行引擎：绑定、事件、if/for、组件实例、运行时加载与显式重载；元素契约 `Element` 与内置元素 | ui、widgets、markup、macros（`element!`）；app 按 feature |
 | aegle-ui | 无窗口保留式 UI 引擎：节点树、布局、输入路由与焦点、滚动与滚动条、光标、触摸/惯性、主题、过渡、IME 与语义导出；控件通过开放的 `Control` trait（经 `InputCx`/`MeasureCx`/`PaintCx`/`SemanticsCx` 上下文）和 `Hooks` 接入；引擎自带的只有无外观容器（`Plain`、grid 的 `Stack`）与滚动条，其余控件都在控件库中 | types、core、layout、scene、text、controls、theme、motion；access 按 feature |
-| aegle-app | 原生应用宿主：App/Window、事件循环、平台与 renderer 选择、系统偏好、后台代理（UiProxy）；每窗口一个 `Ui`；`desktop-services` 时 `App::desktop` 把桌面服务事件经代理交回 UI 线程 | ui、types、scene、text；平台、renderer、access、desktop 按 feature；widgets 仅用于测试 |
+| aegle-app | 原生应用宿主：App/Window、事件循环、平台与 renderer 选择、系统偏好、后台代理（UiProxy）；每窗口一个 `Ui`；只按平台契约编写，一处选定目标平台；`desktop-services` 时 `App::desktop` 把桌面服务事件经代理交回 UI 线程 | ui、types、platform、scene、text；平台实现、renderer、access、desktop 按 feature；widgets 仅用于测试 |
 | aegle | 应用便捷入口与重导出（app、ui、widgets、image），不提供另一套实现 | app、ui、widgets、image；其他按 feature 重导出 |
 
 层次：`aegle-ui` 是引擎，`aegle-widgets` 是默认控件库，`aegle-app` 是原生宿主；三者单向依赖（widgets→ui，app→ui），ui 不依赖 widgets 或任何平台/renderer。自带控件的库可只依赖 `aegle-ui` 实现 `Control`；自带窗口/绘制宿主的程序可只依赖 `aegle-ui` 与 `aegle-widgets`。`Hooks` 让虚拟列表、弹出层、单选组等需要跨节点协作的行为留在控件库内，引擎只提供调用点；各库的节点外数据存于 `State::ext`。
@@ -56,7 +57,9 @@
 
 该模块公开共用的借用/拥有字形缓存身份；可选 `scene` feature 依赖 `aegle-scene/text`，提供 renderer 共用的字体缩放、整像素基线与水平四相位、灰度对比曲线和 bitmap 仿射策略。默认字形缓存仍不依赖 scene。
 
-`aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types 与 dbus（读设置 portal）；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。gpu feature 提供带生命周期的原生 surface 租约，启用 libwayland system backend。layer-shell 表面与 xdg 窗口共用窗口表、输入、IME 和呈现路径，由 `WindowOptions::layer` 选择，不另设 crate 或 feature；剪贴板按 seat 使用 data device 与非阻塞管道。托盘、通知、文件对话框和全局快捷键在 `aegle-desktop`，它们与窗口无关，经会话总线完成。
+`aegle-platform` 只有契约：两个 trait 和它们的值类型，宿主据此只写一遍事件循环与输入翻译，平台在各自 crate 内把原生值翻译成契约（见[平台契约](platform-rendering.md#平台契约)）。它有两个实际实现和一个宿主（aegle-app），不是转发层；契约之外的平台诊断（如 `buffer_bytes`）留在各平台类型上。
+
+`aegle-platform-wayland` 复用 SCTK、wayland-client 与 calloop 管理同一连接、多个普通窗口和原生输入。平台只依赖 types、platform 与 dbus（读设置 portal）；TextSystem、Editor、Scene 和 renderer 在可执行示例中组合，不成为平台的发布依赖。软件呈现直接借出有界 SHM 像素；text-input-v3 以带 seat 身份的事务传递给宿主。gpu feature 提供带生命周期的原生 surface 租约，启用 libwayland system backend。layer-shell 表面与 xdg 窗口共用窗口表、输入、IME 和呈现路径，由 `WindowOptions::layer` 选择，不另设 crate 或 feature；剪贴板按 seat 使用 data device 与非阻塞管道。托盘、通知、文件对话框和全局快捷键在 `aegle-desktop`，它们与窗口无关，经会话总线完成。
 
 `aegle-desktop` 每个 `Desktop` 一个后台线程：Linux 上它读会话总线（portal 请求按规范预测的 Response 路径登记，避免在 Response 早于返回时丢失；托盘对象由同一线程应答宿主的属性与菜单调用），Windows 上它拥有一个隐藏消息窗口并运行对话框、托盘和热键（命令经通道与 `PostMessageW` 送达）。应用经回调收到 `Event`；`aegle-app` 的 `App::desktop` 只是把该回调接到 `UiProxy`。服务不存在时报告 `Event::Unavailable`，不静默丢弃。
 
@@ -88,7 +91,9 @@ flowchart TD
   Facade --> Widgets[aegle-widgets 默认控件]
   Facade --> Image[aegle-image]
   App --> Ui[aegle-ui 引擎]
-  App --> Platform[目标平台 + 可选 shell]
+  App --> Contract[platform 契约]
+  Platform[目标平台 + 可选 shell] --> Contract
+  App --> Platform
   App --> Render[scene + 一个 renderer]
   Widgets --> Ui
   Widgets --> Controls[controls]

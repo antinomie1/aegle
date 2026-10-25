@@ -1,7 +1,7 @@
 //! Drag and drop through `wl_data_device`: windows as drop targets for text
 //! and files, and copy drags this client starts.
 //!
-//! The host answers each [`Event::Drag`] with [`Wayland::accept_drag`];
+//! The host answers each drag event with `accept_drag`;
 //! the compositor drops only onto a window that accepted. Dropped data is
 //! read through the event loop like a paste, then the offer is finished.
 
@@ -17,7 +17,7 @@ use wayland_client::{
     },
 };
 
-use aegle_types::{DragData, Point};
+use aegle_platform::{DragData, Point};
 
 use crate::{Error, Event, State, Wayland, WindowId, WlSeat, clipboard::MIME};
 
@@ -51,9 +51,9 @@ fn decode(mime: &str, data: Vec<u8>) -> Option<DragData> {
 
 impl Wayland {
     /// Accepts or refuses the drag over a window of `seat`, after each
-    /// [`Event::Drag`]. Only offers of text or files can be accepted; the
+    /// drag event. Only offers of text or files can be accepted; the
     /// accepted action is always copy.
-    pub fn accept_drag(&mut self, seat: &WlSeat, accept: bool) {
+    pub(crate) fn accept_drag(&mut self, seat: &WlSeat, accept: bool) {
         let Some(device) = self.state.clipboard.device(seat) else {
             return;
         };
@@ -81,7 +81,7 @@ impl Wayland {
     /// latest button press, which must still be held. The data is served to
     /// the target without blocking; the drag ends when it is dropped or
     /// cancelled.
-    pub fn start_drag(
+    pub(crate) fn start_drag(
         &mut self,
         window: WindowId,
         seat: &WlSeat,
@@ -147,7 +147,7 @@ impl State {
             return;
         };
         if let Some((window, _)) = d.over {
-            let seat = d.device.data().seat().clone();
+            let seat = crate::events::seat_id(d.device.data().seat());
             let position = Point::new(x as f32, y as f32);
             self.events.push_back(Event::Drag {
                 window,
@@ -180,7 +180,7 @@ impl DataDeviceHandler for State {
             return;
         };
         if let Some((window, _)) = d.over.take() {
-            let seat = d.device.data().seat().clone();
+            let seat = crate::events::seat_id(d.device.data().seat());
             self.events.push_back(Event::DragLeave { window, seat });
         }
     }
@@ -206,7 +206,7 @@ impl DataDeviceHandler for State {
         else {
             return;
         };
-        let seat = d.device.data().seat().clone();
+        let seat = crate::events::seat_id(d.device.data().seat());
         let mime = choose(&offer).filter(|_| accepted);
         let pipe = mime.map(|mime| offer.receive(mime.into()));
         let Some(Ok(pipe)) = pipe else {

@@ -158,6 +158,7 @@ impl Target {
         if self.active.get() && self.at.replace(Some(position)) != Some(position) {
             native.emit(Event::Drag {
                 window: native.id,
+                seat: crate::SEAT,
                 position,
             });
         }
@@ -197,7 +198,10 @@ impl IDropTarget_Impl for Target_Impl {
         if self.active.replace(false)
             && let Some(native) = self.native()
         {
-            native.emit(Event::DragLeave { window: native.id });
+            native.emit(Event::DragLeave {
+                window: native.id,
+                seat: crate::SEAT,
+            });
         }
         Ok(())
     }
@@ -222,22 +226,26 @@ impl IDropTarget_Impl for Target_Impl {
                 let position = Target::position(&native, point);
                 native.emit(Event::Drop {
                     window,
+                    seat: crate::SEAT,
                     position,
                     data,
                 });
                 // SAFETY: as above.
                 unsafe { *effect = DROPEFFECT_COPY };
             }
-            None => native.emit(Event::DragLeave { window }),
+            None => native.emit(Event::DragLeave {
+                window,
+                seat: crate::SEAT,
+            }),
         }
         Ok(())
     }
 }
 
 impl Win32 {
-    /// Accepts or refuses the drag over `id`, after each [`Event::Drag`].
+    /// Accepts or refuses the drag over `id`, after each drag event.
     /// Only text and files can be accepted; the action is always copy.
-    pub fn accept_drag(&mut self, id: WindowId, accept: bool) -> Result<(), Error> {
+    pub(crate) fn accept_drag(&mut self, id: WindowId, accept: bool) -> Result<(), Error> {
         self.window(id)?.drag_accept.set(Some(accept));
         Ok(())
     }
@@ -245,7 +253,7 @@ impl Win32 {
     /// Runs a copy drag of `data` from `id` until it is dropped or
     /// cancelled. This blocks in the system's drag loop, which keeps
     /// dispatching window messages; events queue until it returns.
-    pub fn start_drag(&mut self, id: WindowId, data: &DragData) -> Result<(), Error> {
+    pub(crate) fn start_drag(&mut self, id: WindowId, data: &DragData) -> Result<(), Error> {
         let hwnd = self.window(id)?.hwnd.get();
         let (cf, bytes) = match data {
             DragData::Text(text) => {

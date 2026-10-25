@@ -1,9 +1,9 @@
 use std::fmt;
 
-/// Native window, input or presentation failure.
+/// Native window, input or presentation failure, reported to hosts as the
+/// contract's [`aegle_platform::Error`].
 #[derive(Debug)]
-#[non_exhaustive]
-pub enum Error {
+pub(crate) enum Error {
     /// A native OS operation failed.
     Backend(String),
     /// Zero or unrepresentable extent.
@@ -46,28 +46,49 @@ impl fmt::Display for Error {
     }
 }
 impl std::error::Error for Error {}
-#[cfg(windows)]
 impl From<windows::core::Error> for Error {
     fn from(value: windows::core::Error) -> Self {
         Self::Backend(value.to_string())
     }
 }
 
-/// Incomplete frames are never sent to GDI.
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum PresentError<E> {
-    /// Native or allocation failure.
-    Platform(Error),
-    /// Application drawing error.
-    Draw(E),
-}
-impl<E: fmt::Display> fmt::Display for PresentError<E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Platform(e) => e.fmt(f),
-            Self::Draw(e) => e.fmt(f),
+impl From<Error> for aegle_platform::Error {
+    fn from(value: Error) -> Self {
+        match value {
+            Error::Backend(error) => Self::Backend(error),
+            Error::InvalidSize => Self::InvalidSize,
+            Error::InvalidWindow => Self::InvalidWindow,
+            Error::InvalidString => Self::InvalidString,
+            Error::ImeUnavailable => Self::ImeUnavailable,
+            Error::InvalidIme(reason) => Self::InvalidIme(reason),
+            Error::InvalidUtf16 => Self::InvalidText,
+            Error::BufferBudget { required, budget } => Self::BufferBudget { required, budget },
         }
     }
 }
-impl<E: std::error::Error + 'static> std::error::Error for PresentError<E> {}
+
+impl From<aegle_platform::Error> for Error {
+    /// Contract validation failures keep their meaning.
+    fn from(value: aegle_platform::Error) -> Self {
+        match value {
+            aegle_platform::Error::InvalidIme(reason) => Self::InvalidIme(reason),
+            error => Self::Backend(error.to_string()),
+        }
+    }
+}
+
+/// The byte length of a BGRA8 buffer of `size`, rejecting empty or
+/// unrepresentable extents.
+pub(crate) fn bytes(size: crate::PixelSize) -> Result<usize, Error> {
+    if size.width == 0
+        || size.height == 0
+        || size.width > i32::MAX as u32 / 4
+        || size.height > i32::MAX as u32
+    {
+        return Err(Error::InvalidSize);
+    }
+    (size.width as usize)
+        .checked_mul(size.height as usize)
+        .and_then(|n| n.checked_mul(4))
+        .ok_or(Error::InvalidSize)
+}

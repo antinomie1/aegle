@@ -1,232 +1,133 @@
-use crate::{
-    Anchor, Error, ImeEvent, KeyEvent, KeyboardInteractivity, Layer, Modifiers, PointerEventKind,
-    WlSeat,
+//! Translation of Wayland and XKB values into the platform contract.
+
+use aegle_platform::{Key, KeyboardInteractivity, Layer, LayerOptions, Modifiers};
+use smithay_client_toolkit::{
+    seat::keyboard::{self, KeyEvent, Keysym},
+    shell::wlr_layer,
 };
-use aegle_types::{DragData, Point, Preferences, TouchPhase};
+use wayland_client::Proxy;
 
-/// Stable window identity, valid only on its originating connection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct WindowId(pub(crate) u64);
+use crate::{Event, PixelSize, SeatId, WindowId, WindowInfo, WlSeat};
 
-/// Non-fractional extent in either surface or buffer pixels, as documented.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PixelSize {
-    /// Horizontal extent.
-    pub width: u32,
-    /// Vertical extent.
-    pub height: u32,
+/// A seat's contract identity: its protocol object id on this connection.
+pub(crate) fn seat_id(seat: &WlSeat) -> SeatId {
+    SeatId(seat.id().protocol_id())
 }
 
-/// Initial ordinary-window settings.
-#[derive(Clone, Debug)]
-pub struct WindowOptions<'a> {
-    /// Human-readable title, at most 4000 UTF-8 bytes and no NUL.
-    pub title: &'a str,
-    /// Desktop application identifier, at most 4000 UTF-8 bytes and no NUL.
-    pub app_id: &'a str,
-    /// Preferred logical size; the compositor may override it.
-    pub size: PixelSize,
-    /// Maximum live SHM mapping bytes for this window, which holds at most two
-    /// window-sized buffers. Default: unlimited.
-    pub buffer_budget: usize,
-    /// Creates a wlr layer surface instead of a toplevel. Default: `None`.
-    pub layer: Option<LayerOptions>,
-}
-
-/// Placement of a `zwlr_layer_shell_v1` surface, such as a panel or overlay.
-///
-/// Anchoring both opposite edges stretches that axis to the output; otherwise
-/// the preferred size applies. `app_id` becomes the layer namespace.
-#[derive(Clone, Copy, Debug)]
-pub struct LayerOptions {
-    /// Stacking layer.
-    pub layer: Layer,
-    /// Edges the surface attaches to; empty centers it.
-    pub anchor: Anchor,
-    /// Logical pixels reserved along an anchored edge; -1 ignores other zones.
-    pub exclusive_zone: i32,
-    /// Keyboard focus policy.
-    pub keyboard: KeyboardInteractivity,
-}
-
-impl Default for WindowOptions<'_> {
-    fn default() -> Self {
-        Self {
-            title: "Aegle",
-            app_id: "org.aegle.app",
-            size: PixelSize {
-                width: 800,
-                height: 480,
-            },
-            buffer_budget: usize::MAX,
-            layer: None,
+/// Sets the buffer extent from the logical size and scale, rounded half away
+/// from zero; an extent the protocol cannot represent becomes zero, which
+/// presentation rejects.
+pub(crate) fn rescale(info: &mut WindowInfo) {
+    let scaled = |extent: u32| {
+        let pixels = (f64::from(extent) * f64::from(info.scale)).round();
+        if pixels >= 1.0 && pixels <= f64::from(i32::MAX / 4) {
+            pixels as u32
+        } else {
+            0
         }
+    };
+    info.buffer = PixelSize {
+        width: scaled(info.size.width),
+        height: scaled(info.size.height),
+    };
+}
+
+/// A key transition with its XKB translation.
+pub(crate) fn key_event(
+    window: WindowId,
+    seat: &WlSeat,
+    event: KeyEvent,
+    pressed: bool,
+    repeat: bool,
+    state: keyboard::Modifiers,
+) -> Event {
+    Event::Key {
+        window,
+        seat: seat_id(seat),
+        key: key(event.keysym),
+        text: event.utf8,
+        pressed,
+        repeat,
+        modifiers: modifiers(state),
+        time: event.time,
     }
 }
 
-/// Latest configured geometry and focus decoration state.
-#[derive(Clone, Copy, Debug)]
-pub struct WindowInfo {
-    /// Logical surface extent.
-    pub size: PixelSize,
-    /// Scale from logical to buffer pixels, at least 1: whole numbers without
-    /// fractional-scale support, otherwise the compositor's preferred scale.
-    /// Multiply logical drawing coordinates by this.
-    pub scale: f32,
-    /// Whether the compositor marks this window active; always true for layers.
-    pub active: bool,
-    /// Whether an initial configure has arrived.
-    pub configured: bool,
-}
-
-impl WindowInfo {
-    /// Physical framebuffer extent, rejecting protocol overflow.
-    pub fn buffer_size(self) -> Result<PixelSize, Error> {
-        // Buffers are the logical size times the scale, rounded half away from zero.
-        let scaled = |extent: u32| {
-            let pixels = (f64::from(extent) * f64::from(self.scale)).round();
-            (pixels >= 1.0 && pixels <= f64::from(i32::MAX / 4)).then_some(pixels as u32)
-        };
-        match (scaled(self.size.width), scaled(self.size.height)) {
-            (Some(width), Some(height)) => Ok(PixelSize { width, height }),
-            _ => Err(Error::InvalidSize),
-        }
-    }
-}
-
-/// Native events in dispatch order. Coordinates use logical surface pixels.
-#[derive(Debug)]
-pub enum Event {
-    /// An external producer requested a wake; drain the host's own work queue.
-    /// Multiple requests may coalesce into one event.
-    Wake,
-    /// Geometry or activation changed.
-    Configure {
-        /// Target window.
-        window: WindowId,
-        /// Latest state.
-        info: WindowInfo,
-    },
-    /// One frame can be drawn; requests coalesce until it is presented.
-    Redraw {
-        /// Target window.
-        window: WindowId,
-    },
-    /// The compositor requested closing; the host decides when to remove it.
-    Close {
-        /// Target window.
-        window: WindowId,
-    },
-    /// Keyboard focus changed for a seat.
-    KeyboardFocus {
-        /// Target window.
-        window: WindowId,
-        /// Originating seat.
-        seat: WlSeat,
-        /// Whether focus entered.
-        focused: bool,
-    },
-    /// Physical key and XKB translation. IME-consumed keys are not duplicated.
-    Key {
-        /// Target window.
-        window: WindowId,
-        /// Originating seat.
-        seat: WlSeat,
-        /// XKB event including optional translated text.
-        key: KeyEvent,
-        /// Press versus release.
-        pressed: bool,
-        /// Server-configured key repeat.
-        repeat: bool,
-        /// Current modifier state.
-        modifiers: Modifiers,
-    },
-    /// Modifier-only update, including changes during a pointer gesture.
+pub(crate) fn modifiers(value: keyboard::Modifiers) -> Modifiers {
     Modifiers {
-        /// Window with keyboard focus.
-        window: WindowId,
-        /// Originating seat.
-        seat: WlSeat,
-        /// Current modifier state.
-        modifiers: Modifiers,
-    },
-    /// Native pointer event; axis values retain SCTK protocol information.
-    /// Losing a pointer capability synthesizes `Leave { serial: 0 }` to cancel
-    /// host hover/capture; that serial must not authorize a protocol request.
-    Pointer {
-        /// Target window.
-        window: WindowId,
-        /// Originating seat.
-        seat: WlSeat,
-        /// Local logical position.
-        position: Point,
-        /// Motion, button, enter/leave or scroll details.
-        kind: PointerEventKind,
-    },
-    /// One finger of a touch screen. `id` is unique among the seat's active fingers
-    /// and is reused after `Up` or `Cancel`.
-    Touch {
-        /// Window the finger touched down in.
-        window: WindowId,
-        /// Originating seat.
-        seat: WlSeat,
-        /// Finger identity within the seat.
-        id: i32,
-        /// Local logical position.
-        position: Point,
-        /// Compositor time in milliseconds, for velocity.
-        time: u32,
-        /// Contact stage.
-        phase: TouchPhase,
-    },
-    /// A text-input-v3 batch or focus transition.
-    Ime {
-        /// Target window.
-        window: WindowId,
-        /// Originating seat; serials and composition sessions are seat-specific.
-        seat: WlSeat,
-        /// Protocol input event.
-        event: ImeEvent,
-    },
-    /// Text requested by [`crate::Wayland::request_clipboard`].
-    Clipboard {
-        /// Requesting window.
-        window: WindowId,
-        /// Seat whose selection was read.
-        seat: WlSeat,
-        /// Complete UTF-8 selection.
-        text: String,
-    },
-    /// A drag entered or moved over a window, in local logical coordinates.
-    /// Answer with [`crate::Wayland::accept_drag`].
-    Drag {
-        /// Window under the drag.
-        window: WindowId,
-        /// Seat performing the drag.
-        seat: WlSeat,
-        /// Local logical position.
-        position: Point,
-    },
-    /// The drag left the window, or its drop was refused or unreadable.
-    DragLeave {
-        /// Window the drag left.
-        window: WindowId,
-        /// Seat performing the drag.
-        seat: WlSeat,
-    },
-    /// Data was dropped on a window that accepted the drag.
-    Drop {
-        /// Target window.
-        window: WindowId,
-        /// Seat performing the drag.
-        seat: WlSeat,
-        /// Local logical drop position.
-        position: Point,
-        /// Dropped text or local files.
-        data: DragData,
-    },
-    /// System appearance preferences changed; not tied to a window.
-    Preferences(Preferences),
-    /// Asynchronous input or protocol setup failure.
-    Error(Error),
+        shift: value.shift,
+        control: value.ctrl,
+        alt: value.alt,
+        meta: value.logo,
+    }
+}
+
+pub(crate) fn key(value: Keysym) -> Key {
+    match value {
+        Keysym::Return | Keysym::KP_Enter => Key::Enter,
+        Keysym::Tab | Keysym::ISO_Left_Tab => Key::Tab,
+        Keysym::Escape => Key::Escape,
+        Keysym::BackSpace => Key::Backspace,
+        Keysym::Delete => Key::Delete,
+        Keysym::Left => Key::Left,
+        Keysym::Right => Key::Right,
+        Keysym::Up => Key::Up,
+        Keysym::Down => Key::Down,
+        Keysym::Home => Key::Home,
+        Keysym::End => Key::End,
+        Keysym::Page_Up => Key::PageUp,
+        Keysym::Page_Down => Key::PageDown,
+        Keysym::Menu => Key::ContextMenu,
+        value if (Keysym::F1.raw()..=Keysym::F24.raw()).contains(&value.raw()) => {
+            Key::Function((value.raw() - Keysym::F1.raw() + 1) as u8)
+        }
+        value => value
+            .key_char()
+            .map(Key::Character)
+            .unwrap_or(Key::Unidentified),
+    }
+}
+
+/// A Linux input-event code for a non-primary mouse button.
+pub(crate) fn button(code: u32) -> Option<aegle_platform::PointerButton> {
+    use aegle_platform::PointerButton::*;
+    Some(match code {
+        0x111 => Secondary,
+        0x112 => Middle,
+        0x113 | 0x116 => Back,
+        0x114 | 0x115 => Forward,
+        _ => return None,
+    })
+}
+
+/// The evdev code of the primary button.
+pub(crate) const PRIMARY: u32 = 0x110;
+
+pub(crate) fn layer(options: &LayerOptions) -> (wlr_layer::Layer, wlr_layer::Anchor) {
+    let layer = match options.layer {
+        Layer::Background => wlr_layer::Layer::Background,
+        Layer::Bottom => wlr_layer::Layer::Bottom,
+        Layer::Top => wlr_layer::Layer::Top,
+        Layer::Overlay => wlr_layer::Layer::Overlay,
+    };
+    let mut anchor = wlr_layer::Anchor::empty();
+    for (edge, native) in [
+        (aegle_platform::Anchor::TOP, wlr_layer::Anchor::TOP),
+        (aegle_platform::Anchor::BOTTOM, wlr_layer::Anchor::BOTTOM),
+        (aegle_platform::Anchor::LEFT, wlr_layer::Anchor::LEFT),
+        (aegle_platform::Anchor::RIGHT, wlr_layer::Anchor::RIGHT),
+    ] {
+        if options.anchor.contains(edge) {
+            anchor |= native;
+        }
+    }
+    (layer, anchor)
+}
+
+pub(crate) fn interactivity(value: KeyboardInteractivity) -> wlr_layer::KeyboardInteractivity {
+    match value {
+        KeyboardInteractivity::None => wlr_layer::KeyboardInteractivity::None,
+        KeyboardInteractivity::Exclusive => wlr_layer::KeyboardInteractivity::Exclusive,
+        KeyboardInteractivity::OnDemand => wlr_layer::KeyboardInteractivity::OnDemand,
+    }
 }

@@ -12,11 +12,10 @@ mod slider;
 mod text_field;
 mod toggle;
 
-pub use aegle_types::PointerButton;
+pub use aegle_types::{Key, Modifiers, PointerButton};
 pub use button::Button;
 pub use input::{
-    Action, Capture, Clipboard, Input, Key, KeyInput, Modifiers, Outcome, PointerId, PointerInput,
-    PointerKind,
+    Action, Capture, Clipboard, Input, KeyInput, Outcome, PointerId, PointerInput, PointerKind,
 };
 pub use range::{Range, RangeError};
 pub use slider::Slider;

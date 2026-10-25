@@ -1,0 +1,17 @@
+[package]
+name = "aegle-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "The contract native Aegle platforms implement: windows, events, input, IME, clipboard and presentation"
+
+[dependencies]
+aegle-types = { workspace = true, features = ["std"] }
+
+[lints]
+workspace = true

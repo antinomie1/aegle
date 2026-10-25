@@ -6,7 +6,8 @@ use smithay_client_toolkit::shm::{
 };
 use wayland_client::protocol::wl_shm;
 
-use crate::{Error, PixelSize, PresentError};
+use crate::{Error, PixelSize};
+use aegle_platform::DrawResult;
 use aegle_types::{PixelRect, Region};
 
 struct Image {
@@ -68,17 +69,17 @@ impl SoftwareBuffers {
     /// new mapping. Pixels outside it already show the current frame. A failed draw stays unattached and makes its mapping fully
     /// stale. The returned buffer has not been activated; attach and commit it
     /// before drawing another frame. `None` means both slots await server release.
-    pub(crate) fn paint<E>(
+    pub(crate) fn paint(
         &mut self,
         shm: &Shm,
         size: PixelSize,
         damage: Option<Region<PixelRect>>,
-        draw: impl FnOnce(&mut [u8], &Region<PixelRect>) -> Result<(), E>,
-    ) -> Result<Option<&Buffer>, PresentError<E>> {
+        draw: impl FnOnce(&mut [u8], &Region<PixelRect>) -> DrawResult,
+    ) -> Result<Option<&Buffer>, Error> {
         let mut full = Region::default();
         full.add(PixelRect::full(size.width, size.height));
         let damage = damage.unwrap_or(full);
-        let (stride, mapping_bytes) = dimensions(size).map_err(PresentError::Platform)?;
+        let (stride, mapping_bytes) = dimensions(size)?;
 
         // Release only idle old-size images, before considering the new allocation.
         // Each pool has one slot: no growth or orphaned free-list fragments.
@@ -106,13 +107,12 @@ impl SoftwareBuffers {
         if self.images[index].is_none() {
             let required = self.allocated_bytes() + mapping_bytes;
             if required > self.budget {
-                return Err(PresentError::Platform(Error::BufferBudget {
+                return Err(Error::BufferBudget {
                     required,
                     budget: self.budget,
-                }));
+                });
             }
-            let mut pool = SlotPool::new(mapping_bytes, shm)
-                .map_err(|error| PresentError::Platform(Error::backend(error)))?;
+            let mut pool = SlotPool::new(mapping_bytes, shm).map_err(Error::backend)?;
             let (buffer, _) = pool
                 .create_buffer(
                     size.width as i32,
@@ -120,7 +120,7 @@ impl SoftwareBuffers {
                     stride,
                     wl_shm::Format::Xrgb8888,
                 )
-                .map_err(|error| PresentError::Platform(Error::backend(error)))?;
+                .map_err(Error::backend)?;
             self.images[index] = Some(Image {
                 buffer,
                 pool,
@@ -140,7 +140,7 @@ impl SoftwareBuffers {
             .buffer
             .canvas(&mut image.pool)
             .expect("selected image is idle");
-        draw(pixels, &region).map_err(PresentError::Draw)?;
+        draw(pixels, &region).map_err(Error::Draw)?;
         // Little-endian XRGB8888 is BGRA in memory, as drawn; alpha is ignored.
         #[cfg(target_endian = "big")]
         to_big_endian(pixels, size.width, &region);

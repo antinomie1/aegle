@@ -1,6 +1,6 @@
 //! Pointer frames: focus bookkeeping, cursor shape on enter, and window events.
 
-use aegle_types::{Cursor, Point};
+use aegle_platform::{Cursor, Point, PointerKind};
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer::WlPointer};
 
@@ -55,12 +55,58 @@ impl PointerHandler for State {
                     self.events.push_back(Event::Error(Error::backend(error)));
                 }
             }
+            let Some((kind, time)) = translate(&event.kind) else {
+                continue;
+            };
             self.events.push_back(Event::Pointer {
                 window,
-                seat: input.seat.clone(),
+                seat: crate::events::seat_id(&input.seat),
                 position,
-                kind: event.kind.clone(),
+                kind,
+                time,
             });
         }
     }
+}
+
+/// The contract transition and time of a pointer event; `None` for buttons
+/// without a meaning, such as an unknown side button.
+fn translate(kind: &PointerEventKind) -> Option<(PointerKind, Option<u32>)> {
+    use crate::events::{PRIMARY, button};
+    Some(match *kind {
+        PointerEventKind::Enter { .. } => (PointerKind::Move, None),
+        PointerEventKind::Leave { .. } => (PointerKind::Leave, None),
+        PointerEventKind::Motion { time } => (PointerKind::Move, Some(time)),
+        PointerEventKind::Press {
+            button: PRIMARY,
+            time,
+            ..
+        } => (PointerKind::Down { clicks: 1 }, Some(time)),
+        PointerEventKind::Release {
+            button: PRIMARY,
+            time,
+            ..
+        } => (PointerKind::Up, Some(time)),
+        PointerEventKind::Press {
+            button: code, time, ..
+        } => (PointerKind::ButtonDown(button(code)?), Some(time)),
+        PointerEventKind::Release {
+            button: code, time, ..
+        } => (PointerKind::ButtonUp(button(code)?), Some(time)),
+        PointerEventKind::Axis {
+            time,
+            horizontal,
+            vertical,
+            ..
+        } => {
+            let kind = if horizontal.stop || vertical.stop {
+                PointerKind::ScrollEnd
+            } else {
+                PointerKind::Scroll {
+                    delta: Point::new(horizontal.absolute as f32, vertical.absolute as f32),
+                }
+            };
+            (kind, Some(time))
+        }
+    })
 }

@@ -1,6 +1,7 @@
 //! Requires an explicitly isolated compositor; never opens the user's desktop.
 #![cfg(all(target_os = "linux", feature = "window"))]
-use aegle_platform_wayland::{Event, Wayland, WindowOptions};
+use aegle_platform::{DrawResult, Event, Platform, SurfacePlatform, WindowOptions};
+use aegle_platform_wayland::Wayland;
 use aegle_render_vulkan::{Error, Options, WindowRenderer};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
 use aegle_types::PixelRect;
@@ -57,7 +58,7 @@ fn native_present_resize_suspend_and_owned_close() -> Result<(), Box<dyn std::er
             if !matches!(event, Event::Redraw { .. }) {
                 continue;
             }
-            let presented = platform.present_external(id, |size| -> Result<bool, Error> {
+            let presented = platform.present_external(id, |size| -> DrawResult<bool> {
                 if frames == 1 {
                     let _ = renderer.begin_frame(64, 48, Color::WHITE)?;
                     assert_eq!(renderer.extent(), [64, 48]);
@@ -170,7 +171,7 @@ fn two_windows_present_through_one_shared_device() -> Result<(), Box<dyn std::er
             let Some(renderer) = renderers[index].as_mut() else {
                 continue;
             };
-            let done = platform.present_external(window, |size| -> Result<bool, Error> {
+            let done = platform.present_external(window, |size| -> DrawResult<bool> {
                 let Some(mut frame) =
                     renderer.begin_frame(size.width, size.height, Color::WHITE)?
                 else {

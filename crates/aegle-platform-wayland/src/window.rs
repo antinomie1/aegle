@@ -22,14 +22,14 @@ use wayland_client::{
 };
 
 use crate::{
-    Error, Event, ImeRequest, PixelSize, PresentError, State, WindowId, WindowInfo, WindowOptions,
+    Error, Event, PixelSize, State, WindowId, WindowInfo, WindowOptions,
     buffers::SoftwareBuffers,
     clipboard::ClipboardState,
     ime::ImeState,
     input::InputState,
     state::{Shell, WindowState},
 };
-use aegle_types::{Cursor, PixelRect, Region};
+use aegle_platform::{Cursor, DrawResult, ImeRequest, PixelRect, Region, WakeHandle};
 
 /// One Wayland connection and blocking event loop, shared by all its windows.
 ///
@@ -45,23 +45,10 @@ pub struct Wayland {
     wake: Option<(WakeHandle, RegistrationToken)>,
 }
 
-/// Cloneable cross-thread signal for a host work queue, without a polling timer.
-/// A handle keeps only its signal resource alive, never the window or UI state.
-#[derive(Clone, Debug)]
-pub struct WakeHandle(ping::Ping);
-
-impl WakeHandle {
-    /// Requests [`Event::Wake`]. Store work in the host queue before calling.
-    /// Requests after the backend is destroyed cannot deliver an event.
-    pub fn wake(&self) {
-        self.0.ping();
-    }
-}
-
 impl Wayland {
     /// Connects to `WAYLAND_DISPLAY` and binds required xdg-shell/SHM globals.
     /// text-input-v3 is optional; enabling it explicitly reports missing support.
-    pub fn connect() -> Result<Self, Error> {
+    pub(crate) fn connect() -> Result<Self, Error> {
         let connection = Connection::connect_to_env().map_err(Error::backend)?;
         let (globals, queue) = registry_queue_init(&connection).map_err(Error::backend)?;
         let qh = queue.handle();
@@ -131,13 +118,13 @@ impl Wayland {
     /// Desktop portal appearance preferences known so far. Values read within a
     /// short startup bound are present after [`Self::connect`]; later replies and
     /// changes arrive as [`Event::Preferences`]. Unknown without a session bus.
-    pub fn preferences(&self) -> crate::Preferences {
+    pub(crate) fn preferences(&self) -> crate::Preferences {
         self.state.preferences
     }
 
     /// Lazily creates one wake source for background work or accessibility.
     /// Subsequent calls share the source; unused backends allocate no signal FD.
-    pub fn wake_handle(&mut self) -> Result<WakeHandle, Error> {
+    pub(crate) fn wake_handle(&mut self) -> Result<WakeHandle, Error> {
         if self.wake.is_none() {
             let (sender, source) = ping::make_ping().map_err(Error::backend)?;
             let token = self
@@ -147,7 +134,7 @@ impl Wayland {
                     state.events.push_back(Event::Wake);
                 })
                 .map_err(Error::backend)?;
-            self.wake = Some((WakeHandle(sender), token));
+            self.wake = Some((WakeHandle::new(move || sender.ping()), token));
         }
         Ok(self.wake.as_ref().unwrap().0.clone())
     }
@@ -155,14 +142,18 @@ impl Wayland {
     /// Creates an ordinary toplevel, or a layer surface when requested, and
     /// requests its initial configure. No pixel memory is allocated until the
     /// first presentation. Layers require `zwlr_layer_shell_v1`.
-    pub fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
-        let info = WindowInfo {
+    pub(crate) fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
+        let mut info = WindowInfo {
             size: options.size,
+            buffer: PixelSize::default(),
             scale: 1.0,
             active: false,
             configured: false,
         };
-        info.buffer_size()?;
+        crate::events::rescale(&mut info);
+        if info.buffer.width == 0 || info.buffer.height == 0 {
+            return Err(Error::InvalidSize);
+        }
         if [options.title, options.app_id]
             .iter()
             .any(|value| value.len() > 4000 || value.contains('\0'))
@@ -185,27 +176,19 @@ impl Wayland {
                 surface.destroy();
                 Error::backend("zwlr_layer_shell_v1 is unavailable")
             })?;
-            let native = shell.create_layer_surface(
-                &self.qh,
-                surface,
-                layer.layer,
-                Some(options.app_id),
-                None,
-            );
+            let (stacking, anchor) = crate::events::layer(&layer);
+            let native =
+                shell.create_layer_surface(&self.qh, surface, stacking, Some(options.app_id), None);
             let stretch = |edges: Anchor, extent: u32| {
-                if layer.anchor.contains(edges) {
-                    0
-                } else {
-                    extent
-                }
+                if anchor.contains(edges) { 0 } else { extent }
             };
             native.set_size(
                 stretch(Anchor::LEFT | Anchor::RIGHT, options.size.width),
                 stretch(Anchor::TOP | Anchor::BOTTOM, options.size.height),
             );
-            native.set_anchor(layer.anchor);
+            native.set_anchor(anchor);
             native.set_exclusive_zone(layer.exclusive_zone);
-            native.set_keyboard_interactivity(layer.keyboard);
+            native.set_keyboard_interactivity(crate::events::interactivity(layer.keyboard));
             Shell::Layer(native)
         } else {
             let native =
@@ -233,7 +216,7 @@ impl Wayland {
     }
 
     /// Removes the window and its IME session. Its ID is never reused.
-    pub fn remove_window(&mut self, id: WindowId) -> Result<(), Error> {
+    pub(crate) fn remove_window(&mut self, id: WindowId) -> Result<(), Error> {
         let index = self
             .state
             .windows
@@ -244,26 +227,14 @@ impl Wayland {
         self.state
             .remove_input_window(id, &self.connection, &self.qh);
         self.state.windows.swap_remove(index);
-        self.state.events.retain(|event| match event {
-            Event::Configure { window, .. }
-            | Event::Redraw { window }
-            | Event::Close { window }
-            | Event::KeyboardFocus { window, .. }
-            | Event::Key { window, .. }
-            | Event::Modifiers { window, .. }
-            | Event::Pointer { window, .. }
-            | Event::Touch { window, .. }
-            | Event::Ime { window, .. }
-            | Event::Clipboard { window, .. } => *window != id,
-            _ => true,
-        });
+        self.state.events.retain(|event| event.window() != Some(id));
         Ok(())
     }
 
     /// Waits for native events, blocking indefinitely for `None`.
     /// Returns immediately if application events are already queued. It does not
     /// introduce a periodic timer; keyboard repeat uses compositor settings.
-    pub fn dispatch(&mut self, timeout: Option<Duration>) -> Result<(), Error> {
+    pub(crate) fn dispatch(&mut self, timeout: Option<Duration>) -> Result<(), Error> {
         self.state.queue_redraws();
         // WaylandSource only polls READ and ignores a blocked flush. Add WRITE
         // readiness just while backpressured, so idle dispatch cannot deadlock.
@@ -302,12 +273,12 @@ impl Wayland {
     }
 
     /// Pops the oldest application event. Drain before blocking again.
-    pub fn next_event(&mut self) -> Option<Event> {
+    pub(crate) fn next_event(&mut self) -> Option<Event> {
         self.state.events.pop_front()
     }
 
     /// Marks a window dirty. Multiple changes coalesce behind the frame callback.
-    pub fn request_redraw(&mut self, id: WindowId) -> Result<(), Error> {
+    pub(crate) fn request_redraw(&mut self, id: WindowId) -> Result<(), Error> {
         self.window_mut(id)?.dirty = true;
         self.state.queue_redraws();
         Ok(())
@@ -316,7 +287,7 @@ impl Wayland {
     /// Sets the shape shown over a window. It applies immediately to every pointer
     /// inside the window and again whenever a pointer enters it, so the host only
     /// needs to call this when the desired shape changes.
-    pub fn set_cursor(&mut self, id: WindowId, cursor: Cursor) -> Result<(), Error> {
+    pub(crate) fn set_cursor(&mut self, id: WindowId, cursor: Cursor) -> Result<(), Error> {
         let window = self.window_mut(id)?;
         if std::mem::replace(&mut window.cursor, cursor) != cursor {
             self.state.apply_cursor(&self.connection, id);
@@ -325,7 +296,7 @@ impl Wayland {
     }
 
     /// Returns the latest geometry; it can change between redraw notifications.
-    pub fn window_info(&self, id: WindowId) -> Result<WindowInfo, Error> {
+    pub(crate) fn window_info(&self, id: WindowId) -> Result<WindowInfo, Error> {
         self.state
             .windows
             .iter()
@@ -345,13 +316,13 @@ impl Wayland {
     }
 
     /// Whether the compositor advertised text-input-v3 at connection time.
-    pub fn ime_available(&self) -> bool {
+    pub(crate) fn ime_available(&self) -> bool {
         self.state.ime.available()
     }
 
     /// Sets or disables the focused editable control's native IME state.
     /// Process queued input batches before publishing updated surrounding text.
-    pub fn configure_ime(
+    pub(crate) fn configure_ime(
         &mut self,
         id: WindowId,
         request: Option<ImeRequest>,
@@ -383,24 +354,27 @@ impl Wayland {
     /// Returns false without invoking `draw` if not yet configured, a frame is
     /// pending, or both buffers await release. A drawing error never presents
     /// partial pixels; request a redraw to retry.
-    pub fn present<E>(
+    pub(crate) fn present(
         &mut self,
         id: WindowId,
         damage: Option<Region<PixelRect>>,
-        draw: impl FnOnce(&mut [u8], PixelSize, &Region<PixelRect>) -> Result<(), E>,
-    ) -> Result<bool, PresentError<E>> {
+        draw: impl FnOnce(&mut [u8], PixelSize, &Region<PixelRect>) -> DrawResult,
+    ) -> Result<bool, Error> {
         let window = self
             .state
             .windows
             .iter_mut()
             .find(|w| w.id == id)
-            .ok_or(PresentError::Platform(Error::InvalidWindow))?;
+            .ok_or(Error::InvalidWindow)?;
         window.redraw_queued = false;
         if !window.info.configured || window.frame_pending {
             return Ok(false);
         }
         window.dirty = false;
-        let size = window.info.buffer_size().map_err(PresentError::Platform)?;
+        let size = window.info.buffer;
+        if size.width == 0 || size.height == 0 {
+            return Err(Error::InvalidSize);
+        }
         // Pending surface state only takes effect with the commit below.
         window.apply_scale();
         let Some(buffer) =
@@ -424,9 +398,7 @@ impl Wayland {
                 rect.height as i32,
             );
         }
-        buffer
-            .attach_to(surface)
-            .map_err(|e| PresentError::Platform(Error::backend(e)))?;
+        buffer.attach_to(surface).map_err(Error::backend)?;
         if !window.frame_requested {
             surface.frame(&self.qh, FrameCallbackData(surface.clone()));
         }

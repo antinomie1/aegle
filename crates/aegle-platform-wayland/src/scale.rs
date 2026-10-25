@@ -84,6 +84,7 @@ impl Dispatch<WpFractionalScaleV1, WlSurface> for State {
         let scale = scale.max(120) as f32 / 120.0;
         if window.info.scale != scale {
             window.info.scale = scale;
+            crate::events::rescale(&mut window.info);
             window.dirty = true;
             state.events.push_back(Event::Configure {
                 window: window.id,

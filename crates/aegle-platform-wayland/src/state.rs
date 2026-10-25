@@ -121,6 +121,7 @@ impl State {
             window.info.size.height = size.1.unwrap_or(window.info.size.height);
             window.info.active = active;
             window.info.configured = true;
+            crate::events::rescale(&mut window.info);
             window.dirty = true;
             self.events.push_back(Event::Configure {
                 window: window.id,
@@ -206,6 +207,7 @@ impl CompositorHandler for State {
             .find(|w| w.window.wl_surface() == surface && w.fractional.is_none())
         {
             window.info.scale = factor as f32;
+            crate::events::rescale(&mut window.info);
             window.dirty = true;
             self.events.push_back(Event::Configure {
                 window: window.id,

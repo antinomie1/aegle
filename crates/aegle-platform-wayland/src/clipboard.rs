@@ -92,7 +92,7 @@ impl Wayland {
     /// Offers UTF-8 text as `seat`'s clipboard, authorized by its latest key or
     /// button press. The text is retained until another client takes the
     /// selection and is written without blocking whenever a client pastes.
-    pub fn set_clipboard(&mut self, seat: &WlSeat, text: &str) -> Result<(), Error> {
+    pub(crate) fn set_clipboard(&mut self, seat: &WlSeat, text: &str) -> Result<(), Error> {
         let clipboard = &mut self.state.clipboard;
         let manager = clipboard
             .manager
@@ -108,9 +108,13 @@ impl Wayland {
     }
 
     /// Requests `seat`'s clipboard as UTF-8 text for `window`. The result
-    /// arrives as [`Event::Clipboard`]. An empty selection, one without a text
+    /// arrives as a clipboard event. An empty selection, one without a text
     /// type, invalid UTF-8 or more than [`CLIPBOARD_LIMIT`] bytes delivers nothing.
-    pub fn request_clipboard(&mut self, window: WindowId, seat: &WlSeat) -> Result<(), Error> {
+    pub(crate) fn request_clipboard(
+        &mut self,
+        window: WindowId,
+        seat: &WlSeat,
+    ) -> Result<(), Error> {
         let Some(offer) = self
             .state
             .clipboard
@@ -126,7 +130,7 @@ impl Wayland {
             return Ok(());
         };
         let pipe = offer.receive(mime.into()).map_err(Error::backend)?;
-        let seat = seat.clone();
+        let seat = crate::events::seat_id(seat);
         self.state.read_pipe(pipe, move |state, data| {
             if let Some(text) = data.and_then(|data| String::from_utf8(data).ok()) {
                 state

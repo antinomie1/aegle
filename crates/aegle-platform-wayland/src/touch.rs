@@ -1,6 +1,6 @@
-//! `wl_touch`: fingers become [`Event::Touch`] with their window and seat.
+//! `wl_touch`: fingers become touch events with their window and seat.
 
-use aegle_types::Point;
+use aegle_platform::Point;
 use smithay_client_toolkit::seat::touch::TouchHandler;
 use wayland_client::{
     Connection, QueueHandle,
@@ -16,8 +16,8 @@ impl State {
         for (id, window) in input.fingers.drain(..) {
             self.events.push_back(Event::Touch {
                 window,
-                seat: input.seat.clone(),
-                id,
+                seat: crate::events::seat_id(&input.seat),
+                finger: id as u32,
                 position: Point::default(),
                 time: 0,
                 phase: TouchPhase::Cancel,
@@ -49,8 +49,8 @@ impl State {
         }
         self.events.push_back(Event::Touch {
             window,
-            seat: input.seat.clone(),
-            id,
+            seat: crate::events::seat_id(&input.seat),
+            finger: id as u32,
             position: Point {
                 x: position.0 as f32,
                 y: position.1 as f32,

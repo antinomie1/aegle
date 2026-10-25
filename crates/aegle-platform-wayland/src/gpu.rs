@@ -1,7 +1,8 @@
 //! Owned native surface leases for graphics APIs that retain platform handles.
 #![allow(unsafe_code)]
 
-use crate::{Error, PixelSize, PresentError, Wayland, WindowId, state::Shell};
+use crate::{Error, PixelSize, Wayland, WindowId, state::Shell};
+use aegle_platform::DrawResult;
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
     RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle, WindowHandle,
@@ -46,7 +47,7 @@ impl HasDisplayHandle for WindowSurface {
 impl Wayland {
     /// Returns a lease suitable for constructing an independent GPU presenter.
     /// No SHM image is allocated. Drop the presenter before the last surface lease.
-    pub fn window_surface(&self, id: WindowId) -> Result<WindowSurface, Error> {
+    pub(crate) fn window_surface(&self, id: WindowId) -> Result<WindowSurface, Error> {
         let window = self
             .state
             .windows
@@ -68,22 +69,25 @@ impl Wayland {
     /// allocated, attached or read back. Returns false without calling `present`
     /// before configure or while a compositor frame callback is outstanding.
     /// Errors and false results preserve the redraw request for a later retry.
-    pub fn present_external<E>(
+    pub(crate) fn present_external(
         &mut self,
         id: WindowId,
-        present: impl FnOnce(PixelSize) -> Result<bool, E>,
-    ) -> Result<bool, PresentError<E>> {
+        present: impl FnOnce(PixelSize) -> DrawResult<bool>,
+    ) -> Result<bool, Error> {
         let window = self
             .state
             .windows
             .iter_mut()
             .find(|window| window.id == id)
-            .ok_or(PresentError::Platform(Error::InvalidWindow))?;
+            .ok_or(Error::InvalidWindow)?;
         window.redraw_queued = false;
         if !window.info.configured || window.frame_pending {
             return Ok(false);
         }
-        let size = window.info.buffer_size().map_err(PresentError::Platform)?;
+        let size = window.info.buffer;
+        if size.width == 0 || size.height == 0 {
+            return Err(Error::InvalidSize);
+        }
         let surface = window.window.wl_surface();
         window.apply_scale();
         // The external API commits this request with its buffer attachment. A
@@ -105,7 +109,7 @@ impl Wayland {
             }
             Err(error) => {
                 window.dirty = true;
-                Err(PresentError::Draw(error))
+                Err(Error::Draw(error))
             }
         }
     }

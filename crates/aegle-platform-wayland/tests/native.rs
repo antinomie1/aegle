@@ -2,10 +2,11 @@
 
 use std::time::{Duration, Instant};
 
-use aegle_platform_wayland::{
+use aegle_platform::{
     Anchor, Error, Event, ImeRequest, KeyboardInteractivity, Layer, LayerOptions, PixelSize,
-    PresentError, Wayland, WindowId, WindowOptions,
+    Platform, WindowId, WindowOptions,
 };
+use aegle_platform_wayland::Wayland;
 
 fn redraw(platform: &mut Wayland, target: WindowId) {
     let deadline = Instant::now() + Duration::from_secs(3);
@@ -28,7 +29,7 @@ fn redraw(platform: &mut Wayland, target: WindowId) {
 fn present(platform: &mut Wayland, window: WindowId) {
     assert!(
         platform
-            .present::<()>(window, None, |pixels, size, _| {
+            .present(window, None, |pixels, size, _| {
                 assert_eq!(pixels.len(), size.width as usize * size.height as usize * 4);
                 for pixel in pixels.as_chunks_mut::<4>().0.iter_mut() {
                     pixel.copy_from_slice(&[32, 48, 64, 255]);
@@ -53,31 +54,31 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
         buffer_budget: 2 * 1024 * 1024,
         layer: None,
     };
-    let window = platform.create_window(options.clone()).unwrap();
+    let window = platform.create_window(options).unwrap();
     assert!(matches!(
         platform.create_window(WindowOptions {
             title: &"x".repeat(4001),
-            ..options.clone()
+            ..options
         }),
         Err(Error::InvalidString)
     ));
     assert_eq!(platform.buffer_bytes(window).unwrap(), 0);
     assert!(
         !platform
-            .present::<()>(window, None, |_, _, _| panic!("unconfigured draw"))
+            .present(window, None, |_, _, _| panic!("unconfigured draw"))
             .unwrap()
     );
     redraw(&mut platform, window);
     assert!(matches!(
-        platform.present(window, None, |_, _, _| Err("incomplete frame")),
-        Err(PresentError::Draw("incomplete frame"))
+        platform.present(window, None, |_, _, _| Err("incomplete frame".into())),
+        Err(Error::Draw(error)) if error.to_string() == "incomplete frame"
     ));
     platform.request_redraw(window).unwrap();
     redraw(&mut platform, window);
     present(&mut platform, window);
     assert!(
         !platform
-            .present::<()>(window, None, |_, _, _| panic!("frame still pending"))
+            .present(window, None, |_, _, _| panic!("frame still pending"))
             .unwrap()
     );
     for _ in 0..4 {
@@ -85,7 +86,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
         redraw(&mut platform, window);
         present(&mut platform, window);
     }
-    let size = platform.window_info(window).unwrap().buffer_size().unwrap();
+    let size = platform.window_info(window).unwrap().buffer;
     let single_mapping = (size.width as usize * size.height as usize * 4 + 63) & !63;
     assert!(
         (single_mapping..=2 * single_mapping).contains(&platform.buffer_bytes(window).unwrap())
@@ -133,18 +134,15 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
     let constrained = platform
         .create_window(WindowOptions {
             buffer_budget: 0,
-            ..options.clone()
+            ..options
         })
         .unwrap();
     redraw(&mut platform, constrained);
     assert!(matches!(
-        platform.present::<()>(constrained, None, |_, _, _| panic!(
+        platform.present(constrained, None, |_, _, _| panic!(
             "budget rejected before drawing"
         )),
-        Err(PresentError::Platform(Error::BufferBudget {
-            budget: 0,
-            ..
-        }))
+        Err(Error::BufferBudget { budget: 0, .. })
     ));
     assert_eq!(platform.buffer_bytes(constrained).unwrap(), 0);
     platform.remove_window(constrained).unwrap();
@@ -160,7 +158,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
                 width: 256,
                 height: 192,
             },
-            ..options.clone()
+            ..options
         })
         .unwrap();
     assert_ne!(window, replacement);
@@ -233,7 +231,7 @@ fn preferred_scale_sizes_the_buffer_of_a_fractional_window() {
         let info = info.unwrap();
         let mut buffer = None;
         let presented = platform
-            .present::<()>(window, None, |_, size, _| {
+            .present(window, None, |_, size, _| {
                 buffer = Some(size);
                 Ok(())
             })

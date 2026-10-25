@@ -1,7 +1,10 @@
 //! Native lifecycle contract, intentionally opt-in on a test desktop.
 #![cfg(windows)]
 #![allow(unsafe_code)]
-use aegle_platform_win32::{Error, Event, ImeRequest, PixelSize, Win32, WindowOptions};
+use aegle_platform::{
+    Error, Event, ImeRequest, PixelSize, Platform, SeatId, SurfacePlatform, WindowOptions,
+};
+use aegle_platform_win32::Win32;
 use aegle_types::Rect;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::time::Duration;
@@ -44,7 +47,7 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
             pixel.copy_from_slice(&[20, 100, 220, 255]);
         }
         draws += 1;
-        Ok::<_, std::convert::Infallible>(())
+        Ok(())
     })?);
     assert_eq!(draws, 1);
     assert!(backend.buffer_bytes(first)? <= 4 * 1024 * 1024);
@@ -54,7 +57,7 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
     // The window is opaque: GDI ignores alpha instead of rejecting it.
     assert!(backend.present(first, None, |pixels, _, _| {
         pixels.fill(0);
-        Ok::<_, std::convert::Infallible>(())
+        Ok(())
     })?);
     backend.configure_ime(
         first,
@@ -88,7 +91,7 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
     // A ready animation frame must not starve an already posted native input.
     backend.request_redraw(first)?;
     unsafe {
-        PostMessageW(Some(hwnd), WM_CHAR, WPARAM(0x41), LPARAM(0)).map_err(Error::from)?;
+        PostMessageW(Some(hwnd), WM_CHAR, WPARAM(0x41), LPARAM(0)).map_err(Error::backend)?;
     }
     let mut delivered = false;
     for _ in 0..32 {
@@ -105,9 +108,10 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
     assert!(delivered);
     // SAFETY: resize the owned native toplevel; WM_SIZE must publish actual client geometry.
     unsafe {
-        SetWindowPos(hwnd, None, 0, 0, 280, 180, SWP_NOMOVE | SWP_NOZORDER).map_err(Error::from)?;
+        SetWindowPos(hwnd, None, 0, 0, 280, 180, SWP_NOMOVE | SWP_NOZORDER)
+            .map_err(Error::backend)?;
     }
-    assert!(backend.window_info(first)?.buffer_size()?.width > 96);
+    assert!(backend.window_info(first)?.buffer.width > 96);
     backend.remove_window(first)?;
     // Native ownership, not route membership, governs GPU surface validity.
     unsafe {
@@ -119,11 +123,13 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
     unsafe {
         assert!(!IsWindow(Some(hwnd)).as_bool());
     }
-    backend.set_clipboard(second, "剪贴板 😀")?;
-    assert_eq!(
-        backend.clipboard_text(second)?.as_deref(),
-        Some("剪贴板 😀")
-    );
+    backend.set_clipboard(second, SeatId(0), "剪贴板 😀")?;
+    while backend.next_event().is_some() {}
+    backend.request_clipboard(second, SeatId(0))?;
+    assert!(matches!(
+        backend.next_event(),
+        Some(Event::Clipboard { text, .. }) if text == "剪贴板 😀"
+    ));
     backend.remove_window(second)?;
     let wake = backend.wake_handle()?;
     std::thread::spawn(move || wake.wake()).join().unwrap();

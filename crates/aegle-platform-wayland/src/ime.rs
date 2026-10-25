@@ -8,7 +8,8 @@ use wayland_protocols::wp::text_input::zv3::client::{
     zwp_text_input_v3::{self, ZwpTextInputV3},
 };
 
-use crate::{Error, Event, ImeEvent, ImeRequest, ImeUpdate, Preedit, State, WindowId};
+use crate::{Error, Event, ImeEvent, State, WindowId};
+use aegle_platform::{ImeRequest, ImeUpdate, Preedit};
 
 struct Desired {
     window: WindowId,
@@ -64,11 +65,9 @@ impl SeatInput {
             self.disable();
             return;
         };
-        let content = (
-            request.hints,
-            request.purpose,
-            request.surrounding.is_some(),
-        );
+        let hints = crate::ime_types::hints(request);
+        let purpose = crate::ime_types::PURPOSE;
+        let content = (hints, purpose, request.surrounding.is_some());
         if self.server_enabled && self.content != Some(content) {
             // Leave invalidates local content, but does not necessarily disable
             // the server object. Reset that session after the next enter, when
@@ -82,8 +81,9 @@ impl SeatInput {
             self.content = Some(content);
             self.pending = Pending::default();
         }
-        self.object.set_content_type(request.hints, request.purpose);
-        self.object.set_text_change_cause(request.cause);
+        self.object.set_content_type(hints, purpose);
+        self.object
+            .set_text_change_cause(crate::ime_types::cause(request));
         if let Some(text) = &request.surrounding {
             self.object.set_surrounding_text(
                 text.clone(),
@@ -167,7 +167,7 @@ impl ImeState {
     ) -> Result<(), Error> {
         let next = request
             .map(|request| {
-                let rect = request.validate()?;
+                let rect = crate::ime_types::rect(&request)?;
                 if !self.available() {
                     return Err(Error::ImeUnavailable);
                 }
@@ -259,7 +259,7 @@ impl Dispatch<ZwpTextInputV3, ()> for State {
                     );
                     state.events.push_back(Event::Ime {
                         window,
-                        seat: input.seat.clone(),
+                        seat: crate::events::seat_id(&input.seat),
                         event: ImeEvent::Entered,
                     });
                 }
@@ -268,7 +268,7 @@ impl Dispatch<ZwpTextInputV3, ()> for State {
                 if let Some(window) = input.leave() {
                     state.events.push_back(Event::Ime {
                         window,
-                        seat: input.seat.clone(),
+                        seat: crate::events::seat_id(&input.seat),
                         event: ImeEvent::Left,
                     });
                 }
@@ -277,7 +277,7 @@ impl Dispatch<ZwpTextInputV3, ()> for State {
                 text,
                 cursor_begin,
                 cursor_end,
-            } => match Preedit::from_protocol(text, cursor_begin, cursor_end) {
+            } => match crate::ime_types::preedit(text, cursor_begin, cursor_end) {
                 Ok(preedit) => input.pending.preedit = preedit,
                 Err(error) => input.pending.error = Some(error),
             },
@@ -311,14 +311,12 @@ impl Dispatch<ZwpTextInputV3, ()> for State {
                 } else if let Some(window) = input.focus.filter(|_| input.content.is_some()) {
                     state.events.push_back(Event::Ime {
                         window,
-                        seat: input.seat.clone(),
+                        seat: crate::events::seat_id(&input.seat),
                         event: ImeEvent::Update(ImeUpdate {
-                            serial,
-                            current,
                             commit: pending.commit,
                             preedit: pending.preedit,
-                            delete_before: pending.before,
-                            delete_after: pending.after,
+                            delete_before: pending.before as usize,
+                            delete_after: pending.after as usize,
                         }),
                     });
                 }

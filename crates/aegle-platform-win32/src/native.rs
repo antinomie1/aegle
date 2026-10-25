@@ -27,6 +27,8 @@ pub(crate) struct Native {
     /// Held mouse buttons: bit 0 primary, then right, middle, back, forward.
     pub held: Cell<u8>,
     pub high_surrogate: Cell<Option<u16>>,
+    /// Modifiers last reported to the host, so pointer messages report changes.
+    pub modifiers: Cell<crate::Modifiers>,
     /// The window's TSF session, from creation until the window is removed;
     /// `None` when TSF is unavailable.
     pub tsf: RefCell<Option<Session>>,
@@ -77,7 +79,7 @@ impl Native {
     }
     pub fn configure(&self, physical: PixelSize, scale: f32, active: bool, drawable: bool) {
         self.info.set(WindowInfo {
-            physical,
+            buffer: physical,
             scale,
             active,
             configured: drawable,
@@ -101,7 +103,9 @@ impl Native {
         if let Some(session) = self.tsf.borrow().as_ref() {
             session.disable();
         }
-        self.events.borrow_mut().retain(|event| !matches!(event, Event::Ime { window, event: ImeEvent::Update(_), .. } if *window == self.id));
+        self.events.borrow_mut().retain(|event| {
+            !matches!(event, Event::Ime { window, event: ImeEvent::Update(_), .. } if *window == self.id)
+        });
     }
 }
 impl Drop for Native {

@@ -44,6 +44,7 @@ name = "vulkan_text_scene"
 required-features = ["text"]
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
+aegle-platform.workspace = true
 aegle-platform-wayland = { workspace = true, features = ["gpu"] }
 
 [[test]]

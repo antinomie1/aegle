@@ -2,7 +2,18 @@
 #![allow(unsafe_code)]
 
 use crate::native::{RendererBackend, Runtime};
+use aegle_platform::Platform;
+#[cfg(any(feature = "vulkan", feature = "wgpu"))]
+use aegle_platform::SurfacePlatform;
 use aegle_ui::Result;
+
+/// A lease on a window's native handles, for GPU presenters and adapters.
+#[cfg(any(
+    feature = "vulkan",
+    feature = "wgpu",
+    all(access, target_os = "windows")
+))]
+pub(crate) type Surface = <crate::Native as aegle_platform::SurfacePlatform>::Surface;
 #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
 use {aegle_scene::Affine, aegle_types::Rect, aegle_ui::Ui};
 
@@ -24,8 +35,8 @@ pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
 #[cfg(feature = "vulkan")]
 pub(crate) fn create_gpu(
     runtime: &mut Runtime,
-    id: crate::platform::WindowId,
-) -> Result<Option<aegle_render_vulkan::WindowRenderer<crate::platform::WindowSurface>>> {
+    id: aegle_platform::WindowId,
+) -> Result<Option<aegle_render_vulkan::WindowRenderer<Surface>>> {
     if runtime.options.renderer != RendererBackend::Vulkan {
         return Ok(None);
     }
@@ -51,8 +62,8 @@ pub(crate) fn create_gpu(
 #[cfg(feature = "wgpu")]
 pub(crate) fn create_wgpu(
     runtime: &mut Runtime,
-    id: crate::platform::WindowId,
-) -> Result<Option<aegle_render_wgpu::WindowRenderer<crate::platform::WindowSurface>>> {
+    id: aegle_platform::WindowId,
+) -> Result<Option<aegle_render_wgpu::WindowRenderer<Surface>>> {
     if runtime.options.renderer != RendererBackend::Wgpu {
         return Ok(None);
     }
@@ -187,7 +198,7 @@ impl Runtime {
                     let renderer = self.renderer.as_mut().unwrap();
                     let scale = info.scale;
                     // Only the changed area is redrawn into a retained buffer.
-                    let size = info.buffer_size()?;
+                    let size = info.buffer;
                     let damage = device_damage(&entry.ui, scale, size.width, size.height);
                     let presented = self
                         .backend

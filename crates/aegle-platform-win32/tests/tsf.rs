@@ -6,9 +6,11 @@
 //! `cargo test -p aegle-platform-win32 --test tsf -- --ignored`.
 #![cfg(windows)]
 #![allow(unsafe_code)]
-use aegle_platform_win32::{
-    Event, ImeEvent, ImeRequest, ImeUpdate, PixelSize, Preedit, Win32, WindowId, WindowOptions,
+use aegle_platform::{
+    Event, ImeEvent, ImeRequest, ImeUpdate, PixelSize, Platform, Preedit, SurfacePlatform,
+    WindowId, WindowOptions,
 };
+use aegle_platform_win32::Win32;
 use aegle_types::Rect;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::{cell::RefCell, mem::ManuallyDrop, rc::Rc};
@@ -233,6 +235,7 @@ fn updates(backend: &mut Win32, window: WindowId) -> Vec<ImeUpdate> {
             Event::Ime {
                 window: w,
                 event: ImeEvent::Update(update),
+                ..
             } if w == window => updates.push(update),
             Event::Error(error) => panic!("{error}"),
             _ => {}
@@ -265,6 +268,7 @@ fn request(text: &str, caret: usize) -> ImeRequest {
         cursor: caret,
         anchor: caret,
         cursor_rect: Rect::new(10.0, 20.0, 1.5, 16.0),
+        ..Default::default()
     }
 }
 
@@ -288,7 +292,7 @@ fn text_services_compose_reconvert_and_resync()
     };
     let hwnd = HWND(handle.hwnd.get() as *mut _);
     backend.configure_ime(window, Some(request("你好世界", 6)))?;
-    let service = Service::new(hwnd).map_err(aegle_platform_win32::Error::from)?;
+    let service = Service::new(hwnd).map_err(aegle_platform::Error::backend)?;
 
     // Text services read the surrounding excerpt and the caret in UTF-16.
     assert_eq!(service.read(), ("你好世界".into(), (2, 2)));
@@ -309,7 +313,17 @@ fn text_services_compose_reconvert_and_resync()
         }
     });
     let scale = backend.window_info(window)?.scale;
-    let [left, top, right, bottom] = request("", 0).validate(scale)?;
+    // The caret rectangle in physical pixels, rounded outward.
+    let rect = request("", 0).cursor_rect;
+    let scale = f64::from(scale);
+    let (left, top) = (
+        (f64::from(rect.origin.x) * scale).floor() as i32,
+        (f64::from(rect.origin.y) * scale).floor() as i32,
+    );
+    let (right, bottom) = (
+        ((f64::from(rect.origin.x) + f64::from(rect.size.width)) * scale).ceil() as i32,
+        ((f64::from(rect.origin.y) + f64::from(rect.size.height)) * scale).ceil() as i32,
+    );
     let mut origin = POINT::default();
     // SAFETY: a live window of this thread.
     let _ = unsafe { ClientToScreen(hwnd, &mut origin) };

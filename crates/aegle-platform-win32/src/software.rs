@@ -1,5 +1,6 @@
 #![allow(unsafe_code)]
-use crate::{Error, PixelSize, PresentError, Win32, WindowId};
+use crate::{Error, PixelSize, Win32, WindowId};
+use aegle_platform::DrawResult;
 use aegle_types::{PixelRect, Region};
 use windows::Win32::{
     Graphics::{Dwm::DwmFlush, Gdi::*},
@@ -16,29 +17,26 @@ impl Win32 {
     /// Drawing errors retain the last displayed frame. One CPU buffer is reused;
     /// GDI upload and compositor-owned storage are outside `buffer_budget`.
     /// Software frames wait for DWM completion, avoiding a busy animation loop.
-    pub fn present<E>(
+    pub(crate) fn present(
         &mut self,
         id: WindowId,
         damage: Option<Region<PixelRect>>,
-        draw: impl FnOnce(&mut [u8], PixelSize, &Region<PixelRect>) -> Result<(), E>,
-    ) -> Result<bool, PresentError<E>> {
-        let native = self.window(id).map_err(PresentError::Platform)?;
+        draw: impl FnOnce(&mut [u8], PixelSize, &Region<PixelRect>) -> DrawResult,
+    ) -> aegle_platform::Result<bool> {
+        let native = self.window(id)?;
         native.redraw_queued.set(false);
         if !native.info.get().configured {
             return Ok(false);
         }
-        let size = native
-            .info
-            .get()
-            .buffer_size()
-            .map_err(PresentError::Platform)?;
-        let length = size.bytes().map_err(PresentError::Platform)?;
+        let size = native.info.get().buffer;
+        let length = crate::error::bytes(size)?;
         let mut pixels = native.pixels.borrow_mut();
         if length > native.budget {
-            return Err(PresentError::Platform(Error::BufferBudget {
+            return Err(Error::BufferBudget {
                 required: length,
                 budget: native.budget,
-            }));
+            }
+            .into());
         }
         if pixels.capacity() < length {
             // Free an obsolete allocation first; resize never temporarily retains
@@ -46,7 +44,7 @@ impl Win32 {
             *pixels = Vec::new();
             pixels
                 .try_reserve_exact(length)
-                .map_err(|e| PresentError::Platform(Error::Backend(e.to_string())))?;
+                .map_err(aegle_platform::Error::backend)?;
         }
         pixels.resize(length, 0);
         let mut full = Region::default();
@@ -55,7 +53,7 @@ impl Win32 {
             Some(drawn) if drawn == size => damage.unwrap_or(full),
             _ => full,
         };
-        draw(&mut pixels, size, &region).map_err(PresentError::Draw)?;
+        draw(&mut pixels, size, &region).map_err(aegle_platform::Error::Draw)?;
         let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -73,9 +71,7 @@ impl Win32 {
         unsafe {
             let dc = GetDC(Some(native.hwnd.get()));
             if dc.is_invalid() {
-                return Err(PresentError::Platform(Error::Backend(
-                    "GetDC failed".into(),
-                )));
+                return Err(Error::Backend("GetDC failed".into()).into());
             }
             let rows = SetDIBitsToDevice(
                 dc,
@@ -93,14 +89,12 @@ impl Win32 {
             );
             ReleaseDC(Some(native.hwnd.get()), dc);
             if rows == 0 {
-                return Err(PresentError::Platform(Error::Backend(
-                    "GDI bitmap upload failed".into(),
-                )));
+                return Err(Error::Backend("GDI bitmap upload failed".into()).into());
             }
             if !IsWindowVisible(native.hwnd.get()).as_bool() {
                 let _ = ShowWindow(native.hwnd.get(), SW_SHOWNORMAL);
             }
-            DwmFlush().map_err(|e| PresentError::Platform(e.into()))?;
+            DwmFlush().map_err(aegle_platform::Error::backend)?;
         }
         native.dirty.set(false);
         native.drawn.set(Some(size));

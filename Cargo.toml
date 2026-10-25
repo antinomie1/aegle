@@ -14,6 +14,7 @@ categories = ["gui", "graphics"]
 
 [workspace.dependencies]
 aegle-types = { path = "crates/aegle-types", version = "0.1.0" }
+aegle-platform = { path = "crates/aegle-platform", version = "0.1.0" }
 aegle-core = { path = "crates/aegle-core", version = "0.1.0" }
 aegle-dbus = { path = "crates/aegle-dbus", version = "0.1.0" }
 aegle-desktop = { path = "crates/aegle-desktop", version = "0.1.0" }

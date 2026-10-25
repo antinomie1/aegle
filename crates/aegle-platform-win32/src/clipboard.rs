@@ -80,7 +80,7 @@ impl Drop for Open {
 
 impl Win32 {
     /// Replaces the system clipboard with UTF-16 text owned by `id`'s window.
-    pub fn set_clipboard(&mut self, id: WindowId, text: &str) -> Result<(), Error> {
+    pub(crate) fn set_clipboard(&mut self, id: WindowId, text: &str) -> Result<(), Error> {
         let units: Vec<u16> = text.encode_utf16().chain([0]).collect();
         let _open = Open::new(self.window(id)?.hwnd.get())?;
         // SAFETY: the clipboard is open; ownership of the block passes to the
@@ -97,9 +97,20 @@ impl Win32 {
         Ok(())
     }
 
-    /// Reads clipboard text up to its first NUL, or `None` without text.
-    /// Unpaired surrogates become U+FFFD.
-    pub fn clipboard_text(&mut self, id: WindowId) -> Result<Option<String>, Error> {
+    /// Reads clipboard text up to its first NUL and queues it as a clipboard
+    /// event; nothing without text. Unpaired surrogates become U+FFFD.
+    pub(crate) fn request_clipboard(&mut self, id: WindowId) -> Result<(), Error> {
+        if let Some(text) = self.clipboard_text(id)? {
+            self.events.borrow_mut().push_back(crate::Event::Clipboard {
+                window: id,
+                seat: crate::SEAT,
+                text,
+            });
+        }
+        Ok(())
+    }
+
+    fn clipboard_text(&mut self, id: WindowId) -> Result<Option<String>, Error> {
         let _open = Open::new(self.window(id)?.hwnd.get())?;
         // SAFETY: the clipboard is open, so the system-owned block stays valid
         // until close.

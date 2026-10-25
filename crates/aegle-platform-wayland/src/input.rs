@@ -8,7 +8,7 @@ mod repeat;
 mod touch;
 use repeat::Repeat;
 
-use aegle_types::{Cursor, Point};
+use aegle_platform::{Cursor, Point, PointerKind};
 use smithay_client_toolkit::{
     delegate_dispatch2,
     seat::{
@@ -16,7 +16,7 @@ use smithay_client_toolkit::{
         keyboard::{
             KeyEvent, KeyboardHandler, Keymap, Keysym, Modifiers, RawModifiers, RepeatInfo,
         },
-        pointer::{CursorIcon, PointerEventKind, ThemeSpec, ThemedPointer},
+        pointer::{CursorIcon, ThemeSpec, ThemedPointer},
     },
 };
 use wayland_client::{
@@ -79,6 +79,15 @@ pub(crate) struct InputState {
 }
 
 impl State {
+    /// The live seat with this contract identity.
+    pub(crate) fn seat(&self, id: crate::SeatId) -> Option<WlSeat> {
+        self.input
+            .seats
+            .iter()
+            .find(|input| crate::events::seat_id(&input.seat) == id)
+            .map(|input| input.seat.clone())
+    }
+
     /// SCTK only calls `new_seat` for globals arriving after initial binding.
     pub(crate) fn init_input(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
         for seat in self.seat_state.seats() {
@@ -149,7 +158,7 @@ impl State {
         if let Some((window, _)) = input.focus.take() {
             self.events.push_back(Event::KeyboardFocus {
                 window,
-                seat: input.seat.clone(),
+                seat: crate::events::seat_id(&input.seat),
                 focused: false,
             });
         }
@@ -160,9 +169,10 @@ impl State {
         if let Some((window, position)) = input.pointer_focus.take() {
             self.events.push_back(Event::Pointer {
                 window,
-                seat: input.seat.clone(),
+                seat: crate::events::seat_id(&input.seat),
                 position,
-                kind: PointerEventKind::Leave { serial: 0 },
+                kind: PointerKind::Leave,
+                time: None,
             });
         }
     }
@@ -181,14 +191,14 @@ impl State {
             .find(|input| input.keyboard.as_ref() == Some(keyboard))
             && let Some((window, _)) = input.focus
         {
-            self.events.push_back(Event::Key {
+            self.events.push_back(crate::events::key_event(
                 window,
-                seat: input.seat.clone(),
+                &input.seat,
                 key,
                 pressed,
                 repeat,
-                modifiers: input.modifiers,
-            });
+                input.modifiers,
+            ));
         }
     }
 }
@@ -297,7 +307,7 @@ impl SeatHandler for State {
         if let Some(window) = self.ime.remove_seat(&seat) {
             self.events.push_back(Event::Ime {
                 window,
-                seat: seat.clone(),
+                seat: crate::events::seat_id(&seat),
                 event: ImeEvent::Left,
             });
         }
@@ -333,7 +343,7 @@ impl KeyboardHandler for State {
             input.focus = Some((window, surface.clone()));
             self.events.push_back(Event::KeyboardFocus {
                 window,
-                seat: input.seat.clone(),
+                seat: crate::events::seat_id(&input.seat),
                 focused: true,
             });
         }
@@ -441,8 +451,8 @@ impl KeyboardHandler for State {
             if let Some((window, _)) = input.focus {
                 self.events.push_back(Event::Modifiers {
                     window,
-                    seat: input.seat.clone(),
-                    modifiers,
+                    seat: crate::events::seat_id(&input.seat),
+                    modifiers: crate::events::modifiers(modifiers),
                 });
             }
         }

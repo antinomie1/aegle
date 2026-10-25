@@ -1,8 +1,5 @@
-#[cfg(target_os = "windows")]
-use crate::platform::Win32 as Platform;
-use crate::platform::{PixelSize, WindowId};
-#[cfg(target_os = "linux")]
-use crate::platform::{Wayland as Platform, WlSeat};
+use crate::Native;
+use aegle_platform::{PixelSize, Platform, SeatId, WindowId};
 #[cfg(feature = "software")]
 use aegle_render_software::Renderer;
 #[cfg(feature = "motion")]
@@ -104,7 +101,7 @@ impl Default for AppOptions {
     }
 }
 
-/// Initial window size, presentation budget and Wayland surface role.
+/// Initial window size, presentation budget and surface role.
 #[derive(Clone, Copy, Debug)]
 pub struct WindowOptions {
     /// Preferred width in logical pixels; the compositor may override it.
@@ -115,10 +112,10 @@ pub struct WindowOptions {
     /// buffers at most. Default: unlimited; set a limit on small devices.
     /// GPU renderers use `AppOptions::vulkan` or `AppOptions::wgpu` instead.
     pub buffer_budget: usize,
-    /// Wayland layer-shell placement instead of a toplevel, for panels,
-    /// docks and overlays. Default: `None`.
-    #[cfg(target_os = "linux")]
-    pub layer: Option<crate::platform::LayerOptions>,
+    /// Desktop-shell layer placement instead of an ordinary window, for
+    /// panels, docks and overlays (Wayland layer-shell). Window creation
+    /// fails where the platform has no layers. Default: `None`.
+    pub layer: Option<crate::LayerOptions>,
 }
 
 impl Default for WindowOptions {
@@ -127,7 +124,6 @@ impl Default for WindowOptions {
             width: 800,
             height: 480,
             buffer_budget: usize::MAX,
-            #[cfg(target_os = "linux")]
             layer: None,
         }
     }
@@ -158,7 +154,7 @@ pub(crate) struct Runtime {
     pub shared_vulkan: Option<aegle_render_vulkan::SharedDevice>,
     #[cfg(feature = "wgpu")]
     pub shared_wgpu: Option<aegle_render_wgpu::SharedGpu>,
-    pub backend: Platform,
+    pub backend: Native,
     pub fonts: Rc<RefCell<TextSystem>>,
     #[cfg(feature = "software")]
     pub renderer: Option<Renderer>,
@@ -166,46 +162,34 @@ pub(crate) struct Runtime {
     /// UI-thread ends of [`UiProxy`] senders.
     pub proxies: Vec<Rc<RefCell<dyn crate::native_proxy::Drain>>>,
     /// Last system preferences applied to the windows.
-    pub preferences: crate::platform::Preferences,
+    pub preferences: crate::Preferences,
     #[cfg(feature = "motion")]
     pub clock: Instant,
 }
 
 pub(crate) struct Entry {
     #[cfg(feature = "vulkan")]
-    pub gpu: Option<aegle_render_vulkan::WindowRenderer<crate::platform::WindowSurface>>,
+    pub gpu: Option<aegle_render_vulkan::WindowRenderer<crate::native_render::Surface>>,
     #[cfg(feature = "wgpu")]
-    pub wgpu: Option<aegle_render_wgpu::WindowRenderer<crate::platform::WindowSurface>>,
+    pub wgpu: Option<aegle_render_wgpu::WindowRenderer<crate::native_render::Surface>>,
     pub id: WindowId,
     pub ui: Rc<Ui>,
     /// Last cursor shape sent to the platform.
     pub cursor: aegle_ui::Cursor,
-    #[cfg(any(
-        all(feature = "unix-accessibility", target_os = "linux"),
-        all(feature = "windows-accessibility", target_os = "windows")
-    ))]
+    #[cfg(access)]
     pub title: String,
-    #[cfg(target_os = "linux")]
-    pub seat: Option<WlSeat>,
-    /// Recent finger-scroll samples (compositor milliseconds, displacement).
-    #[cfg(all(target_os = "linux", feature = "motion"))]
+    /// The seat whose keyboard and pointer drive this window's focus domain.
+    pub seat: Option<SeatId>,
+    /// Recent scroll samples (platform milliseconds, displacement) for
+    /// kinetic scrolling after the fingers lift.
+    #[cfg(feature = "motion")]
     pub flick: Vec<(u32, aegle_ui::Point)>,
     pub modifiers: Modifiers,
     /// Maps this window's platform input timestamps onto `Instant`.
     pub clock: crate::event_clock::EventClock,
     pub ready: bool,
-    #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
-    pub access_scale: f64,
-    #[cfg(any(
-        all(feature = "unix-accessibility", target_os = "linux"),
-        all(feature = "windows-accessibility", target_os = "windows")
-    ))]
-    pub accessibility: crate::native_access::Adapter,
-    #[cfg(any(
-        all(feature = "unix-accessibility", target_os = "linux"),
-        all(feature = "windows-accessibility", target_os = "windows")
-    ))]
-    pub initial_access: bool,
+    #[cfg(access)]
+    pub accessibility: crate::native_access::Access,
 }
 
 /// Weak ordinary-window handle; dereferences to its root [`Container`].
@@ -271,7 +255,7 @@ impl App {
             return Err("application identifier exceeds 4000 bytes or contains NUL".into());
         }
         crate::native_render::validate_backend(options.renderer)?;
-        let backend = Platform::connect()?;
+        let backend = Native::connect()?;
         let runtime = Runtime {
             preferences: backend.preferences(),
             backend,
@@ -326,7 +310,7 @@ impl App {
         let app_id = runtime.options.app_id.clone();
         let id = runtime
             .backend
-            .create_window(crate::platform::WindowOptions {
+            .create_window(aegle_platform::WindowOptions {
                 title,
                 app_id: &app_id,
                 size: PixelSize {
@@ -334,7 +318,6 @@ impl App {
                     height: options.height,
                 },
                 buffer_budget: options.buffer_budget,
-                #[cfg(target_os = "linux")]
                 layer: options.layer,
             })?;
         #[cfg(feature = "vulkan")]
@@ -353,11 +336,8 @@ impl App {
                 return Err(error);
             }
         };
-        #[cfg(any(
-            all(feature = "unix-accessibility", target_os = "linux"),
-            all(feature = "windows-accessibility", target_os = "windows")
-        ))]
-        let accessibility = match crate::native_access::create(&mut runtime, id) {
+        #[cfg(access)]
+        let accessibility = match crate::native_access::Access::new(&mut runtime.backend, id) {
             Ok(adapter) => adapter,
             Err(error) => {
                 #[cfg(feature = "vulkan")]
@@ -377,30 +357,16 @@ impl App {
             id,
             ui,
             cursor: aegle_ui::Cursor::Default,
-            #[cfg(target_os = "linux")]
             seat: None,
-            #[cfg(all(target_os = "linux", feature = "motion"))]
+            #[cfg(feature = "motion")]
             flick: Vec::new(),
             modifiers: Modifiers::default(),
             clock: Default::default(),
             ready: false,
-            #[cfg(all(feature = "windows-accessibility", target_os = "windows"))]
-            access_scale: 1.0,
-            #[cfg(any(
-                all(feature = "unix-accessibility", target_os = "linux"),
-                all(feature = "windows-accessibility", target_os = "windows")
-            ))]
+            #[cfg(access)]
             title: title.into(),
-            #[cfg(any(
-                all(feature = "unix-accessibility", target_os = "linux"),
-                all(feature = "windows-accessibility", target_os = "windows")
-            ))]
+            #[cfg(access)]
             accessibility,
-            #[cfg(any(
-                all(feature = "unix-accessibility", target_os = "linux"),
-                all(feature = "windows-accessibility", target_os = "windows")
-            ))]
-            initial_access: false,
         });
         Ok(Window {
             runtime: Rc::downgrade(&self.runtime),

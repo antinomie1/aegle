@@ -1,5 +1,5 @@
 use crate::native::{App, Runtime};
-use crate::platform::Event;
+use aegle_platform::{Event, Platform};
 use aegle_ui::{Result, Theme, Ui, UiError};
 use std::{cell::Cell, rc::Rc, time::Duration};
 
@@ -104,35 +104,18 @@ impl App {
         if stale {
             self.runtime.borrow_mut().refresh()?;
         }
-        #[cfg(any(
-            all(feature = "unix-accessibility", target_os = "linux"),
-            all(feature = "windows-accessibility", target_os = "windows")
-        ))]
+        #[cfg(access)]
         loop {
             let pending = {
                 let mut runtime = self.runtime.borrow_mut();
                 runtime.windows.iter_mut().find_map(|entry| {
-                    entry
-                        .accessibility
-                        .next_event()
-                        .map(|event| (entry.id, event))
+                    let action = entry.accessibility.next_action()?;
+                    Some((entry.ui.clone(), action))
                 })
             };
-            let Some((id, event)) = pending else { break };
-            {
-                let mut runtime = self.runtime.borrow_mut();
-                let entry = runtime
-                    .windows
-                    .iter_mut()
-                    .find(|entry| entry.id == id)
-                    .unwrap();
-                match event {
-                    aegle_access::Event::InitialTree => entry.initial_access = true,
-                    aegle_access::Event::Action(action) => {
-                        entry.ui.access_action(action)?;
-                    }
-                    aegle_access::Event::Deactivate => {}
-                }
+            let Some((ui, action)) = pending else { break };
+            if let Some(action) = action {
+                ui.access_action(action)?;
             }
             self.callbacks(callbacks)?;
             self.runtime.borrow_mut().refresh()?;
@@ -230,7 +213,7 @@ impl Runtime {
     }
 
     /// Re-resolves windows that still use the previously resolved values.
-    fn preferences(&mut self, preferences: crate::platform::Preferences) {
+    fn preferences(&mut self, preferences: crate::Preferences) {
         let theme = self.theme();
         #[cfg(feature = "motion")]
         let reduced = self.reduced_motion();
@@ -257,7 +240,7 @@ impl Runtime {
             }
             event => event,
         };
-        let Some(id) = crate::native_input::target(&event) else {
+        let Some(id) = event.window() else {
             return Ok(());
         };
         // Window removal prunes queued platform events; unknown IDs can only
@@ -310,22 +293,8 @@ impl Runtime {
                     self.backend.configure_ime(entry.id, request)?;
                 }
             }
-            #[cfg(any(
-                all(feature = "unix-accessibility", target_os = "linux"),
-                all(feature = "windows-accessibility", target_os = "windows")
-            ))]
-            if entry.initial_access || entry.ui.access_dirty() {
-                #[cfg(target_os = "linux")]
-                let scale = 1.0;
-                #[cfg(target_os = "windows")]
-                let scale = entry.access_scale;
-                entry
-                    .ui
-                    .publish_accessibility(&entry.title, scale, |build| {
-                        entry.accessibility.update_if_active(build);
-                    })?;
-                entry.initial_access = false;
-            }
+            #[cfg(access)]
+            entry.accessibility.publish(&entry.ui, &entry.title)?;
         }
         Ok(())
     }

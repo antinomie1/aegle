@@ -248,6 +248,7 @@ impl TextStore {
                 state.shown = shown;
                 Event::Ime {
                     window: native.id,
+                    seat: crate::SEAT,
                     event: ImeEvent::Update(update),
                 }
             }
@@ -262,7 +263,7 @@ impl TextStore {
                     slot: slot.unwrap_or(anchor.min(focus)..anchor.max(focus)),
                     cursor: None,
                 };
-                Event::Error(error)
+                Event::Error(error.into())
             }
         };
         native.emit(event);

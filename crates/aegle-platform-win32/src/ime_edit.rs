@@ -1,4 +1,4 @@
-//! Translation of a TSF document change into one host [`ImeUpdate`].
+//! Translation of a TSF document change into one host IME update.
 //!
 //! The host shows the document as last reported. Its replaceable range (the
 //! "slot") is the preedit while composing, otherwise its selection. Every

@@ -5,9 +5,11 @@
 //! `cargo test -p aegle-platform-win32 --test ime -- --ignored`.
 #![cfg(windows)]
 #![allow(unsafe_code)]
-use aegle_platform_win32::{
-    Error, Event, ImeEvent, ImeRequest, PixelSize, Win32, WindowId, WindowOptions,
+use aegle_platform::{
+    Error, Event, ImeEvent, ImeRequest, PixelSize, Platform, SurfacePlatform, WindowId,
+    WindowOptions,
 };
+use aegle_platform_win32::Win32;
 use aegle_types::Rect;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::time::{Duration, Instant};
@@ -91,6 +93,7 @@ impl Seen {
             Event::Ime {
                 window: w,
                 event: ImeEvent::Update(update),
+                ..
             } if w == window => {
                 self.commits.extend(update.commit);
                 self.preedits.push(update.preedit.text);
@@ -98,10 +101,12 @@ impl Seen {
             Event::Ime {
                 window: w,
                 event: ImeEvent::Left,
+                ..
             } if w == window => self.left = true,
             Event::KeyboardFocus {
                 window: w,
                 focused: true,
+                ..
             } if w == window => self.focused = true,
             Event::Text { text, .. } => self.text.push_str(&text),
             Event::Key { pressed: true, .. } => self.keys += 1,
@@ -168,7 +173,7 @@ fn microsoft_pinyin_preedit_commit_cancel_and_focus_loss() -> Result<(), Box<dyn
     for id in [other, window] {
         assert!(backend.present(id, None, |pixels, _, _| {
             pixels.fill(255);
-            Ok::<_, std::convert::Infallible>(())
+            Ok(())
         })?);
     }
     foreground(hwnd);
@@ -180,19 +185,20 @@ fn microsoft_pinyin_preedit_commit_cancel_and_focus_loss() -> Result<(), Box<dyn
     // SAFETY: activates a system layout for this thread and opens its input
     // method through the thread's TSF keyboard compartment.
     unsafe {
-        let layout = LoadKeyboardLayoutW(SIMPLIFIED_CHINESE, KLF_ACTIVATE).map_err(Error::from)?;
-        ActivateKeyboardLayout(layout, KLF_SETFORPROCESS).map_err(Error::from)?;
+        let layout =
+            LoadKeyboardLayoutW(SIMPLIFIED_CHINESE, KLF_ACTIVATE).map_err(Error::backend)?;
+        ActivateKeyboardLayout(layout, KLF_SETFORPROCESS).map_err(Error::backend)?;
         let manager: ITfThreadMgr =
             CoCreateInstance(&CLSID_TF_ThreadMgr, None, CLSCTX_INPROC_SERVER)
-                .map_err(Error::from)?;
-        let client = manager.Activate().map_err(Error::from)?;
+                .map_err(Error::backend)?;
+        let client = manager.Activate().map_err(Error::backend)?;
         let open = manager
             .GetGlobalCompartment()
             .and_then(|c| c.GetCompartment(&GUID_COMPARTMENT_KEYBOARD_OPENCLOSE))
-            .map_err(Error::from)?;
+            .map_err(Error::backend)?;
         open.SetValue(client, &VARIANT::from(1i32))
-            .map_err(Error::from)?;
-        manager.Deactivate().map_err(Error::from)?;
+            .map_err(Error::backend)?;
+        manager.Deactivate().map_err(Error::backend)?;
     }
     pump(&mut backend, window, |_| true);
 

@@ -48,15 +48,15 @@ Editor 自己保存显示缓冲与每个硬换行段落的 Parley 布局（段�
 
 `set_password(true)` 把已提交值移入 Editor 自己的字符串，显示缓冲只排版等量 `•`；选择、命中、`display_text` 与 `selected_text` 都是遮盖缓冲的字节偏移，替换按遮盖字符索引同步到明文。`text()` 返回明文。切换时取消组合、光标移到末尾并清空撤销历史；密码模式不记录历史、拒绝 IME 组合（`TextError::Password`），TextField 不向宿主请求 IME 会话。
 
-TextField 在 Ctrl（macOS 为 Command）+C/X/V 时只返回 `Outcome::clipboard` 请求，不访问系统服务；应用经 `Node::copy_text` 发出的写入请求（标记的 `copy(e)` 同此）走同一条路径；密码模式或空选区不复制/剪切，只读不剪切/粘贴。App 在刷新前把请求交给平台：Wayland 每 seat 一个 `wl_data_device`，以最近按键/按钮 serial 设置选区，写出与读取都是 calloop 非阻塞管道，读取上限 `CLIPBOARD_LIMIT` 4 MiB，结果作为 `Event::Clipboard` 回到原 seat 的焦点控件；Win32 同步读写 `CF_UNICODETEXT`。粘贴作为一次独立撤销，单行编辑器丢弃换行类字符。辅助技术编辑动作仍待集成。
+TextField 在 Ctrl（macOS 为 Command）+C/X/V 时只返回 `Outcome::clipboard` 请求，不访问系统服务；应用经 `Node::copy_text` 发出的写入请求（标记的 `copy(e)` 同此）走同一条路径；密码模式或空选区不复制/剪切，只读不剪切/粘贴。App 在刷新前把请求交给平台：Wayland 每 seat 一个 `wl_data_device`，以最近按键/按钮 serial 设置选区，写出与读取都是 calloop 非阻塞管道，读取上限 `CLIPBOARD_LIMIT` 4 MiB，结果作为 `Event::Clipboard` 回到原 seat 的焦点控件；Win32 同步读写 `CF_UNICODETEXT`，读出的文字同样作为 `Event::Clipboard` 进入事件队列，两个平台经同一条宿主路径粘贴。粘贴作为一次独立撤销，单行编辑器丢弃换行类字符。辅助技术编辑动作仍待集成。
 
 ## 当前 Wayland 原生接口
 
-`aegle-platform-wayland` 在窗口使用的同一连接、队列和事件循环上，为每个 seat 创建一个 text-input-v3 对象，当前绑定协议版本 1。`Wayland::configure_ime(window, Some(ImeRequest))` 保存该窗口所聚焦编辑控件的状态；`None` 结束其会话。平台模块不依赖文字引擎或 renderer。`Event::Ime` 携带窗口、seat 和 `Entered/Left/Update`，序号与原生会话按 seat 独立维护；应用层仍需决定多 seat 对控件焦点和同一编辑器的操作规则。
+`aegle-platform-wayland` 在窗口使用的同一连接、队列和事件循环上，为每个 seat 创建一个 text-input-v3 对象，当前绑定协议版本 1。契约方法 `configure_ime(window, Some(ImeRequest))` 保存该窗口所聚焦编辑控件的状态；`None` 结束其会话。平台模块不依赖文字引擎或 renderer。`Event::Ime` 携带窗口、seat 和 `Entered/Left/Update`，序号与原生会话按 seat 独立维护，协议的提交序号与“当前”判断留在平台内部；宿主让最近聚焦窗口的 seat 驱动该窗口的编辑器。
 
-`ImeRequest` 包含 surrounding、光标/anchor 字节偏移、候选窗矩形、内容提示、用途及变更原因。接口校验 surrounding 最多 4000 UTF-8 字节且无 NUL、两个偏移均在字符边界，矩形有限且尺寸非负，向外取整后可用协议的 i32 坐标表示；版本 2 的提示位返回错误。矩形采用 surface 局部逻辑坐标，宿主须先应用布局和滚动变换，不能再乘 buffer scale。文字或选择的外部变化使用 `ImeCause::Other`，来自 IME 的更新使用 `InputMethod`。
+契约 `ImeRequest` 包含 surrounding、光标/anchor 字节偏移、候选窗矩形、是否多行与变更是否来自输入法，两个平台相同。`ImeRequest::validate` 统一校验 surrounding 最多 4000 UTF-8 字节且无 NUL、两个偏移均在字符边界、矩形有限且尺寸非负；Wayland 另要求向外取整后可用协议的 i32 坐标表示，Win32 按 DPI 换算到物理像素后同样检查。矩形采用窗口局部逻辑坐标，宿主须先应用布局和滚动变换，不能再乘 buffer scale。Wayland 把 `multiline` 映射为内容提示，把 `input_method` 映射为 `InputMethod`/`Other` 变更原因。
 
-`Editor::surrounding(max_bytes)` 提供最多两个无分配借用切片，包含完整选区及相对字节偏移；组合期间同时排除预编辑和原被替换片段，将选区折叠为光标。选区本身超预算则返回 None，不能截断选区后伪造偏移。Wayland `ImeRequest::surrounding = None` 表示支持组合但不支持周边文字，此时 cursor/anchor 必须为 0。Some/None 切换通过 disable/enable 更新该协议能力；只有原生 API 要求连续字符串时才分配有界副本。
+`Editor::surrounding(max_bytes)` 提供最多两个无分配借用切片，包含完整选区及相对字节偏移；组合期间同时排除预编辑和原被替换片段，将选区折叠为光标。选区本身超预算则返回 None，不能截断选区后伪造偏移。`ImeRequest::surrounding = None` 表示支持组合但不支持周边文字，此时 cursor/anchor 必须为 0。Some/None 切换通过 disable/enable 更新该协议能力；只有原生 API 要求连续字符串时才分配有界副本。
 
 ### 批次、同步与会话边界
 

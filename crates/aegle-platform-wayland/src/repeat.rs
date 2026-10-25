@@ -12,7 +12,7 @@ use smithay_client_toolkit::{
 use wayland_client::protocol::wl_keyboard::WlKeyboard;
 use xkbcommon::xkb;
 
-use crate::{Error, Event, State};
+use crate::{Error, State};
 
 pub(super) struct Repeat {
     // SCTK does not expose its keymap. This second state is necessary for
@@ -183,14 +183,14 @@ impl State {
         };
         key.time = time;
         let key = key.clone();
-        self.events.push_back(Event::Key {
-            window: *window,
-            seat: input.seat.clone(),
+        self.events.push_back(crate::events::key_event(
+            *window,
+            &input.seat,
             key,
-            pressed: true,
-            repeat: true,
-            modifiers: input.modifiers,
-        });
+            true,
+            true,
+            input.modifiers,
+        ));
         TimeoutAction::ToDuration(Duration::from_nanos(
             (1_000_000_000 / u64::from(rate.get())).max(1),
         ))

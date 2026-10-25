@@ -11,6 +11,7 @@ mod cursor;
 #[cfg(feature = "std")]
 mod drag;
 mod geometry;
+mod keys;
 mod region;
 mod shadow;
 mod system;
@@ -22,6 +23,7 @@ pub use drag::DragData;
 #[cfg(all(feature = "std", unix))]
 pub use drag::{file_uri, path_from_file_uri};
 pub use geometry::{PixelRect, Point, Rect, Size};
+pub use keys::{Key, Modifiers};
 pub use region::{Area, Region};
 pub use shadow::Shadow;
 pub use system::{PointerButton, Preferences, TouchPhase};

@@ -1,4 +1,5 @@
-use crate::{native::App, platform::WakeHandle};
+use crate::native::App;
+use aegle_platform::{Platform, WakeHandle};
 use aegle_ui::{HandlerResult, Result};
 use std::{
     cell::RefCell,

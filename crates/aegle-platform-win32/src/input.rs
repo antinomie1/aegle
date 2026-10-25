@@ -1,5 +1,6 @@
 #![allow(unsafe_code)]
 use crate::{Error, Event, Modifiers, PointerButton, PointerKind, native::Native};
+use aegle_platform::Key;
 use aegle_types::Point;
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::{
@@ -32,14 +33,45 @@ pub(crate) fn key(native: &Native, msg: u32, w: WPARAM, l: LPARAM) {
     if w.0 == VK_PROCESSKEY.0 as usize || native.composing() {
         return;
     }
+    let mut modifiers = modifiers();
+    // AltGr arrives as Ctrl+Alt; it must not invoke Ctrl+A/Z/Y.
+    modifiers.control &= !modifiers.alt;
+    // Pointer messages report a change from what the host last saw.
+    native.modifiers.set(modifiers);
     native.emit(Event::Key {
         window: native.id,
-        key: w.0 as u32,
+        seat: crate::SEAT,
+        key: key_id(w.0 as u32),
+        text: None,
         pressed: matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN),
         repeat: l.0 & (1 << 30) != 0,
-        modifiers: modifiers(),
+        modifiers,
         time: message_time(),
     });
+}
+
+/// The logical key of a Win32 virtual-key code.
+fn key_id(key: u32) -> Key {
+    match key {
+        0x0d => Key::Enter,
+        0x09 => Key::Tab,
+        0x1b => Key::Escape,
+        0x08 => Key::Backspace,
+        0x2e => Key::Delete,
+        0x25 => Key::Left,
+        0x27 => Key::Right,
+        0x26 => Key::Up,
+        0x28 => Key::Down,
+        0x24 => Key::Home,
+        0x23 => Key::End,
+        0x21 => Key::PageUp,
+        0x22 => Key::PageDown,
+        0x20 => Key::Character(' '),
+        0x5d => Key::ContextMenu,
+        0x70..=0x87 => Key::Function((key - 0x6f) as u8),
+        0x30..=0x39 | 0x41..=0x5a => Key::Character(char::from_u32(key).unwrap()),
+        _ => Key::Unidentified,
+    }
 }
 
 pub(crate) fn text(native: &Native, value: usize) -> Result<(), Error> {
@@ -62,6 +94,7 @@ pub(crate) fn text(native: &Native, value: usize) -> Result<(), Error> {
     };
     native.emit(Event::Text {
         window: native.id,
+        seat: crate::SEAT,
         text,
     });
     Ok(())
@@ -195,12 +228,20 @@ pub(crate) fn pointer(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result
         _ => unreachable!(),
     };
     let scale = native.info.get().scale;
+    let modifiers = modifiers();
+    if native.modifiers.replace(modifiers) != modifiers {
+        native.emit(Event::Modifiers {
+            window: native.id,
+            seat: crate::SEAT,
+            modifiers,
+        });
+    }
     native.emit(Event::Pointer {
         window: native.id,
+        seat: crate::SEAT,
         position: Point::new(point.x as f32 / scale, point.y as f32 / scale),
         kind,
-        modifiers: modifiers(),
-        time: message_time(),
+        time: Some(message_time()),
     });
     Ok(())
 }

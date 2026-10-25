@@ -8,74 +8,41 @@
 //! `windows-accessibility` connect the semantic tree to the system; the
 //! controls' own roles and names additionally need `aegle-widgets/accessibility`,
 //! which the `aegle` facade's adapter features enable.
+//!
+//! The host is written once against the [`aegle_platform::Platform`] contract;
+//! the target's platform is chosen in one place, `Native` below.
 
-#[cfg(all(feature = "wayland", target_os = "linux"))]
-use aegle_platform_wayland as platform;
-#[cfg(all(feature = "windows", target_os = "windows"))]
-use aegle_platform_win32 as platform;
-
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 mod event_clock;
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 mod native;
-#[cfg(any(
-    all(feature = "unix-accessibility", target_os = "linux"),
-    all(feature = "windows-accessibility", target_os = "windows")
-))]
+#[cfg(access)]
 mod native_access;
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 mod native_files;
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
-#[cfg_attr(target_os = "windows", path = "native_input_windows.rs")]
+#[cfg(native)]
 mod native_input;
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 mod native_loop;
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 mod native_proxy;
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 mod native_render;
+
+/// The target's platform; a new platform adds one line.
+#[cfg(all(native, target_os = "linux"))]
+type Native = aegle_platform_wayland::Wayland;
+#[cfg(all(native, target_os = "windows"))]
+type Native = aegle_platform_win32::Win32;
 
 #[cfg(feature = "desktop-services")]
 pub use aegle_desktop as desktop;
+pub use aegle_platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions, Preferences};
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::{Options as VulkanOptions, RawDevice, SharedDevice, ash};
 #[cfg(feature = "wgpu")]
 pub use aegle_render_wgpu::{Options as WgpuOptions, SharedGpu, wgpu};
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 pub use native::{App, AppOptions, RendererBackend, Window, WindowOptions};
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
+#[cfg(native)]
 pub use native_proxy::UiProxy;
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
-))]
-pub use platform::Preferences;
-#[cfg(all(feature = "wayland", target_os = "linux"))]
-pub use platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions};

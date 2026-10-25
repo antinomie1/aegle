@@ -174,7 +174,7 @@ pub(crate) fn configure(native: &Native, request: Option<ImeRequest>) -> Result<
         native.cancel_ime();
         return Ok(());
     };
-    let [left, top, right, bottom] = request.validate(native.info.get().scale)?;
+    let [left, top, right, bottom] = crate::ime_types::caret(&request, native.info.get().scale)?;
     let session = native.tsf.borrow();
     let session = session.as_ref().ok_or(Error::ImeUnavailable)?;
     let caret = RECT {
@@ -193,6 +193,7 @@ pub(crate) fn configure(native: &Native, request: Option<ImeRequest>) -> Result<
     if session.enable()? && native.info.get().active {
         native.emit(Event::Ime {
             window: native.id,
+            seat: crate::SEAT,
             event: ImeEvent::Entered,
         });
     }

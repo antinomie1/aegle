@@ -1,10 +1,11 @@
 #![allow(unsafe_code)]
 use crate::{
-    Error, Event, ImeRequest, PixelSize, PresentError, WindowId, WindowInfo, WindowOptions,
+    Error, Event, ImeRequest, PixelSize, WindowId, WindowInfo, WindowOptions,
     native::{Native, Queue},
     procedure::procedure,
     tsf::{Session, Tsf},
 };
+use aegle_platform::{DrawResult, WakeHandle};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
     Win32WindowHandle, WindowHandle,
@@ -42,10 +43,11 @@ static CLASS: OnceLock<Result<u16, String>> = OnceLock::new();
 /// Only one Win32 backend can own a given UI thread at a time.
 pub struct Win32 {
     windows: Vec<Rc<Native>>,
-    events: Queue,
+    pub(crate) events: Queue,
     preferences: Rc<Cell<crate::Preferences>>,
     next_id: u64,
-    wake: Option<WakeHandle>,
+    /// The wake signal and the auto-reset event it sets.
+    wake: Option<(WakeHandle, Arc<OwnedHandle>)>,
     previous_dpi: DPI_AWARENESS_CONTEXT,
     /// None when TSF could not be activated; editors then report
     /// [`Error::ImeUnavailable`].
@@ -79,24 +81,10 @@ impl HasWindowHandle for WindowSurface {
     }
 }
 
-/// Cloneable cross-thread signal; retains only an auto-reset OS event.
-#[derive(Clone, Debug)]
-pub struct WakeHandle(Arc<OwnedHandle>);
-impl WakeHandle {
-    /// Signals the UI loop after work is stored in the caller's own queue.
-    /// Requests coalesce; a handle cannot resurrect a removed event loop.
-    pub fn wake(&self) {
-        // SAFETY: Arc retains the owned event HANDLE until this call returns.
-        unsafe {
-            let _ = SetEvent(HANDLE(self.0.as_raw_handle()));
-        }
-    }
-}
-
 impl Win32 {
     /// Registers one small native class and enters per-monitor-v2 DPI awareness.
     /// Restores the previous calling-thread DPI context when dropped.
-    pub fn connect() -> Result<Self, Error> {
+    pub(crate) fn connect() -> Result<Self, Error> {
         if CONNECTED.with(Cell::get) {
             return Err(Error::Backend(
                 "a Win32 event loop already owns this UI thread".into(),
@@ -145,20 +133,26 @@ impl Win32 {
     }
 
     /// Lazily creates an auto-reset event for accessibility/background work.
-    pub fn wake_handle(&mut self) -> Result<WakeHandle, Error> {
+    pub(crate) fn wake_handle(&mut self) -> Result<WakeHandle, Error> {
         if self.wake.is_none() {
             // SAFETY: no name or borrowed security attributes; unique owned handle.
             let event = unsafe { CreateEventW(None, false, false, None)? };
-            let owned = unsafe { OwnedHandle::from_raw_handle(event.0) };
-            self.wake = Some(WakeHandle(Arc::new(owned)));
+            let owned = Arc::new(unsafe { OwnedHandle::from_raw_handle(event.0) });
+            let signal = owned.clone();
+            // SAFETY: the closure's Arc retains the owned event HANDLE; setting
+            // an event after the loop is gone has no effect.
+            let wake = WakeHandle::new(move || unsafe {
+                let _ = SetEvent(HANDLE(signal.as_raw_handle()));
+            });
+            self.wake = Some((wake, owned));
         }
-        Ok(self.wake.as_ref().unwrap().clone())
+        Ok(self.wake.as_ref().unwrap().0.clone())
     }
 
     /// Creates a hidden opaque toplevel; the first successful frame shows it.
     /// UIA adapters and Vulkan surfaces can attach before that first presentation.
-    pub fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
-        options.size.bytes()?;
+    pub(crate) fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
+        crate::error::bytes(options.size)?;
         if [options.title, options.app_id]
             .iter()
             .any(|value| value.len() > 4000 || value.contains('\0'))
@@ -189,7 +183,7 @@ impl Win32 {
             preferences: self.preferences.clone(),
             info: Cell::new(WindowInfo {
                 size: options.size,
-                physical,
+                buffer: physical,
                 scale,
                 active: false,
                 configured: true,
@@ -201,6 +195,7 @@ impl Win32 {
             cursor: Cell::new(aegle_types::Cursor::Default),
             held: Cell::new(0),
             high_surrogate: Cell::new(None),
+            modifiers: Cell::new(crate::Modifiers::default()),
             tsf: RefCell::new(None),
             pixels: RefCell::new(Vec::new()),
             drawn: Cell::new(None),
@@ -269,7 +264,7 @@ impl Win32 {
 
     /// Stops events and hides the window. Underlying HWND destruction waits until
     /// the last GPU/UIA surface lease is dropped on this thread.
-    pub fn remove_window(&mut self, id: WindowId) -> Result<(), Error> {
+    pub(crate) fn remove_window(&mut self, id: WindowId) -> Result<(), Error> {
         let index = self
             .windows
             .iter()
@@ -285,27 +280,31 @@ impl Win32 {
             let _ = RevokeDragDrop(native.hwnd.get());
             let _ = ShowWindow(native.hwnd.get(), SW_HIDE);
         }
-        self.events.borrow_mut().retain(|e| e.target() != Some(id));
+        self.events.borrow_mut().retain(|e| e.window() != Some(id));
         Ok(())
     }
 
     /// Obtains an owned surface lease suitable for raw-window-handle consumers.
-    pub fn window_surface(&self, id: WindowId) -> Result<WindowSurface, Error> {
+    pub(crate) fn window_surface(&self, id: WindowId) -> Result<WindowSurface, Error> {
         Ok(WindowSurface {
             native: self.window(id)?.clone(),
         })
     }
     /// Returns current exact physical and rounded logical client geometry.
-    pub fn window_info(&self, id: WindowId) -> Result<WindowInfo, Error> {
+    pub(crate) fn window_info(&self, id: WindowId) -> Result<WindowInfo, Error> {
         Ok(self.window(id)?.info.get())
     }
     /// Returns retained software Vec capacity, excluding GDI/compositor storage.
-    pub fn buffer_bytes(&self, id: WindowId) -> Result<usize, Error> {
+    pub fn buffer_bytes(&self, id: WindowId) -> aegle_platform::Result<usize> {
         Ok(self.window(id)?.pixels.borrow().capacity())
     }
     /// Sets the shape shown over a window's client area. It takes effect at once
     /// while the mouse is over the window, and on every later WM_SETCURSOR.
-    pub fn set_cursor(&mut self, id: WindowId, cursor: aegle_types::Cursor) -> Result<(), Error> {
+    pub(crate) fn set_cursor(
+        &mut self,
+        id: WindowId,
+        cursor: aegle_types::Cursor,
+    ) -> Result<(), Error> {
         let native = self.window(id)?;
         native.cursor.set(cursor);
         if native.tracking.get() {
@@ -314,7 +313,7 @@ impl Win32 {
         Ok(())
     }
     /// Marks retained content dirty; requests coalesce and minimized windows wait.
-    pub fn request_redraw(&mut self, id: WindowId) -> Result<(), Error> {
+    pub(crate) fn request_redraw(&mut self, id: WindowId) -> Result<(), Error> {
         let native = self.window(id)?;
         native.dirty.set(true);
         native.queue_redraw();
@@ -322,13 +321,13 @@ impl Win32 {
     }
     /// Whether TSF is active on this thread. This does not imply an installed
     /// language or input method.
-    pub fn ime_available(&self) -> bool {
+    pub(crate) fn ime_available(&self) -> bool {
         self.tsf.is_some()
     }
     /// Enables, updates or cancels the current editable control's TSF session.
     /// Disable before changing editor identity, even within the same window.
-    /// Fails with [`Error::ImeUnavailable`] when TSF is not active.
-    pub fn configure_ime(
+    /// Fails with `ImeUnavailable` when TSF is not active.
+    pub(crate) fn configure_ime(
         &mut self,
         id: WindowId,
         request: Option<ImeRequest>,
@@ -336,19 +335,19 @@ impl Win32 {
         crate::tsf::configure(self.window(id)?, request)
     }
     /// Current system appearance preferences. Changes arrive as
-    /// [`Event::Preferences`] while a window exists to receive the broadcast.
-    pub fn preferences(&self) -> crate::Preferences {
+    /// preference events while a window exists to receive the broadcast.
+    pub(crate) fn preferences(&self) -> crate::Preferences {
         self.preferences.get()
     }
     /// Pops one queued event. Drain these before waiting for more native input.
-    pub fn next_event(&mut self) -> Option<Event> {
+    pub(crate) fn next_event(&mut self) -> Option<Event> {
         self.events.borrow_mut().pop_front()
     }
 
     /// Waits without polling until native input, a wake signal or the deadline.
     /// Returns after messages produce host events so the host can cancel an old
     /// IME session before later native messages are translated.
-    pub fn dispatch(&mut self, timeout: Option<Duration>) -> Result<(), Error> {
+    pub(crate) fn dispatch(&mut self, timeout: Option<Duration>) -> Result<(), Error> {
         for native in &self.windows {
             native.queue_redraw();
         }
@@ -366,7 +365,7 @@ impl Win32 {
         let handle = self
             .wake
             .as_ref()
-            .map(|wake| [HANDLE(wake.0.as_raw_handle())]);
+            .map(|(_, event)| [HANDLE(event.as_raw_handle())]);
         // SAFETY: optional handle is kept alive by self; waiting dispatches no callbacks.
         let status = unsafe {
             MsgWaitForMultipleObjectsEx(
@@ -400,22 +399,19 @@ impl Win32 {
     /// Executes one native GPU submission/presentation when the window is ready.
     /// This does not copy pixels or change presentation synchronization; the
     /// Vulkan presenter owns FIFO pacing, acquire/present and resize handling.
-    pub fn present_external<E>(
+    pub(crate) fn present_external(
         &mut self,
         id: WindowId,
-        draw: impl FnOnce(PixelSize) -> Result<bool, E>,
-    ) -> Result<bool, PresentError<E>> {
-        let native = self.window(id).map_err(PresentError::Platform)?;
+        draw: impl FnOnce(PixelSize) -> DrawResult<bool>,
+    ) -> aegle_platform::Result<bool> {
+        let native = self.window(id)?;
         native.redraw_queued.set(false);
         if !native.info.get().configured {
             return Ok(false);
         }
-        let size = native
-            .info
-            .get()
-            .buffer_size()
-            .map_err(PresentError::Platform)?;
-        if !draw(size).map_err(PresentError::Draw)? {
+        let size = native.info.get().buffer;
+        crate::error::bytes(size)?;
+        if !draw(size).map_err(aegle_platform::Error::Draw)? {
             return Ok(false);
         }
         native.dirty.set(false);

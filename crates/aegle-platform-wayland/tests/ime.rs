@@ -1,8 +1,9 @@
 //! Native protocol regression; run only on an explicitly selected private compositor.
 
-use aegle_platform_wayland::{
-    Event, ImeCause, ImeEvent, ImeRequest, ImeUpdate, Wayland, WindowId, WindowOptions,
+use aegle_platform::{
+    Event, ImeEvent, ImeRequest, ImeUpdate, Platform, SeatId, WindowId, WindowOptions,
 };
+use aegle_platform_wayland::Wayland;
 use std::{
     fs::OpenOptions,
     io::Write,
@@ -83,7 +84,7 @@ struct Probe {
     method: ZwpInputMethodV2,
     state: InputMethod,
     events: Vec<(WindowId, ImeEvent)>,
-    seat: Option<aegle_platform_wayland::WlSeat>,
+    seat: Option<SeatId>,
     clipboard: Option<String>,
 }
 impl Probe {
@@ -95,7 +96,7 @@ impl Probe {
                 match event {
                     Event::Redraw { window } => {
                         self.app
-                            .present::<()>(window, None, |pixels, _, _| {
+                            .present(window, None, |pixels, _, _| {
                                 pixels.fill(255);
                                 Ok(())
                             })
@@ -209,7 +210,6 @@ fn native_ime_batches_and_session_boundaries() {
         (preedit.preedit.text.as_str(), preedit.preedit.cursor),
         ("中文", Some((3, 6)))
     );
-    assert!(preedit.current);
     p.method.delete_surrounding_text(3, 1);
     p.method.set_preedit_string("续".into(), -1, -1);
     p.commit("界");
@@ -228,7 +228,6 @@ fn native_ime_batches_and_session_boundaries() {
     p.commit("古");
     p.queue.roundtrip(&mut p.state).unwrap();
     let stale = p.update();
-    assert!(!stale.current);
     assert_eq!(stale.commit.as_deref(), Some("古"));
     assert!(stale.preedit.text.is_empty());
     assert_eq!((stale.delete_before, stale.delete_after), (0, 0));
@@ -236,7 +235,7 @@ fn native_ime_batches_and_session_boundaries() {
     req.surrounding = Some("你古好 world".into());
     req.cursor = 6;
     req.anchor = 6;
-    req.cause = ImeCause::InputMethod;
+    req.input_method = true;
     p.app.configure_ime(first, Some(req.clone())).unwrap();
     p.pump(|_| true);
     assert_eq!(
@@ -244,7 +243,7 @@ fn native_ime_batches_and_session_boundaries() {
         "stale transactions defer state publication"
     );
     p.commit("今");
-    assert!(p.update().current);
+    p.update();
     req.surrounding = Some("你古今好 world".into());
     req.cursor = 9;
     req.anchor = 9;
@@ -322,11 +321,11 @@ fn native_ime_batches_and_session_boundaries() {
     keyboard.key(0, 30, 1);
     keyboard.key(1, 30, 0);
     p.pump(|p| p.seat.is_some());
-    let seat = p.seat.clone().unwrap();
+    let seat = p.seat.unwrap();
     let text = "剪贴板".repeat(20_000);
-    p.app.set_clipboard(&seat, &text).unwrap();
+    p.app.set_clipboard(first, seat, &text).unwrap();
     p.pump(|_| true);
-    p.app.request_clipboard(first, &seat).unwrap();
+    p.app.request_clipboard(first, seat).unwrap();
     p.pump(|p| p.clipboard.is_some());
     assert!(p.clipboard.as_ref() == Some(&text));
     p.app.remove_window(first).unwrap();
