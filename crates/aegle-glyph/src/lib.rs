@@ -28,6 +28,7 @@ mod colrv1;
 #[cfg(all(not(feature = "swash"), target_os = "linux"))]
 mod freetype;
 mod key;
+mod opentype_name;
 mod outline;
 mod raster;
 #[cfg(feature = "svg")]
@@ -40,6 +41,7 @@ pub use aegle_scene::{FontSource, SystemFont};
 pub use cache::GlyphCache;
 pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};
+pub use opentype_name::{FaceDescription, describe};
 pub use outline::OutlineBuilder;
 pub use system::{SystemRasterizer, register_system_rasterizer, system_rasterizer_registered};
 #[cfg(feature = "scene")]
