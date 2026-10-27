@@ -1,40 +1,52 @@
-//! DirectWrite objects shared by the paragraphs of one text system.
+//! DirectWrite state shared by the paragraphs of one text system.
 //!
-//! A [`DirectWriteSystem`] owns the font collection text formats are created
-//! against and the generic-family substitution table. `TextSystem::new()`
-//! registers application fonts into a private collection built from their
-//! bytes, so it never sees the machine's fonts; `TextSystem::system()` uses the
-//! system collection. Fallback is DirectWrite's own system fallback attached to
-//! each format, so a CJK character in a Latin family shapes with a CJK face.
+//! A [`DirectWriteSystem`] owns the font collection formats are created
+//! against, the system fallback attached to each format, and the
+//! generic-family substitution table. Application fonts are written to
+//! temporary files on registration (see `fonts.rs`) and every registration
+//! rebuilds the collection, because DirectWrite collections are immutable.
+//!
+//! `TextSystem::new()` therefore sees only registered fonts, and
+//! `TextSystem::system()` adds the machine's font set. Fallback is
+//! DirectWrite's own, so a CJK character in a Latin family shapes with a CJK
+//! face instead of a missing-glyph box.
 #![allow(unsafe_code)]
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use windows::Win32::Graphics::DirectWrite::{
-    IDWriteFactory, IDWriteFontCollection, IDWriteFontFallback, IDWriteTextFormat,
+    IDWriteFactory, IDWriteFontCollection, IDWriteFontFallback, IDWriteFontFile, IDWriteTextFormat,
     IDWriteTextFormat1,
 };
 use windows::core::{Interface, PCWSTR};
 
-use super::fonts::{self, Blob};
+use super::fonts::{self, Built, Registered};
 use super::sys::{WideString, factory, factory2, stretch, style, weight};
 use crate::style::Shaping;
 use crate::{FontFamily, GenericFamily, TextError};
 
-/// One registered application font file and the family names it provides.
-struct Registered {
-    id: u32,
+/// One registered application font and the family ids it answers to.
+struct Registration {
+    /// Ids handed to the caller; `FontFamily(id)`.
+    ids: Vec<u32>,
+    /// Family names the file provides, for generic-family mapping.
     families: Vec<String>,
 }
 
 /// DirectWrite state shared by every paragraph of one text system.
 pub(crate) struct DirectWriteSystem {
+    system_fonts: bool,
     collection: Option<IDWriteFontCollection>,
     fallback: Option<IDWriteFontFallback>,
-    /// Keeps the collection's font files and their bytes alive.
-    blobs: Vec<Blob>,
-    files: Vec<windows::Win32::Graphics::DirectWrite::IDWriteFontFile>,
+    /// Font files the collection refers to.
+    files: Vec<IDWriteFontFile>,
+    /// Temporary files holding registered font bytes.
+    temp: Vec<PathBuf>,
+    /// Every registration so far, in order, for rebuilding the collection.
     registered: Vec<Registered>,
+    /// Family ids per registration, for `set_generic_families`.
+    registrations: Vec<Registration>,
     generics: BTreeMap<GenericFamily, Vec<String>>,
     next_id: u32,
 }
@@ -42,23 +54,43 @@ pub(crate) struct DirectWriteSystem {
 impl DirectWriteSystem {
     /// Creates the system, using the machine's fonts when `system_fonts` is set.
     pub fn new(system_fonts: bool) -> Option<Self> {
-        let factory = factory()?;
-        let collection = match system_fonts {
-            true => system_collection(factory),
-            false => None,
-        };
-        // SAFETY: the factory is live and returns a reference-counted fallback.
-        let fallback =
-            factory2().and_then(|factory| unsafe { factory.GetSystemFontFallback().ok() });
-        Some(Self {
-            collection,
-            fallback,
-            blobs: Vec::new(),
+        // The factory is the only hard requirement; an empty collection is a
+        // valid state in which nothing shapes until fonts are registered.
+        factory()?;
+        let mut system = Self {
+            system_fonts,
+            collection: None,
+            fallback: None,
             files: Vec::new(),
+            temp: Vec::new(),
             registered: Vec::new(),
+            registrations: Vec::new(),
             generics: BTreeMap::new(),
             next_id: 1,
-        })
+        };
+        // SAFETY: the factory is live; the fallback is reference counted.
+        system.fallback =
+            factory2().and_then(|factory| unsafe { factory.GetSystemFontFallback().ok() });
+        system.rebuild().ok()?;
+        Some(system)
+    }
+
+    /// Rebuilds the collection from every registration so far.
+    fn rebuild(&mut self) -> Result<(), TextError> {
+        let built = fonts::build(&self.registered, self.system_fonts)?;
+        self.files.clear();
+        match built {
+            Some(Built {
+                collection,
+                files,
+                families: _,
+            }) => {
+                self.collection = Some(collection);
+                self.files = files;
+            }
+            None => self.collection = None,
+        }
+        Ok(())
     }
 
     /// Resolves a CSS family list to the family a format is created with,
@@ -129,27 +161,33 @@ impl DirectWriteSystem {
         if tag != 0x0001_0000 && tag != 0x4f54_544f && tag != 0x7474_6366 && tag != 0x7472_7565 {
             return Err(TextError::InvalidFont);
         }
-        let blob = Blob {
-            data: std::sync::Arc::from(data),
-            index: 0,
+        let path = fonts::temp_file(data)?;
+        let entry = Registered { path: path.clone() };
+        // Read the names by building a collection with only this file, so a
+        // malformed font is rejected before the caller thinks it registered.
+        let probe = fonts::build(std::slice::from_ref(&entry), false)?;
+        let families = match probe {
+            Some(built) => built.families,
+            None => {
+                let _ = std::fs::remove_file(&path);
+                return Err(TextError::InvalidFont);
+            }
         };
-        let built = fonts::build(std::slice::from_ref(&blob))?;
+        if families.is_empty() {
+            let _ = std::fs::remove_file(&path);
+            return Err(TextError::InvalidFont);
+        }
         let id = self.next_id;
         self.next_id += 1;
+        self.temp.push(path);
         self.registered.push(Registered {
-            id,
-            families: built.families.clone(),
+            path: self.temp.last().expect("just pushed").clone(),
         });
-        for data in built.blobs {
-            self.blobs.push(Blob { data, index: 0 });
-        }
-        self.files.extend(built.files);
-        match self.collection {
-            // A system collection cannot gain application fonts; registrations
-            // then only map generic families onto installed names.
-            Some(_) => {}
-            None => self.collection = Some(built.collection),
-        }
+        self.registrations.push(Registration {
+            ids: vec![id],
+            families,
+        });
+        self.rebuild()?;
         Ok(vec![FontFamily(id)])
     }
 
@@ -157,8 +195,10 @@ impl DirectWriteSystem {
     pub fn set_generic_families(&mut self, generic: GenericFamily, families: &[FontFamily]) {
         let mut names = Vec::new();
         for family in families {
-            if let Some(registered) = self.registered.iter().find(|r| r.id == family.0) {
-                names.extend(registered.families.iter().cloned());
+            for registration in &self.registrations {
+                if registration.ids.contains(&family.0) {
+                    names.extend(registration.families.iter().cloned());
+                }
             }
         }
         match names.is_empty() {
@@ -168,29 +208,34 @@ impl DirectWriteSystem {
     }
 
     /// Releases font files no format refers to; registered ids and names stay.
+    ///
+    /// Live formats hold their own references to the collection and its files,
+    /// so dropping these handles frees only what no paragraph uses.
     pub fn trim(&mut self) {
-        // Formats hold their own references to the collection, so dropping our
-        // handles only frees what no live paragraph uses.
         self.files.clear();
-        self.blobs.clear();
+    }
+}
+
+impl Drop for DirectWriteSystem {
+    fn drop(&mut self) {
+        // The collection holds its own references to the files, so the
+        // temporary paths are free to go once the text system is gone.
+        for path in self.temp.drain(..) {
+            let _ = std::fs::remove_file(path);
+        }
     }
 }
 
 impl std::fmt::Debug for DirectWriteSystem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DirectWriteSystem")
-            .field("system_fonts", &self.collection.is_some())
+            .field("system_fonts", &self.system_fonts)
+            .field("collection", &self.collection.is_some())
             .field("fallback", &self.fallback.is_some())
             .field("registered", &self.registered.len())
             .finish()
     }
 }
 
-/// The machine's font collection, if the factory can produce one.
-fn system_collection(factory: &IDWriteFactory) -> Option<IDWriteFontCollection> {
-    let mut collection: Option<IDWriteFontCollection> = None;
-    // SAFETY: the out pointer is valid and the factory is alive; the returned
-    // collection is reference counted.
-    unsafe { factory.GetSystemFontCollection(&mut collection, false) }.ok()?;
-    collection
-}
+/// Unused-import guard: the factory type appears only in signatures above.
+const _: Option<fn(&IDWriteFactory) -> bool> = None;

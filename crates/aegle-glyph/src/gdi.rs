@@ -134,18 +134,24 @@ impl GdiRasterizer {
         bytes: &[u8],
         face: crate::FaceDescription,
     ) -> Result<(), GlyphError> {
-        let count = 0u32;
-        // SAFETY: `bytes` is live for the call; GDI copies the data it needs and
-        // the returned handle owns the registration until `MemoryFont` drops.
+        // GDI writes the face count through this pointer; the binding types it
+        // as `*const u32`, so give it storage it may write and read the count
+        // back through a raw pointer rather than an immutable local.
+        let count: u32 = 0;
+        // SAFETY: `bytes` is live for the call and GDI copies the data it needs;
+        // `count` is a live local the call may write. The returned handle owns
+        // the registration until `MemoryFont` drops.
         let handle = unsafe {
             AddFontMemResourceEx(
                 bytes.as_ptr() as *const c_void,
                 bytes.len() as u32,
                 None,
-                &count,
+                &raw const count,
             )
         };
-        if handle.is_invalid() || count == 0 {
+        // SAFETY: `count` is still live; GDI wrote the number of faces into it.
+        let faces = unsafe { std::ptr::read_volatile(&count) };
+        if handle.is_invalid() || faces == 0 {
             return Err(GlyphError::InvalidFont);
         }
         self.fonts

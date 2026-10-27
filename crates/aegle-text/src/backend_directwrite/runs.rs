@@ -1,41 +1,49 @@
 //! Glyph-run capture: DirectWrite faces as backend-independent font handles.
 //!
 //! DirectWrite's `Draw` calls back once per glyph run with an
-//! `IDWriteFontFace`. The scene must not hold that COM pointer, so each face
+//! `IDWriteFontFace`. The scene must never hold that COM pointer, so each face
 //! becomes a [`SystemFont`] handle: the process keeps the face in a registry
 //! keyed by a monotonically increasing id and tells `aegle-glyph` where its
-//! outline data lives ([`aegle_glyph::register_system_face`]). GDI then
-//! rasterizes from that file path; no pointer outlives the call.
+//! outline data lives ([`aegle_glyph::register_system_face`]).
 //!
-//! Runs are captured into a sink during `Draw` and copied into the layout's
-//! retained run list, so painting and diagnostics need no COM object at all.
+//! Faces of application fonts have no file DirectWrite can name, so their
+//! bytes come from the text system's registrations and are looked up by
+//! matching the face's file path against them. A face that matches nothing is
+//! skipped: painting it would have no outline source, and silently drawing
+//! nothing is worse than omitting the run from the scene.
 #![allow(unsafe_code)]
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use aegle_glyph::FaceSource;
-use aegle_glyph::SystemFont;
+use aegle_glyph::{FaceSource, SystemFont};
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_GLYPH_RUN, DWRITE_GLYPH_RUN_DESCRIPTION, DWRITE_MATRIX, DWRITE_MEASURING_MODE,
-    IDWriteFontFace, IDWriteFontFile, IDWriteInlineObject, IDWritePixelSnapping_Impl,
-    IDWriteTextRenderer, IDWriteTextRenderer_Impl,
+    IDWriteFontFace, IDWriteInlineObject, IDWritePixelSnapping_Impl, IDWriteTextRenderer,
+    IDWriteTextRenderer_Impl,
 };
 use windows::core::BOOL;
 use windows::core::{Interface, Ref, Result, implement};
 
 use super::layout::DirectWriteLayout;
 
-/// Registered DirectWrite faces, by handle id.
+/// Registered faces, by handle id.
 fn faces() -> &'static Mutex<BTreeMap<u64, Face>> {
     static FACES: OnceLock<Mutex<BTreeMap<u64, Face>>> = OnceLock::new();
     FACES.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
-/// Handles already issued for a face object, by its pointer value.
-fn issued() -> &'static Mutex<BTreeMap<usize, SystemFont>> {
-    static ISSUED: OnceLock<Mutex<BTreeMap<usize, SystemFont>>> = OnceLock::new();
+/// A face's identity: its font file path and the index inside a collection.
+type FaceKey = (Arc<str>, u32);
+
+/// Handles already issued for one face, keyed by the face's file and index.
+///
+/// Keying on `(path, index)` rather than on the COM pointer is what keeps this
+/// sound: DirectWrite may hand out a different pointer for the same face on
+/// every `Draw`, and a freed pointer value could be reused by another face.
+fn issued() -> &'static Mutex<BTreeMap<FaceKey, SystemFont>> {
+    static ISSUED: OnceLock<Mutex<BTreeMap<FaceKey, SystemFont>>> = OnceLock::new();
     ISSUED.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
@@ -44,30 +52,28 @@ fn next_id() -> u64 {
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
-/// One registered face: where its outline data lives.
+/// One registered face.
 struct Face {
-    /// Readable by the GDI rasterizer.
+    /// The outline source handed to `aegle-glyph`; kept so the registry entry
+    /// outlives the handle and a later trim can find it.
     _source: FaceSource,
-    /// Kept alive so the path stays meaningful.
-    _file: Option<IDWriteFontFile>,
 }
 
 /// The stable handle for `face`, registering it on first sight.
-///
-/// The same face object always yields the same handle, so repainting a
-/// paragraph reuses one registration. A face that DirectWrite cannot name by
-/// file (an in-memory font) is skipped: painting it would have no outline
-/// source, and silently drawing nothing is worse than omitting the run.
 fn handle(face: &IDWriteFontFace) -> Option<SystemFont> {
-    let pointer = face.as_raw() as usize;
+    let (path, index) = face_identity(face)?;
+    let key = (Arc::from(path.as_str()), index);
     if let Some(font) = issued()
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .get(&pointer)
+        .get(&key)
     {
         return Some(*font);
     }
-    let source = face_source(face)?;
+    let source = FaceSource::File {
+        path: Arc::clone(&key.0),
+        index,
+    };
     let font = SystemFont {
         backend: SystemFont::DWRITE,
         id: next_id(),
@@ -79,41 +85,37 @@ fn handle(face: &IDWriteFontFace) -> Option<SystemFont> {
             font.id,
             Face {
                 _source: source.clone(),
-                _file: None,
             },
         );
     aegle_glyph::register_system_face(font, source);
     issued()
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .insert(pointer, font);
+        .insert(key, font);
     Some(font)
 }
 
-/// Where GDI can read the bytes of `face`.
-fn face_source(face: &IDWriteFontFace) -> Option<FaceSource> {
+/// The file path and face index that identify `face`.
+fn face_identity(face: &IDWriteFontFace) -> Option<(String, u32)> {
     // SAFETY: the face is live for the call; a null buffer asks for the count.
     let mut count = 0u32;
     unsafe { face.GetFiles(&mut count, None) }.ok()?;
     if count == 0 {
         return None;
     }
-    let mut files: Vec<Option<IDWriteFontFile>> = vec![None; count as usize];
+    let mut files: Vec<Option<windows::Win32::Graphics::DirectWrite::IDWriteFontFile>> =
+        vec![None; count as usize];
     // SAFETY: the vector holds exactly `count` slots, as the first call reported.
     unsafe { face.GetFiles(&mut count, Some(files.as_mut_ptr())) }.ok()?;
     let file = files.into_iter().next().flatten()?;
     // SAFETY: the face is live; `GetIndex` only reads its collection index.
     let index = unsafe { face.GetIndex() };
-    let path = file_path(&file)?;
-    Some(FaceSource::File {
-        path: Arc::from(path.as_str()),
-        index,
-    })
+    Some((file_path(&file)?, index))
 }
 
 /// The filesystem path of a DirectWrite font file, when it has one.
-fn file_path(file: &IDWriteFontFile) -> Option<String> {
-    // SAFETY: the file is live; the reference key is owned by the loader and is
+fn file_path(file: &windows::Win32::Graphics::DirectWrite::IDWriteFontFile) -> Option<String> {
+    // SAFETY: the file is live; the reference key belongs to the loader and is
     // only read through that same loader, and the path buffer is sized to the
     // documented maximum path length.
     unsafe {
