@@ -1,31 +1,31 @@
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 use skrifa::{MetadataProvider, instance::Size, raw::TableProvider};
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 use swash::{
     scale::{ScaleContext, outline::Outline},
     zeno::{Angle, Mask, Origin, Scratch, Transform},
 };
 
 use crate::{CacheLimits, FontData, GlyphError, Image, RasterOptions};
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 use crate::{Content, Placement};
 
 pub(crate) struct Rasterizer {
-    #[cfg(feature = "swash")]
+    #[cfg(any(feature = "swash", not(target_os = "linux")))]
     context: ScaleContext,
-    #[cfg(feature = "swash")]
+    #[cfg(any(feature = "swash", not(target_os = "linux")))]
     outline: Outline,
-    #[cfg(feature = "swash")]
+    #[cfg(any(feature = "swash", not(target_os = "linux")))]
     scratch: Scratch,
-    #[cfg(feature = "swash")]
+    #[cfg(any(feature = "swash", not(target_os = "linux")))]
     mask: Vec<u8>,
-    #[cfg(not(feature = "swash"))]
+    #[cfg(all(not(feature = "swash"), target_os = "linux"))]
     ft: Option<crate::freetype::FreeTypeRasterizer>,
 }
 
 impl Rasterizer {
     pub fn new() -> Self {
-        #[cfg(feature = "swash")]
+        #[cfg(any(feature = "swash", not(target_os = "linux")))]
         {
             Self {
                 context: ScaleContext::with_max_entries(4),
@@ -34,7 +34,7 @@ impl Rasterizer {
                 mask: Vec::new(),
             }
         }
-        #[cfg(not(feature = "swash"))]
+        #[cfg(all(not(feature = "swash"), target_os = "linux"))]
         {
             Self {
                 ft: crate::freetype::FreeTypeRasterizer::new(),
@@ -48,20 +48,15 @@ impl Rasterizer {
         glyph: u16,
         options: RasterOptions<'_>,
         limits: CacheLimits,
-        #[cfg_attr(not(feature = "swash"), allow(unused_mut))] mut reserve: impl FnMut(
-            usize,
-        )
-            -> Result<
-            (),
-            GlyphError,
-        >,
+        #[cfg_attr(all(not(feature = "swash"), target_os = "linux"), allow(unused_mut))]
+        mut reserve: impl FnMut(usize) -> Result<(), GlyphError>,
     ) -> Result<Image, GlyphError> {
-        #[cfg(not(feature = "swash"))]
+        #[cfg(all(not(feature = "swash"), target_os = "linux"))]
         {
             let ft = self.ft.as_mut().ok_or(GlyphError::UnsupportedGlyph)?;
             ft.rasterize(data, glyph, options, limits, reserve)
         }
-        #[cfg(feature = "swash")]
+        #[cfg(any(feature = "swash", not(target_os = "linux")))]
         {
             let font = swash::FontRef::from_index(data.data.data(), data.index as usize)
                 .ok_or(GlyphError::InvalidFont)?;
@@ -257,11 +252,11 @@ impl Rasterizer {
     }
 
     pub fn release_scratch(&mut self) {
-        #[cfg(feature = "swash")]
+        #[cfg(any(feature = "swash", not(target_os = "linux")))]
         {
             *self = Self::new();
         }
-        #[cfg(not(feature = "swash"))]
+        #[cfg(all(not(feature = "swash"), target_os = "linux"))]
         {
             if let Some(ft) = &mut self.ft {
                 ft.clear();
@@ -270,12 +265,12 @@ impl Rasterizer {
     }
 }
 
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 fn valid(v: f32) -> bool {
     v.is_finite() && v.abs() < 16_777_216.0
 }
 
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 pub(crate) fn image_size(
     w: u32,
     h: u32,
@@ -290,7 +285,7 @@ pub(crate) fn image_size(
 }
 
 // Premultiplied linear RGBA while sampling/compositing; public images stay straight sRGB.
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 pub(crate) fn linear(rgba: [u8; 4]) -> [f32; 4] {
     let a = rgba[3] as f32 / 255.0;
     let decode = |v: u8| {
@@ -309,7 +304,7 @@ pub(crate) fn linear(rgba: [u8; 4]) -> [f32; 4] {
     ]
 }
 
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 pub(crate) fn encoded(rgba: [f32; 4]) -> [u8; 4] {
     if rgba[3] <= 0.0 {
         return [0; 4];

@@ -1,12 +1,13 @@
 //! Fallback Parley layout backend (unmaintained).
-#![cfg(feature = "text-parley")]
+#![cfg(any(feature = "text-parley", not(target_os = "linux")))]
 
 use std::ops::Range;
 
 #[cfg(feature = "scene")]
 use aegle_scene::{Glyph, GlyphRun, SceneBuilder};
+use aegle_types::Color;
 #[cfg(feature = "scene")]
-use aegle_types::{Color, Point};
+use aegle_types::Point;
 #[cfg(feature = "scene")]
 use parley::PositionedLayoutItem;
 use parley::{Affinity as ParleyAffinity, AlignmentOptions, Cursor, Layout as RawLayout};

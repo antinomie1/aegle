@@ -7,11 +7,11 @@ use crate::{
     layout::{Layout, PlatformSystem},
     style::Shaping,
 };
-#[cfg(feature = "text-parley")]
+#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
 use aegle_types::Color;
-#[cfg(feature = "text-parley")]
+#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
-#[cfg(feature = "text-parley")]
+#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
 use parley::{FontContext, LayoutContext};
 
 /// Font collection and reusable shaping scratch for one UI thread.
@@ -23,9 +23,9 @@ use parley::{FontContext, LayoutContext};
 /// One system is shared by every window of an application, so it also holds
 /// the application-wide budget for idle text, see [`Self::set_idle_budget`].
 pub struct TextSystem {
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     pub(crate) fonts: FontContext,
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     pub(crate) context: LayoutContext<Color>,
     pub(crate) backend: PlatformSystem,
     /// Family lists retained text shapes with, shared instead of copied.
@@ -55,7 +55,7 @@ impl TextSystem {
 
     fn with_system_fonts(_system_fonts: bool) -> Self {
         Self {
-            #[cfg(feature = "text-parley")]
+            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
             fonts: FontContext {
                 collection: Collection::new(CollectionOptions {
                     shared: false,
@@ -63,7 +63,7 @@ impl TextSystem {
                 }),
                 source_cache: SourceCache::default(),
             },
-            #[cfg(feature = "text-parley")]
+            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
             context: LayoutContext::new(),
             backend: PlatformSystem::new(_system_fonts),
             families: Vec::new(),
@@ -80,7 +80,7 @@ impl TextSystem {
         &mut self,
         _data: Arc<dyn AsRef<[u8]> + Send + Sync>,
     ) -> Result<Vec<FontFamily>, TextError> {
-        #[cfg(feature = "text-parley")]
+        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
         {
             let registered = self.fonts.collection.register_fonts(Blob::new(_data), None);
             if registered.is_empty() {
@@ -91,7 +91,7 @@ impl TextSystem {
                 .map(|(id, _)| FontFamily(id))
                 .collect())
         }
-        #[cfg(not(feature = "text-parley"))]
+        #[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
         {
             self.backend.register_fonts(_data.as_ref().as_ref())
         }
@@ -106,11 +106,11 @@ impl TextSystem {
         _families: impl IntoIterator<Item = FontFamily>,
     ) {
         let families: Vec<FontFamily> = _families.into_iter().collect();
-        #[cfg(feature = "text-parley")]
+        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
         self.fonts
             .collection
             .set_generic_families(_generic.fontique(), families.iter().map(|f| f.0));
-        #[cfg(not(feature = "text-parley"))]
+        #[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
         self.backend.set_generic_families(_generic, &families);
     }
 
@@ -199,7 +199,7 @@ impl TextSystem {
     /// method recreates scratch instead of pretending to enforce a byte budget.
     pub fn trim(&mut self) {
         self.backend.trim();
-        #[cfg(feature = "text-parley")]
+        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
         {
             self.context = LayoutContext::new();
             self.fonts.source_cache.prune(0, true);
@@ -271,19 +271,19 @@ impl TextSystem {
         wrap: bool,
         underline: Option<Range<usize>>,
     ) -> Layout {
-        #[cfg(feature = "text-parley")]
+        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
         {
             let mut raw = parley::Layout::new();
             self.shape(&mut raw, text, shaping, Color::BLACK, underline, wrap);
             Layout::Parley(crate::backend_parley::ParleyLayout { raw })
         }
-        #[cfg(not(feature = "text-parley"))]
+        #[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
         {
             Layout::new(&mut self.backend, text, shaping, wrap, underline)
         }
     }
 
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     pub(crate) fn shape(
         &mut self,
         layout: &mut parley::Layout<Color>,

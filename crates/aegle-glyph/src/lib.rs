@@ -20,12 +20,12 @@
 //! one bitmap, and `svg` renders static OpenType-SVG documents without text;
 //! without those features such glyphs return [`GlyphError::UnsupportedGlyph`].
 
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 mod bitmap;
 mod cache;
 #[cfg(feature = "colrv1")]
 mod colrv1;
-#[cfg(not(feature = "swash"))]
+#[cfg(all(not(feature = "swash"), target_os = "linux"))]
 mod freetype;
 mod key;
 mod raster;
@@ -53,7 +53,7 @@ pub struct Placement {
     pub height: u32,
 }
 
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 impl From<swash::zeno::Placement> for Placement {
     fn from(p: swash::zeno::Placement) -> Self {
         Self {
@@ -65,7 +65,7 @@ impl From<swash::zeno::Placement> for Placement {
     }
 }
 
-#[cfg(feature = "swash")]
+#[cfg(any(feature = "swash", not(target_os = "linux")))]
 impl From<Placement> for swash::zeno::Placement {
     fn from(p: Placement) -> Self {
         Self {

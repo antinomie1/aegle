@@ -1,6 +1,6 @@
 use crate::{LineHeight, Slant};
 use aegle_types::Color;
-#[cfg(feature = "text-parley")]
+#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
 use parley::fontique::Language;
 use std::{error::Error, fmt, sync::Arc};
 
@@ -114,7 +114,7 @@ impl Shaping {
             && self.word_spacing == style.word_spacing
     }
 
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     /// Builder defaults, with `color` as every glyph's brush.
     pub fn properties(&self, color: Color) -> [parley::StyleProperty<'_, Color>; 10] {
         use parley::StyleProperty::*;

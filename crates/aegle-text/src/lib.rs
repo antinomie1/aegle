@@ -23,7 +23,7 @@
 mod accessibility;
 #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
 mod backend_pango;
-#[cfg(feature = "text-parley")]
+#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
 mod backend_parley;
 mod compose;
 mod document;

@@ -19,7 +19,7 @@ pub enum Alignment {
 }
 
 impl Alignment {
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     pub(crate) fn parley(self) -> parley::Alignment {
         match self {
             Self::Start => parley::Alignment::Start,
@@ -67,7 +67,7 @@ impl LineHeight {
         }
     }
 
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     pub(crate) fn parley(self) -> parley::LineHeight {
         match self {
             Self::MetricsRelative(value) => parley::LineHeight::MetricsRelative(value),
@@ -91,7 +91,7 @@ pub enum Slant {
 }
 
 impl Slant {
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     pub(crate) fn parley(self) -> parley::FontStyle {
         match self {
             Self::Normal => parley::FontStyle::Normal,
@@ -121,7 +121,7 @@ pub enum GenericFamily {
 }
 
 impl GenericFamily {
-    #[cfg(feature = "text-parley")]
+    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
     pub(crate) fn fontique(self) -> parley::fontique::GenericFamily {
         use parley::fontique::GenericFamily as Generic;
         match self {
@@ -136,10 +136,10 @@ impl GenericFamily {
     }
 }
 
-#[cfg(feature = "text-parley")]
+#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFamily(pub(crate) parley::fontique::FamilyId);
 
-#[cfg(not(feature = "text-parley"))]
+#[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFamily(pub(crate) u32);

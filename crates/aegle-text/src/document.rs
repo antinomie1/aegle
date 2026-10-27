@@ -40,7 +40,10 @@ pub(crate) struct Block {
     /// Height of the lines before the empty one after the break.
     pub height: f32,
     pub diagnostics: TextDiagnostics,
-    #[cfg(all(feature = "text-a11y", feature = "text-parley"))]
+    #[cfg(all(
+        feature = "text-a11y",
+        any(feature = "text-parley", not(target_os = "linux"))
+    ))]
     pub access: parley::LayoutAccessibility,
 }
 
@@ -162,7 +165,10 @@ impl Document {
                 layout,
                 origin: Point::default(),
                 height: 0.0,
-                #[cfg(all(feature = "text-a11y", feature = "text-parley"))]
+                #[cfg(all(
+                    feature = "text-a11y",
+                    any(feature = "text-parley", not(target_os = "linux"))
+                ))]
                 access: Default::default(),
             });
             match next {

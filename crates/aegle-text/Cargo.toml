@@ -33,8 +33,15 @@ icu_provider = { version = "2.3.1", default-features = false, features = ["loggi
 aegle-scene = { workspace = true, optional = true }
 accesskit = { workspace = true, optional = true }
 
-[target.'cfg(any(target_os = "linux", windows))'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 libloading = "0.8.9"
+
+# Until the DirectWrite and CoreText backends exist, those targets keep the
+# Parley stack: text must not disappear from a default build.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+parley.workspace = true
+icu_segmenter = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
+icu_provider = { version = "2.3.1", default-features = false, features = ["logging"] }
 
 [lints.rust]
 unsafe_code = "warn"
