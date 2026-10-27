@@ -7,11 +7,20 @@ use crate::{
     layout::{Layout, PlatformSystem},
     style::Shaping,
 };
-#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+#[cfg(any(
+    feature = "text-parley",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 use aegle_types::Color;
-#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+#[cfg(any(
+    feature = "text-parley",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
-#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+#[cfg(any(
+    feature = "text-parley",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 use parley::{FontContext, LayoutContext};
 
 /// Font collection and reusable shaping scratch for one UI thread.
@@ -23,9 +32,15 @@ use parley::{FontContext, LayoutContext};
 /// One system is shared by every window of an application, so it also holds
 /// the application-wide budget for idle text, see [`Self::set_idle_budget`].
 pub struct TextSystem {
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(crate) fonts: FontContext,
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(crate) context: LayoutContext<Color>,
     pub(crate) backend: PlatformSystem,
     /// Family lists retained text shapes with, shared instead of copied.
@@ -55,7 +70,10 @@ impl TextSystem {
 
     fn with_system_fonts(_system_fonts: bool) -> Self {
         Self {
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             fonts: FontContext {
                 collection: Collection::new(CollectionOptions {
                     shared: false,
@@ -63,7 +81,10 @@ impl TextSystem {
                 }),
                 source_cache: SourceCache::default(),
             },
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             context: LayoutContext::new(),
             backend: PlatformSystem::new(_system_fonts),
             families: Vec::new(),
@@ -80,7 +101,10 @@ impl TextSystem {
         &mut self,
         _data: Arc<dyn AsRef<[u8]> + Send + Sync>,
     ) -> Result<Vec<FontFamily>, TextError> {
-        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+        #[cfg(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        ))]
         {
             let registered = self.fonts.collection.register_fonts(Blob::new(_data), None);
             if registered.is_empty() {
@@ -91,7 +115,10 @@ impl TextSystem {
                 .map(|(id, _)| FontFamily(id))
                 .collect())
         }
-        #[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
+        #[cfg(not(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        )))]
         {
             self.backend.register_fonts(_data.as_ref().as_ref())
         }
@@ -106,11 +133,17 @@ impl TextSystem {
         _families: impl IntoIterator<Item = FontFamily>,
     ) {
         let families: Vec<FontFamily> = _families.into_iter().collect();
-        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+        #[cfg(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        ))]
         self.fonts
             .collection
             .set_generic_families(_generic.fontique(), families.iter().map(|f| f.0));
-        #[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
+        #[cfg(not(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        )))]
         self.backend.set_generic_families(_generic, &families);
     }
 
@@ -199,7 +232,10 @@ impl TextSystem {
     /// method recreates scratch instead of pretending to enforce a byte budget.
     pub fn trim(&mut self) {
         self.backend.trim();
-        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+        #[cfg(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        ))]
         {
             self.context = LayoutContext::new();
             self.fonts.source_cache.prune(0, true);
@@ -271,19 +307,28 @@ impl TextSystem {
         wrap: bool,
         underline: Option<Range<usize>>,
     ) -> Layout {
-        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+        #[cfg(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        ))]
         {
             let mut raw = parley::Layout::new();
             self.shape(&mut raw, text, shaping, Color::BLACK, underline, wrap);
             Layout::Parley(crate::backend_parley::ParleyLayout { raw })
         }
-        #[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
+        #[cfg(not(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        )))]
         {
             Layout::new(&mut self.backend, text, shaping, wrap, underline)
         }
     }
 
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(crate) fn shape(
         &mut self,
         layout: &mut parley::Layout<Color>,

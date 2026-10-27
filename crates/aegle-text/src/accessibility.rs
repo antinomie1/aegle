@@ -1,6 +1,9 @@
 use accesskit::{Node, NodeId, Role, TextPosition, TextSelection, TreeUpdate};
 use aegle_types::{Color, Point};
-#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+#[cfg(any(
+    feature = "text-parley",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 use parley::Cursor;
 
 use crate::{EditorDriver, TextError, document::Caret, nav::Selected};
@@ -70,7 +73,10 @@ impl EditorDriver<'_> {
         editor.access_runs.clear();
         let doc = &mut editor.doc;
         for (index, block) in doc.blocks.iter_mut().enumerate() {
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             if let crate::layout::Layout::Parley(ref p) = block.layout {
                 let start = update.nodes.len();
                 block.access.build_nodes(
@@ -157,12 +163,18 @@ impl EditorDriver<'_> {
         }
         let position = |caret: Caret| {
             #[cfg_attr(
-                not(any(feature = "text-parley", not(target_os = "linux"))),
+                not(any(
+                    feature = "text-parley",
+                    not(any(target_os = "linux", target_os = "windows"))
+                )),
                 allow(unused_variables)
             )]
             let (index, local, affinity) = editor.doc.local_caret(caret);
             let block = &editor.doc.blocks[index];
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             if let crate::layout::Layout::Parley(ref p) = block.layout {
                 let parley_aff = match affinity {
                     crate::layout::Affinity::Downstream => parley::Affinity::Downstream,
@@ -211,7 +223,10 @@ impl EditorDriver<'_> {
             let (index, pos) = normalize(position, &self.editor.access_runs)?;
             let doc = &self.editor.doc;
             let block = &doc.blocks[index];
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             if let crate::layout::Layout::Parley(ref p) = block.layout {
                 let cursor = Cursor::from_access_position(&pos, &p.raw, &block.access)
                     .ok_or(TextError::InvalidRange)?;

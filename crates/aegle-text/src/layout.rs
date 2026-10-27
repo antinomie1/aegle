@@ -65,7 +65,12 @@ pub struct LineMetrics {
 pub(crate) enum PlatformSystem {
     #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
     Pango(crate::backend_pango::PangoSystem),
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+    DirectWrite(crate::backend_directwrite::DirectWriteSystem),
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     Parley,
     Stub,
 }
@@ -78,7 +83,17 @@ impl PlatformSystem {
                 return Self::Pango(sys);
             }
         }
-        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+        #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+        {
+            if let Some(sys) = crate::backend_directwrite::DirectWriteSystem::new(system_fonts) {
+                crate::backend_directwrite::register_rasterizer();
+                return Self::DirectWrite(sys);
+            }
+        }
+        #[cfg(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        ))]
         {
             let _ = system_fonts;
             return Self::Parley;
@@ -96,11 +111,21 @@ impl PlatformSystem {
         if let Self::Pango(sys) = self {
             return sys.register_fonts(data);
         }
-        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+        #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+        if let Self::DirectWrite(sys) = self {
+            return sys.register_fonts(data);
+        }
+        #[cfg(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        ))]
         {
             Ok(Vec::new())
         }
-        #[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
+        #[cfg(not(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        )))]
         Ok(vec![crate::FontFamily(1)])
     }
 
@@ -114,11 +139,19 @@ impl PlatformSystem {
         if let Self::Pango(sys) = self {
             sys.set_generic_families(generic, families);
         }
+        #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+        if let Self::DirectWrite(sys) = self {
+            sys.set_generic_families(generic, families);
+        }
     }
 
     pub fn trim(&mut self) {
         #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
         if let Self::Pango(sys) = self {
+            sys.trim();
+        }
+        #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+        if let Self::DirectWrite(sys) = self {
             sys.trim();
         }
     }
@@ -131,7 +164,12 @@ impl PlatformSystem {
 pub(crate) enum Layout {
     #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
     Pango(crate::backend_pango::PangoLayout),
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+    DirectWrite(crate::backend_directwrite::DirectWriteLayout),
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     Parley(crate::backend_parley::ParleyLayout),
     Stub,
 }
@@ -151,7 +189,16 @@ impl Layout {
                 sys, text, shaping, wrap, underline,
             ));
         }
-        #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+        #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+        if let PlatformSystem::DirectWrite(sys) = system {
+            return Self::DirectWrite(crate::backend_directwrite::DirectWriteLayout::new(
+                sys, text, shaping, wrap, underline,
+            ));
+        }
+        #[cfg(any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        ))]
         {
             let _ = (system, text, shaping, wrap, underline);
             return Self::Parley(crate::backend_parley::ParleyLayout::new());
@@ -168,7 +215,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.reflow(width, alignment),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.reflow(width, alignment),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.reflow(width, alignment),
             _ => {}
         }
@@ -178,7 +230,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.width(),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.width(),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.width(),
             _ => 0.0,
         }
@@ -188,7 +245,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.height(),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.height(),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.height(),
             _ => 0.0,
         }
@@ -198,7 +260,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.line_count(),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.line_count(),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.line_count(),
             _ => 0,
         }
@@ -208,7 +275,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.is_rtl(),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.is_rtl(),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.is_rtl(),
             _ => false,
         }
@@ -218,7 +290,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.first_baseline(),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.first_baseline(),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.first_baseline(),
             _ => None,
         }
@@ -228,7 +305,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.content_widths(),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.content_widths(),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.content_widths(),
             _ => ContentWidths::default(),
         }
@@ -238,7 +320,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.line_metrics(line),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.line_metrics(line),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.line_metrics(line),
             _ => None,
         }
@@ -248,7 +335,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.line_range_from_point(x, y),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.line_range_from_point(x, y),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.line_range_from_point(x, y),
             _ => 0..0,
         }
@@ -258,7 +350,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.line_range_for_index(index),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.line_range_for_index(index),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.line_range_for_index(index),
             _ => 0..0,
         }
@@ -268,7 +365,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.hit_test(x, y),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.hit_test(x, y),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.hit_test(x, y),
             _ => (0, Affinity::Downstream),
         }
@@ -278,7 +380,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.caret_geometry(index, affinity, width),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.caret_geometry(index, affinity, width),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.caret_geometry(index, affinity, width),
             _ => BoundingBox::default(),
         }
@@ -293,7 +400,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.move_cursor(index, affinity, forward),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.move_cursor(index, affinity, forward),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.move_cursor(index, affinity, forward),
             _ => (index, affinity),
         }
@@ -303,7 +415,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.range_boxes(range, visit),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.range_boxes(range, visit),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.range_boxes(range, visit),
             _ => {}
         }
@@ -313,7 +430,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.grapheme_range(line_text, caret, previous),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.grapheme_range(line_text, caret, previous),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.grapheme_range(line_text, caret, previous),
             _ => caret..caret,
         }
@@ -323,7 +445,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.diagnostics(text),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.diagnostics(text),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.diagnostics(text),
             _ => TextDiagnostics::default(),
         }
@@ -334,7 +461,12 @@ impl Layout {
         match self {
             #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
             Self::Pango(layout) => layout.paint(builder, color, weight, origin),
-            #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+            #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
+            Self::DirectWrite(layout) => layout.paint(builder, color, weight, origin),
+            #[cfg(any(
+                feature = "text-parley",
+                not(any(target_os = "linux", target_os = "windows"))
+            ))]
             Self::Parley(layout) => layout.paint(builder, color, weight, origin),
             _ => {}
         }

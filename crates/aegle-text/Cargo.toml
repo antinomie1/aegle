@@ -36,6 +36,16 @@ accesskit = { workspace = true, optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 libloading = "0.8.9"
 
+# DirectWrite layout, Uniscribe grapheme breaks and GDI outlines.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", default-features = false, features = [
+    "Win32_Foundation", "Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi",
+    "Win32_Globalization", "Win32_System_Com",
+] }
+aegle-glyph = { workspace = true }
+# The `implement` macro names windows-core directly.
+windows-core = { version = "0.62.2", default-features = false }
+
 # Until the DirectWrite and CoreText backends exist, those targets keep the
 # Parley stack: text must not disappear from a default build.
 [target.'cfg(not(target_os = "linux"))'.dependencies]

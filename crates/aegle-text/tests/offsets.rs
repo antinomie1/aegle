@@ -1,6 +1,6 @@
 //! UTF-16 ↔ UTF-8 offset conversion at platform boundaries.
 
-use aegle_text::offsets::{after, before, caret, snap, to_utf16, to_utf8};
+use aegle_text::offsets::{after, before, caret, snap, to_utf8, to_utf16};
 
 const MIXED: &str = "a你😀b";
 
@@ -54,3 +54,17 @@ fn neighbors_stop_at_the_edges() {
     assert_eq!(after(MIXED, 8), MIXED.len());
 }
 
+#[test]
+fn paragraph_direction_uses_the_first_strong_character() {
+    use aegle_text::offsets::first_strong_rtl;
+    assert!(!first_strong_rtl("Aegle 你好"));
+    assert!(!first_strong_rtl("你好 Aegle"));
+    assert!(first_strong_rtl("שלום Aegle"));
+    assert!(first_strong_rtl("مرحبا world"));
+    // Leading digits, punctuation and spaces are skipped.
+    assert!(!first_strong_rtl("123 \"Aegle\""));
+    assert!(first_strong_rtl("42 שלום"));
+    // No strong character at all: the paragraph stays left to right.
+    assert!(!first_strong_rtl("123 456"));
+    assert!(!first_strong_rtl(""));
+}

@@ -25,8 +25,12 @@ pub(crate) fn factory() -> Option<&'static IDWriteFactory> {
             // SAFETY: DWriteCreateFactory with the shared factory type is
             // documented to be callable from any thread and returns an owned
             // interface pointer that the wrapper releases.
-            unsafe { windows::Win32::Graphics::DirectWrite::DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED) }
-                .ok()
+            unsafe {
+                windows::Win32::Graphics::DirectWrite::DWriteCreateFactory(
+                    DWRITE_FACTORY_TYPE_SHARED,
+                )
+            }
+            .ok()
         })
         .as_ref()
 }

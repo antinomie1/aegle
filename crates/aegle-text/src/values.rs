@@ -19,7 +19,10 @@ pub enum Alignment {
 }
 
 impl Alignment {
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(crate) fn parley(self) -> parley::Alignment {
         match self {
             Self::Start => parley::Alignment::Start,
@@ -67,7 +70,10 @@ impl LineHeight {
         }
     }
 
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(crate) fn parley(self) -> parley::LineHeight {
         match self {
             Self::MetricsRelative(value) => parley::LineHeight::MetricsRelative(value),
@@ -91,7 +97,10 @@ pub enum Slant {
 }
 
 impl Slant {
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(crate) fn parley(self) -> parley::FontStyle {
         match self {
             Self::Normal => parley::FontStyle::Normal,
@@ -102,7 +111,7 @@ impl Slant {
 }
 
 /// A CSS generic family that application fonts can stand in for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GenericFamily {
     /// `serif`.
     Serif,
@@ -121,7 +130,10 @@ pub enum GenericFamily {
 }
 
 impl GenericFamily {
-    #[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+    #[cfg(any(
+        feature = "text-parley",
+        not(any(target_os = "linux", target_os = "windows"))
+    ))]
     pub(crate) fn fontique(self) -> parley::fontique::GenericFamily {
         use parley::fontique::GenericFamily as Generic;
         match self {
@@ -136,10 +148,16 @@ impl GenericFamily {
     }
 }
 
-#[cfg(any(feature = "text-parley", not(target_os = "linux")))]
+#[cfg(any(
+    feature = "text-parley",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFamily(pub(crate) parley::fontique::FamilyId);
 
-#[cfg(not(any(feature = "text-parley", not(target_os = "linux"))))]
+#[cfg(not(any(
+    feature = "text-parley",
+    not(any(target_os = "linux", target_os = "windows"))
+)))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFamily(pub(crate) u32);

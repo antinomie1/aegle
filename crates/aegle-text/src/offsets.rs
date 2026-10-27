@@ -72,3 +72,36 @@ pub fn caret(text: &str, position: u32, trailing: bool) -> usize {
         false => byte,
     }
 }
+
+/// Whether a paragraph's first strong character runs right to left.
+///
+/// Platform layout APIs report bidi levels but not the paragraph direction, and
+/// Aegle's alignment defaults need it, so this scans once with the standard
+/// first-strong rule: digits, punctuation and unassigned scripts are skipped
+/// rather than guessed, and text with no strong character is left to right.
+pub fn first_strong_rtl(text: &str) -> bool {
+    text.chars()
+        .find_map(|ch| {
+            let value = ch as u32;
+            match value {
+                // Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan, Mandaic and
+                // the Arabic presentation forms.
+                0x0590..=0x08ff | 0xfb1d..=0xfdff | 0xfe70..=0xfeff | 0x1ee00..=0x1eeff => {
+                    Some(true)
+                }
+                // Latin, Greek, Cyrillic, Armenian, Georgian, Hangul, Han and
+                // the Japanese kana.
+                0x0041..=0x005a
+                | 0x0061..=0x007a
+                | 0x00c0..=0x02b8
+                | 0x0370..=0x058f
+                | 0x10a0..=0x10ff
+                | 0x1e00..=0x1fff
+                | 0x3040..=0x30ff
+                | 0x3400..=0x9fff
+                | 0xac00..=0xd7af => Some(false),
+                _ => None,
+            }
+        })
+        .unwrap_or(false)
+}

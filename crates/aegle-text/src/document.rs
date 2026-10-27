@@ -42,7 +42,10 @@ pub(crate) struct Block {
     pub diagnostics: TextDiagnostics,
     #[cfg(all(
         feature = "text-a11y",
-        any(feature = "text-parley", not(target_os = "linux"))
+        any(
+            feature = "text-parley",
+            not(any(target_os = "linux", target_os = "windows"))
+        )
     ))]
     pub access: parley::LayoutAccessibility,
 }
@@ -167,7 +170,10 @@ impl Document {
                 height: 0.0,
                 #[cfg(all(
                     feature = "text-a11y",
-                    any(feature = "text-parley", not(target_os = "linux"))
+                    any(
+                        feature = "text-parley",
+                        not(any(target_os = "linux", target_os = "windows"))
+                    )
                 ))]
                 access: Default::default(),
             });

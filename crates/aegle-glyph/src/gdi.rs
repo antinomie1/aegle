@@ -70,9 +70,10 @@ struct FaceKey {
     hint: bool,
 }
 
-/// A registered in-memory font; dropping it removes the registration.
+/// A registered in-memory font and the description read from its bytes.
 struct MemoryFont {
     handle: HANDLE,
+    face: crate::FaceDescription,
 }
 
 impl Drop for MemoryFont {
@@ -104,13 +105,35 @@ impl GdiRasterizer {
         }
     }
 
-    fn memory_font(&mut self, source: &FaceSource, bytes: &[u8]) -> Result<(), GlyphError> {
-        if self.fonts.contains_key(source) {
-            return Ok(());
+    /// Registers `source` once and returns its description.
+    fn memory_font(&mut self, source: &FaceSource) -> Result<&MemoryFont, GlyphError> {
+        if !self.fonts.contains_key(source) {
+            let (bytes, index): (std::borrow::Cow<'_, [u8]>, u32) = match source {
+                FaceSource::File { path, index } => (
+                    std::borrow::Cow::Owned(
+                        std::fs::read(path.as_ref()).map_err(|_| GlyphError::InvalidFont)?,
+                    ),
+                    *index,
+                ),
+                FaceSource::Bytes { data, index } => {
+                    (std::borrow::Cow::Borrowed(&data[..]), *index)
+                }
+            };
+            if bytes.is_empty() {
+                return Err(GlyphError::InvalidFont);
+            }
+            let face = describe(&bytes, index).ok_or(GlyphError::InvalidFont)?;
+            self.register(source, &bytes, face)?;
         }
-        if bytes.is_empty() {
-            return Err(GlyphError::InvalidFont);
-        }
+        self.fonts.get(source).ok_or(GlyphError::InvalidFont)
+    }
+
+    fn register(
+        &mut self,
+        source: &FaceSource,
+        bytes: &[u8],
+        face: crate::FaceDescription,
+    ) -> Result<(), GlyphError> {
         let count = 0u32;
         // SAFETY: `bytes` is live for the call; GDI copies the data it needs and
         // the returned handle owns the registration until `MemoryFont` drops.
@@ -125,7 +148,8 @@ impl GdiRasterizer {
         if handle.is_invalid() || count == 0 {
             return Err(GlyphError::InvalidFont);
         }
-        self.fonts.insert(source.clone(), MemoryFont { handle });
+        self.fonts
+            .insert(source.clone(), MemoryFont { handle, face });
         Ok(())
     }
 
@@ -206,10 +230,7 @@ impl SystemRasterizer for GdiRasterizer {
         reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
     ) -> Result<Image, GlyphError> {
         let source = crate::system_face(*font).ok_or(GlyphError::InvalidFont)?;
-        let FaceSource::File { path, index } = &source;
-        let bytes = std::fs::read(path.as_ref()).map_err(|_| GlyphError::InvalidFont)?;
-        let face = describe(&bytes, *index).ok_or(GlyphError::InvalidFont)?;
-        self.memory_font(&source, &bytes)?;
+        let face = &self.memory_font(&source)?.face;
         let key = FaceKey {
             family: Arc::from(face.family.as_str()),
             weight: face.weight,

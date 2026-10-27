@@ -93,6 +93,14 @@ pub enum FaceSource {
         /// Face index within a collection; zero for a single font.
         index: u32,
     },
+    /// Font bytes the process already holds, for application-registered fonts
+    /// that have no file on disk.
+    Bytes {
+        /// Immutable font file contents.
+        data: std::sync::Arc<[u8]>,
+        /// Face index within a collection; zero for a single font.
+        index: u32,
+    },
 }
 
 /// Registers the outline source of `font`, replacing any earlier entry.

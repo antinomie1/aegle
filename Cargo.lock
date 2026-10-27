@@ -366,6 +366,7 @@ name = "aegle-text"
 version = "0.1.0"
 dependencies = [
  "accesskit",
+ "aegle-glyph",
  "aegle-scene",
  "aegle-segment",
  "aegle-types",
@@ -374,6 +375,8 @@ dependencies = [
  "libloading",
  "linebender_resource_handle",
  "parley",
+ "windows",
+ "windows-core",
 ]
 
 [[package]]
