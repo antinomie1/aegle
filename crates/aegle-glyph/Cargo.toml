@@ -12,7 +12,9 @@ categories.workspace = true
 
 [features]
 default = []
-scene = ["dep:aegle-scene"]
+# Glyph identity and raster transforms shared with scene consumers. The scene
+# crate is always linked: `FontSource` is the rasterizer's font identity.
+scene = []
 # Fallback Rust rasterizer (unmaintained)
 swash = ["dep:swash", "dep:skrifa"]
 # COLRv1 gradient/composite color glyphs, painted with tiny-skia.
@@ -21,7 +23,7 @@ colrv1 = ["dep:tiny-skia", "swash"]
 svg = ["dep:resvg", "swash"]
 
 [dependencies]
-aegle-scene = { workspace = true, features = ["text"], optional = true }
+aegle-scene = { workspace = true, features = ["text"] }
 linebender_resource_handle.workspace = true
 swash = { workspace = true, optional = true }
 skrifa = { version = "0.44.0", default-features = false, features = ["std"], optional = true }

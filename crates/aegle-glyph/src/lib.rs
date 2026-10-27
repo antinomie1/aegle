@@ -34,6 +34,7 @@ mod svg;
 #[cfg(feature = "scene")]
 mod transform;
 
+pub use aegle_scene::{FontSource, SystemFont};
 pub use cache::GlyphCache;
 pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};

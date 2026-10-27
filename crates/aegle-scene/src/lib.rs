@@ -28,7 +28,7 @@ pub use layer::{BlurBox, Layer, blur_boxes, blur_reach};
 pub use paint::{Gradient, GradientGeometry, GradientStop};
 pub use resource::{FillRule, Image, LineCap, LineJoin, Path, PathBuilder, Stroke, Verb};
 #[cfg(feature = "text")]
-pub use text::{Blob, FontData, Glyph, GlyphRun};
+pub use text::{Blob, FontData, FontSource, Glyph, GlyphRun, SystemFont};
 
 /// Maximum combined transform and clip nesting depth.
 pub const MAX_SCOPE_DEPTH: usize = 64;

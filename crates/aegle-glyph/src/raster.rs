@@ -6,7 +6,7 @@ use swash::{
     zeno::{Angle, Mask, Origin, Scratch, Transform},
 };
 
-use crate::{CacheLimits, FontData, GlyphError, Image, RasterOptions};
+use crate::{CacheLimits, FontSource, GlyphError, Image, RasterOptions};
 #[cfg(any(feature = "swash", not(target_os = "linux")))]
 use crate::{Content, Placement};
 
@@ -44,13 +44,14 @@ impl Rasterizer {
 
     pub fn rasterize(
         &mut self,
-        data: &FontData,
+        font: &FontSource,
         glyph: u16,
         options: RasterOptions<'_>,
         limits: CacheLimits,
         #[cfg_attr(all(not(feature = "swash"), target_os = "linux"), allow(unused_mut))]
         mut reserve: impl FnMut(usize) -> Result<(), GlyphError>,
     ) -> Result<Image, GlyphError> {
+        let data = font.bytes().ok_or(GlyphError::UnsupportedGlyph)?;
         #[cfg(all(not(feature = "swash"), target_os = "linux"))]
         {
             let ft = self.ft.as_mut().ok_or(GlyphError::UnsupportedGlyph)?;

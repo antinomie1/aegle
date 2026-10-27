@@ -4,7 +4,7 @@
 use std::{collections::hash_map::RandomState, hash::BuildHasher};
 
 use aegle_glyph::{
-    Content, FontData, Glyph, GlyphCache, GlyphKey, OwnedGlyphKey, Placement, RasterOptions,
+    Content, FontSource, Glyph, GlyphCache, GlyphKey, OwnedGlyphKey, Placement, RasterOptions,
 };
 use aegle_types::color_math::SrgbTransfer;
 use hashbrown::HashTable;
@@ -232,7 +232,7 @@ impl Atlas {
     pub fn fetch(
         &mut self,
         gpu: &Gpu,
-        font: &FontData,
+        font: &FontSource,
         id: u16,
         options: RasterOptions<'_>,
         mut visible: impl FnMut(Placement) -> Result<bool>,

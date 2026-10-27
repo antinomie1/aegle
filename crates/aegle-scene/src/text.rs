@@ -3,6 +3,64 @@ use alloc::vec::Vec;
 
 pub use linebender_resource_handle::{Blob, FontData};
 
+/// Font identity of one glyph run, independent of the backend that shaped it.
+///
+/// Renderers treat it as an opaque identity: they key glyph caches on it and ask
+/// the backend named by a [`SystemFont`] to rasterize. A run never contains a
+/// native font pointer, so it stays valid across shaping and layout calls.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FontSource {
+    /// Font bytes shared with the application or an embedding host.
+    Bytes(FontData),
+    /// A font object owned by a platform backend, registered under `backend`.
+    System(SystemFont),
+}
+
+impl FontSource {
+    /// The shared font bytes, or `None` for a platform font handle.
+    pub fn bytes(&self) -> Option<&FontData> {
+        match self {
+            Self::Bytes(font) => Some(font),
+            Self::System(_) => None,
+        }
+    }
+
+    /// The platform font handle, or `None` for shared font bytes.
+    pub fn system(&self) -> Option<SystemFont> {
+        match self {
+            Self::Bytes(_) => None,
+            Self::System(font) => Some(*font),
+        }
+    }
+}
+
+impl From<FontData> for FontSource {
+    fn from(font: FontData) -> Self {
+        Self::Bytes(font)
+    }
+}
+
+/// Platform font object: `backend` names the crate that can resolve it and
+/// `id` is that backend registry's key for one face.
+///
+/// Both values are opaque to the scene; only the backend that produced the
+/// handle interprets `id`, and the handle is meaningful only while that
+/// backend's registry entry lives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SystemFont {
+    /// Backend discriminator, one of the values this module documents.
+    pub backend: u8,
+    /// Backend-owned face key.
+    pub id: u64,
+}
+
+impl SystemFont {
+    /// DirectWrite font face handle (`aegle-text/backend_directwrite`).
+    pub const DWRITE: u8 = 1;
+    /// CoreText font handle (`aegle-text/backend_coretext`).
+    pub const CORETEXT: u8 = 2;
+}
+
 /// A shaped glyph and its baseline origin in the scene's local coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Glyph {
@@ -19,7 +77,7 @@ pub struct Glyph {
 /// variation coordinates, not a text layout engine or rasterized glyph images.
 #[derive(Debug)]
 pub struct GlyphRun {
-    font: FontData,
+    font: FontSource,
     size: f32,
     color: Color,
     coords: Vec<i16>,
@@ -37,7 +95,7 @@ impl GlyphRun {
     /// nonpositive or nonfinite size, nonfinite positions or out-of-range coordinates.
     #[track_caller]
     pub fn new(
-        font: FontData,
+        font: impl Into<FontSource>,
         size: f32,
         color: Color,
         coords: Vec<i16>,
@@ -54,7 +112,7 @@ impl GlyphRun {
             crate::fail(SceneError::InvalidText);
         }
         Self {
-            font,
+            font: font.into(),
             size,
             color,
             coords,
@@ -76,8 +134,8 @@ impl GlyphRun {
         self
     }
 
-    /// Shared font file and face index.
-    pub fn font(&self) -> &FontData {
+    /// Font identity: shared bytes or a platform handle.
+    pub fn font(&self) -> &FontSource {
         &self.font
     }
     /// Logical font size before the scene transform.

@@ -22,7 +22,7 @@ fn svg_glyph_renders_blended_layers_at_the_requested_size() {
         hint: false,
         ..Default::default()
     };
-    let glyph = cache.rasterize(&font, id, options).unwrap();
+    let glyph = cache.rasterize(&font.clone().into(), id, options).unwrap();
     assert_eq!(glyph.content, Content::Color);
     let placement = glyph.placement;
     // 1000 × 800 font units: 100 px wide, 80 px above the baseline.
@@ -50,7 +50,11 @@ fn svg_glyph_renders_blended_layers_at_the_requested_size() {
         ..options
     };
     assert_eq!(
-        cache.rasterize(&font, id, shifted).unwrap().placement.width,
+        cache
+            .rasterize(&font.clone().into(), id, shifted)
+            .unwrap()
+            .placement
+            .width,
         101
     );
 }

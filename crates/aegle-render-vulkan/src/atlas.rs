@@ -1,7 +1,7 @@
 //! Bounded glyph, image and path-mask pages. Renderer fences previous GPU use
 //! before each frame.
 use aegle_glyph::{
-    CacheLimits, CacheStats, Content, FontData, Glyph, GlyphCache, GlyphKey, Placement,
+    CacheLimits, CacheStats, Content, FontSource, Glyph, GlyphCache, GlyphKey, Placement,
     RasterOptions,
 };
 use ash::vk;
@@ -113,7 +113,7 @@ impl Atlas {
     #[allow(clippy::too_many_arguments)]
     pub fn get(
         &mut self,
-        font: &FontData,
+        font: &FontSource,
         id: u16,
         options: RasterOptions<'_>,
         device: &Device,

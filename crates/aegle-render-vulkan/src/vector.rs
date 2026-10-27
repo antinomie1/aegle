@@ -74,8 +74,14 @@ impl Text {
         let entry = match self.atlas.resource(raster.key) {
             Some(entry) => entry,
             None => {
-                let (data, placement) =
+                let (data, zeno) =
                     rasterize_path(path, &raster, state.transform, &mut self.scratch);
+                let placement = Placement {
+                    left: zeno.left,
+                    top: zeno.top,
+                    width: zeno.width,
+                    height: zeno.height,
+                };
                 if placement.width == 0 || placement.height == 0 {
                     return Ok(());
                 }

@@ -6,8 +6,8 @@ use lru_slab::LruSlab;
 
 use crate::raster::Rasterizer;
 use crate::{
-    CacheLimits, CacheStats, Content, FontData, Glyph, GlyphError, GlyphKey, Image, OwnedGlyphKey,
-    RasterOptions,
+    CacheLimits, CacheStats, Content, FontSource, Glyph, GlyphError, GlyphKey, Image,
+    OwnedGlyphKey, RasterOptions,
 };
 
 struct Entry {
@@ -73,10 +73,11 @@ impl GlyphCache {
     /// Returns an existing image or rasterizes and stores the requested glyph.
     ///
     /// Use the image immediately, or retain the font/glyph request and ask again.
-    /// Font data must remain immutable for its blob ID's entire lifetime.
+    /// Font data must remain immutable for its blob ID's entire lifetime; a
+    /// platform font handle must stay registered with its backend.
     pub fn rasterize(
         &mut self,
-        font: &FontData,
+        font: &FontSource,
         glyph_id: u16,
         options: RasterOptions<'_>,
     ) -> Result<Glyph<'_>, GlyphError> {

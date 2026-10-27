@@ -23,7 +23,7 @@ fn freetype_rasterizes_cjk_and_spaces() {
 
     // Glyph 103 in aegle-test-cjk is '你'
     let image = cache
-        .rasterize(&font, 103, options)
+        .rasterize(&font.clone().into(), 103, options)
         .expect("rasterize cjk glyph");
     assert_eq!(image.content, Content::Mask);
     assert!(image.placement.width > 0);
@@ -35,7 +35,9 @@ fn freetype_rasterizes_cjk_and_spaces() {
     );
 
     // Empty glyph or whitespace (glyph index 1 is space in aegle-test-cjk)
-    let space = cache.rasterize(&font, 1, options).expect("rasterize space");
+    let space = cache
+        .rasterize(&font.clone().into(), 1, options)
+        .expect("rasterize space");
     assert_eq!(space.placement.width, 0);
     assert_eq!(space.placement.height, 0);
     assert!(space.data.is_empty());
@@ -46,7 +48,9 @@ fn freetype_rasterizes_cjk_and_spaces() {
         ..options
     };
     assert_eq!(
-        cache.rasterize(&font, 103, huge).unwrap_err(),
+        cache
+            .rasterize(&font.clone().into(), 103, huge)
+            .unwrap_err(),
         GlyphError::ImageBudget
     );
 }

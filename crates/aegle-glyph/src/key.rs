@@ -1,9 +1,14 @@
-use crate::{FontData, GlyphError, RasterOptions};
+use crate::{FontSource, GlyphError, RasterOptions};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum FontIdentity {
+    Bytes { blob: u64, index: u32 },
+    System { backend: u8, id: u64 },
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Identity {
-    blob: u64,
-    index: u32,
+    font: FontIdentity,
     glyph: u16,
     size: u32,
     offset: [u32; 2],
@@ -17,7 +22,8 @@ struct Identity {
 ///
 /// Equality includes all parameters and variation coordinates, not just a hash.
 /// Font bytes are not retained; each blob ID must name immutable bytes for its
-/// entire lifetime. A key validates raster options, not the font file itself.
+/// entire lifetime. A key validates raster options, not the font file itself,
+/// and a platform font handle is only an identity here, never a pointer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct GlyphKey<'a> {
     identity: Identity,
@@ -28,7 +34,7 @@ impl<'a> GlyphKey<'a> {
     /// Borrows the variation coordinates and validates raster parameters.
     /// Font parsing and glyph-index validation happen on a raster cache miss.
     pub fn new(
-        font: &FontData,
+        font: &FontSource,
         glyph: u16,
         options: RasterOptions<'a>,
     ) -> Result<Self, GlyphError> {
@@ -48,8 +54,16 @@ impl<'a> GlyphKey<'a> {
         }
         Ok(Self {
             identity: Identity {
-                blob: font.data.id(),
-                index: font.index,
+                font: match font {
+                    FontSource::Bytes(font) => FontIdentity::Bytes {
+                        blob: font.data.id(),
+                        index: font.index,
+                    },
+                    FontSource::System(font) => FontIdentity::System {
+                        backend: font.backend,
+                        id: font.id,
+                    },
+                },
                 glyph,
                 size: options.size.to_bits(),
                 offset: options

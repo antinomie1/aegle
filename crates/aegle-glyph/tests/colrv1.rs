@@ -23,7 +23,7 @@ fn paint_graph_resolves_into_a_color_bitmap() {
         foreground: [10, 200, 30, 255],
         ..Default::default()
     };
-    let glyph = cache.rasterize(&font, id, options).unwrap();
+    let glyph = cache.rasterize(&font.clone().into(), id, options).unwrap();
     assert_eq!(glyph.content, Content::Color);
     let placement = glyph.placement;
     // The 1000-unit clip box is 100 px square, resting on the baseline.
@@ -68,7 +68,10 @@ fn paint_graph_resolves_into_a_color_bitmap() {
         offset: [0.5, 0.0],
         ..options
     };
-    let placement = cache.rasterize(&font, id, shifted).unwrap().placement;
+    let placement = cache
+        .rasterize(&font.clone().into(), id, shifted)
+        .unwrap()
+        .placement;
     assert_eq!((placement.left, placement.width), (0, 101));
 
     let mut tight = GlyphCache::with_limits(CacheLimits {
@@ -77,7 +80,9 @@ fn paint_graph_resolves_into_a_color_bitmap() {
         bitmap_bytes: 1 << 20,
     });
     assert_eq!(
-        tight.rasterize(&font, id, options).unwrap_err(),
+        tight
+            .rasterize(&font.clone().into(), id, options)
+            .unwrap_err(),
         GlyphError::ImageBudget
     );
 }

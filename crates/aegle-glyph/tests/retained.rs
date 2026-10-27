@@ -71,13 +71,13 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     .unwrap();
     assert!(bold != key && slanted != key && bold != slanted);
     let plain = cache
-        .rasterize(&font, ids[0], options)
+        .rasterize(&font.clone().into(), ids[0], options)
         .unwrap()
         .data
         .to_vec();
     let heavier = cache
         .rasterize(
-            &font,
+            &font.clone().into(),
             ids[0],
             RasterOptions {
                 embolden: true,
@@ -92,7 +92,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     );
     let leaning = cache
         .rasterize(
-            &font,
+            &font.clone().into(),
             ids[0],
             RasterOptions {
                 skew: 14,
@@ -131,7 +131,9 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
             Err(GlyphError::Coordinates)
         ));
     }
-    let image = cache.rasterize(&font, ids[0], options).unwrap();
+    let image = cache
+        .rasterize(&font.clone().into(), ids[0], options)
+        .unwrap();
     assert_eq!(image.content, Content::Mask);
     assert!(image.data.iter().any(|v| *v != 0));
     assert_eq!(
@@ -141,7 +143,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     let first = image.data.as_ptr();
     assert_eq!(
         cache
-            .rasterize(&font, ids[0], options)
+            .rasterize(&font.clone().into(), ids[0], options)
             .unwrap()
             .data
             .as_ptr(),
@@ -150,7 +152,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     let stats = cache.stats();
     cache
         .rasterize(
-            &font,
+            &font.clone().into(),
             ids[0],
             RasterOptions {
                 foreground: [255, 0, 0, 255],
@@ -159,13 +161,19 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
         )
         .unwrap();
     assert_eq!(cache.stats(), stats);
-    cache.rasterize(&font, ids[1], options).unwrap();
-    cache.rasterize(&font, ids[0], options).unwrap();
-    cache.rasterize(&font, ids[2], options).unwrap();
+    cache
+        .rasterize(&font.clone().into(), ids[1], options)
+        .unwrap();
+    cache
+        .rasterize(&font.clone().into(), ids[0], options)
+        .unwrap();
+    cache
+        .rasterize(&font.clone().into(), ids[2], options)
+        .unwrap();
     assert_eq!(cache.stats().entries, 2);
     assert_eq!(
         cache
-            .rasterize(&font, ids[0], options)
+            .rasterize(&font.clone().into(), ids[0], options)
             .unwrap()
             .data
             .as_ptr(),
@@ -174,7 +182,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     assert!(cache.stats().image_bytes <= 4096);
     assert!(
         cache
-            .rasterize(&font, ids[3], options)
+            .rasterize(&font.clone().into(), ids[3], options)
             .unwrap()
             .data
             .is_empty()
@@ -185,7 +193,9 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
         ..options
     };
     assert_eq!(
-        cache.rasterize(&font, ids[0], huge).unwrap_err(),
+        cache
+            .rasterize(&font.clone().into(), ids[0], huge)
+            .unwrap_err(),
         GlyphError::ImageBudget
     );
     let invalid = RasterOptions {
@@ -193,12 +203,16 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
         ..options
     };
     assert_eq!(
-        cache.rasterize(&font, ids[0], invalid).unwrap_err(),
+        cache
+            .rasterize(&font.clone().into(), ids[0], invalid)
+            .unwrap_err(),
         GlyphError::InvalidOptions
     );
     let wrong_index = FontData::new(font.data.clone(), 1);
     assert_eq!(
-        cache.rasterize(&wrong_index, ids[0], options).unwrap_err(),
+        cache
+            .rasterize(&wrong_index.clone().into(), ids[0], options)
+            .unwrap_err(),
         GlyphError::InvalidFont
     );
     let stats = cache.stats();
@@ -214,7 +228,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     let parsed = swash::FontRef::from_index(font.data.data(), 0).unwrap();
     let mut cache = GlyphCache::default();
     let image = cache
-        .rasterize(&font, parsed.charmap().map('A'), options)
+        .rasterize(&font.clone().into(), parsed.charmap().map('A'), options)
         .unwrap();
     assert_eq!(image.content, Content::Color);
     assert!(
@@ -229,7 +243,11 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
                 && p[3] == 255)
     );
     let image = cache
-        .rasterize(&font, parsed.charmap().map('B'), RasterOptions::default())
+        .rasterize(
+            &font.clone().into(),
+            parsed.charmap().map('B'),
+            RasterOptions::default(),
+        )
         .unwrap();
     assert_eq!(image.content, Content::Color);
     assert_eq!((image.placement.width, image.placement.height), (2, 2));
@@ -240,7 +258,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     for (size, offset) in [(1e-20, [0.0; 2]), (f32::from_bits(1), [0.25; 2])] {
         let image = cache
             .rasterize(
-                &font,
+                &font.clone().into(),
                 parsed.charmap().map('B'),
                 RasterOptions {
                     size,
