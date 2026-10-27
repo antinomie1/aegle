@@ -258,7 +258,9 @@ fn a_growing_table_shrinks_to_the_space_left() -> Result {
 fn tab_bars_and_images_fit_a_narrow_window() -> Result {
     let ui = ui()?;
     let tabs = ui.root().tabs();
-    for title in ["账户", "设置", "皮肤", "下载", "关于", "日志"] {
+    // ASCII labels: the fixture font carries no CJK, and a missing glyph's
+    // placeholder advance is the system stack's, not this test's, to assert.
+    for title in ["Account", "Settings", "Skin", "Downloads", "About", "Log"] {
         tabs.add(title);
     }
     let pixels = vec![0; 400 * 100 * 4];

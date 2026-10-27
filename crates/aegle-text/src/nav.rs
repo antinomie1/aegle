@@ -1,5 +1,5 @@
-//! Selections across an editor's paragraphs: Parley moves within one
-//! paragraph's layout, and these step between neighboring paragraphs.
+//! Selections across an editor's paragraphs: moving within one
+//! paragraph's layout, and stepping between neighboring paragraphs.
 //!
 //! Word-wise movement and selection take their boundaries from the operating
 //! system's segmenter ([`crate::segment`]) and from nothing else: Aegle bundles
@@ -11,9 +11,11 @@
 //! including right-to-left text.
 
 use aegle_types::Point;
-use parley::{Affinity, Cursor};
 
-use crate::document::{Caret, Document};
+use crate::{
+    document::{Caret, Document},
+    layout::Affinity,
+};
 
 /// What a pointer selection selects and dragging extends by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,20 +80,23 @@ impl Document {
             return Selected::collapsed(if anchor { sel.anchor } else { sel.focus });
         }
         if word {
-            // Without a segmenter there are no words to step over; the caret
-            // and the selection stay where they are.
             return match self.word_step(sel.focus, forward) {
                 Some(focus) => sel.to(focus, extend),
                 None => sel,
             };
         }
-        let (block, cursor) = self.cursor(sel.focus);
+        let (block, local, affinity) = self.local_caret(sel.focus);
         let layout = &self.blocks[block].layout;
-        let next = match forward {
-            true => cursor.next_visual(layout),
-            false => cursor.previous_visual(layout),
+        let at_boundary = match forward {
+            true => local >= self.blocks[block].range.len(),
+            false => local == 0,
         };
-        let stuck = (next.index(), next.affinity()) == (cursor.index(), cursor.affinity());
+        let (next_local, next_affinity) = if at_boundary {
+            (local, affinity)
+        } else {
+            layout.move_cursor(local, affinity, forward)
+        };
+        let stuck = at_boundary || (next_local == local);
         let focus = match (stuck, forward) {
             (true, true) if block + 1 < self.blocks.len() => {
                 Caret::downstream(self.blocks[block + 1].range.start)
@@ -100,7 +105,11 @@ impl Document {
                 index: self.blocks[block - 1].range.end,
                 affinity: Affinity::Upstream,
             },
-            _ => self.caret(block, next),
+            _ => Caret {
+                index: self.blocks[block].range.start
+                    + next_local.min(self.blocks[block].range.len()),
+                affinity: next_affinity,
+            },
         };
         sel.to(focus, extend)
     }
@@ -108,29 +117,35 @@ impl Document {
     /// The neighboring display line at the kept horizontal position; past
     /// the first or last line, that line's start or end.
     pub fn vertical(&self, sel: Selected, down: bool, extend: bool) -> Selected {
-        let (index, cursor) = self.cursor(sel.focus);
+        let (index, local, affinity) = self.local_caret(sel.focus);
         let block = &self.blocks[index];
-        let geometry = cursor.geometry(&block.layout, 0.0);
-        let h_pos = sel.h_pos.unwrap_or(geometry.x0 as f32 + block.origin.x);
+        let geometry = block.layout.caret_geometry(local, affinity, 0.0);
+        let h_pos = sel.h_pos.unwrap_or(geometry.x0 + block.origin.x);
         let lines = block.lines();
-        let line = block
-            .layout
-            .lines()
-            .position(|l| (geometry.y0 as f32) < l.metrics().block_max_coord)
+        let line = (0..lines)
+            .position(|l| {
+                let m = block.layout.line_metrics(l).unwrap_or_default();
+                geometry.y0 < m.y + m.height
+            })
             .unwrap_or(lines.saturating_sub(1));
         let target = match down {
             true if line + 1 < lines => Some((index, line + 1)),
             true if index + 1 < self.blocks.len() => Some((index + 1, 0)),
             false if line > 0 => Some((index, line - 1)),
-            false if index > 0 => Some((index - 1, self.blocks[index - 1].lines() - 1)),
+            false if index > 0 => {
+                Some((index - 1, self.blocks[index - 1].lines().saturating_sub(1)))
+            }
             _ => None,
         };
-        let focus = target.and_then(|(target, line)| {
-            let block = &self.blocks[target];
-            let metrics = *block.layout.get(line)?.metrics();
-            let y = metrics.block_max_coord - metrics.ascent * 0.5;
-            let cursor = Cursor::from_point(&block.layout, h_pos - block.origin.x, y);
-            Some(self.caret(target, cursor))
+        let focus = target.map(|(target, line)| {
+            let b = &self.blocks[target];
+            let m = b.layout.line_metrics(line).unwrap_or_default();
+            let y = m.y + m.height * 0.5;
+            let (target_local, target_aff) = b.layout.hit_test(h_pos - b.origin.x, y);
+            Caret {
+                index: b.range.start + target_local.min(b.range.len()),
+                affinity: target_aff,
+            }
         });
         let focus = focus.unwrap_or_else(|| self.line_edge(sel, down, false).focus);
         Selected {
@@ -141,14 +156,20 @@ impl Document {
 
     /// The start or end of the focus's display line.
     pub fn line_edge(&self, sel: Selected, end: bool, extend: bool) -> Selected {
-        let (block, cursor) = self.cursor(sel.focus);
-        let layout = &self.blocks[block].layout;
-        let line = parley::Selection::from(cursor);
-        let line = match end {
-            true => line.line_end(layout, false),
-            false => line.line_start(layout, false),
+        let (block, local, _) = self.local_caret(sel.focus);
+        let b = &self.blocks[block];
+        let line_range = b.layout.line_range_for_index(local);
+        let (idx, affinity) = match end {
+            true => (line_range.end, Affinity::Upstream),
+            false => (line_range.start, Affinity::Downstream),
         };
-        sel.to(self.caret(block, line.focus()), extend)
+        sel.to(
+            Caret {
+                index: b.range.start + idx,
+                affinity,
+            },
+            extend,
+        )
     }
 
     /// The start or end of the whole text.
@@ -168,8 +189,6 @@ impl Document {
         let (block, at) = self.local(point);
         let layout = &self.blocks[block].layout;
         let (anchor, focus) = match unit {
-            // Without a segmenter a word is unknown, so a word selection
-            // collapses to the pointer, as a plain click does.
             Unit::Word => match self.word_at(block, at) {
                 Some((anchor, focus)) => (anchor, focus),
                 None => {
@@ -178,10 +197,13 @@ impl Document {
                 }
             },
             Unit::Line => {
-                let selection = parley::Selection::line_from_point(layout, at.x, at.y);
+                let line_range = layout.line_range_from_point(at.x, at.y);
                 (
-                    self.caret(block, selection.anchor()),
-                    self.caret(block, selection.focus()),
+                    Caret::downstream(self.blocks[block].range.start + line_range.start),
+                    Caret {
+                        index: self.blocks[block].range.start + line_range.end,
+                        affinity: Affinity::Upstream,
+                    },
                 )
             }
         };
@@ -199,8 +221,8 @@ impl Document {
         let range = self.blocks[block].range.clone();
         let text = &self.text[range.clone()];
         let bounds = crate::segment::boundaries(text)?;
-        let hit = Cursor::from_point(&self.blocks[block].layout, at.x, at.y);
-        let word = bounds.containing(hit.index());
+        let (local, _) = self.blocks[block].layout.hit_test(at.x, at.y);
+        let word = bounds.containing(local);
         Some((
             self.snap(range.start + word.start),
             Caret {
@@ -211,21 +233,18 @@ impl Document {
     }
 
     /// The caret one word before or after `caret`, from the system's
-    /// boundaries, or `None` when the platform has no segmenter or the
-    /// paragraph has no further word in that direction.
+    /// boundaries.
     fn word_step(&self, caret: Caret, forward: bool) -> Option<Caret> {
-        let (block, _) = self.cursor(caret);
+        let (block, local, _) = self.local_caret(caret);
         let range = self.blocks[block].range.clone();
         let text = &self.text[range.clone()];
         let bounds = crate::segment::boundaries(text)?;
-        let local = caret.index.clamp(range.start, range.end) - range.start;
+        let local = local.clamp(0, range.len());
         match forward {
             true => bounds.next(local).map(|at| self.snap(range.start + at)),
             false => bounds.previous(local).map(|at| self.snap(range.start + at)),
         }
         .or_else(|| match forward {
-            // A paragraph boundary is a word boundary too: step into the
-            // neighboring paragraph.
             true => self
                 .blocks
                 .get(block + 1)
@@ -238,7 +257,7 @@ impl Document {
     }
 
     /// Extends to `point`, by whole words or lines when the selection started
-    /// with one, as Parley does.
+    /// with one.
     pub fn extend_to(&self, sel: Selected, point: Point) -> Selected {
         let Some((start, end, unit)) = sel.base else {
             return sel.to(self.hit(point), true);

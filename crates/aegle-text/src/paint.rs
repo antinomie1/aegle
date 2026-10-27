@@ -1,8 +1,6 @@
-use crate::{Paragraph, TextDiagnostics};
-use aegle_scene::{Glyph, GlyphRun, SceneBuilder};
+use crate::{Paragraph, TextDiagnostics, layout::Layout};
+use aegle_scene::SceneBuilder;
 use aegle_types::{Color, Point};
-use parley::Layout;
-use parley::PositionedLayoutItem;
 
 impl Paragraph {
     /// Appends positioned text to a scene in the paragraph's color.
@@ -39,7 +37,7 @@ impl Paragraph {
 
 /// Records `layout`'s glyphs at `origin`, all in `color`.
 pub(crate) fn paint_layout(
-    layout: &Layout<Color>,
+    layout: &Layout,
     diagnostics: TextDiagnostics,
     builder: &mut SceneBuilder,
     color: Color,
@@ -50,37 +48,5 @@ pub(crate) fn paint_layout(
         diagnostics.unshaped_bytes == 0,
         "paragraph contains text with no selected font"
     );
-    // Fontique suggests emboldening whenever the matched face is lighter than
-    // requested, as for a 500 request on a family with only 400 and 700.
-    // Like browsers, synthesize only bold (600 and up); a medium request
-    // keeps the regular outlines instead of thickened ones.
-    let bold = weight >= 600.0;
-    for line in layout.lines() {
-        for item in line.items() {
-            let PositionedLayoutItem::GlyphRun(positioned) = item else {
-                continue;
-            };
-            let run = positioned.run();
-            // OpenType glyph indices are 16-bit.
-            let glyphs = positioned
-                .positioned_glyphs()
-                .map(|glyph| Glyph {
-                    id: glyph.id as u16,
-                    position: Point::new(origin.x + glyph.x, origin.y + glyph.y),
-                })
-                .collect();
-            let run = GlyphRun::new(
-                run.font().clone(),
-                run.font_size(),
-                color,
-                run.normalized_coords().to_vec(),
-                glyphs,
-            )
-            .synthesized(
-                bold && run.synthesis().embolden(),
-                run.synthesis().skew().map_or(0, |a| a.round() as i8),
-            );
-            builder.glyphs(run);
-        }
-    }
+    layout.paint(builder, color, weight, origin);
 }

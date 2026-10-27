@@ -19,6 +19,7 @@ pub enum Alignment {
 }
 
 impl Alignment {
+    #[cfg(feature = "text-parley")]
     pub(crate) fn parley(self) -> parley::Alignment {
         match self {
             Self::Start => parley::Alignment::Start,
@@ -66,6 +67,7 @@ impl LineHeight {
         }
     }
 
+    #[cfg(feature = "text-parley")]
     pub(crate) fn parley(self) -> parley::LineHeight {
         match self {
             Self::MetricsRelative(value) => parley::LineHeight::MetricsRelative(value),
@@ -89,6 +91,7 @@ pub enum Slant {
 }
 
 impl Slant {
+    #[cfg(feature = "text-parley")]
     pub(crate) fn parley(self) -> parley::FontStyle {
         match self {
             Self::Normal => parley::FontStyle::Normal,
@@ -118,6 +121,7 @@ pub enum GenericFamily {
 }
 
 impl GenericFamily {
+    #[cfg(feature = "text-parley")]
     pub(crate) fn fontique(self) -> parley::fontique::GenericFamily {
         use parley::fontique::GenericFamily as Generic;
         match self {
@@ -132,6 +136,10 @@ impl GenericFamily {
     }
 }
 
-/// A font family registered with a [`crate::TextSystem`].
+#[cfg(feature = "text-parley")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFamily(pub(crate) parley::fontique::FamilyId);
+
+#[cfg(not(feature = "text-parley"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FontFamily(pub(crate) u32);

@@ -1,14 +1,13 @@
 use std::{fmt, ops::Range};
 
-use aegle_types::{Rect, Size};
-use parley::{Affinity, BoundingBox};
-
 use crate::{
     TextDiagnostics, TextError, TextStyle, TextSystem,
     document::{Caret, Document},
     history::History,
+    layout::{Affinity, BoundingBox},
     nav::Selected,
 };
+use aegle_types::{Rect, Size};
 
 /// Directed UTF-8 byte selection. Reversed endpoints preserve selection direction.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -129,7 +128,7 @@ pub struct Editor {
     pub(crate) show_cursor: bool,
     /// Emitted run IDs, their character counts and paragraphs.
     #[cfg(feature = "text-a11y")]
-    pub(crate) access_runs: Vec<(accesskit::NodeId, usize, usize)>,
+    pub(crate) access_runs: Vec<crate::accessibility::AccessRun>,
     pub(crate) composition: Option<Composition>,
     pub(crate) history: History,
     pub(crate) changes: EditChanges,
@@ -208,7 +207,10 @@ impl Editor {
     }
     /// Offset of the first line's baseline from the top, if there is a line.
     pub fn first_baseline(&self) -> Option<f32> {
-        Some(self.doc.blocks[0].layout.lines().next()?.metrics().baseline)
+        self.doc
+            .blocks
+            .first()
+            .and_then(|b| b.layout.first_baseline())
     }
     /// Font coverage of the displayed buffer, including preedit.
     pub fn diagnostics(&self) -> TextDiagnostics {
@@ -337,10 +339,5 @@ pub(crate) fn validate_selection(text: &str, selection: Selection) -> Result<(),
 }
 
 pub(crate) fn to_rect(b: BoundingBox) -> Rect {
-    Rect::new(
-        b.x0 as f32,
-        b.y0 as f32,
-        (b.x1 - b.x0) as f32,
-        (b.y1 - b.y0) as f32,
-    )
+    Rect::new(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0)
 }

@@ -21,7 +21,7 @@ accessibility = [
     "aegle-widgets/accessibility",
     "aegle-app/accessibility",
 ]
-desktop = ["native", "software", "system-fonts", "markup", "motion", "effects", "colrv1", "desktop-services"]
+desktop = ["native", "software", "system-fonts", "markup", "motion", "effects", "desktop-services"]
 # File dialogs, notifications, a tray icon and global shortcuts: `App::desktop`
 # and `aegle::desktop`.
 desktop-services = ["native", "aegle-app/desktop-services"]

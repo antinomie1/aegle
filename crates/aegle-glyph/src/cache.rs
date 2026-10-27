@@ -140,7 +140,7 @@ impl GlyphCache {
     /// Swash keeps at most four font proxies here and up to eight hint instances
     /// per outline format internally. It exposes no byte accounting for them.
     pub fn release_scratch(&mut self) {
-        self.raster = Rasterizer::new();
+        self.raster.release_scratch();
     }
 
     /// Releases glyphs, key storage, indices and all scaling scratch.

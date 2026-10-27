@@ -101,7 +101,7 @@ scene、软件和 Vulkan 渲染的文字支持是可选的。仅几何的构建�
 
 ## Vulkan 独立示例
 
-独立 Vulkan 示例需要 Vulkan 1.1 loader 与兼容驱动。可选的 `text` 使用按需的 R8/RGBA8_SRGB 图集页与共享字形光栅化，渲染器不依赖 Parley。示例只用标准库写出 PPM。绘制在 RGBA16F 线性附件中混合，再由 GPU 遍编码为预乘 sRGB RGBA8；读回是显式的。限制与设备验证见 [Vulkan 契约](vulkan.md)；CPU Vulkan 驱动不等于硬件加速。
+独立 Vulkan 示例需要 Vulkan 1.1 loader 与兼容驱动。可选的 `text` 使用按需的 R8/RGBA8_SRGB 图集页与共享字形光栅化，渲染器不依赖排版库。示例只用标准库写出 PPM。绘制在 RGBA16F 线性附件中混合，再由 GPU 遍编码为预乘 sRGB RGBA8；读回是显式的。限制与设备验证见 [Vulkan 契约](vulkan.md)；CPU Vulkan 驱动不等于硬件加速。
 
 ```sh
 cargo run -p aegle-render-vulkan --example geometry --release -- target/aegle-vulkan.ppm

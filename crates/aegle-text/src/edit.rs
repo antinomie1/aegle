@@ -6,6 +6,7 @@ use crate::{
     document::Caret,
     editor::{validate_content, validate_selection},
     history::Edit,
+    layout::Affinity,
     nav::{Selected, Unit},
 };
 
@@ -78,7 +79,6 @@ impl EditorDriver<'_> {
             return Err(TextError::InvalidWidth);
         }
         let doc = &mut self.editor.doc;
-        let alignment = alignment.parley();
         if (doc.width, doc.alignment) != (width, alignment) {
             doc.reflow(width, alignment);
             self.rebuilt(false);
@@ -188,18 +188,8 @@ impl EditorDriver<'_> {
         }
         let line = &doc.text[block.range.clone()];
         let caret = caret - block.range.start;
-        let mut start = 0;
-        // Reuse Parley's ICU tables: shaping clusters can split graphemes.
-        for end in icu_segmenter::GraphemeClusterSegmenter::new()
-            .segment_str(line)
-            .skip(1)
-        {
-            if end > caret || (previous && end == caret) {
-                return block.range.start + start..block.range.start + end;
-            }
-            start = end;
-        }
-        caret..caret
+        let range = block.layout.grapheme_range(line, caret, previous);
+        block.range.start + range.start..block.range.start + range.end
     }
 
     /// Select UTF-8 byte endpoints. Endpoints inside shaping clusters snap to the
@@ -382,8 +372,8 @@ impl EditorDriver<'_> {
         let index = start + text.len();
         // After a line break the caret starts the next line.
         let affinity = match text.ends_with(['\n', '\r', '\u{2028}', '\u{2029}']) {
-            true => parley::Affinity::Downstream,
-            false => parley::Affinity::Upstream,
+            true => Affinity::Downstream,
+            false => Affinity::Upstream,
         };
         self.editor.sel = Selected::collapsed(Caret { index, affinity });
         self.editor.show_cursor = true;
@@ -401,7 +391,7 @@ impl EditorDriver<'_> {
     fn select_end(&mut self) {
         let end = Caret {
             index: self.editor.doc.text.len(),
-            affinity: parley::Affinity::Upstream,
+            affinity: Affinity::Upstream,
         };
         self.editor.sel = Selected::collapsed(end);
         self.editor.show_cursor = true;

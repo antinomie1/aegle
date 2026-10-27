@@ -1,7 +1,5 @@
-use crate::{Alignment, ContentWidths, TextError, style::Shaping};
+use crate::{Alignment, ContentWidths, TextError, layout::Layout, style::Shaping};
 use aegle_types::{Color, Size};
-use parley::AlignmentOptions;
-use parley::Layout;
 
 /// Visible missing-glyph and omitted-text diagnostics for a shaped paragraph.
 ///
@@ -27,11 +25,11 @@ pub struct TextDiagnostics {
 #[derive(Debug)]
 pub struct Paragraph {
     pub(crate) text: String,
-    pub(crate) layout: Layout<Color>,
+    pub(crate) layout: Layout,
     pub(crate) width: Option<f32>,
-    pub(crate) alignment: parley::Alignment,
+    pub(crate) alignment: Alignment,
     pub(crate) diagnostics: TextDiagnostics,
-    pub(crate) content_widths: parley::ContentWidths,
+    pub(crate) content_widths: ContentWidths,
     /// What the layout was shaped with; its weight decides synthetic bold.
     pub(crate) shaping: Shaping,
     /// Foreground color, applied when painting so that changing it needs no
@@ -57,7 +55,7 @@ impl Paragraph {
     /// queries see an empty layout meanwhile, reflowing returns
     /// [`TextError::Released`] and painting panics. For text no one shows.
     pub fn release(&mut self) {
-        self.layout = Layout::new();
+        self.layout = Layout::empty();
         self.released = true;
     }
 
@@ -77,14 +75,10 @@ impl Paragraph {
         if self.released {
             return Err(TextError::Released);
         }
-        let alignment = alignment.parley();
-        if self.width != width {
+        if self.width != width || self.alignment != alignment {
             self.width = width;
             self.alignment = alignment;
-            self.break_lines();
-        } else if self.alignment != alignment {
-            self.alignment = alignment;
-            self.layout.align(alignment, AlignmentOptions::default());
+            self.layout.reflow(width, alignment);
         }
         Ok(self.size())
     }
@@ -101,7 +95,7 @@ impl Paragraph {
 
     /// Offset of the first line's baseline from the top, if there is a line.
     pub fn first_baseline(&self) -> Option<f32> {
-        Some(self.layout.lines().next()?.metrics().baseline)
+        self.layout.first_baseline()
     }
 
     /// Returns intrinsic soft-wrap limits from the shaping result.
@@ -129,37 +123,7 @@ impl Paragraph {
         self.diagnostics.missing_glyphs
     }
 
-    pub(crate) fn break_lines(&mut self) {
-        self.layout.break_all_lines(self.width);
-        self.layout
-            .align(self.alignment, AlignmentOptions::default());
-    }
-
     pub(crate) fn update_diagnostics(&mut self) {
-        self.diagnostics = diagnose(&self.text, &self.layout);
-    }
-}
-
-pub(crate) fn diagnose(text: &str, layout: &Layout<Color>) -> TextDiagnostics {
-    let mut shaped_bytes = 0;
-    let mut missing_glyphs = 0;
-    for line in layout.lines() {
-        for run in line.runs() {
-            for cluster in run.clusters() {
-                let range = cluster.text_range();
-                // An empty paragraph uses an internal synthetic space for metrics.
-                if text.is_empty() {
-                    continue;
-                }
-                shaped_bytes += range.len();
-                if !text[range].chars().all(char::is_control) {
-                    missing_glyphs += cluster.glyphs().filter(|glyph| glyph.id == 0).count();
-                }
-            }
-        }
-    }
-    TextDiagnostics {
-        missing_glyphs,
-        unshaped_bytes: text.len().saturating_sub(shaped_bytes),
+        self.diagnostics = self.layout.diagnostics(&self.text);
     }
 }

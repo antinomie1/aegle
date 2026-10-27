@@ -12,8 +12,8 @@
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；经过校验的布局值（`Length`、`Insets`、`Align`、`Justify`、`Direction`、`LayoutDirection`、`Wrap`，`Length::Calc` 为“百分比 + 像素”，grid 另有 `Track`、`Placement`、`Flow`、`TemplateItem`/`Repeat`/`template`、`areas`、`GridLine`/`GridLines`）；叶节点测量回调与可选的首基线回调（`compute_with_baselines`）；透明的 contents 节点；不依赖应用 | types、core |
 | aegle-segment | 向系统分词器要词边界：Linux/Windows 动态加载系统 ICU（`libicui18n`/`icu.dll`），macOS 用 `CFStringTokenizer`；不链接任何词典数据，也没有回退，找不到即报告不可用 | 无内部依赖 |
-| aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销；按词移动与选词取 `aegle-segment` 的边界 | types、segment；scene 按 feature 接入 |
-| aegle-glyph | Swash 字形光栅化、有界 CPU 缓存、共用字形身份/变换策略；字体内嵌位图的 PNG 解码来自 aegle-image | image、scene 按 feature 接入 |
+| aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销；排版交给平台系统栈（Linux 为 Pango），按词移动与选词取 `aegle-segment` 的边界 | types、segment；scene 按 feature 接入；`text-parley` opt-in 为不再维护的回退 |
+| aegle-glyph | 字形光栅化（Linux 为系统 FreeType）、有界 CPU 缓存、共用字形身份/变换策略；字体内嵌位图由 FreeType 解码 | image、scene 按 feature 接入；`swash` opt-in 为不再维护的回退 |
 | aegle-scene | 二维绘制命令、裁剪、共享图像/路径资源及可选字形记录 | types |
 | aegle-gpu | GPU 后端共用、与图形 API 无关的部分：图元/裁剪记录、场景遍历、货架装箱、图像与路径 mask 放置、WGSL 着色器 | types、scene；vector feature 增加 zeno |
 | aegle-render-vulkan | 几何、可选字形图集、裁剪、离屏读回与可选原生 swapchain | types、scene；glyph 按 text feature 接入 |
@@ -40,7 +40,7 @@
 
 层次：`aegle-ui` 是引擎，`aegle-widgets` 是默认控件库，`aegle-app` 是原生宿主；三者单向依赖（widgets→ui，app→ui），ui 不依赖 widgets 或任何平台/renderer。自带控件的库可只依赖 `aegle-ui` 实现 `Control`；自带窗口/绘制宿主的程序可只依赖 `aegle-ui` 与 `aegle-widgets`。`Hooks` 让虚拟列表、弹出层、单选组等需要跨节点协作的行为留在控件库内，引擎只提供调用点；各库的节点外数据存于 `State::ext`。
 
-表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`，映射 Parley 的可选 AccessKit 支持；基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
+表中的简称指同名前缀 crate。文字无障碍为 `aegle-text/text-a11y`：系统栈下由 Aegle 自己导出 run 与选择位置，`text-parley` 回退下转发 Parley 的 AccessKit 支持。基础文字模块不强制启用它。平台 adapters 按 target 编译，不能把三平台实现都塞进一个程序。
 
 当前 `aegle-scene` 使用 no_std + alloc，默认只依赖 types；`text` 仅增加轻量的 `linebender_resource_handle`，通过共享 `FontData` 及独立 run 旁表保存字形记录，不引入 Parley 或 Swash。纯几何命令不携带完整字体/run 数据。图像与路径以 `Arc` 共享句柄保存在 scene 旁表，路径光栅化留在各 renderer 内部，不另设路径 crate。
 
@@ -52,9 +52,9 @@
 
 `aegle-render-wgpu` 消费相同 Scene，经 wgpu 30 在 Vulkan、Metal、Direct3D 12 上绘制几何、最多八层裁剪与 mask/color 字形，不依赖 Parley、Vulkan 后端或 ash；可选 `window` 只增加 raw-window-handle。图像与 CPU 光栅的路径 mask 共用同一图集，放不下的得到专用纹理。与 Vulkan 后端共用的部分见 [wgpu 契约](wgpu.md)。
 
-`aegle-text` 默认启用 Parley std，并复用其已有的 ICU 分段包处理 grapheme 删除；系统字体、词典、文字无障碍和 scene 桥接分别可选。段落与 Editor 共用 TextSystem 字体/shaping 上下文，Editor 以 Parley 的 Layout、Cursor 与 Selection 按硬换行分段排版（编辑只重新成形触及的段落），并补充稳定提交值、可取消组合和有界 delta 历史；不引入另一个编辑框架或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由平台/应用层连接。
+`aegle-text` 的排版与字形遍历默认来自平台系统栈，`layout.rs` 的 `PlatformSystem`/`Layout` 是唯一按 target 分派的位置：Linux 走 `backend_pango`（Pango + PangoFT2 + Fontconfig，全部运行时加载），其余 target 目前仍走 `text-parley` 回退。段落与 Editor 共用 TextSystem 的字形系统，Editor 按硬换行分段排版（编辑只重新成形触及的段落），并补充稳定提交值、可取消组合和有界 delta 历史；不引入另一个编辑框架或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由平台/应用层连接。
 
-`aegle-glyph` 独立接受共享字体句柄，复用 Swash、Skrifa、hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。
+`aegle-glyph` 独立接受共享字体句柄，字形轮廓、位图与彩色层来自系统 FreeType（`libfreetype.so.6`，运行时加载），索引与 LRU 用 hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。`swash`/`skrifa` 路径只在显式启用该 feature 时编译。
 
 该模块公开共用的借用/拥有字形缓存身份；可选 `scene` feature 依赖 `aegle-scene/text`，提供 renderer 共用的字体缩放、整像素基线与水平四相位、灰度对比曲线和 bitmap 仿射策略。默认字形缓存仍不依赖 scene。
 

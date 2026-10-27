@@ -1,5 +1,6 @@
 use crate::{LineHeight, Slant};
 use aegle_types::Color;
+#[cfg(feature = "text-parley")]
 use parley::fontique::Language;
 use std::{error::Error, fmt, sync::Arc};
 
@@ -62,9 +63,7 @@ impl TextStyle<'_> {
             || !self.letter_spacing.is_finite()
             || !self.word_spacing.is_finite()
             || !valid_slant
-            || self
-                .locale
-                .is_some_and(|locale| Language::parse(locale).is_err())
+            || self.locale.is_some_and(|locale| !is_valid_bcp47(locale))
         {
             return Err(TextError::InvalidStyle);
         }
@@ -72,9 +71,16 @@ impl TextStyle<'_> {
     }
 
     /// The parsed language hint of a validated style.
-    pub(crate) fn language(&self) -> Option<Language> {
-        self.locale.and_then(|locale| Language::parse(locale).ok())
+    pub(crate) fn language(&self) -> Option<String> {
+        self.locale.map(|l| l.to_string())
     }
+}
+
+fn is_valid_bcp47(locale: &str) -> bool {
+    !locale.is_empty()
+        && locale.split('-').all(|part| {
+            !part.is_empty() && part.len() <= 8 && part.chars().all(|c| c.is_ascii_alphanumeric())
+        })
 }
 
 /// What shaping depends on: every [`TextStyle`] field except the color, with
@@ -88,7 +94,7 @@ pub(crate) struct Shaping {
     pub weight: f32,
     pub width: f32,
     pub slant: Slant,
-    pub locale: Option<Language>,
+    pub locale: Option<String>,
     pub line_height: LineHeight,
     pub letter_spacing: f32,
     pub word_spacing: f32,
@@ -108,6 +114,7 @@ impl Shaping {
             && self.word_spacing == style.word_spacing
     }
 
+    #[cfg(feature = "text-parley")]
     /// Builder defaults, with `color` as every glyph's brush.
     pub fn properties(&self, color: Color) -> [parley::StyleProperty<'_, Color>; 10] {
         use parley::StyleProperty::*;
@@ -117,7 +124,7 @@ impl Shaping {
             FontWeight(parley::FontWeight::new(self.weight)),
             FontWidth(parley::FontWidth::from_ratio(self.width)),
             FontStyle(self.slant.parley()),
-            Locale(self.locale),
+            Locale(self.locale.as_deref().and_then(|l| Language::parse(l).ok())),
             Brush(color),
             LineHeight(self.line_height.parley()),
             LetterSpacing(self.letter_spacing),

@@ -1,28 +1,30 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows 经 TSF 文本存储接入输入法（见末节），macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。使用[兼容版本组](dependencies.md)中的 Parley、Fontique、HarfRust、Swash；编辑器复用 Parley 的 Layout、Cursor 与 Selection，按硬换行分段排版，不从零重写 shaping、bidi 或段内选择逻辑。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows 经 TSF 文本存储接入输入法（见末节），macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。
+
+排版引擎默认是**操作系统的文字栈**：Linux 用 Pango（bidi、UAX #14 换行、字体回退）加 Fontconfig 与 FreeType，全部在运行时从发行版的共享库加载；Windows 与 macOS 的目标是 DirectWrite 与 CoreText，目前仍由下面的回退实现承担。Aegle 自己拥有的是保留段落、光标与选择语义（`document`/`nav`/`edit`）以及字形记录，不重写 shaping、bidi 或换行。`aegle-text/text-parley` 与 `aegle-glyph/swash` 是**默认关闭、不再维护**的回退：只在显式启用时编译 Parley/HarfRust/Skrifa/Swash，用来在没有系统文字栈的宿主上继续工作。
 
 ## 当前显示接口
 
-`TextSystem` 共享字体集合及 shaping 临时存储；`Paragraph` 拥有 UTF-8 文本和保留的 Parley 布局。`paragraph/update/restyle` 完成字体选择与 shaping，段落保留去色的 shaping 键，只改颜色时不重新 shaping（绘制取段落颜色）；`Paragraph::release` 释放排版并保留文字、样式与约束，`TextSystem::restore` 重新成形，宿主据 `TextSystem::set_idle_budget` 回收未显示的段落（见[资源](resources.md#当前字体与-cpu-字形边界)）；`reflow` 仅换行和对齐，相同约束直接复用结果。`content_widths` 提供 intrinsic 测量值，宿主通过 Taffy 测量回调接入；最终绘制前采用最终布局宽度。段落与编辑器按布局方向左对齐或右对齐（`Node::set_layout_direction`），混排文本的基础方向仍由 Parley 按内容检测。`Paragraph::first_baseline` 与编辑器的同名方法给出首行基线，文字控件据此按最终尺寸与绘制位置（居中或内边距处）向 Taffy 报告首基线，供 `Align::Baseline`。Parley 对混合双向文本的 intrinsic 宽度仍有估计限制。
+`TextSystem` 共享系统字形栈的一次性初始化与字体集合；`Paragraph` 拥有 UTF-8 文本和保留的排版结果。`layout` 模块的 `PlatformSystem`/`Layout` 是所有排版调用的唯一入口，按 target 选择系统栈或回退实现。`paragraph/update/restyle` 完成字体选择与排版，段落保留去色的 shaping 键，只改颜色时不重新排版（绘制取段落颜色）；`Paragraph::release` 释放排版并保留文字、样式与约束，`TextSystem::restore` 重新成形，宿主据 `TextSystem::set_idle_budget` 回收未显示的段落（见[资源](resources.md#当前字体与-cpu-字形边界)）；`reflow` 仅换行和对齐，相同约束直接复用结果。`content_widths` 提供 intrinsic 测量值，宿主通过 Taffy 测量回调接入；最终绘制前采用最终布局宽度。段落与编辑器按布局方向左对齐或右对齐（`Node::set_layout_direction`），混排文本的基础方向仍由系统栈按内容检测（Pango 的段落方向）。`Paragraph::first_baseline` 与编辑器的同名方法给出首行基线，文字控件据此按最终尺寸与绘制位置（居中或内边距处）向 Taffy 报告首基线，供 `Align::Baseline`。`LineHeight` 的三种取值都换算成系统栈的行距倍数：Pango 的 `pango_layout_set_line_spacing` 乘的是每行自身高度，因此先按首行高度求出目标倍数（0 表示自然行距），混合字号的行按各自高度缩放，这与逐行固定行高的排印模型有意不同。
 
-`glyph_runs` 借用已有字形位置；可选 `aegle-text/scene` 提供 `paint`，将位置和变化轴复制到 scene，字体字节通过 `FontData` 共享。`paint_with_color` 可重建前景颜色而不重新 shaping。scene 不持有文字引擎，光栅化模块不依赖 Parley。
+`glyph_runs` 借用已有字形位置；可选 `aegle-text/scene` 提供 `paint`，将位置和变化轴复制到 scene，字体字节通过 `FontData` 共享。`paint_with_color` 可重建前景颜色而不重新 shaping。scene 不持有文字引擎，光栅化模块不依赖排版库。
 
-`TextDiagnostics` 分别报告缺字 glyph 和没有任何字体可成形的 UTF-8 字节数。前者显示字体的 `.notdef`；后者使 `paint` 返回 `MissingFont`，避免整段文字静默消失。字体缺少所需字重或倾斜时，Parley 给出的合成建议（粗体、倾斜度）随 `GlyphRun` 传到光栅器：轮廓外扩 em/32 并按角度错切，仍是同一字形键与图集；位图字体不合成。字形支持灰度轮廓、COLRv0、SBIX/CBDT PNG 及原始 BGRA/alpha 位图；`colrv1` feature 增加 COLRv1 渐变/变换/混合层，`svg` feature 增加不含文字的 OpenType-SVG，未启用时对应表示返回不支持。注册字体不等于该字体的每种表示均可绘制。
+`TextDiagnostics` 分别报告缺字 glyph 和没有任何字体可成形的 UTF-8 字节数。系统栈下"缺字"指 Pango 给出的 unknown glyph：它自带占位宽度并由 Pango 自己画成占位框，Aegle 不重复绘制（不换成 `.notdef`，否则字形与 advance 不一致），诊断计数照旧；完全没有字体成形的字节数仍使 `paint` panic，避免整段文字静默消失。字体缺少所需字重或倾斜时，合成建议随 `GlyphRun` 传到光栅器：轮廓外扩 em/32 并按角度错切（系统栈下由 FreeType 的 embolden/transform 完成），仍是同一字形键与图集；位图字体不合成。系统栈的彩色字形来自 FreeType 的 `FT_LOAD_COLOR`（COLR 层与内嵌 PNG/BGRA 位图，输出直通 sRGB），此时 `colrv1`/`svg` feature 只在回退实现里有意义。字形支持灰度轮廓、COLRv0、SBIX/CBDT PNG 及原始 BGRA/alpha 位图；`colrv1` feature 增加 COLRv1 渐变/变换/混合层，`svg` feature 增加不含文字的 OpenType-SVG，未启用时对应表示返回不支持。注册字体不等于该字体的每种表示均可绘制。
 
 ## 显示与内存
 
 Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简繁中文及日、韩语言提示。locale 可由应用覆盖，缺字按配置字体链回退，最终使用缺字占位并提供诊断，不能保证未安装字体覆盖所有字符。
 
-未来 desktop 组合默认使用系统字体，不附带巨大 CJK 字库。当前独立模块的 `TextSystem::new()` 始终创建显式字体集合，不受 Cargo feature 合并影响；启用 `system-fonts` 后可用 `TextSystem::system()` 选择系统发现，Linux 需要 Fontconfig。嵌入式直接注册共享字体字节及 fallback 清单，打包字体的许可、覆盖和体积由发布清单记录。映射字体仍计入相应内存口径。
+未来 desktop 组合默认使用系统字体，不附带巨大 CJK 字库。当前独立模块的 `TextSystem::new()` 始终创建显式字体集合，不受 Cargo feature 合并影响：Linux 下它给 Pango 一个空的 Fontconfig 配置，只加入显式注册的字体文件，并把这些字体登记为对应 generic family 的替代（`set_generic_families`）。启用 `system-fonts` 后可用 `TextSystem::system()` 使用发行版的字体发现。嵌入式直接注册共享字体字节及 fallback 清单，打包字体的许可、覆盖和体积由发布清单记录。映射字体仍计入相应内存口径。
 
 按实际出现的 glyph、字号、字体变化轴与光栅化参数生成字形。CPU 字形缓存和 GPU 图集分别有界，按最近使用淘汰，在途资源延迟回收；不预烘焙所有 CJK codepoint。布局结果、字体 metadata 和活动编辑状态也分别计量，不用字形上限代表整个文本系统。
 
 `aegle-glyph/scene` 提供两类 renderer 共用的 `RasterTransform/GlyphOrigin` 策略：取仿射矩阵较大列长度确定设备字号，正向均匀轴向变换采用 hinting、整像素基线与水平四分之一像素相位，其他变换保留原点并过滤采样。共用 `mask_contrast` 按前景亮度调整灰度覆盖率 `c + c(1-c)k`：深色字加重、浅色字减轻，抵消线性混合造成的浅底细字与深底粗字；0 和满覆盖不变。它只计算字形光栅参数和 bitmap 到设备的变换，不改变排版 advance；软件后端已使用同一接口。设备基线超出 ±1,048,576 时明确返回坐标错误，最终图像边界和裁剪仍由各后端处理。
 
-`aegle-text` 不携带任何词典数据：显示、换行、bidi 与删除分别使用 Unicode 规则（UAX #14 换行、extended grapheme 删除边界），按词移动与双击选词只有一个边界来源——系统分词器（`aegle-segment`：Linux/Windows 的系统 ICU、macOS 的 `CFStringTokenizer`）。有它时按词移动与选词是词典结果（实测「中文分词测试」→ 中文/分词/测试、「東京都に行きます」→ 東京/都/に/行き/ます、「ภาษาไทยทดสอบ」→ ภาษา/ไทย/ทดสอบ）；**没有它时这两个操作不做任何事**——不退回规则边界，也不把每个汉字当成一个词：按词移动不移动，双击只把插入点放到点击处。`aegle_text::segment::available()` 报告当前进程是否可用。
+`aegle-text` 不携带任何词典数据：显示、换行、bidi 与删除由系统栈负责（Pango 的 UAX #14 换行与 `pango_get_log_attrs` 的 extended grapheme 边界），按词移动与双击选词只有一个边界来源——系统分词器（`aegle-segment`：Linux/Windows 的系统 ICU、macOS 的 `CFStringTokenizer`）。有它时按词移动与选词是词典结果（实测「中文分词测试」→ 中文/分词/测试、「東京都に行きます」→ 東京/都/に/行き/ます、「ภาษาไทยทดสอบ」→ ภาษา/ไทย/ทดสอบ）；**没有它时这两个操作不做任何事**——不退回规则边界，也不把每个汉字当成一个词：按词移动不移动，双击只把插入点放到点击处。`aegle_text::segment::available()` 报告当前进程是否可用。
 
-因为 Parley 的 complex-scripts 词典数据被彻底关闭，泰/老/缅/高棉的**行内换行**退回 UAX #14 规则，长段落可能不折断——这是移除内置数据的已知代价。按词移动与选词对双向文本同样只来自系统分词器，边界按逻辑（字节）顺序，因此 RTL 段落按逻辑顺序移动。系统分词器查找与 `AEGLE_SEGMENT=none` 的调试开关见 [API 指南](developer/api.md)。
+默认构建不链接任何词典数据，泰/老/缅/高棉的**行内换行**仍由系统栈的规则引擎处理（Pango 自带字典时其行为随发行版而定），按词移动与选词永远只来自系统分词器。回退实现（`text-parley`）关闭了 complex-scripts 词典，这几个script的行内换行退回 UAX #14，长段落可能不折断。按词移动与选词对双向文本同样只来自系统分词器，边界按逻辑（字节）顺序，因此 RTL 段落按逻辑顺序移动。系统分词器查找与 `AEGLE_SEGMENT=none` 的调试开关见 [API 指南](developer/api.md)。
 
 ## 当前编辑接口
 
@@ -30,13 +32,13 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 `Editor::text()` 返回无分配的 `TextValue` 借用视图；需要连续拥有的字符串时才调用 `to_string()`。`display_text()` 包含预编辑，不能充当已提交值。`take_changes()` 合并并取出 value/layout/selection/policy 失效标记，宿主据此更新布局、绘制、平台状态及未来语义树。`revision()` 是只增不减的已提交值修订号（预编辑不推进），比较前后两次读数即知其间值是否改变；aegle-ui 据此在用户输入改变文字后排队 TextField 的 `on_change`（标记中的 `changed`），程序 `set_text` 不经过输入路径，因此不触发。
 
-内部 UTF-8 范围在字符边界验证。`select` 为用户选择，会按 Parley 的 shaping cluster 吸附；`replace` 用于精确协议替换，保留合法字节端点，不把删除一个组合字符扩大为删除基字符。无选区的 backspace/delete 使用与 Parley 同版本 ICU 的 extended grapheme 分段，只扫描光标所在的一行；在行首退格或行尾删除移除整个换行（CRLF 为一个）。
+内部 UTF-8 范围在字符边界验证。`select` 为用户选择，会按当前排版结果的 cluster/字符边界吸附；`replace` 用于精确协议替换，保留合法字节端点，不把删除一个组合字符扩大为删除基字符。无选区的 backspace/delete 使用系统栈的 extended grapheme 分段，只扫描光标所在的一行；在行首退格或行尾删除移除整个换行（CRLF 为一个）。
 
 历史记录保存替换片段及前后选区，不逐次复制完整文本；连续相邻纯插入可合并。宿主在粘贴、焦点变化或输入停顿时调用 `break_undo_group`，编辑器本身不建计时器。默认历史预算 1 MiB，常规超限淘汰最旧完整操作；单次操作大于预算或禁用历史时仍编辑当前值，但清除旧历史以防错误回放。`set_text` 清空历史，详细计量见[资源](resources.md)。
 
 `scene` feature 提供 `Editor::paint`，依次记录选择背景、字形、预编辑下划线及光标。`EditorPaint` 控制颜色及装饰显隐，前景变色不重新 shaping；聚焦、光标闪烁、滚动和裁剪由宿主负责。绘制、命中、选择矩形及 `ime_rect` 共用同一布局。`ime_rect` 返回未裁剪的局部逻辑坐标，宿主必须施加当前滚动/呈现变换。
 
-Editor 自己保存显示缓冲与每个硬换行段落的 Parley 布局（段落连同其后的换行符成形，排版时跳过换行后的空行，因此语义 run、选区与光标几何与整段布局相同）。替换只重新成形包含编辑或旧预编辑的段落，以及因插入、删除换行而合并或拆开的相邻段落，后面段落只平移字节偏移与位置；精确 UTF-8 替换直接作用于缓冲，不再借助上游 composition API。改宽度或对齐只重新断行与对齐，无换行宽度时各段在最宽一段内按对齐方式摆放；只改颜色不成形，`EditChanges::paint` 通知宿主重录；字体、字号等其余样式改变重新成形全部段落。段内移动、命中与按词/行选择用 Parley 的 Cursor/Selection，越过段首尾时走到相邻段落，上下移动保留水平位置。单行编辑器只有一个段落，每次编辑仍重新成形整行；仍不是富文本编辑器。
+Editor 自己保存显示缓冲与每个硬换行段落的排版结果（段落连同其后的换行符成形，排版时跳过换行后的空行，因此语义 run、选区与光标几何与整段布局相同）。替换只重新成形包含编辑或旧预编辑的段落，以及因插入、删除换行而合并或拆开的相邻段落，后面段落只平移字节偏移与位置；精确 UTF-8 替换直接作用于缓冲，不再借助上游 composition API。改宽度或对齐只重新断行与对齐，无换行宽度时各段在最宽一段内按对齐方式摆放；只改颜色不成形，`EditChanges::paint` 通知宿主重录；字体、字号等其余样式改变重新成形全部段落。段内移动、命中与按词/行选择调用 `Layout` 的 `move_cursor`/`hit_test`/`line_range_*`，越过段首尾时走到相邻段落，上下移动保留水平位置；系统栈返回的字节偏移一律先归到 UTF-8 字符边界（`pango_layout_xy_to_index` 的 trailing 位表示"落在该字符后半"，不是加一个字节），宿主发布 IME surrounding 时不会交出半个字符的偏移。单行编辑器只有一个段落，每次编辑仍重新成形整行；仍不是富文本编辑器。
 
 ## 组合输入模型
 
@@ -80,11 +82,11 @@ TextField 在 Ctrl（macOS 为 Command）+C/X/V 时只返回 `Outcome::clipboard
 
 Wayland 已接入上述 text-input-v3，Windows 经 TSF 文本存储以同一批次形式接入（见[当前 Windows 输入边界](#当前-windows-输入边界)）；macOS 的 NSTextInputClient 仍为待实现目标。文字引擎不代替这些平台协议。候选窗采用当前呈现几何，主题、缩放或动画更新时同步，不重建编辑器。当前 app 的局部字号改变重排同一 Editor，保留组合和选择；皮肤/局部配色只覆盖绘制，不重启 IME 会话。动画几何仍未实现。
 
-`text-a11y` 提供 `EditorDriver::accessibility` 导出显示文字 run、几何、预编辑下划线和选区；`select_accessibility` 校验最近导出的身份/cluster 索引并作用于同一个 Editor。布局重建后旧映射无效；活动组合期间明确返回 CompositionActive，不能把显示范围直接套到取消后的已提交值。Unix 示例通过独立 aegle-access 接到 AT-SPI 查询、选择和焦点，当前上游缺少 EditableText，不能声称支持辅助技术文字替换；详见[无障碍边界](accessibility.md)。
+`text-a11y` 提供 `EditorDriver::accessibility` 导出显示文字 run、几何、预编辑下划线和选区；系统栈下 run 由 Aegle 按段落与预编辑边界切分（预编辑恰好被下划线覆盖），回退实现转发 Parley 的 run；`select_accessibility` 校验最近导出的身份/cluster 索引并作用于同一个 Editor。布局重建后旧映射无效；活动组合期间明确返回 CompositionActive，不能把显示范围直接套到取消后的已提交值。Unix 示例通过独立 aegle-access 接到 AT-SPI 查询、选择和焦点，当前上游缺少 EditableText，不能声称支持辅助技术文字替换；详见[无障碍边界](accessibility.md)。
 
 平台缺少 IME 协议时报告 ImeUnavailable 并保留基础键盘输入；要求组合输入的应用可以将其设为启动必需能力。正式 CJK/IME 验收必须在具备对应协议和真实输入法的环境进行。
 
-来源：[PlainEditor 发布源码](https://docs.rs/crate/parley/0.11.1/source/src/editing/editor.rs)、[Parley analysis](https://docs.rs/crate/parley/0.11.1/source/src/analysis/mod.rs)、[ICU4X CJK 换行说明](https://docs.rs/crate/icu_segmenter/2.3.0/source/src/line.rs)、[text-input-v3 协议](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/unstable/text-input/text-input-unstable-v3.xml)。
+来源：[Pango 布局 API](https://docs.gtk.org/Pango/pango/Layout.html)、[Pango 断行属性](https://docs.gtk.org/Pango/method.get_log_attrs.html)、[Fontconfig 配置 API](https://fontconfig.pages.freedesktop.org/fontconfig/fontconfig-FcConfigCreate.html)、[FreeType 位图与彩色字形](https://freetype.org/freetype2/docs/reference/ft2-bitmap_handling.html)、[text-input-v3 协议](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/unstable/text-input/text-input-unstable-v3.xml)。
 
 ## 当前应用层滚动与候选区域
 

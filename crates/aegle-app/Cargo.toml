@@ -13,7 +13,7 @@ description = "Native application host: windows, event loop, renderers, system p
 [features]
 default = []
 motion = ["aegle-ui/motion"]
-system-fonts = ["aegle-ui/system-fonts"]
+system-fonts = ["aegle-ui/system-fonts", "aegle-text/system-fonts"]
 # The semantic tree plus the system adapter of the target: AT-SPI on Linux,
 # UI Automation on Windows, NSAccessibility on macOS. The adapter attaches to a
 # native window, so this implies `native`; the other targets' adapters are not

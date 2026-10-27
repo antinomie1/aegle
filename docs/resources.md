@@ -17,7 +17,7 @@
 | 输入到首次相关呈现 | p95 ≤ 33 ms，p99 ≤ 50 ms | 60 Hz 场景；端到端测量，不仅测 setter |
 | UI 布局及构造绘制提交工作 | p95 ≤ 4 ms | 不把 GPU 等待计为纯 CPU 计算 |
 | 首帧 | 热启动 ≤ 200 ms，冷启动 ≤ 600 ms | 包含字体发现，分别报告缓存冷热 |
-| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-11-02 在 x86_64 Linux 以默认 feature 构建 `hello` 为 4,891,328 B（4.66 MiB），**达到**；内置 ICU 词典数据已彻底移除（此前默认开启时为 8,495,544 B，可选后含词典的构建为 8,693,352 B），改由运行时向系统分词器取词，所以同一构建不再有 3.63 MiB 的词典增量。只开 `native,software,system-fonts` 的最小组合为 4,547,376 B（4.34 MiB）。Windows 同类构建为 3,487,232 B（2026-10-10 测量） |
+| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-11-02 起文字与字形改用系统栈（Pango/Fontconfig/FreeType，运行时加载），x86_64 Linux 默认 feature 构建 `hello` 为 **2,580,056 B（2.46 MiB）**，比 Parley 时代同构建的 4,891,328 B（4.66 MiB）少 2.31 MiB，**达到**且余量充足。构成：`.text` 1.98 MB、`.rodata` 95 KB、`.eh_frame` 165 KB、`.rela.dyn` 138 KB；`ldd` 只剩 libxkbcommon、libm、libc 与 libgcc_s，Pango/FreeType/Fontconfig 由 `libloading` 在运行时打开，不计入发布文件。内置 ICU 词典数据在后一阶段已彻底移除，改由运行时向系统分词器取词，所以同一构建不再有 3.63 MiB 的词典增量。只开 `native,software,system-fonts` 的最小组合与默认组合只差 markup/motion/effects/desktop-services。Windows 同类构建在 Parley 时代为 3,487,232 B（2026-10-10 测量），DirectWrite 后端落地后需重测 |
 | 默认组件文字场景发布文件 | ≤ 16 MiB | 包含默认无障碍、主题、补间；不含可选高级模块 |
 | 最小窗口 / 100 控件场景 PSS | ≤ 32 / 48 MiB | Linux 测量，包含可归因的用户态驱动映射；系统服务进程另列 |
 | 场景显式 GPU 分配 | ≤ 16 MiB | 800×480；计入图集、纹理和临时附件；swapchain 估计与驱动隐藏分配另列 |
@@ -60,13 +60,13 @@ mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲
 
 `GlyphCache::release_scratch()` 释放光栅化临时存储并保留完成图像；`clear()` 同时释放图像和索引。renderer 的 `release_scratch()` 也释放 glyph scratch，清空图像须显式调用 `glyph_cache_mut().clear()`。字形缓存不持有字体文件；活动段落和 scene 共享字体句柄。scene 的存储统计含 run/位置/变化轴数组，不重复计入共享字体字节。
 
-`TextSystem::trim()` 重建 shaping 临时上下文并清除只被字体 source cache 持有的映射；注册字体、metadata 和活动段落保持有效。Parley shaping 缓存有 16 条上限，未暴露完整字节预算。`trim` 也丢弃不再被任何段落或编辑器使用的驻留字体族名。
+`TextSystem::trim()` 在系统栈下释放进程级字体文件缓存（活动段落保留下一步重读，`FontData` 句柄被替换前仍共享原字节），`text-parley` 下重建 shaping 临时上下文并清除 source cache；注册字体、metadata 和活动段落保持有效。Parley shaping 缓存有 16 条上限，未暴露完整字节预算。`trim` 也丢弃不再被任何段落或编辑器使用的驻留字体族名。
 
 空闲文字预算是全应用的：`TextSystem::set_idle_budget(bytes)` 限制共享该 TextSystem 的所有宿主中未显示、仍保留排版的段落文字字节，默认 `None` 不回收。宿主以 `report_idle` 上报，`aegle-ui` 的每个 Ui 在刷新末尾扫描文字控件（与 `visit_scenes` 同一可见判定），总量超出时按最久未显示先释放本窗口段落的 Parley 排版与绘制记录，段落只留文字、shaping 键与约束；再次显示、测量或求基线时重新成形。预算计 UTF-8 字节，排版内存随文字增长但不等于这个数；回收只在刷新的窗口进行，关闭的窗口撤回上报。编辑器的活动编辑状态不回收。设置预算后被释放的屏外段落在每次重新布局时都会重新成形，换取屏外期间不占排版内存。
 
 ### 当前编辑历史与组合状态
 
-每个 `Editor` 只有一份显示缓冲，以及每个硬换行段落一个 Parley 布局（共享 TextSystem 驻留的字体族名）。组合期间额外保留原选区片段，以便取消和维持已提交值；`TextValue` 读取三个借用片段，不拼接、不分配。预编辑文本仍在显示缓冲中，组合片段、当前文本和布局属于活动状态，不受撤销预算限制；宿主需对可接受内容长度另设产品约束。
+每个 `Editor` 只有一份显示缓冲，以及每个硬换行段落一个排版结果（共享 TextSystem 驻留的字体族名）。组合期间额外保留原选区片段，以便取消和维持已提交值；`TextValue` 读取三个借用片段，不拼接、不分配。预编辑文本仍在显示缓冲中，组合片段、当前文本和布局属于活动状态，不受撤销预算限制；宿主需对可接受内容长度另设产品约束。
 
 撤销/重做共用默认 1 MiB 的 delta 历史预算，统计已占用 `Edit` 头部与插入/删除字符串的 capacity；不包含 VecDeque 空余槽位、allocator 开销或操作期间临时分配。`history_stats()` 返回该口径及可撤销/重做组数，`set_history_limit(0)` 释放历史。常规超限按依赖顺序丢弃完整操作；单次 delta 无法容纳时跳过历史副本并清空原时间线，保留新值。连续纯插入可合并，IME 提交独立成组；取消组合不进入历史。
 
@@ -105,7 +105,7 @@ app 的 motion feature 使用两张稀疏表：安装过渡的节点保存策略
 
 首次激活才由 UI 线程导出完整语义树，原生 adapter 保存语义快照及文字属性。Aegle Mailbox 不复制控件树，也不额外缓存完整语义树，但使用无界标准库通道；上游 worker 消息通道同样无界。宿主须每次唤醒及时清空回调、保持动作处理短小。两层队列、序列化缓冲、文字副本及上游语义缓存当前没有统一字节预算；不能将其他缓存的上限宣传为包含无障碍的总 RAM 保证。
 
-文本桥每次导出为文字 run 分配文本和几何属性。Parley 保留 span 与语义 ID 的双向映射以及 cluster→span 映射；Aegle 另保存最近导出的 `(NodeId, character_count)` 数组，用于验证外部选区。布局重建清除该数组的有效内容并保留容量；重新导出前拒绝旧范围。适配停用后上游可释放活动语义树，但当前示例仍保留 Editor 的这些映射和容量，未实现专用停用回收 API。文字 run 重新导出和 adapter 更新期间的短期分配也另计。
+文本桥每次导出为文字 run 分配文本和几何属性。系统栈下 Aegle 自己切分 run 并保存最近导出的 `(NodeId, character_count, 段落, 起止)` 数组；`text-parley` 下由 Parley 保留 span 与语义 ID 的双向映射以及 cluster→span 映射，Aegle 仍保存同一份数组，用于验证外部选区。布局重建清除该数组的有效内容并保留容量；重新导出前拒绝旧范围。适配停用后上游可释放活动语义树，但当前示例仍保留 Editor 的这些映射和容量，未实现专用停用回收 API。文字 run 重新导出和 adapter 更新期间的短期分配也另计。
 
 Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping source，回调先入队再唤醒 UI，未加入周期轮询。语义只在首次请求或脏标记变化时导出，文字内容、选择或滚动导致的变化仍会重新导出相应控件的文字 run。私有 AT-SPI 协议验证确认这些更新与动作连通；它不证明上述整机资源目标已经达到。
 

@@ -21,6 +21,10 @@
 
 #[cfg(feature = "text-a11y")]
 mod accessibility;
+#[cfg(all(target_os = "linux", not(feature = "text-parley")))]
+mod backend_pango;
+#[cfg(feature = "text-parley")]
+mod backend_parley;
 mod compose;
 mod document;
 mod edit;
@@ -29,6 +33,7 @@ mod editor;
 mod editor_paint;
 mod history;
 mod ime;
+mod layout;
 mod nav;
 mod surrounding;
 

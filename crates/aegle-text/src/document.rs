@@ -1,13 +1,16 @@
-//! An editor's text as one Parley layout per hard line: an edit shapes only
+//! An editor's text as one layout per hard line: an edit shapes only
 //! the paragraphs it touches, rewrapping only breaks lines, and a new color
 //! shapes nothing.
 
 use std::ops::Range;
 
 use aegle_types::{Color, Point, Size};
-use parley::{Affinity, Alignment, AlignmentOptions, BoundingBox, Cursor, Layout};
 
-use crate::{TextDiagnostics, TextSystem, paragraph::diagnose, style::Shaping};
+use crate::{
+    Alignment, TextDiagnostics, TextSystem,
+    layout::{Affinity, BoundingBox, Layout},
+    style::Shaping,
+};
 
 /// A caret in the whole buffer: a byte index and the side it binds to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,22 +28,19 @@ impl Caret {
     }
 }
 
-/// The text between two hard line breaks. Its layout also holds the break
-/// after it, so that semantic runs and selection geometry show the break as
-/// one layout of the whole text did; Parley lays an empty line out after a
-/// break, which stacking skips.
+/// The text between two hard line breaks.
 pub(crate) struct Block {
     /// The text before the break.
     pub range: Range<usize>,
     /// Byte length of the break that follows; zero for the last block.
     pub break_len: usize,
-    pub layout: Layout<Color>,
+    pub layout: Layout,
     /// Top-left corner of the layout in the editor.
     pub origin: Point,
     /// Height of the lines before the empty one after the break.
     pub height: f32,
     pub diagnostics: TextDiagnostics,
-    #[cfg(feature = "text-a11y")]
+    #[cfg(all(feature = "text-a11y", feature = "text-parley"))]
     pub access: parley::LayoutAccessibility,
 }
 
@@ -102,7 +102,6 @@ impl Document {
         }
         let first = self.block_at(low);
         let mut last = self.block_at(high);
-        // An edit reaching into the following break may join the next paragraph.
         if high > self.blocks[last].range.end && last + 1 < self.blocks.len() {
             last += 1;
         }
@@ -115,7 +114,6 @@ impl Document {
         self.text.replace_range(range, text);
         self.compose = compose;
         let mut from = self.blocks[first].range.start;
-        // A line feed inserted after a carriage return joins its break.
         let bytes = self.text.as_bytes();
         if from > 0 && bytes[from - 1] == b'\r' && bytes.get(from) == Some(&b'\n') {
             from += 1;
@@ -140,8 +138,7 @@ impl Document {
         self.width = width;
         self.alignment = alignment;
         for block in &mut self.blocks {
-            block.layout.break_all_lines(width);
-            block.layout.align(alignment, AlignmentOptions::default());
+            block.layout.reflow(width, alignment);
         }
         self.place();
     }
@@ -155,26 +152,17 @@ impl Document {
                 let range = c.start.max(from)..c.end.min(end);
                 (range.start < range.end).then(|| range.start - from..range.end - from)
             });
-            let mut layout = Layout::new();
             let text = &self.text[from..next.unwrap_or(end)];
-            system.shape(
-                &mut layout,
-                text,
-                &self.shaping,
-                self.color,
-                underline,
-                self.wrap,
-            );
-            layout.break_all_lines(self.width);
-            layout.align(self.alignment, AlignmentOptions::default());
+            let mut layout = system.shape_layout(text, &self.shaping, self.wrap, underline);
+            layout.reflow(self.width, self.alignment);
             blocks.push(Block {
                 range: from..end,
                 break_len: next.map_or(0, |next| next - end),
-                diagnostics: diagnose(text, &layout),
+                diagnostics: layout.diagnostics(text),
                 layout,
                 origin: Point::default(),
                 height: 0.0,
-                #[cfg(feature = "text-a11y")]
+                #[cfg(all(feature = "text-a11y", feature = "text-parley"))]
                 access: Default::default(),
             });
             match next {
@@ -184,8 +172,7 @@ impl Document {
         }
     }
 
-    /// Stacks the paragraphs. Without a wrap width each one aligns within its
-    /// own width, so it moves within the widest one instead.
+    /// Stacks the paragraphs.
     fn place(&mut self) {
         let widest = self
             .blocks
@@ -209,8 +196,8 @@ impl Document {
             block.height = match lines < block.layout.len() {
                 true => block
                     .layout
-                    .get(lines - 1)
-                    .map_or(0.0, |l| l.metrics().block_max_coord),
+                    .line_metrics(lines.saturating_sub(1))
+                    .map_or(0.0, |m| m.y + m.height),
                 false => block.layout.height(),
             };
             top += block.height;
@@ -226,26 +213,14 @@ impl Document {
         self.blocks.partition_point(|b| b.range.start <= index) - 1
     }
 
-    /// The paragraph and local cursor of `caret`; inside a break it is the
-    /// end of the paragraph before.
-    pub fn cursor(&self, caret: Caret) -> (usize, Cursor) {
+    pub fn local_caret(&self, caret: Caret) -> (usize, usize, Affinity) {
         let index = self.block_at(caret.index);
         let block = &self.blocks[index];
         let (local, affinity) = match caret.index > block.range.end {
             true => (block.range.len(), Affinity::Upstream),
             false => (caret.index - block.range.start, caret.affinity),
         };
-        (
-            index,
-            Cursor::from_byte_index(&block.layout, local, affinity),
-        )
-    }
-
-    pub fn caret(&self, block: usize, cursor: Cursor) -> Caret {
-        Caret {
-            index: self.blocks[block].range.start + cursor.index(),
-            affinity: cursor.affinity(),
-        }
+        (index, local, affinity)
     }
 
     /// The caret at byte `index`, snapped to a cluster boundary.
@@ -257,8 +232,10 @@ impl Document {
             false => Affinity::Downstream,
         };
         let local = index.min(range.end) - range.start;
-        let cursor = Cursor::from_byte_index(&self.blocks[block].layout, local, affinity);
-        self.caret(block, cursor)
+        Caret {
+            index: range.start + local,
+            affinity,
+        }
     }
 
     /// The paragraph at height `y` and `point` in its coordinates.
@@ -274,15 +251,18 @@ impl Document {
     /// The caret nearest `point`.
     pub fn hit(&self, point: Point) -> Caret {
         let (block, at) = self.local(point);
-        let cursor = Cursor::from_point(&self.blocks[block].layout, at.x, at.y);
-        self.caret(block, cursor)
+        let (local, affinity) = self.blocks[block].layout.hit_test(at.x, at.y);
+        Caret {
+            index: self.blocks[block].range.start + local.min(self.blocks[block].range.len()),
+            affinity,
+        }
     }
 
     /// The caret's rectangle `width` wide, in editor coordinates.
     pub fn caret_box(&self, caret: Caret, width: f32) -> BoundingBox {
-        let (block, cursor) = self.cursor(caret);
-        let block = &self.blocks[block];
-        offset(cursor.geometry(&block.layout, width), block.origin)
+        let (block, local, affinity) = self.local_caret(caret);
+        let b = &self.blocks[block];
+        offset(b.layout.caret_geometry(local, affinity, width), b.origin)
     }
 
     /// Visits the rectangles covering `range`, including a selected break.
@@ -295,16 +275,12 @@ impl Document {
             if block.range.start > range.end {
                 break;
             }
-            // A selected break shows as Parley draws it in one layout.
             let shaped = block.shaped().end;
             let start = range.start.clamp(block.range.start, shaped) - block.range.start;
             let end = range.end.min(shaped) - block.range.start;
-            let layout = &block.layout;
-            let selection = parley::Selection::new(
-                Cursor::from_byte_index(layout, start, Affinity::Downstream),
-                Cursor::from_byte_index(layout, end, Affinity::Upstream),
-            );
-            selection.geometry_with(layout, |rect, _| visit(offset(rect, block.origin)));
+            block
+                .layout
+                .range_boxes(start..end, |rect| visit(offset(rect, block.origin)));
         }
     }
 }
@@ -317,7 +293,9 @@ impl Block {
 
     /// Its display lines, without the empty one after its break.
     pub fn lines(&self) -> usize {
-        self.layout.len() - usize::from(self.break_len > 0 && self.layout.len() > 1)
+        self.layout
+            .len()
+            .saturating_sub(usize::from(self.break_len > 0 && self.layout.len() > 1))
     }
 }
 
@@ -336,6 +314,10 @@ fn next_break(text: &str, from: usize) -> (usize, Option<usize>) {
 }
 
 fn offset(rect: BoundingBox, origin: Point) -> BoundingBox {
-    let (x, y) = (f64::from(origin.x), f64::from(origin.y));
-    BoundingBox::new(rect.x0 + x, rect.y0 + y, rect.x1 + x, rect.y1 + y)
+    BoundingBox {
+        x0: rect.x0 + origin.x,
+        y0: rect.y0 + origin.y,
+        x1: rect.x1 + origin.x,
+        y1: rect.y1 + origin.y,
+    }
 }

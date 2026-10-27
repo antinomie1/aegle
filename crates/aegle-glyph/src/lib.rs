@@ -20,10 +20,13 @@
 //! one bitmap, and `svg` renders static OpenType-SVG documents without text;
 //! without those features such glyphs return [`GlyphError::UnsupportedGlyph`].
 
+#[cfg(feature = "swash")]
 mod bitmap;
 mod cache;
 #[cfg(feature = "colrv1")]
 mod colrv1;
+#[cfg(not(feature = "swash"))]
+mod freetype;
 mod key;
 mod raster;
 #[cfg(feature = "svg")]
@@ -34,9 +37,45 @@ mod transform;
 pub use cache::GlyphCache;
 pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};
-pub use swash::zeno::Placement;
 #[cfg(feature = "scene")]
 pub use transform::{GlyphOrigin, RasterTransform};
+
+/// Baseline-relative placement: draw at `(baseline_x + left, baseline_y - top)`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Placement {
+    /// Distance from the baseline origin to the left edge of the bitmap.
+    pub left: i32,
+    /// Distance from the baseline origin to the top edge of the bitmap.
+    pub top: i32,
+    /// Width of the bitmap in device pixels.
+    pub width: u32,
+    /// Height of the bitmap in device pixels.
+    pub height: u32,
+}
+
+#[cfg(feature = "swash")]
+impl From<swash::zeno::Placement> for Placement {
+    fn from(p: swash::zeno::Placement) -> Self {
+        Self {
+            left: p.left,
+            top: p.top,
+            width: p.width,
+            height: p.height,
+        }
+    }
+}
+
+#[cfg(feature = "swash")]
+impl From<Placement> for swash::zeno::Placement {
+    fn from(p: Placement) -> Self {
+        Self {
+            left: p.left,
+            top: p.top,
+            width: p.width,
+            height: p.height,
+        }
+    }
+}
 
 /// Coverage contrast for a mask glyph painted in a straight sRGB `color`.
 ///

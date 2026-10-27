@@ -14,10 +14,9 @@
 | Windows | windows 0.62.2 | 按模块启用所需 Win32/GDI/TSF/UIA 能力（`Win32_UI_TextServices` 需要 `Win32_System_Variant`） |
 | 系统分词 | libloading 0.8.9（Linux/Windows 动态加载系统 ICU）、objc2-core-foundation 0.3.2（macOS 的 `CFStringTokenizer`） | 不链接任何词典数据；找不到分词器时 `aegle-segment` 报告不可用，按词操作关闭 |
 | macOS | objc2 0.6.4 + objc2-app-kit / objc2-foundation / objc2-core-foundation / objc2-core-graphics 0.3.2、block2 0.6.2 | AppKit 窗口、输入与 `NSTextInputClient`；软件呈现用 Core Graphics 的 `CGImage`，Metal 只经 wgpu 使用；不采用已弃用 metal crate 或 MoltenVK |
-| 文本 | Parley/Fontique 0.11.1 | 基础排版、字体回退及纯文本编辑 |
-| grapheme 分段 | icu_segmenter 2.3.0 | 直接复用 Parley 已锁定的包及 compiled_data，编辑删除不另带分段引擎 |
-| shaping / 字体解析 | HarfRust 0.12.0、Skrifa 0.44.0 | 按 Parley 兼容版本线，避免追最新产生双份依赖 |
-| 字形 | Swash 0.2.10 | 按需光栅化；有界缓存由 aegle-glyph 管理 |
+| 系统文字栈（Linux） | 运行时加载 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1`（libloading 0.8.9） | 排版、bidi、换行、字体回退与字形光栅都交给发行版的系统库；不链接、不内嵌任何字体引擎或数据 |
+| 系统字形（Linux） | 运行时加载 `libfreetype.so.6`（libloading 0.8.9） | 轮廓、hinting、内嵌位图与 COLR 彩色层；有界缓存仍由 aegle-glyph 管理 |
+| 文本回退（不再维护） | Parley/Fontique 0.11.1、HarfRust 0.12.0、Skrifa 0.44.0、Swash 0.2.10、icu_segmenter 2.3.0 | 仅 `aegle-text/text-parley` 与 `aegle-glyph/swash` opt-in；默认构建不包含这些包 |
 | 共享字体资源 | linebender_resource_handle 0.1.1 | scene/text 仅借助该轻量句柄共享字体字节，不引入 shaping |
 | 字形缓存索引 | hashbrown 0.17.1、lru-slab 0.1.3 | 哈希索引和 LRU 槽位复用现成实现，命中不分配 |
 | 语义 | AccessKit 0.24.1 | 与 Parley 可选 text-a11y 使用同一 schema |
@@ -32,7 +31,7 @@
 
 设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何/文字依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。Windows 编译与运行证据、GPU 原生呈现验证另见实现状态，不能将其等同于全部实机验收；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
-`aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；Parley 的光标、选择、bidi 与点命中继续复用（编辑器自己按段落管理布局），不另带 Unicode 或编辑框架。`system-fonts`、`text-a11y`、`scene` 独立选择。Parley 的 complex-scripts 词典数据永久关闭：按词移动与双击选词改由独立的 `aegle-segment` 在运行时向系统分词器要边界（Linux/Windows 的 `libicui18n`/`icu.dll` 用 libloading 动态加载，macOS 的 `CFStringTokenizer` 随 CoreFoundation），不链接任何词典数据；找不到时这两个操作停用，不保留第二套近似分词。`icu_segmenter/compiled_data` 仍提供规则分段（grapheme、UAX #14 换行），`icu_provider/logging` 让 ICU 的缺少模型诊断走 `log` 而非调试构建的 stderr，两者都不新增包。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它；该 feature 提供文本语义桥，系统接入另选 `aegle-access/unix`。
+`aegle-text` 默认走平台系统文字栈：Linux 用 Pango（含 bidi、UAX #14 换行与字体回退）、Fontconfig 与 FreeType，全部在运行时按 `.so` 名称加载，找不到时 `TextSystem::system()` 报告不可用而不是退回第二套引擎。grapheme 删除边界同样来自 Pango（`pango_get_log_attrs` 的 cursor position），因此默认构建不再携带 `icu_segmenter` 的 UAX #14 数据。`system-fonts`、`text-a11y`、`scene` 独立选择。按词移动与双击选词仍由独立的 `aegle-segment` 在运行时向系统分词器要边界（Linux/Windows 的 `libicui18n`/`icu.dll`，macOS 的 `CFStringTokenizer`），不链接任何词典数据；找不到时这两个操作停用。Parley/HarfRust/Skrifa/Swash（以及它们需要的 `icu_segmenter/compiled_data`）只在显式启用 `text-parley` 时参与构建，作为不再维护的回退路径保留，默认关闭。
 
 `aegle-access` 默认依赖 AccessKit schema 与标准库通道，不带原生 adapter、异步运行时或窗口库。`unix` 仅在非 macOS 的 Unix 目标启用 AccessKit Unix 0.22.1，关闭其默认 features 并显式选择 `async-io`；上游不允许同时启用 `async-io` 与 `tokio`。该闭包含 AccessKit consumer 0.38.0、AT-SPI、Serde、zbus 及其异步组件，不能描述为只有一个小型运行依赖。consumer 使用的 hashbrown 0.16 与字形缓存的 0.17 同时存在于锁定图，不为统一版本私自修改上游依赖。上游 adapter/consumer 声明 MSRV 1.85，zbus 5.19 声明 1.87；完整 MSRV 仍须实际工具链验收。
 

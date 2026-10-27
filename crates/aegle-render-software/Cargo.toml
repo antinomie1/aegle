@@ -36,3 +36,4 @@ required-features = ["text"]
 [[example]]
 name = "editor_scene"
 required-features = ["text"]
+

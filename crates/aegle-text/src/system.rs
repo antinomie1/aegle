@@ -1,11 +1,17 @@
+use std::ops::Range;
 use std::sync::Arc;
 
 use crate::{
-    FontFamily, GenericFamily, Paragraph, TextDiagnostics, TextError, TextStyle, style::Shaping,
+    Alignment, ContentWidths, FontFamily, GenericFamily, Paragraph, TextDiagnostics, TextError,
+    TextStyle,
+    layout::{Layout, PlatformSystem},
+    style::Shaping,
 };
+#[cfg(feature = "text-parley")]
 use aegle_types::Color;
+#[cfg(feature = "text-parley")]
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
-use parley::{Alignment, ContentWidths};
+#[cfg(feature = "text-parley")]
 use parley::{FontContext, LayoutContext};
 
 /// Font collection and reusable shaping scratch for one UI thread.
@@ -17,8 +23,11 @@ use parley::{FontContext, LayoutContext};
 /// One system is shared by every window of an application, so it also holds
 /// the application-wide budget for idle text, see [`Self::set_idle_budget`].
 pub struct TextSystem {
+    #[cfg(feature = "text-parley")]
     pub(crate) fonts: FontContext,
+    #[cfg(feature = "text-parley")]
     pub(crate) context: LayoutContext<Color>,
+    pub(crate) backend: PlatformSystem,
     /// Family lists retained text shapes with, shared instead of copied.
     families: Vec<Arc<str>>,
     idle_budget: Option<usize>,
@@ -44,16 +53,19 @@ impl TextSystem {
         Self::with_system_fonts(true)
     }
 
-    fn with_system_fonts(system_fonts: bool) -> Self {
+    fn with_system_fonts(_system_fonts: bool) -> Self {
         Self {
+            #[cfg(feature = "text-parley")]
             fonts: FontContext {
                 collection: Collection::new(CollectionOptions {
                     shared: false,
-                    system_fonts,
+                    system_fonts: _system_fonts,
                 }),
                 source_cache: SourceCache::default(),
             },
+            #[cfg(feature = "text-parley")]
             context: LayoutContext::new(),
+            backend: PlatformSystem::new(_system_fonts),
             families: Vec::new(),
             idle_budget: None,
             idle_bytes: 0,
@@ -66,16 +78,23 @@ impl TextSystem {
     /// registered faces is an error.
     pub fn register_fonts(
         &mut self,
-        data: Arc<dyn AsRef<[u8]> + Send + Sync>,
+        _data: Arc<dyn AsRef<[u8]> + Send + Sync>,
     ) -> Result<Vec<FontFamily>, TextError> {
-        let registered = self.fonts.collection.register_fonts(Blob::new(data), None);
-        if registered.is_empty() {
-            return Err(TextError::InvalidFont);
+        #[cfg(feature = "text-parley")]
+        {
+            let registered = self.fonts.collection.register_fonts(Blob::new(_data), None);
+            if registered.is_empty() {
+                return Err(TextError::InvalidFont);
+            }
+            Ok(registered
+                .into_iter()
+                .map(|(id, _)| FontFamily(id))
+                .collect())
         }
-        Ok(registered
-            .into_iter()
-            .map(|(id, _)| FontFamily(id))
-            .collect())
+        #[cfg(not(feature = "text-parley"))]
+        {
+            self.backend.register_fonts(_data.as_ref().as_ref())
+        }
     }
 
     /// Makes `families`, in order, what a generic family such as
@@ -83,12 +102,16 @@ impl TextSystem {
     /// the default. Existing paragraphs keep their fonts until restyled.
     pub fn set_generic_families(
         &mut self,
-        generic: GenericFamily,
-        families: impl IntoIterator<Item = FontFamily>,
+        _generic: GenericFamily,
+        _families: impl IntoIterator<Item = FontFamily>,
     ) {
+        let families: Vec<FontFamily> = _families.into_iter().collect();
+        #[cfg(feature = "text-parley")]
         self.fonts
             .collection
-            .set_generic_families(generic.fontique(), families.into_iter().map(|f| f.0));
+            .set_generic_families(_generic.fontique(), families.iter().map(|f| f.0));
+        #[cfg(not(feature = "text-parley"))]
+        self.backend.set_generic_families(_generic, &families);
     }
 
     /// Shapes text once and lays it out without soft wrapping.
@@ -104,7 +127,7 @@ impl TextSystem {
         validate_text(&text, style)?;
         let mut paragraph = Paragraph {
             text,
-            layout: Default::default(),
+            layout: Layout::empty(),
             width: None,
             alignment: Alignment::Start,
             diagnostics: TextDiagnostics::default(),
@@ -175,8 +198,12 @@ impl TextSystem {
     /// shaping caches have a 16-entry limit but no public byte accounting; this
     /// method recreates scratch instead of pretending to enforce a byte budget.
     pub fn trim(&mut self) {
-        self.context = LayoutContext::new();
-        self.fonts.source_cache.prune(0, true);
+        self.backend.trim();
+        #[cfg(feature = "text-parley")]
+        {
+            self.context = LayoutContext::new();
+            self.fonts.source_cache.prune(0, true);
+        }
         self.families
             .retain(|families| Arc::strong_count(families) > 1);
     }
@@ -237,6 +264,26 @@ impl TextSystem {
         }
     }
 
+    pub(crate) fn shape_layout(
+        &mut self,
+        text: &str,
+        shaping: &Shaping,
+        wrap: bool,
+        underline: Option<Range<usize>>,
+    ) -> Layout {
+        #[cfg(feature = "text-parley")]
+        {
+            let mut raw = parley::Layout::new();
+            self.shape(&mut raw, text, shaping, Color::BLACK, underline, wrap);
+            Layout::Parley(crate::backend_parley::ParleyLayout { raw })
+        }
+        #[cfg(not(feature = "text-parley"))]
+        {
+            Layout::new(&mut self.backend, text, shaping, wrap, underline)
+        }
+    }
+
+    #[cfg(feature = "text-parley")]
     pub(crate) fn shape(
         &mut self,
         layout: &mut parley::Layout<Color>,
@@ -264,16 +311,13 @@ impl TextSystem {
     }
 
     fn build(&mut self, paragraph: &mut Paragraph) {
-        let Paragraph {
-            text,
-            layout,
-            shaping,
-            color,
-            ..
-        } = paragraph;
-        self.shape(layout, text, shaping, *color, None, true);
-        paragraph.content_widths = paragraph.layout.calculate_content_widths();
-        paragraph.break_lines();
+        let text = paragraph.text.clone();
+        let shaping = paragraph.shaping.clone();
+        paragraph.layout = self.shape_layout(&text, &shaping, true, None);
+        paragraph.content_widths = paragraph.layout.content_widths();
+        paragraph
+            .layout
+            .reflow(paragraph.width, paragraph.alignment);
         paragraph.update_diagnostics();
     }
 }
