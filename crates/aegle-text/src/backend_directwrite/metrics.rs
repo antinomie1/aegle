@@ -94,24 +94,21 @@ impl DirectWriteLayout {
         if unsafe { layout.GetClusterMetrics(Some(&mut clusters), &mut count) }.is_err() {
             return (index, Affinity::Downstream);
         }
-        let unit = offsets::to_utf16(&self.text, index) as usize;
-        // Walk clusters in logical order and step to the neighbouring boundary.
-        let mut start = 0usize;
+        // `GetClusterMetrics` reports clusters in logical order, each with the
+        // number of code units it covers; walk them once and step to the
+        // neighbouring boundary.
+        let mut boundaries = Vec::with_capacity(count as usize);
+        let mut start = 0u32;
         for cluster in &clusters[..count as usize] {
-            let end = start + cluster.length as usize;
-            if unit >= start && unit < end {
-                let target = match forward {
-                    true => end,
-                    false => start,
-                };
-                return (
-                    offsets::to_utf8(&self.text, target as u32),
-                    Affinity::Downstream,
-                );
-            }
+            let end = start + u32::from(cluster.length);
+            boundaries.push((start, end));
             start = end;
         }
-        (index, Affinity::Downstream)
+        let unit = offsets::to_utf16(&self.text, index);
+        match offsets::step_cluster(&boundaries, unit, forward) {
+            Some(target) => (offsets::to_utf8(&self.text, target), Affinity::Downstream),
+            None => (index, Affinity::Downstream),
+        }
     }
 
     /// One box per line covered by the byte range.

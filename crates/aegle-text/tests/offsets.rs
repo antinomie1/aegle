@@ -99,3 +99,32 @@ fn line_height_reduces_all_three_forms_to_one_target() {
         None
     );
 }
+
+#[test]
+fn cluster_stepping_always_advances_and_stops_at_the_edges() {
+    use aegle_text::offsets::step_cluster;
+    // Four clusters: "ab" + "cd" + "ef" + "gh" in code units.
+    let clusters = [(0, 2), (2, 4), (4, 6), (6, 8)];
+    // Forward from every position reaches the next cluster end, then stops.
+    assert_eq!(step_cluster(&clusters, 0, true), Some(2));
+    assert_eq!(step_cluster(&clusters, 1, true), Some(2));
+    assert_eq!(step_cluster(&clusters, 2, true), Some(4));
+    assert_eq!(step_cluster(&clusters, 7, true), Some(8));
+    assert_eq!(step_cluster(&clusters, 8, true), None);
+    // Backward from every position reaches the previous cluster start.
+    assert_eq!(step_cluster(&clusters, 8, false), Some(6));
+    assert_eq!(step_cluster(&clusters, 7, false), Some(6));
+    assert_eq!(step_cluster(&clusters, 6, false), Some(4));
+    assert_eq!(step_cluster(&clusters, 1, false), Some(0));
+    assert_eq!(step_cluster(&clusters, 0, false), None);
+    // Repeating a direction never sticks in the middle of the text.
+    let mut unit = 0;
+    let mut steps = 0;
+    while let Some(next) = step_cluster(&clusters, unit, true) {
+        assert!(next > unit, "forward step from {unit} reached {next}");
+        unit = next;
+        steps += 1;
+    }
+    assert_eq!((unit, steps), (8, 4));
+    assert_eq!(step_cluster(&[], 0, true), None);
+}

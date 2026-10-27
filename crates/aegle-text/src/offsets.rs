@@ -123,3 +123,31 @@ pub fn line_height(line_height: crate::LineHeight, natural: f32, font_size: f32)
     };
     (target.is_finite() && target > 0.0).then_some(target)
 }
+
+/// The next caret stop one shaping cluster forward or backward.
+///
+/// `clusters` are the layout's cluster boundaries in logical order, as
+/// `(start, end)` UTF-16 code-unit offsets covering the whole text. `unit` is
+/// the current caret in code units.
+///
+/// Movement is logical, not visual, so a right-to-left cluster's next stop is
+/// still its logical successor; `nav.rs` documents the same rule for the
+/// editor. A caret at a cluster's start steps back to the previous cluster's
+/// start, and one at its end steps on to the next cluster's end, so repeated
+/// steps always advance instead of sticking. Returns `None` at either end.
+pub fn step_cluster(clusters: &[(u32, u32)], unit: u32, forward: bool) -> Option<u32> {
+    if clusters.is_empty() {
+        return None;
+    }
+    match forward {
+        true => clusters
+            .iter()
+            .find(|(_, end)| *end > unit)
+            .map(|(_, end)| *end),
+        false => clusters
+            .iter()
+            .rev()
+            .find(|(start, _)| *start < unit)
+            .map(|(start, _)| *start),
+    }
+}
