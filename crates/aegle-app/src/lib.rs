@@ -1,11 +1,14 @@
 //! Native application host: [`App`] owns the platform connection, windows, event
 //! loop, renderers and system preferences, and gives each window an
 //! `aegle-ui` [`Ui`](aegle_ui::Ui). On Linux enable `wayland`, on Windows
-//! `windows`, plus an explicit `software`, `vulkan` or `wgpu` renderer feature.
+//! `windows`, on macOS `macos`, plus an explicit `software`, `vulkan` or `wgpu`
+//! renderer feature (macOS presents GPU frames through Metal, so `vulkan` is
+//! unavailable there).
 //! Windows share fonts, the platform connection and (for GPU renderers) one
 //! device; each keeps its own control tree. [`App::proxy`] posts messages from
-//! other threads to the UI thread. `unix-accessibility` and
-//! `windows-accessibility` connect the semantic tree to the system; the
+//! other threads to the UI thread. `unix-accessibility`,
+//! `windows-accessibility` and `macos-accessibility` connect the semantic tree
+//! to the system; the
 //! controls' own roles and names additionally need `aegle-widgets/accessibility`,
 //! which the `aegle` facade's adapter features enable.
 //!
@@ -34,6 +37,8 @@ mod native_render;
 type Native = aegle_platform_wayland::Wayland;
 #[cfg(all(native, target_os = "windows"))]
 type Native = aegle_platform_win32::Win32;
+#[cfg(all(native, target_os = "macos"))]
+type Native = aegle_platform_macos::MacOs;
 
 #[cfg(feature = "desktop-services")]
 pub use aegle_desktop as desktop;

@@ -11,13 +11,15 @@ use aegle_ui::{Result, Ui};
 type Adapter = aegle_access::UnixAdapter;
 #[cfg(target_os = "windows")]
 type Adapter = aegle_access::WindowsAdapter<crate::native_render::Surface>;
+#[cfg(target_os = "macos")]
+type Adapter = aegle_access::MacosAdapter<crate::native_render::Surface>;
 
 pub(crate) struct Access {
     adapter: Adapter,
     /// The adapter asked for the whole tree.
     initial: bool,
-    /// Scale of the bounds the adapter reports: UI Automation uses physical
-    /// pixels, AT-SPI window-local logical ones.
+    /// Scale of the bounds the adapter reports: UI Automation and
+    /// NSAccessibility use physical pixels, AT-SPI window-local logical ones.
     scale: f64,
 }
 
@@ -30,13 +32,14 @@ impl Access {
             let _ = window;
             Adapter::new(move || wake.wake())
         };
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         let adapter = {
             use aegle_platform::SurfacePlatform;
             let surface = platform.window_surface(window)?;
-            // SAFETY: the owned lease keeps this HWND and its window-procedure
-            // context alive until the adapter has removed its subclass during
-            // destruction.
+            // SAFETY: the owned lease keeps this native view (or HWND) alive
+            // until the adapter has removed its subclass during destruction.
+            // The window is still hidden and unfocused here, as NSView
+            // subclassing requires.
             unsafe { Adapter::new(surface, move || wake.wake())? }
         };
         Ok(Self {
@@ -48,10 +51,12 @@ impl Access {
 
     /// Follows the window's activation and scale.
     pub fn configure(&mut self, info: &WindowInfo) {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         self.adapter.set_window_focused(info.active);
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         if self.scale != f64::from(info.scale) {
+            // Bounds and hit testing are in physical pixels, so a new scale
+            // needs the whole tree again.
             self.scale = f64::from(info.scale);
             self.initial = true;
         }

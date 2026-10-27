@@ -11,7 +11,8 @@ use aegle_ui::Result;
 #[cfg(any(
     feature = "vulkan",
     feature = "wgpu",
-    all(access, target_os = "windows")
+    all(access, target_os = "windows"),
+    all(access, target_os = "macos")
 ))]
 pub(crate) type Surface = <crate::Native as aegle_platform::SurfacePlatform>::Surface;
 #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
@@ -24,6 +25,9 @@ pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
         }
         RendererBackend::Vulkan if !cfg!(feature = "vulkan") => {
             Err("Vulkan rendering requires the vulkan feature".into())
+        }
+        RendererBackend::Vulkan if cfg!(target_os = "macos") => {
+            Err("Vulkan rendering is unavailable on macOS; use wgpu".into())
         }
         RendererBackend::Wgpu if !cfg!(feature = "wgpu") => {
             Err("wgpu rendering requires the wgpu feature".into())

@@ -9,6 +9,7 @@ fn main() {
     let platforms = [
         ("linux", "WAYLAND", "UNIX_ACCESSIBILITY"),
         ("windows", "WINDOWS", "WINDOWS_ACCESSIBILITY"),
+        ("macos", "MACOS", "MACOS_ACCESSIBILITY"),
     ];
     println!("cargo::rustc-check-cfg=cfg(native, access)");
     for (target, platform, access) in platforms {

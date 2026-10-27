@@ -17,11 +17,13 @@ system-fonts = ["aegle-ui/system-fonts"]
 accessibility = ["aegle-ui/accessibility"]
 wayland = ["dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
+macos = ["dep:aegle-platform-macos"]
 software = ["dep:aegle-render-software"]
 vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
 wgpu = ["dep:aegle-render-wgpu", "aegle-platform-wayland?/gpu"]
 windows-accessibility = ["windows", "accessibility", "aegle-access/windows"]
 unix-accessibility = ["wayland", "accessibility", "aegle-access/unix"]
+macos-accessibility = ["macos", "accessibility", "aegle-access/macos"]
 # File dialogs, notifications, a tray icon and global shortcuts (`App::desktop`).
 desktop-services = ["dep:aegle-desktop"]
 
@@ -42,6 +44,9 @@ aegle-platform-wayland = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 aegle-platform-win32 = { path = "../aegle-platform-win32", version = "0.1.0", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+aegle-platform-macos = { path = "../aegle-platform-macos", version = "0.1.0", optional = true }
 
 [dev-dependencies]
 aegle-widgets.workspace = true
