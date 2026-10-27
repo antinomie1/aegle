@@ -15,7 +15,7 @@ aegle = { path = "../aegle/crates/aegle" }
 
 | feature | 默认 | 作用 |
 | --- | :---: | --- |
-| `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32（按编译目标选择） |
+| `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit（按编译目标选择） |
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现（Linux 链接 Fontconfig） |
 | `text-dictionary` |  | 中日文及东南亚文字的词典分词（按词移动、双击选词）；release 约增加 3.6 MiB。关闭时这些文字按基础边界移动与选词，ICU 的缺少模型诊断经 `log` 输出 |
@@ -31,6 +31,8 @@ aegle = { path = "../aegle/crates/aegle" }
 | `accessibility` |  | 语义树导出（`Ui::accessibility`），不接系统 |
 | `unix-accessibility` |  | Linux AT-SPI 适配（含 `accessibility`），引入 zbus |
 | `windows-accessibility` |  | Windows UI Automation 适配（含 `accessibility`） |
+| `macos` |  | macOS AppKit 原生窗口 |
+| `macos-accessibility` |  | macOS NSAccessibility 适配（含 `accessibility`） |
 
 Linux 构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon；启用 `system-fonts` 时还需要 Fontconfig。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。
 
@@ -102,7 +104,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 
 `AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Vulkan`/`Wgpu`，编译了软件绘制时默认软件）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
 
-`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）与 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（Windows）创建失败并返回 `Unsupported`：
+`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）与 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（Windows、macOS）创建失败并返回 `Unsupported`：
 
 ```rust
 use aegle::app::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
@@ -159,7 +161,7 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `menu()` / `context_menu()` | 创建锚定于该控件的菜单；后者在上下文菜单请求处显示，见[控件参考](controls.md#menu--menubar)；来自 `NodeWidgets` |
 | `set_tooltip(text)` | 悬停提示，同时作为无障碍描述；`None` 移除；来自 `NodeWidgets` |
 
-**鼠标指针形状**：原生窗口会自动跟随。可用形状见 `Cursor`（`Default`、`Text`、`Pointer`、`Crosshair`、`Move`、`Grab`、`Grabbing`、`NotAllowed`、`ResizeHorizontal`、`ResizeVertical`）。规则按优先级：按下后捕获指针的控件（拖选文字时指针移出字段仍是 I-beam）；鼠标下最上层可见控件上的显式 `set_cursor`；可用的文本字段（含只读，因为文字可选）显示 I-beam，禁用的字段不显示；最近祖先的显式形状；箭头。滚动条条带与拖动滚动条始终是箭头；已显示的弹出层遮住其下方的控件。按钮默认不变手形，这是桌面惯例，需要时对按钮或链接式标签 `set_cursor(Some(Cursor::Pointer))`。Windows 没有抓手光标，`Grab` 用手形、`Grabbing` 用四向箭头。
+**鼠标指针形状**：原生窗口会自动跟随。可用形状见 `Cursor`（`Default`、`Text`、`Pointer`、`Crosshair`、`Move`、`Grab`、`Grabbing`、`NotAllowed`、`ResizeHorizontal`、`ResizeVertical`）。规则按优先级：按下后捕获指针的控件（拖选文字时指针移出字段仍是 I-beam）；鼠标下最上层可见控件上的显式 `set_cursor`；可用的文本字段（含只读，因为文字可选）显示 I-beam，禁用的字段不显示；最近祖先的显式形状；箭头。滚动条条带与拖动滚动条始终是箭头；已显示的弹出层遮住其下方的控件。按钮默认不变手形，这是桌面惯例，需要时对按钮或链接式标签 `set_cursor(Some(Cursor::Pointer))`。Windows 没有抓手光标，`Grab` 用手形、`Grabbing` 用四向箭头；macOS 没有四向箭头，`Move` 用闭合手形。
 
 句柄是弱引用：丢弃句柄不会删除控件；删除控件或关闭窗口后，其句柄的其他调用以 `UiError::DeadHandle` 的消息 panic，`is_alive()` 返回 false。句柄可以克隆后移入回调；可能比控件活得久的回调（后台任务、`App::proxy`）应先检查 `is_alive()`。
 
@@ -382,7 +384,7 @@ window.ui().on_key(move |key| {
 
 - `Node::on_frame(FnMut(Node, Instant) -> bool)` 每个呈现帧调用一次，按注册顺序，在布局与绘制之前、所有借用之外；返回 `true` 继续，返回 `false` 停止。只要还有逐帧回调，原生窗口就按显示器节奏持续出帧；全部停止后不再唤醒。控件删除时其回调随之移除。
 - `Ui::on_key(FnMut(KeyEvent) -> bool)`（原生窗口用 `window.ui().on_key`）在焦点控件和 Tab 遍历之前收到每个按键；多个处理器按注册顺序执行，第一个返回 `true` 的处理器消费该键。`KeyEvent::editing` 表示焦点在文本编辑器中，此时普通字符键通常应留给输入。
-- 按键与指针事件带有平台时间：Wayland 的毫秒时间戳与 Win32 的 `GetMessageTime` 被映射到 `Instant`（锚定到最小投递延迟，处理 32 位回绕）。窗口按键处理器从 `KeyEvent::time` 读取，自定义控件从 `InputCx::time` 读取；嵌入宿主用 `key_at`、`pointer_at` 传入。
+- 按键与指针事件带有平台时间：Wayland 的毫秒时间戳、Win32 的 `GetMessageTime` 与 AppKit 的 `NSEvent.timestamp` 被映射到 `Instant`（锚定到最小投递延迟，处理 32 位回绕）。窗口按键处理器从 `KeyEvent::time` 读取，自定义控件从 `InputCx::time` 读取；嵌入宿主用 `key_at`、`pointer_at` 传入。
 
 ### 拖放
 
@@ -401,7 +403,7 @@ canvas.set_input(move |canvas, event| match event {
 });
 ```
 
-拖放只有复制语义，数据为文字或本地文件列表。外部程序拖入的数据与本应用其他窗口拖出的数据走同一路径（Wayland 经 compositor 的 `wl_data_device`，Windows 经 OLE）。Windows 上 `start_drag` 在系统拖动循环中阻塞到放下或取消。
+拖放只有复制语义，数据为文字或本地文件列表。外部程序拖入的数据与本应用其他窗口拖出的数据走同一路径（Wayland 经 compositor 的 `wl_data_device`，Windows 经 OLE，macOS 经 `NSDraggingSession`）。Windows 上 `start_drag` 在系统拖动循环中阻塞到放下或取消；macOS 上它立即返回，拖动由 AppKit 事件循环推进。
 
 ### 后台线程
 

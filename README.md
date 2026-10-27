@@ -55,7 +55,7 @@ Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`,
 
 | Feature | Default | Purpose |
 | --- | :---: | --- |
-| `native` | ✓ | Native windows: Wayland on Linux, Win32 on Windows |
+| `native` | ✓ | Native windows: Wayland on Linux, Win32 on Windows, AppKit on macOS |
 | `software` | ✓ | CPU software rendering |
 | `system-fonts` | ✓ | System font discovery |
 | `markup` | ✓ | `ui!` macro and the markup engine, including runtime loading |
@@ -69,8 +69,9 @@ Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`,
 | `accessibility` |  | Semantic tree export without a platform adapter |
 | `unix-accessibility` |  | AT-SPI adapter on Linux (includes `accessibility`) |
 | `windows-accessibility` |  | UI Automation adapter on Windows (includes `accessibility`) |
+| `macos-accessibility` |  | NSAccessibility adapter on macOS (includes `accessibility`) |
 
-Finer-grained features (`wayland`, `windows`) and the crate-level breakdown are in the [crate guide](docs/crates-and-examples.md).
+Finer-grained features (`wayland`, `windows`, `macos`) and the crate-level breakdown are in the [crate guide](docs/crates-and-examples.md).
 
 ## Documentation
 

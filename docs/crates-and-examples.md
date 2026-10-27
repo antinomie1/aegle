@@ -6,18 +6,18 @@
 
 紧凑共享类型、保留树、Taffy 布局、保留式 Unicode 段落与编辑器、按需 CJK 字形、绘制记录和软件光栅化已可用。独立 Wayland 后端提供原生窗口、有界 SHM 呈现、键盘/指针输入与 text-input-v3。应用层提供窗口、行、列、透明分组（可选网格与叠放）及对齐、换行、外边距、最小/最大尺寸、百分比、绝对定位等 flex/grid 布局，滚动视图、标签、按钮、纯文本字段、复选框、开关、滑块和进度条，并带浅色/深色/高对比主题。编译型 `.aegle` 标记与简洁的命令式 Rust 创建相同的保留控件。局部颜色、字体排印和小型主题/状态皮肤函数让组件库复用这些控件。共享的控件行为把输入和焦点接到保留树与编辑器。可选的绘制过渡共享同一状态，以帧驱动采样、平滑重定向，并显式支持减少动态效果；缩放/旋转、惯性滚动、渐变/阴影图像、触摸手势、后台 `UiProxy`、按字段的主题覆盖与系统文本缩放也已提供，可选的 JPEG/WebP/GIF/SVG 解码在 `aegle-image`。
 
-可选的 Unix 无障碍通过 AT-SPI 暴露控件、CJK 文本、选择、焦点与按钮动作；AT-SPI 文本替换仍不支持。Windows 增加 Win32 窗口、软件/Vulkan/wgpu 呈现、TSF 输入法与可选 UIA。macOS 和完整的辅助技术验收仍未完成。
+可选的 Unix 无障碍通过 AT-SPI 暴露控件、CJK 文本、选择、焦点与按钮动作；AT-SPI 文本替换仍不支持。Windows 增加 Win32 窗口、软件/Vulkan/wgpu 呈现、TSF 输入法与可选 UIA。macOS 增加 AppKit 窗口、NSTextInputClient 输入法、软件/wgpu（Metal）呈现与可选 NSAccessibility；macOS 平台只经 Linux 交叉编译检查，未在 Mac 上运行，完整的辅助技术验收仍未完成。
 
 标记当前支持静态字面量、绑定、事件块、组件（含 slot 与组件事件）、record 与带 key 的列表、`let` 与宿主动作、导入和运行时加载，细节见[标记语言](markup.md)。标记编译为直接的构造器与 setter；带 `id` 的字段返回类型化的弱句柄，可用于普通 Rust 回调；仅用 `ui!` 的可执行文件不带标记解析器或运行时注册表。
 
 ## 默认组合与平台前提
 
-`aegle` 默认启用原生窗口（Linux Wayland / Windows Win32）、软件绘制、系统字体、标记（含动态标记引擎）与过渡。系统无障碍适配默认关闭：`--features unix-accessibility`（AT-SPI，需要会话 D-Bus，并引入 zbus 栈）或 `--features windows-accessibility`（UI Automation）。
+`aegle` 默认启用原生窗口（Linux Wayland / Windows Win32 / macOS AppKit）、软件绘制、系统字体、标记（含动态标记引擎）与过渡。系统无障碍适配默认关闭：`--features unix-accessibility`（AT-SPI，需要会话 D-Bus，并引入 zbus 栈）、`--features windows-accessibility`（UI Automation）或 `--features macos-accessibility`（NSAccessibility）。
 
 - 系统字体必须覆盖所请求的文字；Linux 的系统字体发现还链接系统 Fontconfig 及其发行版相关的运行时依赖，显式提供应用字体可避免该依赖。
 - Wayland IME 需要 text-input-v3；没有它时聚焦可编辑字段返回能力错误。
 - Wayland 需要 xdg-shell 与版本不低于 4 的 wl_compositor；构建需要 libxkbcommon 的 pkg-config 元数据，运行需要 libxkbcommon 运行时。
-- Windows 输入法经 TSF 文本存储，输入法可读取周边文字并重转换已提交文字。macOS 仍在开发中。
+- Windows 输入法经 TSF 文本存储，输入法可读取周边文字并重转换已提交文字。macOS 输入法经 `NSTextInputClient`，同样得到周边摘录、预编辑与提交；日文/韩文等输入法未实测。
 
 ## 示例与检查命令
 
@@ -62,8 +62,8 @@ cargo doc --workspace --all-features --no-deps
 - `aegle-render-wgpu`：可选的全平台几何、文字、图像与路径，离屏或原生 surface。
 - `aegle-controls`：无皮肤的 Button/Toggle/Slider 行为、共享数值 Range 与可选 TextField。
 - `aegle-widgets`：默认控件库，包含全部默认控件（标签、按钮、单/多行编辑、复选/开关/单选、滑块、进度、图像/画布、滚动视图、虚拟列表、表格、弹出层、下拉框、菜单与菜单栏）及其纯函数皮肤。
-- `aegle-access`：UI 线程回调邮箱与可选的 Unix/Windows 无障碍。
-- `aegle-platform-wayland`、`aegle-platform-win32`：窗口与原生输入，不依赖绘制。
+- `aegle-access`：UI 线程回调邮箱与可选的 Unix/Windows/macOS 无障碍。
+- `aegle-platform-wayland`、`aegle-platform-win32`、`aegle-platform-macos`：窗口与原生输入，不依赖绘制。`aegle-desktop` 在 macOS 上把每个请求如实报告为 `Unavailable`（面板、状态栏项需要应用事件循环占用的主线程）。
 - `aegle-theme`：无分配的调色板、基于状态的皮肤与局部样式值。
 - `aegle-motion`：无分配的按时间补间。
 - `aegle-ui`：无窗口保留式 UI 引擎（树、布局、输入、焦点、滚动、主题、过渡、IME、语义），通过 `Control` trait 接入控件。

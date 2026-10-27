@@ -66,7 +66,8 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
 
 #[cfg(any(
     all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows")
+    all(feature = "windows", target_os = "windows"),
+    all(feature = "macos", target_os = "macos")
 ))]
 pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
     use aegle_markup::{Bound, Prop, PropertyName, Value};
@@ -225,7 +226,8 @@ impl View {
         }
         #[cfg(any(
             all(feature = "wayland", target_os = "linux"),
-            all(feature = "windows", target_os = "windows")
+            all(feature = "windows", target_os = "windows"),
+            all(feature = "macos", target_os = "macos"),
         ))]
         for (prop, bound) in &root.properties {
             use aegle_markup::{Bound, Prop, PropertyName, Value};

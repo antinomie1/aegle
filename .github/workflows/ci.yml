@@ -67,6 +67,21 @@ jobs:
       # Native window and input-method tests stay opt-in (`--ignored`) on a test desktop.
       - run: cargo test -p aegle-platform-win32
       - run: cargo test -p aegle --no-default-features --features "windows,software,markup,motion,windows-accessibility"
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # Only the macOS crates: the Wayland crate needs libxkbcommon.
+      - run: cargo clippy -p aegle-platform-macos --all-targets -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "macos,software,markup,motion" -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "macos,software,wgpu,macos-accessibility" -- -D warnings
+      # Native window tests need a GUI session.
+      - run: cargo test -p aegle-platform-macos
+      - run: cargo test -p aegle --no-default-features --features "macos,software,markup,motion,macos-accessibility"
   deny:
     runs-on: ubuntu-latest
     steps:

@@ -12,7 +12,7 @@
 | Vulkan shader 编译 | Naga 30.0.1 | 仅构建期 wgsl-in/spv-out，生成 Vulkan 1.1 SPIR-V，不进入发布运行依赖 |
 | Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 软件独立构建用 Rust client backend；gpu feature 启用 system/dlopen 获取 libwayland 原生句柄，保留同一连接 |
 | Windows | windows 0.62.2 | 按模块启用所需 Win32/GDI/TSF/UIA 能力（`Win32_UI_TextServices` 需要 `Win32_System_Variant`） |
-| macOS | objc2 0.6.4 | AppKit 系统绑定，尚未实现；原生 Metal 方案已放弃，Metal 只经 wgpu 使用，不采用已弃用 metal crate 或 MoltenVK |
+| macOS | objc2 0.6.4 + objc2-app-kit / objc2-foundation / objc2-core-foundation / objc2-core-graphics 0.3.2、block2 0.6.2 | AppKit 窗口、输入与 `NSTextInputClient`；软件呈现用 Core Graphics 的 `CGImage`，Metal 只经 wgpu 使用；不采用已弃用 metal crate 或 MoltenVK |
 | 文本 | Parley/Fontique 0.11.1 | 基础排版、字体回退及纯文本编辑 |
 | grapheme 分段 | icu_segmenter 2.3.0 | 直接复用 Parley 已锁定的包及 compiled_data，编辑删除不另带分段引擎 |
 | shaping / 字体解析 | HarfRust 0.12.0、Skrifa 0.44.0 | 按 Parley 兼容版本线，避免追最新产生双份依赖 |
@@ -20,7 +20,7 @@
 | 共享字体资源 | linebender_resource_handle 0.1.1 | scene/text 仅借助该轻量句柄共享字体字节，不引入 shaping |
 | 字形缓存索引 | hashbrown 0.17.1、lru-slab 0.1.3 | 哈希索引和 LRU 槽位复用现成实现，命中不分配 |
 | 语义 | AccessKit 0.24.1 | 与 Parley 可选 text-a11y 使用同一 schema |
-| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 当前 Unix/Windows 通过可选 feature 接入；三者属于上述 AccessKit 兼容线 |
+| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 三者都通过可选 feature 接入（`macos`/`windows`/`unix`）；macOS 适配器仍基于 objc2 0.5，与平台 crate 的 objc2 0.6 在同一锁定图中共存 |
 | Unix 无障碍传输 | accesskit_atspi_common 0.19.1、atspi 0.29.0、zbus 5.19.0 | 复用 AccessKit 适配；采用 async-io，无 Tokio |
 | 路径 | 软件复用 tiny-skia，Vulkan 复用 zeno 0.3.3（swash 已依赖） | CPU 覆盖率光栅，不引入 Lyon 或三角细分 |
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
@@ -49,4 +49,4 @@ Wayland 软件后端使用 SCTK 0.21.1/calloop 0.14，键盘使用同一版本�
 
 构建需 libxkbcommon 的开发链接与 pkg-config 信息，发布需对应 runtime；SDK 不打包进程序。当前验证机器仅安装 runtime，验证时在临时目录创建了指向已有系统库的开发链接与 `.pc` 并经 `PKG_CONFIG_PATH` 引用，未修改系统或项目构建配置。当前软件路径未启用 wayland-client/system，因此不将 libwayland-client 误写成该示例的实际动态依赖；最终以构建的依赖树和二进制链接结果为准。
 
-原生 window 复用 raw-window-handle 0.6.2；不引入 winit/ash-window。Win32 平台仅启用 windows crate 所需 API；UIA 在 aegle-access/windows 中额外编译 accesskit_windows 0.34.0，与现有 schema/consumer 兼容。Windows 的 target-specific 依赖不会将 Unix D-Bus、Wayland 或 Fontconfig 链入 Windows 程序。
+原生 window 复用 raw-window-handle 0.6.2；不引入 winit/ash-window。macOS 平台按目标仅链接 objc2 0.6 族与 Core Graphics/Foundation；`aegle-access/macos` 另编译 accesskit_macos 0.26.3，其 objc2 0.5 依赖不会进入 Linux/Windows 目标。Win32 平台仅启用 windows crate 所需 API；UIA 在 aegle-access/windows 中额外编译 accesskit_windows 0.34.0，与现有 schema/consumer 兼容。Windows 的 target-specific 依赖不会将 Unix D-Bus、Wayland 或 Fontconfig 链入 Windows 程序。

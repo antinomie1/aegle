@@ -4,7 +4,7 @@
 
 Aegle 是面向 Rust 2024 的模块化保留模式 GUI 库，关注低内存占用、事件驱动更新、CJK 文字与原生输入法。控件创建一次，之后通过句柄修改；界面空闲时不重绘也不轮询。
 
-它由一组相互独立的 crate 组成（保留树、Taffy 布局、文字与字形、绘制 scene、软件 / Vulkan / wgpu 渲染器、Wayland 与 Win32 平台后端、控件、主题、标记语言），再加上把它们串起来的 `aegle` facade。项目仍在开发中，尚未发布到 crates.io；当前可用的能力见[实现状态](docs/implementation.md)。
+它由一组相互独立的 crate 组成（保留树、Taffy 布局、文字与字形、绘制 scene、软件 / Vulkan / wgpu 渲染器、Wayland、Win32 与 macOS 平台后端、控件、主题、标记语言），再加上把它们串起来的 `aegle` facade。项目仍在开发中，尚未发布到 crates.io；当前可用的能力见[实现状态](docs/implementation.md)。
 
 ## 最小开始
 
@@ -55,7 +55,7 @@ fn main() -> Result<()> {
 
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
-| `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32 |
+| `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit |
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现 |
 | `markup` | ✓ | `ui!` 宏与标记引擎，含运行时加载 |
@@ -69,6 +69,7 @@ fn main() -> Result<()> {
 | `accessibility` |  | 导出语义树，不接系统适配器 |
 | `unix-accessibility` |  | Linux AT-SPI 适配（含 `accessibility`） |
 | `windows-accessibility` |  | Windows UI Automation 适配（含 `accessibility`） |
+| `macos-accessibility` |  | macOS NSAccessibility 适配（含 `accessibility`） |
 
 更细的 feature（`wayland`、`windows`）和各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
 

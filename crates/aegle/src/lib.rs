@@ -72,7 +72,8 @@ pub use aegle_loader as loader;
 pub mod prelude {
     #[cfg(any(
         all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows")
+        all(feature = "windows", target_os = "windows"),
+        all(feature = "macos", target_os = "macos")
     ))]
     pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
     /// The built-in markup elements: the specs `ui!` reads under the handle

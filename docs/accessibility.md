@@ -1,6 +1,6 @@
 # 无障碍与可检查的控件树
 
-状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI / Windows UIA adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍。facade 默认不启用系统适配（用户决定），应用按需选择 `unix-accessibility`、`windows-accessibility`，或只导出语义树的 `accessibility`；独立模块同样显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
+状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI / Windows UIA / macOS NSAccessibility adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍，macOS 适配只经交叉编译检查，未在辅助技术下运行。facade 默认不启用系统适配（用户决定），应用按需选择 `unix-accessibility`、`windows-accessibility`、`macos-accessibility`，或只导出语义树的 `accessibility`；独立模块同样显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
 
 `Ui::accessibility(initial, title)` 可检查当前控件树及文本 run，使用与绘制相同的父子关系、布局与滚动几何；语义检查保留宿主尚未消费的重绘请求。身份由每个 Ui 单调分配，文本 run 与动态控件共用无冲突命名空间。`access_action` 对已经删除的节点、过期选择或预编辑期间的选择返回 false，原生应用不会因此退出。App 首次/重新激活完整导出，之后使用语义失效差量；文本的主题、局部样式及自定义皮肤前景同步到系统语义。自定义皮肤可依交互状态改变文字颜色，因此相关状态变化也标记语义失效；默认普通 hover/pressed 仍仅改变绘制。当前没有独立树检查器 GUI。
 
@@ -65,6 +65,8 @@ AccessKit 当前上游 README 表示已发布适配支持单行和多行输入�
 AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handlers 只排队并唤醒主线程；`Wayland::wake_handle()` 复用 calloop 的事件唤醒，不增加轮询定时器。激活回调返回 `None`，宿主收到 `InitialTree` 后立即在 UI 线程构建完整树，即使没有像素需要重画。`UnixAdapter::update_if_active` 的闭包只在原生适配处于活动或待初始化状态时调用；逻辑控件焦点和原生窗口激活分别同步；当前辅助 Focus 不会请求 xdg-activation 来激活后台窗口。按钮 Click 经过与物理输入共用的 `Input::Activate`，Focus 经过现有焦点策略，过期或不适用的目标不会直接访问已失效控件。
 
 `aegle-text/text-a11y` 的 `EditorDriver::accessibility` 导出当前显示文本、布局几何、只读状态及选区；显示文本包含 IME 预编辑及下划线，不能视为已提交值。`select_accessibility` 使用最近一次导出的 run 身份验证范围，布局重建后须重新导出。AccessKit 的 run 内位置以可选择的 shaping cluster 计数，AT-SPI 外部偏移以 Unicode scalar 计数；平台 adapter 与 Parley 依据 run 的字符长度完成转换，不能直接传递 UTF-8 字节偏移。
+
+macOS：`macos` feature 编译 `MacosAdapter`，复用 AccessKit 0.26.3 的 `SubclassingAdapter`。它在窗口首次显示前动态替换内容视图的类，由 `accessibilityChildren`、`accessibilityFocusedUIElement`、`accessibilityHitTest:` 从同一棵语义树回答 VoiceOver、转子与「键盘」偏好面板；焦点变化经 `NSAccessibilityFocusedUIElementChangedNotification`，逻辑控件焦点与原生窗口激活分别同步（`set_window_focused`）。原生回调同样只排队并唤醒主线程，UI 线程在 `update_if_active` 中发布完整树或差量。坐标按物理像素（AccessKit 的约定）提交，视图非翻转，由上游 adapter 换算屏幕矩形；缩放变化强制重发整棵树。适配器要求在视图显示、获焦或加入 KVO 之前安装，`aegle-app` 因此在窗口创建时创建它——窗口在首帧成功后才 `makeKeyAndOrderFront:`。以上只经 Linux 上的 `cargo check --target aarch64-apple-darwin` 与 `--no-run` 编译验证，尚未在 Mac 上用 VoiceOver 或「辅助功能检查器」验收。
 
 只读编辑器仍接受合法选择。活动预编辑期间 `select_accessibility` 返回 `CompositionActive`，引擎拒绝该次辅助技术选择，不隐式取消组合或重解释旧范围；应用代码的 `TextField::select` 则先结束组合再选择。未知 run、越界位置或重排后尚未重新发布的选择返回 `InvalidRange`。密码编辑器导出 `PasswordInput` 角色，值、文字 run 与选择只含 `•` 遮盖字符，选择按遮盖偏移转换。
 

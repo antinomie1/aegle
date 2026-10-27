@@ -1,6 +1,6 @@
 # wgpu 后端
 
-状态：最小实现，2026-10-06。离屏几何、裁剪、字形、图像、路径与原生 surface 呈现已实现，只在 Linux 上经 Vulkan 验证；Metal 与 Direct3D 12 经 wgpu 编译进该 crate，没有在这些平台构建或运行过。
+状态：最小实现，2026-11-02。离屏几何、裁剪、字形、图像、路径与原生 surface 呈现已实现，只在 Linux 上经 Vulkan 验证；Metal 与 Direct3D 12 经 wgpu 编译进该 crate，没有在这些平台构建或运行过。macOS 的原生窗口租约（`NSView`，由 `raw-window-metal` 建 `CAMetalLayer`）已经接入 `aegle-platform-macos` 并交叉编译通过，同样未在 Mac 上运行。
 
 ## 定位与取舍
 
@@ -24,7 +24,7 @@
 
 图像按 Image id 缓存，非预乘 sRGB 像素在线性空间预乘后以 RGBA8 sRGB 上传，着色器钳制到边缘纹素并乘以解析的边缘覆盖率，没有 mipmap。路径由 zeno 在 CPU 光栅为 R8 覆盖率 mask，键为路径 id、线性 2×2 矩阵、两轴四分之一像素相位和描边样式：整像素平移命中原条目，新的缩放/旋转再光栅一次。与字形相同的页放不下时，图像和路径 mask（含带边框超过 `atlas_size` 的）获得恰好其尺寸的专用纹理，不带边框，在最后一次使用后的下一帧仍保留、再下一帧释放，所以动画重绘不会反复上传，消失的图像会被回收。单个字形超过页尺寸，或图像/路径 mask 超过设备纹理上限，返回 `TooLarge`。上传前的像素转换缓冲超过 1 MiB 即释放；不像 Vulkan 后端那样限制 CPU 上传量，图像大小只受设备纹理上限约束。`Renderer::resident_entries` 报告当前驻留条目数。
 
-窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。wgpu 没有呈现区域接口，每帧整幅绘制并上报整个 surface（Vulkan 后端可上报变化区域）。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的验证、内存与内部错误当作致命错误并 panic；本后端在设备上安装 `on_uncaptured_error` 与设备丢失回调，记下第一个故障，之后 `begin_frame`、提交与 `read_pixels` 返回 `Error::Gpu` 或 `Error::DeviceLost`，不再 panic。wgpu 在编码与提交时同步校验，所以出错的那一帧在 `finish` 即返回错误。故障不可恢复：同一设备上的渲染器（含共享设备的窗口）都拒绝后续工作，由调用方新建渲染器；Aegle 不自动重建设备或切换后端，与 Vulkan 后端一致。
+窗口：`WindowRenderer::new` 为 unsafe，与 Vulkan 版有相同的句柄寿命要求；FIFO 呈现。macOS 的内容视图声明为不透明（与软件呈现一致），所以透明窗口在那里不会露出桌面：`Options::transparent` 与别处一样，合成器不提供预乘 alpha 时退回不透明合成，随后由不透明清屏色要求拒绝半透明背景。wgpu 没有呈现区域接口，每帧整幅绘制并上报整个 surface（Vulkan 后端可上报变化区域）。`Options::transparent` 且合成器提供预乘 alpha 时保留透明，否则要求不透明清屏色。`begin_frame` 在零尺寸、被遮挡或超时时返回 `None`，surface 过期返回 `SurfaceOutOfDate` 要求调用方重绘，surface 丢失返回 `SurfaceLost`。wgpu 默认把未捕获的验证、内存与内部错误当作致命错误并 panic；本后端在设备上安装 `on_uncaptured_error` 与设备丢失回调，记下第一个故障，之后 `begin_frame`、提交与 `read_pixels` 返回 `Error::Gpu` 或 `Error::DeviceLost`，不再 panic。wgpu 在编码与提交时同步校验，所以出错的那一帧在 `finish` 即返回错误。故障不可恢复：同一设备上的渲染器（含共享设备的窗口）都拒绝后续工作，由调用方新建渲染器；Aegle 不自动重建设备或切换后端，与 Vulkan 后端一致。
 
 ## 应用纹理
 

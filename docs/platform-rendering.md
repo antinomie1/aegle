@@ -8,13 +8,15 @@
 | --- | --- | --- |
 | Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；SCTK + wayland-client；text-input-v3 |
 | Windows | Windows 11，x86_64/aarch64 | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；原生窗口；TSF 文本存储输入法 |
-| macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 绘制经可选 wgpu 使用 Metal，窗口平台未实现；AppKit、NSTextInputClient |
+| macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 软件绘制（默认）或经可选 wgpu 使用 Metal；AppKit 窗口、NSTextInputClient；无 Vulkan |
+
+macOS 的原生平台已建立（`aegle-platform-macos`）：普通顶层窗口、输入、`NSTextInputClient` 输入法、剪贴板、拖放与软件/GPU 呈现；layer 表面返回 `Unsupported`。它目前只在 Linux 上交叉 `cargo check`/`clippy`/`cargo test --no-run` 过，未在 Mac 硬件上运行，见[实现状态](implementation.md)。
 
 这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 不实现 X11；基础普通窗口要求 xdg-shell，shell 表面另要求 layer-shell。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。
 
 Linux 使用一个连接和事件队列承载普通窗口及可选 layer-shell，补齐预编辑、提交、周边文字/删除、焦点和提交时序。SCTK 的 input_method 面向输入法程序，不代替普通客户端 text-input-v3。默认不会引入 winit 再维护另一套窗口循环。
 
-各平台按事件等待；Linux 使用 FD readiness 和协议要求的读取流程，Windows/AppKit 保留原生消息循环。文本输入、系统偏好、剪贴板和无障碍动作归一化后交给 UI 主线程，不跨 FFI 展开 panic。
+各平台按事件等待；Linux 使用 FD readiness 和协议要求的读取流程，Windows 保留原生消息循环，AppKit 用 `nextEventMatchingMask:untilDate:inMode:dequeue:` 按截止时间等待并自己驱动 `NSApplication`，不进入 `NSApplicationMain`。文本输入、系统偏好、剪贴板和无障碍动作归一化后交给 UI 主线程，不跨 FFI 展开 panic。
 
 ## 绘制契约
 
@@ -48,6 +50,8 @@ GPU 路径的轴对齐裁剪用整数范围，圆角与小数裁剪由 shader �
 ## 坐标与平台差异
 
 内部使用逻辑 dp、统一二维变换；平台层转换为物理像素和平台坐标，整数边界向外取整。命中、IME 光标矩形和语义位置共享几何来源。
+
+三套视图坐标都以左上角为原点、逻辑 dp；AppKit 视图本身以左下角为原点，`aegle-platform-macos` 在边界处转换（指针、IME 光标矩形、命中与屏幕矩形），软件呈现按帧的图像高度定位。
 
 Wayland 通常不向普通客户端公开全局窗口位置。平台能力必须区分窗口局部坐标与可取得的屏幕原点，不能编造全局坐标；对应辅助技术的屏幕定位能力受 compositor 和 adapter 限制，但角色、文本、焦点和动作仍需正确。具体支持矩阵通过真实 compositor 验收。
 

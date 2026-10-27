@@ -7,15 +7,17 @@
 //! `aegle_app::App::desktop` does. Requests return at once; their results
 //! arrive as events.
 //!
-//! | Service | Linux | Windows |
-//! |---|---|---|
-//! | File dialogs | `org.freedesktop.portal.FileChooser` | `IFileOpenDialog`, `IFileSaveDialog` |
-//! | Notifications | `org.freedesktop.Notifications` | a tray balloon (a toast on Windows 10 and later) |
-//! | Tray | `StatusNotifierItem` with `com.canonical.dbusmenu` | `Shell_NotifyIcon` and a popup menu |
-//! | Global shortcuts | `org.freedesktop.portal.GlobalShortcuts` | `RegisterHotKey` |
+//! | Service | Linux | Windows | macOS |
+//! |---|---|---|---|
+//! | File dialogs | `org.freedesktop.portal.FileChooser` | `IFileOpenDialog`, `IFileSaveDialog` | not yet |
+//! | Notifications | `org.freedesktop.Notifications` | a tray balloon (a toast on Windows 10 and later) | not yet |
+//! | Tray | `StatusNotifierItem` with `com.canonical.dbusmenu` | `Shell_NotifyIcon` and a popup menu | not yet |
+//! | Global shortcuts | `org.freedesktop.portal.GlobalShortcuts` | `RegisterHotKey` | not yet |
 //!
 //! A service the desktop does not offer reports [`Event::Unavailable`]
-//! instead of failing silently.
+//! instead of failing silently. macOS panels and status items need the main
+//! thread that the application's event loop owns, so every request there is
+//! reported as unavailable.
 
 use std::path::PathBuf;
 
@@ -23,6 +25,10 @@ use std::path::PathBuf;
 mod linux;
 #[cfg(target_os = "linux")]
 use linux as imp;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+use self::macos as imp;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
