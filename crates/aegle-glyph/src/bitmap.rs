@@ -1,6 +1,6 @@
 use skrifa::bitmap::{BitmapData, BitmapGlyph, Origin};
 
-use crate::raster::{encoded, image_size, linear};
+use crate::srgb::{encoded, image_size, linear};
 use crate::{CacheLimits, Content, GlyphError, Image, Placement, RasterOptions};
 
 pub(crate) fn render(

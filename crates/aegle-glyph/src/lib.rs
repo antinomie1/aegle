@@ -20,7 +20,7 @@
 //! one bitmap, and `svg` renders static OpenType-SVG documents without text;
 //! without those features such glyphs return [`GlyphError::UnsupportedGlyph`].
 
-#[cfg(any(feature = "swash", not(target_os = "linux")))]
+#[cfg(feature = "swash")]
 mod bitmap;
 mod cache;
 #[cfg(feature = "colrv1")]
@@ -33,6 +33,7 @@ mod key;
 mod opentype_name;
 mod outline;
 mod raster;
+mod srgb;
 #[cfg(feature = "svg")]
 mod svg;
 mod system;
@@ -46,8 +47,8 @@ pub use linebender_resource_handle::{Blob, FontData};
 pub use opentype_name::{FaceDescription, describe};
 pub use outline::OutlineBuilder;
 pub use system::{
-    FaceSource, SystemRasterizer, register_system_face, register_system_rasterizer, system_face,
-    system_rasterizer_registered, unregister_system_face,
+    FaceSource, SystemRasterizer, register_system_face, register_system_rasterizer, shared_face,
+    system_face, system_rasterizer_registered, unregister_system_face,
 };
 #[cfg(feature = "scene")]
 pub use transform::{GlyphOrigin, RasterTransform};

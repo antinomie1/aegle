@@ -15,7 +15,8 @@ use tiny_skia::{
     Pixmap, PixmapPaint, Point, RadialGradient, Rect, Shader, SpreadMode, Transform as Matrix,
 };
 
-use crate::{Content, GlyphError, Image, Placement, raster::image_size};
+use crate::srgb::image_size;
+use crate::{Content, GlyphError, Image, Placement};
 
 /// Deepest nesting of clips or layers a glyph may use; deeper graphs are refused.
 const DEPTH: usize = 32;

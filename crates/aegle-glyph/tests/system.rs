@@ -1,8 +1,9 @@
 //! System font handles dispatch to the rasterizer registered for their backend.
 
 use aegle_glyph::{
-    CacheLimits, Content, FontSource, GlyphCache, GlyphError, Image, Placement, RasterOptions,
-    SystemFont, SystemRasterizer, register_system_rasterizer, system_rasterizer_registered,
+    Blob, CacheLimits, Content, FontData, FontSource, GlyphCache, GlyphError, Image, Placement,
+    RasterOptions, SystemFont, SystemRasterizer, register_system_rasterizer,
+    system_rasterizer_registered,
 };
 
 /// Fills a 3×2 mask with the requested glyph id and reports the options it saw.
@@ -109,4 +110,51 @@ fn system_handles_dispatch_to_their_backend_only() {
         GlyphError::UnsupportedGlyph
     );
     assert!(!system_rasterizer_registered(252));
+}
+
+#[test]
+fn shared_bytes_reach_the_registered_backend_as_one_handle() {
+    // A second fake backend so this test does not depend on the first one.
+    struct Bytes(usize);
+    impl SystemRasterizer for Bytes {
+        fn rasterize(
+            &mut self,
+            font: &SystemFont,
+            glyph: u16,
+            _: RasterOptions<'_>,
+            _: CacheLimits,
+            reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
+        ) -> Result<Image, GlyphError> {
+            let source = aegle_glyph::system_face(*font).ok_or(GlyphError::InvalidFont)?;
+            match source {
+                aegle_glyph::FaceSource::Bytes { data, index } => {
+                    self.0 += 1;
+                    assert_eq!(index, 0);
+                    assert_eq!(data.len(), 32);
+                    reserve(1)?;
+                    Ok(Image {
+                        placement: Placement::default(),
+                        content: Content::Mask,
+                        data: vec![glyph as u8].into_boxed_slice(),
+                    })
+                }
+                aegle_glyph::FaceSource::File { .. } => Err(GlyphError::UnsupportedGlyph),
+            }
+        }
+    }
+    assert!(register_system_rasterizer(250, Box::new(Bytes(0))));
+
+    let font = FontData::new(Blob::from(vec![7u8; 32]), 0);
+    let first = aegle_glyph::shared_face(250, &font);
+    let again = aegle_glyph::shared_face(250, &font);
+    assert_eq!(first, again, "one handle per blob and index");
+
+    let mut cache = GlyphCache::with_limits(CacheLimits::default());
+    let image = cache
+        .rasterize(&FontSource::System(first), 9, RasterOptions::default())
+        .expect("shared bytes rasterize");
+    assert_eq!(image.data, [9]);
+    // A second face index of the same blob is a distinct handle.
+    let other = aegle_glyph::shared_face(250, &FontData::new(Blob::from(vec![7u8; 32]), 1));
+    assert_ne!(other, first);
 }

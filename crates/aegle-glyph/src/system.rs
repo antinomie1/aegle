@@ -126,6 +126,41 @@ pub fn unregister_system_face(font: SystemFont) {
     map.remove(&font);
 }
 
+/// The handle a platform rasterizer should use for shared font bytes.
+///
+/// Platform backends rasterize through [`SystemRasterizer`], which takes a
+/// [`SystemFont`] handle. A `FontSource::Bytes` run therefore needs a handle
+/// whose face is the same bytes; this registers one per `(backend, blob,
+/// index)` and returns it. The bytes are copied once into the registry so the
+/// platform can read them for as long as the registration lives.
+pub fn shared_face(backend: u8, font: &linebender_resource_handle::FontData) -> SystemFont {
+    type Key = (u8, u64, u32);
+    fn cache() -> &'static Mutex<Vec<(Key, SystemFont)>> {
+        static CACHE: OnceLock<Mutex<Vec<(Key, SystemFont)>>> = OnceLock::new();
+        CACHE.get_or_init(|| Mutex::new(Vec::new()))
+    }
+    let key = (backend, font.data.id(), font.index);
+    let mut cache = cache().lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((_, handle)) = cache.iter().find(|(existing, _)| *existing == key) {
+        return *handle;
+    }
+    let handle = SystemFont {
+        backend,
+        id: NEXT_SHARED.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+    };
+    let source = FaceSource::Bytes {
+        data: std::sync::Arc::from(font.data.data()),
+        index: font.index,
+    };
+    register_system_face(handle, source);
+    cache.push((key, handle));
+    handle
+}
+
+/// Ids for [`shared_face`]; distinct from any backend's own numbering because
+/// the backend value is part of the key.
+static NEXT_SHARED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1 << 62);
+
 fn faces() -> &'static Mutex<BTreeMap<SystemFont, FaceSource>> {
     static FACES: OnceLock<Mutex<BTreeMap<SystemFont, FaceSource>>> = OnceLock::new();
     FACES.get_or_init(|| Mutex::new(BTreeMap::new()))
