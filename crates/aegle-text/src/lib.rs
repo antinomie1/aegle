@@ -35,6 +35,7 @@ mod history;
 mod ime;
 mod layout;
 mod nav;
+pub mod offsets;
 mod surrounding;
 
 #[cfg(feature = "scene")]
