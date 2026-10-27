@@ -17,8 +17,8 @@ default = []
 scene = []
 # Fallback Rust rasterizer (unmaintained)
 swash = ["dep:swash", "dep:skrifa"]
-# COLRv1 gradient/composite color glyphs, painted with tiny-skia.
-colrv1 = ["dep:tiny-skia", "swash"]
+# COLRv1 gradient/composite color glyphs.
+colrv1 = ["swash"]
 # OpenType-SVG glyph documents (static, no text), rendered by resvg.
 svg = ["dep:resvg", "swash"]
 
@@ -28,7 +28,8 @@ linebender_resource_handle.workspace = true
 swash = { workspace = true, optional = true }
 skrifa = { version = "0.44.0", default-features = false, features = ["std"], optional = true }
 aegle-image.workspace = true
-tiny-skia = { workspace = true, optional = true }
+# Platform outline → coverage rasterization (GDI/CoreText) and COLRv1 painting.
+tiny-skia.workspace = true
 resvg = { version = "0.48.1", default-features = false, features = ["svgz"], optional = true }
 hashbrown = { version = "0.17.1", default-features = false }
 lru-slab = "0.1.3"

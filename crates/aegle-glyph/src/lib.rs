@@ -28,6 +28,7 @@ mod colrv1;
 #[cfg(all(not(feature = "swash"), target_os = "linux"))]
 mod freetype;
 mod key;
+mod outline;
 mod raster;
 #[cfg(feature = "svg")]
 mod svg;
@@ -39,6 +40,7 @@ pub use aegle_scene::{FontSource, SystemFont};
 pub use cache::GlyphCache;
 pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};
+pub use outline::OutlineBuilder;
 pub use system::{SystemRasterizer, register_system_rasterizer, system_rasterizer_registered};
 #[cfg(feature = "scene")]
 pub use transform::{GlyphOrigin, RasterTransform};
@@ -220,6 +222,7 @@ impl std::error::Error for GlyphError {}
 ///
 /// A [`SystemRasterizer`] returns this from a platform font; the cache converts
 /// it to the borrowed [`Glyph`] it hands to callers.
+#[derive(Debug)]
 pub struct Image {
     /// Baseline-relative placement of `data`.
     pub placement: Placement,
