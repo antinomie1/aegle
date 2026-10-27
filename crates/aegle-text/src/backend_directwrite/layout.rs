@@ -10,7 +10,7 @@
 use std::ops::Range;
 
 use windows::Win32::Graphics::DirectWrite::{
-    DWRITE_LINE_METRICS, DWRITE_TEXT_METRICS, IDWriteTextLayout,
+    DWRITE_LINE_METRICS, DWRITE_LINE_SPACING_METHOD_UNIFORM, DWRITE_TEXT_METRICS, IDWriteTextLayout,
 };
 
 use super::sys::{alignment as dwrite_alignment, factory, wrapping};
@@ -36,6 +36,10 @@ pub(crate) struct DirectWriteLayout {
     pub(super) is_rtl: bool,
     /// Underline range the layout was built with, kept for rebuilds.
     underline: Option<Range<usize>>,
+    /// Line height the layout was built with, kept for rebuilds.
+    line_height: crate::LineHeight,
+    /// Font size, which relative line heights scale.
+    font_size: f32,
     /// Glyph runs captured for painting and diagnostics.
     pub(super) runs: Vec<super::runs::StoredRun>,
 }
@@ -53,6 +57,8 @@ impl DirectWriteLayout {
         layout.text = text.to_owned();
         layout.wrap = wrap;
         layout.underline = underline.filter(|range| !range.is_empty());
+        layout.line_height = shaping.line_height;
+        layout.font_size = shaping.size;
         layout.build(system, shaping);
         layout
     }
@@ -70,6 +76,8 @@ impl DirectWriteLayout {
             content_widths: ContentWidths::default(),
             is_rtl: false,
             underline: None,
+            line_height: crate::LineHeight::default(),
+            font_size: 0.0,
             runs: Vec::new(),
         }
     }
@@ -107,8 +115,42 @@ impl DirectWriteLayout {
             }
         }
         self.raw = Some(layout);
+        self.apply_line_height();
         self.reflow(self.width, Alignment::Start);
         self.capture_runs();
+    }
+
+    /// Applies Aegle's line height as uniform DirectWrite line spacing.
+    ///
+    /// `DWRITE_LINE_SPACING_METHOD_UNIFORM` takes the distance between
+    /// baselines directly, so all three [`crate::LineHeight`] forms become one
+    /// target height: metrics relative to the natural line, the font size, or
+    /// absolute pixels. The natural line height is read back from the layout
+    /// first; when it is unavailable the natural spacing is left in place
+    /// rather than guessing a value DirectWrite would then apply.
+    fn apply_line_height(&self) {
+        let Some(layout) = &self.raw else {
+            return;
+        };
+        // SAFETY: the layout is live; a null buffer asks for the line count.
+        let natural = unsafe {
+            let mut count = 0u32;
+            if layout.GetLineMetrics(None, &mut count).is_err() || count == 0 {
+                return;
+            }
+            let mut lines = vec![DWRITE_LINE_METRICS::default(); count as usize];
+            if layout.GetLineMetrics(Some(&mut lines), &mut count).is_err() {
+                return;
+            }
+            lines.first().map_or(0.0, |line| line.height)
+        };
+        let Some(target) = offsets::line_height(self.line_height, natural, self.font_size) else {
+            return;
+        };
+        // SAFETY: the layout is live; this setter only changes layout state.
+        unsafe {
+            let _ = layout.SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, target, target * 0.8);
+        }
     }
 
     /// Applies wrapping width and alignment, then re-measures.

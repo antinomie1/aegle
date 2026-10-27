@@ -229,11 +229,18 @@ impl DirectWriteLayout {
 
     /// Missing-glyph and unshaped-byte counts.
     ///
-    /// DirectWrite always falls back, so no byte goes unshaped while the layout
-    /// exists and `unshaped_bytes` is always zero. A missing glyph is glyph
-    /// index zero (`.notdef`) in a captured run; DirectWrite draws the same
-    /// `.notdef` box the count reports, so the count and the pixels agree.
-    pub fn diagnostics(&self, _text: &str) -> TextDiagnostics {
+    /// DirectWrite always falls back, so a created layout leaves no byte
+    /// unshaped: `unshaped_bytes` counts only what a *failed* layout could not
+    /// shape at all, which is every byte but the line separators. That keeps a
+    /// text system with no usable font collection reporting honestly instead of
+    /// claiming success. A missing glyph is glyph index zero (`.notdef`) in a
+    /// captured run; DirectWrite draws the same `.notdef` box the count
+    /// reports, so the count and the pixels agree.
+    pub fn diagnostics(&self, text: &str) -> TextDiagnostics {
+        let unshaped_bytes = match self.raw() {
+            Some(_) => 0,
+            None => text.bytes().filter(|&b| b != b'\n' && b != b'\r').count(),
+        };
         TextDiagnostics {
             missing_glyphs: self
                 .runs
@@ -241,7 +248,7 @@ impl DirectWriteLayout {
                 .flat_map(|run| run.glyphs.iter())
                 .filter(|glyph| glyph.0 == 0)
                 .count(),
-            unshaped_bytes: 0,
+            unshaped_bytes,
         }
     }
 

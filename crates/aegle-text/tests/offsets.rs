@@ -68,3 +68,34 @@ fn paragraph_direction_uses_the_first_strong_character() {
     assert!(!first_strong_rtl("123 456"));
     assert!(!first_strong_rtl(""));
 }
+
+#[test]
+fn line_height_reduces_all_three_forms_to_one_target() {
+    use aegle_text::LineHeight;
+    use aegle_text::offsets::line_height;
+    // Natural line 20, font size 16.
+    assert_eq!(
+        line_height(LineHeight::MetricsRelative(1.5), 20.0, 16.0),
+        Some(30.0)
+    );
+    assert_eq!(
+        line_height(LineHeight::FontSizeRelative(2.0), 20.0, 16.0),
+        Some(32.0)
+    );
+    assert_eq!(
+        line_height(LineHeight::Absolute(24.0), 20.0, 16.0),
+        Some(24.0)
+    );
+    // A natural height the platform cannot provide leaves its spacing alone.
+    assert_eq!(line_height(LineHeight::Absolute(24.0), 0.0, 16.0), None);
+    assert_eq!(
+        line_height(LineHeight::Absolute(24.0), f32::NAN, 16.0),
+        None
+    );
+    // A request that would produce a nonpositive or nonfinite target is refused.
+    assert_eq!(line_height(LineHeight::Absolute(0.0), 20.0, 16.0), None);
+    assert_eq!(
+        line_height(LineHeight::FontSizeRelative(f32::INFINITY), 20.0, 16.0),
+        None
+    );
+}

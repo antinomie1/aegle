@@ -105,3 +105,21 @@ pub fn first_strong_rtl(text: &str) -> bool {
         })
         .unwrap_or(false)
 }
+
+/// The distance between baselines for a requested line height.
+///
+/// All three [`crate::LineHeight`] forms reduce to one target height: a
+/// multiple of the natural line, a multiple of the font size, or absolute
+/// pixels. Returns `None` when the request or the natural height is not usable,
+/// so the platform keeps its own spacing instead of applying a bad value.
+pub fn line_height(line_height: crate::LineHeight, natural: f32, font_size: f32) -> Option<f32> {
+    if !natural.is_finite() || natural <= 0.0 {
+        return None;
+    }
+    let target = match line_height {
+        crate::LineHeight::MetricsRelative(factor) => natural * factor,
+        crate::LineHeight::FontSizeRelative(factor) => font_size * factor,
+        crate::LineHeight::Absolute(pixels) => pixels,
+    };
+    (target.is_finite() && target > 0.0).then_some(target)
+}
