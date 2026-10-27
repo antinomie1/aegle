@@ -14,18 +14,28 @@ description = "Native application host: windows, event loop, renderers, system p
 default = []
 motion = ["aegle-ui/motion"]
 system-fonts = ["aegle-ui/system-fonts"]
-accessibility = ["aegle-ui/accessibility"]
+# The semantic tree plus the system adapter of the target: AT-SPI on Linux,
+# UI Automation on Windows, NSAccessibility on macOS. The adapter attaches to a
+# native window, so this implies `native`; the other targets' adapters are not
+# built.
+accessibility = [
+    "native",
+    "dep:aegle-access",
+    "aegle-access/platform",
+    "aegle-ui/accessibility",
+]
+# Native windows: exactly the target's platform crate is built.
+native = ["wayland", "windows", "macos"]
 wayland = ["dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
 macos = ["dep:aegle-platform-macos"]
 software = ["dep:aegle-render-software"]
+# Vulkan is the Linux and Windows GPU path and reports `Unsupported` on macOS;
+# `wgpu` reaches Metal there.
 vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
 wgpu = ["dep:aegle-render-wgpu", "aegle-platform-wayland?/gpu"]
-windows-accessibility = ["windows", "accessibility", "aegle-access/windows"]
-unix-accessibility = ["wayland", "accessibility", "aegle-access/unix"]
-macos-accessibility = ["macos", "accessibility", "aegle-access/macos"]
 # File dialogs, notifications, a tray icon and global shortcuts (`App::desktop`).
-desktop-services = ["dep:aegle-desktop"]
+desktop-services = ["native", "dep:aegle-desktop"]
 
 [dependencies]
 aegle-ui.workspace = true

@@ -64,11 +64,7 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
     })
 }
 
-#[cfg(any(
-    all(feature = "wayland", target_os = "linux"),
-    all(feature = "windows", target_os = "windows"),
-    all(feature = "macos", target_os = "macos")
-))]
+#[cfg(feature = "window")]
 pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
     use aegle_markup::{Bound, Prop, PropertyName, Value};
     let root = &program.0.checked.templates[0].root;
@@ -224,11 +220,7 @@ impl View {
         if let Some(index) = root.id {
             ids[index] = Some(self.root.clone());
         }
-        #[cfg(any(
-            all(feature = "wayland", target_os = "linux"),
-            all(feature = "windows", target_os = "windows"),
-            all(feature = "macos", target_os = "macos"),
-        ))]
+        #[cfg(feature = "window")]
         for (prop, bound) in &root.properties {
             use aegle_markup::{Bound, Prop, PropertyName, Value};
             if let (Prop::Node(PropertyName::Theme), Bound::Literal(Value::Identifier(theme))) =

@@ -66,12 +66,9 @@ Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`,
 | `desktop-services` | ✓ | File dialogs, notifications, tray icon and global shortcuts (`App::desktop`) |
 | `vulkan` |  | Vulkan rendering |
 | `wgpu` |  | Portable minimal wgpu rendering |
-| `accessibility` |  | Semantic tree export without a platform adapter |
-| `unix-accessibility` |  | AT-SPI adapter on Linux (includes `accessibility`) |
-| `windows-accessibility` |  | UI Automation adapter on Windows (includes `accessibility`) |
-| `macos-accessibility` |  | NSAccessibility adapter on macOS (includes `accessibility`) |
+| `accessibility` |  | Semantic tree plus the target's system adapter: AT-SPI on Linux (pulls in zbus), UI Automation on Windows, NSAccessibility on macOS. Implies `native` |
 
-Finer-grained features (`wayland`, `windows`, `macos`) and the crate-level breakdown are in the [crate guide](docs/crates-and-examples.md).
+`native` builds only the target's platform crate, and `accessibility` only the target's adapter. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).
 
 ## Documentation
 

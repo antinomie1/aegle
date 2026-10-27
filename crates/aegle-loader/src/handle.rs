@@ -29,11 +29,7 @@ impl Handle {
         self.typed.downcast_ref::<T>().cloned()
     }
 
-    #[cfg(any(
-        all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows"),
-        all(feature = "macos", target_os = "macos")
-    ))]
+    #[cfg(feature = "window")]
     pub(crate) fn window(window: aegle_app::Window) -> Self {
         Self {
             node: Node::clone(&window),

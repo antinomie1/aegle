@@ -1,15 +1,7 @@
 //! Window documents, only in a dedicated test desktop: both paths apply the
 //! window's theme before its content's transitions install, and a reload
 //! validates host actions like the first build.
-#![cfg(all(
-    feature = "markup",
-    feature = "motion",
-    any(
-        all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows"),
-        all(feature = "macos", target_os = "macos")
-    )
-))]
+#![cfg(all(feature = "markup", feature = "motion", feature = "native"))]
 
 #[allow(unused_imports)]
 use aegle::prelude::*;

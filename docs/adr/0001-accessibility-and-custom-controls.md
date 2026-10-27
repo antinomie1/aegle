@@ -10,5 +10,5 @@ status: accepted
 
 ## 实现补充
 
-后续实现选择 AccessKit 的独立平台 adapter（Unix AT-SPI、Windows UIA），语义由框架从同一控件树导出，`accessibility` feature 可在不接系统的情况下检查语义树。为控制默认依赖与常驻资源，经用户决定，facade 默认组合不启用系统 adapter，应用以 `unix-accessibility` 或 `windows-accessibility` 显式启用；本决定要求的语义完整性不因此降低，适配范围与限制见[无障碍设计](../accessibility.md)。
+后续实现选择 AccessKit 的独立平台 adapter（Unix AT-SPI、Windows UIA），语义由框架从同一控件树导出，`accessibility` feature 可在不接系统的情况下检查语义树。为控制默认依赖与常驻资源，经用户决定，facade 默认组合不启用系统 adapter，应用以单个 `accessibility` feature 显式启用，它按编译目标接入 AT-SPI、UIA 或 NSAccessibility（2026-11-02 起由三个分平台 feature 合并而来）；本决定要求的语义完整性不因此降低，适配范围与限制见[无障碍设计](../accessibility.md)。
 

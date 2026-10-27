@@ -25,7 +25,7 @@
 | aegle-platform-win32 | 以契约提供 Win32 窗口、TSF 文本存储输入法、DPI、OLE 拖放、GDI 软件与 GPU 句柄、外观偏好 | types、platform |
 | aegle-platform-macos | 以契约提供 AppKit 顶部窗口、`NSTextInputClient` 输入法、`NSView` 上的拖放、`CGImage` 软件呈现与 GPU 视图租约、外观偏好；`NSApplication` 由平台自己驱动 | types、platform、objc2 |
 | aegle-platform-appkit | 计划中，**尚未实现**：以契约提供 AppKit 窗口、NSTextInputClient 及平台偏好 | types、platform |
-| aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，unix/windows adapters 分别启用 |
+| aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，`platform` 按目标启用 AT-SPI/UIA/NSAccessibility 之一 |
 | aegle-theme | 无分配的 Theme、控件类型 `ControlKind`（默认皮肤与可接受样式组）、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；类型化 `Token<T>` 与内置 token（注册表与绑定在 aegle-ui） | types |
 | aegle-motion | 补间、过渡、关键帧动画与 Bézier/弹簧曲线；可无窗口独立推进 | types |
 | aegle-controls | 可复用控件行为、语义动作与基础组合；无默认皮肤 | types；text feature 接 text，树与路由由宿主提供 |
@@ -74,7 +74,7 @@
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 ui 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 ui 派生的滚动几何。
 
-`aegle` 重导出 app、ui、widgets 与 image，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32）+ 软件绘制 + 系统字体 + 词典分词 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由 `unix-accessibility` 选择；Windows UIA 由 `windows-accessibility` 选择。`aegle-ui` / `aegle-widgets` 的 `accessibility` 仅启用语义树导出，`aegle-app` 转发它，`unix-accessibility` 另接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 用 `software` 或 `wgpu`（Vulkan 显式选择时返回错误）；动态标记与运行时加载都由 `markup` 中的 loader 执行。
+`aegle` 重导出 app、ui、widgets 与 image，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32 / macOS AppKit）+ 软件绘制 + 系统字体 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合；词典分词（`text-dictionary`，release 约 3.6 MiB）与系统无障碍适配都需显式启用。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由单个 `accessibility` 选择，它按编译目标接入 AT-SPI、UIA 或 NSAccessibility，并隐含 `native`；`aegle-ui` / `aegle-widgets` 的 `accessibility` 只启用语义树导出，`aegle-app` 在此基础上接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 用 `software` 或 `wgpu`（Vulkan 显式选择时返回错误）；动态标记与运行时加载都由 `markup` 中的 loader 执行。
 
 `aegle-markup` 是无第三方依赖的有界解析器、schema 与类型检查器；不依赖 app 或任何平台，可供外部工具独立检查，I/O 由调用方的读取函数提供。`aegle-macros` 复用它，并用 syn/quote 处理 Rust 宏参数与代码生成，避免自建 Rust 语法处理；facade 的 `ui!` 与 loader 的 `element!` 以 `macro_rules!` 把 `$crate` 交给 proc macro，依赖别名由编译器解析。facade 的可选 `markup` 增加编译期宏与 `aegle-loader`：静态文档生成直接创建控件的代码，不链接引擎；动态文档生成构造已检查程序的代码并由引擎执行，发布程序不带解析器。引擎以 state 单元和效果（effect）记录绑定依赖，绑定与块随控件通过 `Node::keep_alive` 释放；运行时加载额外链接解析器。
 
@@ -117,13 +117,13 @@ flowchart TD
 
 | 组合 | 包含 | 不自动包含 |
 | --- | --- | --- |
-| `aegle` 默认 `desktop` | 目标平台窗口（`native`）、软件绘制、系统字体、词典分词、`markup`（编译宏与 loader，含运行时加载）、`motion`（过渡、关键帧与弹簧）、`effects`、`colrv1`、`desktop-services` | 系统无障碍适配、Vulkan、wgpu、JPEG/WebP/GIF/SVG、Grid |
+| `aegle` 默认 `desktop` | 目标平台窗口（`native`）、软件绘制、系统字体、`markup`（编译宏与 loader，含运行时加载）、`motion`（过渡、关键帧与弹簧）、`effects`、`colrv1`、`desktop-services` | 系统无障碍适配（`accessibility`）、词典分词、Vulkan、wgpu、JPEG/WebP/GIF/SVG、Grid |
 | `default-features = false` | 不自动选择窗口/renderer；使用者显式加所需功能或直接用独立模块 | 便捷默认组合 |
 | `text-dictionary` | 中日词典分词及相关复杂文字分段数据 | 网络字体 |
 | `effects`（桌面默认）/ `colrv1`（桌面默认）/ `jpeg` / `webp` / `gif` / `svg` | 渐变与阴影图像、COLRv1 字形、各图像格式、静态 SVG（图像与 OpenType-SVG 字形） | 彼此不暗中全部开启 |
 | `grid` | Taffy Grid 算法、`grid`/`stack` 容器与标记 `Grid`/`Stack`（release 约 244 KiB） | 默认 desktop 不包含 |
 
-默认组合不启用系统无障碍 adapter：`unix-accessibility`、`windows-accessibility` 显式选择，`accessibility` 只导出可检查的语义树；不能把未接 adapter 的构建宣传为完整无障碍构建，省掉平台 adapter 也不删除控件的基本语义定义。减少动态效果偏好由 `motion` 跟随系统。
+默认组合不启用系统无障碍 adapter：`accessibility` 显式选择，它同时给出可检查的语义树与目标平台的 adapter；不能把未接 adapter 的构建宣传为完整无障碍构建，省掉平台 adapter 也不删除控件的基本语义定义。减少动态效果偏好由 `motion` 跟随系统。
 
 Cargo feature 在依赖图中会统一：不能承诺同一程序里的某个控件使用有字典的 Parley，另一个控件因此完全不承担其静态数据成本。发布检查必须查看实际闭包和最终文件，而不是只查看 facade 清单。
 
@@ -133,4 +133,4 @@ Cargo feature 在依赖图中会统一：不能承诺同一程序里的某个控
 
 首版只承诺文档所列 capability。扩展能力不存在时返回结构化错误或使用明确的组件降级方案，不依赖反射查找“可能存在”的隐藏服务。
 
-`aegle/native` 是 wayland/windows/macos 的目标平台便捷组合，不编译另一个 OS 的平台依赖。最小命令式软件 hello 选择 native,software,system-fonts；仅 Vulkan 则选择 native,vulkan,system-fonts。两个 renderer 同时编译时默认软件，显式 AppOptions.renderer 切换；没有 renderer feature 时构造返回错误。标记与 motion 继续单独选择。Windows adapter 同样可由 windows-accessibility 独立关闭。
+`aegle/native` 是目标平台的便捷组合（内部再选 wayland/windows/macos 中与目标相符的一个），不编译另一个 OS 的平台依赖。最小命令式软件 hello 选择 native,software,system-fonts；仅 Vulkan 则选择 native,vulkan,system-fonts。两个 renderer 同时编译时默认软件，显式 AppOptions.renderer 切换；没有 renderer feature 时构造返回错误。标记与 motion 继续单独选择。系统 adapter 由 `accessibility` 单独选择，它不影响 `aegle-ui`/`aegle-widgets` 的语义定义。

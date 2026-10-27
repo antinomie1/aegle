@@ -1,6 +1,6 @@
 # 无障碍与可检查的控件树
 
-状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI / Windows UIA / macOS NSAccessibility adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍，macOS 适配只经交叉编译检查，未在辅助技术下运行。facade 默认不启用系统适配（用户决定），应用按需选择 `unix-accessibility`、`windows-accessibility`、`macos-accessibility`，或只导出语义树的 `accessibility`；独立模块同样显式选择 feature。关联 R04–R07、R12–R14、R18–R21。
+状态：设计目标与当前实现并列。已实现独立 `aegle-access` 回调桥、可选 Unix AT-SPI / Windows UIA / macOS NSAccessibility adapter、保留编辑器文本桥及应用层接入；尚未完成完整跨平台无障碍，macOS 适配只经交叉编译检查，未在辅助技术下运行。facade 默认不启用系统适配（用户决定），应用启用单个 `accessibility` feature 即接上编译目标的适配器（Linux AT-SPI、Windows UI Automation、macOS NSAccessibility），另一个平台的适配器与其依赖不进入构建；独立模块用 `aegle-access` 的 `platform`（或单平台的 `unix`/`windows`/`macos`）同样选择。关联 R04–R07、R12–R14、R18–R21。
 
 `Ui::accessibility(initial, title)` 可检查当前控件树及文本 run，使用与绘制相同的父子关系、布局与滚动几何；语义检查保留宿主尚未消费的重绘请求。身份由每个 Ui 单调分配，文本 run 与动态控件共用无冲突命名空间。`access_action` 对已经删除的节点、过期选择或预编辑期间的选择返回 false，原生应用不会因此退出。App 首次/重新激活完整导出，之后使用语义失效差量；文本的主题、局部样式及自定义皮肤前景同步到系统语义。自定义皮肤可依交互状态改变文字颜色，因此相关状态变化也标记语义失效；默认普通 hover/pressed 仍仅改变绘制。当前没有独立树检查器 GUI。
 
@@ -60,13 +60,13 @@ AccessKit 当前上游 README 表示已发布适配支持单行和多行输入�
 
 ## 当前接入与行为边界
 
-`aegle-access` 默认仅依赖 AccessKit schema，提供与窗口循环无关的 `Mailbox/Handlers`。`unix` feature 才编译 `UnixAdapter` 与 Unix AT-SPI 依赖；Wayland 模块不因此永久绑定无障碍实现。原生 App 在启用 `unix-accessibility` 时组合它们，从控件树派生窗口、控件、文本框及文字 run，并用 `Dirty::SEMANTICS` 提交变化。首次激活或重新激活提交完整树，其后提交发生变化的控件及其文字 run；当前没有每个文字 run 的独立差量比较缓存。 facade 默认 desktop 不启用任何系统适配：Linux 应用显式选择 `unix-accessibility` 才会链接 zbus/AT-SPI 依赖并启动上游 worker，Windows 应用显式选择 `windows-accessibility` 才接入 UIA；只需检查语义树时选择 `accessibility`。
+`aegle-access` 默认仅依赖 AccessKit schema，提供与窗口循环无关的 `Mailbox/Handlers`。`platform`（或单平台的 `unix`/`windows`/`macos`）才编译对应 adapter 与系统依赖，每个依赖只为自己的目标声明，所以启用全部三者也只构建一个；Wayland 模块不因此永久绑定无障碍实现。原生 App 在启用 `accessibility` 时组合它们，从控件树派生窗口、控件、文本框及文字 run，并用 `Dirty::SEMANTICS` 提交变化。首次激活或重新激活提交完整树，其后提交发生变化的控件及其文字 run；当前没有每个文字 run 的独立差量比较缓存。 facade 默认 desktop 不启用任何系统适配：Linux 应用显式选择 `accessibility` 才会链接 zbus/AT-SPI 依赖并启动上游 worker，Windows 应用同样只有该 feature 才接入 UIA，macOS 只有该 feature 才安装 NSAccessibility 子类；只需检查语义树时直接使用 `aegle-ui`/`aegle-widgets` 的 `accessibility`。该 feature 隐含 `native`，因为适配器要挂到原生窗口上。
 
 AccessKit Unix 的激活、动作与停用回调均在后台线程执行。Handlers 只排队并唤醒主线程；`Wayland::wake_handle()` 复用 calloop 的事件唤醒，不增加轮询定时器。激活回调返回 `None`，宿主收到 `InitialTree` 后立即在 UI 线程构建完整树，即使没有像素需要重画。`UnixAdapter::update_if_active` 的闭包只在原生适配处于活动或待初始化状态时调用；逻辑控件焦点和原生窗口激活分别同步；当前辅助 Focus 不会请求 xdg-activation 来激活后台窗口。按钮 Click 经过与物理输入共用的 `Input::Activate`，Focus 经过现有焦点策略，过期或不适用的目标不会直接访问已失效控件。
 
 `aegle-text/text-a11y` 的 `EditorDriver::accessibility` 导出当前显示文本、布局几何、只读状态及选区；显示文本包含 IME 预编辑及下划线，不能视为已提交值。`select_accessibility` 使用最近一次导出的 run 身份验证范围，布局重建后须重新导出。AccessKit 的 run 内位置以可选择的 shaping cluster 计数，AT-SPI 外部偏移以 Unicode scalar 计数；平台 adapter 与 Parley 依据 run 的字符长度完成转换，不能直接传递 UTF-8 字节偏移。
 
-macOS：`macos` feature 编译 `MacosAdapter`，复用 AccessKit 0.26.3 的 `SubclassingAdapter`。它在窗口首次显示前动态替换内容视图的类，由 `accessibilityChildren`、`accessibilityFocusedUIElement`、`accessibilityHitTest:` 从同一棵语义树回答 VoiceOver、转子与「键盘」偏好面板；焦点变化经 `NSAccessibilityFocusedUIElementChangedNotification`，逻辑控件焦点与原生窗口激活分别同步（`set_window_focused`）。原生回调同样只排队并唤醒主线程，UI 线程在 `update_if_active` 中发布完整树或差量。坐标按物理像素（AccessKit 的约定）提交，视图非翻转，由上游 adapter 换算屏幕矩形；缩放变化强制重发整棵树。适配器要求在视图显示、获焦或加入 KVO 之前安装，`aegle-app` 因此在窗口创建时创建它——窗口在首帧成功后才 `makeKeyAndOrderFront:`。以上只经 Linux 上的 `cargo check --target aarch64-apple-darwin` 与 `--no-run` 编译验证，尚未在 Mac 上用 VoiceOver 或「辅助功能检查器」验收。
+macOS：`macos`（`accessibility` 隐含）feature 编译 `MacosAdapter`，复用 AccessKit 0.26.3 的 `SubclassingAdapter`。它在窗口首次显示前动态替换内容视图的类，由 `accessibilityChildren`、`accessibilityFocusedUIElement`、`accessibilityHitTest:` 从同一棵语义树回答 VoiceOver、转子与「键盘」偏好面板；焦点变化经 `NSAccessibilityFocusedUIElementChangedNotification`，逻辑控件焦点与原生窗口激活分别同步（`set_window_focused`）。原生回调同样只排队并唤醒主线程，UI 线程在 `update_if_active` 中发布完整树或差量。坐标按物理像素（AccessKit 的约定）提交，视图非翻转，由上游 adapter 换算屏幕矩形；缩放变化强制重发整棵树。适配器要求在视图显示、获焦或加入 KVO 之前安装，`aegle-app` 因此在窗口创建时创建它——窗口在首帧成功后才 `makeKeyAndOrderFront:`。以上只经 Linux 上的 `cargo check --target aarch64-apple-darwin` 与 `--no-run` 编译验证，尚未在 Mac 上用 VoiceOver 或「辅助功能检查器」验收。
 
 只读编辑器仍接受合法选择。活动预编辑期间 `select_accessibility` 返回 `CompositionActive`，引擎拒绝该次辅助技术选择，不隐式取消组合或重解释旧范围；应用代码的 `TextField::select` 则先结束组合再选择。未知 run、越界位置或重排后尚未重新发布的选择返回 `InvalidRange`。密码编辑器导出 `PasswordInput` 角色，值、文字 run 与选择只含 `•` 遮盖字符，选择按遮盖偏移转换。
 
@@ -141,4 +141,4 @@ RadioButton 导出同名角色；复选框部分选中时 Toggled 为 Mixed。Dr
 
 Ui 检查 API 继续使用逻辑坐标，Windows App 在语义根应用 DPI scale，UIA adapter 再负责 client-to-screen；DPI 改变重新发布。没有维护第二棵可修改的 UI 树；AccessKit 派生缓存、标准库消息队列及 COM/UIA 成本仍需计量。
 
-控件自身的角色与名称来自 `aegle-widgets/accessibility`；facade 的 `windows-accessibility`、`unix-accessibility` 因此同时启用 `accessibility`（此前只接系统 adapter，按钮和标签被导出为无名容器，`aegle/tests/accessibility.rs` 覆盖）。直接组合 `aegle-app` 时须自行启用该 feature。Windows 11 上用系统 UI Automation 客户端检查 `controls` 示例：窗口下依次为两个 Text、名为 "Text editor" 的 Edit（TextPattern 返回含 CJK 的全文）和三个支持 Invoke 的 Button；Invoke "Clear text" 清空编辑器，SetFocus 把系统焦点移到编辑器。Windows 真实屏幕阅读器（讲述人/NVDA）、文本模式的选择与编辑及通知的完整验收尚未完成。
+控件自身的角色与名称来自 `aegle-widgets/accessibility`；facade 的单个 `accessibility` 同时启用它（此前只接系统 adapter，按钮和标签被导出为无名容器，`aegle/tests/accessibility.rs` 覆盖）。直接组合 `aegle-app` 时须自行启用该 feature。Windows 11 上用系统 UI Automation 客户端检查 `controls` 示例：窗口下依次为两个 Text、名为 "Text editor" 的 Edit（TextPattern 返回含 CJK 的全文）和三个支持 Invoke 的 Button；Invoke "Clear text" 清空编辑器，SetFocus 把系统焦点移到编辑器。Windows 真实屏幕阅读器（讲述人/NVDA）、文本模式的选择与编辑及通知的完整验收尚未完成。

@@ -1,16 +1,18 @@
 //! Native application host: [`App`] owns the platform connection, windows, event
 //! loop, renderers and system preferences, and gives each window an
-//! `aegle-ui` [`Ui`](aegle_ui::Ui). On Linux enable `wayland`, on Windows
-//! `windows`, on macOS `macos`, plus an explicit `software`, `vulkan` or `wgpu`
-//! renderer feature (macOS presents GPU frames through Metal, so `vulkan` is
-//! unavailable there).
+//! `aegle-ui` [`Ui`](aegle_ui::Ui). `native` builds the target's platform crate
+//! (Wayland, Win32 or AppKit; `wayland`, `windows` and `macos` select one
+//! explicitly), plus an explicit `software`, `vulkan` or `wgpu` renderer
+//! feature. `vulkan` has no macOS backend and returns `Unsupported` there,
+//! where `wgpu` presents through Metal.
+//!
 //! Windows share fonts, the platform connection and (for GPU renderers) one
 //! device; each keeps its own control tree. [`App::proxy`] posts messages from
-//! other threads to the UI thread. `unix-accessibility`,
-//! `windows-accessibility` and `macos-accessibility` connect the semantic tree
-//! to the system; the
-//! controls' own roles and names additionally need `aegle-widgets/accessibility`,
-//! which the `aegle` facade's adapter features enable.
+//! other threads to the UI thread. `accessibility` connects the semantic tree
+//! to the target's system adapter (AT-SPI, UI Automation or
+//! NSAccessibility) and enables `aegle-ui/accessibility`; the controls' own
+//! roles and names additionally need `aegle-widgets/accessibility`, which the
+//! `aegle` facade's `accessibility` feature enables.
 //!
 //! The host is written once against the [`aegle_platform::Platform`] contract;
 //! the target's platform is chosen in one place, `Native` below.

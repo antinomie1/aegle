@@ -13,9 +13,9 @@ categories.workspace = true
 [features]
 motion = ["aegle-ui/motion", "aegle-widgets/motion"]
 grid = ["aegle-ui/grid"]
-wayland = ["dep:aegle-app", "aegle-app/wayland"]
-windows = ["dep:aegle-app", "aegle-app/windows"]
-macos = ["dep:aegle-app", "aegle-app/macos"]
+# Window documents: opening and reloading a Window through the native App of
+# the target.
+window = ["dep:aegle-app", "aegle-app/native"]
 
 [dependencies]
 aegle-ui.workspace = true

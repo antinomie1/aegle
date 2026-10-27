@@ -12,6 +12,11 @@ description = "Event-driven accessibility adapters over retained application sta
 
 [features]
 default = []
+# The target's system adapter: AT-SPI on Linux, UI Automation on Windows,
+# NSAccessibility on macOS. Each switch below names an optional dependency
+# that is only declared for its own target, so enabling all of them builds
+# exactly one adapter.
+platform = ["unix", "windows", "macos"]
 unix = ["dep:accesskit_unix"]
 windows = ["dep:accesskit_windows", "dep:raw-window-handle"]
 macos = ["dep:accesskit_macos", "dep:raw-window-handle"]

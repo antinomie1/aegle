@@ -66,12 +66,9 @@ fn main() -> Result<()> {
 | `desktop-services` | ✓ | 文件对话框、通知、托盘与全局快捷键（`App::desktop`） |
 | `vulkan` |  | Vulkan 绘制 |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制 |
-| `accessibility` |  | 导出语义树，不接系统适配器 |
-| `unix-accessibility` |  | Linux AT-SPI 适配（含 `accessibility`） |
-| `windows-accessibility` |  | Windows UI Automation 适配（含 `accessibility`） |
-| `macos-accessibility` |  | macOS NSAccessibility 适配（含 `accessibility`） |
+| `accessibility` |  | 语义树与目标平台的系统适配（Linux AT-SPI，引入 zbus；Windows UI Automation；macOS NSAccessibility）；隐含 `native` |
 
-更细的 feature（`wayland`、`windows`）和各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
+`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
 
 ## 文档
 

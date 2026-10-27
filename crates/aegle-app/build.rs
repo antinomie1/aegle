@@ -5,11 +5,12 @@
 fn main() {
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let feature = |name: &str| std::env::var_os(format!("CARGO_FEATURE_{name}")).is_some();
-    // (target OS, platform feature, accessibility adapter feature)
+    // (target OS, platform feature, accessibility feature); the accessibility
+    // feature selects the same target's adapter inside `aegle-access`.
     let platforms = [
-        ("linux", "WAYLAND", "UNIX_ACCESSIBILITY"),
-        ("windows", "WINDOWS", "WINDOWS_ACCESSIBILITY"),
-        ("macos", "MACOS", "MACOS_ACCESSIBILITY"),
+        ("linux", "WAYLAND", "ACCESSIBILITY"),
+        ("windows", "WINDOWS", "ACCESSIBILITY"),
+        ("macos", "MACOS", "ACCESSIBILITY"),
     ];
     println!("cargo::rustc-check-cfg=cfg(native, access)");
     for (target, platform, access) in platforms {

@@ -1,10 +1,13 @@
 //! Convenient entry to Aegle's retained application layer.
 //!
-//! The default desktop host selects Wayland on Linux or Win32 on Windows with
-//! software rendering and system fonts. System accessibility adapters are
-//! opt-in through `unix-accessibility` and `windows-accessibility`. Enable `vulkan`
-//! or `wgpu` and select `RendererBackend::Vulkan` or `RendererBackend::Wgpu` for GPU presentation. Lower-level crates
-//! remain independent; no macOS host is currently implemented.
+//! The default desktop host selects the target's native window (Wayland on
+//! Linux, Win32 on Windows, AppKit on macOS) with software rendering and system
+//! fonts. System accessibility is opt-in through the single `accessibility`
+//! feature, which adds the semantic tree and the target's adapter (AT-SPI, UI
+//! Automation or NSAccessibility). Enable `vulkan` or `wgpu` and select
+//! `RendererBackend::Vulkan` or `RendererBackend::Wgpu` for GPU presentation;
+//! `vulkan` reports `Unsupported` on macOS, where `wgpu` reaches Metal.
+//! Lower-level crates remain independent.
 //!
 //! [`prelude`] holds the common names; everything else stays under the crate
 //! it comes from: [`ui`](mod@ui), [`widgets`] and [`app`].
@@ -70,11 +73,7 @@ pub use aegle_loader as loader;
 
 /// Common imperative application and control types.
 pub mod prelude {
-    #[cfg(any(
-        all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows"),
-        all(feature = "macos", target_os = "macos")
-    ))]
+    #[cfg(feature = "native")]
     pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
     /// The built-in markup elements: the specs `ui!` reads under the handle
     /// type names, and marker types for the other element names.

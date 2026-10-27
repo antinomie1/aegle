@@ -12,7 +12,7 @@
 
 ## 默认组合与平台前提
 
-`aegle` 默认启用原生窗口（Linux Wayland / Windows Win32 / macOS AppKit）、软件绘制、系统字体、标记（含动态标记引擎）与过渡。系统无障碍适配默认关闭：`--features unix-accessibility`（AT-SPI，需要会话 D-Bus，并引入 zbus 栈）、`--features windows-accessibility`（UI Automation）或 `--features macos-accessibility`（NSAccessibility）。
+`aegle` 默认启用原生窗口（Linux Wayland / Windows Win32 / macOS AppKit）、软件绘制、系统字体、标记（含动态标记引擎）与过渡。系统无障碍适配默认关闭：单个 `--features accessibility` 接上目标平台的适配器（Linux AT-SPI，需要会话 D-Bus 并引入 zbus 栈；Windows UI Automation；macOS NSAccessibility），另一平台的适配器与其依赖不进入构建。
 
 - 系统字体必须覆盖所请求的文字；Linux 的系统字体发现还链接系统 Fontconfig 及其发行版相关的运行时依赖，显式提供应用字体可避免该依赖。
 - Wayland IME 需要 text-input-v3；没有它时聚焦可编辑字段返回能力错误。

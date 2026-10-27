@@ -242,11 +242,7 @@ impl Program {
     }
 
     /// Opens a document whose root is a Window. A failure closes that window.
-    #[cfg(any(
-        all(feature = "wayland", target_os = "linux"),
-        all(feature = "windows", target_os = "windows"),
-        all(feature = "macos", target_os = "macos")
-    ))]
+    #[cfg(feature = "window")]
     pub fn open(&self, app: &aegle_app::App) -> Result<View> {
         view::window(self, app)
     }

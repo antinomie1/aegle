@@ -26,15 +26,11 @@ aegle = { path = "../aegle/crates/aegle" }
 | `jpeg` / `webp` / `gif` |  | `aegle::image::decode` 解码 JPEG、WebP（静态）、GIF（首帧） |
 | `svg` |  | 静态 SVG（无文字）：`aegle::image::svg` 栅格化，并渲染 OpenType-SVG 字形 |
 | `grid` |  | 网格与叠放容器（`grid`、`stack`）及标记的 `Grid`/`Stack`；release 约增加 244 KiB |
-| `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译 |
-| `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），可与其他后端同时编译 |
-| `accessibility` |  | 语义树导出（`Ui::accessibility`），不接系统 |
-| `unix-accessibility` |  | Linux AT-SPI 适配（含 `accessibility`），引入 zbus |
-| `windows-accessibility` |  | Windows UI Automation 适配（含 `accessibility`） |
-| `macos` |  | macOS AppKit 原生窗口 |
-| `macos-accessibility` |  | macOS NSAccessibility 适配（含 `accessibility`） |
+| `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译；macOS 上没有 Vulkan，显式选择后构造返回 `Unsupported` |
+| `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），macOS 上经 Metal；可与其他后端同时编译 |
+| `accessibility` |  | 语义树导出，并接上编译目标的系统适配：Linux AT-SPI（引入 zbus）、Windows UI Automation、macOS NSAccessibility。只取语义树而不接系统时直接用 `aegle-ui`/`aegle-widgets` 的同名 feature |
 
-Linux 构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon；启用 `system-fonts` 时还需要 Fontconfig。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。
+Linux 构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon；启用 `system-fonts` 时还需要 Fontconfig。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。
 
 `use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入与 `scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口与 `desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
 

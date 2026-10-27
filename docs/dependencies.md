@@ -20,7 +20,7 @@
 | 共享字体资源 | linebender_resource_handle 0.1.1 | scene/text 仅借助该轻量句柄共享字体字节，不引入 shaping |
 | 字形缓存索引 | hashbrown 0.17.1、lru-slab 0.1.3 | 哈希索引和 LRU 槽位复用现成实现，命中不分配 |
 | 语义 | AccessKit 0.24.1 | 与 Parley 可选 text-a11y 使用同一 schema |
-| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 三者都通过可选 feature 接入（`macos`/`windows`/`unix`）；macOS 适配器仍基于 objc2 0.5，与平台 crate 的 objc2 0.6 在同一锁定图中共存 |
+| 系统语义 adapters | macOS 0.26.3、Windows 0.34.0、Unix 0.22.1 | 由单个 `platform` feature 接入，每个依赖只为自己的目标声明，因此只构建一个适配器；macOS 适配器仍基于 objc2 0.5，与平台 crate 的 objc2 0.6 在同一锁定图中共存 |
 | Unix 无障碍传输 | accesskit_atspi_common 0.19.1、atspi 0.29.0、zbus 5.19.0 | 复用 AccessKit 适配；采用 async-io，无 Tokio |
 | 路径 | 软件复用 tiny-skia，Vulkan 复用 zeno 0.3.3（swash 已依赖） | CPU 覆盖率光栅，不引入 Lyon 或三角细分 |
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
@@ -35,7 +35,7 @@
 
 `aegle-access` 默认依赖 AccessKit schema 与标准库通道，不带原生 adapter、异步运行时或窗口库。`unix` 仅在非 macOS 的 Unix 目标启用 AccessKit Unix 0.22.1，关闭其默认 features 并显式选择 `async-io`；上游不允许同时启用 `async-io` 与 `tokio`。该闭包含 AccessKit consumer 0.38.0、AT-SPI、Serde、zbus 及其异步组件，不能描述为只有一个小型运行依赖。consumer 使用的 hashbrown 0.16 与字形缓存的 0.17 同时存在于锁定图，不为统一版本私自修改上游依赖。上游 adapter/consumer 声明 MSRV 1.85，zbus 5.19 声明 1.87；完整 MSRV 仍须实际工具链验收。
 
-Wayland 库本身没有 AccessKit 依赖；Unix adapter 由 aegle-app 的 `unix-accessibility` 引入。构建时纳入 async-io/zbus 不等于启动即创建线程，首次构造 UnixAdapter 才启动上游 worker；此后 worker 的生命周期、无界队列和语义缓存成本见[资源](resources.md)。Unix 原生文字选择可用，但当前上游缺少 AT-SPI EditableText 接口；不能用依赖版本声明代替完整控件支持。
+Wayland 库本身没有 AccessKit 依赖；Unix adapter 由 aegle-app 的 `accessibility` 经 `aegle-access/platform` 引入，Windows 与 macOS 的适配器在同一 feature 下只为各自目标构建。构建时纳入 async-io/zbus 不等于启动即创建线程，首次构造 UnixAdapter 才启动上游 worker；此后 worker 的生命周期、无界队列和语义缓存成本见[资源](resources.md)。Unix 原生文字选择可用，但当前上游缺少 AT-SPI EditableText 接口；不能用依赖版本声明代替完整控件支持。
 
 `aegle-glyph` 用 Swash std/render 和与 Parley 相同的 Skrifa 0.44 解析字体；使用 png 的有界解码接口处理嵌入 PNG，避免无上限的中间解码分配。`aegle-render-software/text` 与 `aegle-render-vulkan/text` 显式引入此依赖闭包和 scene/text，均不依赖 Parley；默认纯几何构建没有字体栈或 PNG。Vulkan 图集索引复用已有 hashbrown 0.17，不增加另一套字体解析或栅格库。Cargo 测试/示例的 dev-dependencies 不代表库的发布依赖，仍需核查最终应用的 feature 合并。
 

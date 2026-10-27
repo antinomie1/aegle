@@ -1,11 +1,7 @@
-//! Selecting only a system adapter feature still exports every stock widget's
-//! semantics; without them UIA/AT-SPI saw unnamed containers instead of
+//! Selecting the accessibility feature still exports every stock widget's
+//! semantics; without it the system adapters saw unnamed containers instead of
 //! labels and buttons.
-#![cfg(any(
-    feature = "accessibility",
-    feature = "windows-accessibility",
-    feature = "unix-accessibility"
-))]
+#![cfg(feature = "accessibility")]
 
 use aegle::{
     ui::{Result, Size, TextSystem, Theme, Ui, accesskit::Role},
