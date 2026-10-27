@@ -10,7 +10,9 @@
 
 use std::ops::Range;
 
-use windows::Win32::Globalization::{SCRIPT_ANALYSIS, SCRIPT_LOGATTR, SCRIPT_STATE, ScriptBreak};
+use windows::Win32::Globalization::{
+    SCRIPT_ANALYSIS, SCRIPT_ITEM, SCRIPT_LOGATTR, ScriptBreak, ScriptItemize,
+};
 use windows::Win32::Graphics::DirectWrite::{DWRITE_CLUSTER_METRICS, DWRITE_HIT_TEST_METRICS};
 use windows::core::BOOL;
 use windows::core::PCWSTR;
@@ -170,10 +172,16 @@ impl DirectWriteLayout {
 
     /// The grapheme containing or following `caret` in `line_text`.
     ///
-    /// `line_text` is the layout's own line, and `caret` a byte offset into it.
+    /// `line_text` is the layout's own line and `caret` a byte offset into it.
     /// Boundaries come from Uniscribe's `ScriptBreak`, the same character-stop
-    /// attribute the Pango backend takes from `pango_get_log_attrs`, and only
-    /// the caret's line is segmented.
+    /// attribute the Pango backend takes from `pango_get_log_attrs`. Uniscribe
+    /// needs the script of the item the character belongs to, so the line is
+    /// itemized first with `ScriptItemize` and the analysis of the item that
+    /// contains the caret is passed in; a zeroed analysis would segment complex
+    /// scripts as if they were Latin.
+    ///
+    /// Only the caret's line is segmented, and the scan stops at the first
+    /// boundary past the caret.
     pub fn grapheme_range(&self, line_text: &str, caret: usize, previous: bool) -> Range<usize> {
         let caret = offsets::snap(line_text, caret);
         let units: Vec<u16> = line_text.encode_utf16().collect();
@@ -181,9 +189,8 @@ impl DirectWriteLayout {
             return caret..caret;
         }
         let mut attrs = vec![SCRIPT_LOGATTR::default(); units.len()];
-        let analysis = SCRIPT_ANALYSIS {
-            _bitfield: 0,
-            s: SCRIPT_STATE::default(),
+        let Some(analysis) = script_analysis(&units, caret, line_text) else {
+            return caret..caret;
         };
         // SAFETY: the pointer and count describe the live `units` slice, and
         // `attrs` has one entry per code unit; ScriptBreak only writes `attrs`.
@@ -258,4 +265,38 @@ impl DirectWriteLayout {
             .iter()
             .find(|line| index >= line.start && index <= line.end)
     }
+}
+
+/// The Uniscribe analysis of the script item containing `caret`.
+///
+/// `ScriptItemize` splits the line into runs of one script and direction; the
+/// analysis of the run covering the caret is what `ScriptBreak` needs. Returns
+/// `None` when itemization fails or reports no item, so the caller leaves the
+/// caret where it was instead of segmenting with a guessed script.
+fn script_analysis(units: &[u16], caret: usize, line_text: &str) -> Option<SCRIPT_ANALYSIS> {
+    // The caret in UTF-16 units, then the item containing it.
+    let unit = offsets::to_utf16(line_text, caret) as usize;
+    // Uniscribe's documented worst case is one item per code unit plus one.
+    let mut items = vec![SCRIPT_ITEM::default(); units.len() + 1];
+    let mut count = 0i32;
+    // SAFETY: the slice and its capacity describe live storage; ScriptItemize
+    // writes at most `items.len()` entries and reports how many it wrote.
+    let itemized = unsafe { ScriptItemize(units, None, None, &mut items, &mut count) };
+    if itemized.is_err() || count <= 0 {
+        return None;
+    }
+    let count = count as usize;
+    let mut found = items[0].a;
+    for index in 0..count {
+        let start = items[index].iCharPos.max(0) as usize;
+        let end = match items.get(index + 1) {
+            Some(next) => next.iCharPos.max(0) as usize,
+            None => units.len(),
+        };
+        if unit >= start && unit <= end {
+            found = items[index].a;
+            break;
+        }
+    }
+    Some(found)
 }
