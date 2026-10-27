@@ -82,3 +82,43 @@ pub(crate) fn rasterize(
         .ok_or(GlyphError::UnsupportedGlyph)?;
     rasterizer.rasterize(&font, glyph, options, limits, reserve)
 }
+
+/// Where a platform font handle's outline data lives.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FaceSource {
+    /// A font file readable by the platform, and the face index inside it.
+    File {
+        /// Filesystem path the platform backend can open.
+        path: std::sync::Arc<str>,
+        /// Face index within a collection; zero for a single font.
+        index: u32,
+    },
+}
+
+/// Registers the outline source of `font`, replacing any earlier entry.
+///
+/// The text backend calls this when it creates a platform font handle, before
+/// any run naming that handle is painted. Replacing an entry is allowed because
+/// the backend owns the lifetime: an old layout referring to a reused key would
+/// be a backend bug, not something the rasterizer can detect.
+pub fn register_system_face(font: SystemFont, source: FaceSource) {
+    let mut map = faces().lock().unwrap_or_else(PoisonError::into_inner);
+    map.insert(font, source);
+}
+
+/// The outline source of a platform font handle, if one was registered.
+pub fn system_face(font: SystemFont) -> Option<FaceSource> {
+    let map = faces().lock().unwrap_or_else(PoisonError::into_inner);
+    map.get(&font).cloned()
+}
+
+/// Drops a face registration; used when a text system shuts down.
+pub fn unregister_system_face(font: SystemFont) {
+    let mut map = faces().lock().unwrap_or_else(PoisonError::into_inner);
+    map.remove(&font);
+}
+
+fn faces() -> &'static Mutex<BTreeMap<SystemFont, FaceSource>> {
+    static FACES: OnceLock<Mutex<BTreeMap<SystemFont, FaceSource>>> = OnceLock::new();
+    FACES.get_or_init(|| Mutex::new(BTreeMap::new()))
+}

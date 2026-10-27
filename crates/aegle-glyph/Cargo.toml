@@ -37,6 +37,12 @@ lru-slab = "0.1.3"
 [target.'cfg(target_os = "linux")'.dependencies]
 libloading = "0.8.9"
 
+# GDI outlines: GetGlyphOutlineW and the in-memory font registration.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", default-features = false, features = [
+    "Win32_Foundation", "Win32_Graphics_Gdi",
+] }
+
 # Only Linux renders through the system FreeType for now; other targets keep the
 # Rust rasterizer until their own system path exists.
 [target.'cfg(not(target_os = "linux"))'.dependencies]

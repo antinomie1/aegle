@@ -46,7 +46,7 @@ impl From<FontData> for FontSource {
 /// Both values are opaque to the scene; only the backend that produced the
 /// handle interprets `id`, and the handle is meaningful only while that
 /// backend's registry entry lives.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SystemFont {
     /// Backend discriminator, one of the values this module documents.
     pub backend: u8,

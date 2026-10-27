@@ -177,6 +177,7 @@ dependencies = [
  "skrifa",
  "swash",
  "tiny-skia",
+ "windows",
 ]
 
 [[package]]
