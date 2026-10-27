@@ -51,7 +51,10 @@ impl Rasterizer {
         #[cfg_attr(all(not(feature = "swash"), target_os = "linux"), allow(unused_mut))]
         mut reserve: impl FnMut(usize) -> Result<(), GlyphError>,
     ) -> Result<Image, GlyphError> {
-        let data = font.bytes().ok_or(GlyphError::UnsupportedGlyph)?;
+        let FontSource::Bytes(data) = font else {
+            let system = font.system().expect("system font source");
+            return crate::system::rasterize(system, glyph, options, limits, &mut reserve);
+        };
         #[cfg(all(not(feature = "swash"), target_os = "linux"))]
         {
             let ft = self.ft.as_mut().ok_or(GlyphError::UnsupportedGlyph)?;

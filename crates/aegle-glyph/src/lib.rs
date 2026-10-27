@@ -31,6 +31,7 @@ mod key;
 mod raster;
 #[cfg(feature = "svg")]
 mod svg;
+mod system;
 #[cfg(feature = "scene")]
 mod transform;
 
@@ -38,6 +39,7 @@ pub use aegle_scene::{FontSource, SystemFont};
 pub use cache::GlyphCache;
 pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};
+pub use system::{SystemRasterizer, register_system_rasterizer, system_rasterizer_registered};
 #[cfg(feature = "scene")]
 pub use transform::{GlyphOrigin, RasterTransform};
 
@@ -214,10 +216,17 @@ impl core::fmt::Display for GlyphError {
 
 impl std::error::Error for GlyphError {}
 
-struct Image {
-    placement: Placement,
-    content: Content,
-    data: Box<[u8]>,
+/// Owned rasterized glyph pixels, before the cache stores them.
+///
+/// A [`SystemRasterizer`] returns this from a platform font; the cache converts
+/// it to the borrowed [`Glyph`] it hands to callers.
+pub struct Image {
+    /// Baseline-relative placement of `data`.
+    pub placement: Placement,
+    /// Whether `data` is coverage or straight sRGB pixels.
+    pub content: Content,
+    /// Tightly packed, top-to-bottom pixels.
+    pub data: Box<[u8]>,
 }
 
 impl Image {
