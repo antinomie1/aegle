@@ -1,0 +1,26 @@
+[package]
+name = "aegle-segment"
+description = "Word boundaries from the operating system's text segmenter, with no bundled dictionary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+
+[target.'cfg(any(target_os = "linux", windows))'.dependencies]
+# Loads the system ICU at run time instead of linking dictionary data.
+libloading = "0.8.9"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
+    "std", "CFLocale", "CFString", "CFStringTokenizer",
+] }
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"

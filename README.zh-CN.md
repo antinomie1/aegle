@@ -59,7 +59,6 @@ fn main() -> Result<()> {
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现 |
 | `markup` | ✓ | `ui!` 宏与标记引擎，含运行时加载 |
-| `text-dictionary` |  | 中日及东南亚文字的词典分词（约 3.6 MiB） |
 | `motion` | ✓ | 过渡、关键帧动画与弹簧 |
 | `effects` | ✓ | 图像效果（`aegle::image::effects`） |
 | `colrv1` | ✓ | COLRv1 彩色字形 |

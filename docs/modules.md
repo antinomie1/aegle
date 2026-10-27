@@ -11,7 +11,8 @@
 | aegle-types | 几何、颜色、阴影值、光标形状及 `Preferences`、`TouchPhase` 等两个平台共用的小词汇；`std` feature 增加拖放数据 `DragData` 与 `file://` URI 转换；无平台依赖 | 无 |
 | aegle-core | 槽位树、句柄、属性变更、事件路由、焦点 | types |
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；经过校验的布局值（`Length`、`Insets`、`Align`、`Justify`、`Direction`、`LayoutDirection`、`Wrap`，`Length::Calc` 为“百分比 + 像素”，grid 另有 `Track`、`Placement`、`Flow`、`TemplateItem`/`Repeat`/`template`、`areas`、`GridLine`/`GridLines`）；叶节点测量回调与可选的首基线回调（`compute_with_baselines`）；透明的 contents 节点；不依赖应用 | types、core |
-| aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销 | types；scene 按 feature 接入 |
+| aegle-segment | 向系统分词器要词边界：Linux/Windows 动态加载系统 ICU（`libicui18n`/`icu.dll`），macOS 用 `CFStringTokenizer`；不链接任何词典数据，也没有回退，找不到即报告不可用 | 无内部依赖 |
+| aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销；按词移动与选词取 `aegle-segment` 的边界 | types、segment；scene 按 feature 接入 |
 | aegle-glyph | Swash 字形光栅化、有界 CPU 缓存、共用字形身份/变换策略；字体内嵌位图的 PNG 解码来自 aegle-image | image、scene 按 feature 接入 |
 | aegle-scene | 二维绘制命令、裁剪、共享图像/路径资源及可选字形记录 | types |
 | aegle-gpu | GPU 后端共用、与图形 API 无关的部分：图元/裁剪记录、场景遍历、货架装箱、图像与路径 mask 放置、WGSL 着色器 | types、scene；vector feature 增加 zeno |
@@ -24,7 +25,6 @@
 | aegle-platform-wayland | 以契约提供 Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板与拖放、输出与平台偏好 | types、platform、dbus |
 | aegle-platform-win32 | 以契约提供 Win32 窗口、TSF 文本存储输入法、DPI、OLE 拖放、GDI 软件与 GPU 句柄、外观偏好 | types、platform |
 | aegle-platform-macos | 以契约提供 AppKit 顶部窗口、`NSTextInputClient` 输入法、`NSView` 上的拖放、`CGImage` 软件呈现与 GPU 视图租约、外观偏好；`NSApplication` 由平台自己驱动 | types、platform、objc2 |
-| aegle-platform-appkit | 计划中，**尚未实现**：以契约提供 AppKit 窗口、NSTextInputClient 及平台偏好 | types、platform |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，`platform` 按目标启用 AT-SPI/UIA/NSAccessibility 之一 |
 | aegle-theme | 无分配的 Theme、控件类型 `ControlKind`（默认皮肤与可接受样式组）、视觉状态、Appearance/Style 和纯函数 Skin；局部主题继承、按字段的 `ThemeOverride`；类型化 `Token<T>` 与内置 token（注册表与绑定在 aegle-ui） | types |
 | aegle-motion | 补间、过渡、关键帧动画与 Bézier/弹簧曲线；可无窗口独立推进 | types |
@@ -74,7 +74,7 @@
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 ui 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 ui 派生的滚动几何。
 
-`aegle` 重导出 app、ui、widgets 与 image，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32 / macOS AppKit）+ 软件绘制 + 系统字体 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合；词典分词（`text-dictionary`，release 约 3.6 MiB）与系统无障碍适配都需显式启用。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由单个 `accessibility` 选择，它按编译目标接入 AT-SPI、UIA 或 NSAccessibility，并隐含 `native`；`aegle-ui` / `aegle-widgets` 的 `accessibility` 只启用语义树导出，`aegle-app` 在此基础上接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 用 `software` 或 `wgpu`（Vulkan 显式选择时返回错误）；动态标记与运行时加载都由 `markup` 中的 loader 执行。
+`aegle` 重导出 app、ui、widgets 与 image，不复制实现。当前默认 `desktop` 组合是 **目标平台原生窗口（Linux Wayland / Windows Win32 / macOS AppKit）+ 软件绘制 + 系统字体 + 编译型标记（含动态标记引擎） + 外观过渡**，不是下表的目标 GPU 组合；按词移动与选词所需的词典来自运行环境的系统分词器（`aegle-segment`），不链接数据、没有回退，系统无障碍适配需显式启用。系统无障碍适配默认不启用：Linux AT-SPI 引入 zbus 与异步运行时，由单个 `accessibility` 选择，它按编译目标接入 AT-SPI、UIA 或 NSAccessibility，并隐含 `native`；`aegle-ui` / `aegle-widgets` 的 `accessibility` 只启用语义树导出，`aegle-app` 在此基础上接系统 adapter；`system-fonts` 可关闭并改用显式字体。当前 facade 的 `default-features = false` 仍保留 Ui 的文字等基本依赖；需要更小的单一能力时直接选择底层 crate。Vulkan 可选且无需编译软件 renderer；macOS 用 `software` 或 `wgpu`（Vulkan 显式选择时返回错误）；动态标记与运行时加载都由 `markup` 中的 loader 执行。
 
 `aegle-markup` 是无第三方依赖的有界解析器、schema 与类型检查器；不依赖 app 或任何平台，可供外部工具独立检查，I/O 由调用方的读取函数提供。`aegle-macros` 复用它，并用 syn/quote 处理 Rust 宏参数与代码生成，避免自建 Rust 语法处理；facade 的 `ui!` 与 loader 的 `element!` 以 `macro_rules!` 把 `$crate` 交给 proc macro，依赖别名由编译器解析。facade 的可选 `markup` 增加编译期宏与 `aegle-loader`：静态文档生成直接创建控件的代码，不链接引擎；动态文档生成构造已检查程序的代码并由引擎执行，发布程序不带解析器。引擎以 state 单元和效果（effect）记录绑定依赖，绑定与块随控件通过 `Node::keep_alive` 释放；运行时加载额外链接解析器。
 
@@ -117,9 +117,9 @@ flowchart TD
 
 | 组合 | 包含 | 不自动包含 |
 | --- | --- | --- |
-| `aegle` 默认 `desktop` | 目标平台窗口（`native`）、软件绘制、系统字体、`markup`（编译宏与 loader，含运行时加载）、`motion`（过渡、关键帧与弹簧）、`effects`、`colrv1`、`desktop-services` | 系统无障碍适配（`accessibility`）、词典分词、Vulkan、wgpu、JPEG/WebP/GIF/SVG、Grid |
+| `aegle` 默认 `desktop` | 目标平台窗口（`native`）、软件绘制、系统字体、`markup`（编译宏与 loader，含运行时加载）、`motion`（过渡、关键帧与弹簧）、`effects`、`colrv1`、`desktop-services` | 系统无障碍适配（`accessibility`）、Vulkan、wgpu、JPEG/WebP/GIF/SVG、Grid |
 | `default-features = false` | 不自动选择窗口/renderer；使用者显式加所需功能或直接用独立模块 | 便捷默认组合 |
-| `text-dictionary` | 中日词典分词及相关复杂文字分段数据 | 网络字体 |
+| 按词移动与选词 | 系统分词器（`aegle-segment` 运行时查找 libicu / `icu.dll` / `CFStringTokenizer`），不链接数据 | 内置词典数据（已移除）与任何近似替代（找不到时分词操作关闭） |
 | `effects`（桌面默认）/ `colrv1`（桌面默认）/ `jpeg` / `webp` / `gif` / `svg` | 渐变与阴影图像、COLRv1 字形、各图像格式、静态 SVG（图像与 OpenType-SVG 字形） | 彼此不暗中全部开启 |
 | `grid` | Taffy Grid 算法、`grid`/`stack` 容器与标记 `Grid`/`Stack`（release 约 244 KiB） | 默认 desktop 不包含 |
 

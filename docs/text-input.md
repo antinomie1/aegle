@@ -20,7 +20,9 @@ Fontique 管理字体匹配与按 script/locale 的 fallback；明确区分简�
 
 `aegle-glyph/scene` 提供两类 renderer 共用的 `RasterTransform/GlyphOrigin` 策略：取仿射矩阵较大列长度确定设备字号，正向均匀轴向变换采用 hinting、整像素基线与水平四分之一像素相位，其他变换保留原点并过滤采样。共用 `mask_contrast` 按前景亮度调整灰度覆盖率 `c + c(1-c)k`：深色字加重、浅色字减轻，抵消线性混合造成的浅底细字与深底粗字；0 和满覆盖不变。它只计算字形光栅参数和 bitmap 到设备的变换，不改变排版 advance；软件后端已使用同一接口。设备基线超出 ±1,048,576 时明确返回坐标错误，最终图像边界和裁剪仍由各后端处理。
 
-独立的 `aegle-text` 默认保留基本 CJK 显示、bidi 和 UAX #14 换行，关闭词典分段数据；`text-dictionary` 启用上游 complex-scripts 数据（release 约增加 3.6 MiB），facade 的默认 `desktop` 组合不含它，需要中日词典分词的应用自行开启。编辑器的视觉移动、按词导航和点击选择复用 Parley，删除使用 Unicode extended grapheme 边界。中文/日文按词导航和双击选词在关闭词典时采用基础边界行为；关闭该数据也影响泰/老/缅/高棉等上下文分段。关闭词典时上游缺少分段模型的诊断经 `log` 输出；即使启用词典也不能宣传为全语言完整编辑支持。
+`aegle-text` 不携带任何词典数据：显示、换行、bidi 与删除分别使用 Unicode 规则（UAX #14 换行、extended grapheme 删除边界），按词移动与双击选词只有一个边界来源——系统分词器（`aegle-segment`：Linux/Windows 的系统 ICU、macOS 的 `CFStringTokenizer`）。有它时按词移动与选词是词典结果（实测「中文分词测试」→ 中文/分词/测试、「東京都に行きます」→ 東京/都/に/行き/ます、「ภาษาไทยทดสอบ」→ ภาษา/ไทย/ทดสอบ）；**没有它时这两个操作不做任何事**——不退回规则边界，也不把每个汉字当成一个词：按词移动不移动，双击只把插入点放到点击处。`aegle_text::segment::available()` 报告当前进程是否可用。
+
+因为 Parley 的 complex-scripts 词典数据被彻底关闭，泰/老/缅/高棉的**行内换行**退回 UAX #14 规则，长段落可能不折断——这是移除内置数据的已知代价。按词移动与选词对双向文本同样只来自系统分词器，边界按逻辑（字节）顺序，因此 RTL 段落按逻辑顺序移动。系统分词器查找与 `AEGLE_SEGMENT=none` 的调试开关见 [API 指南](developer/api.md)。
 
 ## 当前编辑接口
 

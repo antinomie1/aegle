@@ -352,11 +352,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aegle-segment"
+version = "0.1.0"
+dependencies = [
+ "libloading",
+ "objc2-core-foundation",
+]
+
+[[package]]
 name = "aegle-text"
 version = "0.1.0"
 dependencies = [
  "accesskit",
  "aegle-scene",
+ "aegle-segment",
  "aegle-types",
  "icu_provider",
  "icu_segmenter",

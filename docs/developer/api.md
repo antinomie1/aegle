@@ -18,7 +18,6 @@ aegle = { path = "../aegle/crates/aegle" }
 | `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit（按编译目标选择） |
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现（Linux 链接 Fontconfig） |
-| `text-dictionary` |  | 中日文及东南亚文字的词典分词（按词移动、双击选词）；release 约增加 3.6 MiB。关闭时这些文字按基础边界移动与选词，ICU 的缺少模型诊断经 `log` 输出 |
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
 | `motion` | ✓ | 外观/位移/缩放旋转过渡、惯性滚动 |
 | `effects` | ✓ | `aegle::image::effects`：线性/径向渐变与柔和阴影图像 |
@@ -29,6 +28,8 @@ aegle = { path = "../aegle/crates/aegle" }
 | `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译；macOS 上没有 Vulkan，显式选择后构造返回 `Unsupported` |
 | `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），macOS 上经 Metal；可与其他后端同时编译 |
 | `accessibility` |  | 语义树导出，并接上编译目标的系统适配：Linux AT-SPI（引入 zbus）、Windows UI Automation、macOS NSAccessibility。只取语义树而不接系统时直接用 `aegle-ui`/`aegle-widgets` 的同名 feature |
+
+按词移动与双击选词要中日文/泰文分词时，运行环境需要系统分词器：Linux 需安装 `libicu`（多数桌面发行版已随系统安装，程序用 `dlopen` 在运行时查找，`libicui18n.so.<版本>` 与未带版本的 soname 都会探测），Windows 用系统的 `icu.dll`/`icuin.dll`（Windows 10 1903+/1703+），macOS 用系统自带的 `CFStringTokenizer`。都找不到时不报错，也没有回退：按词移动（Ctrl/Alt+←→）与双击选词停用——按键不移动插入点，双击只放置插入点；其余编辑操作不受影响。`aegle_text::segment::available()` 返回当前进程是否找到分词器，环境变量 `AEGLE_SEGMENT=none` 可强制停用以便调试。
 
 Linux 构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon；启用 `system-fonts` 时还需要 Fontconfig。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。
 

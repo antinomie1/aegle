@@ -63,6 +63,7 @@ cargo doc --workspace --all-features --no-deps
 - `aegle-controls`：无皮肤的 Button/Toggle/Slider 行为、共享数值 Range 与可选 TextField。
 - `aegle-widgets`：默认控件库，包含全部默认控件（标签、按钮、单/多行编辑、复选/开关/单选、滑块、进度、图像/画布、滚动视图、虚拟列表、表格、弹出层、下拉框、菜单与菜单栏）及其纯函数皮肤。
 - `aegle-access`：UI 线程回调邮箱与可选的 Unix/Windows/macOS 无障碍。
+- `aegle-segment`：向系统分词器要词边界（Linux/Windows 动态加载系统 ICU，macOS 用 `CFStringTokenizer`），不带词典数据；`cargo run -p aegle-segment --example probe` 打印样例文本的分词结果与耗时。
 - `aegle-platform-wayland`、`aegle-platform-win32`、`aegle-platform-macos`：窗口与原生输入，不依赖绘制。`aegle-desktop` 在 macOS 上把每个请求如实报告为 `Unavailable`（面板、状态栏项需要应用事件循环占用的主线程）。
 - `aegle-theme`：无分配的调色板、基于状态的皮肤与局部样式值。
 - `aegle-motion`：无分配的按时间补间。

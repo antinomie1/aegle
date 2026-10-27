@@ -13,16 +13,18 @@ categories.workspace = true
 [features]
 default = []
 system-fonts = ["parley/system"]
-text-dictionary = ["parley/complex-scripts"]
 text-a11y = ["parley/accesskit", "dep:accesskit"]
 scene = ["dep:aegle-scene", "aegle-scene/text"]
 
 [dependencies]
+aegle-segment.workspace = true
 aegle-types.workspace = true
 parley.workspace = true
 icu_segmenter = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
-# Routes ICU diagnostics, such as the missing dictionary without
-# `text-dictionary`, to `log` instead of debug-build stderr.
+# ICU's rule-based segmentation (graphemes, line breaking) needs its data;
+# routes its diagnostics, such as a missing dictionary model, to `log` instead
+# of debug-build stderr. Word dictionaries come from the system segmenter in
+# `aegle-segment`, not from here.
 icu_provider = { version = "2.3.1", default-features = false, features = ["logging"] }
 aegle-scene = { workspace = true, optional = true }
 accesskit = { workspace = true, optional = true }

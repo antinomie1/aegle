@@ -12,6 +12,7 @@
 | Vulkan shader 编译 | Naga 30.0.1 | 仅构建期 wgsl-in/spv-out，生成 Vulkan 1.1 SPIR-V，不进入发布运行依赖 |
 | Wayland | wayland-client 0.31.15、SCTK 0.21.1 | 软件独立构建用 Rust client backend；gpu feature 启用 system/dlopen 获取 libwayland 原生句柄，保留同一连接 |
 | Windows | windows 0.62.2 | 按模块启用所需 Win32/GDI/TSF/UIA 能力（`Win32_UI_TextServices` 需要 `Win32_System_Variant`） |
+| 系统分词 | libloading 0.8.9（Linux/Windows 动态加载系统 ICU）、objc2-core-foundation 0.3.2（macOS 的 `CFStringTokenizer`） | 不链接任何词典数据；找不到分词器时 `aegle-segment` 报告不可用，按词操作关闭 |
 | macOS | objc2 0.6.4 + objc2-app-kit / objc2-foundation / objc2-core-foundation / objc2-core-graphics 0.3.2、block2 0.6.2 | AppKit 窗口、输入与 `NSTextInputClient`；软件呈现用 Core Graphics 的 `CGImage`，Metal 只经 wgpu 使用；不采用已弃用 metal crate 或 MoltenVK |
 | 文本 | Parley/Fontique 0.11.1 | 基础排版、字体回退及纯文本编辑 |
 | grapheme 分段 | icu_segmenter 2.3.0 | 直接复用 Parley 已锁定的包及 compiled_data，编辑删除不另带分段引擎 |
@@ -31,7 +32,7 @@
 
 设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何/文字依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。Windows 编译与运行证据、GPU 原生呈现验证另见实现状态，不能将其等同于全部实机验收；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。
 
-`aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；Parley 的光标、选择、bidi 与点命中继续复用（编辑器自己按段落管理布局），不另带 Unicode 或编辑框架。`system-fonts`、`text-dictionary`、`text-a11y`、`scene` 独立选择。默认关闭 Parley complex-scripts；基础 CJK 显示与 UAX #14 换行保留，中日词典分词和部分东南亚文字上下文分段由 text-dictionary 启用，facade 默认不含它；`icu_provider/logging` 让 ICU 的缺少模型诊断走 `log` 而非调试构建的 stderr，不新增包。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它；该 feature 提供文本语义桥，系统接入另选 `aegle-access/unix`。
+`aegle-text` 默认启用 Parley std，并直接使用已有 icu_segmenter/compiled_data 提供 extended grapheme 删除边界。此直接依赖没有向锁定图新增包；Parley 的光标、选择、bidi 与点命中继续复用（编辑器自己按段落管理布局），不另带 Unicode 或编辑框架。`system-fonts`、`text-a11y`、`scene` 独立选择。Parley 的 complex-scripts 词典数据永久关闭：按词移动与双击选词改由独立的 `aegle-segment` 在运行时向系统分词器要边界（Linux/Windows 的 `libicui18n`/`icu.dll` 用 libloading 动态加载，macOS 的 `CFStringTokenizer` 随 CoreFoundation），不链接任何词典数据；找不到时这两个操作停用，不保留第二套近似分词。`icu_segmenter/compiled_data` 仍提供规则分段（grapheme、UAX #14 换行），`icu_provider/logging` 让 ICU 的缺少模型诊断走 `log` 而非调试构建的 stderr，两者都不新增包。未来默认 desktop 组合启用 parley/accesskit，当前独立文字模块默认关闭它；该 feature 提供文本语义桥，系统接入另选 `aegle-access/unix`。
 
 `aegle-access` 默认依赖 AccessKit schema 与标准库通道，不带原生 adapter、异步运行时或窗口库。`unix` 仅在非 macOS 的 Unix 目标启用 AccessKit Unix 0.22.1，关闭其默认 features 并显式选择 `async-io`；上游不允许同时启用 `async-io` 与 `tokio`。该闭包含 AccessKit consumer 0.38.0、AT-SPI、Serde、zbus 及其异步组件，不能描述为只有一个小型运行依赖。consumer 使用的 hashbrown 0.16 与字形缓存的 0.17 同时存在于锁定图，不为统一版本私自修改上游依赖。上游 adapter/consumer 声明 MSRV 1.85，zbus 5.19 声明 1.87；完整 MSRV 仍须实际工具链验收。
 

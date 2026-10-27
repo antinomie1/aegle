@@ -1,5 +1,14 @@
 //! Selections across an editor's paragraphs: Parley moves within one
 //! paragraph's layout, and these step between neighboring paragraphs.
+//!
+//! Word-wise movement and selection take their boundaries from the operating
+//! system's segmenter ([`crate::segment`]) and from nothing else: Aegle bundles
+//! no dictionary and keeps no second, approximate notion of a word. When the
+//! platform has no segmenter the word operations do nothing, and
+//! [`crate::segment::available`] says so; every other movement still works.
+//!
+//! Boundaries are logical, so stepping follows byte order in every script,
+//! including right-to-left text.
 
 use aegle_types::Point;
 use parley::{Affinity, Cursor};
@@ -68,13 +77,19 @@ impl Document {
             };
             return Selected::collapsed(if anchor { sel.anchor } else { sel.focus });
         }
+        if word {
+            // Without a segmenter there are no words to step over; the caret
+            // and the selection stay where they are.
+            return match self.word_step(sel.focus, forward) {
+                Some(focus) => sel.to(focus, extend),
+                None => sel,
+            };
+        }
         let (block, cursor) = self.cursor(sel.focus);
         let layout = &self.blocks[block].layout;
-        let next = match (forward, word) {
-            (true, false) => cursor.next_visual(layout),
-            (false, false) => cursor.previous_visual(layout),
-            (true, true) => cursor.next_visual_word(layout),
-            (false, true) => cursor.previous_visual_word(layout),
+        let next = match forward {
+            true => cursor.next_visual(layout),
+            false => cursor.previous_visual(layout),
         };
         let stuck = (next.index(), next.affinity()) == (cursor.index(), cursor.affinity());
         let focus = match (stuck, forward) {
@@ -152,18 +167,74 @@ impl Document {
     pub fn unit_at(&self, point: Point, unit: Unit) -> Selected {
         let (block, at) = self.local(point);
         let layout = &self.blocks[block].layout;
-        let selection = match unit {
-            Unit::Word => parley::Selection::word_from_point(layout, at.x, at.y),
-            Unit::Line => parley::Selection::line_from_point(layout, at.x, at.y),
+        let (anchor, focus) = match unit {
+            // Without a segmenter a word is unknown, so a word selection
+            // collapses to the pointer, as a plain click does.
+            Unit::Word => match self.word_at(block, at) {
+                Some((anchor, focus)) => (anchor, focus),
+                None => {
+                    let caret = self.hit(point);
+                    (caret, caret)
+                }
+            },
+            Unit::Line => {
+                let selection = parley::Selection::line_from_point(layout, at.x, at.y);
+                (
+                    self.caret(block, selection.anchor()),
+                    self.caret(block, selection.focus()),
+                )
+            }
         };
-        let anchor = self.caret(block, selection.anchor());
-        let focus = self.caret(block, selection.focus());
         Selected {
             anchor,
             focus,
             h_pos: None,
             base: Some((anchor, focus, unit)),
         }
+    }
+
+    /// The system's word at `at` in `block`, or `None` when the platform has no
+    /// segmenter.
+    fn word_at(&self, block: usize, at: Point) -> Option<(Caret, Caret)> {
+        let range = self.blocks[block].range.clone();
+        let text = &self.text[range.clone()];
+        let bounds = crate::segment::boundaries(text)?;
+        let hit = Cursor::from_point(&self.blocks[block].layout, at.x, at.y);
+        let word = bounds.containing(hit.index());
+        Some((
+            self.snap(range.start + word.start),
+            Caret {
+                index: range.start + word.end,
+                affinity: Affinity::Upstream,
+            },
+        ))
+    }
+
+    /// The caret one word before or after `caret`, from the system's
+    /// boundaries, or `None` when the platform has no segmenter or the
+    /// paragraph has no further word in that direction.
+    fn word_step(&self, caret: Caret, forward: bool) -> Option<Caret> {
+        let (block, _) = self.cursor(caret);
+        let range = self.blocks[block].range.clone();
+        let text = &self.text[range.clone()];
+        let bounds = crate::segment::boundaries(text)?;
+        let local = caret.index.clamp(range.start, range.end) - range.start;
+        match forward {
+            true => bounds.next(local).map(|at| self.snap(range.start + at)),
+            false => bounds.previous(local).map(|at| self.snap(range.start + at)),
+        }
+        .or_else(|| match forward {
+            // A paragraph boundary is a word boundary too: step into the
+            // neighboring paragraph.
+            true => self
+                .blocks
+                .get(block + 1)
+                .map(|next| Caret::downstream(next.range.start)),
+            false => (block > 0).then(|| Caret {
+                index: self.blocks[block - 1].range.end,
+                affinity: Affinity::Upstream,
+            }),
+        })
     }
 
     /// Extends to `point`, by whole words or lines when the selection started

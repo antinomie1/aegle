@@ -24,7 +24,7 @@ aegle-render-software = { path = "../aegle/crates/aegle-render-software", featur
 | 过渡、动画、惯性滚动 | `aegle-widgets/motion` | 转发到 `aegle-ui/motion`；滑块与进度条的数值滑动也随之启用。只开 `aegle-ui/motion` 时引擎有动画，但默认控件不做数值滑动 |
 | 语义树（无障碍） | `aegle-widgets/accessibility` | 转发到 `aegle-ui/accessibility`；控件的角色与动作在 widgets 中，只开引擎的 feature 时默认控件没有角色 |
 | 系统字体发现 | `aegle-ui/system-fonts` | 否则用 `TextSystem::register_fonts` 显式注册 |
-| 中日文词典分词 | `aegle-ui/text-dictionary` | 按词移动与双击选词 |
+| 中日文按词移动与选词 | 无需 feature | `aegle-text` 依赖 `aegle-segment`，运行时向系统分词器（libicu / `icu.dll` / `CFStringTokenizer`）要边界；找不到时这两个操作停用，没有近似替代 |
 | Grid 与 Stack 容器 | `aegle-ui/grid` | |
 
 Cargo 会统一同一 crate 的 feature：在任一依赖上开启的 feature 对整个程序生效。

@@ -5,9 +5,10 @@
 //! Register application fonts explicitly, or enable `system-fonts` and construct
 //! `TextSystem::system` to discover platform fonts. No font files are embedded.
 //!
-//! `text-dictionary` enables Parley's dictionary word segmentation. Without it,
-//! basic CJK display and line wrapping remain supported, but dictionary-based
-//! word navigation and some Southeast Asian segmentation are unavailable.
+//! Word-wise cursor movement and double-click selection ask the operating
+//! system for word boundaries (see [`segment`]); no dictionary data is bundled.
+//! When the platform has no segmenter, those two operations are off instead of
+//! approximating words.
 //! `text-a11y` adds AccessKit text runs and selection actions through the same
 //! editor/layout, without an OS adapter or a second text buffer.
 //! `scene` adds paragraph painting into Aegle's retained scene records; it rejects
@@ -38,6 +39,7 @@ mod style;
 mod system;
 mod values;
 
+pub use aegle_segment as segment;
 pub use edit::{EditorDriver, HitSelection, Movement};
 pub use editor::{EditChanges, Editor, EditorOptions, HistoryStats, Selection, TextValue};
 #[cfg(feature = "scene")]

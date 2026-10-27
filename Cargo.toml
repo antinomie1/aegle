@@ -25,6 +25,7 @@ aegle-gpu = { path = "crates/aegle-gpu", version = "0.1.0" }
 aegle-render-vulkan = { path = "crates/aegle-render-vulkan", version = "0.1.0" }
 aegle-render-wgpu = { path = "crates/aegle-render-wgpu", version = "0.1.0" }
 aegle-text = { path = "crates/aegle-text", version = "0.1.0" }
+aegle-segment = { path = "crates/aegle-segment", version = "0.1.0" }
 aegle-glyph = { path = "crates/aegle-glyph", version = "0.1.0" }
 aegle-controls = { path = "crates/aegle-controls", version = "0.1.0" }
 aegle-access = { path = "crates/aegle-access", version = "0.1.0" }

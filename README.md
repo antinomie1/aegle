@@ -59,7 +59,6 @@ Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`,
 | `software` | ✓ | CPU software rendering |
 | `system-fonts` | ✓ | System font discovery |
 | `markup` | ✓ | `ui!` macro and the markup engine, including runtime loading |
-| `text-dictionary` |  | Dictionary word segmentation for Chinese, Japanese and Southeast Asian scripts (about 3.6 MiB) |
 | `motion` | ✓ | Transitions, keyframe animations and springs |
 | `effects` | ✓ | Image effects (`aegle::image::effects`) |
 | `colrv1` | ✓ | COLRv1 colour glyphs |
