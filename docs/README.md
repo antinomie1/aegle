@@ -22,6 +22,8 @@ Rust 2024、Taffy、保留模式。标记语言优先，提供十行内完整示
 - [平台与绘制](platform-rendering.md)、[Vulkan 绘制与呈现](vulkan.md)、[wgpu 后端](wgpu.md)、[依赖版本](dependencies.md)
 - [资源目标](resources.md)、[验收与交付边界](quality.md)
 
+参考比较：[Aegle 与 GPUI 对比](gpui-comparison.md)。该文是外部框架的横向参考，不是设计契约，不改变本文档中的架构决定。
+
 重要决策：[无障碍与自绘](adr/0001-accessibility-and-custom-controls.md)、[标记双执行路径](adr/0002-dual-markup-execution.md)、[独立模块和显式更新](adr/0003-independent-modules-and-imperative-ui.md)、[标记元素契约](adr/0004-element-contract.md)。
 
 本文档的 API 是设计规范，预算是待测工程目标。具体实现的编译验证见状态文档；不能将“设计已完成”解读为“整个库已实现或达标”。
