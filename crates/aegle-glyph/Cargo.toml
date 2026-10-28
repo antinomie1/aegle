@@ -15,7 +15,8 @@ default = []
 # Glyph identity and raster transforms shared with scene consumers. The scene
 # crate is always linked: `FontSource` is the rasterizer's font identity.
 scene = []
-# Fallback Rust rasterizer (unmaintained)
+# Fallback Rust rasterizer (unmaintained). Linux, Windows and macOS default to
+# their system backends; this feature is how the Rust path is compiled there.
 swash = ["dep:swash", "dep:skrifa"]
 # COLRv1 gradient/composite color glyphs.
 colrv1 = ["swash"]
@@ -52,12 +53,13 @@ objc2-core-graphics = { version = "0.3.2", default-features = false, features = 
     "std", "CGDataProvider", "CGFont", "CGPath",
 ] }
 objc2-core-text = { version = "0.3.2", default-features = false, features = [
-    "std", "CTFont", "objc2-core-graphics",
+    "std", "CTFont", "CTFontDescriptor", "objc2-core-graphics",
 ] }
 
-# Only Linux renders through the system FreeType for now; other targets keep the
-# Rust rasterizer until their own system path exists.
-[target.'cfg(not(target_os = "linux"))'.dependencies]
+# A target with no system glyph backend still needs a rasterizer so glyphs never
+# silently disappear. Linux, Windows and macOS use their own backend unless the
+# `swash` feature is enabled.
+[target.'cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))'.dependencies]
 swash.workspace = true
 skrifa = { version = "0.44.0", default-features = false, features = ["std"] }
 

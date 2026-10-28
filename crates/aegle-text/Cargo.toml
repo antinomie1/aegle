@@ -16,7 +16,9 @@ system-fonts = []
 text-a11y = ["dep:accesskit", "parley?/accesskit"]
 scene = ["dep:aegle-scene", "aegle-scene/text"]
 # The Parley/HarfRust Rust text stack as a fallback: default off and no longer
-# maintained. Every target defaults to its own system text stack.
+# maintained. Linux, Windows and macOS default to their own system text stack
+# (Pango, DirectWrite, CoreText); this feature is the only way to compile
+# Parley on those targets.
 text-parley = ["dep:parley", "dep:icu_segmenter", "dep:icu_provider"]
 
 [dependencies]
@@ -63,9 +65,10 @@ aegle-glyph = { workspace = true }
 # The `implement` macro names windows-core directly.
 windows-core = { version = "0.62.2", default-features = false }
 
-# Until the DirectWrite and CoreText backends exist, those targets keep the
-# Parley stack: text must not disappear from a default build.
-[target.'cfg(not(target_os = "linux"))'.dependencies]
+# A target with no system text backend still needs a text stack, and must not
+# silently lay out nothing. These targets keep Parley unconditionally; Linux,
+# Windows and macOS use their own backend unless `text-parley` is enabled.
+[target.'cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))'.dependencies]
 parley.workspace = true
 icu_segmenter = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
 icu_provider = { version = "2.3.1", default-features = false, features = ["logging"] }

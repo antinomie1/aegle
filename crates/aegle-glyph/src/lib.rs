@@ -68,7 +68,7 @@ pub struct Placement {
     pub height: u32,
 }
 
-#[cfg(any(feature = "swash", not(target_os = "linux")))]
+#[cfg(feature = "swash")]
 impl From<swash::zeno::Placement> for Placement {
     fn from(p: swash::zeno::Placement) -> Self {
         Self {
@@ -80,7 +80,7 @@ impl From<swash::zeno::Placement> for Placement {
     }
 }
 
-#[cfg(any(feature = "swash", not(target_os = "linux")))]
+#[cfg(feature = "swash")]
 impl From<Placement> for swash::zeno::Placement {
     fn from(p: Placement) -> Self {
         Self {
