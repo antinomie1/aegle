@@ -34,10 +34,10 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
     let fonts = test_fonts()?;
     let mut settings = AppOptions::default();
     if std::env::var_os("AEGLE_TEST_VULKAN").is_some() {
-        settings.renderer = aegle_app::RendererBackend::Vulkan;
+        settings.renderer = aegle_app::RendererChoice::named("vulkan")?;
     }
     if std::env::var_os("AEGLE_TEST_WGPU").is_some() {
-        settings.renderer = aegle_app::RendererBackend::Wgpu;
+        settings.renderer = aegle_app::RendererChoice::named("wgpu")?;
     }
     let app = Rc::new(App::with_fonts(fonts, settings)?);
     let options = WindowOptions {
@@ -105,10 +105,10 @@ fn layers_draw_into_native_windows() -> Result {
     );
     let mut settings = AppOptions::default();
     if std::env::var_os("AEGLE_TEST_VULKAN").is_some() {
-        settings.renderer = aegle_app::RendererBackend::Vulkan;
+        settings.renderer = aegle_app::RendererChoice::named("vulkan")?;
     }
     if std::env::var_os("AEGLE_TEST_WGPU").is_some() {
-        settings.renderer = aegle_app::RendererBackend::Wgpu;
+        settings.renderer = aegle_app::RendererChoice::named("wgpu")?;
     }
     let app = App::with_fonts(test_fonts()?, settings)?;
     let options = WindowOptions {
@@ -195,7 +195,7 @@ fn proxy_messages_from_threads_reach_the_ui_thread_in_order() -> Result {
 }
 
 #[test]
-#[cfg(feature = "software")]
+#[cfg(feature = "tiny-skia")]
 #[ignore = "requires an isolated test desktop; never run on the user's desktop"]
 fn software_windows_reject_a_translucent_background() -> Result {
     assert_eq!(
@@ -241,7 +241,7 @@ fn cairo_windows_present_and_reject_a_translucent_background() -> Result {
         Ok("private")
     );
     let settings = AppOptions {
-        renderer: aegle_app::RendererBackend::Cairo,
+        renderer: aegle_app::RendererChoice::named("cairo")?,
         ..Default::default()
     };
     let app = App::with_fonts(test_fonts()?, settings)?;
@@ -276,7 +276,7 @@ fn cairo_windows_present_and_reject_a_translucent_background() -> Result {
     let mut theme = aegle_ui::Theme::light();
     theme.background = aegle_types::Color::rgba(255, 255, 255, 128);
     let options = AppOptions {
-        renderer: aegle_app::RendererBackend::Cairo,
+        renderer: aegle_app::RendererChoice::named("cairo")?,
         theme,
         dark_theme: None,
         high_contrast_theme: None,

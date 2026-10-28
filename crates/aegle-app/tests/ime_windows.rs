@@ -3,7 +3,7 @@
 //! dedicated Windows test desktop with Simplified Chinese Microsoft Pinyin:
 //! `AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-app --features
 //! windows,software --test ime_windows -- --ignored`.
-#![cfg(all(feature = "windows", feature = "software", target_os = "windows"))]
+#![cfg(all(feature = "windows", feature = "tiny-skia", target_os = "windows"))]
 #![allow(unsafe_code)]
 
 use aegle_app::{App, AppOptions, WindowOptions};

@@ -51,21 +51,23 @@ fn main() -> Result<()> {
 
 ## Features
 
-在 `aegle` crate 上设置。默认启用 `native`、`software`、`system-fonts`、`markup`、`motion`、`effects`、`colrv1` 与 `desktop-services`。
+在 `aegle` crate 上设置。默认启用 `native`、`tiny-skia`、`system-fonts`、`markup`、`motion`、`effects`、`colrv1` 与 `desktop-services`。
+
+四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）是平级的：每个编译一个后端，可以叠加，没有哪个构建把它们之一当作“软件路径”。构建的默认后端是它包含的第一个（按此顺序）；也可以用 `RendererChoice::named` 或 `showcase <名字>` 按名选择。
 
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
 | `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit |
-| `software` | ✓ | CPU 软件绘制（tiny-skia 覆盖率） |
-| `cairo` |  | Linux 上经系统 `libcairo.so.2` 的 CPU 绘制，运行时加载 |
+| `tiny-skia` | ✓ | CPU 绘制（tiny-skia 覆盖率） |
+| `cairo` |  | CPU 绘制（系统 cairo 覆盖率，仅 Linux），运行时加载 `libcairo.so.2` |
 | `system-fonts` | ✓ | 系统字体发现 |
 | `markup` | ✓ | `ui!` 宏与标记引擎，含运行时加载 |
 | `motion` | ✓ | 过渡、关键帧动画与弹簧 |
 | `effects` | ✓ | 图像效果（`aegle::image::effects`） |
 | `colrv1` | ✓ | COLRv1 彩色字形 |
 | `desktop-services` | ✓ | 文件对话框、通知、托盘与全局快捷键（`App::desktop`） |
-| `vulkan` |  | Vulkan 绘制 |
-| `wgpu` |  | 全平台通用的最小 wgpu 绘制 |
+| `vulkan` |  | 经 ash 的 Vulkan 绘制 |
+| `wgpu` |  | 全平台通用的 wgpu 绘制（Vulkan、Metal、Direct3D 12） |
 | `accessibility` |  | 语义树与目标平台的系统适配（Linux AT-SPI，引入 zbus；Windows UI Automation；macOS NSAccessibility）；隐含 `native` |
 
 `native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。

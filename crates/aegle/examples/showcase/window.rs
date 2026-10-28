@@ -9,6 +9,7 @@
 use std::{cell::Cell, rc::Rc};
 
 use aegle::{
+    app::{KNOWN, RendererChoice},
     prelude::*,
     ui::scene::{Affine, FillRule, Gradient, GradientStop, Image, PathBuilder, Point, Stroke},
 };
@@ -28,7 +29,7 @@ fn star() -> Result<aegle::ui::scene::Path> {
 
 /// Whether `name` is a backend this program can name but may not have built.
 pub fn known_backend(name: &str) -> bool {
-    matches!(name, "vulkan" | "wgpu" | "cairo" | "software")
+    aegle::app::KNOWN.contains(&name)
 }
 
 /// Editors, buttons with a popup, binary and numeric choices, and the theme dropdown.
@@ -248,22 +249,34 @@ fn views(pane: &Container) -> Result {
 ///
 /// Named backends this build cannot provide are an error: silently using another
 /// rasterizer would make the output depend on feature selection instead of on the
-/// request.
-pub fn choose_renderer() -> Result<RendererBackend> {
-    let argument = std::env::args().nth(1);
-    match argument.as_deref() {
-        #[cfg(feature = "vulkan")]
-        Some("vulkan") => Ok(RendererBackend::Vulkan),
-        #[cfg(feature = "wgpu")]
-        Some("wgpu") => Ok(RendererBackend::Wgpu),
-        #[cfg(feature = "cairo")]
-        Some("cairo") => Ok(RendererBackend::Cairo),
-        // A backend name this build cannot provide must not be swapped for
-        // another rasterizer behind the caller's back.
-        Some(name) if known_backend(name) => {
-            Err(format!("this build has no {name} renderer; rebuild with --features {name}").into())
-        }
-        _ => Ok(RendererBackend::default()),
+/// request. A name no build knows is a typo, reported separately.
+pub fn choose_renderer() -> Result<RendererChoice> {
+    // No argument, an empty one, or `rtl` all mean "this build's default": the
+    // first argument is only a backend name when it names one.
+    let Some(argument) = std::env::args().nth(1).filter(|arg| !arg.is_empty()) else {
+        return Ok(RendererChoice::default());
+    };
+    if argument == "rtl" {
+        return Ok(RendererChoice::default());
+    }
+    match known_backend(&argument) {
+        true => RendererChoice::named(backend_name(&argument)),
+        false => Err(format!("unknown renderer {argument:?}; this build knows {KNOWN:?}").into()),
+    }
+}
+
+/// Maps a command-line name onto the static backend name it selects.
+///
+/// `RendererChoice::named` takes a `&'static str`, so the four names are matched
+/// here rather than leaking the lifetime of `std::env::args`.
+fn backend_name(name: &str) -> &'static str {
+    match name {
+        "tiny-skia" => "tiny-skia",
+        "cairo" => "cairo",
+        "vulkan" => "vulkan",
+        "wgpu" => "wgpu",
+        // `known_backend` is the only caller, so this arm is unreachable.
+        _ => "tiny-skia",
     }
 }
 
@@ -272,7 +285,7 @@ pub fn choose_renderer() -> Result<RendererBackend> {
 /// The fixed-backend variants such as `showcase_cairo` include this file and call
 /// here, so their pixels, layout and features are those of the default showcase
 /// with only the rasterizer changed.
-pub fn run(renderer: RendererBackend) -> Result<()> {
+pub fn run(renderer: RendererChoice) -> Result<()> {
     let rtl = std::env::args().any(|arg| arg == "rtl");
     let app = App::with_options(AppOptions {
         renderer,

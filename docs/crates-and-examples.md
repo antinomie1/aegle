@@ -93,9 +93,9 @@ cargo run -p aegle --no-default-features --features native,software,system-fonts
 cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,markup --example scrolling --release
 ```
 
-同时编译多个渲染器时，把 `AppOptions.renderer` 显式设为 `RendererBackend::Vulkan`、`RendererBackend::Wgpu` 或 Linux 上的 `RendererBackend::Cairo`；软件仍是默认。驱动、feature 或预算失败返回错误，不会切换后端。只带 Vulkan 的最小构建默认使用 Vulkan。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
+四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级，每个编译一个后端，可以叠加。`AppOptions.renderer` 是 `RendererChoice`：`RendererChoice::named("vulkan")` 之类按名选择，`RendererChoice::default()`（即 `Default`）表示“本构建包含的第一个后端”，顺序固定为 `tiny-skia` → `cairo` → `vulkan` → `wgpu`，所以只带 Vulkan 的构建默认就是 Vulkan。宿主没有后端枚举，四个后端实现同一个 `Renderer` trait；请求本构建没有的后端、驱动或预算失败都返回错误，不会切换后端。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
 
-可选的 wgpu 后端（`wgpu` feature、`RendererBackend::Wgpu`）绘制几何、文字、图像与路径；用 `WGPU_BACKEND` 和 `WGPU_ADAPTER_NAME` 选择适配器。契约见 [wgpu](wgpu.md)。
+可选的 wgpu 后端（`wgpu` feature、`RendererChoice::named("wgpu")`）绘制几何、文字、图像与路径；用 `WGPU_BACKEND` 和 `WGPU_ADAPTER_NAME` 选择适配器。契约见 [wgpu](wgpu.md)。
 
 ## 嵌入已有宿主
 

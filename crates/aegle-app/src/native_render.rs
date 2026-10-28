@@ -1,10 +1,21 @@
-//! Native rendering policy; retained scenes and clipping are shared by backends.
+//! Shared drawing for every backend; retained scenes and clipping are common.
+//!
+//! Each backend is the same shape: ask the platform for the window's size, take
+//! a frame from its own renderer, walk the retained tree into it, finish. The
+//! backends differ in which frame type they hand back and whether the platform
+//! presents its own software buffer or an external graphics API does. Those
+//! differences live in the four `present_*` functions and their `create_*`
+//! counterparts; everything above them is shared.
 #![allow(unsafe_code)]
 
-use crate::native::{RendererBackend, Runtime};
+use crate::renderer::Present;
+#[cfg(any(feature = "vulkan", feature = "wgpu"))]
+use crate::renderer::Setup;
+#[cfg(any(feature = "tiny-skia", feature = "cairo"))]
 use aegle_platform::Platform;
 #[cfg(any(feature = "vulkan", feature = "wgpu"))]
 use aegle_platform::SurfacePlatform;
+use aegle_platform::WindowId;
 use aegle_ui::Result;
 
 /// A lease on a window's native handles, for GPU presenters and adapters.
@@ -16,92 +27,16 @@ use aegle_ui::Result;
 ))]
 pub(crate) type Surface = <crate::Native as aegle_platform::SurfacePlatform>::Surface;
 #[cfg(any(
-    feature = "software",
+    feature = "tiny-skia",
     feature = "cairo",
     feature = "vulkan",
     feature = "wgpu"
 ))]
 use {aegle_scene::Affine, aegle_types::Rect, aegle_ui::Ui};
 
-pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
-    match renderer {
-        RendererBackend::Software if !cfg!(feature = "software") => {
-            Err("software rendering requires the software feature".into())
-        }
-        RendererBackend::Cairo if !cfg!(feature = "cairo") => {
-            Err("cairo rendering requires the cairo feature".into())
-        }
-        RendererBackend::Cairo if !cfg!(target_os = "linux") => {
-            Err("cairo rendering is available on Linux only".into())
-        }
-        RendererBackend::Vulkan if !cfg!(feature = "vulkan") => {
-            Err("Vulkan rendering requires the vulkan feature".into())
-        }
-        RendererBackend::Vulkan if cfg!(target_os = "macos") => {
-            Err("Vulkan rendering is unavailable on macOS; use wgpu".into())
-        }
-        RendererBackend::Wgpu if !cfg!(feature = "wgpu") => {
-            Err("wgpu rendering requires the wgpu feature".into())
-        }
-        _ => Ok(()),
-    }
-}
-
-#[cfg(feature = "vulkan")]
-pub(crate) fn create_gpu(
-    runtime: &mut Runtime,
-    id: aegle_platform::WindowId,
-) -> Result<Option<aegle_render_vulkan::WindowRenderer<Surface>>> {
-    if runtime.options.renderer != RendererBackend::Vulkan {
-        return Ok(None);
-    }
-    let window = runtime.backend.window_surface(id)?;
-    // SAFETY: WindowSurface owns the native window and connection. Its public API
-    // cannot revoke these handles; Runtime drops the presenter before its platform.
-    let renderer = unsafe {
-        match &runtime.shared_vulkan {
-            Some(shared) => aegle_render_vulkan::WindowRenderer::with_device(
-                window,
-                runtime.options.vulkan,
-                shared,
-            )?,
-            None => aegle_render_vulkan::WindowRenderer::new(window, runtime.options.vulkan)?,
-        }
-    };
-    runtime
-        .shared_vulkan
-        .get_or_insert_with(|| renderer.shared_device());
-    Ok(Some(renderer))
-}
-
-#[cfg(feature = "wgpu")]
-pub(crate) fn create_wgpu(
-    runtime: &mut Runtime,
-    id: aegle_platform::WindowId,
-) -> Result<Option<aegle_render_wgpu::WindowRenderer<Surface>>> {
-    if runtime.options.renderer != RendererBackend::Wgpu {
-        return Ok(None);
-    }
-    let window = runtime.backend.window_surface(id)?;
-    // SAFETY: WindowSurface owns the native window and connection. Its public API
-    // cannot revoke these handles; Runtime drops the presenter before its platform.
-    let renderer = unsafe {
-        match &runtime.shared_wgpu {
-            Some(shared) => {
-                aegle_render_wgpu::WindowRenderer::with_gpu(window, runtime.options.wgpu, shared)?
-            }
-            None => aegle_render_wgpu::WindowRenderer::new(window, runtime.options.wgpu)?,
-        }
-    };
-    runtime
-        .shared_wgpu
-        .get_or_insert_with(|| renderer.shared_gpu());
-    Ok(Some(renderer))
-}
-
 /// A renderer frame the UI's records and layers are drawn into.
 #[cfg(any(
-    feature = "software",
+    feature = "tiny-skia",
     feature = "cairo",
     feature = "vulkan",
     feature = "wgpu"
@@ -117,12 +52,7 @@ trait Target {
     fn pop(&mut self) -> Result<()>;
 }
 
-#[cfg(any(
-    feature = "software",
-    feature = "cairo",
-    feature = "vulkan",
-    feature = "wgpu"
-))]
+#[cfg(any(feature = "vulkan", feature = "wgpu"))]
 macro_rules! target {
     ($frame:ty) => {
         impl Target for $frame {
@@ -143,17 +73,37 @@ macro_rules! target {
         }
     };
 }
-#[cfg(feature = "software")]
-target!(aegle_render_tiny_skia::Frame<'_, '_, '_, aegle_render_tiny_skia::TinySkia>);
-#[cfg(feature = "cairo")]
-target!(aegle_render_cairo::Frame<'_, '_, '_, aegle_render_cairo::CairoRaster>);
+/// The shared CPU frame over any coverage rasterizer.
+///
+/// `present_cpu` is generic so one function serves both CPU backends; the
+/// frame type it draws into is generic too, so the `Target` bound must hold for
+/// every rasterizer rather than only the two built here.
+#[cfg(any(feature = "tiny-skia", feature = "cairo"))]
+impl<R: aegle_render_cpu::Rasterizer> Target for aegle_render_cpu::Frame<'_, '_, '_, R> {
+    fn scene(
+        &mut self,
+        scene: &aegle_scene::Scene,
+        transform: Affine,
+        clip: Option<Rect>,
+    ) -> Result<()> {
+        Ok(self.draw_clipped(scene, transform, clip)?)
+    }
+
+    fn push(&mut self, layer: &aegle_scene::Layer) -> Result<()> {
+        Ok(self.push_layer(layer)?)
+    }
+
+    fn pop(&mut self) -> Result<()> {
+        Ok(self.pop_layer()?)
+    }
+}
 #[cfg(feature = "vulkan")]
 target!(aegle_render_vulkan::Frame<'_>);
 #[cfg(feature = "wgpu")]
 target!(aegle_render_wgpu::Frame<'_>);
 
 #[cfg(any(
-    feature = "software",
+    feature = "tiny-skia",
     feature = "cairo",
     feature = "vulkan",
     feature = "wgpu"
@@ -161,7 +111,7 @@ target!(aegle_render_wgpu::Frame<'_>);
 fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
     let scale = Affine::scale(factor, factor);
     // Node clips snap to whole device pixels, like a scissor rectangle; the
-    // software renderer then clips without a surface-sized mask.
+    // CPU renderers then clip without a surface-sized mask.
     let snap = |rect: Rect| {
         let (left, top) = (
             (rect.origin.x * factor).round(),
@@ -187,8 +137,8 @@ fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
 
 /// The UI's changed area in buffer pixels of a `width` × `height` window at
 /// `scale`; `None` for all of it.
-#[cfg(any(feature = "software", feature = "cairo", feature = "vulkan"))]
-fn device_damage(
+#[cfg(any(feature = "tiny-skia", feature = "cairo", feature = "vulkan"))]
+pub(crate) fn device_damage(
     ui: &Ui,
     scale: f32,
     width: u32,
@@ -203,182 +153,148 @@ fn device_damage(
     })
 }
 
-impl Runtime {
-    // Without a renderer feature no App is created, and only the
-    // unreachable arm remains.
-    #[cfg_attr(
-        not(any(
-            feature = "software",
-            feature = "cairo",
-            feature = "vulkan",
-            feature = "wgpu"
-        )),
-        allow(unreachable_code)
-    )]
-    pub(crate) fn present(&mut self) -> Result<()> {
-        for entry in &mut self.windows {
-            if !std::mem::take(&mut entry.ready) {
-                continue;
-            }
-            #[cfg(any(
-                feature = "software",
-                feature = "cairo",
-                feature = "vulkan",
-                feature = "wgpu"
-            ))]
-            let info = self.backend.window_info(entry.id)?;
-            #[cfg(any(
-                feature = "software",
-                feature = "cairo",
-                feature = "vulkan",
-                feature = "wgpu"
-            ))]
-            let background = entry.ui.background();
-            match self.options.renderer {
-                #[cfg(feature = "software")]
-                RendererBackend::Software => {
-                    // Software windows are opaque on both platforms; GPU windows
-                    // check their own surface, which may be transparent.
-                    if background.to_rgba()[3] != 255 {
-                        return Err("software windows require an opaque background".into());
-                    }
-                    let renderer = self.renderer.as_mut().unwrap();
-                    let scale = info.scale;
-                    // Only the changed area is redrawn into a retained buffer.
-                    let size = info.buffer;
-                    let damage = device_damage(&entry.ui, scale, size.width, size.height);
-                    let presented = self
-                        .backend
-                        .present(entry.id, damage, |pixels, size, region| -> Result<()> {
-                            let mut surface = aegle_render_tiny_skia::Surface::new_bgra(
-                                pixels,
-                                size.width,
-                                size.height,
-                            )?;
-                            for rect in region.rects() {
-                                let rect = Rect::new(
-                                    rect.x as f32,
-                                    rect.y as f32,
-                                    rect.width as f32,
-                                    rect.height as f32,
-                                );
-                                let mut frame =
-                                    renderer.begin_region(&mut surface, background, rect);
-                                scenes(&entry.ui, scale, &mut frame)?;
-                            }
-                            Ok(())
-                        })
-                        .map_err(|error| format!("present: {error}"))?;
-                    if presented {
-                        entry.ui.clear_damage();
-                    }
-                }
-                #[cfg(feature = "cairo")]
-                RendererBackend::Cairo => {
-                    // Cairo composites into the same retained BGRA buffer, so it
-                    // shares the opaque-background rule and damage-only redraw.
-                    if background.to_rgba()[3] != 255 {
-                        return Err("software windows require an opaque background".into());
-                    }
-                    let renderer = self.cairo.as_mut().unwrap();
-                    let scale = info.scale;
-                    let size = info.buffer;
-                    let damage = device_damage(&entry.ui, scale, size.width, size.height);
-                    let presented = self
-                        .backend
-                        .present(entry.id, damage, |pixels, size, region| -> Result<()> {
-                            let mut surface = aegle_render_cairo::Surface::new_bgra(
-                                pixels,
-                                size.width,
-                                size.height,
-                            )?;
-                            for rect in region.rects() {
-                                let rect = Rect::new(
-                                    rect.x as f32,
-                                    rect.y as f32,
-                                    rect.width as f32,
-                                    rect.height as f32,
-                                );
-                                let mut frame =
-                                    renderer.begin_region(&mut surface, background, rect);
-                                scenes(&entry.ui, scale, &mut frame)?;
-                            }
-                            Ok(())
-                        })
-                        .map_err(|error| format!("present: {error}"))?;
-                    if presented {
-                        entry.ui.clear_damage();
-                    }
-                }
-                #[cfg(feature = "vulkan")]
-                RendererBackend::Vulkan => {
-                    let renderer = entry.gpu.as_mut().unwrap();
-                    let result = self
-                        .backend
-                        .present_external(entry.id, |size| -> Result<bool> {
-                            let mut frame =
-                                match renderer.begin_frame(size.width, size.height, background) {
-                                    Ok(Some(frame)) => frame,
-                                    Ok(None)
-                                    | Err(aegle_render_vulkan::Error::SurfaceOutOfDate) => {
-                                        return Ok(false);
-                                    }
-                                    Err(error) => return Err(error.into()),
-                                };
-                            let [width, height] = frame.extent();
-                            let scale = info.scale;
-                            if let Some(damage) = device_damage(&entry.ui, scale, width, height) {
-                                frame.set_damage(damage.rects());
-                            }
-                            scenes(&entry.ui, scale, &mut frame)?;
-                            match frame.finish() {
-                                Ok(()) => Ok(true),
-                                Err(aegle_render_vulkan::Error::SurfaceOutOfDate) => Ok(false),
-                                Err(error) => Err(error.into()),
-                            }
-                        });
-                    if result.map_err(|error| format!("Vulkan present: {error}"))? {
-                        entry.ui.clear_damage();
-                    } else {
-                        self.backend.request_redraw(entry.id)?;
-                    }
-                }
-                #[cfg(feature = "wgpu")]
-                RendererBackend::Wgpu => {
-                    let renderer = entry.wgpu.as_mut().unwrap();
-                    let result = self
-                        .backend
-                        .present_external(entry.id, |size| -> Result<bool> {
-                            let mut frame =
-                                match renderer.begin_frame(size.width, size.height, background) {
-                                    Ok(Some(frame)) => frame,
-                                    Ok(None) | Err(aegle_render_wgpu::Error::SurfaceOutOfDate) => {
-                                        return Ok(false);
-                                    }
-                                    Err(error) => return Err(error.into()),
-                                };
-                            scenes(&entry.ui, info.scale, &mut frame)?;
-                            frame.finish()?;
-                            Ok(true)
-                        });
-                    if result.map_err(|error| format!("wgpu present: {error}"))? {
-                        entry.ui.clear_damage();
-                    } else {
-                        self.backend.request_redraw(entry.id)?;
-                    }
-                }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("rendering feature was checked at App construction"),
-            }
-            // Native frame pacing blocks occluded windows without an idle poll.
-            #[cfg(feature = "motion")]
-            let animating = entry.ui.has_animations();
-            #[cfg(not(feature = "motion"))]
-            let animating = false;
-            if animating || entry.ui.wants_frames() {
-                self.backend.request_redraw(entry.id)?;
-            }
+/// Draws one CPU renderer's frame into the platform's retained software buffer.
+///
+/// Both CPU backends present the same way: the platform lends its buffer, the
+/// renderer composites the changed region into it, and only whole-pixel damage
+/// is redrawn. A window background must be opaque because the XRGB/DIB surface
+/// has no alpha to composite against.
+#[cfg(any(feature = "tiny-skia", feature = "cairo"))]
+pub(crate) fn present_cpu<R: aegle_render_cpu::Rasterizer>(
+    renderer: &mut aegle_render_cpu::Renderer<R>,
+    window: WindowId,
+    present: &mut Present<'_>,
+) -> Result<bool> {
+    if present.background.to_rgba()[3] != 255 {
+        return Err("a native software window requires an opaque background".into());
+    }
+    let Present {
+        backend,
+        ui,
+        info,
+        background,
+    } = present;
+    let scale = info.scale;
+    // Only the changed area is redrawn into the retained buffer.
+    let damage = device_damage(ui, scale, info.buffer.width, info.buffer.height);
+    let presented = backend.present(window, damage, |pixels, size, region| {
+        let mut surface = aegle_render_cpu::Surface::new_bgra(pixels, size.width, size.height)?;
+        for rect in region.rects() {
+            let rect = Rect::new(
+                rect.x as f32,
+                rect.y as f32,
+                rect.width as f32,
+                rect.height as f32,
+            );
+            let mut frame = renderer.begin_region(&mut surface, *background, rect);
+            scenes(ui, scale, &mut frame)?;
         }
         Ok(())
+    })?;
+    Ok(presented)
+}
+
+/// Creates a Vulkan presenter for a new window, sharing `shared` when present.
+#[cfg(feature = "vulkan")]
+pub(crate) fn create_vulkan(
+    setup: &mut Setup<'_>,
+    window: WindowId,
+    shared: &Option<aegle_render_vulkan::SharedDevice>,
+) -> Result<aegle_render_vulkan::WindowRenderer<Surface>> {
+    let lease = setup.backend.window_surface(window)?;
+    // SAFETY: WindowSurface owns the native window and connection. Its public API
+    // cannot revoke these handles; the renderer is dropped before its platform.
+    unsafe {
+        match shared {
+            Some(shared) => {
+                aegle_render_vulkan::WindowRenderer::with_device(lease, setup.vulkan(), shared)
+            }
+            None => aegle_render_vulkan::WindowRenderer::new(lease, setup.vulkan()),
+        }
     }
+    .map_err(Into::into)
+}
+
+/// Draws one Vulkan frame straight into the window's swapchain.
+#[cfg(feature = "vulkan")]
+pub(crate) fn present_vulkan(
+    renderer: &mut aegle_render_vulkan::WindowRenderer<Surface>,
+    window: WindowId,
+    present: &mut Present<'_>,
+) -> Result<bool> {
+    let Present {
+        backend,
+        ui,
+        info,
+        background,
+        ..
+    } = present;
+    let scale = info.scale;
+    let presented = backend.present_external(window, |size| -> Result<bool> {
+        let mut frame = match renderer.begin_frame(size.width, size.height, *background) {
+            Ok(Some(frame)) => frame,
+            Ok(None) | Err(aegle_render_vulkan::Error::SurfaceOutOfDate) => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        let [width, height] = frame.extent();
+        if let Some(damage) = device_damage(ui, scale, width, height) {
+            frame.set_damage(damage.rects());
+        }
+        scenes(ui, scale, &mut frame)?;
+        match frame.finish() {
+            Ok(()) => Ok(true),
+            Err(aegle_render_vulkan::Error::SurfaceOutOfDate) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    })?;
+    Ok(presented)
+}
+
+/// Creates a wgpu presenter for a new window, sharing `shared` when present.
+#[cfg(feature = "wgpu")]
+pub(crate) fn create_wgpu(
+    setup: &mut Setup<'_>,
+    window: WindowId,
+    shared: &Option<aegle_render_wgpu::SharedGpu>,
+) -> Result<aegle_render_wgpu::WindowRenderer<Surface>> {
+    let lease = setup.backend.window_surface(window)?;
+    // SAFETY: WindowSurface owns the native window and connection. Its public API
+    // cannot revoke these handles; the renderer is dropped before its platform.
+    unsafe {
+        match shared {
+            Some(shared) => {
+                aegle_render_wgpu::WindowRenderer::with_gpu(lease, setup.wgpu(), shared)
+            }
+            None => aegle_render_wgpu::WindowRenderer::new(lease, setup.wgpu()),
+        }
+    }
+    .map_err(Into::into)
+}
+
+/// Draws one wgpu frame straight into the window's surface.
+#[cfg(feature = "wgpu")]
+pub(crate) fn present_wgpu(
+    renderer: &mut aegle_render_wgpu::WindowRenderer<Surface>,
+    window: WindowId,
+    present: &mut Present<'_>,
+) -> Result<bool> {
+    let Present {
+        backend,
+        ui,
+        info,
+        background,
+        ..
+    } = present;
+    let scale = info.scale;
+    let presented = backend.present_external(window, |size| -> Result<bool> {
+        let mut frame = match renderer.begin_frame(size.width, size.height, *background) {
+            Ok(Some(frame)) => frame,
+            Ok(None) | Err(aegle_render_wgpu::Error::SurfaceOutOfDate) => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        scenes(ui, scale, &mut frame)?;
+        frame.finish()?;
+        Ok(true)
+    })?;
+    Ok(presented)
 }

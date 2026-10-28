@@ -29,10 +29,10 @@ native = ["wayland", "windows", "macos"]
 wayland = ["dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
 macos = ["dep:aegle-platform-macos"]
-software = ["dep:aegle-render-tiny-skia"]
+tiny-skia = ["dep:aegle-render-tiny-skia", "dep:aegle-render-cpu"]
 # System cairo as a second CPU coverage rasterizer; Linux only, loaded at run
 # time, so no build-time dependency on cairo headers or libraries.
-cairo = ["dep:aegle-render-cairo"]
+cairo = ["dep:aegle-render-cairo", "dep:aegle-render-cpu"]
 # Vulkan is the Linux and Windows GPU path and reports `Unsupported` on macOS;
 # `wgpu` reaches Metal there.
 vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
@@ -49,6 +49,9 @@ aegle-scene.workspace = true
 aegle-text.workspace = true
 aegle-access = { workspace = true, optional = true }
 aegle-render-tiny-skia = { workspace = true, features = ["text"], optional = true }
+# The compositor both CPU backends share; named here so the host can draw into
+# either one without knowing which rasterizer it holds.
+aegle-render-cpu = { workspace = true, features = ["text"], optional = true }
 aegle-render-cairo = { workspace = true, features = ["text"], optional = true }
 aegle-render-vulkan = { workspace = true, features = ["text", "window"], optional = true }
 aegle-render-wgpu = { workspace = true, features = ["text", "window"], optional = true }

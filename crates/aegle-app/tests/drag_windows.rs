@@ -2,8 +2,8 @@
 //! files, then text, reach the target's drop handler and the source's press
 //! is cancelled. It moves the system pointer, so it runs only on a dedicated
 //! Windows test desktop: `AEGLE_TEST_COMPOSITOR=private cargo test -p
-//! aegle-app --features windows,software --test drag_windows -- --ignored`.
-#![cfg(all(feature = "windows", feature = "software", target_os = "windows"))]
+//! aegle-app --features windows,tiny-skia --test drag_windows -- --ignored`.
+#![cfg(all(feature = "windows", feature = "tiny-skia", target_os = "windows"))]
 #![allow(unsafe_code)]
 
 use aegle_app::{App, AppOptions, WindowOptions};

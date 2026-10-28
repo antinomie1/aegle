@@ -25,7 +25,7 @@ struct Spin { angle: f32 }
 
 fn main() -> Result<()> {
     let app = App::with_options(AppOptions {
-        renderer: RendererBackend::Wgpu,
+        renderer: RendererChoice::named("wgpu")?,
         ..Default::default()
     })?;
     let window = app.window("Aegle — GPU texture")?;

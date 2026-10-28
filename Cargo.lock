@@ -125,6 +125,7 @@ dependencies = [
  "aegle-platform-wayland",
  "aegle-platform-win32",
  "aegle-render-cairo",
+ "aegle-render-cpu",
  "aegle-render-tiny-skia",
  "aegle-render-vulkan",
  "aegle-render-wgpu",

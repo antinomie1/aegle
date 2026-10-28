@@ -2,9 +2,11 @@
 //! loop, renderers and system preferences, and gives each window an
 //! `aegle-ui` [`Ui`](aegle_ui::Ui). `native` builds the target's platform crate
 //! (Wayland, Win32 or AppKit; `wayland`, `windows` and `macos` select one
-//! explicitly), plus an explicit `software`, `vulkan` or `wgpu` renderer
-//! feature. `vulkan` has no macOS backend and returns `Unsupported` there,
-//! where `wgpu` presents through Metal.
+//! explicitly), plus one or more renderer features (`tiny-skia`, `cairo`,
+//! `vulkan`, `wgpu`). Every renderer is one [`RendererChoice`]; the build's
+//! first one is the default and none is privileged. `vulkan` has no macOS
+//! backend and returns `Unsupported` there, where `wgpu` presents through
+//! Metal.
 //!
 //! Windows share fonts, the platform connection and (for GPU renderers) one
 //! device; each keeps its own control tree. [`App::proxy`] posts messages from
@@ -33,6 +35,8 @@ mod native_loop;
 mod native_proxy;
 #[cfg(native)]
 mod native_render;
+#[cfg(native)]
+mod renderer;
 
 /// The target's platform; a new platform adds one line.
 #[cfg(all(native, target_os = "linux"))]
@@ -50,6 +54,7 @@ pub use aegle_render_vulkan::{Options as VulkanOptions, RawDevice, SharedDevice,
 #[cfg(feature = "wgpu")]
 pub use aegle_render_wgpu::{Options as WgpuOptions, SharedGpu, wgpu};
 #[cfg(native)]
-pub use native::{App, AppOptions, RendererBackend, Window, WindowOptions};
+pub use native::{App, AppOptions, Window, WindowOptions};
 #[cfg(native)]
 pub use native_proxy::UiProxy;
+pub use renderer::{KNOWN, RendererChoice, built};

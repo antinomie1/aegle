@@ -14,8 +14,8 @@ mod showcase {
     pub mod window;
 }
 
-use aegle::{app::RendererBackend, ui::Result};
+use aegle::{app::RendererChoice, ui::Result};
 
 fn main() -> Result {
-    showcase::window::run(RendererBackend::Cairo)
+    showcase::window::run(RendererChoice::named("cairo")?)
 }

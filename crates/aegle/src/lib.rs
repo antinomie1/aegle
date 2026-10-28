@@ -5,10 +5,10 @@
 //! fonts. System accessibility is opt-in through the single `accessibility`
 //! feature, which adds the semantic tree and the target's adapter (AT-SPI, UI
 //! Automation or NSAccessibility). Enable `vulkan` or `wgpu` and select
-//! `RendererBackend::Vulkan` or `RendererBackend::Wgpu` for GPU presentation;
+//! `RendererChoice::named("vulkan")` or `("wgpu")` for GPU presentation;
 //! `vulkan` reports `Unsupported` on macOS, where `wgpu` reaches Metal. On Linux,
 //! `cairo` adds a second CPU rasterizer that draws through the distribution's
-//! `libcairo.so.2` and is selected with `RendererBackend::Cairo`.
+//! `libcairo.so.2` and is selected with `RendererChoice::named("cairo")`.
 //! Lower-level crates remain independent.
 //!
 //! [`prelude`] holds the common names; everything else stays under the crate
@@ -76,7 +76,7 @@ pub use aegle_loader as loader;
 /// Common imperative application and control types.
 pub mod prelude {
     #[cfg(feature = "native")]
-    pub use aegle_app::{App, AppOptions, RendererBackend, Window, WindowOptions};
+    pub use aegle_app::{App, AppOptions, KNOWN, RendererChoice, Window, WindowOptions, built};
     /// The built-in markup elements: the specs `ui!` reads under the handle
     /// type names, and marker types for the other element names.
     #[cfg(feature = "markup")]

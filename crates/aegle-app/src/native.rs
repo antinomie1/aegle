@@ -1,9 +1,6 @@
 use crate::Native;
+use crate::renderer::{Renderer, RendererChoice};
 use aegle_platform::{PixelSize, Platform, SeatId, WindowId};
-#[cfg(feature = "cairo")]
-use aegle_render_cairo::Renderer as CairoRenderer;
-#[cfg(feature = "software")]
-use aegle_render_tiny_skia::Renderer;
 #[cfg(feature = "motion")]
 use aegle_ui::Transition;
 use aegle_ui::{Container, Modifiers, OrFail, Result, Size, TextSystem, Theme, Ui, UiError};
@@ -15,37 +12,8 @@ use std::{
     rc::{Rc, Weak},
 };
 
-/// Explicit rendering policy. Backend failures are returned without switching.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RendererBackend {
-    /// CPU rendering with tiny-skia coverage into the platform's native software
-    /// surface. Requires the `software` feature.
-    Software,
-    /// CPU rendering with system cairo coverage into the platform's native
-    /// software surface. Requires the `cairo` feature and `libcairo.so.2` at run
-    /// time; a missing library fails the frame with a rendering error.
-    Cairo,
-    /// Vulkan geometry and glyph rendering directly into a native swapchain.
-    /// Requires the `vulkan` feature and a Vulkan-capable driver.
-    Vulkan,
-    /// Portable wgpu geometry and glyph rendering directly into a native surface
-    /// on Vulkan, Metal or Direct3D 12. Requires the `wgpu` feature.
-    Wgpu,
-}
-
-impl Default for RendererBackend {
-    fn default() -> Self {
-        if cfg!(feature = "software") {
-            Self::Software
-        } else if cfg!(feature = "vulkan") {
-            Self::Vulkan
-        } else if cfg!(feature = "wgpu") {
-            Self::Wgpu
-        } else {
-            Self::Software
-        }
-    }
-}
+// Renderer selection lives in `crate::renderer`: every backend is one
+// `Renderer` implementation, so the host has no backend enum to match on.
 
 /// Shared native application settings. Budgets exclude font metadata and trees.
 #[derive(Clone, Debug)]
@@ -61,8 +29,8 @@ pub struct AppOptions {
     /// Theme while the system requests high contrast; it takes precedence over
     /// `dark_theme`. Defaults to [`Theme::high_contrast`]; `None` ignores it.
     pub high_contrast_theme: Option<Theme>,
-    /// Explicit renderer selection; software is the default when compiled in.
-    pub renderer: RendererBackend,
+    /// Explicit renderer selection; the build's first backend by default.
+    pub renderer: RendererChoice,
     /// Per-window Vulkan device, recording and glyph-cache budgets.
     #[cfg(feature = "vulkan")]
     pub vulkan: crate::VulkanOptions,
@@ -92,7 +60,7 @@ impl Default for AppOptions {
             theme: Theme::default(),
             dark_theme: Some(Theme::dark()),
             high_contrast_theme: Some(Theme::high_contrast()),
-            renderer: RendererBackend::default(),
+            renderer: RendererChoice::default(),
             #[cfg(feature = "vulkan")]
             vulkan: crate::VulkanOptions::default(),
             #[cfg(feature = "wgpu")]
@@ -152,20 +120,18 @@ pub struct App {
 }
 
 pub(crate) struct Runtime {
-    // Presenters and their window leases must be destroyed before the event loop.
+    // Fields drop in declaration order: window presenters and their native
+    // surface leases, then the renderer's devices, then the platform connection
+    // and the event loop that owns it. Reordering these breaks that contract.
     pub windows: Vec<Entry>,
-    /// GPU devices shared by all windows, created with the first window and
-    /// dropped before the platform that owns their surfaces' connection.
-    #[cfg(feature = "vulkan")]
-    pub shared_vulkan: Option<aegle_render_vulkan::SharedDevice>,
-    #[cfg(feature = "wgpu")]
-    pub shared_wgpu: Option<aegle_render_wgpu::SharedGpu>,
+    /// The selected backend, or `None` in a build with no renderer at all.
+    ///
+    /// Holds each GPU window's surface and swapchain plus the shared device, so
+    /// it must drop before `backend` releases the connection those handles
+    /// belong to.
+    pub renderer: Option<Box<dyn Renderer>>,
     pub backend: Native,
     pub fonts: Rc<RefCell<TextSystem>>,
-    #[cfg(feature = "software")]
-    pub renderer: Option<Renderer>,
-    #[cfg(feature = "cairo")]
-    pub cairo: Option<CairoRenderer>,
     pub options: AppOptions,
     /// UI-thread ends of [`UiProxy`] senders.
     pub proxies: Vec<Rc<RefCell<dyn crate::native_proxy::Drain>>>,
@@ -176,10 +142,6 @@ pub(crate) struct Runtime {
 }
 
 pub(crate) struct Entry {
-    #[cfg(feature = "vulkan")]
-    pub gpu: Option<aegle_render_vulkan::WindowRenderer<crate::native_render::Surface>>,
-    #[cfg(feature = "wgpu")]
-    pub wgpu: Option<aegle_render_wgpu::WindowRenderer<crate::native_render::Surface>>,
     pub id: WindowId,
     pub ui: Rc<Ui>,
     /// Last cursor shape sent to the platform.
@@ -212,19 +174,21 @@ pub struct Window {
 }
 
 impl App {
-    /// The wgpu device shared by this app's windows, once a window using
-    /// [`RendererBackend::Wgpu`] exists. Create textures on it and register
-    /// them to draw them with `SceneBuilder::texture`.
+    /// The wgpu device shared by this app's windows, once a window exists.
+    ///
+    /// Create textures on it and register them to draw them with
+    /// `SceneBuilder::texture`. `None` unless the wgpu backend is in use.
     #[cfg(feature = "wgpu")]
     pub fn wgpu(&self) -> Option<aegle_render_wgpu::SharedGpu> {
-        self.runtime.borrow().shared_wgpu.clone()
+        self.runtime.borrow().renderer.as_ref()?.wgpu_device()
     }
 
-    /// The Vulkan device shared by this app's windows, once a window using
-    /// [`RendererBackend::Vulkan`] exists.
+    /// The Vulkan device shared by this app's windows, once a window exists.
+    ///
+    /// `None` unless the Vulkan backend is in use.
     #[cfg(feature = "vulkan")]
     pub fn vulkan(&self) -> Option<aegle_render_vulkan::SharedDevice> {
-        self.runtime.borrow().shared_vulkan.clone()
+        self.runtime.borrow().renderer.as_ref()?.vulkan_device()
     }
 
     /// Connects to the native platform and discovers installed system fonts.
@@ -262,24 +226,19 @@ impl App {
         if options.app_id.len() > 4000 || options.app_id.contains('\0') {
             return Err("application identifier exceeds 4000 bytes or contains NUL".into());
         }
-        crate::native_render::validate_backend(options.renderer)?;
+        // Resolving the choice before connecting keeps a misconfigured build
+        // from touching the display server at all.
+        let renderer = Some(crate::renderer::create(
+            &options,
+            options.renderer.resolve()?,
+        )?);
         let backend = Native::connect()?;
         let runtime = Runtime {
             preferences: backend.preferences(),
             backend,
             windows: Vec::new(),
-            #[cfg(feature = "vulkan")]
-            shared_vulkan: None,
-            #[cfg(feature = "wgpu")]
-            shared_wgpu: None,
             fonts: Rc::new(RefCell::new(fonts)),
-            #[cfg(feature = "software")]
-            renderer: (options.renderer == RendererBackend::Software)
-                .then(|| Renderer::new(options.mask_budget)),
-            #[cfg(feature = "cairo")]
-            cairo: (options.renderer == RendererBackend::Cairo)
-                .then(|| aegle_render_cairo::renderer(options.mask_budget))
-                .transpose()?,
+            renderer,
             options,
             proxies: Vec::new(),
             #[cfg(feature = "motion")]
@@ -332,40 +291,43 @@ impl App {
                 buffer_budget: options.buffer_budget,
                 layer: options.layer,
             })?;
-        #[cfg(feature = "vulkan")]
-        let gpu = match crate::native_render::create_gpu(&mut runtime, id) {
-            Ok(gpu) => gpu,
-            Err(error) => {
+        // The renderer and the platform are separate fields, so they are
+        // borrowed separately while the window is handed over. A renderer that
+        // cannot take this window must not leave the native window behind, and
+        // whatever it already acquired must go first.
+        let Runtime {
+            renderer: slot,
+            backend,
+            options: settings,
+            ..
+        } = &mut *runtime;
+        if let Some(renderer) = slot.as_mut() {
+            let outcome = renderer.add_window(
+                id,
+                &mut crate::renderer::Setup {
+                    backend,
+                    options: settings,
+                },
+            );
+            if let Err(error) = outcome {
+                renderer.remove_window(id);
                 runtime.backend.remove_window(id)?;
                 return Err(error);
             }
-        };
-        #[cfg(feature = "wgpu")]
-        let wgpu = match crate::native_render::create_wgpu(&mut runtime, id) {
-            Ok(wgpu) => wgpu,
-            Err(error) => {
-                runtime.backend.remove_window(id)?;
-                return Err(error);
-            }
-        };
+        }
         #[cfg(access)]
         let accessibility = match crate::native_access::Access::new(&mut runtime.backend, id) {
             Ok(adapter) => adapter,
             Err(error) => {
-                #[cfg(feature = "vulkan")]
-                drop(gpu);
-                #[cfg(feature = "wgpu")]
-                drop(wgpu);
+                if let Some(renderer) = runtime.renderer.as_mut() {
+                    renderer.remove_window(id);
+                }
                 runtime.backend.remove_window(id)?;
                 return Err(error);
             }
         };
         let root = ui.root();
         runtime.windows.push(Entry {
-            #[cfg(feature = "vulkan")]
-            gpu,
-            #[cfg(feature = "wgpu")]
-            wgpu,
             id,
             ui,
             cursor: aegle_ui::Cursor::Default,
@@ -455,9 +417,12 @@ impl Runtime {
             .position(|entry| entry.id == id)
             .ok_or(UiError::DeadHandle)?;
         self.windows[index].ui.close();
-        // Destroy the GPU surface and swapchain while the platform still owns
-        // its window, then remove the window and queued native events.
+        // Destroy the renderer's state (GPU surfaces, swapchains) while the
+        // platform still owns the window, then remove the window and its events.
         drop(self.windows.remove(index));
+        if let Some(renderer) = self.renderer.as_mut() {
+            renderer.remove_window(id);
+        }
         self.backend.remove_window(id)?;
         Ok(())
     }

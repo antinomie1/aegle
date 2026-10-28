@@ -51,21 +51,23 @@ Try the bundled examples with `cargo run -p aegle --example controls --release`.
 
 ## Features
 
-Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`, `markup`, `motion`, `effects`, `colrv1` and `desktop-services`.
+Set on the `aegle` crate. The defaults are `native`, `tiny-skia`, `system-fonts`, `markup`, `motion`, `effects`, `colrv1` and `desktop-services`.
+
+The four renderer features (`tiny-skia`, `cairo`, `vulkan`, `wgpu`) are peers: each compiles one backend, they may be combined, and no build treats one as "the software path". A build's default backend is the first of them it contains, in that order; any backend can be selected by name with `RendererChoice::named` and `showcase <name>`.
 
 | Feature | Default | Purpose |
 | --- | :---: | --- |
 | `native` | ✓ | Native windows: Wayland on Linux, Win32 on Windows, AppKit on macOS |
-| `software` | ✓ | CPU software rendering (tiny-skia coverage) |
-| `cairo` |  | Linux CPU rendering through the system `libcairo.so.2`, loaded at run time |
+| `tiny-skia` | ✓ | CPU rendering with tiny-skia coverage |
+| `cairo` |  | CPU rendering with system cairo coverage (Linux), `libcairo.so.2` loaded at run time |
 | `system-fonts` | ✓ | System font discovery |
 | `markup` | ✓ | `ui!` macro and the markup engine, including runtime loading |
 | `motion` | ✓ | Transitions, keyframe animations and springs |
 | `effects` | ✓ | Image effects (`aegle::image::effects`) |
 | `colrv1` | ✓ | COLRv1 colour glyphs |
 | `desktop-services` | ✓ | File dialogs, notifications, tray icon and global shortcuts (`App::desktop`) |
-| `vulkan` |  | Vulkan rendering |
-| `wgpu` |  | Portable minimal wgpu rendering |
+| `vulkan` |  | Vulkan rendering through ash |
+| `wgpu` |  | Portable wgpu rendering (Vulkan, Metal, Direct3D 12) |
 | `accessibility` |  | Semantic tree plus the target's system adapter: AT-SPI on Linux (pulls in zbus), UI Automation on Windows, NSAccessibility on macOS. Implies `native` |
 
 `native` builds only the target's platform crate, and `accessibility` only the target's adapter. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).
