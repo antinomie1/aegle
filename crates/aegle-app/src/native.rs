@@ -1,5 +1,5 @@
 use crate::Native;
-use crate::renderer::{Renderer, RendererChoice};
+use crate::renderer::Renderer;
 use aegle_platform::{PixelSize, Platform, SeatId, WindowId};
 #[cfg(feature = "motion")]
 use aegle_ui::Transition;
@@ -12,8 +12,8 @@ use std::{
     rc::{Rc, Weak},
 };
 
-// Renderer selection lives in `crate::renderer`: every backend is one
-// `Renderer` implementation, so the host has no backend enum to match on.
+// The renderer lives in `crate::renderer`: a build compiles exactly one
+// backend, and every backend is one `Renderer` implementation.
 
 /// Shared native application settings. Budgets exclude font metadata and trees.
 #[derive(Clone, Debug)]
@@ -29,8 +29,6 @@ pub struct AppOptions {
     /// Theme while the system requests high contrast; it takes precedence over
     /// `dark_theme`. Defaults to [`Theme::high_contrast`]; `None` ignores it.
     pub high_contrast_theme: Option<Theme>,
-    /// Explicit renderer selection; the build's first backend by default.
-    pub renderer: RendererChoice,
     /// Per-window Vulkan device, recording and glyph-cache budgets.
     #[cfg(feature = "vulkan")]
     pub vulkan: crate::VulkanOptions,
@@ -60,7 +58,6 @@ impl Default for AppOptions {
             theme: Theme::default(),
             dark_theme: Some(Theme::dark()),
             high_contrast_theme: Some(Theme::high_contrast()),
-            renderer: RendererChoice::default(),
             #[cfg(feature = "vulkan")]
             vulkan: crate::VulkanOptions::default(),
             #[cfg(feature = "wgpu")]
@@ -124,12 +121,12 @@ pub(crate) struct Runtime {
     // surface leases, then the renderer's devices, then the platform connection
     // and the event loop that owns it. Reordering these breaks that contract.
     pub windows: Vec<Entry>,
-    /// The selected backend, or `None` in a build with no renderer at all.
+    /// This build's backend.
     ///
     /// Holds each GPU window's surface and swapchain plus the shared device, so
     /// it must drop before `backend` releases the connection those handles
     /// belong to.
-    pub renderer: Option<Box<dyn Renderer>>,
+    pub renderer: Box<dyn Renderer>,
     pub backend: Native,
     pub fonts: Rc<RefCell<TextSystem>>,
     pub options: AppOptions,
@@ -177,18 +174,18 @@ impl App {
     /// The wgpu device shared by this app's windows, once a window exists.
     ///
     /// Create textures on it and register them to draw them with
-    /// `SceneBuilder::texture`. `None` unless the wgpu backend is in use.
+    /// `SceneBuilder::texture`. `None` before the first window.
     #[cfg(feature = "wgpu")]
     pub fn wgpu(&self) -> Option<aegle_render_wgpu::SharedGpu> {
-        self.runtime.borrow().renderer.as_ref()?.wgpu_device()
+        self.runtime.borrow().renderer.wgpu_device()
     }
 
     /// The Vulkan device shared by this app's windows, once a window exists.
     ///
-    /// `None` unless the Vulkan backend is in use.
+    /// `None` before the first window.
     #[cfg(feature = "vulkan")]
     pub fn vulkan(&self) -> Option<aegle_render_vulkan::SharedDevice> {
-        self.runtime.borrow().renderer.as_ref()?.vulkan_device()
+        self.runtime.borrow().renderer.vulkan_device()
     }
 
     /// Connects to the native platform and discovers installed system fonts.
@@ -226,12 +223,9 @@ impl App {
         if options.app_id.len() > 4000 || options.app_id.contains('\0') {
             return Err("application identifier exceeds 4000 bytes or contains NUL".into());
         }
-        // Resolving the choice before connecting keeps a misconfigured build
+        // Creating the renderer before connecting keeps a build without one
         // from touching the display server at all.
-        let renderer = Some(crate::renderer::create(
-            &options,
-            options.renderer.resolve()?,
-        )?);
+        let renderer = crate::renderer::create(&options)?;
         let backend = Native::connect()?;
         let runtime = Runtime {
             preferences: backend.preferences(),
@@ -296,32 +290,28 @@ impl App {
         // cannot take this window must not leave the native window behind, and
         // whatever it already acquired must go first.
         let Runtime {
-            renderer: slot,
+            renderer,
             backend,
             options: settings,
             ..
         } = &mut *runtime;
-        if let Some(renderer) = slot.as_mut() {
-            let outcome = renderer.add_window(
-                id,
-                &mut crate::renderer::Setup {
-                    backend,
-                    options: settings,
-                },
-            );
-            if let Err(error) = outcome {
-                renderer.remove_window(id);
-                runtime.backend.remove_window(id)?;
-                return Err(error);
-            }
+        let outcome = renderer.add_window(
+            id,
+            &mut crate::renderer::Setup {
+                backend,
+                options: settings,
+            },
+        );
+        if let Err(error) = outcome {
+            renderer.remove_window(id);
+            runtime.backend.remove_window(id)?;
+            return Err(error);
         }
         #[cfg(access)]
         let accessibility = match crate::native_access::Access::new(&mut runtime.backend, id) {
             Ok(adapter) => adapter,
             Err(error) => {
-                if let Some(renderer) = runtime.renderer.as_mut() {
-                    renderer.remove_window(id);
-                }
+                runtime.renderer.remove_window(id);
                 runtime.backend.remove_window(id)?;
                 return Err(error);
             }
@@ -420,9 +410,7 @@ impl Runtime {
         // Destroy the renderer's state (GPU surfaces, swapchains) while the
         // platform still owns the window, then remove the window and its events.
         drop(self.windows.remove(index));
-        if let Some(renderer) = self.renderer.as_mut() {
-            renderer.remove_window(id);
-        }
+        self.renderer.remove_window(id);
         self.backend.remove_window(id)?;
         Ok(())
     }

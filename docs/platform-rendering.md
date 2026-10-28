@@ -85,7 +85,7 @@ tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、
 
 像素对齐由合成器保证，不由光栅器决定：正立、直角、轴对齐的填充与边框按逐像素精确面积计算，完全不经过光栅器；轴对齐的显式路径虽经光栅器，整像素边缘的覆盖率在两者也都是精确的 0/255。设备边缘落在整像素时，覆盖正好是整像素的 255 与相邻像素的 0；落在半像素时相邻两像素各 128。因此两个 CPU 后端对这类几何输出逐字节相同，`aegle-render-cairo/tests/parity.rs` 直接比较两者：填充、边框、整像素裁剪、轴对齐路径（填充、描边与 even-odd）、图像、渐变、阴影与组透明度层在 cairo 1.18.6 上**逐字节相同**。圆角、任意路径与描边经各自光栅器，边缘覆盖率按光栅器自身的曲线细分与采样量化而不同：tiny-skia 每像素取四条子扫描线（覆盖量化到 1/4 步），cairo 计算精确面积，实测差在单个覆盖率步内、不跨越全覆与未覆。
 
-Linux 的 cairo 后端（`cairo` feature，`RendererChoice::named("cairo")`）在运行时用 `libloading` 打开发行版的 `libcairo.so.2`，构建期不链接、不读头文件；只绑定图像 surface、路径与 mask 入口，不涉及窗口系统、字体、PDF/SVG 后端。缺失该库时 `Renderer::new`/`aegle_render_cairo::renderer()` 返回 `RenderError::BackendUnavailable`，帧失败而不会静默换成另一光栅器。覆盖缓冲区是 cairo `A8` 图像 surface，行距按 cairo 要求补到 4 字节倍数；补白从不被读，且计入 mask 预算。曲线细分容差取 0.01 设备像素（cairo 默认 0.1 在 UI 半径的浅弧上误差可见）。代价实测（i5-13600KF，1280×800，224 个矩形，`cargo run --release -p aegle-render-cairo --example cairo_cost`，三次运行中位数）：直角填充与边框两者相同（1.70 ms，都不进光栅器），圆角版本 tiny-skia 4.45 ms、cairo 5.18 ms（+17%）。
+Linux 的 cairo 后端（`cairo` feature，替代默认的 tiny-skia）在运行时用 `libloading` 打开发行版的 `libcairo.so.2`，构建期不链接、不读头文件；只绑定图像 surface、路径与 mask 入口，不涉及窗口系统、字体、PDF/SVG 后端。缺失该库时 `aegle_render_cairo::renderer()` 返回 `RenderError::BackendUnavailable`，`App` 创建即失败，不会静默换成另一光栅器（构建里也没有另一个）。覆盖缓冲区是 cairo `A8` 图像 surface，行距按 cairo 要求补到 4 字节倍数；补白从不被读，且计入 mask 预算。曲线细分容差取 0.01 设备像素（cairo 默认 0.1 在 UI 半径的浅弧上误差可见）。代价实测（i5-13600KF，1280×800，224 个矩形，`cargo run --release -p aegle-render-cairo --example cairo_cost`，三次运行中位数）：直角填充与边框两者相同（1.70 ms，都不进光栅器），圆角版本 tiny-skia 4.45 ms、cairo 5.18 ms（+17%）。
 
 ## 图层
 
@@ -117,7 +117,7 @@ Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该�
 
 可选 `text` 已将共享 aegle-glyph 缓存接到按需 R8 灰度/RGBA8_SRGB 彩色图集；缓存身份、像素基线与水平相位、灰度对比曲线及仿射光栅策略与软件共用。彩色图集在线性预乘空间过滤，灰度图集复用不同前景色；默认纯几何构建不带字体，遇到文字命令返回不支持错误。
 
-`begin_frame → draw/draw_clipped → finish` 完成提交，`wait` 或下一帧等待 fence 后复用资源；只有显式 `read_pixels` 才分配并使用读回缓冲。shader 由构建期 Naga 生成 Vulkan 1.1 SPIR-V。几何与文字测试/示例已在 RX 6800 XT 和 Lavapipe 上执行验证层检查；可选 window 已支持 Wayland/Win32 swapchain，App 通过 `RendererChoice` 显式选择；默认是本构建包含的第一个后端，Vulkan-only 构建因此默认 Vulkan。资源及失败恢复契约见 [Vulkan](vulkan.md)，设备执行证据见[实现状态](implementation.md)。
+`begin_frame → draw/draw_clipped → finish` 完成提交，`wait` 或下一帧等待 fence 后复用资源；只有显式 `read_pixels` 才分配并使用读回缓冲。shader 由构建期 Naga 生成 Vulkan 1.1 SPIR-V。几何与文字测试/示例已在 RX 6800 XT 和 Lavapipe 上执行验证层检查；可选 window 已支持 Wayland/Win32 swapchain，App 使用本构建唯一的渲染器，Vulkan 由 `vulkan` feature 编入（渲染器 feature 互斥）。资源及失败恢复契约见 [Vulkan](vulkan.md)，设备执行证据见[实现状态](implementation.md)。
 
 ## 平台契约
 

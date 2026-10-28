@@ -1,7 +1,10 @@
 //! Every default control in one window, wired to a shared status line.
 //!
-//! `showcase vulkan`, `showcase wgpu` or `showcase cairo` selects a backend this
-//! build has, and a trailing `rtl` lays the window out right to left.
+//! The window draws with the build's renderer and names it in the title:
+//! `cargo run -p aegle --release --example showcase` uses tiny-skia, and
+//! `--no-default-features --features desktop,cairo` (or `vulkan`, `wgpu`) builds
+//! the same window with another one. A trailing `rtl` argument lays the window
+//! out right to left.
 mod showcase {
     pub mod window;
 }
@@ -9,6 +12,5 @@ mod showcase {
 use aegle::ui::Result;
 
 fn main() -> Result {
-    let renderer = showcase::window::choose_renderer()?;
-    showcase::window::run(renderer)
+    showcase::window::run()
 }

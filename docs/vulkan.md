@@ -100,4 +100,4 @@ geometry 示例只用标准库写 PPM，不增加 PNG 运行依赖。示例能�
 
 `Stats.swapchain_bytes` 为 extent×4×驱动返回的实际图像数估计，只单列报告，不计入 memory_budget：swapchain 图像由驱动/窗口系统分配，应用无法控制或缩小，WSI 也不暴露其实际 memory requirements，不声称此值包含驱动分配/压缩/对齐。memory_budget 只约束 device_bytes 报告的显式分配（目标图像、缓冲、读回与图集）；驱动内部资源和线程另计。各窗口渲染器的图集与目标仍独立，尚无跨窗口共享 GPU 缓存。
 
-原生综合场景位于 tests/native.rs，默认 ignored；需隔离 Wayland compositor，设置 AEGLE_TEST_COMPOSITOR=private。App 的同一个 native 场景通过 AEGLE_TEST_VULKAN=1 切换渲染器，覆盖两个 CJK 窗口、回调、关闭和句柄失效。具体设备证据见实现状态。
+原生综合场景位于 tests/native.rs，默认 ignored；需隔离 Wayland compositor，设置 AEGLE_TEST_COMPOSITOR=private。App 的同一个 native 场景以 `vulkan` feature 构建即用 Vulkan 绘制（渲染器 feature 互斥），覆盖两个 CJK 窗口、回调、关闭和句柄失效。具体设备证据见实现状态。

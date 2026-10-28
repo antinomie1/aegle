@@ -32,20 +32,22 @@ cargo run -p aegle --example components --release
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
 cargo run -p aegle --example showcase --release
-cargo run -p aegle --features cairo --example showcase_cairo --release
+cargo run -p aegle --no-default-features --features desktop,cairo --example showcase --release
 cargo run -p aegle --features grid --example layout --release
 cargo run -p aegle-widgets --features motion --example standalone --release
 cargo run -p aegle-widgets --example custom_control --release
-cargo test --workspace --all-features
+cargo test --workspace
 cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-tiny-skia --example software_scene --release
 cargo run -p aegle-render-tiny-skia --features text --example text_scene --release
 cargo run -p aegle-render-tiny-skia --features text --example editor_scene --release
 cargo run -p aegle-render-cairo --release --example cairo_cost
-cargo doc --workspace --all-features --no-deps
+cargo doc --workspace --no-deps
 ```
 
-`showcase_cairo` 与 `showcase` 是同一个窗口：两者共用 `examples/showcase/window.rs`，默认 feature 也完全一致（原生平台、系统字体、标记、过渡、特效、COLRv1、桌面服务），只有渲染器不同。因此它既是 cairo 后端的可交互演示，也是两个 CPU 后端像素一致性的现场对照。`showcase cairo|wgpu|vulkan` 也能指定后端，但如果该后端没编进这次构建，程序直接报错而不是悄悄换成别的光栅器。
+`showcase` 用本构建唯一的渲染器绘制，并把渲染器名写进窗口标题。默认构建用 tiny-skia；上面第二条 `showcase` 命令以 `desktop,cairo` 构建同一个窗口，其余 feature（原生平台、系统字体、标记、过渡、特效、桌面服务）不变。两次构建写到同一个 `target/release/examples/showcase`，要并排对照两个 CPU 后端的像素，给其中一次加 `--target-dir`。`vulkan`、`wgpu` 同理。
+
+渲染器 feature 互斥，`--all-features` 会同时打开四个，因此只能用于 `aegle` 与 `aegle-app` 以外的 crate：`cargo test --workspace --exclude aegle --exclude aegle-app --all-features`。这两个 crate 按渲染器各测一次，即 CI 的 `renderers` 任务：`cargo test -p aegle -p aegle-app --no-default-features --features "aegle/desktop,aegle/accessibility,…,aegle/<渲染器>"`。
 
 `cargo run -p aegle --example gallery` 重新生成[控件参考](developer/controls.md)中的截图。
 
@@ -93,9 +95,9 @@ cargo run -p aegle --no-default-features --features native,software,system-fonts
 cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,markup --example scrolling --release
 ```
 
-四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级，每个编译一个后端，可以叠加。`AppOptions.renderer` 是 `RendererChoice`：`RendererChoice::named("vulkan")` 之类按名选择，`RendererChoice::default()`（即 `Default`）表示“本构建包含的第一个后端”，顺序固定为 `tiny-skia` → `cairo` → `vulkan` → `wgpu`，所以只带 Vulkan 的构建默认就是 Vulkan。宿主没有后端枚举，四个后端实现同一个 `Renderer` trait；请求本构建没有的后端、驱动或预算失败都返回错误，不会切换后端。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
+四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级且互斥，一个构建恰好编入一个：同时启用两个由 `aegle-app` 的 `compile_error!` 拒绝，所以运行时没有可选的东西，`AppOptions` 也没有渲染器字段，`aegle::app::RENDERER` 给出本构建的渲染器名。`aegle` 的 `default` 是 `desktop` 加 `tiny-skia`，换渲染器用 `--no-default-features --features desktop,<渲染器>`。没有渲染器的 `native` 构建可以编译，但创建 `App` 时报错。宿主没有后端枚举，四个后端实现同一个 `Renderer` trait；驱动或预算失败返回错误，不会切换后端。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
 
-可选的 wgpu 后端（`wgpu` feature、`RendererChoice::named("wgpu")`）绘制几何、文字、图像与路径；用 `WGPU_BACKEND` 和 `WGPU_ADAPTER_NAME` 选择适配器。契约见 [wgpu](wgpu.md)。
+可选的 wgpu 后端（`wgpu` feature）绘制几何、文字、图像与路径；用 `WGPU_BACKEND` 和 `WGPU_ADAPTER_NAME` 选择适配器。契约见 [wgpu](wgpu.md)。
 
 ## 嵌入已有宿主
 

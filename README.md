@@ -53,21 +53,21 @@ Try the bundled examples with `cargo run -p aegle --example controls --release`.
 
 Set on the `aegle` crate. The defaults are `native`, `tiny-skia`, `system-fonts`, `markup`, `motion`, `effects`, `colrv1` and `desktop-services`.
 
-The four renderer features (`tiny-skia`, `cairo`, `vulkan`, `wgpu`) are peers: each compiles one backend, they may be combined, and no build treats one as "the software path". A build's default backend is the first of them it contains, in that order; any backend can be selected by name with `RendererChoice::named` and `showcase <name>`.
+A build contains exactly one renderer. The four renderer features (`tiny-skia`, `cairo`, `vulkan`, `wgpu`) are peers and mutually exclusive: enabling two is a compile error, so a binary never carries a backend it cannot use, and `aegle::app::RENDERER` names the one it has. `desktop` is every default except the renderer, so another renderer replaces tiny-skia with `--no-default-features --features desktop,<renderer>`, for example `cargo run -p aegle --release --no-default-features --features desktop,cairo --example showcase`.
 
 | Feature | Default | Purpose |
 | --- | :---: | --- |
 | `native` | ✓ | Native windows: Wayland on Linux, Win32 on Windows, AppKit on macOS |
-| `tiny-skia` | ✓ | CPU rendering with tiny-skia coverage |
-| `cairo` |  | CPU rendering with system cairo coverage (Linux), `libcairo.so.2` loaded at run time |
+| `tiny-skia` | ✓ | Renderer: CPU rendering with tiny-skia coverage |
+| `cairo` |  | Renderer: CPU rendering with system cairo coverage (Linux), `libcairo.so.2` loaded at run time |
 | `system-fonts` | ✓ | System font discovery |
 | `markup` | ✓ | `ui!` macro and the markup engine, including runtime loading |
 | `motion` | ✓ | Transitions, keyframe animations and springs |
 | `effects` | ✓ | Image effects (`aegle::image::effects`) |
 | `colrv1` | ✓ | COLRv1 colour glyphs |
 | `desktop-services` | ✓ | File dialogs, notifications, tray icon and global shortcuts (`App::desktop`) |
-| `vulkan` |  | Vulkan rendering through ash |
-| `wgpu` |  | Portable wgpu rendering (Vulkan, Metal, Direct3D 12) |
+| `vulkan` |  | Renderer: Vulkan through ash |
+| `wgpu` |  | Renderer: portable wgpu (Vulkan, Metal, Direct3D 12) |
 | `accessibility` |  | Semantic tree plus the target's system adapter: AT-SPI on Linux (pulls in zbus), UI Automation on Windows, NSAccessibility on macOS. Implies `native` |
 
 `native` builds only the target's platform crate, and `accessibility` only the target's adapter. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).

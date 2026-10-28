@@ -1,5 +1,8 @@
 //! A wgpu render pass draws into an application texture every frame; a canvas
 //! shows it inside ordinary controls, like a game or 3D viewport in an editor.
+//!
+//! wgpu replaces the default renderer:
+//! `cargo run -p aegle --release --no-default-features --features desktop,wgpu --example gpu_texture`
 use std::{cell::Cell, rc::Rc, time::Instant};
 
 use aegle::{app::wgpu, prelude::*, ui::scene::TextureId};
@@ -24,10 +27,7 @@ struct Spin { angle: f32 }
 ";
 
 fn main() -> Result<()> {
-    let app = App::with_options(AppOptions {
-        renderer: RendererChoice::named("wgpu")?,
-        ..Default::default()
-    })?;
+    let app = App::new()?;
     let window = app.window("Aegle — GPU texture")?;
     window.text("A wgpu render pass draws the viewport below every frame.");
     let gpu = app

@@ -1,6 +1,7 @@
 //! Names the configurations the sources test: `native` when the target's
-//! platform feature is enabled, and `access` when its system accessibility
-//! adapter is too. A new platform adds one row here.
+//! platform feature is enabled, `access` when its system accessibility adapter
+//! is too, and `renderer` when the build has its one renderer. A new platform
+//! adds one row here.
 
 fn main() {
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
@@ -12,7 +13,13 @@ fn main() {
         ("windows", "WINDOWS", "ACCESSIBILITY"),
         ("macos", "MACOS", "ACCESSIBILITY"),
     ];
-    println!("cargo::rustc-check-cfg=cfg(native, access)");
+    println!("cargo::rustc-check-cfg=cfg(native, access, renderer)");
+    if ["TINY_SKIA", "CAIRO", "VULKAN", "WGPU"]
+        .into_iter()
+        .any(feature)
+    {
+        println!("cargo::rustc-cfg=renderer");
+    }
     for (target, platform, access) in platforms {
         if os == target && feature(platform) {
             println!("cargo::rustc-cfg=native");

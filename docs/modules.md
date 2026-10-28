@@ -81,7 +81,7 @@
 
 `aegle-theme` 是 no_std、无分配的小型值类型，只依赖 types。`Theme` 提供浅色、深色和高对比配色以及正文、间距、圆角和控件高度；Appearance/Style 按控件状态解析独立于行为的外观，Skin 是纯函数指针；自定义值在宿主接受时验证。app 用稀疏表保存本地外观和字号，不把完整 Style 放进每个节点；局部主题由子树节点共享一份 `Rc<Theme>`。token 注册表、全局/子树 token 覆盖与属性绑定（Style、字号、字体、padding/gap、过渡时长）由 aegle-ui 保存（稀疏表，按索引）；系统偏好由平台 crate 报告，原生 App 据此选择主题；可选外观/位移过渡由 app 连接独立 motion 模块。
 
-`aegle-ui` 不创建平台依赖。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树，提供容器（row/column、透明的 contents 分组，`grid` feature 下另有 grid/stack）与完整的 flex/grid 布局 setter、滚动、主题、过渡、输入、IME 与语义接口，具体控件由 `aegle-widgets` 通过 `Widgets` trait 创建。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`aegle-app` 的 `wayland` / `windows` / `macos` 按目标增加原生 App，`tiny-skia` / `cairo` / `vulkan` / `wgpu` 各增加一个 renderer，四者是同一个 `Renderer` trait 的实现，宿主不区分“软件”与“GPU”；各窗口独立拥有 Ui，共享平台和字体；两个 CPU 后端共用一个合成器实例，GPU 窗口共享第一个窗口创建的设备，图集按窗口独立。
+`aegle-ui` 不创建平台依赖。`Ui::with_fonts` 接受可共享的 TextSystem，拥有一棵控件树，提供容器（row/column、透明的 contents 分组，`grid` feature 下另有 grid/stack）与完整的 flex/grid 布局 setter、滚动、主题、过渡、输入、IME 与语义接口，具体控件由 `aegle-widgets` 通过 `Widgets` trait 创建。平台宿主可分别调用输入、刷新、scene 遍历、IME 和可选语义接口。`aegle-app` 的 `wayland` / `windows` / `macos` 按目标增加原生 App，`tiny-skia` / `cairo` / `vulkan` / `wgpu` 互斥，恰好选一个 renderer 编入（同时启用两个是编译错误），四者是同一个 `Renderer` trait 的实现，宿主不区分“软件”与“GPU”；各窗口独立拥有 Ui，共享平台和字体；CPU 后端的所有窗口共用一个合成器实例，GPU 窗口共享第一个窗口创建的设备，图集按窗口独立。
 
 ScrollView 的偏移、嵌套滚轮传递和焦点显露由 ui 协调现有树与布局，不新增滚动 crate。renderer 仍不依赖控件树：scene 遍历给宿主传递平移和外部矩形裁剪，由宿主应用；绘制、输入、IME 和可选语义共享 ui 派生的滚动几何。
 

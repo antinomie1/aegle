@@ -1,15 +1,15 @@
 //! Renderers as one uniform concept: every backend is a [`Renderer`].
 //!
-//! The host does not classify backends. A backend knows its name, keeps its own
-//! per-window state, and presents one redraw; the host supplies the platform
-//! connection, the retained tree and the theme background, and reports errors.
-//! Rasterizing on the CPU is not a special case: tiny-skia, cairo, Vulkan and
-//! wgpu are four implementations of the same trait, differing only in what they
-//! do internally.
+//! The host does not classify backends. A backend knows its own per-window
+//! state and presents one redraw; the host supplies the platform connection, the
+//! retained tree and the theme background, and reports errors. Rasterizing on
+//! the CPU is not a special case: tiny-skia, cairo, Vulkan and wgpu are four
+//! implementations of the same trait, differing only in what they do internally.
 //!
-//! Selection is by name ([`RendererChoice::named`]) or by the build's default
-//! ([`RendererChoice::default`]), the first backend this build contains in the
-//! compile-time order of [`built`]. No backend is privileged.
+//! A build contains exactly one of them. The `tiny-skia`, `cairo`, `vulkan` and
+//! `wgpu` features are mutually exclusive, so the binary carries no backend it
+//! cannot use and an application has nothing to choose at run time;
+//! [`RENDERER`] names the one this build contains.
 
 use aegle_platform::WindowId;
 use aegle_ui::Result;
@@ -19,6 +19,7 @@ use aegle_platform::Platform;
 use crate::native::{AppOptions, Runtime};
 
 /// Everything a renderer needs to present one window's redraw.
+#[cfg_attr(not(renderer), allow(dead_code))]
 pub(crate) struct Present<'a> {
     /// The platform connection that owns the window.
     pub backend: &'a mut crate::Native,
@@ -83,129 +84,61 @@ pub(crate) trait Renderer {
     }
 }
 
-/// A requested backend, resolved against this build.
+/// The renderer this build contains, or `None` without a renderer feature.
 ///
-/// A choice is a name resolved when the application starts; there is no backend
-/// enum and no privileged member. [`Default`] means "this build's first
-/// backend", resolved at [`App`](crate::App) creation. A name this build does
-/// not contain is an error rather than a silent substitution.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RendererChoice {
-    /// `None` until resolved: take this build's default order.
-    name: Option<&'static str>,
-}
+/// The renderer features are mutually exclusive, so this is the backend every
+/// [`App`](crate::App) of the build draws with. A build without one compiles,
+/// but fails at `App` creation.
+pub const RENDERER: Option<&str> = if cfg!(feature = "tiny-skia") {
+    Some("tiny-skia")
+} else if cfg!(feature = "cairo") {
+    Some("cairo")
+} else if cfg!(feature = "vulkan") {
+    Some("vulkan")
+} else if cfg!(feature = "wgpu") {
+    Some("wgpu")
+} else {
+    None
+};
 
-impl RendererChoice {
-    /// The backend with this name, if this build contains it.
-    ///
-    /// Fails for a backend the build can name but does not contain, so callers
-    /// never get a different rasterizer than the one they asked for.
-    pub fn named(name: &'static str) -> Result<Self> {
-        match built().contains(&name) {
-            true => Ok(Self { name: Some(name) }),
-            false => Err(format!(
-                "this build has no {name} renderer; rebuild with --features {name}"
-            )
-            .into()),
-        }
-    }
-
-    /// This backend's name, or the build's default, resolved once.
-    ///
-    /// Called at [`App`](crate::App) creation; an explicit name is always kept,
-    /// so a build with several backends never overrides the request. Fails only
-    /// when the build contains no renderer at all.
-    pub fn resolve(&self) -> Result<&'static str> {
-        match self.name {
-            Some(name) => Ok(name),
-            None => built().into_iter().next().ok_or_else(|| {
-                "this build has no renderer; enable one of tiny-skia, cairo, vulkan or wgpu".into()
-            }),
-        }
-    }
-
-    /// This backend's name, or `None` while it still means "build default".
-    pub fn name(&self) -> Option<&'static str> {
-        self.name
-    }
-}
-
-impl std::fmt::Display for RendererChoice {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.name {
-            Some(name) => formatter.write_str(name),
-            None => formatter.write_str("default"),
-        }
-    }
-}
-
-/// Every backend name this crate knows, whether or not this build contains it.
-///
-/// A caller parsing a name from a command line uses this to tell a typo from a
-/// backend that simply was not compiled in.
-pub const KNOWN: &[&str] = &["tiny-skia", "cairo", "vulkan", "wgpu"];
-
-/// The backends this build contains, in default preference order.
-///
-/// The order is the order of these blocks, so it is stable for a given feature
-/// combination; the first entry is the default.
-pub fn built() -> Vec<&'static str> {
-    vec![
-        #[cfg(feature = "tiny-skia")]
-        Cpu::NAME,
-        #[cfg(feature = "cairo")]
-        Cairo::NAME,
-        #[cfg(feature = "vulkan")]
-        Vulkan::NAME,
-        #[cfg(feature = "wgpu")]
-        Wgpu::NAME,
-    ]
-}
-
-/// Creates the backend named by `name` for a new application.
+/// Creates this build's backend for a new application.
 ///
 /// Renderers construct without a platform connection: the ones that need native
-/// handles take them per window in [`Renderer::add_window`].
-pub(crate) fn create(options: &AppOptions, name: &'static str) -> Result<Box<dyn Renderer>> {
+/// handles take them per window in [`Renderer::add_window`]. A build without a
+/// renderer fails here, before the application connects.
+pub(crate) fn create(options: &AppOptions) -> Result<Box<dyn Renderer>> {
+    // The GPU backends read their options per window, in `add_window`.
+    let _ = options;
     #[cfg(feature = "tiny-skia")]
-    if name == Cpu::NAME {
-        return Ok(Box::new(Cpu {
-            renderer: aegle_render_tiny_skia::Renderer::new(options.mask_budget),
-        }));
-    }
+    return Ok(Box::new(Cpu {
+        renderer: aegle_render_tiny_skia::Renderer::new(options.mask_budget),
+    }));
     #[cfg(feature = "cairo")]
-    if name == Cairo::NAME {
-        return Ok(Box::new(Cairo {
-            renderer: aegle_render_cairo::renderer(options.mask_budget)?,
-        }));
-    }
+    return Ok(Box::new(Cairo {
+        renderer: aegle_render_cairo::renderer(options.mask_budget)?,
+    }));
     #[cfg(feature = "vulkan")]
-    if name == Vulkan::NAME {
-        if cfg!(target_os = "macos") {
-            return Err("Vulkan rendering is unavailable on macOS; use wgpu".into());
-        }
-        return Ok(Box::new(Vulkan::default()));
-    }
+    return match cfg!(target_os = "macos") {
+        true => Err("Vulkan rendering is unavailable on macOS; build with wgpu instead".into()),
+        false => Ok(Box::new(Vulkan::default())),
+    };
     #[cfg(feature = "wgpu")]
-    if name == Wgpu::NAME {
-        return Ok(Box::new(Wgpu::default()));
-    }
-    let _ = (options, name);
-    Err(format!("this build has no {name} renderer").into())
+    return Ok(Box::new(Wgpu::default()));
+    #[cfg(not(renderer))]
+    return Err(
+        "this build has no renderer; enable one of the tiny-skia, cairo, vulkan or wgpu features"
+            .into(),
+    );
 }
 
-// The four backends. Each is a thin shell over `native_render`'s shared drawing
-// code; what differs lives there, not in how the host treats them.
+// The four backends, one of which a build compiles. Each is a thin shell over
+// `native_render`'s shared drawing code; what differs lives there, not in how
+// the host treats them.
 
 /// The shared CPU compositor over tiny-skia coverage.
 #[cfg(feature = "tiny-skia")]
 struct Cpu {
     renderer: aegle_render_tiny_skia::Renderer,
-}
-
-#[cfg(feature = "tiny-skia")]
-impl Cpu {
-    const NAME: &'static str = "tiny-skia";
 }
 
 #[cfg(feature = "tiny-skia")]
@@ -227,11 +160,6 @@ impl Renderer for Cpu {
 #[cfg(feature = "cairo")]
 struct Cairo {
     renderer: aegle_render_cairo::Renderer,
-}
-
-#[cfg(feature = "cairo")]
-impl Cairo {
-    const NAME: &'static str = "cairo";
 }
 
 #[cfg(feature = "cairo")]
@@ -257,11 +185,6 @@ struct Vulkan {
     )>,
     /// Device shared by every window, created with the first one.
     shared: Option<aegle_render_vulkan::SharedDevice>,
-}
-
-#[cfg(feature = "vulkan")]
-impl Vulkan {
-    const NAME: &'static str = "vulkan";
 }
 
 #[cfg(feature = "vulkan")]
@@ -307,11 +230,6 @@ struct Wgpu {
 }
 
 #[cfg(feature = "wgpu")]
-impl Wgpu {
-    const NAME: &'static str = "wgpu";
-}
-
-#[cfg(feature = "wgpu")]
 impl Renderer for Wgpu {
     fn add_window(&mut self, window: WindowId, setup: &mut Setup<'_>) -> Result<()> {
         let renderer = crate::native_render::create_wgpu(setup, window, &self.shared)?;
@@ -348,14 +266,11 @@ impl Runtime {
     /// as an error from that call.
     pub(crate) fn present(&mut self) -> Result<()> {
         let Runtime {
-            renderer: slot,
+            renderer,
             backend,
             windows,
             ..
         } = self;
-        let Some(renderer) = slot.as_mut() else {
-            return Ok(());
-        };
         for entry in windows.iter_mut() {
             if !std::mem::take(&mut entry.ready) {
                 continue;

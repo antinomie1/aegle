@@ -17,10 +17,34 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets
-      - run: cargo clippy --workspace --all-targets --all-features
       - run: cargo test --workspace
-      - run: cargo test --workspace --all-features
-      - run: cargo doc --workspace --all-features --no-deps
+      # The renderer features of aegle-app are mutually exclusive, so
+      # `--all-features` covers every other crate; the `renderers` job covers
+      # aegle and aegle-app once per renderer.
+      - run: cargo clippy --workspace --exclude aegle --exclude aegle-app --all-targets --all-features
+      - run: cargo test --workspace --exclude aegle --exclude aegle-app --all-features
+      - run: cargo doc --workspace --exclude aegle --exclude aegle-app --all-features --no-deps
+  renderers:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+      RUSTDOCFLAGS: -D warnings
+      # Every aegle feature except the renderers.
+      FEATURES: aegle/desktop,aegle/accessibility,aegle/jpeg,aegle/webp,aegle/gif,aegle/svg,aegle/colrv1,aegle/grid
+    strategy:
+      fail-fast: false
+      matrix:
+        renderer: [tiny-skia, cairo, vulkan, wgpu]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev
+      - run: cargo clippy -p aegle -p aegle-app --all-targets --no-default-features --features "$FEATURES,aegle/${{ matrix.renderer }}"
+      - run: cargo test -p aegle -p aegle-app --no-default-features --features "$FEATURES,aegle/${{ matrix.renderer }}"
+      - run: cargo doc -p aegle -p aegle-app --no-deps --no-default-features --features "$FEATURES,aegle/${{ matrix.renderer }}"
   features:
     runs-on: ubuntu-latest
     env:
@@ -32,9 +56,9 @@ jobs:
           - ""
           - markup
           - markup,native
-          - markup,native,software
+          - markup,native,tiny-skia
           - markup,motion
-          - motion,native,software
+          - motion,native,tiny-skia
           - grid,markup
           - native,vulkan
           - native,wgpu
@@ -53,7 +77,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev
-      - run: cargo check --workspace --all-features
+      - run: cargo check --workspace --exclude aegle --exclude aegle-app --all-features
+      - run: cargo check -p aegle -p aegle-app --all-targets --features aegle/accessibility,aegle/jpeg,aegle/webp,aegle/gif,aegle/svg,aegle/colrv1,aegle/grid
   windows:
     runs-on: windows-latest
     steps:
@@ -64,11 +89,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Only the Windows crates: the Wayland crate needs libxkbcommon.
       - run: cargo clippy -p aegle-platform-win32 --all-targets -- -D warnings
-      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,software,markup,motion" -- -D warnings
-      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,software,vulkan,wgpu,accessibility" -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,tiny-skia,markup,motion" -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,vulkan,accessibility" -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,wgpu,accessibility" -- -D warnings
       # Native window and input-method tests stay opt-in (`--ignored`) on a test desktop.
       - run: cargo test -p aegle-platform-win32
-      - run: cargo test -p aegle --no-default-features --features "native,software,markup,motion,accessibility"
+      - run: cargo test -p aegle --no-default-features --features "native,tiny-skia,markup,motion,accessibility"
   macos:
     runs-on: macos-latest
     steps:
@@ -79,11 +105,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Only the macOS crates: the Wayland crate needs libxkbcommon.
       - run: cargo clippy -p aegle-platform-macos --all-targets -- -D warnings
-      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,software,markup,motion" -- -D warnings
-      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,software,wgpu,accessibility" -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,tiny-skia,markup,motion" -- -D warnings
+      - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,wgpu,accessibility" -- -D warnings
       # The window model tests run anywhere; native window tests need a GUI session.
       - run: cargo test -p aegle-platform-macos
-      - run: cargo test -p aegle --no-default-features --features "native,software,markup,motion,accessibility"
+      - run: cargo test -p aegle --no-default-features --features "native,tiny-skia,markup,motion,accessibility"
   deny:
     runs-on: ubuntu-latest
     steps:

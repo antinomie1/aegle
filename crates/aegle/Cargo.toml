@@ -11,7 +11,9 @@ categories.workspace = true
 description = "A small retained GUI with imperative controls and composable backends"
 
 [features]
-default = ["desktop"]
+# `desktop` holds everything but the renderer, so another renderer replaces
+# tiny-skia with `--no-default-features --features desktop,<renderer>`.
+default = ["desktop", "tiny-skia"]
 # System accessibility is opt-in: one feature adds the semantic tree and the
 # adapter of the target (AT-SPI over zbus on Linux, UI Automation on Windows,
 # NSAccessibility on macOS). Only that target's adapter is compiled.
@@ -21,7 +23,7 @@ accessibility = [
     "aegle-widgets/accessibility",
     "aegle-app/accessibility",
 ]
-desktop = ["native", "tiny-skia", "system-fonts", "markup", "motion", "effects", "desktop-services"]
+desktop = ["native", "system-fonts", "markup", "motion", "effects", "desktop-services"]
 # File dialogs, notifications, a tray icon and global shortcuts: `App::desktop`
 # and `aegle::desktop`.
 desktop-services = ["native", "aegle-app/desktop-services"]
@@ -31,12 +33,14 @@ native = ["aegle-app/native", "aegle-loader?/window"]
 motion = ["aegle-ui/motion", "aegle-widgets/motion", "aegle-app/motion", "aegle-loader?/motion"]
 effects = ["aegle-image/effects"]
 markup = ["dep:aegle-macros", "dep:aegle-loader"]
+# The renderer: exactly one of these four, enabling two is a compile error.
+# CPU rendering with tiny-skia coverage, on every platform.
 tiny-skia = ["aegle-app/tiny-skia"]
-# System cairo as a second CPU coverage rasterizer, Linux only. The library is
-# loaded at run time; a missing `libcairo.so.2` fails the frame with an error.
+# CPU rendering with system cairo coverage, Linux only. The library is loaded at
+# run time; a missing `libcairo.so.2` fails `App` creation with an error.
 cairo = ["aegle-app/cairo"]
-# Vulkan is the Linux and Windows GPU path; on macOS it fails at run time with
-# `Unsupported`, and `wgpu` is the Metal path.
+# Vulkan is the Linux and Windows GPU path; on macOS it fails at `App` creation,
+# and `wgpu` is the Metal path.
 vulkan = ["aegle-app/vulkan"]
 wgpu = ["aegle-app/wgpu"]
 system-fonts = ["aegle-ui/system-fonts", "aegle-app/system-fonts"]
@@ -114,11 +118,6 @@ required-features = ["motion"]
 name = "showcase"
 required-features = ["native", "system-fonts"]
 
-# The same window as `showcase`, drawn through the system cairo library. Only the
-# renderer differs, so the two can be compared side by side.
-[[example]]
-name = "showcase_cairo"
-required-features = ["native", "system-fonts", "cairo"]
 
 [[example]]
 name = "layout"

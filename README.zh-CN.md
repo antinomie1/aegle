@@ -53,21 +53,21 @@ fn main() -> Result<()> {
 
 在 `aegle` crate 上设置。默认启用 `native`、`tiny-skia`、`system-fonts`、`markup`、`motion`、`effects`、`colrv1` 与 `desktop-services`。
 
-四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）是平级的：每个编译一个后端，可以叠加，没有哪个构建把它们之一当作“软件路径”。构建的默认后端是它包含的第一个（按此顺序）；也可以用 `RendererChoice::named` 或 `showcase <名字>` 按名选择。
+一个构建只包含一个渲染器。四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级且互斥：同时启用两个会编译失败，因此二进制里不会带着用不到的后端，`aegle::app::RENDERER` 给出本构建的那一个。`desktop` 是除渲染器以外的全部默认 feature，换渲染器就用 `--no-default-features --features desktop,<渲染器>` 替掉 tiny-skia，例如 `cargo run -p aegle --release --no-default-features --features desktop,cairo --example showcase`。
 
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
 | `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit |
-| `tiny-skia` | ✓ | CPU 绘制（tiny-skia 覆盖率） |
-| `cairo` |  | CPU 绘制（系统 cairo 覆盖率，仅 Linux），运行时加载 `libcairo.so.2` |
+| `tiny-skia` | ✓ | 渲染器：CPU 绘制（tiny-skia 覆盖率） |
+| `cairo` |  | 渲染器：CPU 绘制（系统 cairo 覆盖率，仅 Linux），运行时加载 `libcairo.so.2` |
 | `system-fonts` | ✓ | 系统字体发现 |
 | `markup` | ✓ | `ui!` 宏与标记引擎，含运行时加载 |
 | `motion` | ✓ | 过渡、关键帧动画与弹簧 |
 | `effects` | ✓ | 图像效果（`aegle::image::effects`） |
 | `colrv1` | ✓ | COLRv1 彩色字形 |
 | `desktop-services` | ✓ | 文件对话框、通知、托盘与全局快捷键（`App::desktop`） |
-| `vulkan` |  | 经 ash 的 Vulkan 绘制 |
-| `wgpu` |  | 全平台通用的 wgpu 绘制（Vulkan、Metal、Direct3D 12） |
+| `vulkan` |  | 渲染器：经 ash 的 Vulkan |
+| `wgpu` |  | 渲染器：全平台通用的 wgpu（Vulkan、Metal、Direct3D 12） |
 | `accessibility` |  | 语义树与目标平台的系统适配（Linux AT-SPI，引入 zbus；Windows UI Automation；macOS NSAccessibility）；隐含 `native` |
 
 `native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。

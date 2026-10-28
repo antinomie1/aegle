@@ -8,6 +8,7 @@
 //! counterparts; everything above them is shared.
 #![allow(unsafe_code)]
 
+#[cfg(renderer)]
 use crate::renderer::Present;
 #[cfg(any(feature = "vulkan", feature = "wgpu"))]
 use crate::renderer::Setup;
@@ -15,8 +16,8 @@ use crate::renderer::Setup;
 use aegle_platform::Platform;
 #[cfg(any(feature = "vulkan", feature = "wgpu"))]
 use aegle_platform::SurfacePlatform;
-use aegle_platform::WindowId;
-use aegle_ui::Result;
+#[cfg(renderer)]
+use {aegle_platform::WindowId, aegle_ui::Result};
 
 /// A lease on a window's native handles, for GPU presenters and adapters.
 #[cfg(any(
@@ -26,21 +27,11 @@ use aegle_ui::Result;
     all(access, target_os = "macos")
 ))]
 pub(crate) type Surface = <crate::Native as aegle_platform::SurfacePlatform>::Surface;
-#[cfg(any(
-    feature = "tiny-skia",
-    feature = "cairo",
-    feature = "vulkan",
-    feature = "wgpu"
-))]
+#[cfg(renderer)]
 use {aegle_scene::Affine, aegle_types::Rect, aegle_ui::Ui};
 
 /// A renderer frame the UI's records and layers are drawn into.
-#[cfg(any(
-    feature = "tiny-skia",
-    feature = "cairo",
-    feature = "vulkan",
-    feature = "wgpu"
-))]
+#[cfg(renderer)]
 trait Target {
     fn scene(
         &mut self,
@@ -102,12 +93,7 @@ target!(aegle_render_vulkan::Frame<'_>);
 #[cfg(feature = "wgpu")]
 target!(aegle_render_wgpu::Frame<'_>);
 
-#[cfg(any(
-    feature = "tiny-skia",
-    feature = "cairo",
-    feature = "vulkan",
-    feature = "wgpu"
-))]
+#[cfg(renderer)]
 fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
     let scale = Affine::scale(factor, factor);
     // Node clips snap to whole device pixels, like a scissor rectangle; the

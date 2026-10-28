@@ -1,4 +1,7 @@
 //! Native application lifecycle, only in a dedicated test desktop.
+//!
+//! Every scenario draws with the build's one renderer, so each renderer is
+//! covered by running these tests with its feature.
 #![cfg(any(
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
@@ -32,14 +35,7 @@ fn windows_callbacks_and_deferred_actions_share_one_native_loop() -> Result {
         Ok("private")
     );
     let fonts = test_fonts()?;
-    let mut settings = AppOptions::default();
-    if std::env::var_os("AEGLE_TEST_VULKAN").is_some() {
-        settings.renderer = aegle_app::RendererChoice::named("vulkan")?;
-    }
-    if std::env::var_os("AEGLE_TEST_WGPU").is_some() {
-        settings.renderer = aegle_app::RendererChoice::named("wgpu")?;
-    }
-    let app = Rc::new(App::with_fonts(fonts, settings)?);
+    let app = Rc::new(App::with_fonts(fonts, AppOptions::default())?);
     let options = WindowOptions {
         width: 240,
         height: 160,
@@ -103,14 +99,7 @@ fn layers_draw_into_native_windows() -> Result {
         std::env::var("AEGLE_TEST_COMPOSITOR").as_deref(),
         Ok("private")
     );
-    let mut settings = AppOptions::default();
-    if std::env::var_os("AEGLE_TEST_VULKAN").is_some() {
-        settings.renderer = aegle_app::RendererChoice::named("vulkan")?;
-    }
-    if std::env::var_os("AEGLE_TEST_WGPU").is_some() {
-        settings.renderer = aegle_app::RendererChoice::named("wgpu")?;
-    }
-    let app = App::with_fonts(test_fonts()?, settings)?;
+    let app = App::with_fonts(test_fonts()?, AppOptions::default())?;
     let options = WindowOptions {
         width: 240,
         height: 160,
@@ -240,11 +229,7 @@ fn cairo_windows_present_and_reject_a_translucent_background() -> Result {
         std::env::var("AEGLE_TEST_COMPOSITOR").as_deref(),
         Ok("private")
     );
-    let settings = AppOptions {
-        renderer: aegle_app::RendererChoice::named("cairo")?,
-        ..Default::default()
-    };
-    let app = App::with_fonts(test_fonts()?, settings)?;
+    let app = App::with_fonts(test_fonts()?, AppOptions::default())?;
     let window = app.window_with_options(
         "Cairo",
         WindowOptions {
@@ -276,7 +261,6 @@ fn cairo_windows_present_and_reject_a_translucent_background() -> Result {
     let mut theme = aegle_ui::Theme::light();
     theme.background = aegle_types::Color::rgba(255, 255, 255, 128);
     let options = AppOptions {
-        renderer: aegle_app::RendererChoice::named("cairo")?,
         theme,
         dark_theme: None,
         high_contrast_theme: None,

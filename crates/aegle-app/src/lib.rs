@@ -2,11 +2,11 @@
 //! loop, renderers and system preferences, and gives each window an
 //! `aegle-ui` [`Ui`](aegle_ui::Ui). `native` builds the target's platform crate
 //! (Wayland, Win32 or AppKit; `wayland`, `windows` and `macos` select one
-//! explicitly), plus one or more renderer features (`tiny-skia`, `cairo`,
-//! `vulkan`, `wgpu`). Every renderer is one [`RendererChoice`]; the build's
-//! first one is the default and none is privileged. `vulkan` has no macOS
-//! backend and returns `Unsupported` there, where `wgpu` presents through
-//! Metal.
+//! explicitly), plus exactly one renderer feature (`tiny-skia`, `cairo`,
+//! `vulkan` or `wgpu`). The renderer features are mutually exclusive: enabling
+//! two is a compile error, so a binary never carries a backend it cannot use,
+//! and [`RENDERER`] names the one it has. `vulkan` has no macOS backend and
+//! fails at `App` creation there, where `wgpu` presents through Metal.
 //!
 //! Windows share fonts, the platform connection and (for GPU renderers) one
 //! device; each keeps its own control tree. [`App::proxy`] posts messages from
@@ -18,6 +18,22 @@
 //!
 //! The host is written once against the [`aegle_platform::Platform`] contract;
 //! the target's platform is chosen in one place, `Native` below.
+
+// One renderer per build: a second backend would only add code the application
+// can never select.
+#[cfg(any(
+    all(
+        feature = "tiny-skia",
+        any(feature = "cairo", feature = "vulkan", feature = "wgpu")
+    ),
+    all(feature = "cairo", any(feature = "vulkan", feature = "wgpu")),
+    all(feature = "vulkan", feature = "wgpu"),
+))]
+compile_error!(
+    "aegle-app: enable exactly one renderer feature (tiny-skia, cairo, vulkan or wgpu). \
+     The `aegle` defaults include tiny-skia; build another renderer with \
+     `--no-default-features --features desktop,<renderer>`."
+);
 
 #[cfg(native)]
 mod event_clock;
@@ -57,4 +73,5 @@ pub use aegle_render_wgpu::{Options as WgpuOptions, SharedGpu, wgpu};
 pub use native::{App, AppOptions, Window, WindowOptions};
 #[cfg(native)]
 pub use native_proxy::UiProxy;
-pub use renderer::{KNOWN, RendererChoice, built};
+#[cfg(native)]
+pub use renderer::RENDERER;

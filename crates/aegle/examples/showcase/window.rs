@@ -1,15 +1,9 @@
 //! Every default control in one window, wired to a shared status line.
-//!
-//! Both `showcase` and the fixed-backend variant `showcase_cairo` build this one
-//! window, so they differ only in the renderer they pass to [`run`]. Each binary
-//! compiles the whole file but uses one half of it, so unused items are allowed
-//! rather than duplicated into two copies that could drift apart.
-#![allow(dead_code)]
 
 use std::{cell::Cell, rc::Rc};
 
 use aegle::{
-    app::{KNOWN, RendererChoice},
+    app::RENDERER,
     prelude::*,
     ui::scene::{Affine, FillRule, Gradient, GradientStop, Image, PathBuilder, Point, Stroke},
 };
@@ -25,11 +19,6 @@ fn star() -> Result<aegle::ui::scene::Path> {
     }
     star.close();
     Ok(star.finish(FillRule::NonZero))
-}
-
-/// Whether `name` is a backend this program can name but may not have built.
-pub fn known_backend(name: &str) -> bool {
-    aegle::app::KNOWN.contains(&name)
 }
 
 /// Editors, buttons with a popup, binary and numeric choices, and the theme dropdown.
@@ -245,58 +234,23 @@ fn views(pane: &Container) -> Result {
     Ok(())
 }
 
-/// The backend requested on the command line, or this build's default.
+/// Draws the whole showcase with the build's renderer and runs the app.
 ///
-/// Named backends this build cannot provide are an error: silently using another
-/// rasterizer would make the output depend on feature selection instead of on the
-/// request. A name no build knows is a typo, reported separately.
-pub fn choose_renderer() -> Result<RendererChoice> {
-    // No argument, an empty one, or `rtl` all mean "this build's default": the
-    // first argument is only a backend name when it names one.
-    let Some(argument) = std::env::args().nth(1).filter(|arg| !arg.is_empty()) else {
-        return Ok(RendererChoice::default());
-    };
-    if argument == "rtl" {
-        return Ok(RendererChoice::default());
-    }
-    match known_backend(&argument) {
-        true => RendererChoice::named(backend_name(&argument)),
-        false => Err(format!("unknown renderer {argument:?}; this build knows {KNOWN:?}").into()),
-    }
-}
-
-/// Maps a command-line name onto the static backend name it selects.
-///
-/// `RendererChoice::named` takes a `&'static str`, so the four names are matched
-/// here rather than leaking the lifetime of `std::env::args`.
-fn backend_name(name: &str) -> &'static str {
-    match name {
-        "tiny-skia" => "tiny-skia",
-        "cairo" => "cairo",
-        "vulkan" => "vulkan",
-        "wgpu" => "wgpu",
-        // `known_backend` is the only caller, so this arm is unreachable.
-        _ => "tiny-skia",
-    }
-}
-
-/// Draws the whole showcase with `renderer` and runs the app.
-///
-/// The fixed-backend variants such as `showcase_cairo` include this file and call
-/// here, so their pixels, layout and features are those of the default showcase
-/// with only the rasterizer changed.
-pub fn run(renderer: RendererChoice) -> Result<()> {
+/// The title names the renderer, so builds with different renderer features can
+/// be told apart side by side.
+pub fn run() -> Result<()> {
     let rtl = std::env::args().any(|arg| arg == "rtl");
-    let app = App::with_options(AppOptions {
-        renderer,
-        ..Default::default()
-    })?;
+    let app = App::new()?;
     let options = WindowOptions {
         width: 960,
         height: 720,
         ..Default::default()
     };
-    let window = app.window_with_options("Aegle — all controls", options)?;
+    let title = format!(
+        "Aegle — all controls ({})",
+        RENDERER.unwrap_or("no renderer")
+    );
+    let window = app.window_with_options(&title, options)?;
     window.set_padding(16.0);
     window.set_gap(12.0, 12.0);
     if rtl {

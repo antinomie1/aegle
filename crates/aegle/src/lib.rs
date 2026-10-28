@@ -1,20 +1,22 @@
 //! Convenient entry to Aegle's retained application layer.
 //!
 //! The default desktop host selects the target's native window (Wayland on
-//! Linux, Win32 on Windows, AppKit on macOS) with software rendering and system
-//! fonts. System accessibility is opt-in through the single `accessibility`
-//! feature, which adds the semantic tree and the target's adapter (AT-SPI, UI
-//! Automation or NSAccessibility). Enable `vulkan` or `wgpu` and select
-//! `RendererChoice::named("vulkan")` or `("wgpu")` for GPU presentation;
-//! `vulkan` reports `Unsupported` on macOS, where `wgpu` reaches Metal. On Linux,
-//! `cairo` adds a second CPU rasterizer that draws through the distribution's
-//! `libcairo.so.2` and is selected with `RendererChoice::named("cairo")`.
-//! Lower-level crates remain independent.
+//! Linux, Win32 on Windows, AppKit on macOS) with tiny-skia software rendering
+//! and system fonts. System accessibility is opt-in through the single
+//! `accessibility` feature, which adds the semantic tree and the target's adapter
+//! (AT-SPI, UI Automation or NSAccessibility).
+//!
+//! A build contains exactly one renderer: `tiny-skia` (the default), `cairo`
+//! (Linux, drawing through the distribution's `libcairo.so.2`), `vulkan` or
+//! `wgpu`. Enabling two is a compile error, so another renderer replaces the
+//! default with `--no-default-features --features desktop,<renderer>`. `vulkan`
+//! fails at `App` creation on macOS, where `wgpu` reaches Metal. Lower-level
+//! crates remain independent.
 //!
 //! [`prelude`] holds the common names; everything else stays under the crate
 //! it comes from: [`ui`](mod@ui), [`widgets`] and [`app`].
 
-/// Native application host: `App`, windows, renderer selection and desktop
+/// Native application host: `App`, windows, the build's renderer and desktop
 /// services. Empty without a native platform or GPU renderer feature.
 pub use aegle_app as app;
 /// Bounded image decoding into scene images (PNG always; JPEG, WebP, GIF and SVG by
@@ -76,7 +78,7 @@ pub use aegle_loader as loader;
 /// Common imperative application and control types.
 pub mod prelude {
     #[cfg(feature = "native")]
-    pub use aegle_app::{App, AppOptions, KNOWN, RendererChoice, Window, WindowOptions, built};
+    pub use aegle_app::{App, AppOptions, Window, WindowOptions};
     /// The built-in markup elements: the specs `ui!` reads under the handle
     /// type names, and marker types for the other element names.
     #[cfg(feature = "markup")]
