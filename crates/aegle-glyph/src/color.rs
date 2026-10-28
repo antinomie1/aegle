@@ -1,9 +1,9 @@
 //! Color-glyph representations the Rust stack decodes: COLRv1 paint graphs and
 //! OpenType-SVG documents.
 //!
-//! The platform rasterizers draw monochrome outlines and cannot expose either
-//! representation (GDI has no COLR access, `CTFontCreatePathForGlyph` only
-//! returns outlines). These two features therefore do not replace the platform
+//! The platform rasterizers render monochrome coverage and cannot expose either
+//! representation (FreeType's mask, DirectWrite's alpha texture and an
+//! alpha-only CoreGraphics context all drop color). These two features therefore do not replace the platform
 //! rasterizer; instead the rasterizer consults this module first, and only the
 //! glyphs that actually carry a color representation take this path.
 //!

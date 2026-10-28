@@ -13,7 +13,7 @@
 | aegle-layout | Taffy 低层树适配、Flex/Block 与可选 Grid；经过校验的布局值（`Length`、`Insets`、`Align`、`Justify`、`Direction`、`LayoutDirection`、`Wrap`，`Length::Calc` 为“百分比 + 像素”，grid 另有 `Track`、`Placement`、`Flow`、`TemplateItem`/`Repeat`/`template`、`areas`、`GridLine`/`GridLines`）；叶节点测量回调与可选的首基线回调（`compute_with_baselines`）；透明的 contents 节点；不依赖应用 | types、core |
 | aegle-segment | 向系统分词器要词边界：Linux/Windows 动态加载系统 ICU（`libicui18n`/`icu.dll`），macOS 用 `CFStringTokenizer`；不链接任何词典数据，也没有回退，找不到即报告不可用 | 无内部依赖 |
 | aegle-text | 字体、保留段落布局、纯文本编辑/组合状态与有界撤销；排版交给平台系统栈（Linux 为 Pango、Windows 为 DirectWrite、macOS 为 CoreText），按词移动与选词取 `aegle-segment` 的边界 | types、segment；scene 按 feature 接入；glyph 在 Windows/macOS 上注册字形后端；`text-parley` opt-in 为不再维护的回退 |
-| aegle-glyph | 字形光栅化（Linux 为系统 FreeType、Windows 为 GDI 轮廓、macOS 为 CoreGraphics 轮廓）、有界 CPU 缓存、共用字形身份/变换策略；系统字体句柄经注册的 `SystemRasterizer` 解析 | image、scene 按 feature 接入；`swash` opt-in 为不再维护的回退 |
+| aegle-glyph | 字形光栅化（Linux 为系统 FreeType、Windows 为 DirectWrite alpha 纹理、macOS 为 CoreGraphics alpha 位图，都由系统抗锯齿）、有界 CPU 缓存、共用字形身份/变换策略；系统字体句柄经注册的 `SystemRasterizer` 解析 | image、scene 按 feature 接入；`swash` opt-in 为不再维护的回退 |
 | aegle-scene | 二维绘制命令、裁剪、共享图像/路径资源及可选字形记录；字形身份是后端无关的 `FontSource`（共享字节或平台字体句柄） | types |
 | aegle-gpu | GPU 后端共用、与图形 API 无关的部分：图元/裁剪记录、场景遍历、货架装箱、图像与路径 mask 放置、WGSL 着色器 | types、scene；vector feature 增加 zeno |
 | aegle-render-vulkan | 几何、可选字形图集、裁剪、离屏读回与可选原生 swapchain | types、scene；glyph 按 text feature 接入 |
@@ -44,7 +44,7 @@
 
 - `aegle-text/src/backend_directwrite/`：`sys.rs`（DirectWrite 工厂单例、CSS→DWRITE 映射与宽字符串）、`system.rs`（字体集合、text format 与 generic family）、`fonts.rs`（从注册字节建字体集合，含临时文件）、`layout.rs`（`IDWriteTextLayout` 与度量）、`metrics.rs`（命中/光标/范围/Uniscribe 分段/诊断）、`runs.rs`（`Draw` 回调把 face 变成 `SystemFont` 并登记 `FaceSource`）、`paint.rs`（run→scene）。依赖 windows crate 的 DirectWrite/GDI/Globalization/Com 模块与 `aegle-glyph`。
 - `aegle-text/src/backend_coretext/`：同样的分工，`sys.rs`（CF 字符串、属性字典、`CTParagraphStyle`）、`system.rs`（字体与 generic family）、`fonts.rs`（`CTFontManagerRegisterGraphicsFont`）、`layout.rs`（`CTFramesetter`/`CTFrame` 与度量）、`metrics.rs`（`CTLineGetStringIndexForPosition` 等）、`runs.rs`（`CTRun` → `SystemFont`）、`paint.rs`。依赖 objc2-core-foundation/core-text/core-graphics 与 `aegle-glyph`。
-- `aegle-glyph/src/outline.rs`：平台轮廓（y-up 字体空间）→ tiny-skia 覆盖率 mask 的唯一实现，被 `gdi.rs` 与 `cg.rs` 共用；`system.rs` 拥有 `SystemRasterizer` 注册表、`FaceSource` 注册表与 `shared_face`。`gdi.rs`/`cg.rs` 各自拥有自己的原生对象缓存与释放点，只在 `cfg(windows)`/`cfg(target_os = "macos")` 且未启用 `swash` 时编译。
+- `aegle-glyph/src/directwrite.rs` 与 `cg.rs`：系统直接出覆盖率，前者用 DirectWrite glyph-run analysis 的灰度 alpha 纹理，后者用 CoreText 画进 alpha-only `CGBitmapContext`；两者都把彩色/位图字形报告为 `UnsupportedGlyph`。`system.rs` 拥有 `SystemRasterizer` 注册表、`FaceSource` 注册表与 `shared_face`。两个后端各自拥有原生对象缓存与释放点，只在 `cfg(windows)`/`cfg(target_os = "macos")` 且未启用 `swash` 时编译。
 - `aegle-text/src/offsets.rs`：三个后端共用的 UTF-16↔UTF-8 换算、段落方向与行高换算，公开给写自己平台适配器的宿主。
 
 层次：`aegle-ui` 是引擎，`aegle-widgets` 是默认控件库，`aegle-app` 是原生宿主；三者单向依赖（widgets→ui，app→ui），ui 不依赖 widgets 或任何平台/renderer。自带控件的库可只依赖 `aegle-ui` 实现 `Control`；自带窗口/绘制宿主的程序可只依赖 `aegle-ui` 与 `aegle-widgets`。`Hooks` 让虚拟列表、弹出层、单选组等需要跨节点协作的行为留在控件库内，引擎只提供调用点；各库的节点外数据存于 `State::ext`。
@@ -63,9 +63,9 @@
 
 `aegle-render-wgpu` 消费相同 Scene，经 wgpu 30 在 Vulkan、Metal、Direct3D 12 上绘制几何、最多八层裁剪与 mask/color 字形，不依赖 Parley、Vulkan 后端或 ash；可选 `window` 只增加 raw-window-handle。图像与 CPU 光栅的路径 mask 共用同一图集，放不下的得到专用纹理。与 Vulkan 后端共用的部分见 [wgpu 契约](wgpu.md)。
 
-`aegle-text` 的排版与字形遍历默认来自平台系统栈，`layout.rs` 的 `PlatformSystem`/`Layout` 是唯一按 target 分派的位置：Linux 走 `backend_pango`（Pango + PangoFT2 + Fontconfig，全部运行时加载），Windows 走 `backend_directwrite`（DirectWrite 排版 + Uniscribe 分段 + GDI 轮廓），macOS 走 `backend_coretext`（CoreText 排版 + CoreGraphics 轮廓）。三者都把字体身份记录成 `FontSource::System`，由 `aegle-glyph` 的 `SystemRasterizer` 注册表按 backend 分派光栅化；未注册的 backend 返回 `GlyphError::UnsupportedGlyph`，不猜、不回退到字节路径。`offsets.rs` 提供三者共用的 UTF-16↔UTF-8 边界换算、段落方向判定与行高换算。段落与 Editor 共用 TextSystem 的字形系统，Editor 按硬换行分段排版（编辑只重新成形触及的段落），并补充稳定提交值、可取消组合和有界 delta 历史；不引入另一个编辑框架或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由平台/应用层连接。
+`aegle-text` 的排版与字形遍历默认来自平台系统栈，`layout.rs` 的 `PlatformSystem`/`Layout` 是唯一按 target 分派的位置：Linux 走 `backend_pango`（Pango + PangoFT2 + Fontconfig，全部运行时加载），Windows 走 `backend_directwrite`（DirectWrite 排版与字形覆盖率 + Uniscribe 分段），macOS 走 `backend_coretext`（CoreText 排版 + CoreGraphics 字形位图）。三者都把字体身份记录成 `FontSource::System`，由 `aegle-glyph` 的 `SystemRasterizer` 注册表按 backend 分派光栅化；未注册的 backend 返回 `GlyphError::UnsupportedGlyph`，不猜、不回退到字节路径。`offsets.rs` 提供三者共用的 UTF-16↔UTF-8 边界换算、段落方向判定与行高换算。段落与 Editor 共用 TextSystem 的字形系统，Editor 按硬换行分段排版（编辑只重新成形触及的段落），并补充稳定提交值、可取消组合和有界 delta 历史；不引入另一个编辑框架或转发 crate。scene 桥接共用字形绘制，额外记录选择、预编辑和光标；平台 IME、剪贴板及系统语义由平台/应用层连接。
 
-`aegle-glyph` 独立接受共享字体句柄，字形轮廓来自平台：Linux 是系统 FreeType（`libfreetype.so.6`，运行时加载），Windows 是 GDI `GetGlyphOutlineW(GGO_NATIVE)`，macOS 是 CoreText `CTFontCreatePathForGlyph`。后两者的轮廓都经 `outline.rs`（tiny-skia 覆盖率）转成与 FreeType 同格式的 8-bit mask；`opentype_name.rs` 是有界的 `name`/`OS/2` 解析器，给 GDI 提供 family/weight/italic。索引与 LRU 用 hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。`swash`/`skrifa` 路径只在显式启用该 feature 时编译。
+`aegle-glyph` 独立接受共享字体句柄，字形覆盖率由平台直接给出：Linux 是系统 FreeType（`libfreetype.so.6`，运行时加载），Windows 是 DirectWrite glyph-run analysis（`DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE` 的 1x1 alpha 纹理），macOS 是 `CTFontDrawGlyphs` 画进 alpha-only `CGBitmapContext`，三者输出同格式的 8-bit mask。合成粗体在 Windows 是 DirectWrite 的粗体模拟、在 macOS 是填充加 `size / 32` 宽的描边，合成斜体都是变换矩阵。`opentype_name.rs` 是有界的 `name`/`OS/2` 解析器，给 CoreText 后端注册应用字体时提供 family/weight/italic。索引与 LRU 用 hashbrown 与 lru-slab，不自建字体解析器或通用缓存框架。缓存不保留字体字节；段落、编辑器及 scene 的字体句柄维持各自资源寿命。`swash`/`skrifa` 路径只在显式启用该 feature 时编译。
 
 该模块公开共用的借用/拥有字形缓存身份；可选 `scene` feature 依赖 `aegle-scene/text`，提供 renderer 共用的字体缩放、整像素基线与水平四相位、灰度对比曲线和 bitmap 仿射策略。默认字形缓存仍不依赖 scene。
 

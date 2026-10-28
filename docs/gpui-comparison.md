@@ -136,7 +136,7 @@ GPUI 是纯 GPU 路线：Zed 的公开材料描述其 120 FPS 目标是基于 SD
 | 方面 | Aegle | GPUI 0.2.2 |
 | --- | --- | --- |
 | Linux 排版 | Pango + Fontconfig + FreeType，运行时 `dlopen` | cosmic-text 0.14（Rust 栈） |
-| Windows 排版 | DirectWrite 排版 + Uniscribe 分段 + GDI 轮廓 | DirectWrite |
+| Windows 排版 | DirectWrite 排版与字形覆盖率 + Uniscribe 分段 | DirectWrite |
 | macOS 排版 | CoreText + CoreGraphics 轮廓 | CoreText |
 | 字体发现 | Fontconfig / DirectWrite / CoreText | zed-font-kit / 平台 API |
 | 按词/选词 | 系统分词器（ICU/CFStringTokenizer），无词典数据 | cosmic-text/unicode 段边界（未见系统词典接入） |

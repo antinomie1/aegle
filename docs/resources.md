@@ -56,7 +56,7 @@ mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲
 
 `GlyphKey` 将这份身份作为无分配借用接口公开，统一验证光栅参数并规范化负零相位。CPU 缓存及图集消费者使用完整字段/变化轴相等比较，不能只把哈希值当身份；`mask()` 清除前景色，但命中时仍须确认条目确为灰度。`OwnedGlyphKey` 只复制变化轴，不持有字体字节；字体与 glyph 解析仍在真正光栅化的资源边界进行，已有图集命中无需再次查询 CPU 缓存。
 
-源位图解码缓冲与 PNG 解码器内部各自使用 2 MiB 默认 allowance；COLRv0 临时层 mask 同样受 bitmap 上限约束。Windows 的 GDI 路径与 macOS 的 CoreGraphics 路径各自最多缓存 4 个平台字体对象（HFONT/HDC 或 CTFont），与 FreeType 的 4 个 face 上限一致；两者都不缓存字体字节（`FaceSource::Bytes` 由 scene/TextSystem 持有的句柄维持寿命），`outline.rs` 的轮廓点与 tiny-skia 扫描线属于短期 scratch，不计入字形图像预算。Windows 的临时字体文件（每个注册字体一份）计入磁盘而非 RAM。这些成本独立于字形图像预算，不能把两个上限之和宣传为总峰值。哈希/LRU 元数据、变化轴数组、轮廓点、扫描及 hinting 存储另计。`stats()` 提供图像字节、条目及表容量，不声称完整 RAM 统计。Swash 上下文最多缓存 4 个字体代理，内部每种轮廓格式最多 8 个 hint 实例，但没有公开字节计量。
+源位图解码缓冲与 PNG 解码器内部各自使用 2 MiB 默认 allowance；COLRv0 临时层 mask 同样受 bitmap 上限约束。Windows 的 DirectWrite 路径与 macOS 的 CoreGraphics 路径各自最多缓存 4 个平台字体对象（`IDWriteFontFace` 或 CTFont），与 FreeType 的 4 个 face 上限一致；字体字节由 scene/TextSystem 持有的句柄维持寿命，只有 Windows 的 `FaceSource::Bytes` 经 DirectWrite 的内存字体加载器复制一份（随该 face 释放）。glyph-run analysis 与 bitmap context 是每次光栅化的短期对象，不计入字形图像预算。Windows 的临时字体文件（每个注册字体一份）计入磁盘而非 RAM。这些成本独立于字形图像预算，不能把两个上限之和宣传为总峰值。哈希/LRU 元数据、变化轴数组、轮廓点、扫描及 hinting 存储另计。`stats()` 提供图像字节、条目及表容量，不声称完整 RAM 统计。Swash 上下文最多缓存 4 个字体代理，内部每种轮廓格式最多 8 个 hint 实例，但没有公开字节计量。
 
 `GlyphCache::release_scratch()` 释放光栅化临时存储并保留完成图像；`clear()` 同时释放图像和索引。renderer 的 `release_scratch()` 也释放 glyph scratch，清空图像须显式调用 `glyph_cache_mut().clear()`。字形缓存不持有字体文件；活动段落和 scene 共享字体句柄。scene 的存储统计含 run/位置/变化轴数组，不重复计入共享字体字节。
 

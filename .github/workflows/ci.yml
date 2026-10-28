@@ -94,6 +94,8 @@ jobs:
       - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,wgpu,accessibility" -- -D warnings
       # Native window and input-method tests stay opt-in (`--ignored`) on a test desktop.
       - run: cargo test -p aegle-platform-win32
+      # DirectWrite renders the glyph coverage; these tests need the real system.
+      - run: cargo test -p aegle-glyph
       - run: cargo test -p aegle --no-default-features --features "native,tiny-skia,markup,motion,accessibility"
   macos:
     runs-on: macos-latest
@@ -109,6 +111,8 @@ jobs:
       - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,wgpu,accessibility" -- -D warnings
       # The window model tests run anywhere; native window tests need a GUI session.
       - run: cargo test -p aegle-platform-macos
+      # CoreText renders the glyph coverage; these tests need the real system.
+      - run: cargo test -p aegle-glyph
       - run: cargo test -p aegle --no-default-features --features "native,tiny-skia,markup,motion,accessibility"
   deny:
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 //! Minimal OpenType face description: family, subfamily, weight and slant.
 //!
-//! A platform font request (GDI's `CreateFontIndirectW`) needs the family name
-//! and style bits, which only the font file knows. This parser reads the `name`
+//! A platform font request (the CoreText backend registering application
+//! fonts) needs the family name and style bits, which only the font file knows. This parser reads the `name`
 //! and `OS/2` tables and nothing else. Every offset and length is checked
 //! against the file, counts are capped, and a file it cannot understand yields
 //! `None` so the caller reports an unsupported face instead of guessing.

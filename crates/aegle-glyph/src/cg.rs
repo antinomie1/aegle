@@ -1,16 +1,20 @@
-//! CoreGraphics outline rasterizer for macOS, driven by
-//! `CTFontCreatePathForGlyph`.
+//! CoreGraphics glyph rasterizer for macOS: CoreText draws each glyph into an
+//! alpha-only bitmap context.
 //!
-//! `CTFontCreatePathForGlyph` returns the glyph outline as a `CGPath` in font
-//! units scaled to the requested size, y up from the baseline. This module
-//! walks that path into the shared [`OutlineBuilder`], so macOS and Windows
-//! produce coverage from the same rasterizer. CoreGraphics can hand back color
-//! glyphs through a separate API this module does not use, so COLR/CBDT/SVG
-//! glyphs return [`GlyphError::UnsupportedGlyph`] rather than a monochrome
-//! approximation.
+//! The system antialiases the glyph itself, as FreeType does on Linux, so the
+//! output is the same 8-bit coverage mask with baseline-relative placement.
+//! Font smoothing (CoreGraphics' stem darkening for LCD output) is off, so the
+//! coverage is the plain antialiased area the renderers' contrast curve expects.
+//! Synthetic slant is the text matrix, and synthetic bold strokes the glyph's
+//! outline while filling it, growing every side by half of `size / 32` like
+//! `FT_Outline_Embolden`. An alpha-only context drops color, and CoreText
+//! reports color glyphs (sbix, COLR, SVG) only per font, so every visible glyph
+//! of a font with the color-glyphs trait returns
+//! [`GlyphError::UnsupportedGlyph`] instead of a monochrome silhouette.
 //!
 //! Every font object is reference counted by `CFRetained`, and at most
-//! [`MAX_FONTS`] stay alive, evicting the least recently used.
+//! [`MAX_FONTS`] stay alive, evicting the least recently used. Font variation
+//! coordinates are not applied, matching the earlier outline path.
 //!
 //! # Verification
 //!
@@ -18,22 +22,29 @@
 //! and never run on a Mac.
 #![allow(unsafe_code)]
 
+use std::ptr::NonNull;
+
 use aegle_scene::SystemFont;
-use objc2_core_foundation::{CFData, CFRetained};
-use objc2_core_graphics::{CGDataProvider, CGFont, CGPath, CGPathElement, CGPathElementType};
-use objc2_core_text::CTFont;
+use objc2_core_foundation::{CFData, CFRetained, CGAffineTransform, CGPoint, CGRect};
+use objc2_core_graphics::{
+    CGBitmapContextCreate, CGContext, CGDataProvider, CGFont, CGImageAlphaInfo, CGTextDrawingMode,
+};
+use objc2_core_text::{CTFont, CTFontOrientation, CTFontSymbolicTraits};
 
 use crate::system::{FaceSource, SystemRasterizer, register_system_rasterizer};
-use crate::{CacheLimits, GlyphError, Image, OutlineBuilder, RasterOptions};
+use crate::{CacheLimits, Content, GlyphError, Image, Placement, RasterOptions};
 
-/// Fonts kept alive at once; four matches the FreeType and GDI limits.
+/// Fonts kept alive at once; four matches the FreeType and DirectWrite limits.
 const MAX_FONTS: usize = 4;
+/// Largest glyph bound magnitude in device pixels, matching the renderers'
+/// device range.
+const MAX_COORD: f64 = 1_048_576.0;
 
 /// One cached font and the face source it was built from.
 struct Cached {
     source: FaceSource,
     font: CFRetained<CTFont>,
-    /// Pixels per em the font was created at; CoreText paths scale with it.
+    /// Bits of the `f32` pixels per em the font was created at.
     size: u32,
 }
 
@@ -50,11 +61,12 @@ impl CgRasterizer {
 
     /// A font for `source` at `size` pixels per em, reusing or evicting a cache
     /// entry.
-    fn font(&mut self, source: &FaceSource, size: u32) -> Result<&CFRetained<CTFont>, GlyphError> {
+    fn font(&mut self, source: &FaceSource, size: f32) -> Result<&CFRetained<CTFont>, GlyphError> {
+        let bits = size.to_bits();
         if let Some(index) = self
             .fonts
             .iter()
-            .position(|cached| &cached.source == source && cached.size == size)
+            .position(|cached| &cached.source == source && cached.size == bits)
         {
             let cached = self.fonts.remove(index);
             self.fonts.push(cached);
@@ -67,7 +79,7 @@ impl CgRasterizer {
         self.fonts.push(Cached {
             source: source.clone(),
             font,
-            size,
+            size: bits,
         });
         Ok(&self.fonts.last().expect("just pushed").font)
     }
@@ -76,7 +88,7 @@ impl CgRasterizer {
 // SAFETY: CoreText font objects are immutable and CoreText documents them as
 // safe to use from any thread; the rasterizer is only ever moved as a whole,
 // never shared between threads concurrently (the registry holds one and calls
-// it under a lock).
+// it under a lock). Bitmap contexts live only inside one `rasterize` call.
 unsafe impl Send for CgRasterizer {}
 
 impl Default for CgRasterizer {
@@ -95,92 +107,167 @@ impl SystemRasterizer for CgRasterizer {
         reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
     ) -> Result<Image, GlyphError> {
         let source = crate::system_face(*font).ok_or(GlyphError::InvalidFont)?;
-        let pixels = options.size.round().clamp(1.0, 16_384.0) as u32;
-        let font = self.font(&source, pixels)?.clone();
-        // SAFETY: the font is live and owned; a null matrix means the identity
-        // transform. The returned path is reference counted, and `None` means
-        // CoreGraphics has no outline for this glyph.
-        let path = unsafe { font.path_for_glyph(glyph, std::ptr::null()) };
-        let Some(path) = path else {
-            return Err(GlyphError::UnsupportedGlyph);
-        };
-        let mut outline = OutlineBuilder::new(options.size, options.embolden, options.skew);
-        // SAFETY: the path is live for the call; the applier only reads it and
-        // passes each element to `visit`, which copies the points it needs.
+        let font = self.font(&source, options.size)?.clone();
+        let mut glyph = glyph;
+        let mut bounds = CGRect::default();
+        // SAFETY: the font is live; one glyph and one output rectangle are
+        // passed with a count of one. The return value is the union, which for
+        // one glyph equals the rectangle written.
         unsafe {
-            CGPath::apply(
-                Some(&path),
-                &mut outline as *mut OutlineBuilder as *mut core::ffi::c_void,
-                Some(visit),
+            font.bounding_rects_for_glyphs(
+                CTFontOrientation::Default,
+                NonNull::from(&mut glyph),
+                &mut bounds,
+                1,
             );
         }
-        let offset = [options.offset[0], -options.offset[1]];
-        outline.rasterize(offset, reserve)
+        let skew = match options.skew {
+            0 => 0.0,
+            degrees => f64::from(degrees).to_radians().tan(),
+        };
+        let embolden = match options.embolden {
+            true => f64::from(options.size) / 32.0,
+            false => 0.0,
+        };
+        // Device space here is y-up from the integral baseline; the glyph origin
+        // sits at the fractional offset (whose y is positive downward).
+        let origin = (f64::from(options.offset[0]), -f64::from(options.offset[1]));
+        let (low, high) = (bounds.origin.y, bounds.origin.y + bounds.size.height);
+        // The slant moves x by `skew * y`, so its extremes are at the vertical
+        // bounds. One pixel of margin keeps antialiased edges inside the image.
+        let grow = embolden / 2.0 + 1.0;
+        let left = bounds.origin.x + (skew * low).min(skew * high) + origin.0 - grow;
+        let right =
+            bounds.origin.x + bounds.size.width + (skew * low).max(skew * high) + origin.0 + grow;
+        let bottom = low + origin.1 - grow;
+        let top = high + origin.1 + grow;
+        if bounds.size.width <= 0.0 || bounds.size.height <= 0.0 {
+            reserve(0)?;
+            return Ok(empty());
+        }
+        // SAFETY: the font is live; reading its traits has no other effect.
+        let traits = unsafe { font.symbolic_traits() };
+        if traits.contains(CTFontSymbolicTraits::TraitColorGlyphs) {
+            return Err(GlyphError::UnsupportedGlyph);
+        }
+        if ![left, right, bottom, top]
+            .into_iter()
+            .all(|v| v.is_finite() && v.abs() <= MAX_COORD)
+        {
+            return Err(GlyphError::Coordinates);
+        }
+        let (left, right, bottom, top) = (left.floor(), right.ceil(), bottom.floor(), top.ceil());
+        let width = (right - left) as usize;
+        let height = (top - bottom) as usize;
+        let bytes = width.checked_mul(height).ok_or(GlyphError::ImageBudget)?;
+        reserve(bytes)?;
+        let mut data = vec![0u8; bytes];
+        // SAFETY: `data` holds exactly `width * height` bytes, one per pixel with
+        // rows `width` bytes apart, and outlives the context, which is dropped
+        // at the end of this function. A null color space with alpha-only
+        // `bitmap_info` is the documented form for an 8-bit alpha context.
+        let context = unsafe {
+            CGBitmapContextCreate(
+                data.as_mut_ptr().cast(),
+                width,
+                height,
+                8,
+                width,
+                None,
+                CGImageAlphaInfo::Only.0,
+            )
+        }
+        .ok_or(GlyphError::ImageBudget)?;
+        draw(
+            &context,
+            &font,
+            glyph,
+            skew,
+            embolden,
+            (origin.0 - left, origin.1 - bottom),
+        );
+        drop(context);
+        // The bitmap's first row is its top edge, so `data` is already top-down.
+        Ok(Image {
+            placement: Placement {
+                left: left as i32,
+                top: top as i32,
+                width: width as u32,
+                height: height as u32,
+            },
+            content: Content::Mask,
+            data: data.into_boxed_slice(),
+        })
     }
 }
 
-/// Appends one `CGPath` element to the builder in `info`.
-///
-/// # Safety
-///
-/// `info` must point at a live `OutlineBuilder`, which is how `rasterize` calls
-/// this; CoreGraphics guarantees the element's points array has as many entries
-/// as its type requires.
-unsafe extern "C-unwind" fn visit(
-    info: *mut core::ffi::c_void,
-    element: std::ptr::NonNull<CGPathElement>,
+/// Draws `glyph` with its origin at `position` in the context's y-up pixels.
+fn draw(
+    context: &CGContext,
+    font: &CTFont,
+    glyph: u16,
+    skew: f64,
+    embolden: f64,
+    position: (f64, f64),
 ) {
-    let builder = unsafe { &mut *info.cast::<OutlineBuilder>() };
-    let element = unsafe { element.as_ref() };
-    let points = element.points.as_ptr();
-    // SAFETY: the point count per element type is fixed by CoreGraphics, and
-    // the array is valid for the duration of the callback.
+    let context_ref = Some(context);
+    CGContext::set_should_antialias(context_ref, true);
+    CGContext::set_allows_font_smoothing(context_ref, false);
+    CGContext::set_should_smooth_fonts(context_ref, false);
+    CGContext::set_allows_font_subpixel_positioning(context_ref, true);
+    CGContext::set_should_subpixel_position_fonts(context_ref, true);
+    CGContext::set_allows_font_subpixel_quantization(context_ref, false);
+    CGContext::set_should_subpixel_quantize_fonts(context_ref, false);
+    // In an alpha-only context only the alpha of a color is stored.
+    CGContext::set_gray_fill_color(context_ref, 0.0, 1.0);
+    CGContext::set_text_matrix(
+        context_ref,
+        CGAffineTransform {
+            a: 1.0,
+            b: 0.0,
+            c: skew,
+            d: 1.0,
+            tx: 0.0,
+            ty: 0.0,
+        },
+    );
+    if embolden > 0.0 {
+        CGContext::set_gray_stroke_color(context_ref, 0.0, 1.0);
+        CGContext::set_line_width(context_ref, embolden);
+        CGContext::set_text_drawing_mode(context_ref, CGTextDrawingMode::FillStroke);
+    }
+    let mut glyph = glyph;
+    let mut point = CGPoint {
+        x: position.0,
+        y: position.1,
+    };
+    // SAFETY: the font and context are live for the call, and exactly one glyph
+    // and one position are passed with a count of one.
     unsafe {
-        match element.r#type {
-            CGPathElementType::MoveToPoint => {
-                let p = *points;
-                builder.move_to(p.x as f32, p.y as f32);
-            }
-            CGPathElementType::AddLineToPoint => {
-                let p = *points;
-                builder.line_to(p.x as f32, p.y as f32);
-            }
-            CGPathElementType::AddQuadCurveToPoint => {
-                let control = *points;
-                let end = *points.add(1);
-                builder.quad_to(
-                    control.x as f32,
-                    control.y as f32,
-                    end.x as f32,
-                    end.y as f32,
-                );
-            }
-            CGPathElementType::AddCurveToPoint => {
-                let c1 = *points;
-                let c2 = *points.add(1);
-                let end = *points.add(2);
-                builder.cubic_to(
-                    c1.x as f32,
-                    c1.y as f32,
-                    c2.x as f32,
-                    c2.y as f32,
-                    end.x as f32,
-                    end.y as f32,
-                );
-            }
-            CGPathElementType::CloseSubpath => builder.close(),
-            _ => {}
-        }
+        font.draw_glyphs(
+            NonNull::from(&mut glyph),
+            NonNull::from(&mut point),
+            1,
+            context,
+        );
+    }
+}
+
+fn empty() -> Image {
+    Image {
+        placement: Placement::default(),
+        content: Content::Mask,
+        data: Vec::new().into_boxed_slice(),
     }
 }
 
 /// Builds a `CTFont` for `source` at `pixels` pixels per em.
 ///
-/// A file-backed face is opened by URL; a byte-backed one is turned into a
+/// A file-backed face is opened by name; a byte-backed one is turned into a
 /// `CGFont` from a data provider. Both are then sized through
-/// `CTFontCreateWithGraphicsFont`, so the path CoreGraphics returns is in the
-/// same coordinate space either way.
-fn build_font(source: &FaceSource, pixels: u32) -> Result<CFRetained<CTFont>, GlyphError> {
+/// `CTFontCreateWithGraphicsFont`, so the glyph is drawn in the same coordinate
+/// space either way.
+fn build_font(source: &FaceSource, pixels: f32) -> Result<CFRetained<CTFont>, GlyphError> {
     let graphics = match source {
         FaceSource::File { path, .. } => {
             let name = objc2_core_foundation::CFString::from_str(path);

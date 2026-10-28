@@ -70,7 +70,7 @@ impl Rasterizer {
         }
         // Platform backends rasterize through the registered system rasterizer,
         // for handles and for shared bytes alike: on Windows and macOS the
-        // outline comes from GDI/CoreGraphics, not from the Rust rasterizer.
+        // coverage comes from DirectWrite/CoreText, not from the Rust rasterizer.
         #[cfg(all(
             not(feature = "swash"),
             any(target_os = "windows", target_os = "macos")

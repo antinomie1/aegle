@@ -71,7 +71,7 @@ scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基
 
 保留 `Editor` 也使用同一文字绘制函数；选区背景、预编辑下划线和 caret 从当前排版生成几何，再录入普通 scene 命令。宿主负责焦点/闪烁时机、滚动与裁剪，模块没有自己的定时器。候选窗使用 `ime_rect()` 的未裁剪局部文字几何；长单行文字溢出字段宽度时不能只截断右边缘而产生负宽度。原生平台 adapter 应统一应用呈现/滚动变换后再转换坐标。
 
-字形光栅化按平台走系统后端：Linux 是 FreeType，Windows 是 GDI `GetGlyphOutlineW(GGO_NATIVE)`，macOS 是 `CTFontCreatePathForGlyph`；后两者把轮廓交给 `aegle-glyph/src/outline.rs` 的共享 path→coverage，输出与 FreeType 相同格式的 8-bit 灰度 mask，因此三个平台的 scene 字形记录与 renderer 路径完全一致。Windows/macOS 的彩色字形返回 `UnsupportedGlyph`（GDI 与 CoreGraphics 的轮廓 API 都拿不到 COLR/CBDT/SVG），不画成黑白近似。
+字形光栅化按平台走系统后端，抗锯齿由系统完成：Linux 是 FreeType，Windows 是 DirectWrite 的 glyph-run analysis（灰度抗锯齿、1x1 alpha 纹理），macOS 是 CoreText 画进 alpha-only `CGBitmapContext`，输出相同格式的 8-bit 灰度 mask，因此三个平台的 scene 字形记录与 renderer 路径完全一致。alpha 纹理与 alpha 位图都不带颜色，所以 Windows 上带 COLR/SVG/位图表示的字形（按 `IDWriteFontFace4::GetGlyphImageFormats` 逐字形判断）、macOS 上带彩色字形特征的字体中的可见字形（CoreText 只按字体报告）返回 `UnsupportedGlyph`，不画成黑白剪影。
 
 正向、轴对齐、均匀缩放的文字在设备字号光栅化，基线取整到设备像素、水平原点按四分之一像素相位取整，排版 advance 保持原值；灰度覆盖率经与前景亮度相关的共用对比曲线，平衡线性混合下深色/浅色文字的粗细；旋转、反射、斜切和非均匀缩放通过逆变换双线性采样。彩色字形在线性预乘空间过滤，字形接口输出非预乘 sRGB，合成后仍遵守 `Surface` 的预乘 sRGB 格式。前景透明度只应用一次。灰度 glyph 与前景色分离，颜色主题更新可复用字形缓存；彩色格式范围与错误见[文字](text-input.md)。
 

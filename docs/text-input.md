@@ -1,6 +1,6 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。文字后端在 Linux（Pango + FreeType，本机运行验证）、Windows（DirectWrite + GDI，仅交叉编译检查）与 macOS（CoreText + CoreGraphics，仅交叉编译检查）三处各有实现，验证程度不同。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows 经 TSF 文本存储接入输入法（见末节），macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。文字后端在 Linux（Pango + FreeType，本机运行验证）、Windows（DirectWrite，仅交叉编译检查）与 macOS（CoreText + CoreGraphics，仅交叉编译检查）三处各有实现，验证程度不同。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows 经 TSF 文本存储接入输入法（见末节），macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。
 
 排版引擎默认是**操作系统的文字栈**：Linux 用 Pango（bidi、UAX #14 换行、字体回退）加 Fontconfig 与 FreeType，全部在运行时从发行版的共享库加载；Windows 用 DirectWrite（`backend_directwrite/`），macOS 用 CoreText（`backend_coretext/`）。三者的验证程度不同：Linux 路径在本机运行并通过全部测试与像素核对；Windows 与 macOS 路径只在 Linux 上交叉 `cargo check`/`clippy` 过，**没有在目标系统上运行**（见[实现状态](implementation.md)）。Aegle 自己拥有的是保留段落、光标与选择语义（`document`/`nav`/`edit`）以及字形记录，不重写 shaping、bidi 或换行。`aegle-text/text-parley` 与 `aegle-glyph/swash` 是**默认关闭、不再维护**的回退：只在显式启用时编译 Parley/HarfRust/Skrifa/Swash。三个有系统后端的 target 上它们只作 opt-in；其他 target 没有系统后端，仍默认编译回退实现，避免默认构建静默失去文字。
 
@@ -12,7 +12,7 @@
 
 `TextDiagnostics` 分别报告缺字 glyph 和没有任何字体可成形的 UTF-8 字节数。三个系统栈的缺字表现并不相同：Linux 的 Pango 给出 unknown glyph，它自带占位宽度并由 Pango 自己画成占位框，Aegle 不重复绘制（不换成 `.notdef`，否则字形与 advance 不一致），诊断照常计数；Windows 的 DirectWrite 总会回退，缺字表现为字形索引 0（`.notdef`），DirectWrite 画出的就是该框，因此计数与像素一致，`unshaped_bytes` 只在布局创建失败时统计非换行字节；macOS 的 CoreText 同样总会回退，缺字由 CTLine 的字形索引 0 表示。完全没有字体成形的字节数仍使 `paint` panic，避免整段文字静默消失。字体缺少所需字重或倾斜时，合成建议随 `GlyphRun` 传到光栅器：轮廓外扩 em/32 并按角度错切，仍是同一字形键与图集；位图字体不合成。
 
-彩色字形按平台如实区分：Linux 的 FreeType `FT_LOAD_COLOR` 覆盖 COLR 层与内嵌 PNG/BGRA 位图（输出直通 sRGB）；**Windows 的 GDI 轮廓路径拿不到 COLR/CBDT/SVG**，这些字形返回 `GlyphError::UnsupportedGlyph`，不画成黑白近似；macOS 的 `CTFontCreatePathForGlyph` 只给轮廓，彩色字形同样返回 `UnsupportedGlyph`。Windows/macOS 的彩色字形接入 DirectWrite 的 glyph-run analysis / CoreText 的彩色 run 是后续工作。`colrv1`/`svg` feature 增加 COLRv1 渐变层与不含文字的 OpenType-SVG，**并作用于所有字形路径**：光栅化前先由 `aegle-glyph/src/color.rs` 判断字形是否带这两种表示，有则用 Skrifa + tiny-skia / resvg 解码，无则走平台光栅器。它们不启用 `swash`、也不替换平台光栅器——这两点曾经是耦合的，导致开 `svg` 就把 Linux 的 FreeType 换成 Rust 光栅器（字形像素随之改变）。未启用时对应表示返回 `UnsupportedGlyph` 而不是画成灰度轮廓。注册字体不等于该字体的每种表示均可绘制。
+彩色字形按平台如实区分：Linux 的 FreeType `FT_LOAD_COLOR` 覆盖 COLR 层与内嵌 PNG/BGRA 位图（输出直通 sRGB）；**Windows 的 DirectWrite alpha 纹理不带颜色**，`GetGlyphImageFormats` 报告有 COLR/SVG/PNG/JPEG/TIFF/BGRA 表示的字形返回 `GlyphError::UnsupportedGlyph`，不画成黑白剪影；macOS 的 alpha-only 位图同样不带颜色，CoreText 只按字体报告彩色字形，因此带彩色字形特征的字体中的可见字形都返回 `UnsupportedGlyph`。Windows/macOS 的彩色字形接入 DirectWrite 的 glyph-run analysis / CoreText 的彩色 run 是后续工作。`colrv1`/`svg` feature 增加 COLRv1 渐变层与不含文字的 OpenType-SVG，**并作用于所有字形路径**：光栅化前先由 `aegle-glyph/src/color.rs` 判断字形是否带这两种表示，有则用 Skrifa + tiny-skia / resvg 解码，无则走平台光栅器。它们不启用 `swash`、也不替换平台光栅器——这两点曾经是耦合的，导致开 `svg` 就把 Linux 的 FreeType 换成 Rust 光栅器（字形像素随之改变）。未启用时对应表示返回 `UnsupportedGlyph` 而不是画成灰度轮廓。注册字体不等于该字体的每种表示均可绘制。
 
 ## 显示与内存
 

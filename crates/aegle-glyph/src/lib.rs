@@ -32,13 +32,12 @@ pub mod cg;
 mod color;
 #[cfg(feature = "colrv1")]
 mod colrv1;
+#[cfg(all(target_os = "windows", not(feature = "swash")))]
+pub mod directwrite;
 #[cfg(all(not(feature = "swash"), target_os = "linux"))]
 mod freetype;
-#[cfg(all(target_os = "windows", not(feature = "swash")))]
-pub mod gdi;
 mod key;
 mod opentype_name;
-mod outline;
 mod raster;
 mod srgb;
 #[cfg(feature = "svg")]
@@ -54,7 +53,6 @@ pub use cache::GlyphCache;
 pub use key::{GlyphKey, OwnedGlyphKey};
 pub use linebender_resource_handle::{Blob, FontData};
 pub use opentype_name::{FaceDescription, describe};
-pub use outline::OutlineBuilder;
 pub use system::{
     FaceSource, SystemRasterizer, register_system_face, register_system_rasterizer, shared_face,
     system_face, system_rasterizer_registered, unregister_system_face,
