@@ -32,6 +32,7 @@ cargo run -p aegle --example components --release
 cargo run -p aegle --example widgets --release
 cargo run -p aegle --example scrolling --release
 cargo run -p aegle --example showcase --release
+cargo run -p aegle --features cairo --example showcase_cairo --release
 cargo run -p aegle --features grid --example layout --release
 cargo run -p aegle-widgets --features motion --example standalone --release
 cargo run -p aegle-widgets --example custom_control --release
@@ -43,6 +44,8 @@ cargo run -p aegle-render-tiny-skia --features text --example editor_scene --rel
 cargo run -p aegle-render-cairo --release --example cairo_cost
 cargo doc --workspace --all-features --no-deps
 ```
+
+`showcase_cairo` 与 `showcase` 是同一个窗口：两者共用 `examples/showcase/window.rs`，默认 feature 也完全一致（原生平台、系统字体、标记、过渡、特效、COLRv1、桌面服务），只有渲染器不同。因此它既是 cairo 后端的可交互演示，也是两个 CPU 后端像素一致性的现场对照。`showcase cairo|wgpu|vulkan` 也能指定后端，但如果该后端没编进这次构建，程序直接报错而不是悄悄换成别的光栅器。
 
 `cargo run -p aegle --example gallery` 重新生成[控件参考](developer/controls.md)中的截图。
 

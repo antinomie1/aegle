@@ -114,6 +114,12 @@ required-features = ["motion"]
 name = "showcase"
 required-features = ["native", "system-fonts"]
 
+# The same window as `showcase`, drawn through the system cairo library. Only the
+# renderer differs, so the two can be compared side by side.
+[[example]]
+name = "showcase_cairo"
+required-features = ["native", "system-fonts", "cairo"]
+
 [[example]]
 name = "layout"
 required-features = ["native", "system-fonts", "markup", "grid"]
