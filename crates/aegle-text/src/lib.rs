@@ -21,13 +21,15 @@
 
 #[cfg(feature = "text-a11y")]
 mod accessibility;
+#[cfg(all(target_os = "macos", not(feature = "text-parley")))]
+mod backend_coretext;
 #[cfg(all(target_os = "windows", not(feature = "text-parley")))]
 mod backend_directwrite;
 #[cfg(all(target_os = "linux", not(feature = "text-parley")))]
 mod backend_pango;
 #[cfg(any(
     feature = "text-parley",
-    not(any(target_os = "linux", target_os = "windows"))
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 ))]
 mod backend_parley;
 mod compose;

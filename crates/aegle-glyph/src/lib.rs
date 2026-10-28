@@ -23,6 +23,8 @@
 #[cfg(feature = "swash")]
 mod bitmap;
 mod cache;
+#[cfg(all(target_os = "macos", not(feature = "swash")))]
+pub mod cg;
 #[cfg(feature = "colrv1")]
 mod colrv1;
 #[cfg(all(not(feature = "swash"), target_os = "linux"))]

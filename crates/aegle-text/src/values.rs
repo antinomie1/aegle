@@ -21,7 +21,7 @@ pub enum Alignment {
 impl Alignment {
     #[cfg(any(
         feature = "text-parley",
-        not(any(target_os = "linux", target_os = "windows"))
+        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
     ))]
     pub(crate) fn parley(self) -> parley::Alignment {
         match self {
@@ -72,7 +72,7 @@ impl LineHeight {
 
     #[cfg(any(
         feature = "text-parley",
-        not(any(target_os = "linux", target_os = "windows"))
+        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
     ))]
     pub(crate) fn parley(self) -> parley::LineHeight {
         match self {
@@ -99,7 +99,7 @@ pub enum Slant {
 impl Slant {
     #[cfg(any(
         feature = "text-parley",
-        not(any(target_os = "linux", target_os = "windows"))
+        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
     ))]
     pub(crate) fn parley(self) -> parley::FontStyle {
         match self {
@@ -132,7 +132,7 @@ pub enum GenericFamily {
 impl GenericFamily {
     #[cfg(any(
         feature = "text-parley",
-        not(any(target_os = "linux", target_os = "windows"))
+        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
     ))]
     pub(crate) fn fontique(self) -> parley::fontique::GenericFamily {
         use parley::fontique::GenericFamily as Generic;
@@ -150,14 +150,14 @@ impl GenericFamily {
 
 #[cfg(any(
     feature = "text-parley",
-    not(any(target_os = "linux", target_os = "windows"))
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 ))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFamily(pub(crate) parley::fontique::FamilyId);
 
 #[cfg(not(any(
     feature = "text-parley",
-    not(any(target_os = "linux", target_os = "windows"))
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 )))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFamily(pub(crate) u32);

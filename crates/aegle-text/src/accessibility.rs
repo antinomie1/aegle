@@ -2,7 +2,7 @@ use accesskit::{Node, NodeId, Role, TextPosition, TextSelection, TreeUpdate};
 use aegle_types::{Color, Point};
 #[cfg(any(
     feature = "text-parley",
-    not(any(target_os = "linux", target_os = "windows"))
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 ))]
 use parley::Cursor;
 
@@ -75,7 +75,7 @@ impl EditorDriver<'_> {
         for (index, block) in doc.blocks.iter_mut().enumerate() {
             #[cfg(any(
                 feature = "text-parley",
-                not(any(target_os = "linux", target_os = "windows"))
+                not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
             ))]
             if let crate::layout::Layout::Parley(ref p) = block.layout {
                 let start = update.nodes.len();
@@ -165,7 +165,7 @@ impl EditorDriver<'_> {
             #[cfg_attr(
                 not(any(
                     feature = "text-parley",
-                    not(any(target_os = "linux", target_os = "windows"))
+                    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
                 )),
                 allow(unused_variables)
             )]
@@ -173,7 +173,7 @@ impl EditorDriver<'_> {
             let block = &editor.doc.blocks[index];
             #[cfg(any(
                 feature = "text-parley",
-                not(any(target_os = "linux", target_os = "windows"))
+                not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
             ))]
             if let crate::layout::Layout::Parley(ref p) = block.layout {
                 let parley_aff = match affinity {
@@ -225,7 +225,7 @@ impl EditorDriver<'_> {
             let block = &doc.blocks[index];
             #[cfg(any(
                 feature = "text-parley",
-                not(any(target_os = "linux", target_os = "windows"))
+                not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
             ))]
             if let crate::layout::Layout::Parley(ref p) = block.layout {
                 let cursor = Cursor::from_access_position(&pos, &p.raw, &block.access)

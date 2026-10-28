@@ -44,7 +44,7 @@ pub(crate) struct Block {
         feature = "text-a11y",
         any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         )
     ))]
     pub access: parley::LayoutAccessibility,
@@ -172,7 +172,7 @@ impl Document {
                     feature = "text-a11y",
                     any(
                         feature = "text-parley",
-                        not(any(target_os = "linux", target_os = "windows"))
+                        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
                     )
                 ))]
                 access: Default::default(),

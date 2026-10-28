@@ -9,17 +9,17 @@ use crate::{
 };
 #[cfg(any(
     feature = "text-parley",
-    not(any(target_os = "linux", target_os = "windows"))
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 ))]
 use aegle_types::Color;
 #[cfg(any(
     feature = "text-parley",
-    not(any(target_os = "linux", target_os = "windows"))
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 ))]
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
 #[cfg(any(
     feature = "text-parley",
-    not(any(target_os = "linux", target_os = "windows"))
+    not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 ))]
 use parley::{FontContext, LayoutContext};
 
@@ -34,12 +34,12 @@ use parley::{FontContext, LayoutContext};
 pub struct TextSystem {
     #[cfg(any(
         feature = "text-parley",
-        not(any(target_os = "linux", target_os = "windows"))
+        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
     ))]
     pub(crate) fonts: FontContext,
     #[cfg(any(
         feature = "text-parley",
-        not(any(target_os = "linux", target_os = "windows"))
+        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
     ))]
     pub(crate) context: LayoutContext<Color>,
     pub(crate) backend: PlatformSystem,
@@ -72,7 +72,7 @@ impl TextSystem {
         Self {
             #[cfg(any(
                 feature = "text-parley",
-                not(any(target_os = "linux", target_os = "windows"))
+                not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
             ))]
             fonts: FontContext {
                 collection: Collection::new(CollectionOptions {
@@ -83,7 +83,7 @@ impl TextSystem {
             },
             #[cfg(any(
                 feature = "text-parley",
-                not(any(target_os = "linux", target_os = "windows"))
+                not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
             ))]
             context: LayoutContext::new(),
             backend: PlatformSystem::new(_system_fonts),
@@ -103,7 +103,7 @@ impl TextSystem {
     ) -> Result<Vec<FontFamily>, TextError> {
         #[cfg(any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         ))]
         {
             let registered = self.fonts.collection.register_fonts(Blob::new(_data), None);
@@ -117,7 +117,7 @@ impl TextSystem {
         }
         #[cfg(not(any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         )))]
         {
             self.backend.register_fonts(_data.as_ref().as_ref())
@@ -135,14 +135,14 @@ impl TextSystem {
         let families: Vec<FontFamily> = _families.into_iter().collect();
         #[cfg(any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         ))]
         self.fonts
             .collection
             .set_generic_families(_generic.fontique(), families.iter().map(|f| f.0));
         #[cfg(not(any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         )))]
         self.backend.set_generic_families(_generic, &families);
     }
@@ -234,7 +234,7 @@ impl TextSystem {
         self.backend.trim();
         #[cfg(any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         ))]
         {
             self.context = LayoutContext::new();
@@ -309,7 +309,7 @@ impl TextSystem {
     ) -> Layout {
         #[cfg(any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         ))]
         {
             let mut raw = parley::Layout::new();
@@ -318,7 +318,7 @@ impl TextSystem {
         }
         #[cfg(not(any(
             feature = "text-parley",
-            not(any(target_os = "linux", target_os = "windows"))
+            not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
         )))]
         {
             Layout::new(&mut self.backend, text, shaping, wrap, underline)
@@ -327,7 +327,7 @@ impl TextSystem {
 
     #[cfg(any(
         feature = "text-parley",
-        not(any(target_os = "linux", target_os = "windows"))
+        not(any(target_os = "linux", target_os = "windows", target_os = "macos"))
     ))]
     pub(crate) fn shape(
         &mut self,

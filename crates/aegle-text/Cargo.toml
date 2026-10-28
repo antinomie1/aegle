@@ -36,6 +36,23 @@ accesskit = { workspace = true, optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 libloading = "0.8.9"
 
+# CoreText layout, CoreGraphics outlines and the CoreFoundation objects both use.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
+    "std", "CFArray", "CFAttributedString", "CFCGTypes", "CFData", "CFDictionary",
+    "CFString", "CFURL",
+] }
+objc2-core-text = { version = "0.3.2", default-features = false, features = [
+    "std", "CTFont", "CTFontDescriptor", "CTFontManager", "CTFontTraits", "CTFrame",
+    "CTFramesetter", "CTLine", "CTParagraphStyle", "CTRun", "CTStringAttributes",
+    "objc2-core-graphics",
+] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+    "std", "CGAffineTransform", "CGDataProvider", "CGFont", "CGPath",
+] }
+aegle-glyph = { workspace = true }
+
 # DirectWrite layout, Uniscribe grapheme breaks and GDI outlines.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", default-features = false, features = [
