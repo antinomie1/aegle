@@ -130,59 +130,39 @@ impl CoreTextLayout {
     /// The grapheme containing or following `caret` in `line_text`.
     ///
     /// `line_text` is the layout's own line and `caret` a byte offset into it.
-    /// Boundaries come from CoreText's line breaking: the string indices of the
-    /// line's glyph runs are the positions CoreText itself treats as caret
-    /// stops. `previous` selects the grapheme before the caret instead of the
-    /// one after it.
+    /// Boundaries come from CoreFoundation's composed-character segmentation
+    /// (`CFStringGetRangeOfComposedCharactersAtIndex`), the same extended
+    /// grapheme rule CoreText uses for editing. Only the caret's line is
+    /// segmented: the string is built once for that line, so a paragraph of
+    /// thousands of lines costs one line's worth of work per deletion.
     pub fn grapheme_range(&self, line_text: &str, caret: usize, previous: bool) -> Range<usize> {
         let caret = offsets::snap(line_text, caret);
-        let mut boundaries = self.character_stops(line_text);
-        boundaries.push(line_text.len());
-        boundaries.dedup();
-        if boundaries.len() < 2 {
+        if line_text.is_empty() {
             return caret..caret;
         }
-        let mut start = 0;
-        for &end in boundaries.iter().skip(1) {
-            if end > caret || (previous && end == caret) {
-                return start..end;
-            }
-            start = end;
-        }
-        caret..caret
-    }
-
-    /// The string indices CoreText reports as caret stops for one line.
-    ///
-    /// Each glyph run's start is a stop; a run's index list covers the
-    /// characters it shaped, so the union of run starts and the end of the line
-    /// is the set of boundaries CoreText can place a caret at.
-    fn character_stops(&self, line_text: &str) -> Vec<usize> {
-        let Some(frame) = self.frame() else {
-            return Vec::new();
+        let text = super::sys::cf_string(line_text);
+        let units = line_text.encode_utf16().count();
+        // The caret is already a UTF-8 boundary, so its UTF-16 index is exact.
+        let unit = offsets::to_utf16(line_text, caret);
+        let at = if previous && unit > 0 {
+            // The character before the caret: step back one unit, then take the
+            // composed range that contains that unit.
+            unit - 1
+        } else {
+            unit
         };
-        // SAFETY: the frame and its line array are live; every element is a
-        // `CTLine` for the duration of the loop, and each line's glyph-run array
-        // holds `CTRun`s.
-        unsafe {
-            let lines: CFRetained<CFArray<CTLine>> = CFRetained::cast_unchecked(frame.lines());
-            let mut stops = Vec::new();
-            for index in 0..lines.len() {
-                let line = lines.get(index).expect("in range");
-                let range = line.string_range();
-                let start = offsets::to_utf8(&self.text, range.location.max(0) as u32);
-                let end =
-                    offsets::to_utf8(&self.text, (range.location + range.length).max(0) as u32);
-                // Only the line whose text matches the caller's line contributes.
-                let line_end = (start + line_text.len()).min(self.text.len());
-                if line_end > self.text.len() || &self.text[start..line_end] != line_text {
-                    continue;
-                }
-                stops.push(0);
-                let _ = end;
-            }
-            stops
+        if at as usize >= units {
+            return caret..caret;
         }
+        // SAFETY: the string is live and `at` is within its length; the call
+        // only reads the string.
+        let range = unsafe { text.range_of_composed_characters_at_index(at as isize) };
+        if range.location < 0 || range.length <= 0 {
+            return caret..caret;
+        }
+        let start = offsets::to_utf8(line_text, range.location as u32);
+        let end = offsets::to_utf8(line_text, (range.location + range.length) as u32);
+        start..end
     }
 
     /// Missing-glyph and unshaped-byte counts.
