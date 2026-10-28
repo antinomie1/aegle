@@ -1,7 +1,7 @@
 use crate::Native;
 use aegle_platform::{PixelSize, Platform, SeatId, WindowId};
 #[cfg(feature = "software")]
-use aegle_render_software::Renderer;
+use aegle_render_tiny_skia::Renderer;
 #[cfg(feature = "motion")]
 use aegle_ui::Transition;
 use aegle_ui::{Container, Modifiers, OrFail, Result, Size, TextSystem, Theme, Ui, UiError};

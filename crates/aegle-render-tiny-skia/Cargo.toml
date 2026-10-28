@@ -1,5 +1,5 @@
 [package]
-name = "aegle-render-software"
+name = "aegle-render-tiny-skia"
 description = "Bounded software rendering of Aegle scenes without a GPU"
 version.workspace = true
 edition.workspace = true

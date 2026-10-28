@@ -1,7 +1,7 @@
 //! Retained paragraphs measured by Taffy and rendered without a window or GPU.
 use aegle_core::{NodeId, Tree};
 use aegle_layout::{Available, LayoutNode, LayoutStyle, Space, compute};
-use aegle_render_software::{Renderer, Surface};
+use aegle_render_tiny_skia::{Renderer, Surface};
 use aegle_scene::{Affine, Color, Point, Rect, RoundedRect, Scene, SceneBuilder};
 use aegle_text::{Alignment, LineHeight, Paragraph, TextStyle, TextSystem};
 use aegle_types::Size;

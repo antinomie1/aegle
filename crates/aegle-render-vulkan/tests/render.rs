@@ -76,8 +76,8 @@ fn geometry_boundaries_and_failed_frame_recovery() -> Result<(), Box<dyn std::er
     frame.finish()?;
     renderer.read_pixels(&mut pixels)?;
     let mut expected = vec![0; pixels.len()];
-    let mut surface = aegle_render_software::Surface::new(&mut expected, 64, 64)?;
-    aegle_render_software::Renderer::default()
+    let mut surface = aegle_render_tiny_skia::Surface::new(&mut expected, 64, 64)?;
+    aegle_render_tiny_skia::Renderer::default()
         .begin_frame(&mut surface, base)
         .draw(&blend, Affine::IDENTITY)?;
     near(

@@ -1,5 +1,5 @@
 //! Pixel-level integration boundaries: clipping, compositing and bounded reuse.
-use aegle_render_software::{RenderError, Renderer, Surface};
+use aegle_render_tiny_skia::{RenderError, Renderer, Surface};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
 
 fn shape(x: f32, y: f32, w: f32, h: f32, r: f32) -> RoundedRect {

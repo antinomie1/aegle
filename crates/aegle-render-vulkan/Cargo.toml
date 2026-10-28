@@ -32,7 +32,7 @@ naga = { version = "30.0.1", default-features = false, features = ["wgsl-in", "s
 
 [dev-dependencies]
 aegle-scene = { workspace = true, features = ["text"] }
-aegle-render-software = { workspace = true, features = ["text"] }
+aegle-render-tiny-skia = { workspace = true, features = ["text"] }
 aegle-text = { workspace = true, features = ["scene"] }
 
 [lints.rust]

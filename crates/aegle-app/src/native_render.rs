@@ -123,7 +123,7 @@ macro_rules! target {
     };
 }
 #[cfg(feature = "software")]
-target!(aegle_render_software::Frame<'_, '_, '_>);
+target!(aegle_render_tiny_skia::Frame<'_, '_, '_>);
 #[cfg(feature = "vulkan")]
 target!(aegle_render_vulkan::Frame<'_>);
 #[cfg(feature = "wgpu")]
@@ -207,7 +207,7 @@ impl Runtime {
                     let presented = self
                         .backend
                         .present(entry.id, damage, |pixels, size, region| -> Result<()> {
-                            let mut surface = aegle_render_software::Surface::new_bgra(
+                            let mut surface = aegle_render_tiny_skia::Surface::new_bgra(
                                 pixels,
                                 size.width,
                                 size.height,

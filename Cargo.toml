@@ -20,7 +20,7 @@ aegle-dbus = { path = "crates/aegle-dbus", version = "0.1.0" }
 aegle-desktop = { path = "crates/aegle-desktop", version = "0.1.0" }
 aegle-layout = { path = "crates/aegle-layout", version = "0.1.0" }
 aegle-scene = { path = "crates/aegle-scene", version = "0.1.0" }
-aegle-render-software = { path = "crates/aegle-render-software", version = "0.1.0" }
+aegle-render-tiny-skia = { path = "crates/aegle-render-tiny-skia", version = "0.1.0" }
 aegle-gpu = { path = "crates/aegle-gpu", version = "0.1.0" }
 aegle-render-vulkan = { path = "crates/aegle-render-vulkan", version = "0.1.0" }
 aegle-render-wgpu = { path = "crates/aegle-render-wgpu", version = "0.1.0" }
@@ -64,7 +64,7 @@ strip = "symbols"
 [profile.dev.package."*"]
 opt-level = 2
 
-[profile.dev.package.aegle-render-software]
+[profile.dev.package.aegle-render-tiny-skia]
 opt-level = 2
 
 [profile.dev.package.aegle-platform-wayland]

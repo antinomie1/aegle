@@ -39,8 +39,8 @@ fn compare(
     let mut pixels = vec![0; size as usize * size as usize * 4];
     renderer.read_pixels(&mut pixels)?;
     let mut expected = vec![0; pixels.len()];
-    let mut surface = aegle_render_software::Surface::new(&mut expected, size, size)?;
-    aegle_render_software::Renderer::default()
+    let mut surface = aegle_render_tiny_skia::Surface::new(&mut expected, size, size)?;
+    aegle_render_tiny_skia::Renderer::default()
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw_clipped(scene, transform, clip)?;
     for (i, (&actual, &reference)) in pixels.iter().zip(&expected).enumerate() {

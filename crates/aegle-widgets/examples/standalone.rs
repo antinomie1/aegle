@@ -10,7 +10,7 @@ use aegle_ui::OrFail;
 use std::{cell::RefCell, fs, rc::Rc, sync::Arc, time::Duration};
 
 use aegle_motion::{Spring, Transition};
-use aegle_render_software::{Renderer, Surface};
+use aegle_render_tiny_skia::{Renderer, Surface};
 use aegle_text::{GenericFamily, TextSystem};
 use aegle_theme::Theme;
 use aegle_ui::{Modifiers, Point, PointerId, PointerKind, Result, Size, Ui, Visit};

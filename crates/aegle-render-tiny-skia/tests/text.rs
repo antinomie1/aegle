@@ -1,7 +1,7 @@
 //! Real shaped CJK records share clipping, transforms, colors and glyph lifetime.
 #![cfg(feature = "text")]
 
-use aegle_render_software::{Renderer, Surface};
+use aegle_render_tiny_skia::{Renderer, Surface};
 use aegle_scene::{
     Affine, Blob, Color, FontData, Glyph, GlyphRun, Point, Rect, RoundedRect, SceneBuilder,
 };
@@ -140,7 +140,7 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
                 Affine::IDENTITY,
                 Some(Rect::new(0.0, 0.0, 63.5, 48.0)),
             ),
-        Err(aegle_render_software::RenderError::MaskBudget {
+        Err(aegle_render_tiny_skia::RenderError::MaskBudget {
             required: 6144,
             limit: 0
         })

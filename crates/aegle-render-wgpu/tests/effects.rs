@@ -43,8 +43,8 @@ fn gradients_and_shadows_match_software() -> Result {
     let mut pixels = vec![0; (SIZE * SIZE * 4) as usize];
     renderer.read_pixels(&mut pixels)?;
     let mut expected = vec![0; pixels.len()];
-    let mut surface = aegle_render_software::Surface::new(&mut expected, SIZE, SIZE)?;
-    aegle_render_software::Renderer::default()
+    let mut surface = aegle_render_tiny_skia::Surface::new(&mut expected, SIZE, SIZE)?;
+    aegle_render_tiny_skia::Renderer::default()
         .begin_frame(&mut surface, Color::WHITE)
         .draw(&scene, Affine::IDENTITY)?;
     let differences = pixels.iter().zip(&expected).map(|(a, b)| a.abs_diff(*b));

@@ -1,5 +1,5 @@
 //! Headless retained editor: selection, transient preedit, commit and delta undo.
-use aegle_render_software::{Renderer, Surface};
+use aegle_render_tiny_skia::{Renderer, Surface};
 use aegle_scene::{Affine, Color, Rect, RoundedRect, SceneBuilder};
 use aegle_text::{Editor, EditorOptions, EditorPaint, Selection, TextStyle, TextSystem};
 use std::{error::Error, fs::File, io::BufWriter, sync::Arc, time::Instant};

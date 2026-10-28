@@ -37,9 +37,9 @@ cargo run -p aegle-widgets --features motion --example standalone --release
 cargo run -p aegle-widgets --example custom_control --release
 cargo test --workspace --all-features
 cargo run -p aegle-layout --example retained --release
-cargo run -p aegle-render-software --example software_scene --release
-cargo run -p aegle-render-software --features text --example text_scene --release
-cargo run -p aegle-render-software --features text --example editor_scene --release
+cargo run -p aegle-render-tiny-skia --example software_scene --release
+cargo run -p aegle-render-tiny-skia --features text --example text_scene --release
+cargo run -p aegle-render-tiny-skia --features text --example editor_scene --release
 cargo doc --workspace --all-features --no-deps
 ```
 
@@ -56,7 +56,7 @@ cargo doc --workspace --all-features --no-deps
 - `aegle-text`：段落、字体回退、纯文本编辑、组合与有界 delta 撤销。
 - `aegle-glyph`：按需字形光栅化与有界图像缓存，含合成粗体/斜体；`colrv1`、`svg` feature 增加 COLRv1 与 OpenType-SVG 字形。
 - `aegle-image`：有界图像解码，PNG 加可选 JPEG、WebP、GIF 首帧与静态 SVG 栅格化。
-- `aegle-render-software`：借用帧缓冲与线性光合成。
+- `aegle-render-tiny-skia`：借用帧缓冲与线性光合成。
 - `aegle-gpu`：Vulkan 与 wgpu 后端共用、与图形 API 无关的图元/裁剪记录、场景遍历、图集装箱、图像与路径 mask 放置及 WGSL 着色器。
 - `aegle-render-vulkan`：几何与文字、原生 swapchain、有界分配、显式离屏读回。
 - `aegle-render-wgpu`：可选的全平台几何、文字、图像与路径，离屏或原生 surface。

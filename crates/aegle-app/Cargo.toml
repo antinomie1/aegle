@@ -29,7 +29,7 @@ native = ["wayland", "windows", "macos"]
 wayland = ["dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
 macos = ["dep:aegle-platform-macos"]
-software = ["dep:aegle-render-software"]
+software = ["dep:aegle-render-tiny-skia"]
 # Vulkan is the Linux and Windows GPU path and reports `Unsupported` on macOS;
 # `wgpu` reaches Metal there.
 vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
@@ -45,7 +45,7 @@ aegle-types.workspace = true
 aegle-scene.workspace = true
 aegle-text.workspace = true
 aegle-access = { workspace = true, optional = true }
-aegle-render-software = { workspace = true, features = ["text"], optional = true }
+aegle-render-tiny-skia = { workspace = true, features = ["text"], optional = true }
 aegle-render-vulkan = { workspace = true, features = ["text", "window"], optional = true }
 aegle-render-wgpu = { workspace = true, features = ["text", "window"], optional = true }
 

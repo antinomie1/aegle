@@ -10,13 +10,13 @@
 | `aegle-widgets` | 全部默认控件与皮肤，经 `Widgets` trait 在 `Container` 上创建 | 使用默认控件时 |
 | `aegle-theme` | `Theme`、`Style`、`Appearance`、`Skin`、`Token` 等纯值类型，no_std、不分配 | 不经引擎使用这些值时；`aegle-ui` 已重导出全部类型 |
 | `aegle-motion` | `Tween`、`Animation`、`Easing`、`Spring`，由调用者提供时间 | 不经引擎做补间时；`aegle-ui` 的 `motion` feature 已重导出 |
-| `aegle-render-software` 等 | 绘制 `Ui::visit_scenes` 给出的 scene | 没有自己的 renderer 时 |
+| `aegle-render-tiny-skia` 等 | 绘制 `Ui::visit_scenes` 给出的 scene | 没有自己的 renderer 时 |
 
 ```toml
 [dependencies]
 aegle-ui = { path = "../aegle/crates/aegle-ui", features = ["system-fonts"] }
 aegle-widgets = { path = "../aegle/crates/aegle-widgets", features = ["motion"] }
-aegle-render-software = { path = "../aegle/crates/aegle-render-software", features = ["text"] }
+aegle-render-tiny-skia = { path = "../aegle/crates/aegle-render-tiny-skia", features = ["text"] }
 ```
 
 | 需要 | feature | 说明 |

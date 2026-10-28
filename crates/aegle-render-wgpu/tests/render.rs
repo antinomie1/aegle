@@ -20,8 +20,8 @@ fn gpu(renderer: &mut Renderer, scene: &Scene, clip: Option<Rect>) -> Result<Vec
 
 fn software(scene: &Scene, clip: Option<Rect>) -> Result<Vec<u8>> {
     let mut pixels = vec![0; (SIZE * SIZE * 4) as usize];
-    let mut surface = aegle_render_software::Surface::new(&mut pixels, SIZE, SIZE)?;
-    aegle_render_software::Renderer::default()
+    let mut surface = aegle_render_tiny_skia::Surface::new(&mut pixels, SIZE, SIZE)?;
+    aegle_render_tiny_skia::Renderer::default()
         .begin_frame(&mut surface, Color::rgb(250, 250, 250))
         .draw_clipped(scene, Affine::IDENTITY, clip)?;
     Ok(pixels)

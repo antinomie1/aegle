@@ -96,7 +96,7 @@ dependencies = [
  "aegle-image",
  "aegle-loader",
  "aegle-macros",
- "aegle-render-software",
+ "aegle-render-tiny-skia",
  "aegle-text",
  "aegle-ui",
  "aegle-widgets",
@@ -124,7 +124,7 @@ dependencies = [
  "aegle-platform-macos",
  "aegle-platform-wayland",
  "aegle-platform-win32",
- "aegle-render-software",
+ "aegle-render-tiny-skia",
  "aegle-render-vulkan",
  "aegle-render-wgpu",
  "aegle-scene",
@@ -300,7 +300,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aegle-render-software"
+name = "aegle-render-tiny-skia"
 version = "0.1.0"
 dependencies = [
  "aegle-core",
@@ -321,7 +321,7 @@ dependencies = [
  "aegle-gpu",
  "aegle-platform",
  "aegle-platform-wayland",
- "aegle-render-software",
+ "aegle-render-tiny-skia",
  "aegle-scene",
  "aegle-text",
  "aegle-types",
@@ -338,7 +338,7 @@ version = "0.1.0"
 dependencies = [
  "aegle-glyph",
  "aegle-gpu",
- "aegle-render-software",
+ "aegle-render-tiny-skia",
  "aegle-scene",
  "aegle-text",
  "aegle-types",
@@ -422,7 +422,7 @@ dependencies = [
  "aegle-image",
  "aegle-layout",
  "aegle-motion",
- "aegle-render-software",
+ "aegle-render-tiny-skia",
  "aegle-scene",
  "aegle-text",
  "aegle-theme",

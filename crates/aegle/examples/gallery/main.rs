@@ -16,7 +16,7 @@ use aegle::{
     },
     widgets::Widgets,
 };
-use aegle_render_software::{Renderer, Surface};
+use aegle_render_tiny_skia::{Renderer, Surface};
 use aegle_text::GenericFamily;
 use aegle_ui::OrFail;
 use std::{

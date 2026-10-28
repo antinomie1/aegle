@@ -1,6 +1,6 @@
 //! Gradient fills interpolate in linear light and pad their ends; shadows fall
 //! off around the shape within three standard deviations and respect clips.
-use aegle_render_software::{Renderer, Surface};
+use aegle_render_tiny_skia::{Renderer, Surface};
 use aegle_scene::{
     Affine, Color, Gradient, GradientStop, Point, Rect, RoundedRect, Scene, SceneBuilder,
 };

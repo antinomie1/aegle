@@ -1,6 +1,6 @@
 //! Layers composite their content once at an opacity; backdrop blur softens
 //! what lies beneath inside the layer shape only; budgets and pairing hold.
-use aegle_render_software::{RenderError, Renderer, Surface};
+use aegle_render_tiny_skia::{RenderError, Renderer, Surface};
 use aegle_scene::{Affine, Color, Layer, Rect, RoundedRect, Scene, SceneBuilder};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;

@@ -1,10 +1,10 @@
 //! Times a 1280×800 frame of stripes alone, with a 480×320 group-opacity
 //! layer, and with a σ=8 backdrop blur under that layer.
 //!
-//! `cargo run --release -p aegle-render-software --example software_layer_cost`
+//! `cargo run --release -p aegle-render-tiny-skia --example software_layer_cost`
 use std::time::Instant;
 
-use aegle_render_software::{Renderer, Surface};
+use aegle_render_tiny_skia::{Renderer, Surface};
 use aegle_scene::{Affine, Color, Layer, Rect, RoundedRect, Scene, SceneBuilder};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;

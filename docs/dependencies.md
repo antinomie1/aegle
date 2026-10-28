@@ -40,7 +40,7 @@
 
 Wayland 库本身没有 AccessKit 依赖；Unix adapter 由 aegle-app 的 `accessibility` 经 `aegle-access/platform` 引入，Windows 与 macOS 的适配器在同一 feature 下只为各自目标构建。构建时纳入 async-io/zbus 不等于启动即创建线程，首次构造 UnixAdapter 才启动上游 worker；此后 worker 的生命周期、无界队列和语义缓存成本见[资源](resources.md)。Unix 原生文字选择可用，但当前上游缺少 AT-SPI EditableText 接口；不能用依赖版本声明代替完整控件支持。
 
-`aegle-glyph` 默认用平台光栅器：Linux 是运行时加载的 FreeType，Windows 是 GDI `GetGlyphOutlineW`，macOS 是 CoreText `CTFontCreatePathForGlyph`；后两者把轮廓交给共享的 `outline.rs`（tiny-skia 覆盖率）。只有 `swash` feature 才用 Swash std/render 与 Skrifa 0.44 解析字体；`swash` 路径仍使用 png 的有界解码接口处理嵌入 PNG，避免无上限的中间解码分配。`aegle-render-software/text` 与 `aegle-render-vulkan/text` 显式引入此依赖闭包和 scene/text，均不依赖 Parley；默认纯几何构建没有字体栈或 PNG。Vulkan 图集索引复用已有 hashbrown 0.17，不增加另一套字体解析或栅格库。Cargo 测试/示例的 dev-dependencies 不代表库的发布依赖，仍需核查最终应用的 feature 合并。
+`aegle-glyph` 默认用平台光栅器：Linux 是运行时加载的 FreeType，Windows 是 GDI `GetGlyphOutlineW`，macOS 是 CoreText `CTFontCreatePathForGlyph`；后两者把轮廓交给共享的 `outline.rs`（tiny-skia 覆盖率）。只有 `swash` feature 才用 Swash std/render 与 Skrifa 0.44 解析字体；`swash` 路径仍使用 png 的有界解码接口处理嵌入 PNG，避免无上限的中间解码分配。`aegle-render-tiny-skia/text` 与 `aegle-render-vulkan/text` 显式引入此依赖闭包和 scene/text，均不依赖 Parley；默认纯几何构建没有字体栈或 PNG。Vulkan 图集索引复用已有 hashbrown 0.17，不增加另一套字体解析或栅格库。Cargo 测试/示例的 dev-dependencies 不代表库的发布依赖，仍需核查最终应用的 feature 合并。
 
 SVG 默认以路径图标/构建期资产为主；可选运行时 resvg（`aegle-image/svg`、OpenType-SVG 字形的 `aegle-glyph/svg`）不处理 SVG text、外部 URL 或网络资源。需要 SVG 文字时在构建期转轮廓。构建期转换为位图需要指定尺寸/缩放档位，不能宣称与任意动态缩放完全等价。
 

@@ -61,7 +61,7 @@ aegle-image.workspace = true
 
 [dev-dependencies]
 aegle-text.workspace = true
-aegle-render-software = { workspace = true, features = ["text"] }
+aegle-render-tiny-skia = { workspace = true, features = ["text"] }
 png = "0.18.1"
 
 [[example]]
