@@ -17,9 +17,9 @@
 | 输入到首次相关呈现 | p95 ≤ 33 ms，p99 ≤ 50 ms | 60 Hz 场景；端到端测量，不仅测 setter |
 | UI 布局及构造绘制提交工作 | p95 ≤ 4 ms | 不把 GPU 等待计为纯 CPU 计算 |
 | 首帧 | 热启动 ≤ 200 ms，冷启动 ≤ 600 ms | 包含字体发现，分别报告缓存冷热 |
-| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-11-02 起文字与字形改用系统栈（Pango/Fontconfig/FreeType，运行时加载），x86_64 Linux 默认 feature 构建 `hello` 为 **2,580,056 B（2.46 MiB）**，比 Parley 时代同构建的 4,891,328 B（4.66 MiB）少 2.31 MiB，**达到**且余量充足。构成：`.text` 1.98 MB、`.rodata` 95 KB、`.eh_frame` 165 KB、`.rela.dyn` 138 KB；`ldd` 只剩 libxkbcommon、libm、libc 与 libgcc_s，Pango/FreeType/Fontconfig 由 `libloading` 在运行时打开，不计入发布文件。内置 ICU 词典数据在后一阶段已彻底移除，改由运行时向系统分词器取词，所以同一构建不再有 3.63 MiB 的词典增量。只开 `native,software,system-fonts` 的最小组合与默认组合只差 markup/motion/effects/desktop-services。Windows 同类构建在 Parley 时代为 3,487,232 B（2026-10-10 测量），DirectWrite 后端落地后需重测 |
+| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-11-02 起文字与字形改用系统栈（Pango/Fontconfig/FreeType，运行时加载），x86_64 Linux 默认 feature 构建 `hello` 为 **2,580,056 B（2.46 MiB）**（2026-11-02 工具链上的测量；同一台机器 2026-10-28 的工具链测得 2,494,112 B，加入后端无关字体身份后同构建的相对增量为 +2,144 B），比 Parley 时代同构建的 4,891,328 B（4.66 MiB）少 2.31 MiB，**达到**且余量充足。构成：`.text` 1.98 MB、`.rodata` 95 KB、`.eh_frame` 165 KB、`.rela.dyn` 138 KB；`ldd` 只剩 libxkbcommon、libm、libc 与 libgcc_s，Pango/FreeType/Fontconfig 由 `libloading` 在运行时打开，不计入发布文件。内置 ICU 词典数据在后一阶段已彻底移除，改由运行时向系统分词器取词，所以同一构建不再有 3.63 MiB 的词典增量。只开 `native,software,system-fonts` 的最小组合与默认组合只差 markup/motion/effects/desktop-services。Windows 同类构建在 Parley 时代为 3,487,232 B（2026-10-10 测量）。DirectWrite + GDI 后端已落地但**未在 Windows 上构建或测量**，因此这里不写新数字，只记口径：同为 release、thin LTO、strip 的默认 feature `hello`，不含系统 DLL 与系统字体；需在真机重测。macOS 同此。 |
 | 默认组件文字场景发布文件 | ≤ 16 MiB | 包含默认无障碍、主题、补间；不含可选高级模块 |
-| 最小窗口 / 100 控件场景 PSS | ≤ 32 / 48 MiB | Linux 测量，包含可归因的用户态驱动映射；系统服务进程另列 |
+| 最小窗口 / 100 控件场景 PSS | ≤ 32 / 48 MiB | Linux 测量，包含可归因的用户态驱动映射；系统服务进程另列。Windows/macOS 未测 |
 | 场景显式 GPU 分配 | ≤ 16 MiB | 800×480；计入图集、纹理和临时附件；swapchain 估计与驱动隐藏分配另列 |
 
 这些是暴露取舍的工程门槛。未达到时先定位成本，再调整实现或记录带证据的预算修订；不为满足数字删除已承诺的文字、IME 或无障碍行为。实际硬件不满足 Vulkan 能力时应报告不可支持，不能伪造测量。
@@ -56,11 +56,11 @@ mask 保留至同尺寸的后续帧使用；尺寸改变先释放旧像素缓冲
 
 `GlyphKey` 将这份身份作为无分配借用接口公开，统一验证光栅参数并规范化负零相位。CPU 缓存及图集消费者使用完整字段/变化轴相等比较，不能只把哈希值当身份；`mask()` 清除前景色，但命中时仍须确认条目确为灰度。`OwnedGlyphKey` 只复制变化轴，不持有字体字节；字体与 glyph 解析仍在真正光栅化的资源边界进行，已有图集命中无需再次查询 CPU 缓存。
 
-源位图解码缓冲与 PNG 解码器内部各自使用 2 MiB 默认 allowance；COLRv0 临时层 mask 同样受 bitmap 上限约束。这些成本独立于字形图像预算，不能把两个上限之和宣传为总峰值。哈希/LRU 元数据、变化轴数组、轮廓点、扫描及 hinting 存储另计。`stats()` 提供图像字节、条目及表容量，不声称完整 RAM 统计。Swash 上下文最多缓存 4 个字体代理，内部每种轮廓格式最多 8 个 hint 实例，但没有公开字节计量。
+源位图解码缓冲与 PNG 解码器内部各自使用 2 MiB 默认 allowance；COLRv0 临时层 mask 同样受 bitmap 上限约束。Windows 的 GDI 路径与 macOS 的 CoreGraphics 路径各自最多缓存 4 个平台字体对象（HFONT/HDC 或 CTFont），与 FreeType 的 4 个 face 上限一致；两者都不缓存字体字节（`FaceSource::Bytes` 由 scene/TextSystem 持有的句柄维持寿命），`outline.rs` 的轮廓点与 tiny-skia 扫描线属于短期 scratch，不计入字形图像预算。Windows 的临时字体文件（每个注册字体一份）计入磁盘而非 RAM。这些成本独立于字形图像预算，不能把两个上限之和宣传为总峰值。哈希/LRU 元数据、变化轴数组、轮廓点、扫描及 hinting 存储另计。`stats()` 提供图像字节、条目及表容量，不声称完整 RAM 统计。Swash 上下文最多缓存 4 个字体代理，内部每种轮廓格式最多 8 个 hint 实例，但没有公开字节计量。
 
 `GlyphCache::release_scratch()` 释放光栅化临时存储并保留完成图像；`clear()` 同时释放图像和索引。renderer 的 `release_scratch()` 也释放 glyph scratch，清空图像须显式调用 `glyph_cache_mut().clear()`。字形缓存不持有字体文件；活动段落和 scene 共享字体句柄。scene 的存储统计含 run/位置/变化轴数组，不重复计入共享字体字节。
 
-`TextSystem::trim()` 在系统栈下释放进程级字体文件缓存（活动段落保留下一步重读，`FontData` 句柄被替换前仍共享原字节），`text-parley` 下重建 shaping 临时上下文并清除 source cache；注册字体、metadata 和活动段落保持有效。Parley shaping 缓存有 16 条上限，未暴露完整字节预算。`trim` 也丢弃不再被任何段落或编辑器使用的驻留字体族名。
+`TextSystem::trim()` 在系统栈下释放进程级字体文件缓存（活动段落保留下一步重读，`FontData` 句柄被替换前仍共享原字节）；Linux 下是 Pango 的字体文件缓存，Windows 下是 DirectWrite 字体文件句柄，macOS 下 CoreText 没有可释放的句柄。`text-parley` 下重建 shaping 临时上下文并清除 source cache；注册字体、metadata 和活动段落保持有效。Parley shaping 缓存有 16 条上限，未暴露完整字节预算。`trim` 也丢弃不再被任何段落或编辑器使用的驻留字体族名。
 
 空闲文字预算是全应用的：`TextSystem::set_idle_budget(bytes)` 限制共享该 TextSystem 的所有宿主中未显示、仍保留排版的段落文字字节，默认 `None` 不回收。宿主以 `report_idle` 上报，`aegle-ui` 的每个 Ui 在刷新末尾扫描文字控件（与 `visit_scenes` 同一可见判定），总量超出时按最久未显示先释放本窗口段落的 Parley 排版与绘制记录，段落只留文字、shaping 键与约束；再次显示、测量或求基线时重新成形。预算计 UTF-8 字节，排版内存随文字增长但不等于这个数；回收只在刷新的窗口进行，关闭的窗口撤回上报。编辑器的活动编辑状态不回收。设置预算后被释放的屏外段落在每次重新布局时都会重新成形，换取屏外期间不占排版内存。
 

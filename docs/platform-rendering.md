@@ -71,6 +71,8 @@ scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基
 
 保留 `Editor` 也使用同一文字绘制函数；选区背景、预编辑下划线和 caret 从当前排版生成几何，再录入普通 scene 命令。宿主负责焦点/闪烁时机、滚动与裁剪，模块没有自己的定时器。候选窗使用 `ime_rect()` 的未裁剪局部文字几何；长单行文字溢出字段宽度时不能只截断右边缘而产生负宽度。原生平台 adapter 应统一应用呈现/滚动变换后再转换坐标。
 
+字形光栅化按平台走系统后端：Linux 是 FreeType，Windows 是 GDI `GetGlyphOutlineW(GGO_NATIVE)`，macOS 是 `CTFontCreatePathForGlyph`；后两者把轮廓交给 `aegle-glyph/src/outline.rs` 的共享 path→coverage，输出与 FreeType 相同格式的 8-bit 灰度 mask，因此三个平台的 scene 字形记录与 renderer 路径完全一致。Windows/macOS 的彩色字形返回 `UnsupportedGlyph`（GDI 与 CoreGraphics 的轮廓 API 都拿不到 COLR/CBDT/SVG），不画成黑白近似。
+
 正向、轴对齐、均匀缩放的文字在设备字号光栅化，基线取整到设备像素、水平原点按四分之一像素相位取整，排版 advance 保持原值；灰度覆盖率经与前景亮度相关的共用对比曲线，平衡线性混合下深色/浅色文字的粗细；旋转、反射、斜切和非均匀缩放通过逆变换双线性采样。彩色字形在线性预乘空间过滤，字形接口输出非预乘 sRGB，合成后仍遵守 `Surface` 的预乘 sRGB 格式。前景透明度只应用一次。灰度 glyph 与前景色分离，颜色主题更新可复用字形缓存；彩色格式范围与错误见[文字](text-input.md)。
 
 `Surface` 借用紧密排列、从上到下的 RGBA8（`Surface::new`）或 BGRA8（`Surface::new_bgra`）字节切片，要求长度准确等于宽×高×4。BGRA8 是小端 Wayland XRGB8888 与 Windows 32 位 DIB 的内存顺序，原生软件宿主直接画进平台缓冲，不再逐像素转换；renderer 在生成颜色处（纯色、渐变色标、图像与彩色字形纹素、阴影色）交换红蓝，混合按通道独立进行，两种顺序的结果只差红蓝互换。大端 Wayland 目标在呈现前把区域内像素反转为 XRGB。begin_frame 清空整帧；`begin_region(surface, clear, rect)` 只清空并绘制向外取整到整像素的矩形，其余像素保留，供保留上一帧的宿主局部重绘，矩形外的绘制不需要 mask；损伤有多个矩形时宿主逐个调用。draw 按调用次序合成保留记录；无像素变化时宿主不调用绘制。错误可能发生在部分像素已更新之后，失败帧不得呈现。
