@@ -13,8 +13,9 @@ use objc2_core_foundation::{
 };
 use objc2_core_text::{
     CTFont, CTFontDescriptor, CTParagraphStyle, CTParagraphStyleSetting, CTParagraphStyleSpecifier,
-    CTTextAlignment, kCTFontAttributeName, kCTFontFamilyNameAttribute, kCTFontSlantTrait,
-    kCTFontTraitsAttribute, kCTFontWeightTrait, kCTParagraphStyleAttributeName,
+    CTTextAlignment, CTUnderlineStyle, kCTFontAttributeName, kCTFontFamilyNameAttribute,
+    kCTFontSlantTrait, kCTFontTraitsAttribute, kCTFontWeightTrait, kCTParagraphStyleAttributeName,
+    kCTUnderlineStyleAttributeName,
 };
 
 use crate::Alignment;
@@ -126,10 +127,16 @@ pub(crate) fn paragraph_style(
     unsafe { CTParagraphStyle::new(settings.as_ptr(), settings.len()) }
 }
 
-/// The attribute dictionary for one run: font and paragraph style.
+/// The attribute dictionary for one run: font, paragraph style and, when
+/// `underline` is set, a single underline over the whole run.
+///
+/// The editor draws preedit underlines itself, so this is only used for a
+/// paragraph that requested one; CoreText then draws it as part of the glyph
+/// run, which is what the Pango backend gets from `PANGO_UNDERLINE_SINGLE`.
 pub(crate) fn text_attributes(
     font: &CTFont,
     style: &CTParagraphStyle,
+    underline: bool,
 ) -> CFRetained<CFMutableDictionary<CFString, CFType>> {
     let attributes = dictionary();
     // SAFETY: both keys are static CoreFoundation strings and both values are
@@ -138,8 +145,14 @@ pub(crate) fn text_attributes(
         attributes.set(kCTFontAttributeName, font);
         attributes.set(kCTParagraphStyleAttributeName, style);
     }
-    attributes
+    if underline {
+        let value = CFNumber::new_i32(CTUnderlineStyle::Single.bits());
+        // SAFETY: the key is a static CoreFoundation string and the value is a
+        // live CoreFoundation number.
+        unsafe {
+            attributes.set(kCTUnderlineStyleAttributeName, &value);
+        }
+    }
+    // SAFETY: the dictionary holds `CFString` keys and `CFType` values.
+    unsafe { CFRetained::cast_unchecked(attributes) }
 }
-
-/// Keeps the `CFType` import meaningful for the dictionary casts above.
-const _: Option<fn() -> &'static CFType> = None;

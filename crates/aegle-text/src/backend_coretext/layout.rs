@@ -108,32 +108,22 @@ impl CoreTextLayout {
     ) {
         self.attributed = None;
         self.frame = None;
-        let Some(font) = system.font(shaping) else {
+        self.shaping = Some(shaping.clone());
+        self.underline = underline;
+        if system.font(shaping).is_none() {
             return;
-        };
-        let natural = natural_line_height(&font);
-        let target = offsets::line_height(self.line_height, natural, self.font_size).map(f64::from);
-        let style = sys::paragraph_style(self.alignment, target);
-        let attributes = sys::text_attributes(&font, &style);
-        // SAFETY: the string, attributes and font are live for the call and
-        // CoreFoundation copies what the attributed string needs; the result is
-        // reference counted.
-        let attributed = unsafe {
-            let text = sys::cf_string(&self.text);
-            let attributes: CFRetained<CFDictionary> = CFRetained::cast_unchecked(attributes);
-            CFAttributedString::new(None, Some(&text), Some(&attributes))
-        };
-        let Some(attributed) = attributed else {
-            return;
-        };
-        let _ = underline;
-        self.attributed = Some(attributed);
+        }
+        self.build_attributed();
         self.build_frame();
         self.measure();
         self.capture_runs();
     }
 
-    /// Builds only the attributed string, for a reflow that keeps the font.
+    /// Builds the attributed string from the retained shaping key.
+    ///
+    /// The font, paragraph style (alignment and line height) and attributes all
+    /// live here, so a reflow that only changes the width can reuse the string
+    /// while a changed alignment or line height rebuilds it.
     fn build_attributed(&mut self) {
         let Some(shaping) = self.shaping.clone() else {
             return;
@@ -151,9 +141,10 @@ impl CoreTextLayout {
         let natural = natural_line_height(&font);
         let target = offsets::line_height(self.line_height, natural, self.font_size).map(f64::from);
         let style = sys::paragraph_style(self.alignment, target);
-        let attributes = sys::text_attributes(&font, &style);
-        // SAFETY: the string, attributes and font are live for the call; the
-        // result is reference counted.
+        let attributes = sys::text_attributes(&font, &style, self.underline.is_some());
+        // SAFETY: the string, attributes and font are live for the call;
+        // CoreFoundation copies what the attributed string needs, and the result
+        // is reference counted.
         self.attributed = unsafe {
             let text = sys::cf_string(&self.text);
             let attributes: CFRetained<CFDictionary> = CFRetained::cast_unchecked(attributes);
