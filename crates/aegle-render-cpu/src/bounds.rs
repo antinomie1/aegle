@@ -1,7 +1,6 @@
 //! Whole-pixel rectangles of a surface that drawing reads and writes.
 
 use aegle_types::Rect;
-use tiny_skia::Path;
 
 use crate::Surface;
 
@@ -49,13 +48,20 @@ impl Bounds {
             bounds
         })
     }
-    pub(crate) fn path(path: &Path, surface: &Surface<'_>) -> Self {
-        let b = path.bounds();
-        Self {
-            left: b.left().floor().clamp(0.0, surface.width as f32) as usize,
-            top: b.top().floor().clamp(0.0, surface.height as f32) as usize,
-            right: b.right().ceil().clamp(0.0, surface.width as f32) as usize,
-            bottom: b.bottom().ceil().clamp(0.0, surface.height as f32) as usize,
+    /// The whole pixels a rectangle touches, rounded outward and clamped to the
+    /// surface.
+    pub(crate) fn of(rect: Rect, surface: &Surface<'_>) -> Self {
+        let (width, height) = (surface.width as f32, surface.height as f32);
+        let bounds = Self {
+            left: rect.origin.x.floor().clamp(0.0, width) as usize,
+            top: rect.origin.y.floor().clamp(0.0, height) as usize,
+            right: (rect.origin.x + rect.size.width).ceil().clamp(0.0, width) as usize,
+            bottom: (rect.origin.y + rect.size.height).ceil().clamp(0.0, height) as usize,
+        };
+        if bounds.is_empty() {
+            Self::EMPTY
+        } else {
+            bounds
         }
     }
     pub(crate) fn intersect(self, other: Self) -> Self {

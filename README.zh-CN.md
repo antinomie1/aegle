@@ -4,7 +4,7 @@
 
 Aegle 是面向 Rust 2024 的模块化保留模式 GUI 库，关注低内存占用、事件驱动更新、CJK 文字与原生输入法。控件创建一次，之后通过句柄修改；界面空闲时不重绘也不轮询。
 
-它由一组相互独立的 crate 组成（保留树、Taffy 布局、文字与字形、绘制 scene、软件 / Vulkan / wgpu 渲染器、Wayland、Win32 与 macOS 平台后端、控件、主题、标记语言），再加上把它们串起来的 `aegle` facade。项目仍在开发中，尚未发布到 crates.io；当前可用的能力见[实现状态](docs/implementation.md)。
+它由一组相互独立的 crate 组成（保留树、Taffy 布局、文字与字形、绘制 scene、软件（tiny-skia 或系统 cairo）/ Vulkan / wgpu 渲染器、Wayland、Win32 与 macOS 平台后端、控件、主题、标记语言），再加上把它们串起来的 `aegle` facade。项目仍在开发中，尚未发布到 crates.io；当前可用的能力见[实现状态](docs/implementation.md)。
 
 ## 最小开始
 
@@ -56,7 +56,8 @@ fn main() -> Result<()> {
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
 | `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit |
-| `software` | ✓ | CPU 软件绘制 |
+| `software` | ✓ | CPU 软件绘制（tiny-skia 覆盖率） |
+| `cairo` |  | Linux 上经系统 `libcairo.so.2` 的 CPU 绘制，运行时加载 |
 | `system-fonts` | ✓ | 系统字体发现 |
 | `markup` | ✓ | `ui!` 宏与标记引擎，含运行时加载 |
 | `motion` | ✓ | 过渡、关键帧动画与弹簧 |

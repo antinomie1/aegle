@@ -40,6 +40,7 @@ cargo run -p aegle-layout --example retained --release
 cargo run -p aegle-render-tiny-skia --example software_scene --release
 cargo run -p aegle-render-tiny-skia --features text --example text_scene --release
 cargo run -p aegle-render-tiny-skia --features text --example editor_scene --release
+cargo run -p aegle-render-cairo --release --example cairo_cost
 cargo doc --workspace --all-features --no-deps
 ```
 
@@ -56,7 +57,9 @@ cargo doc --workspace --all-features --no-deps
 - `aegle-text`：段落、字体回退、纯文本编辑、组合与有界 delta 撤销。
 - `aegle-glyph`：按需字形光栅化与有界图像缓存，含合成粗体/斜体；`colrv1`、`svg` feature 增加 COLRv1 与 OpenType-SVG 字形。
 - `aegle-image`：有界图像解码，PNG 加可选 JPEG、WebP、GIF 首帧与静态 SVG 栅格化。
-- `aegle-render-tiny-skia`：借用帧缓冲与线性光合成。
+- `aegle-render-cpu`：两个 CPU 后端共用的合成器（线性光混合、裁剪 mask 预算、图层与模糊、渐变/阴影、图像与字形采样），只把抗锯齿几何覆盖率交给 `Rasterizer`。
+- `aegle-render-tiny-skia`：CPU 合成器加 tiny-skia 覆盖率光栅器。
+- `aegle-render-cairo`：CPU 合成器加系统 cairo 覆盖率光栅器（仅 Linux，运行时加载 `libcairo.so.2`）。
 - `aegle-gpu`：Vulkan 与 wgpu 后端共用、与图形 API 无关的图元/裁剪记录、场景遍历、图集装箱、图像与路径 mask 放置及 WGSL 着色器。
 - `aegle-render-vulkan`：几何与文字、原生 swapchain、有界分配、显式离屏读回。
 - `aegle-render-wgpu`：可选的全平台几何、文字、图像与路径，离屏或原生 surface。
@@ -87,7 +90,7 @@ cargo run -p aegle --no-default-features --features native,software,system-fonts
 cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,markup --example scrolling --release
 ```
 
-同时编译多个渲染器时，把 `AppOptions.renderer` 显式设为 `RendererBackend::Vulkan` 或 `RendererBackend::Wgpu`；软件仍是默认。驱动、feature 或预算失败返回错误，不会切换后端。只带 Vulkan 的最小构建默认使用 Vulkan。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
+同时编译多个渲染器时，把 `AppOptions.renderer` 显式设为 `RendererBackend::Vulkan`、`RendererBackend::Wgpu` 或 Linux 上的 `RendererBackend::Cairo`；软件仍是默认。驱动、feature 或预算失败返回错误，不会切换后端。只带 Vulkan 的最小构建默认使用 Vulkan。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
 
 可选的 wgpu 后端（`wgpu` feature、`RendererBackend::Wgpu`）绘制几何、文字、图像与路径；用 `WGPU_BACKEND` 和 `WGPU_ADAPTER_NAME` 选择适配器。契约见 [wgpu](wgpu.md)。
 

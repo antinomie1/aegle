@@ -228,3 +228,75 @@ fn software_windows_reject_a_translucent_background() -> Result {
     );
     Ok(())
 }
+
+/// The cairo backend draws the same window through a different coverage
+/// rasterizer; a translucent background is rejected identically, and a window
+/// with pixel-aligned shapes presents.
+#[test]
+#[cfg(all(feature = "cairo", target_os = "linux"))]
+#[ignore = "requires an isolated test desktop; never run on the user's desktop"]
+fn cairo_windows_present_and_reject_a_translucent_background() -> Result {
+    assert_eq!(
+        std::env::var("AEGLE_TEST_COMPOSITOR").as_deref(),
+        Ok("private")
+    );
+    let settings = AppOptions {
+        renderer: aegle_app::RendererBackend::Cairo,
+        ..Default::default()
+    };
+    let app = App::with_fonts(test_fonts()?, settings)?;
+    let window = app.window_with_options(
+        "Cairo",
+        WindowOptions {
+            width: 240,
+            height: 160,
+            ..Default::default()
+        },
+    )?;
+    window.set_background(aegle_ui::Color::WHITE);
+    let row = window.row();
+    for color in [
+        aegle_ui::Color::rgb(30, 90, 200),
+        aegle_ui::Color::rgb(200, 40, 40),
+    ] {
+        let cell = row.column();
+        cell.set_width(40.0);
+        cell.set_height(40.0);
+        cell.set_background(color);
+    }
+    window.text("Cairo 渲染");
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        app.dispatch(Some(Duration::from_millis(20)))?;
+    }
+    assert!(row.bounds().size.width > 0.0);
+    drop(window);
+    drop(app);
+
+    let mut theme = aegle_ui::Theme::light();
+    theme.background = aegle_types::Color::rgba(255, 255, 255, 128);
+    let options = AppOptions {
+        renderer: aegle_app::RendererBackend::Cairo,
+        theme,
+        dark_theme: None,
+        high_contrast_theme: None,
+        ..Default::default()
+    };
+    let app = App::with_fonts(test_fonts()?, options)?;
+    let _window = app.window("Translucent")?;
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let error = loop {
+        match app.dispatch(Some(Duration::from_millis(20))) {
+            Err(error) => break error,
+            Ok(_) => assert!(
+                Instant::now() < deadline,
+                "a translucent frame was presented"
+            ),
+        }
+    };
+    assert_eq!(
+        error.to_string(),
+        "software windows require an opaque background"
+    );
+    Ok(())
+}

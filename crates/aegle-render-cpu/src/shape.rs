@@ -4,22 +4,28 @@
 //! rasterized, the fully covered inside of a fill is written directly and the
 //! hole of a border is skipped. A rounded border rasterizes its ring once and
 //! reads only the bands around the hole; other shapes use the general path.
+//!
+//! This is the pixel-alignment contract shared by every CPU backend: an upright
+//! shape is never sent to a rasterizer, so a fill or border whose device edges
+//! land on whole pixels covers exactly those pixels with coverage 255 and its
+//! neighbours with 0, on every backend.
 
 use aegle_scene::{Affine, RoundedRect};
 use aegle_types::Color;
-use tiny_skia::FillRule;
 
 use crate::{
-    RenderError,
+    Mask, Rasterizer, RenderError,
     blend::Solid,
-    path,
-    raster::{Bounds, Frame, State, coverage_product},
+    bounds::Bounds,
+    outline,
+    raster::Frame,
+    raster::{FillRule, State, coverage_product},
 };
 
 /// Device edges `[left, top, right, bottom]`.
 type Edges = [f32; 4];
 
-impl Frame<'_, '_, '_> {
+impl<R: Rasterizer> Frame<'_, '_, '_, R> {
     pub(crate) fn paint(
         &mut self,
         shape: RoundedRect,
@@ -34,25 +40,29 @@ impl Frame<'_, '_, '_> {
             && shape.radius() == 0.0
         {
             let (outer, hole) = sharp(shape, width, [a, d, e, f]);
-            path::validate_bounds(outer)?;
+            outline::validate_bounds(outer)?;
             self.sharp(outer, hole, color, state);
             return Ok(());
         }
-        let path = self.geometry(shape, width, state.transform)?;
-        let bounds = state.bounds.intersect(Bounds::path(&path, self.surface));
+        let path = self.shape(shape, width, state.transform)?;
+        let bounds = state.bounds.intersect(self.path_bounds(&path));
         match rounded_hole(shape, width, state.transform).map(|hole| hole.intersect(bounds)) {
             // The ring lies in the bands: rasterize it once, read only them.
             Some(hole) if !hole.is_empty() => {
                 let bands = bounds.around(hole);
-                self.cover_parts(&path, FillRule::EvenOdd, color, state, &bands);
-                self.renderer.path = path.clear();
+                let result = self.cover_parts(&path, FillRule::EvenOdd, color, state, &bands);
+                self.renderer.raster.release(path);
+                result?;
             }
-            _ => self.fill_device(path, FillRule::EvenOdd, color, state),
+            _ => self.fill_device(path, FillRule::EvenOdd, color, state)?,
         }
         Ok(())
     }
 
     /// Draws an upright sharp-cornered fill, or a border when `hole` is set.
+    ///
+    /// Coverage is exact pixel area, so this path never reaches a rasterizer and
+    /// every CPU backend writes the same bytes for it.
     fn sharp(&mut self, outer: Edges, hole: Option<Edges>, color: Color, state: State) {
         let (width, height) = (self.surface.width as f32, self.surface.height as f32);
         type Round = fn(f32) -> f32;
@@ -78,20 +88,20 @@ impl Frame<'_, '_, '_> {
             true => [bounds, Bounds::EMPTY, Bounds::EMPTY, Bounds::EMPTY],
             false => bounds.around(inside),
         };
-        let clip = state
-            .clips
-            .checked_sub(1)
-            .map(|index| self.renderer.masks[index + 1].data());
+        let clip = state.clips.checked_sub(1);
         let paint = Solid::new(self.surface.color(color));
         let stride = self.surface.width as usize;
         for row in parts.iter().flat_map(|part| part.rows(stride)) {
             let y = (row.start / stride) as f32;
+            let clip_row = clip.map(|index| self.renderer.masks[index + 1].row(y as usize));
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
             paint.blend_span(pixels, row.start, |i| {
                 let x = (i % stride) as f32;
                 let area = overlap(outer, x, y) - hole.map_or(0.0, |hole| overlap(hole, x, y));
                 let coverage = (area * 255.0 + 0.5) as u8;
-                clip.map_or(coverage, |c| coverage_product(coverage, c[i]))
+                clip_row.map_or(coverage, |clip| {
+                    coverage_product(coverage, clip[i % stride])
+                })
             });
         }
         if hole.is_none() && !inside.is_empty() {
@@ -101,14 +111,12 @@ impl Frame<'_, '_, '_> {
 
     /// Fills whole pixels at full coverage, within the current clip.
     fn solid(&mut self, inner: Bounds, color: Color, state: State) {
-        let clip = state
-            .clips
-            .checked_sub(1)
-            .map(|index| self.renderer.masks[index + 1].data());
+        let clip = state.clips.checked_sub(1);
         let color = self.surface.color(color);
         let rgba = color.to_rgba();
+        let stride = self.surface.width as usize;
         if clip.is_none() && rgba[3] == 255 {
-            for row in inner.rows(self.surface.width as usize) {
+            for row in inner.rows(stride) {
                 for pixel in self.surface.data[row.start * 4..row.end * 4]
                     .as_chunks_mut::<4>()
                     .0
@@ -119,9 +127,13 @@ impl Frame<'_, '_, '_> {
             return;
         }
         let paint = Solid::new(color);
-        for row in inner.rows(self.surface.width as usize) {
+        for row in inner.rows(stride) {
+            let y = row.start / stride;
+            let clip_row = clip.map(|index| self.renderer.masks[index + 1].row(y));
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
-            paint.blend_span(pixels, row.start, |i| clip.map_or(255, |clip| clip[i]));
+            paint.blend_span(pixels, row.start, |i| {
+                clip_row.map_or(255, |clip| clip[i % stride])
+            });
         }
     }
 }
@@ -134,7 +146,7 @@ fn overlap([left, top, right, bottom]: Edges, x: f32, y: f32) -> f32 {
 }
 
 /// The device edges of an upright sharp-cornered fill, or of a centered
-/// border's outside and hole, as `path::build` outlines them.
+/// border's outside and hole, as `outline::shape_segments` outlines them.
 fn sharp(shape: RoundedRect, width: Option<f32>, [a, d, e, f]: [f32; 4]) -> (Edges, Option<Edges>) {
     let rect = shape.rect();
     let (x, y) = (rect.origin.x, rect.origin.y);

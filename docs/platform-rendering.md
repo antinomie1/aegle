@@ -6,7 +6,7 @@
 
 | 平台 | 首版目标 | 绘制与输入 |
 | --- | --- | --- |
-| Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；SCTK + wayland-client；text-input-v3 |
+| Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | 软件绘制（默认，tiny-skia 或系统 cairo 覆盖光栅）、可选 ash/Vulkan 与 wgpu；SCTK + wayland-client；text-input-v3 |
 | Windows | Windows 11，x86_64/aarch64 | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；原生窗口；TSF 文本存储输入法 |
 | macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 软件绘制（默认）或经可选 wgpu 使用 Metal；AppKit 窗口、NSTextInputClient；无 Vulkan |
 
@@ -34,9 +34,9 @@ GPU 路径的轴对齐裁剪用整数范围，圆角与小数裁剪由 shader �
 
 原生 GPU 呈现目标为默认 FIFO、最多两帧在途；有像素变化才请求新帧；GPU 路径每次绘制完整窗口，Vulkan 在支持 `VK_KHR_incremental_present` 时只向合成器上报变化区域；软件路径只重绘并上报变化区域（见[资源](resources.md)）。四条路径的像素结果相同，差别只在重绘与上报的范围。当前离屏 Vulkan 只保留一次在途提交。后台上传和临时资源遵守[资源预算](resources.md)。DeviceLost 停止相关提交并报告，首版不隐藏地切换后端。
 
-三个后端的能力差异如下，没有运行时能力查询：差异在编译期（feature）或创建时（所选后端）已确定，未支持的命令使帧返回错误，不静默跳过。
+各后端的能力差异如下，没有运行时能力查询：差异在编译期（feature）或创建时（所选后端）已确定，未支持的命令使帧返回错误，不静默跳过。两个 CPU 后端（软件 tiny-skia 与 Linux 的 cairo）共用同一套合成实现，能力完全相同，见下文“CPU 后端的共享合成”。
 
-| | 软件 | Vulkan | wgpu |
+| | 软件（tiny-skia / cairo） | Vulkan | wgpu |
 | --- | --- | --- | --- |
 | 应用纹理（`SceneBuilder::texture`） | 不支持，帧返回 `UnsupportedCommand` | 支持（独立使用需 `text`） | 支持（独立使用需 `text`） |
 | 文字、图像、路径 | 支持 | 需 `text` feature | 需 `text` feature |
@@ -79,9 +79,17 @@ scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基
 
 tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、按需初始化转换表，避免逐像素幂运算；每次绘制量化到 RGBA8，完全不透明覆盖直接复制。透明背景、半透明叠加与旋转已有像素级验证。裁剪 mask 的预算、复用与释放见[资源](resources.md)。
 
+## CPU 后端的共享合成
+
+`aegle-render-cpu` 持有两个 CPU 后端共用的部分：线性光 source-over 合成、矩形与圆角裁剪及其 mask 预算、离屏图层与三次盒式背景模糊、解析式渐变与阴影、双线性图像采样、以及 `aegle-glyph` 字形的采样。只有抗锯齿几何覆盖率经 `Rasterizer` trait 交给具体光栅器，因此光栅器从不接触颜色。`aegle-render-tiny-skia` 与 `aegle-render-cairo` 都只是这个合成器加一种覆盖率实现，两者公开的 `Renderer`/`Frame`/`Surface` 与错误类型相同。
+
+像素对齐由合成器保证，不由光栅器决定：正立、直角、轴对齐的填充与边框按逐像素精确面积计算，完全不经过光栅器；轴对齐的显式路径虽经光栅器，整像素边缘的覆盖率在两者也都是精确的 0/255。设备边缘落在整像素时，覆盖正好是整像素的 255 与相邻像素的 0；落在半像素时相邻两像素各 128。因此两个 CPU 后端对这类几何输出逐字节相同，`aegle-render-cairo/tests/parity.rs` 直接比较两者：填充、边框、整像素裁剪、轴对齐路径（填充、描边与 even-odd）、图像、渐变、阴影与组透明度层在 cairo 1.18.6 上**逐字节相同**。圆角、任意路径与描边经各自光栅器，边缘覆盖率按光栅器自身的曲线细分与采样量化而不同：tiny-skia 每像素取四条子扫描线（覆盖量化到 1/4 步），cairo 计算精确面积，实测差在单个覆盖率步内、不跨越全覆与未覆。
+
+Linux 的 cairo 后端（`cairo` feature，`RendererBackend::Cairo`）在运行时用 `libloading` 打开发行版的 `libcairo.so.2`，构建期不链接、不读头文件；只绑定图像 surface、路径与 mask 入口，不涉及窗口系统、字体、PDF/SVG 后端。缺失该库时 `Renderer::new`/`aegle_render_cairo::renderer()` 返回 `RenderError::BackendUnavailable`，帧失败而不会静默换成另一光栅器。覆盖缓冲区是 cairo `A8` 图像 surface，行距按 cairo 要求补到 4 字节倍数；补白从不被读，且计入 mask 预算。曲线细分容差取 0.01 设备像素（cairo 默认 0.1 在 UI 半径的浅弧上误差可见）。代价实测（i5-13600KF，1280×800，224 个矩形，`cargo run --release -p aegle-render-cairo --example cairo_cost`，三次运行中位数）：直角填充与边框两者相同（1.70 ms，都不进光栅器），圆角版本 tiny-skia 4.45 ms、cairo 5.18 ms（+17%）。
+
 ## 图层
 
-`Frame::push_layer(&Layer)` 与 `pop_layer()` 在三个后端语义一致。`Layer` 记录形状（圆角矩形加变换）、内容范围、可选设备裁剪、不透明度和背景模糊标准差。push 后的绘制进入一张覆盖范围（与裁剪求交）的线性图像，pop 时以不透明度 source-over 合成到下层，仍受裁剪限制。可嵌套；帧结束时仍打开的层先依次合成。软件 `Frame` 在 drop 时同样合成，所以读取表面前要先结束 frame。
+`Frame::push_layer(&Layer)` 与 `pop_layer()` 在各后端语义一致。`Layer` 记录形状（圆角矩形加变换）、内容范围、可选设备裁剪、不透明度和背景模糊标准差。push 后的绘制进入一张覆盖范围（与裁剪求交）的线性图像，pop 时以不透明度 source-over 合成到下层，仍受裁剪限制。可嵌套；帧结束时仍打开的层先依次合成。软件 `Frame` 在 drop 时同样合成，所以读取表面前要先结束 frame。
 
 背景模糊为正时，push 先对已绘制内容做模糊，按层形状和裁剪、以层不透明度画回，再开始绘制层内容。模糊采用 W3C 三次盒式近似：`d = floor(σ·3√(2π)/4 + 0.5)`，上限 4095。d 为奇数时用三个居中的盒；为偶数时用 (左 d/2, 宽 d)、(左 d/2−1, 宽 d)、(左 d/2, 宽 d+1)。先横向三遍再纵向三遍，边缘夹取。σ 先乘层变换的 √|det|。软件后端在线性光预乘下计算；GPU 端按 `aegle-gpu` 的计划，把采样区复制到暂存图像后跑六遍 `blur.wgsl`，参数编码在实例索引中。
 

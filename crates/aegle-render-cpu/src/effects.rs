@@ -3,16 +3,16 @@
 
 use aegle_scene::{Affine, Gradient, GradientGeometry, RoundedRect};
 use aegle_types::{Color, Point};
-use tiny_skia::FillRule;
 
 use crate::{
-    Frame, RenderError,
+    Frame, Mask, Rasterizer, RenderError,
     blend::{blend_linear_span, linear_rgba},
-    path,
-    raster::{Bounds, State, coverage_product},
+    bounds::Bounds,
+    outline,
+    raster::{FillRule, State, coverage_product},
 };
 
-impl Frame<'_, '_, '_> {
+impl<R: Rasterizer> Frame<'_, '_, '_, R> {
     pub(crate) fn paint_gradient(
         &mut self,
         shape: RoundedRect,
@@ -31,31 +31,35 @@ impl Frame<'_, '_, '_> {
             );
         }
         let stops = &stops[..gradient.stops().len()];
-        let path = path::build(
-            std::mem::take(&mut self.renderer.path),
-            shape,
-            None,
-            state.transform,
-        )?;
-        let bounds = state.bounds.intersect(Bounds::path(&path, self.surface));
+        let path = self.shape(shape, None, state.transform)?;
+        let bounds = state.bounds.intersect(self.path_bounds(&path));
         let (coverage, clips) = self.renderer.masks.split_at_mut(1);
-        crate::raster::rasterize(&mut coverage[0], &path, bounds, FillRule::EvenOdd);
-        let (mask, clip) = (coverage[0].data(), state.clips.checked_sub(1));
-        let clip = clip.map(|index| clips[index].data());
+        crate::raster::fill_mask(
+            &mut self.renderer.raster,
+            &mut coverage[0],
+            &path,
+            FillRule::EvenOdd,
+            bounds,
+        )?;
+        let clip = state.clips.checked_sub(1).map(|index| &clips[index]);
         let width = self.surface.width as usize;
         for (y, row) in (bounds.top..).zip(bounds.rows(width)) {
-            let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
+            let (pixels, mask) = (
+                &mut self.surface.data[row.start * 4..row.end * 4],
+                coverage[0].row(y),
+            );
+            let clip_row = clip.map(|clip| clip.row(y));
             blend_linear_span(pixels, row.start, |i, _| {
-                let alpha = clip.map_or(mask[i], |clip| coverage_product(mask[i], clip[i]));
+                let x = i % width;
+                let alpha = clip_row.map_or(mask[x], |clip| coverage_product(mask[x], clip[x]));
                 if alpha == 0 {
                     return ([0.0; 4], 0);
                 }
-                let x = (i % width) as f32;
-                let local = inverse.map_point(Point::new(x + 0.5, y as f32 + 0.5));
+                let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
                 (ramp(stops, offset(gradient, local)), alpha)
             });
         }
-        self.renderer.path = path.clear();
+        self.renderer.raster.release(path);
         Ok(())
     }
 
@@ -88,7 +92,7 @@ impl Frame<'_, '_, '_> {
                 device[3].max(corner.y),
             ];
         }
-        path::validate_bounds(device)?;
+        outline::validate_bounds(device)?;
         let (width, height) = (self.surface.width as f32, self.surface.height as f32);
         let bounds = state.bounds.intersect(Bounds {
             left: device[0].floor().clamp(0.0, width) as usize,
@@ -98,7 +102,6 @@ impl Frame<'_, '_, '_> {
         });
         let paint = linear_rgba(self.surface.color(color).to_rgba());
         let clip = state.clips.checked_sub(1);
-        let clip = clip.map(|index| self.renderer.masks[index + 1].data());
         let half = (rect.size.width * 0.5, rect.size.height * 0.5);
         let center = (rect.origin.x + half.0, rect.origin.y + half.1);
         let shadow = Shadow {
@@ -128,10 +131,11 @@ impl Frame<'_, '_, '_> {
             let start = inverse.map_point(Point::new(bounds.left as f32 + 0.5, y as f32 + 0.5));
             let rows = shadow.rows(start.y - center.1);
             let shared = !columns.is_empty() && rows.iter().all(|&(curved, _)| curved == straight);
+            let clip_row = clip.map(|index| self.renderer.masks[index + 1].row(y));
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
             blend_linear_span(pixels, row.start, |i, _| {
                 let x = i % row_width;
-                let alpha = clip.map_or(255, |clip| clip[i]);
+                let alpha = clip_row.map_or(255, |clip| clip[x]);
                 let value = if shared {
                     let part = columns[x - bounds.left];
                     let value: f32 = rows.iter().map(|&(_, mass)| part * mass).sum();

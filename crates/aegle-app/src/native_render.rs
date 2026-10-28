@@ -15,13 +15,24 @@ use aegle_ui::Result;
     all(access, target_os = "macos")
 ))]
 pub(crate) type Surface = <crate::Native as aegle_platform::SurfacePlatform>::Surface;
-#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+#[cfg(any(
+    feature = "software",
+    feature = "cairo",
+    feature = "vulkan",
+    feature = "wgpu"
+))]
 use {aegle_scene::Affine, aegle_types::Rect, aegle_ui::Ui};
 
 pub(crate) fn validate_backend(renderer: RendererBackend) -> Result<()> {
     match renderer {
         RendererBackend::Software if !cfg!(feature = "software") => {
             Err("software rendering requires the software feature".into())
+        }
+        RendererBackend::Cairo if !cfg!(feature = "cairo") => {
+            Err("cairo rendering requires the cairo feature".into())
+        }
+        RendererBackend::Cairo if !cfg!(target_os = "linux") => {
+            Err("cairo rendering is available on Linux only".into())
         }
         RendererBackend::Vulkan if !cfg!(feature = "vulkan") => {
             Err("Vulkan rendering requires the vulkan feature".into())
@@ -89,7 +100,12 @@ pub(crate) fn create_wgpu(
 }
 
 /// A renderer frame the UI's records and layers are drawn into.
-#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+#[cfg(any(
+    feature = "software",
+    feature = "cairo",
+    feature = "vulkan",
+    feature = "wgpu"
+))]
 trait Target {
     fn scene(
         &mut self,
@@ -101,7 +117,12 @@ trait Target {
     fn pop(&mut self) -> Result<()>;
 }
 
-#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+#[cfg(any(
+    feature = "software",
+    feature = "cairo",
+    feature = "vulkan",
+    feature = "wgpu"
+))]
 macro_rules! target {
     ($frame:ty) => {
         impl Target for $frame {
@@ -123,13 +144,20 @@ macro_rules! target {
     };
 }
 #[cfg(feature = "software")]
-target!(aegle_render_tiny_skia::Frame<'_, '_, '_>);
+target!(aegle_render_tiny_skia::Frame<'_, '_, '_, aegle_render_tiny_skia::TinySkia>);
+#[cfg(feature = "cairo")]
+target!(aegle_render_cairo::Frame<'_, '_, '_, aegle_render_cairo::CairoRaster>);
 #[cfg(feature = "vulkan")]
 target!(aegle_render_vulkan::Frame<'_>);
 #[cfg(feature = "wgpu")]
 target!(aegle_render_wgpu::Frame<'_>);
 
-#[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+#[cfg(any(
+    feature = "software",
+    feature = "cairo",
+    feature = "vulkan",
+    feature = "wgpu"
+))]
 fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
     let scale = Affine::scale(factor, factor);
     // Node clips snap to whole device pixels, like a scissor rectangle; the
@@ -159,7 +187,7 @@ fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
 
 /// The UI's changed area in buffer pixels of a `width` × `height` window at
 /// `scale`; `None` for all of it.
-#[cfg(any(feature = "software", feature = "vulkan"))]
+#[cfg(any(feature = "software", feature = "cairo", feature = "vulkan"))]
 fn device_damage(
     ui: &Ui,
     scale: f32,
@@ -179,7 +207,12 @@ impl Runtime {
     // Without a renderer feature no App is created, and only the
     // unreachable arm remains.
     #[cfg_attr(
-        not(any(feature = "software", feature = "vulkan", feature = "wgpu")),
+        not(any(
+            feature = "software",
+            feature = "cairo",
+            feature = "vulkan",
+            feature = "wgpu"
+        )),
         allow(unreachable_code)
     )]
     pub(crate) fn present(&mut self) -> Result<()> {
@@ -187,9 +220,19 @@ impl Runtime {
             if !std::mem::take(&mut entry.ready) {
                 continue;
             }
-            #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+            #[cfg(any(
+                feature = "software",
+                feature = "cairo",
+                feature = "vulkan",
+                feature = "wgpu"
+            ))]
             let info = self.backend.window_info(entry.id)?;
-            #[cfg(any(feature = "software", feature = "vulkan", feature = "wgpu"))]
+            #[cfg(any(
+                feature = "software",
+                feature = "cairo",
+                feature = "vulkan",
+                feature = "wgpu"
+            ))]
             let background = entry.ui.background();
             match self.options.renderer {
                 #[cfg(feature = "software")]
@@ -208,6 +251,43 @@ impl Runtime {
                         .backend
                         .present(entry.id, damage, |pixels, size, region| -> Result<()> {
                             let mut surface = aegle_render_tiny_skia::Surface::new_bgra(
+                                pixels,
+                                size.width,
+                                size.height,
+                            )?;
+                            for rect in region.rects() {
+                                let rect = Rect::new(
+                                    rect.x as f32,
+                                    rect.y as f32,
+                                    rect.width as f32,
+                                    rect.height as f32,
+                                );
+                                let mut frame =
+                                    renderer.begin_region(&mut surface, background, rect);
+                                scenes(&entry.ui, scale, &mut frame)?;
+                            }
+                            Ok(())
+                        })
+                        .map_err(|error| format!("present: {error}"))?;
+                    if presented {
+                        entry.ui.clear_damage();
+                    }
+                }
+                #[cfg(feature = "cairo")]
+                RendererBackend::Cairo => {
+                    // Cairo composites into the same retained BGRA buffer, so it
+                    // shares the opaque-background rule and damage-only redraw.
+                    if background.to_rgba()[3] != 255 {
+                        return Err("software windows require an opaque background".into());
+                    }
+                    let renderer = self.cairo.as_mut().unwrap();
+                    let scale = info.scale;
+                    let size = info.buffer;
+                    let damage = device_damage(&entry.ui, scale, size.width, size.height);
+                    let presented = self
+                        .backend
+                        .present(entry.id, damage, |pixels, size, region| -> Result<()> {
+                            let mut surface = aegle_render_cairo::Surface::new_bgra(
                                 pixels,
                                 size.width,
                                 size.height,

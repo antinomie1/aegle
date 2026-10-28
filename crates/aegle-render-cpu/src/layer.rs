@@ -5,18 +5,19 @@
 //! own masks. Popping blends it onto the next target in linear light.
 
 use aegle_scene::{Affine, BlurBox, Layer, Rect, blur_boxes, blur_reach};
-use tiny_skia::{FillRule, Mask};
 
 use crate::{
-    RenderError, Renderer, Surface,
+    Rasterizer, RenderError, Renderer, Surface,
     blend::{blend_linear, blend_linear_span, premultiplied_linear},
-    raster::{Bounds, Frame, rasterize},
+    bounds::Bounds,
+    coverage::Mask,
+    raster::{FillRule, Frame},
 };
 
 /// An open layer: its pixels and where they land in the surface.
-pub(crate) struct Open {
+pub(crate) struct Open<M> {
     pixels: Vec<u8>,
-    masks: Vec<Mask>,
+    masks: Vec<M>,
     /// Surface pixels the layer covers; empty when nothing of it can show.
     bounds: Bounds,
     /// Surface pixels the composite may change.
@@ -24,7 +25,7 @@ pub(crate) struct Open {
     opacity: f32,
 }
 
-impl Open {
+impl<M> Open<M> {
     fn width(&self) -> usize {
         self.bounds.right - self.bounds.left
     }
@@ -70,7 +71,7 @@ fn whole(rect: Rect) -> Bounds {
     }
 }
 
-impl Renderer {
+impl<R: Rasterizer> Renderer<R> {
     /// Limits the bytes of open layer images and blur scratch. Opening a
     /// layer beyond it fails with [`RenderError::EffectBudget`]; a backdrop
     /// blur beyond it is skipped and counted by [`Self::skipped_blurs`]. The
@@ -85,7 +86,7 @@ impl Renderer {
     }
 }
 
-impl Frame<'_, '_, '_> {
+impl<R: Rasterizer> Frame<'_, '_, '_, R> {
     /// Opens a layer: until the matching [`Self::pop_layer`], draws go to an
     /// offscreen image covering the layer's extent within the frame region,
     /// composited on pop. A positive backdrop blur first blurs what is
@@ -149,7 +150,7 @@ impl Frame<'_, '_, '_> {
         Ok(())
     }
 
-    fn composite(&mut self, open: &Open) {
+    fn composite(&mut self, open: &Open<R::Mask>) {
         if open.bounds.is_empty() || open.opacity == 0.0 {
             return;
         }
@@ -183,7 +184,7 @@ impl Frame<'_, '_, '_> {
     /// its masks, or on this frame; `shift` maps surface to target pixels.
     pub(crate) fn in_target<T>(
         &mut self,
-        draw: impl FnOnce(&mut Frame<'_, '_, '_>, Affine) -> Result<T, RenderError>,
+        draw: impl FnOnce(&mut Frame<'_, '_, '_, R>, Affine) -> Result<T, RenderError>,
     ) -> Result<T, RenderError> {
         let Some(open) = self.layers.last_mut() else {
             return draw(self, Affine::IDENTITY);
@@ -275,13 +276,26 @@ impl Frame<'_, '_, '_> {
             .transform()
             .then(shift)
             .map_err(|_| RenderError::Coordinates)?;
-        let path = self.geometry(layer.shape(), None, transform)?;
-        rasterize(&mut self.renderer.masks[0], &path, area, FillRule::Winding);
-        self.renderer.path = path.clear();
-        let (mask, opacity) = (self.renderer.masks[0].data(), layer.opacity());
+        let path = self.shape(layer.shape(), None, transform)?;
+        let area_bounds = Bounds {
+            left: area.left,
+            top: area.top,
+            right: area.right,
+            bottom: area.bottom,
+        };
+        crate::raster::fill_mask(
+            &mut self.renderer.raster,
+            &mut self.renderer.masks[0],
+            &path,
+            FillRule::NonZero,
+            area_bounds,
+        )?;
+        self.renderer.raster.release(path);
+        let opacity = layer.opacity();
         for y in area.top..area.bottom {
+            let mask = self.renderer.masks[0].row(y);
             for x in area.left..area.right {
-                let coverage = mask[y * width + x];
+                let coverage = mask[x];
                 let blurred =
                     image[(y - sampled.top) * columns + x - sampled.left].map(|c| c * opacity);
                 let pixel = (y * width + x) * 4;
@@ -293,7 +307,7 @@ impl Frame<'_, '_, '_> {
     }
 }
 
-impl Drop for Frame<'_, '_, '_> {
+impl<R: Rasterizer> Drop for Frame<'_, '_, '_, R> {
     fn drop(&mut self) {
         while let Some(open) = self.layers.pop() {
             self.composite(&open);

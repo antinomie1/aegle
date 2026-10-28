@@ -121,7 +121,7 @@ GPUI 只有 Rust 一种入口：`div()` 加 Tailwind 风格方法（`.flex()`、
 | CPU 软件渲染 | 有，且是默认；无 GPU 可运行 | 无；需要 GPU 驱动 |
 | GPU | 直接 ash/Vulkan；可选 wgpu（Vulkan/Metal/DX12） | blade-graphics：Metal（macOS）、Vulkan（Linux）、D3D11（Windows） |
 | 绘制抽象 | `Scene` 绘制记录 + 三后端 | 元素树 → 图元 → GPU |
-| 路径 | CPU 光栅化成覆盖率 mask（tiny-skia/zeno），三后端一致 | lyon 三角化 + GPU；`etagere` 图集 |
+| 路径 | CPU 光栅化成覆盖率 mask（tiny-skia/zeno/cairo），各后端一致 | lyon 三角化 + GPU；`etagere` 图集 |
 | 文字 | 灰度字形图集，彩色字形按平台能力 | 字形图集；`cosmic-text`/CoreText/DirectWrite |
 | 局部重绘 | 软件路径按损伤矩形；GPU 整窗，Vulkan 可增量上报 | 公开 API 无损伤区域抽象；以帧为单位 |
 | 效果 | 渐变、解析阴影、组透明度、背景模糊图层、最多 8 层裁剪 | 渐变背景、box shadow、窗口背景外观；裁剪以矩形 `ContentMask` |
@@ -186,7 +186,7 @@ GPUI 在 Linux 上用 cosmic-text，macOS/Windows 用系统栈，因此三平台
 
 ## 8. 模块化、嵌入与构建资源
 
-Aegle 把能力拆成 29 个 crate：`types/core/layout/scene/text/glyph/segment/render-*/platform-*/access/theme/motion/controls/widgets/markup/macros/loader/app/ui/facade`，依赖方向单向，`aegle-ui` 是无窗口引擎，第三方控件库可只依赖 `aegle-ui`；`aegle-render-tiny-skia` 可以只做几何而不带字体栈；没有全局服务定位器、通用异步运行时或 winit。默认组合是“目标平台窗口 + 软件绘制 + 系统字体 + 标记 + 过渡”，Vulkan/wgpu/无障碍/Grid 按 feature 选择。文档记录 `hello` 默认 release 构建 2,580,056 B（2.46 MiB，另一工具链上的绝对测量，本机同构建为 2,494,112 B），目标 8 MiB；1000 控件无窗口场景首帧 3.69–3.88 ms、空闲刷新 23–25 µs/4 次分配，2000 行文档编辑器单字符输入 22 µs。整机 PSS、空闲 CPU、启动时间等仍是待验收目标，不是已完成结果。见[实现状态](implementation.md)、[资源](resources.md)、[crates 与示例](crates-and-examples.md)。
+Aegle 把能力拆成 31 个 crate：`types/core/layout/scene/text/glyph/segment/render-*/platform-*/access/theme/motion/controls/widgets/markup/macros/loader/app/ui/facade`，依赖方向单向，`aegle-ui` 是无窗口引擎，第三方控件库可只依赖 `aegle-ui`；`aegle-render-tiny-skia` 与 Linux 的 `aegle-render-cairo` 共用 `aegle-render-cpu` 的合成器、都只做几何而不带字体栈；没有全局服务定位器、通用异步运行时或 winit。默认组合是“目标平台窗口 + 软件绘制 + 系统字体 + 标记 + 过渡”，Vulkan/wgpu/无障碍/Grid 按 feature 选择。文档记录 `hello` 默认 release 构建 2,580,056 B（2.46 MiB，另一工具链上的绝对测量，本机同构建为 2,494,112 B），目标 8 MiB；1000 控件无窗口场景首帧 3.69–3.88 ms、空闲刷新 23–25 µs/4 次分配，2000 行文档编辑器单字符输入 22 µs。整机 PSS、空闲 CPU、启动时间等仍是待验收目标，不是已完成结果。见[实现状态](implementation.md)、[资源](resources.md)、[crates 与示例](crates-and-examples.md)。
 
 GPUI 是 1 个主 crate（`gpui`，63k 行 Rust、127 个文件，crate 发布包约 5.29 MB、约 47 个常规依赖）加若干 `gpui_*` 辅助 crate，平台后端在 0.2.2 中还是 `src/platform/{mac,linux,windows,blade,test}` 内部模块，main 分支已开始拆成 `gpui_macos`/`gpui_linux`/`gpui_windows`/`gpui_platform`。它提供完整应用生命周期（`Application`、`Window`、`Entity`、异步执行器、动作、菜单、提示框），但**没有** `aegle-ui` 那样的独立无窗口引擎。要嵌入已有宿主，需要自己实现 `Platform`/窗口层，成本远高于使用 `aegle-ui`。GPUI 的依赖与功能面也大得多：blade、cosmic-text、taffy、lyon、etagere、resvg/usvg、image、serde、schemars、smol 等；它没有以二进制体积、空闲唤醒或低内存为目标，也不提供软件渲染回退。这些不是缺陷，而是面向不同产品形态的取舍。
 

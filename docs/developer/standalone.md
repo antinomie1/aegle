@@ -10,7 +10,7 @@
 | `aegle-widgets` | 全部默认控件与皮肤，经 `Widgets` trait 在 `Container` 上创建 | 使用默认控件时 |
 | `aegle-theme` | `Theme`、`Style`、`Appearance`、`Skin`、`Token` 等纯值类型，no_std、不分配 | 不经引擎使用这些值时；`aegle-ui` 已重导出全部类型 |
 | `aegle-motion` | `Tween`、`Animation`、`Easing`、`Spring`，由调用者提供时间 | 不经引擎做补间时；`aegle-ui` 的 `motion` feature 已重导出 |
-| `aegle-render-tiny-skia` 等 | 绘制 `Ui::visit_scenes` 给出的 scene | 没有自己的 renderer 时 |
+| `aegle-render-tiny-skia`、Linux 上的 `aegle-render-cairo` | 绘制 `Ui::visit_scenes` 给出的 scene（两者共用 `aegle-render-cpu` 的合成器） | 没有自己的 renderer 时 |
 
 ```toml
 [dependencies]

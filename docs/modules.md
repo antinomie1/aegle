@@ -17,7 +17,9 @@
 | aegle-scene | 二维绘制命令、裁剪、共享图像/路径资源及可选字形记录；字形身份是后端无关的 `FontSource`（共享字节或平台字体句柄） | types |
 | aegle-gpu | GPU 后端共用、与图形 API 无关的部分：图元/裁剪记录、场景遍历、货架装箱、图像与路径 mask 放置、WGSL 着色器 | types、scene；vector feature 增加 zeno |
 | aegle-render-vulkan | 几何、可选字形图集、裁剪、离屏读回与可选原生 swapchain | types、scene；glyph 按 text feature 接入 |
-| aegle-render-tiny-skia | 无 GPU 栅格绘制，与 GPU 共用 scene/文字资源 | types、scene；glyph 按 text feature 接入 |
+| aegle-render-cpu | 两个 CPU 后端共用的合成器：线性光混合、裁剪 mask、图层/模糊、渐变/阴影、图像与字形采样 | types、scene；glyph 按 text feature 接入 |
+| aegle-render-tiny-skia | 无 GPU 栅格绘制（CPU 合成器 + tiny-skia 覆盖率），与 GPU 共用 scene/文字资源 | render-cpu、tiny-skia、scene |
+| aegle-render-cairo | Linux 上同一 CPU 合成器加系统 cairo 覆盖率（运行时加载） | render-cpu、scene、libloading |
 | aegle-render-wgpu | 可选的最小跨平台 GPU 后端：几何、字形图集、裁剪、离屏读回与原生 surface 呈现 | types、scene；glyph 按 text feature 接入 |
 | aegle-dbus | Linux 会话总线：认证、Hello、消息编解码（无 Unix fd 与 16 位整数），任意线程发送，阻塞或非阻塞读取 | 无 |
 | aegle-desktop | 桌面服务：文件选择对话框、通知、托盘及其菜单、全局快捷键；Linux 走会话总线（portal FileChooser/GlobalShortcuts、`org.freedesktop.Notifications`、StatusNotifierItem + dbusmenu），Windows 走 `IFileDialog`、`Shell_NotifyIconW`、`RegisterHotKey`；结果经一个线程安全回调送出，不依赖窗口或 UI | Linux 为 dbus |
@@ -51,7 +53,9 @@
 
 当前 `aegle-scene` 使用 no_std + alloc，默认只依赖 types；`text` 仅增加轻量的 `linebender_resource_handle`，通过共享 `FontData` 及独立 run 旁表保存字形记录，不引入 Parley 或 Swash。一个 run 的字体身份是 `FontSource::Bytes(FontData)` 或 `FontSource::System(SystemFont { backend, id })`：后者只是后端注册表键，scene 从不保存原生指针，`backend` 由 `SystemFont::DWRITE`/`CORETEXT` 区分。渲染器与图集把它当不透明身份。纯几何命令不携带完整字体/run 数据。图像与路径以 `Arc` 共享句柄保存在 scene 旁表，路径光栅化留在各 renderer 内部，不另设路径 crate。
 
-`aegle-render-tiny-skia` 借用调用方像素缓冲，不依赖 core、Taffy 或窗口；默认是纯几何构建，没有字体栈和 PNG 运行依赖。tiny-skia 0.12（仅 std/simd）完成覆盖率栅格化，小型自有实现完成线性光 SourceOver。`text` 显式增加 aegle-glyph，其 PNG 解码器用于字体内嵌位图。软件后端不依赖 aegle-text，其他 shaping 宿主也可提供 scene 字形记录。
+`aegle-render-cpu` 是 CPU 后端的共享合成器：它借用调用方像素缓冲，不依赖 core、Taffy 或窗口，也不依赖任何光栅库。线性光 SourceOver、裁剪 mask 预算、离屏图层与背景模糊、渐变/阴影、图像与字形采样都在这里；抗锯齿几何覆盖率经 `Rasterizer` trait 交给具体后端。`text` 显式增加 aegle-glyph，其 PNG 解码器用于字体内嵌位图。
+
+`aegle-render-tiny-skia` 是该合成器加 tiny-skia 0.12（仅 std/simd）的覆盖率光栅器；默认纯几何构建没有字体栈和 PNG 运行依赖。`aegle-render-cairo` 是同一合成器加发行版 `libcairo.so.2` 的覆盖率光栅器（仅 Linux，运行时用 libloading 加载，不链接、不读头文件），缺失时返回明确的 `BackendUnavailable`。两个 CPU 后端不依赖 aegle-text，其他 shaping 宿主也可提供 scene 字形记录；它们对正立直角几何的输出逐字节相同，差异只在光栅器的边缘采样。
 
 `aegle-render-vulkan` 通过 ash 0.38 和 bytemuck 1.25 消费相同 Scene，支持几何、最多八层裁剪及显式 RGBA8 读回。默认纯几何不带字体；可选 `text` 用 glyph、scene/text 和 hashbrown 管理按需 R8/RGBA8_SRGB 图集，复用下述字形身份与光栅策略，不依赖 Parley。没有 core、平台窗口库或软件 renderer 的正常依赖；可选 window 仅增加 raw-window-handle；Naga 30 仅在构建期生成 SPIR-V。swapchain 与 App 显式后端选择已接入，详见 [Vulkan 契约](vulkan.md)。
 
@@ -109,6 +113,7 @@ flowchart TD
   Ui --> Layout[layout / Taffy]
   Ui --> Text[text + glyph]
   Ui --> Visual[theme / motion / scene]
+  Render --> Cpu[render-cpu 共享合成]
   Ui --> Access[可选 access]
   Facade --> Loader
   Loader[可选 loader] --> Ui

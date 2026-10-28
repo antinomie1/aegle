@@ -1,18 +1,18 @@
-//! Arbitrary path coverage through tiny-skia and bilinear image sampling.
+//! Bilinear image sampling; path coverage comes from the rasterizer.
 
-use aegle_scene::{Affine, FillRule, Image, LineCap, LineJoin, Path, Rect, Stroke, Verb};
+use aegle_scene::{Affine, FillRule, Image, Path, Rect, Stroke};
 use aegle_types::{Color, Point};
-use tiny_skia::{PathStroker, Transform};
 
 use crate::{
-    Frame, RenderError, Surface,
+    Frame, Mask, Rasterizer, RenderError, Surface,
     blend::{blend_linear_span, linear_rgba},
-    path,
-    raster::{Bounds, State},
+    bounds::Bounds,
+    outline,
+    raster::State,
     surface::order,
 };
 
-impl Frame<'_, '_, '_> {
+impl<R: Rasterizer> Frame<'_, '_, '_, R> {
     pub(crate) fn paint_path(
         &mut self,
         path: &Path,
@@ -23,70 +23,14 @@ impl Frame<'_, '_, '_> {
         if color.to_rgba()[3] == 0 || state.bounds.is_empty() {
             return Ok(());
         }
-        let mut builder = std::mem::take(&mut self.renderer.path);
-        let mut points = path.points().iter().map(|p| (p.x, p.y));
-        let mut next = || points.next().unwrap();
-        for verb in path.verbs() {
-            match verb {
-                Verb::Move => {
-                    let (x, y) = next();
-                    builder.move_to(x, y);
-                }
-                Verb::Line => {
-                    let (x, y) = next();
-                    builder.line_to(x, y);
-                }
-                Verb::Quad => {
-                    let ((x1, y1), (x, y)) = (next(), next());
-                    builder.quad_to(x1, y1, x, y);
-                }
-                Verb::Cubic => {
-                    let ((x1, y1), (x2, y2), (x, y)) = (next(), next(), next());
-                    builder.cubic_to(x1, y1, x2, y2, x, y);
-                }
-                Verb::Close => builder.close(),
-            }
-        }
         // Fewer than two points or degenerate strokes cover no pixel.
-        let Some(local) = builder.finish() else {
-            return Ok(());
+        let rule = match stroke {
+            None => path.fill_rule(),
+            Some(_) => FillRule::NonZero,
         };
-        let [a, b, c, d, e, f] = state.transform.coefficients();
-        let transform = Transform::from_row(a, b, c, d, e, f);
-        let (local, rule) = match stroke {
-            None => (local, path.fill_rule()),
-            Some(stroke) => {
-                let style = tiny_skia::Stroke {
-                    width: stroke.width,
-                    miter_limit: 4.0,
-                    line_cap: match stroke.cap {
-                        LineCap::Butt => tiny_skia::LineCap::Butt,
-                        LineCap::Round => tiny_skia::LineCap::Round,
-                        LineCap::Square => tiny_skia::LineCap::Square,
-                    },
-                    line_join: match stroke.join {
-                        LineJoin::Miter => tiny_skia::LineJoin::Miter,
-                        LineJoin::Round => tiny_skia::LineJoin::Round,
-                        LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
-                    },
-                    dash: None,
-                };
-                let scale = PathStroker::compute_resolution_scale(&transform);
-                match local.stroke(&style, scale) {
-                    Some(outline) => (outline, FillRule::NonZero),
-                    None => return Ok(()),
-                }
-            }
-        };
-        let device = local.transform(transform).ok_or(RenderError::Coordinates)?;
-        let b = device.bounds();
-        path::validate_bounds([b.left(), b.top(), b.right(), b.bottom()])?;
-        let rule = match rule {
-            FillRule::NonZero => tiny_skia::FillRule::Winding,
-            FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
-        };
-        self.fill_device(device, rule, color, state);
-        Ok(())
+        // The rasterizer validates the device outline's range when it builds it.
+        let device = self.scene_path(path, stroke, state.transform)?;
+        self.fill_device(device, rule, color, state)
     }
 
     pub(crate) fn paint_image(
@@ -124,14 +68,18 @@ impl Frame<'_, '_, '_> {
         let edge = |p: f32, size: f32, footprint: f32| {
             ((size - p) / footprint + 0.5).clamp(0.0, 1.0) - (0.5 - p / footprint).clamp(0.0, 1.0)
         };
-        let clip = (state.clips > 0).then(|| self.renderer.masks[state.clips].data());
+        let clip = state
+            .clips
+            .checked_sub(1)
+            .map(|index| &self.renderer.masks[index + 1]);
         let (stride, bgra) = (self.surface.width as usize, self.surface.bgra);
         for row in bounds.rows(stride) {
             let y = (row.start / stride) as f32 + 0.5;
+            let clip_row = clip.map(|mask| mask.row(row.start / stride));
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
             blend_linear_span(pixels, row.start, |i, pixel| {
                 let local = inverse.map_point(Point::new((i % stride) as f32 + 0.5, y));
-                let coverage = clip.map_or(255, |mask| mask[i]);
+                let coverage = clip_row.map_or(255, |mask| mask[i % stride]);
                 if aligned {
                     let texel = order(bgra, fetch(image, local.x as u32, local.y as u32));
                     if texel[3] == 255 && coverage == 255 {
@@ -179,7 +127,7 @@ pub(crate) fn device_bounds(
     let y0 = fold(|p| p.y, f32::INFINITY, f32::min);
     let x1 = fold(|p| p.x, f32::NEG_INFINITY, f32::max);
     let y1 = fold(|p| p.y, f32::NEG_INFINITY, f32::max);
-    path::validate_bounds([x0, y0, x1, y1])?;
+    outline::validate_bounds([x0, y0, x1, y1])?;
     Ok(Bounds {
         left: x0.floor().clamp(0.0, surface.width as f32) as usize,
         top: y0.floor().clamp(0.0, surface.height as f32) as usize,

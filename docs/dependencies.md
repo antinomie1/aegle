@@ -5,7 +5,8 @@
 | 职责 | 基线 | 说明 |
 | --- | --- | --- |
 | 布局 | Taffy 0.14.0 | Flex/Block 默认，Grid 可选；低层树适配 |
-| 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由小型自有实现完成 |
+| 软件覆盖率栅格化 | tiny-skia 0.12.0 | 仅 std/simd，关闭默认 PNG；只用几何覆盖率，线性颜色合成由 `aegle-render-cpu` 完成 |
+| Linux 系统覆盖率栅格化 | 运行时加载 `libcairo.so.2`（libloading 0.8.9） | 仅 `aegle-render-cairo`：可选 CPU 后端，用发行版的 cairo 光栅化几何覆盖率。不链接、不读头文件、不内嵌 cairo；只绑定图像 surface/路径/mask 入口 |
 | Vulkan | ash 0.38.0+1.3.281 | 当前离屏/原生窗口几何及可选文字；loaded/std 动态加载，资源与同步由小型封装管理，不采用 vulkano；wgpu 只用于下一行的可选后端 |
 | 跨平台 GPU | wgpu 30.0.1 | 仅 `aegle-render-wgpu`：关闭默认 feature，启用 std、parking_lot、wgsl、vulkan、dx12、metal；不启用 GLES（无顶点存储缓冲）；适配器与设备请求由 `gpu.rs` 中约 20 行的 std `block_on`（`Wake` + `thread::park`）阻塞等待 |
 | GPU 数据布局 | bytemuck 1.25（当前锁定 1.25.2） | Pod/Zeroable 与安全字节转换；shader 布局按显式契约对应 |

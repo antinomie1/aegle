@@ -6,7 +6,9 @@
 //! feature, which adds the semantic tree and the target's adapter (AT-SPI, UI
 //! Automation or NSAccessibility). Enable `vulkan` or `wgpu` and select
 //! `RendererBackend::Vulkan` or `RendererBackend::Wgpu` for GPU presentation;
-//! `vulkan` reports `Unsupported` on macOS, where `wgpu` reaches Metal.
+//! `vulkan` reports `Unsupported` on macOS, where `wgpu` reaches Metal. On Linux,
+//! `cairo` adds a second CPU rasterizer that draws through the distribution's
+//! `libcairo.so.2` and is selected with `RendererBackend::Cairo`.
 //! Lower-level crates remain independent.
 //!
 //! [`prelude`] holds the common names; everything else stays under the crate

@@ -1,5 +1,7 @@
 use crate::Native;
 use aegle_platform::{PixelSize, Platform, SeatId, WindowId};
+#[cfg(feature = "cairo")]
+use aegle_render_cairo::Renderer as CairoRenderer;
 #[cfg(feature = "software")]
 use aegle_render_tiny_skia::Renderer;
 #[cfg(feature = "motion")]
@@ -16,9 +18,13 @@ use std::{
 /// Explicit rendering policy. Backend failures are returned without switching.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RendererBackend {
-    /// CPU rendering into the platform's native software surface.
-    /// Requires the `software` feature.
+    /// CPU rendering with tiny-skia coverage into the platform's native software
+    /// surface. Requires the `software` feature.
     Software,
+    /// CPU rendering with system cairo coverage into the platform's native
+    /// software surface. Requires the `cairo` feature and `libcairo.so.2` at run
+    /// time; a missing library fails the frame with a rendering error.
+    Cairo,
     /// Vulkan geometry and glyph rendering directly into a native swapchain.
     /// Requires the `vulkan` feature and a Vulkan-capable driver.
     Vulkan,
@@ -158,6 +164,8 @@ pub(crate) struct Runtime {
     pub fonts: Rc<RefCell<TextSystem>>,
     #[cfg(feature = "software")]
     pub renderer: Option<Renderer>,
+    #[cfg(feature = "cairo")]
+    pub cairo: Option<CairoRenderer>,
     pub options: AppOptions,
     /// UI-thread ends of [`UiProxy`] senders.
     pub proxies: Vec<Rc<RefCell<dyn crate::native_proxy::Drain>>>,
@@ -268,6 +276,10 @@ impl App {
             #[cfg(feature = "software")]
             renderer: (options.renderer == RendererBackend::Software)
                 .then(|| Renderer::new(options.mask_budget)),
+            #[cfg(feature = "cairo")]
+            cairo: (options.renderer == RendererBackend::Cairo)
+                .then(|| aegle_render_cairo::renderer(options.mask_budget))
+                .transpose()?,
             options,
             proxies: Vec::new(),
             #[cfg(feature = "motion")]

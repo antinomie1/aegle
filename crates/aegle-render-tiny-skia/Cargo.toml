@@ -12,13 +12,13 @@ categories.workspace = true
 
 [features]
 default = []
-text = ["aegle-scene/text", "dep:aegle-glyph", "aegle-glyph/scene"]
+text = ["aegle-render-cpu/text", "aegle-scene/text"]
 
 [dependencies]
+aegle-render-cpu.workspace = true
 aegle-types = { workspace = true, features = ["color-math"] }
 aegle-scene.workspace = true
 tiny-skia.workspace = true
-aegle-glyph = { workspace = true, optional = true }
 
 [dev-dependencies]
 aegle-core.workspace = true

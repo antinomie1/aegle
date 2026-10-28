@@ -233,14 +233,16 @@ fn views(pane: &Container) -> Result {
 }
 
 fn main() -> Result<()> {
-    // `showcase vulkan` or `showcase wgpu` selects a GPU backend built in, and
-    // a trailing `rtl` lays the window out right to left.
+    // `showcase vulkan`, `showcase wgpu` or `showcase cairo` selects a backend
+    // built in, and a trailing `rtl` lays the window out right to left.
     let rtl = std::env::args().any(|arg| arg == "rtl");
     let renderer = match std::env::args().nth(1).as_deref() {
         #[cfg(feature = "vulkan")]
         Some("vulkan") => RendererBackend::Vulkan,
         #[cfg(feature = "wgpu")]
         Some("wgpu") => RendererBackend::Wgpu,
+        #[cfg(feature = "cairo")]
+        Some("cairo") => RendererBackend::Cairo,
         _ => RendererBackend::default(),
     };
     let app = App::with_options(AppOptions {

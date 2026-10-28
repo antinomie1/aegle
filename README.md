@@ -4,7 +4,7 @@
 
 Aegle is a modular retained-mode GUI library for Rust 2024, built for low memory use, event-driven updates, CJK text and native input methods. Controls are created once and changed through handles; nothing redraws or polls while the UI is idle.
 
-It is a workspace of independent crates (retained tree, Taffy layout, text and glyphs, drawing scenes, software / Vulkan / wgpu renderers, Wayland and Win32 platform backends, controls, themes, markup) plus the `aegle` facade that ties them together. The project is in progress and not yet published to crates.io; see the [implementation status](docs/implementation.md) for what works today.
+It is a workspace of independent crates (retained tree, Taffy layout, text and glyphs, drawing scenes, software (tiny-skia or system cairo) / Vulkan / wgpu renderers, Wayland and Win32 platform backends, controls, themes, markup) plus the `aegle` facade that ties them together. The project is in progress and not yet published to crates.io; see the [implementation status](docs/implementation.md) for what works today.
 
 ## Quick start
 
@@ -56,7 +56,8 @@ Set on the `aegle` crate. The defaults are `native`, `software`, `system-fonts`,
 | Feature | Default | Purpose |
 | --- | :---: | --- |
 | `native` | ✓ | Native windows: Wayland on Linux, Win32 on Windows, AppKit on macOS |
-| `software` | ✓ | CPU software rendering |
+| `software` | ✓ | CPU software rendering (tiny-skia coverage) |
+| `cairo` |  | Linux CPU rendering through the system `libcairo.so.2`, loaded at run time |
 | `system-fonts` | ✓ | System font discovery |
 | `markup` | ✓ | `ui!` macro and the markup engine, including runtime loading |
 | `motion` | ✓ | Transitions, keyframe animations and springs |

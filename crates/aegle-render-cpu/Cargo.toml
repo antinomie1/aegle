@@ -1,0 +1,23 @@
+[package]
+name = "aegle-render-cpu"
+description = "Shared CPU scene compositing for software rasterizers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = []
+text = ["aegle-scene/text", "dep:aegle-glyph", "aegle-glyph/scene"]
+
+[dependencies]
+aegle-types = { workspace = true, features = ["color-math"] }
+aegle-scene.workspace = true
+aegle-glyph = { workspace = true, optional = true }
+
+[lints]
+workspace = true

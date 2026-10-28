@@ -3,14 +3,14 @@ use aegle_scene::GlyphRun;
 use aegle_types::{Color, Point};
 
 use crate::{
-    Frame, RenderError,
+    Frame, Mask, Rasterizer, RenderError,
     blend::{Solid, encoded_rgba, linear_rgba},
     raster::{State, coverage_product},
     surface::order,
     vector::device_bounds,
 };
 
-impl Frame<'_, '_, '_> {
+impl<R: Rasterizer> Frame<'_, '_, '_, R> {
     pub(crate) fn paint_text(&mut self, run: &GlyphRun, state: State) -> Result<(), RenderError> {
         if state.bounds.is_empty() || run.color().to_rgba()[3] == 0 {
             return Ok(());
@@ -58,10 +58,11 @@ impl Frame<'_, '_, '_> {
             let bounds = device_bounds(width, height, transform, self.surface, !aligned)?
                 .intersect(state.bounds);
             let inverse = transform.inverse().map_err(|_| RenderError::Coordinates)?;
-            let clip = (state.clips > 0).then(|| self.renderer.masks[state.clips].data());
+            let clip = state.clips.checked_sub(1);
             let width = self.surface.width as usize;
             for row in bounds.rows(width) {
                 let y = (row.start / width) as f32 + 0.5;
+                let clip_row = clip.map(|index| self.renderer.masks[index + 1].row(y as usize));
                 let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
                 let texel = |i: usize| {
                     let local = inverse.map_point(Point::new((i % width) as f32 + 0.5, y));
@@ -72,7 +73,7 @@ impl Frame<'_, '_, '_> {
                 };
                 if image.content == Content::Mask {
                     solid.blend_span(pixels, row.start, |i| {
-                        let coverage = clip.map_or(255, |mask| mask[i]);
+                        let coverage = clip_row.map_or(255, |mask| mask[i % width]);
                         coverage_product(adjust(texel(i)[3]), coverage)
                     });
                     continue;
@@ -82,7 +83,7 @@ impl Frame<'_, '_, '_> {
                     let rgba = texel(i);
                     let [r, g, b, _] = order(bgra, rgba);
                     Solid::new(Color::rgba(r, g, b, coverage_product(rgba[3], opacity)))
-                        .blend(pixel, clip.map_or(255, |mask| mask[i]));
+                        .blend(pixel, clip_row.map_or(255, |mask| mask[i % width]));
                 }
             }
         }

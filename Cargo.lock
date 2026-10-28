@@ -124,6 +124,7 @@ dependencies = [
  "aegle-platform-macos",
  "aegle-platform-wayland",
  "aegle-platform-win32",
+ "aegle-render-cairo",
  "aegle-render-tiny-skia",
  "aegle-render-vulkan",
  "aegle-render-wgpu",
@@ -300,12 +301,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "aegle-render-cairo"
+version = "0.1.0"
+dependencies = [
+ "aegle-render-cpu",
+ "aegle-render-tiny-skia",
+ "aegle-scene",
+ "aegle-types",
+ "libloading",
+]
+
+[[package]]
+name = "aegle-render-cpu"
+version = "0.1.0"
+dependencies = [
+ "aegle-glyph",
+ "aegle-scene",
+ "aegle-types",
+]
+
+[[package]]
 name = "aegle-render-tiny-skia"
 version = "0.1.0"
 dependencies = [
  "aegle-core",
- "aegle-glyph",
  "aegle-layout",
+ "aegle-render-cpu",
  "aegle-scene",
  "aegle-text",
  "aegle-types",

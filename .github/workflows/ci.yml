@@ -38,6 +38,7 @@ jobs:
           - grid,markup
           - native,vulkan
           - native,wgpu
+          - native,cairo
           - accessibility
     steps:
       - uses: actions/checkout@v4
