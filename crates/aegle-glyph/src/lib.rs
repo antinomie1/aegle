@@ -25,6 +25,11 @@ mod bitmap;
 mod cache;
 #[cfg(all(target_os = "macos", not(feature = "swash")))]
 pub mod cg;
+// Compiled whenever a rasterizer that cannot draw color representations is in
+// use: the module then reports those glyphs as unsupported instead of letting
+// an outline path draw the wrong pixels.
+#[cfg(any(feature = "swash", feature = "colrv1", feature = "svg"))]
+mod color;
 #[cfg(feature = "colrv1")]
 mod colrv1;
 #[cfg(all(not(feature = "swash"), target_os = "linux"))]
@@ -38,6 +43,8 @@ mod raster;
 mod srgb;
 #[cfg(feature = "svg")]
 mod svg;
+#[cfg(feature = "swash")]
+mod swash_raster;
 mod system;
 #[cfg(feature = "scene")]
 mod transform;

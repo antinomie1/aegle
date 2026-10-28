@@ -3,6 +3,11 @@
 //! Gradients, clips, transforms and composite layers all resolve into a single
 //! image, so every renderer draws these glyphs through its ordinary color path.
 //! Sweep gradients, which tiny-skia lacks, are evaluated per pixel here.
+//!
+//! The entry point is only called from the `swash` rasterizer: without that
+//! feature this module is compiled (its tests exercise it directly) but nothing
+//! in the library reaches it.
+#![allow(dead_code)]
 use skrifa::{
     GlyphId,
     color::{Brush, ColorGlyph, ColorPainter, ColorStop, CompositeMode, Extend, Transform},

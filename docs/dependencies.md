@@ -27,9 +27,9 @@
 | Unix 无障碍传输 | accesskit_atspi_common 0.19.1、atspi 0.29.0、zbus 5.19.0 | 复用 AccessKit 适配；采用 async-io，无 Tokio |
 | 路径 | 软件复用 tiny-skia，Vulkan 复用 zeno 0.3.3（swash 已依赖） | CPU 覆盖率光栅，不引入 Lyon 或三角细分 |
 | PNG | png 0.18.1 | aegle-glyph 用于有界字体位图解码；纯几何 renderer 仅示例使用，不引入整个 image crate |
-| SVG | resvg/usvg 0.48.1 | 仅 `aegle-image/svg` 与 `aegle-glyph/svg`：关闭 text、system-fonts 等默认 feature，glyph 侧启用 svgz；不处理 SVG 文字、外部文件或网络资源 |
+| SVG | resvg/usvg 0.48.1 | 仅 `aegle-image/svg` 与 `aegle-glyph/svg`：关闭 text、system-fonts 等默认 feature，glyph 侧启用 svgz；不处理 SVG 文字、外部文件或网络资源。`aegle-glyph/svg` 需要 `skrifa` 定位 OpenType-SVG 表，但**不启用 `swash`**：它与 `colrv1` 都是按字形的颜色表示，不是整套字形光栅器 |
 | 其他图像格式 | zune-jpeg 0.5、image-webp 0.2、gif 0.14 | 仅 `aegle-image` 的 `jpeg`/`webp`/`gif` feature；都先检查尺寸与字节预算再分配；`image` crate 只作为测试编码器的开发依赖 |
-| COLRv1 字形 | tiny-skia 0.12.0（已在 workspace） | `aegle-glyph/colrv1` 光栅 skrifa 的绘制回调，不增加新包 |
+| COLRv1 字形 | tiny-skia 0.12.0（已在 workspace）与 `skrifa` | `aegle-glyph/colrv1` 用 `skrifa` 解析绘制图、tiny-skia 光栅化，不增加新包，也**不启用 `swash`** |
 | 标记编译宏 | syn 2、quote 1、proc-macro2 1 | 仅编译期；Rust 语法与代码生成复用现成库；facade 与 loader 的 `macro_rules!` 包装把 `$crate` 传给 proc macro，依赖改名后路径仍然正确，不读 Cargo 清单 |
 
 设计版本来自 crates.io 发布记录及发布包 manifest 的核查。Taffy、tiny-skia、Parley/Fontique/HarfRust、Swash/Skrifa、字体句柄、缓存/PNG、Wayland 及独立 Vulkan 几何/文字依赖已进入 Cargo.lock 并在当前工具链构建验证；可选 Parley AccessKit 文本桥与 Unix adapter 已构建，并通过私有总线上的 AT-SPI 协议验证。Windows 编译与运行证据、GPU 原生呈现验证另见实现状态，不能将其等同于全部实机验收；Unix 当前能力与限制见[无障碍](accessibility.md)，具体验证见[实现状态](implementation.md)。tiny-skia 使用 BSD-3-Clause，不引入原生 Skia、图形驱动或窗口系统。特别保留 Parley/HarfRust/AccessKit 的兼容版本组，不把各库最新版随意组合。实现时检查完整传递依赖、许可、feature 合并与 MSRV；这是实现验收，不是尚待用户选择的架构问题。

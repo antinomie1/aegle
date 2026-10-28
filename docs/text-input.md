@@ -12,7 +12,7 @@
 
 `TextDiagnostics` 分别报告缺字 glyph 和没有任何字体可成形的 UTF-8 字节数。三个系统栈的缺字表现并不相同：Linux 的 Pango 给出 unknown glyph，它自带占位宽度并由 Pango 自己画成占位框，Aegle 不重复绘制（不换成 `.notdef`，否则字形与 advance 不一致），诊断照常计数；Windows 的 DirectWrite 总会回退，缺字表现为字形索引 0（`.notdef`），DirectWrite 画出的就是该框，因此计数与像素一致，`unshaped_bytes` 只在布局创建失败时统计非换行字节；macOS 的 CoreText 同样总会回退，缺字由 CTLine 的字形索引 0 表示。完全没有字体成形的字节数仍使 `paint` panic，避免整段文字静默消失。字体缺少所需字重或倾斜时，合成建议随 `GlyphRun` 传到光栅器：轮廓外扩 em/32 并按角度错切，仍是同一字形键与图集；位图字体不合成。
 
-彩色字形按平台如实区分：Linux 的 FreeType `FT_LOAD_COLOR` 覆盖 COLR 层与内嵌 PNG/BGRA 位图（输出直通 sRGB）；**Windows 的 GDI 轮廓路径拿不到 COLR/CBDT/SVG**，这些字形返回 `GlyphError::UnsupportedGlyph`，不画成黑白近似；macOS 的 `CTFontCreatePathForGlyph` 只给轮廓，彩色字形同样返回 `UnsupportedGlyph`。Windows/macOS 的彩色字形接入 DirectWrite 的 glyph-run analysis / CoreText 的彩色 run 是后续工作。`colrv1`/`svg` feature 只在 Rust 回退实现里增加 COLRv1 渐变层与不含文字的 OpenType-SVG；三个系统栈下未启用时对应表示返回不支持。注册字体不等于该字体的每种表示均可绘制。
+彩色字形按平台如实区分：Linux 的 FreeType `FT_LOAD_COLOR` 覆盖 COLR 层与内嵌 PNG/BGRA 位图（输出直通 sRGB）；**Windows 的 GDI 轮廓路径拿不到 COLR/CBDT/SVG**，这些字形返回 `GlyphError::UnsupportedGlyph`，不画成黑白近似；macOS 的 `CTFontCreatePathForGlyph` 只给轮廓，彩色字形同样返回 `UnsupportedGlyph`。Windows/macOS 的彩色字形接入 DirectWrite 的 glyph-run analysis / CoreText 的彩色 run 是后续工作。`colrv1`/`svg` feature 增加 COLRv1 渐变层与不含文字的 OpenType-SVG，**并作用于所有字形路径**：光栅化前先由 `aegle-glyph/src/color.rs` 判断字形是否带这两种表示，有则用 Skrifa + tiny-skia / resvg 解码，无则走平台光栅器。它们不启用 `swash`、也不替换平台光栅器——这两点曾经是耦合的，导致开 `svg` 就把 Linux 的 FreeType 换成 Rust 光栅器（字形像素随之改变）。未启用时对应表示返回 `UnsupportedGlyph` 而不是画成灰度轮廓。注册字体不等于该字体的每种表示均可绘制。
 
 ## 显示与内存
 

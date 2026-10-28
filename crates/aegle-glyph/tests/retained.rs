@@ -23,14 +23,14 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
         size: 24.0,
         ..Default::default()
     };
-    let key = GlyphKey::new(&font, ids[0], options).unwrap();
+    let key = GlyphKey::new(&font.clone().into(), ids[0], options).unwrap();
     let owned = key.to_owned();
     assert_eq!(owned.as_key(), key);
     use std::hash::BuildHasher;
     let hash = std::collections::hash_map::RandomState::new();
     assert_eq!(hash.hash_one(key), hash.hash_one(&owned));
     let recolored = GlyphKey::new(
-        &font,
+        &font.clone().into(),
         ids[0],
         RasterOptions {
             offset: [-0.0, 0.0],
@@ -42,7 +42,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     assert_ne!(key, recolored);
     assert_eq!(key.mask(), recolored.mask());
     let varied = GlyphKey::new(
-        &font,
+        &font.clone().into(),
         ids[0],
         RasterOptions {
             normalized_coords: &[100],
@@ -52,7 +52,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     .unwrap();
     assert_ne!(key, varied);
     let bold = GlyphKey::new(
-        &font,
+        &font.clone().into(),
         ids[0],
         RasterOptions {
             embolden: true,
@@ -61,7 +61,7 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
     )
     .unwrap();
     let slanted = GlyphKey::new(
-        &font,
+        &font.clone().into(),
         ids[0],
         RasterOptions {
             skew: 14,

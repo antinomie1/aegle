@@ -127,7 +127,7 @@ flowchart TD
 | `aegle` 默认 `desktop` | 目标平台窗口（`native`）、软件绘制、系统字体、`markup`（编译宏与 loader，含运行时加载）、`motion`（过渡、关键帧与弹簧）、`effects`、`colrv1`、`desktop-services` | 系统无障碍适配（`accessibility`）、Vulkan、wgpu、JPEG/WebP/GIF/SVG、Grid |
 | `default-features = false` | 不自动选择窗口/renderer；使用者显式加所需功能或直接用独立模块 | 便捷默认组合 |
 | 按词移动与选词 | 系统分词器（`aegle-segment` 运行时查找 libicu / `icu.dll` / `CFStringTokenizer`），不链接数据 | 内置词典数据（已移除）与任何近似替代（找不到时分词操作关闭） |
-| `effects`（桌面默认）/ `colrv1`（桌面默认）/ `jpeg` / `webp` / `gif` / `svg` | 渐变与阴影图像、COLRv1 字形、各图像格式、静态 SVG（图像与 OpenType-SVG 字形） | 彼此不暗中全部开启 |
+| `effects`（桌面默认）/ `colrv1`（桌面默认）/ `jpeg` / `webp` / `gif` / `svg` | 渐变与阴影图像、COLRv1 字形、各图像格式、静态 SVG（图像与 OpenType-SVG 字形） | 彼此不暗中全部开启；`colrv1`/`svg` 只增加按字形的颜色表示，**不替换平台字形光栅器**（那是 `swash` 的作用）；未启用时颜色字形返回 `UnsupportedGlyph` 而不画成灰度轮廓 |
 | `grid` | Taffy Grid 算法、`grid`/`stack` 容器与标记 `Grid`/`Stack`（release 约 244 KiB） | 默认 desktop 不包含 |
 
 默认组合不启用系统无障碍 adapter：`accessibility` 显式选择，它同时给出可检查的语义树与目标平台的 adapter；不能把未接 adapter 的构建宣传为完整无障碍构建，省掉平台 adapter 也不删除控件的基本语义定义。减少动态效果偏好由 `motion` 跟随系统。

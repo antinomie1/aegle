@@ -17,11 +17,14 @@ default = []
 scene = []
 # Fallback Rust rasterizer (unmaintained). Linux, Windows and macOS default to
 # their system backends; this feature is how the Rust path is compiled there.
+# It replaces the platform rasterizer, so glyph pixels change.
 swash = ["dep:swash", "dep:skrifa"]
-# COLRv1 gradient/composite color glyphs.
-colrv1 = ["swash"]
-# OpenType-SVG glyph documents (static, no text), rendered by resvg.
-svg = ["dep:resvg", "swash"]
+# COLRv1 gradient/composite color glyphs. Skrifa parses the paint graph and
+# tiny-skia paints it; this does not replace the platform rasterizer.
+colrv1 = ["dep:skrifa"]
+# OpenType-SVG glyph documents (static, no text), rendered by resvg. The SVG
+# table is located through Skrifa; this does not replace the platform rasterizer.
+svg = ["dep:resvg", "dep:skrifa"]
 
 [dependencies]
 aegle-scene = { workspace = true, features = ["text"] }

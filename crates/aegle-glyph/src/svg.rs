@@ -8,7 +8,8 @@ use resvg::{
     usvg,
 };
 
-use crate::{Content, GlyphError, Image, Placement, raster::image_size};
+use crate::srgb::image_size;
+use crate::{Content, GlyphError, Image, Placement};
 
 pub(crate) struct Request<'a> {
     pub data: &'a [u8],

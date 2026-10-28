@@ -7,7 +7,7 @@
 
 /// Premultiplied linear RGBA while sampling/compositing; public images stay
 /// straight sRGB.
-#[cfg_attr(not(any(feature = "swash", feature = "colrv1")), allow(dead_code))]
+#[cfg_attr(not(feature = "swash"), allow(dead_code))]
 pub(crate) fn linear(rgba: [u8; 4]) -> [f32; 4] {
     let a = rgba[3] as f32 / 255.0;
     let decode = |v: u8| {
@@ -27,7 +27,7 @@ pub(crate) fn linear(rgba: [u8; 4]) -> [f32; 4] {
 }
 
 /// Encodes premultiplied linear RGBA back to straight sRGB bytes.
-#[cfg_attr(not(any(feature = "swash", feature = "colrv1")), allow(dead_code))]
+#[cfg_attr(not(feature = "swash"), allow(dead_code))]
 pub(crate) fn encoded(rgba: [f32; 4]) -> [u8; 4] {
     if rgba[3] <= 0.0 {
         return [0; 4];
@@ -50,7 +50,7 @@ pub(crate) fn encoded(rgba: [f32; 4]) -> [u8; 4] {
 }
 
 /// Bytes for `w × h × channels`, refused above `limit`.
-#[cfg_attr(not(any(feature = "swash", feature = "colrv1")), allow(dead_code))]
+#[cfg_attr(not(feature = "swash"), allow(dead_code))]
 pub(crate) fn image_size(
     w: u32,
     h: u32,

@@ -2,16 +2,21 @@
 #![cfg(feature = "svg")]
 use aegle_glyph::{Blob, CacheLimits, Content, FontData, GlyphCache, RasterOptions};
 
+/// The glyph id of `ch` in `font`, read through Skrifa so the test does not
+/// depend on the `swash` feature just to look up a codepoint.
+fn glyph_id(font: &FontData, ch: char) -> u16 {
+    use skrifa::MetadataProvider;
+    let parsed = skrifa::FontRef::from_index(font.data.data(), font.index).unwrap();
+    u16::try_from(parsed.charmap().map(ch).expect("glyph for char").to_u32()).unwrap()
+}
+
 #[test]
 fn svg_glyph_renders_blended_layers_at_the_requested_size() {
     let font = FontData::new(
         Blob::from(include_bytes!("../../../tests/assets/aegle-test-svg.ttf").to_vec()),
         0,
     );
-    let id = swash::FontRef::from_index(font.data.data(), 0)
-        .unwrap()
-        .charmap()
-        .map('A');
+    let id = glyph_id(&font, 'A');
     let mut cache = GlyphCache::with_limits(CacheLimits {
         image_bytes: 1 << 20,
         entries: 16,
