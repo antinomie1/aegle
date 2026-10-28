@@ -220,7 +220,6 @@ impl CoreTextLayout {
         // SAFETY: the frame is live and every out pointer refers to a local
         // that outlives its call.
         unsafe {
-            let visible = frame.visible_string_range();
             self.is_rtl = offsets::first_strong_rtl(&self.text);
             // SAFETY: `CTFrameGetLines` always returns an array of `CTLine`.
             let lines: CFRetained<CFArray<CTLine>> = CFRetained::cast_unchecked(frame.lines());
@@ -275,7 +274,6 @@ impl CoreTextLayout {
                 min: self.measure_min_width(),
                 max: self.size.0,
             };
-            let _ = visible;
         }
     }
 
@@ -454,6 +452,3 @@ impl CFRangeFor {
         length: 0,
     };
 }
-
-/// Keeps the dictionary import used by `build`'s signature alive.
-const _: Option<&CFDictionary> = None;

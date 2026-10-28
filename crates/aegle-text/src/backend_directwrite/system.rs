@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use windows::Win32::Graphics::DirectWrite::{
-    IDWriteFactory, IDWriteFontCollection, IDWriteFontFallback, IDWriteFontFile, IDWriteTextFormat,
+    IDWriteFontCollection, IDWriteFontFallback, IDWriteFontFile, IDWriteTextFormat,
     IDWriteTextFormat1,
 };
 use windows::core::{Interface, PCWSTR};
@@ -236,6 +236,3 @@ impl std::fmt::Debug for DirectWriteSystem {
             .finish()
     }
 }
-
-/// Unused-import guard: the factory type appears only in signatures above.
-const _: Option<fn(&IDWriteFactory) -> bool> = None;

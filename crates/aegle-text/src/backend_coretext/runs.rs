@@ -216,6 +216,3 @@ unsafe fn collect_run(run: &CTRun) -> Option<StoredRun> {
         })
     }
 }
-
-/// Keeps the `CFString` import meaningful for the attribute lookup above.
-const _: Option<&CFString> = None;
