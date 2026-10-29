@@ -192,6 +192,7 @@ impl Ui {
         let (prevented, failure) = self.propagate(target, event);
         if prevented {
             let mut state = self.write();
+            state.rebuild_order();
             state.pointer = live.then_some((id, position));
             let hit = state.pointer.and_then(|_| state.hit(position));
             state.update_hover(hit, id, position)?;

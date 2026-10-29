@@ -231,6 +231,34 @@ fn tabs_splitters_and_tooltips() -> Result {
     assert_eq!(children(), before + 1);
     key(&ui, Key::Escape)?;
     assert_eq!(children(), before);
+
+    // Clicking or moving off a shown tooltip removes its overlay during pointer
+    // routing and must not leave a dead node in hit-test order.
+    ui.pointer(id, PointerKind::Move, Point::new(1.0, 1.0), m)?;
+    ui.pointer(id, PointerKind::Move, center(&button), m)?;
+    let due = ui.next_wake().expect("a pending tooltip");
+    ui.wake(due + Duration::from_millis(1))?;
+    ui.refresh()?;
+    assert_eq!(children(), before + 1);
+    ui.pointer(id, PointerKind::Down { clicks: 1 }, center(&button), m)?;
+    ui.pointer(id, PointerKind::Up, center(&button), m)?;
+    assert_eq!(children(), before);
+
+    ui.pointer(id, PointerKind::Move, Point::new(1.0, 1.0), m)?;
+    ui.pointer(id, PointerKind::Move, center(&button), m)?;
+    let due = ui.next_wake().expect("a pending tooltip");
+    ui.wake(due + Duration::from_millis(1))?;
+    ui.refresh()?;
+    assert_eq!(children(), before + 1);
+    ui.pointer(id, PointerKind::Move, Point::new(1.0, 1.0), m)?;
+    assert_eq!(children(), before);
+
+    // Wheel routing with an input listener must also rebuild order after removal.
+    ui.root().on_input_capture(|_, _| {});
+    let transient = ui.root().button("Transient");
+    ui.refresh()?;
+    transient.remove();
+    ui.scroll(center(&button), 12.0)?;
     #[cfg(feature = "accessibility")]
     {
         let tree = ui.accessibility(true, "")?;

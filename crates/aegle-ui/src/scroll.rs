@@ -62,6 +62,7 @@ impl State {
         if !std::mem::take(&mut self.geometry_dirty) {
             return Ok(());
         }
+        self.rebuild_order();
         for index in 0..self.order.len() {
             let id = self.order[index];
             let parent = self.tree.parent(id)?.map(|pid| {

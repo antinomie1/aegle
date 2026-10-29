@@ -113,6 +113,7 @@ impl Ui {
         }
         state.pointer =
             (!matches!(kind, PointerKind::Leave | PointerKind::Cancel)).then_some((id, position));
+        state.rebuild_order();
         let hit = state.pointer.and_then(|_| state.hit(position));
         if state.scrollbar_pointer(id, kind, position, hit)? {
             return Ok(());
@@ -130,12 +131,20 @@ impl Ui {
         if target != hit {
             state.sync_hover(id, position)?;
         }
-        match (kind, state.node_at(position, false)) {
-            (PointerKind::Down { clicks: 2 }, Some(node)) => state.double_click(node),
-            (PointerKind::ButtonDown(PointerButton::Secondary), Some(node)) => {
-                state.context_menu(node, position);
+        if matches!(
+            kind,
+            PointerKind::Down { clicks: 2 } | PointerKind::ButtonDown(PointerButton::Secondary)
+        ) {
+            state.rebuild_order();
+            if let Some(node) = state.node_at(position, false) {
+                match kind {
+                    PointerKind::Down { clicks: 2 } => state.double_click(node),
+                    PointerKind::ButtonDown(PointerButton::Secondary) => {
+                        state.context_menu(node, position);
+                    }
+                    _ => {}
+                }
             }
-            _ => {}
         }
         Ok(())
     }
@@ -176,7 +185,8 @@ impl Ui {
             return Err(UiError::InvalidValue.into());
         }
         let target = {
-            let state = self.read();
+            let mut state = self.write();
+            state.rebuild_order();
             (!state.listeners.is_empty())
                 .then(|| state.node_at(position, false))
                 .flatten()

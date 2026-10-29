@@ -17,6 +17,7 @@ impl State {
             return Ok(());
         }
         if let Some((id, position)) = self.pointer {
+            self.rebuild_order();
             let hit = self.hit(position);
             self.update_hover(hit, id, position)?;
             self.sync_hover(id, position)?;
