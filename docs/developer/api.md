@@ -97,6 +97,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 | `app.preferences()` | 最近应用的系统偏好 `Preferences { dark, high_contrast, reduced_motion }` |
 | `app.ime_available()` | 平台是否支持原生输入法组合 |
 | `window.close()` | 关闭窗口并使其所有控件句柄失效 |
+| `window.scale()` | 窗口最近配置的设备像素比（物理像素/逻辑像素，可为小数），供按设备分辨率渲染的应用纹理使用；窗口关闭后返回错误 |
 | `window.ui()` | 窗口的引擎 `Ui`：窗口级 `on_key`、`set_reduced_motion`、`set_token`、`set_default_transition` 等；主题用根节点的 `window.set_theme(theme)` |
 
 `AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Cairo`/`Vulkan`/`Wgpu`；编译了软件绘制时默认 `Software`，`Cairo` 仅在 Linux 的 `cairo` feature 下可用并需要运行时的 `libcairo.so.2`）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
@@ -156,6 +157,7 @@ let panel = app.window_with_options("Panel", WindowOptions {
 | `keep_alive(value)` | 让任意值与控件同生命周期 |
 | `popup()` | 创建锚定于该控件的弹出层 `Popup`（`show` / `show_at` / `hide` / `is_shown`）；来自 `NodeWidgets` trait |
 | `menu()` / `context_menu()` | 创建锚定于该控件的菜单；后者在上下文菜单请求处显示，见[控件参考](controls.md#menu--menubar)；来自 `NodeWidgets` |
+| `request_paste()` | 请求宿主读取剪贴板并作为粘贴交给焦点控件（交互 Canvas 收到 `CanvasEvent::Paste`）；复制用 `copy_text(text)` |
 | `set_tooltip(text)` | 悬停提示，同时作为无障碍描述；`None` 移除；来自 `NodeWidgets` |
 
 **鼠标指针形状**：原生窗口会自动跟随。可用形状见 `Cursor`（`Default`、`Text`、`Pointer`、`Crosshair`、`Move`、`Grab`、`Grabbing`、`NotAllowed`、`ResizeHorizontal`、`ResizeVertical`）。规则按优先级：按下后捕获指针的控件（拖选文字时指针移出字段仍是 I-beam）；鼠标下最上层可见控件上的显式 `set_cursor`；可用的文本字段（含只读，因为文字可选）显示 I-beam，禁用的字段不显示；最近祖先的显式形状；箭头。滚动条条带与拖动滚动条始终是箭头；已显示的弹出层遮住其下方的控件。按钮默认不变手形，这是桌面惯例，需要时对按钮或链接式标签 `set_cursor(Some(Cursor::Pointer))`。Windows 没有抓手光标，`Grab` 用手形、`Grabbing` 用四向箭头；macOS 没有四向箭头，`Move` 用闭合手形。
@@ -348,7 +350,7 @@ save.on_click(move |_button| status.set_text("Saved"));
 | `TextField`（单/多行） | `on_change(FnMut(TextField))`：用户改变已提交文字后（键入、删除、粘贴、剪切、撤销/重做、输入法提交）；预编辑与 `set_text` 不触发 |
 | `CheckBox` / `Switch` / `Radio` / `Slider` / `NumberField` / `Dropdown` / `Tabs` | `on_change(FnMut(Self))` |
 | 任意控件（`motion`） | `on_transition_end(FnMut(Node))` |
-| `Canvas` | `set_input(FnMut(Canvas, CanvasEvent))`：指针、滚轮、按键与焦点，见[控件参考](controls.md#canvas) |
+| `Canvas` | `set_input(FnMut(Canvas, CanvasEvent))`：指针、滚轮、按键、焦点与粘贴，见[控件参考](controls.md#canvas) |
 | 任意控件 | `on_double_click(FnMut(Node))`：主键在该控件或没有自己处理器的后代上双击，在按下的默认行为之后执行 |
 | 任意控件 | `on_context_menu(FnMut(Node, Point))`：在该控件或没有自己处理器的后代上请求上下文菜单——右键按下（得到按下点），或焦点在其中时按 Menu 键、Shift+F10，或辅助技术的 ShowContextMenu（得到该控件左上角）；点为窗口逻辑坐标，可直接交给 `Popup::show_at` |
 | 任意控件 | `on_drop(FnMut(Node, DropEvent))`：成为该控件及没有自己处理器的后代的放置目标。每次拖动经过先得到 `DropEvent::Enter`，再得到一次 `Leave` 或 `Drop { data, position }`（`data` 为 `DragData::Text` 或 `DragData::Files`，`position` 为窗口逻辑坐标）；有处理器即接受文字与文件，不用的数据忽略即可 |

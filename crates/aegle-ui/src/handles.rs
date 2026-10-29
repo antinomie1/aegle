@@ -207,6 +207,16 @@ impl Node {
             Ok(())
         })
     }
+    /// Asks the host to read this window's clipboard and deliver it to the
+    /// focused control as a paste, as a paste shortcut in an editor does; an
+    /// interactive canvas receives it as `CanvasEvent::Paste`. A later copy,
+    /// cut or paste before the host handles it replaces the request.
+    pub fn request_paste(&self) {
+        self.change(|state, _| {
+            state.clipboard = Some(crate::ClipboardRequest::Read);
+            Ok(())
+        })
+    }
     /// Requests logical focus using the same enabled/visible policy as keyboard traversal.
     pub fn focus(&self) {
         self.change(|state, id| state.set_focus(Some(id)))

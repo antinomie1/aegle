@@ -379,6 +379,15 @@ impl Window {
         Ok(())
     }
 
+    /// Physical pixels per logical pixel of the window's latest configuration,
+    /// possibly fractional, for content rendered at device resolution such as
+    /// application textures. Fails once the window is closed.
+    pub fn scale(&self) -> Result<f32> {
+        let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
+        let runtime = runtime.borrow();
+        Ok(runtime.backend.window_info(self.id)?.scale)
+    }
+
     /// This window's engine, for what concerns the whole window rather than
     /// one control: key handlers, reduced motion, tokens and default
     /// transitions. Controls keep using their handles; the window's root is

@@ -117,6 +117,9 @@ pub enum CanvasEvent {
     },
     /// The canvas gained or lost keyboard focus.
     Focus(bool),
+    /// Clipboard text delivered while the canvas has focus, after
+    /// [`Node::request_paste`](aegle_ui::Node::request_paste).
+    Paste(String),
 }
 
 /// The control inside a [`Canvas`] node.
@@ -313,6 +316,9 @@ impl Control for CanvasControl {
                 repaint: true,
                 ..self.push(CanvasEvent::Focus(focused))
             },
+            Input::Paste(text) if self.interactive => {
+                self.push(CanvasEvent::Paste(text.to_owned()))
+            }
             _ => Outcome::default(),
         }
     }

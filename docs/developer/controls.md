@@ -475,6 +475,7 @@ canvas.set_input(move |canvas, event| {
 - 事件坐标是 Canvas 的局部逻辑坐标，带平台时间 `time`。按下时获得焦点并捕获指针，之后的 `Move { pressed: true }` 与 `Release` 即使在 Canvas 外也会送达；未按下时的移动是 `Move { pressed: false }`，离开是 `Leave`；捕获丢失为 `Cancel`。
 - 右键、中键与侧键（`PointerButton::{Secondary, Middle, Back, Forward}`）作为 `ButtonPress`/`ButtonRelease { button, .. }` 送达，同样获得焦点并捕获指针，直到在 Canvas 上按下的所有按键都释放；`Move` 的 `pressed` 只表示主键，按住其他键拖动（如中键平移）时用自己记录的按键状态。默认控件忽略这些按键。
 - 鼠标滚轮与触控板滚动先交给其下的交互 Canvas 并被消费，外层 ScrollView 不滚动；惯性滚动只作用于滚动视图。
+- 粘贴：`canvas.request_paste()` 请求读取剪贴板，文字以 `CanvasEvent::Paste(String)` 送达（编辑器式的 Ctrl+V 由应用自己绑定）；复制用 `copy_text`。
 - 获得焦点时有焦点框并加入 Tab 顺序，聚焦时收到全部按键（Tab 仍用于切换焦点）；`Focus(bool)` 报告焦点变化。
 - 同一批输入的事件按顺序在该批之后、所有借用之外交给回调，回调里可以修改任意控件。输入回调是画布自身的行为，与 `set_painter` 一样，再次设置会替换。
 
