@@ -8,7 +8,7 @@ use crate::{Error, Event, ImeEvent, ImeRequest, native::Native, text_store::Text
 use std::{cell::Cell, rc::Rc};
 use windows::{
     Win32::{
-        Foundation::{HWND, RECT},
+        Foundation::{HWND, LPARAM, RECT, WPARAM},
         System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
         UI::{Input::KeyboardAndMouse::GetFocus, TextServices::*},
     },
@@ -43,6 +43,33 @@ impl Tsf {
                     Err(error.into())
                 }
             }
+        }
+    }
+}
+
+impl Tsf {
+    /// Offers a key to the active text service, which sees only the keystrokes
+    /// an application forwards through the thread manager; a consumed key must
+    /// not also become text. Returns whether the service took it.
+    pub fn keystroke(&self, down: bool, wparam: WPARAM, lparam: LPARAM) -> bool {
+        // SAFETY: TSF objects of this thread; the thread manager implements the
+        // keystroke manager, which the caller has already scoped to a session.
+        unsafe {
+            let Ok(keystrokes) = self.manager.cast::<ITfKeystrokeMgr>() else {
+                return false;
+            };
+            let eaten = match down {
+                true => keystrokes.TestKeyDown(wparam, lparam),
+                false => keystrokes.TestKeyUp(wparam, lparam),
+            };
+            if !eaten.is_ok_and(|eaten| eaten.as_bool()) {
+                return false;
+            }
+            let _ = match down {
+                true => keystrokes.KeyDown(wparam, lparam),
+                false => keystrokes.KeyUp(wparam, lparam),
+            };
+            true
         }
     }
 }

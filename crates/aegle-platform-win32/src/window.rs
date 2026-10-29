@@ -29,7 +29,10 @@ use windows::{
         },
         UI::{
             HiDpi::*,
-            Input::Ime::{HIMC, ImmAssociateContext},
+            Input::{
+                Ime::{HIMC, ImmAssociateContext},
+                KeyboardAndMouse::GetFocus,
+            },
             WindowsAndMessaging::*,
         },
     },
@@ -392,18 +395,43 @@ impl Win32 {
             self.events.borrow_mut().push_back(Event::Wake);
         }
         let mut message = MSG::default();
-        // SAFETY: initialized writable MSG, UI thread translates/dispatches it.
         while unsafe { PeekMessageW(&mut message, None, 0, 0, PM_REMOVE) }.as_bool() {
             let queued = self.events.borrow().len();
-            unsafe {
-                let _ = TranslateMessage(&message);
-                DispatchMessageW(&message);
+            // An input method that takes the key also owns the text it would
+            // become, so the message is neither translated nor dispatched.
+            if !self.ime_keystroke(&message) {
+                // SAFETY: initialized writable MSG, UI thread translates/dispatches it.
+                unsafe {
+                    let _ = TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
             }
             if self.events.borrow().len() != queued {
                 break;
             }
         }
         Ok(())
+    }
+
+    /// Offers a key to the focused window's input method before it is
+    /// translated; true when the service consumed it. Only a window with an
+    /// enabled editor session composes, so other windows keep every key.
+    fn ime_keystroke(&self, message: &MSG) -> bool {
+        let down = match message.message {
+            WM_KEYDOWN | WM_SYSKEYDOWN => true,
+            WM_KEYUP | WM_SYSKEYUP => false,
+            _ => return false,
+        };
+        let Some(tsf) = &self.tsf else {
+            return false;
+        };
+        // SAFETY: GetFocus reads this UI thread's focus.
+        let focused = unsafe { GetFocus() };
+        let Some(window) = self.windows.iter().find(|w| w.hwnd.get() == focused) else {
+            return false;
+        };
+        let enabled = window.tsf.borrow().as_ref().is_some_and(Session::enabled);
+        enabled && tsf.keystroke(down, message.wParam, message.lParam)
     }
 
     /// Executes one native GPU submission/presentation when the window is ready.
