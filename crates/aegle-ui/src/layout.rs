@@ -176,6 +176,7 @@ impl State {
                 let changes = field.editor_mut().take_changes();
                 let caret = field.editor().ime_rect();
                 let size = field.editor().size();
+                let multiline = field.editor().is_multiline();
                 if std::mem::take(&mut element.ensure_caret) || changes.layout || changes.selection
                 {
                     if focused {
@@ -186,20 +187,26 @@ impl State {
                         .x
                         .min(caret.origin.x)
                         .max(caret.origin.x + caret.size.width - viewport.width);
-                    element.scroll.y = element
-                        .scroll
-                        .y
-                        .min(caret.origin.y)
-                        .max(caret.origin.y + caret.size.height - viewport.height);
+                    if multiline {
+                        element.scroll.y = element
+                            .scroll
+                            .y
+                            .min(caret.origin.y)
+                            .max(caret.origin.y + caret.size.height - viewport.height);
+                    }
                 }
                 element.scroll.x = element.scroll.x.clamp(
                     0.0,
                     (size.width + caret.size.width - viewport.width).max(0.0),
                 );
-                element.scroll.y = element
-                    .scroll
-                    .y
-                    .clamp(0.0, (size.height - viewport.height).max(0.0));
+                // A single line stays anchored at the top padding.
+                element.scroll.y = match multiline {
+                    true => element
+                        .scroll
+                        .y
+                        .clamp(0.0, (size.height - viewport.height).max(0.0)),
+                    false => 0.0,
+                };
             }
         }
         if let Some(target) = self.reveal_target.take()

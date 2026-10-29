@@ -75,7 +75,7 @@ button.on_click(move |_| {
 
 `scroll_view()` 返回保留状态的列容器（`Container`），默认透明并带 1dp 主题边框和半个主题 padding 的内边距；限制尺寸或 flex 分配后，两轴溢出均可滚动。`scroll_to(Point)` 和 `scroll_by(Point)` 接受有限逻辑坐标，先刷新布局再分别限制到各轴范围；负偏移归零。`scroll_offset` 是当前状态，`max_scroll_offset` 与 `content_size` 来自最近刷新布局，范围包含末尾 padding。隐藏保留偏移，但隐藏布局的范围需重新显示并刷新后才恢复。
 
-`ensure_visible` 先刷新布局，再逐层滚动祖先，使控件或编辑器 caret 可见，不改变焦点；隐藏节点无操作。Tab 焦点和 caret 更新也使用这条显露路径。`visible_bounds` 返回最近刷新几何与祖先滚动视口的交集；隐藏或完全裁剪时为 None，不额外裁剪到窗口边缘。移出视口不销毁控件。嵌套视口和编辑器通过 `Ui::scroll_by(position, delta)` 将未消费的双轴滚轮位移向外传递。
+`ensure_visible` 先刷新布局，再逐层滚动祖先，使控件或编辑器 caret 可见，不改变焦点；隐藏节点无操作。Tab 焦点和 caret 更新也使用这条显露路径。`visible_bounds` 返回最近刷新几何与祖先滚动视口的交集；隐藏或完全裁剪时为 None，不额外裁剪到窗口边缘。移出视口不销毁控件。嵌套视口和编辑器通过 `Ui::scroll_by(position, delta)` 将未消费的双轴滚轮位移向外传递；单行编辑器的文字固定在顶部内边距处，滚轮经过它时滚动外层视图，只有多行编辑器滚动自己的文字。
 
 滚动裁剪为直角矩形，不随外观圆角改变。自有宿主的 `Ui::visit_scenes` 回调按顺序接收 `Visit`：`Scene { scene, transform, clip }` 是保留绘制记录、平移和窗口逻辑坐标裁剪，宿主必须应用裁剪；`PushLayer(Layer)` 与 `PopLayer` 包住有组透明度或背景模糊的子树，宿主缩放后交给 renderer 的 `push_layer`/`pop_layer`。某轴溢出时 ScrollView 在该轴末端绘制滚动条：12dp 指针带内贴外缘是轨道与胶囊形滑块（最短 24dp），静止时 4dp 粗，视图悬停或拖动时 8dp，两端让开视图圆角，两轴同时出现时纵轴让出角落；多行编辑器只绘制纵向滑块。溢出的一侧在内边距之外为滚动条留出 14dp（轨道、边距与 4dp 间隙），内容不会滚到滚动条下面。滑块在子树之后绘制，外层视口优先命中。按下滑块拖动，按下滑块外的指针带先把滑块中心移到该处再拖动；拖动期间其他控件不接收该指针事件，取消、隐藏或删除结束拖动且保留最后偏移。轨道与滑块颜色取自外观的 `scrollbar` 字段，默认为主题的 hover、border 与 muted；没有淡出计时器或动画。当前没有 ScrollView 独立键盘焦点或滚动动画。可执行嵌套表单示例：`cargo run -p aegle --example scrolling`。
 

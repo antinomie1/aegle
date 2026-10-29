@@ -21,14 +21,21 @@ impl State {
         }
         match node.context.control.editor() {
             Some(field) => {
+                let editor = field.editor();
                 let padding = node.context.inset(&self.theme) * 2.0;
                 let viewport = node.context.bounds.size;
-                let text = field.editor().size();
+                let text = editor.size();
+                // A single line never scrolls vertically: its text is anchored
+                // at the top padding, so part of it must not be scrolled away.
+                let height = match editor.is_multiline() {
+                    true => (text.height - (viewport.height - padding).max(0.0)).max(0.0),
+                    false => 0.0,
+                };
                 Point::new(
-                    (text.width + field.editor().ime_rect().size.width
+                    (text.width + editor.ime_rect().size.width
                         - (viewport.width - padding).max(0.0))
                     .max(0.0),
-                    (text.height - (viewport.height - padding).max(0.0)).max(0.0),
+                    height,
                 )
             }
             None => Point::default(),
@@ -189,7 +196,14 @@ impl State {
                 }
             }
             let element = &self.tree.get(id).unwrap().context;
-            if element.control.viewport() || element.control.editor().is_some() {
+            // A single-line field keeps its text anchored; a wheel over it
+            // scrolls the enclosing view instead.
+            let scrollable = element.control.viewport()
+                || element
+                    .control
+                    .editor()
+                    .is_some_and(|field| field.editor().is_multiline());
+            if scrollable {
                 // A right-to-left view's offset grows leftward.
                 let sign = if element.rtl && element.control.viewport() {
                     -1.0

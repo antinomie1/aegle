@@ -94,6 +94,21 @@ impl TextField {
 /// The control inside a [`TextField`] node.
 pub struct FieldControl(pub(crate) Box<aegle_controls::TextField>);
 
+impl FieldControl {
+    /// Where the text layout starts in the control's local coordinates.
+    ///
+    /// A single line is centered vertically in the control, like a button's
+    /// label; a multiline area starts at the top padding and scrolls.
+    fn text_origin(&self, size: Size, padding: f32, scroll: Point) -> Point {
+        let editor = self.0.editor();
+        let y = match editor.is_multiline() {
+            true => padding - scroll.y,
+            false => (size.height - editor.size().height) * 0.5,
+        };
+        Point::new(padding - scroll.x, y)
+    }
+}
+
 impl Control for FieldControl {
     fn kind(&self) -> &'static ControlKind {
         &crate::kinds::TEXT_FIELD
@@ -125,12 +140,14 @@ impl Control for FieldControl {
     fn handle(&mut self, cx: &mut InputCx<'_>, input: Input<'_>) -> Outcome {
         self.0.handle(cx.fonts, input).or_fail()
     }
-    fn content_offset(&self, _: Size, padding: f32, scroll: Point) -> Point {
-        Point::new(scroll.x - padding, scroll.y - padding)
+    fn content_offset(&self, size: Size, padding: f32, scroll: Point) -> Point {
+        let origin = self.text_origin(size, padding, scroll);
+        Point::new(-origin.x, -origin.y)
     }
-    fn baseline(&self, _: Size, padding: f32) -> Option<f32> {
+    fn baseline(&self, size: Size, padding: f32) -> Option<f32> {
         // The unscrolled text origin, as CSS aligns scroll containers.
-        Some(padding + self.0.editor().first_baseline()?)
+        let origin = self.text_origin(size, padding, Point::default());
+        Some(origin.y + self.0.editor().first_baseline()?)
     }
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let size = cx
@@ -171,11 +188,10 @@ impl Control for FieldControl {
         }
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
+        let origin = self.text_origin(cx.size, cx.padding, cx.scroll);
         cx.builder.push_clip(cx.shape);
-        cx.builder.push_transform(Affine::translation(
-            cx.padding - cx.scroll.x,
-            cx.padding - cx.scroll.y,
-        ));
+        cx.builder
+            .push_transform(Affine::translation(origin.x, origin.y));
         self.0.editor().paint(
             cx.builder,
             EditorPaint {

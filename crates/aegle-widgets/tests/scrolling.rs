@@ -340,3 +340,53 @@ fn scroll_views_fit_the_window_and_their_content_scrolls() -> Result {
 fn panics(change: impl FnOnce()) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
 }
+
+#[test]
+fn single_line_fields_keep_their_text_while_the_page_scrolls() -> Result {
+    let mut fonts = TextSystem::new();
+    let families = fonts.register_fonts(Arc::new(
+        include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
+    ui.root().set_padding(0.0);
+    let view = ui.root().scroll_view();
+    view.set_width(Some(200.0));
+    view.set_height(Some(60.0));
+    view.set_padding(0.0);
+    view.set_gap(4.0, 4.0);
+    let field = view.text_field("hello");
+    let number = view.number_field(0.0, 100.0, 0.0);
+    for _ in 0..6 {
+        view.button("filler").set_height(Some(20.0));
+    }
+    ui.resize(Size::new(240.0, 320.0));
+    ui.refresh()?;
+    // A single line is anchored at the top padding, so it has no vertical scroll.
+    assert_eq!(field.max_scroll_offset(), Point::default());
+    assert_eq!(number.max_scroll_offset(), Point::default());
+    assert_eq!(field.scroll_offset(), Point::default());
+    assert_eq!(number.scroll_offset(), Point::default());
+
+    // The wheel over a field scrolls the page, not the text inside the field.
+    let at = field.bounds().origin;
+    ui.scroll(Point::new(at.x + 5.0, at.y + 5.0), 30.0)?;
+    ui.refresh()?;
+    assert_eq!(
+        view.scroll_offset().y,
+        30.0,
+        "wheel was absorbed by a field"
+    );
+    assert_eq!(field.scroll_offset(), Point::default());
+    assert_eq!(number.scroll_offset(), Point::default());
+
+    // A multiline area still scrolls its own text.
+    let area = view.text_area("one\ntwo\nthree\nfour\nfive\nsix\nseven");
+    area.set_height(Some(40.0));
+    area.set_min_height(0.0);
+    ui.refresh()?;
+    area.scroll_by(Point::new(0.0, 10.0));
+    ui.refresh()?;
+    assert!(area.scroll_offset().y > 0.0);
+    Ok(())
+}

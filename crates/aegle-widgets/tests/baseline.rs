@@ -51,3 +51,33 @@ fn baseline_rows_align_text_controls() -> Result {
     }
     Ok(())
 }
+
+#[test]
+fn single_line_editors_center_their_text() -> Result {
+    let mut fonts = TextSystem::new();
+    let families = fonts.register_fonts(Arc::new(
+        include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+    ))?;
+    fonts.set_generic_families(GenericFamily::SansSerif, families.iter().copied());
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(fonts)), Theme::light())?;
+    ui.root().set_padding(0.0);
+
+    // A taller single-line control moves its text down by half the difference,
+    // so the line stays centered, like a button's label.
+    let short = ui.root().text_field("edit");
+    short.set_height(Some(60.0));
+    let tall = ui.root().text_field("edit");
+    tall.set_height(Some(100.0));
+    ui.refresh()?;
+    let (a, b) = (short.baseline().unwrap(), tall.baseline().unwrap());
+    assert!((b - a - 20.0).abs() < 0.51, "baselines {a} and {b}");
+
+    // A multiline area keeps its first line at the top padding instead.
+    let area = ui.root().text_area("one\ntwo");
+    area.set_height(Some(80.0));
+    let taller = ui.root().text_area("one\ntwo");
+    taller.set_height(Some(120.0));
+    ui.refresh()?;
+    assert_eq!(area.baseline(), taller.baseline());
+    Ok(())
+}
