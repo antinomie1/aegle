@@ -113,6 +113,11 @@ impl Renderer {
     pub fn raw_device(&self) -> RawDevice {
         self.device.raw_handles()
     }
+
+    /// The CPU glyph cache shared by every renderer on this device.
+    pub fn glyph_cache(&self) -> crate::SharedGlyphCache {
+        self.device.glyph_cache(self.options.text.glyph_cache)
+    }
 }
 
 impl crate::text::Text {

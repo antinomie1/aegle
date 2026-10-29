@@ -39,7 +39,7 @@ impl Text {
             return Err(Error::InvalidTextOptions);
         }
         Ok(Self {
-            atlas: Atlas::new(options)?,
+            atlas: Atlas::new(device, options)?,
             pipeline: TextPipeline::new(
                 device,
                 pipeline,

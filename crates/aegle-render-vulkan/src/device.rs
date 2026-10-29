@@ -1,5 +1,7 @@
 #![allow(unsafe_code)]
 
+use std::{cell::RefCell, rc::Rc};
+
 use ash::{Entry, vk};
 
 use crate::{Error, Result};
@@ -17,6 +19,11 @@ pub(crate) struct Device {
     /// Application image views registered for drawing.
     #[cfg(feature = "text")]
     pub textures: crate::external::Registry,
+    /// The CPU glyph cache, created by the first renderer that needs one and
+    /// then shared: every renderer on this device keeps its uploads in the same
+    /// rasterized images instead of rasterizing them again.
+    #[cfg(feature = "text")]
+    glyph_cache: RefCell<Option<crate::SharedGlyphCache>>,
     /// Only while the creating window renderer takes it; surfaces belong to renderers.
     #[cfg(feature = "window")]
     surface: Option<crate::surface::Surface>,
@@ -48,6 +55,20 @@ impl Device {
         let mut device = Self::create(device_index, Some((display, window)))?;
         let surface = device.surface.take().expect("created with a window");
         Ok((device, surface))
+    }
+
+    /// The device's CPU glyph cache, created with `limits` by the first caller;
+    /// later callers share it and their own limits are ignored.
+    #[cfg(feature = "text")]
+    pub fn glyph_cache(
+        &self,
+        limits: aegle_glyph::CacheLimits,
+    ) -> crate::SharedGlyphCache {
+        let mut slot = self.glyph_cache.borrow_mut();
+        slot.get_or_insert_with(|| {
+            Rc::new(RefCell::new(aegle_glyph::GlyphCache::with_limits(limits)))
+        })
+        .clone()
     }
 
     /// The loader that created this device's instance.
@@ -127,6 +148,8 @@ impl Device {
                     memory,
                     #[cfg(feature = "text")]
                     textures: Default::default(),
+                    #[cfg(feature = "text")]
+                    glyph_cache: RefCell::new(None),
                     #[cfg(feature = "window")]
                     surface,
                     #[cfg(feature = "window")]

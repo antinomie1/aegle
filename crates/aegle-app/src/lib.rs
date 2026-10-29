@@ -66,7 +66,9 @@ type Native = aegle_platform_macos::MacOs;
 pub use aegle_desktop as desktop;
 pub use aegle_platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions, Preferences};
 #[cfg(feature = "vulkan")]
-pub use aegle_render_vulkan::{Options as VulkanOptions, RawDevice, SharedDevice, ash};
+pub use aegle_render_vulkan::{
+    Options as VulkanOptions, RawDevice, SharedDevice, SharedGlyphCache, ash,
+};
 #[cfg(feature = "wgpu")]
 pub use aegle_render_wgpu::{Options as WgpuOptions, SharedGpu, wgpu};
 #[cfg(native)]

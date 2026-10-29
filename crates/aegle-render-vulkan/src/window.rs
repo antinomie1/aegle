@@ -104,6 +104,13 @@ impl SharedDevice {
     pub fn raw_device(&self) -> crate::RawDevice {
         self.0.raw_handles()
     }
+
+    /// The CPU glyph cache shared by every renderer on this device, for an
+    /// application that rasterizes its own glyphs into the same pages.
+    #[cfg(feature = "text")]
+    pub fn glyph_cache(&self) -> crate::SharedGlyphCache {
+        self.0.glyph_cache(aegle_glyph::CacheLimits::default())
+    }
 }
 
 impl<W> WindowRenderer<W> {

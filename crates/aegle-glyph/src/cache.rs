@@ -70,6 +70,21 @@ impl GlyphCache {
         }
     }
 
+    /// Runs `use_glyph` on the requested glyph.
+    ///
+    /// A cache behind a `RefCell` can be shared by several owners, such as a
+    /// window renderer and an application drawing into it: the image is used
+    /// while the borrow is held and never escapes it.
+    pub fn with_glyph<T>(
+        &mut self,
+        font: &FontSource,
+        glyph_id: u16,
+        options: RasterOptions<'_>,
+        use_glyph: impl FnOnce(Glyph<'_>) -> T,
+    ) -> Result<T, GlyphError> {
+        self.rasterize(font, glyph_id, options).map(use_glyph)
+    }
+
     /// Returns an existing image or rasterizes and stores the requested glyph.
     ///
     /// Use the image immediately, or retain the font/glyph request and ask again.

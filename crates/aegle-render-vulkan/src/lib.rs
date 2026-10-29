@@ -47,6 +47,9 @@ mod vector;
 mod window;
 
 pub use aegle_scene::TextureId;
+/// The CPU glyph cache, shared by every renderer created on one device.
+#[cfg(feature = "text")]
+pub type SharedGlyphCache = std::rc::Rc<std::cell::RefCell<aegle_glyph::GlyphCache>>;
 /// The ash version this renderer uses, for working with its raw Vulkan handles.
 pub use ash;
 #[cfg(feature = "text")]

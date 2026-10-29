@@ -270,3 +270,44 @@ fn on_demand_cjk_cache_reuse_eviction_and_limits() {
         assert!(image.data.iter().all(|v| *v == 0));
     }
 }
+
+#[test]
+fn one_cache_serves_several_owners_through_with_glyph() {
+    use std::{cell::RefCell, rc::Rc};
+
+    let font = FontData::new(
+        Blob::from(include_bytes!("../../../tests/assets/aegle-test-cjk.otf").to_vec()),
+        0,
+    );
+    let parsed = swash::FontRef::from_index(font.data.data(), 0).unwrap();
+    let id = parsed.charmap().map('你');
+    assert_ne!(id, 0);
+    let options = RasterOptions {
+        size: 24.0,
+        ..Default::default()
+    };
+    // Two renderers on one device share the cache the way a window renderer and
+    // an application do; the image is borrowed only for the callback.
+    let cache = Rc::new(RefCell::new(GlyphCache::with_limits(CacheLimits::default())));
+    let mut first = Vec::new();
+    cache
+        .clone()
+        .borrow_mut()
+        .with_glyph(&font.clone().into(), id, options, |glyph| {
+            assert_eq!(glyph.content, Content::Mask);
+            first.extend_from_slice(glyph.data);
+        })
+        .unwrap();
+    assert_eq!(cache.borrow().stats().entries, 1);
+    let mut second = Vec::new();
+    cache
+        .clone()
+        .borrow_mut()
+        .with_glyph(&font.clone().into(), id, options, |glyph| {
+            second.extend_from_slice(glyph.data);
+        })
+        .unwrap();
+    // The second owner reuses the rasterized pixels instead of storing its own.
+    assert_eq!(first, second);
+    assert_eq!(cache.borrow().stats().entries, 1);
+}

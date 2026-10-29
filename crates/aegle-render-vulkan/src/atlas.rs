@@ -1,9 +1,7 @@
 //! Bounded glyph, image and path-mask pages. Renderer fences previous GPU use
 //! before each frame.
 use aegle_glyph::{
-    CacheLimits, CacheStats, Content, FontSource, Glyph, GlyphCache, GlyphKey, Placement,
-    RasterOptions,
-};
+    CacheLimits, CacheStats, Content, FontSource, Glyph, GlyphKey, Placement, RasterOptions};
 use ash::vk;
 
 pub(crate) use crate::atlas_pages::{AtlasGlyph, ResourceKey};
@@ -71,12 +69,13 @@ pub struct TextStats {
 pub(crate) struct Atlas {
     storage: Storage,
     uploads: Uploads,
-    cache: GlyphCache,
+    /// The device's raster cache, shared with every other renderer on it.
+    cache: crate::SharedGlyphCache,
     options: TextOptions,
     raster_requests: u64,
 }
 impl Atlas {
-    pub fn new(options: TextOptions) -> Result<Self> {
+    pub fn new(device: &Device, options: TextOptions) -> Result<Self> {
         if options.page_size < 2
             || options.page_size > i32::MAX as u32
             || options.max_pages == 0
@@ -87,7 +86,7 @@ impl Atlas {
         Ok(Self {
             storage: Storage::new(),
             uploads: Uploads::default(),
-            cache: GlyphCache::with_limits(options.glyph_cache),
+            cache: device.glyph_cache(options.glyph_cache),
             options,
             raster_requests: 0,
         })
@@ -130,29 +129,37 @@ impl Atlas {
             return Ok(Some(glyph));
         }
         self.raster_requests = self.raster_requests.saturating_add(1);
-        let glyph = self.cache.rasterize(font, id, options)?;
-        if glyph.placement.width == 0 || glyph.placement.height == 0 || !visible(glyph.placement)? {
-            return Ok(None);
-        }
-        let key = if glyph.content == Content::Mask {
-            key.mask()
-        } else {
-            key
-        };
-        let hash = self.storage.hash(key);
-        let budget = budget - self.uploads.device_bytes();
-        self.storage
-            .insert(
-                EntryKey::Glyph(key.to_owned()),
-                hash,
-                glyph,
-                &mut self.uploads,
-                self.options,
-                device,
-                pipeline,
-                budget,
-            )
-            .map(Some)
+        // The cache is shared, so its image is used inside the borrow and the
+        // pixels are copied into this renderer's uploads before it is released.
+        let cache = self.cache.clone();
+        let mut cache = cache.borrow_mut();
+        cache.with_glyph(font, id, options, |glyph| {
+            if glyph.placement.width == 0
+                || glyph.placement.height == 0
+                || !visible(glyph.placement)?
+            {
+                return Ok(None);
+            }
+            let key = if glyph.content == Content::Mask {
+                key.mask()
+            } else {
+                key
+            };
+            let hash = self.storage.hash(key);
+            let budget = budget - self.uploads.device_bytes();
+            self.storage
+                .insert(
+                    EntryKey::Glyph(key.to_owned()),
+                    hash,
+                    glyph,
+                    &mut self.uploads,
+                    self.options,
+                    device,
+                    pipeline,
+                    budget,
+                )
+                .map(Some)
+        })?
     }
 
     /// Returns a cached non-glyph entry and pins its page for this frame.
@@ -237,7 +244,7 @@ impl Atlas {
             upload_region_capacity: self.uploads.regions.capacity(),
             entry_capacity: self.storage.entry_capacity(),
             page_capacity: self.storage.pages.capacity(),
-            glyph_cache: self.cache.stats(),
+            glyph_cache: self.cache.borrow().stats(),
             raster_requests: self.raster_requests,
         }
     }
@@ -246,7 +253,7 @@ impl Atlas {
     pub fn clear(&mut self) {
         self.storage = Storage::new();
         self.uploads = Uploads::default();
-        self.cache.clear();
+        self.cache.borrow_mut().clear();
         self.raster_requests = 0;
     }
 }
