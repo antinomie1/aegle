@@ -13,24 +13,27 @@ use linebender_resource_handle::{Blob, FontData};
 use super::layout::{PangoLayout, StoredRun};
 use super::sys::{PANGO_GLYPH_EMPTY, PANGO_GLYPH_UNKNOWN_FLAG, PANGO_SCALE, PangoRectangle, pango};
 
-/// Font files already read by path, shared by every layout in this process.
+/// Font files already read, by path, shared by every layout in this process.
 ///
-/// Runs refer to their font by file and face index, so a layout Pango re-shapes
-/// with another face cannot pair glyph indices with stale bytes.
-fn files() -> &'static Mutex<HashMap<(String, u32), FontData>> {
-    static FILES: OnceLock<Mutex<HashMap<(String, u32), FontData>>> = OnceLock::new();
+/// One read serves every face of a collection (`.ttc`): runs pair the shared
+/// bytes with their face index, so a layout Pango re-shapes with another face
+/// cannot pair glyph indices with stale bytes.
+fn files() -> &'static Mutex<HashMap<String, Blob<u8>>> {
+    static FILES: OnceLock<Mutex<HashMap<String, Blob<u8>>>> = OnceLock::new();
     FILES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn font_data(path: &str, index: u32) -> Option<FontData> {
     let mut files = files().lock().ok()?;
-    if let Some(font) = files.get(&(path.to_owned(), index)) {
-        return Some(font.clone());
-    }
-    let bytes = fs::read(path).ok()?;
-    let font = FontData::new(Blob::new(Arc::new(bytes)), index);
-    files.insert((path.to_owned(), index), font.clone());
-    Some(font)
+    let blob = match files.get(path) {
+        Some(blob) => blob.clone(),
+        None => {
+            let blob = Blob::new(Arc::new(fs::read(path).ok()?));
+            files.insert(path.to_owned(), blob.clone());
+            blob
+        }
+    };
+    Some(FontData::new(blob, index))
 }
 
 /// Releases the process-wide font files; live layouts re-read them when painted.
