@@ -40,6 +40,8 @@ struct SeatInput {
     enable_serial: u32,
     blocked: bool,
     dirty: bool,
+    /// A composition is showing; an empty preedit from here ends it.
+    composing: bool,
     pending: Pending,
 }
 
@@ -56,6 +58,7 @@ impl SeatInput {
         }
         self.content = None;
         self.blocked = false;
+        self.composing = false;
         self.pending = Pending::default();
     }
 
@@ -102,6 +105,7 @@ impl SeatInput {
         self.content = None;
         self.pending = Pending::default();
         self.blocked = false;
+        self.composing = false;
         self.dirty = false;
         self.focus.take()
     }
@@ -138,6 +142,7 @@ impl ImeState {
                 enable_serial: 0,
                 blocked: false,
                 dirty: false,
+                composing: false,
                 pending: Pending::default(),
             });
         }
@@ -304,6 +309,21 @@ impl Dispatch<ZwpTextInputV3, ()> for State {
                     return;
                 }
                 input.blocked = !current;
+                // A batch with no content only acknowledges the state the input
+                // method was given; reporting it would make the host republish
+                // that state, so the two would answer each other forever. An
+                // empty preedit is still reported when it ends a composition.
+                let composing = !pending.preedit.text.is_empty();
+                let ends = input.composing && !composing;
+                input.composing = composing;
+                let empty = pending.commit.is_none()
+                    && pending.before == 0
+                    && pending.after == 0
+                    && pending.preedit.text.is_empty()
+                    && pending.preedit.cursor.is_none();
+                if pending.error.is_none() && empty && !ends {
+                    return;
+                }
                 if let Some(error) = pending.error {
                     state
                         .events
