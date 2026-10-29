@@ -20,7 +20,7 @@ use aegle_layout::LayoutStyle;
 use aegle_scene::{Color, RoundedRect, SceneBuilder};
 use aegle_text::{Paragraph, TextStyle, TextSystem};
 use aegle_theme::{Accepts, Appearance, ControlKind, Theme, VisualState};
-use aegle_types::{Point, Size};
+use aegle_types::{Point, Rect, Size};
 
 use crate::{LocalLayout, OrFail, Result, bar::Bar, state::State};
 
@@ -228,6 +228,15 @@ pub trait Control: Any {
     }
     /// Mutable [`Control::editor`].
     fn editor_mut(&mut self) -> Option<&mut TextField> {
+        None
+    }
+    /// Composition caret of a control that accepts native IME without a text
+    /// editor, in its own local logical coordinates, for a node of `size`; the
+    /// engine offsets it into window coordinates and publishes it with an empty
+    /// surrounding excerpt, so only caret-anchored composition is offered. The
+    /// control then receives [`Input::Ime`] and [`Input::Cancel`] like an
+    /// editor, and its content is the composition's own business.
+    fn ime_caret(&mut self, _size: Size) -> Option<Rect> {
         None
     }
     /// Adjusts the node's text style for this control's text, as a type

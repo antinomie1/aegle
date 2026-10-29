@@ -217,6 +217,15 @@ impl Node {
             Ok(())
         })
     }
+    /// Republishes this window's native IME state after the composition caret
+    /// moved, the editor content changed or a text-input session entered, see
+    /// [`Ui::take_ime_state`](crate::Ui::take_ime_state).
+    pub fn request_ime_sync(&self) {
+        self.change(|state, _| {
+            state.ime_dirty = true;
+            Ok(())
+        })
+    }
     /// Requests logical focus using the same enabled/visible policy as keyboard traversal.
     pub fn focus(&self) {
         self.change(|state, id| state.set_focus(Some(id)))

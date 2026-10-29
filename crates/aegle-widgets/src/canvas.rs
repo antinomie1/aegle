@@ -8,7 +8,7 @@ use aegle_controls::{
 use aegle_core::Dirty;
 use aegle_scene::SceneBuilder;
 use aegle_theme::ControlKind;
-use aegle_types::{Point, Size};
+use aegle_types::{Point, Rect, Size};
 use aegle_ui::LayoutStyle;
 use aegle_ui::{
     Container, Control, HandlerResult,
@@ -120,6 +120,27 @@ pub enum CanvasEvent {
     /// Clipboard text delivered while the canvas has focus, after
     /// [`Node::request_paste`](aegle_ui::Node::request_paste).
     Paste(String),
+    /// One native IME transaction for a canvas published as a composition
+    /// target with [`Canvas::set_ime`]; apply its fields in order.
+    Ime(CanvasIme),
+    /// Native text-input focus left: drop the composition without committing it.
+    ImeCancelled,
+}
+
+/// One native IME transaction in UTF-8 byte offsets, owned so a canvas may
+/// defer it to its own callback.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CanvasIme {
+    /// Bytes to delete before the caret or composition.
+    pub delete_before: usize,
+    /// Bytes to delete after the caret or composition.
+    pub delete_after: usize,
+    /// Committed text replacing the deleted range; `Some("")` deletes.
+    pub commit: Option<String>,
+    /// Temporary text following the commit, empty when the composition ends.
+    pub preedit: String,
+    /// Fixed and active caret endpoints within `preedit`, in bytes.
+    pub cursor: Option<(usize, usize)>,
 }
 
 /// The control inside a [`Canvas`] node.
@@ -133,6 +154,8 @@ pub struct CanvasControl {
     buttons: u8,
     /// Input waiting for the next callback dispatch.
     events: Vec<CanvasEvent>,
+    /// Composition caret in local logical coordinates, see [`Canvas::set_ime`].
+    ime: Option<Box<dyn FnMut(Size) -> Option<Rect>>>,
     /// A splitter grip's orientation (vertical) and first-pane share, for semantics.
     pub(crate) splitter: Option<(bool, f32)>,
 }
@@ -174,6 +197,22 @@ impl Canvas {
                 }
                 Ok(())
             });
+            Ok(())
+        })
+    }
+    /// Makes an interactive canvas a native IME composition target: `caret`
+    /// returns the composition caret rectangle in local logical coordinates
+    /// (or `None` to end the session) for a canvas of the given size, and
+    /// native transactions arrive as [`CanvasEvent::Ime`]. The engine publishes
+    /// no surrounding excerpt, so the input method composes without it and only
+    /// the caret anchors the candidate window. Call
+    /// [`Node::request_ime_sync`](aegle_ui::Node::request_ime_sync) whenever the
+    /// caret moves, and [`Self::set_input`] must be called too: a canvas that
+    /// accepts no input takes no composition.
+    pub fn set_ime(&self, caret: impl FnMut(Size) -> Option<Rect> + 'static) {
+        self.change(|state, id| {
+            state.control_as::<CanvasControl>(id).unwrap().ime = Some(Box::new(caret));
+            state.invalidate(id, Dirty::PAINT)?;
             Ok(())
         })
     }
@@ -293,7 +332,17 @@ impl Control for CanvasControl {
                     ..self.push(event)
                 }
             }
-            Input::Cancel => self.cancel(),
+            Input::Cancel => {
+                let mut outcome = self.cancel();
+                if self.ime.is_some() {
+                    // Native text-input focus left: the composition ends
+                    // without being committed.
+                    let pushed = self.push(CanvasEvent::ImeCancelled);
+                    outcome.action = outcome.action.or(pushed.action);
+                    outcome.handled = true;
+                }
+                outcome
+            }
             Input::Wheel {
                 delta,
                 position,
@@ -319,8 +368,18 @@ impl Control for CanvasControl {
             Input::Paste(text) if self.interactive => {
                 self.push(CanvasEvent::Paste(text.to_owned()))
             }
+            Input::Ime(edit) if self.ime.is_some() => self.push(CanvasEvent::Ime(CanvasIme {
+                delete_before: edit.delete_before,
+                delete_after: edit.delete_after,
+                commit: edit.commit.map(str::to_owned),
+                preedit: edit.preedit.to_owned(),
+                cursor: edit.cursor.map(|selection| (selection.anchor, selection.focus)),
+            })),
             _ => Outcome::default(),
         }
+    }
+    fn ime_caret(&mut self, size: Size) -> Option<Rect> {
+        (self.ime.as_mut()?)(size)
     }
     fn paint(&mut self, cx: &mut PaintCx<'_>) {
         (self.painter)(cx.builder, cx.size)
@@ -351,6 +410,7 @@ pub(crate) fn canvas(
                 pressed: None,
                 buttons: 0,
                 events: Vec::new(),
+                ime: None,
                 splitter: None,
             }) as Box<dyn Control>,
             {

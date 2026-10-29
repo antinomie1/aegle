@@ -391,24 +391,42 @@ impl Ui {
 
     /// Consumes pending IME synchronization after refresh and event callbacks.
     pub fn take_ime_state(&self, max_bytes: usize) -> Option<ImeState> {
-        let mut state = self.write();
+        let mut guard = self.write();
+        let state = &mut *guard;
         if !state.ime_dirty {
             return None;
         }
         state.ime_dirty = false;
         let reset = std::mem::take(&mut state.ime_reset);
+        let (theme, size) = (state.theme, state.size);
         let request = state.focus.current(&state.tree).and_then(|id| {
-            let element = &state.tree.get(id).unwrap().context;
-            let field = element.control.editor()?;
-            if !field.accepts_ime() {
-                return None;
-            }
-            let surrounding = field.editor().surrounding(max_bytes);
-            let selection = surrounding.map(|s| s.selection).unwrap_or_default();
-            let mut cursor_rect = field.editor().ime_rect();
-            let origin = element.text_origin(&state.theme);
-            cursor_rect.origin.x += element.bounds.origin.x + origin.x;
-            cursor_rect.origin.y += element.bounds.origin.y + origin.y;
+            let element = &mut state.tree.get_mut(id).unwrap().context;
+            let node = element.bounds.size;
+            // An editor offers its excerpt and selection; any other composition
+            // target, such as a canvas, offers its caret alone.
+            let (surrounding, selection, mut cursor_rect, multiline) =
+                match element.control.editor().filter(|field| field.accepts_ime()) {
+                    Some(field) => {
+                        let surrounding = field.editor().surrounding(max_bytes);
+                        let selection = surrounding.map(|s| s.selection).unwrap_or_default();
+                        let mut rect = field.editor().ime_rect();
+                        let origin = element.text_origin(&theme);
+                        rect.origin.x += origin.x;
+                        rect.origin.y += origin.y;
+                        (
+                            surrounding.map(|s| s.to_string()),
+                            selection,
+                            rect,
+                            field.editor().is_multiline(),
+                        )
+                    }
+                    None => {
+                        let rect = element.control.ime_caret(node)?;
+                        (None, Selection::default(), rect, false)
+                    }
+                };
+            cursor_rect.origin.x += element.bounds.origin.x;
+            cursor_rect.origin.y += element.bounds.origin.y;
             // Keep a manually scrolled-out composition alive. Its candidate
             // anchor collapses at the nearest visible edge until it re-enters.
             if let Some(xf) = element.xf {
@@ -420,13 +438,13 @@ impl Ui {
             }
             cursor_rect = crate::scroll_geometry::clamp_anchor(
                 cursor_rect,
-                Rect::new(0.0, 0.0, state.size.width, state.size.height),
+                Rect::new(0.0, 0.0, size.width, size.height),
             );
             Some(ImeRequest {
-                surrounding: surrounding.map(|s| s.to_string()),
+                surrounding,
                 selection,
                 cursor_rect,
-                multiline: field.editor().is_multiline(),
+                multiline,
                 input_method: state.input_method,
             })
         });

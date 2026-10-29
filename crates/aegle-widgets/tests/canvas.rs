@@ -213,3 +213,60 @@ fn canvas_drawing_beyond_its_bounds_is_damaged() -> Result {
     assert_eq!((rect.origin, rect.size.width), (origin, 150.0));
     Ok(())
 }
+
+#[test]
+fn canvas_publishes_a_caret_and_takes_ime_transactions() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(300.0, 300.0));
+    ui.root().set_padding(0.0);
+    let caret = aegle_ui::scene::Rect::new(10.0, 20.0, 8.0, 16.0);
+    let canvas = ui.root().canvas(|_, _| {});
+    canvas.set_width(100.0);
+    canvas.set_height(100.0);
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let log = events.clone();
+    canvas.set_input(move |_, event| {
+        log.borrow_mut().push(event);
+        Ok(())
+    });
+    // A composition target with no text editor: only the caret is published.
+    canvas.set_ime(move |_| Some(caret));
+    ui.refresh()?;
+    canvas.focus();
+    ui.refresh()?;
+    let state = ui.take_ime_state(4000).expect("focus publishes IME state");
+    let request = state.request.expect("the canvas is a composition target");
+    assert_eq!(request.surrounding, None);
+    assert_eq!(request.cursor_rect, caret);
+    assert!(!request.multiline);
+
+    ui.ime(aegle_ui::ImeEdit {
+        preedit: "にほ",
+        ..aegle_ui::ImeEdit::default()
+    })?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(
+        events.borrow().last(),
+        Some(&CanvasEvent::Ime(aegle_widgets::CanvasIme {
+            preedit: "にほ".into(),
+            ..aegle_widgets::CanvasIme::default()
+        }))
+    );
+    // A commit arrives in the same channel; focus leaving cancels the rest.
+    ui.ime(aegle_ui::ImeEdit {
+        commit: Some("日本"),
+        ..aegle_ui::ImeEdit::default()
+    })?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(
+        events.borrow().last(),
+        Some(&CanvasEvent::Ime(aegle_widgets::CanvasIme {
+            commit: Some("日本".into()),
+            ..aegle_widgets::CanvasIme::default()
+        }))
+    );
+    ui.ime_left()?;
+    ui.dispatch_callbacks()?;
+    assert_eq!(events.borrow().last(), Some(&CanvasEvent::ImeCancelled));
+    Ok(())
+}

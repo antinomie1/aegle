@@ -57,7 +57,7 @@ use aegle_ui::LayoutStyle;
 use aegle_ui::{Container, Control, FileMode, HandlerResult, Hooks, Node, Result, State};
 
 pub use button::{Button, ButtonControl};
-pub use canvas::{Canvas, CanvasControl, CanvasEvent, Painter};
+pub use canvas::{Canvas, CanvasControl, CanvasEvent, CanvasIme, Painter};
 pub use dialog::Dialog;
 pub use drawer::{Drawer, DrawerSide};
 pub use dropdown::Dropdown;
