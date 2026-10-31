@@ -84,8 +84,10 @@ pub struct WindowOptions {
     /// GPU renderers use `AppOptions::vulkan` or `AppOptions::wgpu` instead.
     pub buffer_budget: usize,
     /// Desktop-shell layer placement instead of an ordinary window, for
-    /// panels, docks and overlays (Wayland layer-shell). Window creation
-    /// fails where the platform has no layers. Default: `None`.
+    /// panels, docks and overlays (the `wayland` backend's layer-shell).
+    /// Window creation fails with an unsupported-capability error where the
+    /// platform has no layers, including the default SDL3 backend. Default:
+    /// `None`.
     pub layer: Option<crate::LayerOptions>,
 }
 
@@ -339,9 +341,9 @@ impl App {
         })
     }
 
-    /// Whether this platform supports native composition (Wayland text-input-v3
-    /// or the Windows Text Services Framework). An unavailable requested IME is
-    /// returned as a capability error from the event loop.
+    /// Whether this platform supports native composition (Wayland text-input-v3,
+    /// SDL3 text input or the Windows Text Services Framework). An unavailable
+    /// requested IME is returned as a capability error from the event loop.
     pub fn ime_available(&self) -> bool {
         self.runtime.borrow().backend.ime_available()
     }

@@ -1,15 +1,19 @@
 //! Convenient entry to Aegle's retained application layer.
 //!
-//! The default desktop host selects the target's native window (Wayland on
-//! Linux, Win32 on Windows, AppKit on macOS) with tiny-skia software rendering
-//! and system fonts. System accessibility is opt-in through the single
+//! The default desktop host selects the target's native window (SDL3 on Linux,
+//! Win32 on Windows, AppKit on macOS) with tiny-skia software rendering and
+//! system fonts. On Linux the `wayland` feature replaces SDL3 with the native
+//! Wayland client, which adds layer surfaces, a drag source and text-input-v3
+//! surrounding text. System accessibility is opt-in through the single
 //! `accessibility` feature, which adds the semantic tree and the target's adapter
 //! (AT-SPI, UI Automation or NSAccessibility).
 //!
 //! A build contains exactly one renderer: `tiny-skia` (the default), `cairo`
 //! (Linux, drawing through the distribution's `libcairo.so.2`), `vulkan` or
 //! `wgpu`. Enabling two is a compile error, so another renderer replaces the
-//! default with `--no-default-features --features desktop,<renderer>`. `vulkan`
+//! default with `--no-default-features --features desktop,<renderer>`; the
+//! Linux window backend switches the same way with
+//! `--no-default-features --features desktop,wayland,tiny-skia`. `vulkan`
 //! fails at `App` creation on macOS, where `wgpu` reaches Metal. Lower-level
 //! crates remain independent.
 //!

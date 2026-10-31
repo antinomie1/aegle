@@ -1,12 +1,14 @@
 //! Native application host: [`App`] owns the platform connection, windows, event
 //! loop, renderers and system preferences, and gives each window an
-//! `aegle-ui` [`Ui`](aegle_ui::Ui). `native` builds the target's platform crate
-//! (Wayland, Win32 or AppKit; `wayland`, `windows` and `macos` select one
-//! explicitly), plus exactly one renderer feature (`tiny-skia`, `cairo`,
-//! `vulkan` or `wgpu`). The renderer features are mutually exclusive: enabling
-//! two is a compile error, so a binary never carries a backend it cannot use,
-//! and [`RENDERER`] names the one it has. `vulkan` has no macOS backend and
-//! fails at `App` creation there, where `wgpu` presents through Metal.
+//! `aegle-ui` [`Ui`](aegle_ui::Ui). `native` hosts the target's platform crate:
+//! Win32 on Windows and AppKit on macOS, and on Linux exactly one of the
+//! mutually exclusive `sdl3` (windows through the distribution's SDL3) or
+//! `wayland` (the native Wayland client). It comes with exactly one renderer
+//! feature (`tiny-skia`, `cairo`, `vulkan` or `wgpu`). Both kinds of backend
+//! features are exclusive: enabling two is a compile error, so a binary never
+//! carries a backend it cannot use, and [`RENDERER`] names the renderer it
+//! has. `vulkan` has no macOS backend and fails at `App` creation there, where
+//! `wgpu` presents through Metal.
 //!
 //! Windows share fonts, the platform connection and (for GPU renderers) one
 //! device; each keeps its own control tree. [`App::proxy`] posts messages from

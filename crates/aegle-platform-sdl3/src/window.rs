@@ -58,6 +58,9 @@ impl Drop for NativeWindow {
 pub(crate) struct WindowState {
     pub(crate) id: WindowId,
     pub(crate) native: Rc<NativeWindow>,
+    /// SDL's own window ID, which every event names; cached so event
+    /// translation does not call into SDL to find the window.
+    pub(crate) native_id: u32,
     pub(crate) info: WindowInfo,
     /// The window was shown and not hidden again.
     pub(crate) shown: bool,
@@ -275,9 +278,12 @@ impl Sdl3 {
             .next_id
             .checked_add(1)
             .ok_or_else(|| Error::backend("window identity exhausted"))?;
+        // SAFETY: the window was just created; SDL assigns its ID here.
+        let native_id = unsafe { (lib.get_window_id)(window.as_ptr()) };
         let state = WindowState {
             id,
             native: Rc::new(NativeWindow { window, lib }),
+            native_id,
             info: WindowInfo {
                 size: options.size,
                 buffer: PixelSize::default(),
@@ -532,7 +538,7 @@ impl Sdl3 {
     pub(crate) fn id_of(&self, native: u32) -> Option<WindowId> {
         self.windows
             .iter()
-            .find(|window| unsafe { (self.lib.get_window_id)(window.ptr()) } == native)
+            .find(|window| window.native_id == native)
             .map(|window| window.id)
     }
 
