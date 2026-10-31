@@ -72,14 +72,14 @@ fn main() -> Result<()> {
 | `wgpu` |  | 渲染器：全平台通用的 wgpu（Vulkan、Metal、Direct3D 12） |
 | `accessibility` |  | 语义树与目标平台的系统适配（Linux AT-SPI，引入 zbus；Windows UI Automation；macOS NSAccessibility）；隐含 `native` |
 
-`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；Linux 上 `sdl3` 与 `wayland` 互斥，同时开启是编译错误，经本 facade 只给 `native` 而没有后端同样是带重建命令的编译错误；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
+`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；Linux 上 `sdl3` 与 `wayland` 互斥，同时开启是编译错误，经本 facade 只给 `native` 而没有后端同样是带重建命令的编译错误；各 crate 的分工见 [模块、依赖与构建组合](docs/modules.md)。
 
 ## 文档
 
 - [API 指南](docs/developer/api.md)：依赖与 feature、应用与窗口、布局、样式、事件、动画、标记与嵌入宿主。
 - [控件参考](docs/developer/controls.md)：每个默认控件的用法与各状态截图。
 - [不经 facade 使用控件库](docs/developer/standalone.md)：只用 aegle-ui、aegle-widgets、aegle-theme、aegle-motion 接入自己的宿主，以及编写自定义控件。
-- [Crate、示例与构建组合](docs/crates-and-examples.md)、[设计索引](docs/README.md)、[实现状态](docs/implementation.md)。
+- [模块、依赖与构建组合](docs/modules.md)、[设计索引](docs/README.md)、[实现状态](docs/implementation.md)。
 
 ## 许可证
 

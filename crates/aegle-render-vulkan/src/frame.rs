@@ -115,7 +115,7 @@ impl Frame<'_> {
     /// on pop at its opacity. A positive backdrop blur first draws the blur of
     /// what is already drawn under the layer's shape over it; a blur whose
     /// scratch images exceed the memory budget is skipped and counted by
-    /// [`Renderer::skipped_blurs`]. Each layer boundary is a submission the
+    /// `Renderer::skipped_blurs`. Each layer boundary is a submission the
     /// frame waits for. Needs `text`, whose image pipeline composites layers;
     /// without it this fails with [`Error::UnsupportedCommand`]. Layers still
     /// open when the frame finishes are composited first.

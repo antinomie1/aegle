@@ -1,281 +1,132 @@
-# Aegle 标记语言
+# 界面标记语言 (.aegle)
 
-状态：v0.1。编译型静态结构、类型检查和具名弱句柄已实现；类型化 state、属性表达式绑定、`on` 事件块、`if`/`for` 结构块、组件与 `use` 导入、运行时加载和显式 `reload` 已实现，见[当前动态标记](#当前动态标记)。record 与带 key 的列表、`let`、宿主动作、slot、组件事件和可配置限额也已实现，见[当前动态标记](#当前动态标记)末段；呈现几何（offset_x/offset_y/scale/rotation）与逐属性过渡时长也已实现。采用 `.aegle` 扩展名；QML 风格的结构，不依赖 Qt/QML，也不强制 JavaScript。
+Aegle 提供类 QML 风格的花括号标记语言（扩展名 `.aegle`），作为界面的声明式编写入口。它支持**编译期零开销宏展开**与**运行时动态解释加载**两条并行路径。
 
-## 最小程序
+---
 
-`main.aegle`：
+## 一、 语法概览与最小示例
 
+### 1. 结构与语法
 ```text
 Window {
-    title: "Hello"
-    Text { text: "你好，世界" }
+    title: "Aegle 示例"
+    width: 480
+    height: 320
+
+    Column {
+        padding: 16
+        gap: 8
+
+        Text {
+            id: label
+            text: "计数: " + str(count)
+        }
+
+        Button {
+            id: btn
+            text: "增加"
+            on click {
+                count = count + 1
+            }
+        }
+    }
+
+    state {
+        count: int = 0
+    }
 }
 ```
 
-`main.rs`：
+* **属性赋值**：`key: value`；表达式自动根据引用的 `state` 变量建立**单向响应式绑定**。
+* **事件块**：`on <event> { ... }` 处理点击、数值变更等交互动作。
+* **具名引用**：`id: name` 赋予节点文件内唯一标识，用于跨控件访问或在 Rust 中获取有类型弱句柄。
+
+---
+
+## 二、 编译期执行模式 (`ui!`)
+
+通过过程宏在编译期将 `.aegle` 文档直接生成为普通 Rust 控件树调用代码：
 
 ```rust
 use aegle::prelude::*;
 
 fn main() -> Result<()> {
-    App::run_ui(aegle::ui!("main.aegle"))
+    // 1. 作为 App 启动入口直接运行
+    App::run_ui(aegle::ui!("main.aegle"))?;
+
+    // 2. 或挂载到现有窗口容器，返回类型化视图
+    let view = aegle::ui!(&window, "panel.aegle")?;
+    view.btn.on_click(move |_| {
+        println!("Rust 闭包直接接收点击事件");
+    });
+    Ok(())
 }
 ```
 
-两份手写源码合计 8 行（4 行标记、4 行 Rust），初始化包含在 App::run_ui 中；`use aegle::prelude::*` 不能省略，它让内置元素在 `ui!` 的调用处可见。宏是构建期能力：静态文档生成直接创建/设置控件的 Rust 代码；含动态特性的文档生成构造已检查程序的 Rust 代码，由 `aegle::loader` 执行。两者的编译产物都不携带标记解析器。宏为入口及每个导入文件生成编译器可追踪的依赖标记，修改任一文件都会触发重编译。
+* **零解析开销**：发布二进制中不包含标记解析器代码。
+* **类型安全**：生成的 `View` 自动携带文件中所有 `id` 的具体弱句柄（如 `Button`、`Text`），在编译期验证属性与事件匹配。
+* **文件跟踪**：宏为每个导入文件生成构建依赖，文件变更自动触发 `cargo` 增量重编译。
 
-对应可执行示例为 `cargo run -p aegle --example hello_markup`；加上示例的文档注释，两份文件共 9 行。当前 App 需要 Linux Wayland 与系统字体；`markup` 本身不启用原生平台，片段可挂到无窗口 Ui。
+---
 
-## 当前编译接口
+## 三、 动态加载模式 (`aegle-loader`)
 
-`ui!("path.aegle")` 返回构造闭包：Window 根接收 `&App`，其他根接收 `&Container`，返回 `Result<View>`。`ui!(&parent, "path.aegle")` 立即构造并且只求值一次 parent。路径相对使用宏的包的 `CARGO_MANIFEST_DIR`，允许显式 `../`，不接受绝对路径；没有隐式查找目录。文件必须随使用者的源包一起发布。
-
-```text
-Column {
-    Text { id: status; text: "等待" }
-    Button { id: done; text: "完成" }
-}
-```
+通过解释引擎在运行时加载、运行或热重载标记文档：
 
 ```rust
-let view = aegle::ui!(&window, "panel.aegle")?;
-view.done.on_click(move |_| view.status.set_text("已完成"));
+use aegle::loader::Program;
+
+let program = Program::load("ui/dashboard.aegle")?;
+let view = program.build(&window)?;
+
+// 动态修改 state
+view.set("count", 42)?;
+
+// 支持热重载更新
+view.reload()?;
 ```
 
-生成的局部 View 有 `root` 字段和每个 `id` 对应的有类型公开字段；没有运行时字符串查询表。ID 在一个文件中唯一，使用 ASCII Rust 标识符，不能是 Rust 关键字、`_` 或保留名 `root`。丢弃 View 不删除控件；它与命令式 API 使用相同弱句柄、回调、布局、主题、IME 和语义树。
+* **安全边界**：不引入通用 JavaScript 引擎或脚本 VM。表达式仅支持基础算术、逻辑运算、字符串拼接、三元运算与安全内置函数。
+* **受限执行**：事件块语句执行上限为 10,000 条，嵌套调用上限 64 层，彻底杜绝死循环导致 UI 挂起。
 
-一次构建（视图本身，或一个 `if` 分支、一行 `for`）分三步：先按文档顺序创建全部控件，再按文档顺序（父先于子）设置属性、建立绑定与 `if`/`for` 块，最后安装过渡与事件。编译型构造与运行时引擎顺序相同，因此容器设置属性时子控件已存在，祖先的初始值（如 `enabled: false`、窗口主题）不会让后代的过渡在首次显示时启动。任一步返回错误时删除本次新建的整棵子树，Window 根则关闭该窗口，保留调用方原有父节点。清理本身失败时返回清理错误。该规则只覆盖构造返回前的同步错误；后续刷新或原生呈现失败仍遵守 App 的错误处理。编译型 View 不提供重载；运行时加载的 View 用 `reload` 原子替换。
+---
 
-文档根可以是 `Window`（原生窗口，只能作文件根）或任意元素。其余节点名都是**元素**：每个元素由控件库用 [`element!`](developer/elements.md) 声明一份规格（名称、布局、样式组、属性、事件、`self` 字段和子节点规则），检查器只按这些规格检查，内置元素与第三方元素走同一条路径，没有固定的元素表（[ADR 0004](adr/0004-element-contract.md)）。`ui!` 在调用处按 Rust 作用域解析元素名：`use aegle::prelude::*` 引入内置元素，控件库的元素随其句柄类型一起导入；不在作用域内的元素由 rustc 报告“找不到宏”。运行时加载按传入的 `Elements` 查找，`Program::load` 只认识内置元素，第三方元素用 `Elements::new().with::<E>()` 与 `Program::load_with` 登记，未登记即“unknown component”。
+## 四、 结构控制与组件复用
 
-### 内置元素
-
-| 元素 | 布局与子节点 | 元素属性（构造参数标 *，必填标 !） | 事件与 `self` 字段 |
-| --- | --- | --- | --- |
-| Column、Row | flex 容器 | — | — |
-| ScrollView | flex 容器，裁剪并滚动 | — | — |
-| Grid | grid 容器，需要 `grid` feature | — | — |
-| Stack | 盒容器，子项叠放，需要 `grid` feature | — | — |
-| Tabs | 盒容器，只接受 Tab | — | `changed`；`selected: int` |
-| Tab | 盒容器，只能直接写在 Tabs 中 | `title`*! 单行字符串 | — |
-| Splitter | 盒容器，恰好两个直接写出的元素，依次放入两个窗格 | `orientation`* `horizontal`/`vertical`；`ratio` 0 到 1 的数或百分比 | — |
-| TreeView | 盒容器，只接受 TreeNode，可直接写或写在 `if`/`for` 块中 | — | — |
-| TreeNode | 盒容器，只能写在 TreeView 或 TreeNode 中（直接或经 `if`/`for` 块），只接受 TreeNode（作为下一层，同样可经块） | `text`* 单行字符串；`expanded`、`selected` bool | `selected`（点击或 Enter/Space 选中，也在展开/收起时触发）；`text: string`、`expanded: bool`、`selected: bool` |
-| Dialog | 盒容器，子元素放入对话框正文；遮罩覆盖父容器，卡片不超出遮罩，内容过多时在卡片内滚动 | `title`* 单行字符串；`open` bool；`dismissible` bool | `closed`；`open: bool` |
-| Drawer | 盒容器，子元素放入抽屉面板；停靠父容器边缘，面板不宽于父容器，内容过多时在面板内滚动 | `side`* `left`/`right`；`open` bool；`width` dp 长度 | `closed`；`open: bool` |
-| Text | 叶 | `text`* 字符串；`wrap` bool | —；`text: string` |
-| Button | 叶 | `text`* 字符串 | `clicked`；`text: string` |
-| TextField | 叶 | `text`* 单行字符串；`read_only`、`password` bool | `submitted`、`changed`；`text: string` |
-| TextArea | 叶 | `text`* 字符串；`read_only` bool | `changed`；`text: string` |
-| Dropdown | 叶 | `items`*! 非空的单行字符串列表，字面量或 `list<string>` 表达式；`selected` 非负整数（默认 0） | `changed`；`selected: int`、`text: string` |
-| CheckBox | 叶 | `text`* 字符串；`checked`* bool；`mixed`、`wrap` bool | `changed`；`checked: bool`、`text: string` |
-| Switch、RadioButton | 叶 | `text`* 字符串；`checked`* bool；`wrap` bool；同一父容器中的 RadioButton 互斥 | `changed`；`checked: bool`、`text: string` |
-| Slider | 叶 | `min`*、`max`*、`value`* 有限数（默认 0/1/0）；`step` 非负数；`orientation` | `changed`；`value: float` |
-| Progress | 叶 | `min`*、`max`*、`value`*；`orientation`；`indeterminate` bool | —；`value: float` |
-| NumberField | 叶 | `min`*、`max`*、`value`*；`step` 非负数；`decimals` 0 到 9 的整数 | `changed`；`value: float` |
-| FilePicker | 叶（路径文本框加按钮） | `mode`* `open`/`save`/`folder`；`path`、`title`、`button_text` 单行字符串；`filters` 非空字符串列表，每项 `名称|模式 模式` 或只写模式；`read_only` bool | `changed`（对话框选中、拖放文件或编辑路径）；`path: string` |
-| Image | 叶 | `source` 单行字符串，图像文件路径（相对工作目录，空串为空视图）；`fit` `fill`/`contain`/`cover`（默认 `fill`） | `failed`（读取或解码失败，视图被清空）；`error: string` |
-| Separator | 叶 | — | — |
-
-元素属性的名称遮蔽同名的节点属性（如 Tab 的 `title`、Text 的 `wrap`）。Dialog 与 Drawer 的 `open` 只在与当前状态不同时打开或关闭，用户经 Escape、遮罩或关闭按钮关闭时触发 `closed`，绑定的状态需在 `on closed` 中同步，例如 `open: shown; on closed { shown = false }`。构造参数为字面量时交给构造器，不依赖源码顺序；写成表达式时构造器取默认值（必填参数取该类型的占位值，如 `lines` 为一项空串），随后由绑定设置。元素属性的字面量与绑定按元素规格中的声明顺序应用，同样不依赖源码顺序（如 Dropdown 先 `items` 后 `selected`）。没有 setter 的必填参数只能写字面量；只有构造参数而没有 setter 的属性（如 Splitter 的 `orientation`、数值元素的 `min`/`max`）也只能写字面量。数值元素的 `min` 须小于 `max`、`value` 按共享 Range 契约 clamp，由构造器在构建时检查，违反时构建失败并移除本次子树。标记数字以有限 f32 解析再转 f64；需要完整 f64 精度可用 Rust API。文本默认为空字符串，窗口标题默认为 `Aegle`。
-
-TextField 与 TextArea 的 `changed` 在用户改变已提交文字后触发：键入、删除、粘贴、剪切、撤销/重做或输入法提交，每次改变一次；输入法预编辑与 `text` 的绑定或 `set_text` 不触发，处理块用 `self.text` 读取新值，例如 `on changed { query = self.text }`。Dropdown 的 `items` 可写字面量列表（如 `items: ["小", "中", "大"]`，检查期验证非空且每项单行），也可绑定 `list<string>` 表达式（如 `items: sizes`）；绑定值在每次变化时检查，空列表或含换行的项返回带位置的 `RuntimeError`，选项保持不变。新选项在原索引仍有效时保留它，否则选中第一项，不触发 `changed`。`selected` 可绑定 int，越界时由 setter 拒绝（panic），因此同一处理块中先改 `items` 再改 `selected`。用户选择不同项时触发 `changed`，程序设置不触发，`self.selected` 与 `self.text` 给出当前项。TreeView/TreeNode 中的 `if`/`for` 块生成的 TreeNode 与直接写出的节点同层：块的透明分组位于外层节点的子节点容器内，块内节点按外层节点计算缩进并使其显示展开箭头；块清空后外层节点仍保留箭头。
-
-### 节点属性
-
-下表的属性每个节点都有，按目标的布局和样式组限定：容器属性只用于非叶元素与 Window，`direction`/`wrap` 只用于 flex 布局，网格属性只用于 grid 布局；`font_size` 需要 text 样式组，`hover_background`/`focus_color`/`focus_width` 需要 interactive，`pressed_background` 需要 pressed，`indicator_color` 需要 indicator，`selection_color`/`caret_color` 需要 editor。样式组与控件类型的 `Accepts` 一致，内置元素的样式组见 `aegle::loader::elements` 的文档。
-
-| 属性 | 值与适用范围 |
-| --- | --- |
-| `id` | 唯一标识符，生成有类型句柄 |
-| `title` | Window 的字符串，最多 4000 UTF-8 字节且无 NUL |
-| `width`、`height` | 控件为非负 `dp`、百分比、`calc(...)` 或 `auto`；Window 为正整数 `dp`，对应原生建议尺寸，可被 compositor 覆盖 |
-| `min_width`、`min_height`、`max_width`、`max_height`、`basis` | 非负 `dp`、百分比或 `auto`（最大尺寸的 `auto` 为不限） |
-| `aspect_ratio` | 正数，宽/高 |
-| `padding` | 容器为非负 `dp`/百分比，或按 CSS 顺序的 `[上下, 左右]`、`[上, 右, 下, 左]`；其他控件为一个非负 `dp` |
-| `margin` | 同 padding 的写法，可为负或 `auto`（左右 `auto` 水平居中） |
-| `inset` | 同 margin 的写法；设置即绝对定位，相对父容器内边距框，绘制在兄弟之上 |
-| `gap` | 容器的非负 `dp`/百分比，或 `[行间距, 列间距]` |
-| `grow`、`shrink` | 有限非负数值 |
-| `direction` | flex 容器的 `row`、`column`、`row_reverse`、`column_reverse` |
-| `layout_direction` | 任意控件的 `ltr`、`rtl`，子树继承；镜像行、对齐、文本、滚动条与方向性控件 |
-| `wrap` | flex 容器的 `no_wrap`、`wrap`、`wrap_reverse` |
-| `align`、`align_self` | 容器子项 / 本控件的交叉轴对齐：`start`、`end`、`center`、`stretch`、`baseline` |
-| `justify`、`align_content` | 容器的主轴剩余空间 / 行间剩余空间：`start`、`end`、`center`、`stretch`、`space_between`、`space_around`、`space_evenly` |
-| `columns`、`rows` | Grid 的显式轨道列表：轨道（`dp`、百分比、`fr`、`auto`、`min_content`、`max_content`、`minmax(dp, fr)`、`fit_content(dp)`）、字符串线名，以及 `repeat(次数或 auto_fill/auto_fit, 轨道与线名…)`；repeat 不嵌套且至少含一条轨道，自动 repeat 至多一个，此时全部轨道须为固定尺寸（`dp`、百分比、`minmax(dp, fr)`） |
-| `auto_columns`、`auto_rows` | Grid 的隐式轨道：单个或列表，不含线名与 repeat |
-| `areas`、`grid_area` | Grid 的命名区域：每行一个字符串，空白分隔的格名，各行格数相同，`.` 为未命名格，同名格须构成矩形；子项以区域名字符串放入区域（区域生成 `名-start`/`名-end` 线） |
-| `flow`、`justify_items` | Grid 的 `row`、`column`、`row_dense`、`column_dense`；子项水平对齐 |
-| `grid_column`、`grid_row`、`justify_self` | Grid 子项：非零整数线号（负数从末尾数）或线名/区域名字符串（同 CSS `grid-column: name`），或 `[线号、auto 或线名, 跨度或结束线名]`；格内水平对齐 |
-| `visible`、`enabled` | bool，作用于控件子树 |
-| `label` | 无障碍名称字符串 |
-
-长度属性（尺寸、内外边距、inset、gap）还接受 `calc(...)`：百分比与 `dp` 的线性组合，可用 `+`、`-`、一元负号与数字乘除，如 `calc((100% - 8dp) / 2)`；检查时折叠为“百分比 + dp”，因此不支持 `min`/`max`/`clamp` 或两个长度相乘。结果的正负取决于父尺寸，不按非负约束拒绝；Taffy 把负尺寸与内边距截为零。需要 64 位目标。
-| `theme` | Window 的 `light`、`dark`、`high_contrast` |
-| `background`、`foreground`、`border_color` | `#RRGGBB` 或 `#RRGGBBAA` 颜色 |
-| `hover_background`、`pressed_background` | 悬停、按下时的背景色 |
-| `disabled_background`、`disabled_foreground` | 对应禁用状态的颜色覆盖 |
-| `border_width`、`radius` | 非负 `dp`；边框宽度为零时关闭 |
-| `focus_color`、`focus_width` | 焦点颜色与非负 `dp` 宽度 |
-| `selection_color`、`caret_color` | 编辑器的选择与 caret/预编辑颜色 |
-| `font_size` | 正 `dp` |
-| `token("包.名称")` | 上述颜色属性及 `border_width`、`radius`、`focus_width`、`font_size`、`padding`、`gap`、`shadow` 和渐变色标也可绑定已登记的 token（如 `token("theme.accent")`；padding 与 gap 取统一值）；构建时按名查找，此后随主题和 token 覆盖更新。字体与过渡时长 token 只能在 Rust 中绑定 |
-| `shadow` | 除 Window 外任意控件：`[x, y, 模糊, 扩展, 颜色]`，四个 `dp` 长度（模糊非负）加一个颜色，如 `[0dp, 1dp, 3dp, 0dp, #0000004D]`；或整个阴影绑定 `Shadow` token，如 `token("theme.shadow")` |
-| `background_gradient` | 以渐变代替背景色：`linear(角度, 色标…)` 或 `radial(色标…)`，2–16 个色标，每个是颜色、`token("包.名称")` 或 `[颜色, 百分比]`；要么全部带位置（0%–100%，不递减），要么都不带（均匀分布）。角度为度数，0 指向上方，90 指向右方，在归一化的单位盒中度量，45 总是从左下角到右上角；radial 以中心为圆心，半径为较长边的一半 |
-| `opacity` | 除 Window 外任意控件的组透明度，[0, 1] 的数，子树作为一张图像合成；可绑定 float |
-| `backdrop_blur` | 除 Window 外任意控件，非负 `dp` 标准差，先模糊其圆角边界内已绘制的内容 |
-| `tooltip` | 除 Window 外任意控件的提示字符串，同时作为无障碍描述 |
-| `indicator_color` | 标志或完成部分的颜色 |
-| `transition` | 全节点过渡：`120ms` 或 `[120ms, ease_in_out]`，曲线为 linear/ease_in/ease_out/ease_in_out，未写时 ease_out；零表示立即到目标 |
-| `offset_x`、`offset_y` | 除 Window 外任意控件的呈现位移，有限 `dp`；可绑定 float（按 dp）。另一轴保持当前目标 |
-| `scale` | 除 Window 外任意控件以中心缩放子树，(0, 1000] 的数，默认 1；可绑定 |
-| `rotation` | 除 Window 外任意控件以中心旋转子树，有限的度数（顺时针为正）；可绑定 |
-| `paint_transition`、`offset_transition`、`scale_transition`、`rotation_transition`、`opacity_transition`、`shadow_transition` | 单独设置外观、位移、缩放、旋转、组透明度、阴影的过渡，写法同 `transition`；覆盖同节点 `transition` 中的对应部分 |
-
-Window 的通用控件属性作用于其内容根；例如 `visible: false` 隐藏内容，不卸载原生窗口。单独设置宽度不会清除高度的主题默认值；显式高度在切换主题后保留。
-
-ScrollView 可作为片段根或嵌套容器，内部按列布局；用 `height`、`width` 或 flex 分配约束视口即可产生滚动溢出。放在 `grow: 1` 的位置或任意层行/列、Tab 中时，它收缩到窗口给的空间而不是被内容撑开，中间容器不需要 `min_height: 0dp`；滚动方向上的直接子项保持自身尺寸。它没有可选样式组，因此不接受 font_size、hover/pressed/focus 等交互状态属性。当前没有初始滚动偏移属性；通过具名 ScrollView 句柄调用 `scroll_to`，或对子控件调用 `ensure_visible`。布局刷新、裁剪、嵌套滚轮和保留状态遵守同一套 [Rust 滚动契约](rust-api.md#当前滚动契约)；完整示例为 `crates/aegle/examples/scrolling.aegle`。
-
-声明必须以换行或分号分隔，最后一项可以直接跟 `}`；支持 `//` 注释和 JSON 字符串转义。数值为有限 f32，长度写为 `8dp`，百分比写为紧跟数字的 `50%`（`a % b` 取余在数字后需留空格），网格份数写为 `1fr`；`[8dp, auto]` 这类只含字面量与标识符的列表只用于上表注明的布局属性与 `shadow`、渐变色标。颜色为非预乘 sRGB 字节，严格接受六位或八位十六进制；时长严格采用 ASCII 整数加 `ms`，覆盖完整 u64，拒绝负数、小数、指数与溢出。布局属性只接受字面量，不能绑定表达式。未知属性、重复属性/ID、不适用属性、错误类型及未实现语法在 `ui!` 的编译期、运行时加载的挂载前拒绝，错误带文件、行、Unicode scalar 列和源码片段。外观属性直接调用同一套本地 setter，状态优先级见[组件样式](components-theme-animation.md)，没有另一套标记样式引擎。
-
-`transition: [120ms, ease_out]` 等过渡属性需要 facade 的 `motion` feature（默认 desktop 已启用）；关闭该 feature 却使用过渡会在生成代码的 API 检查时报错。过渡在本次构建的全部属性设置后才安装（见上文构建顺序），首次显示没有初始样式动画。`transition` 为外观、位移、缩放、旋转、组透明度和阴影统一设置时长，六个 `*_transition` 随后逐项覆盖；只写某一项时其余属性没有过渡，直接到目标。几何属性调用同一套 `set_offset`/`set_transform`，只改变呈现层，不影响布局、字号或文本行为；绑定的几何值变化时按对应时长补间。
-
-独立 `aegle-markup` 无第三方依赖，提供 AST、字节跨度、`parse`/`parse_with_limits`、元素规格 `ElementSpec`、多文件 `Sources`/`compile`（经调用方提供的读取函数解析 `use`）与 `check_program`。默认解析上限为 1 MiB、64 层、10,000 节点，括号、调用实参和列表的嵌套，以及运算符与字段读取构成的左脊，合计受同一层数上限约束，`list<…>` 类型不允许嵌套；整数字面量必须在 i64 内；显式解析深度最多 `Limits::MAX_DEPTH`（256）。尺寸预算只由解析器执行；`check_program` 对手工构造的 AST 只施加同一 256 层上限，使构建不会递归更深。`ui!` 与 `Program::load` 使用默认上限。`choices(name)` 列出节点属性接受的标识符，元素的选项写在其规格中；两条路径都把节点属性交给 loader 的同一组 setter，把元素属性交给元素自己的胶水代码，引擎逐项显式映射，不把未知值落到默认值。静态文档的运行时不保留 AST、规格或解析器；`syn`/`quote` 仅用于构建宏；`ui!` 与 `element!` 是把 `$crate` 传给 proc macro 的 `macro_rules!` 包装，依赖改名后生成路径仍然正确。
-
-## 当前动态标记
-
+### 1. 条件渲染与循环
 ```text
-use "tasks.aegle"
-Window {
-    state added: int = 0
-    state tasks: list<string> = ["Write markup"]
-    Button { text: "Add"; on clicked { added += 1; tasks += ["Task " + str(added)] } }
-    if len(tasks) > 0 { Text { text: str(len(tasks)) + " tasks" } } else { Text { text: "Empty" } }
-    for task in tasks { Task { title: task } }
-}
-```
-
-`state name: type = value` 只能写在文档根节点或组件体顶层；类型为 bool、int（i64）、float（有限 f32）、string、`list<int>`、`list<string>`。初始值可读参数和此前声明的 state，每个实例求值一次。表达式包含字面量、名称（内层 for 项 → state → 参数）、事件块中元素声明的 `self` 字段、`!`、一元 `-`、`|| && == != < <= > >= + - * / %`、列表字面量，以及 `str`、`len`、`int`、`float`。除整数字面量可按上下文转为 float 外没有隐式转换；`+` 也连接字符串和同类列表，比较只用于数值和字符串。未知名称、类型不符、不适用属性等在编译或加载时报告文件、行、Unicode 列和源码片段。
-
-属性值写表达式即为单向绑定：节点属性中可绑定 label/tooltip（string）、visible/enabled（bool）与 offset_x/offset_y/scale/rotation（float）；元素属性中有 setter 且类型为 bool、int、float、fraction、length、string、line（各自对应的表达式类型）或 lines（`list<string>`）的可绑定。其余属性只接受字面量。绑定在求值时记录读取的 state，只在这些 state 变化时重新求值，结果相等不调用 setter，不按帧轮询。用户编辑字段或切换控件不会回写 state，需要时用事件。元素的事件见其规格（内置元素见上表），事件不携带值，处理块用 `self.字段` 读取元素声明的字段，入口文档中的处理块（含 `for`/`if` 块、slot 内容与组件实例的 `on` 处理块）还可用 `id.字段` 读取任一具名控件声明的字段，取点击时的当前值，具名控件可以写在处理块之后；绑定中不能读具名控件（它们不随控件变化而更新），组件体内看不到入口文档的 id。语句为 `x = e`、`x += e`（数值、字符串、列表）、`x -= e`（数值）、`if/else if/else` 及 `copy(e)`，只能赋值本文档或组件的 state；`copy` 把字符串交给所在窗口的剪贴板（同 Rust 的 `Node::copy_text`），原生 App 在本次输入处理后写入系统剪贴板。事件块与普通回调一样在 UI 借用外执行，每次赋值立即更新相关绑定；整数溢出、除零、非有限浮点和越界 `int()` 返回 `RuntimeError` 并停止本次处理，保留此前赋值。没有循环语句，单次执行量受 `Limits` 约束（见下文限额）。标记事件块与 Rust 的 `on_*` 处理器一样追加到控件上，两者共存、按注册顺序执行。
-
-`if c { } else if d { } else { }` 在条件变化时销毁旧分支并重建新分支，分支内本地状态随之重置。`for item in list { }` 以列表项值（int 或 string）作 key，重复 key 返回错误且块保留原有行；保留 key 的行保持控件身份和本地状态，删除的行被销毁，顺序变化时一次性重新挂接各行。块内子节点放在一个透明的 contents 分组中，直接参与父容器的布局：在 Row/Column 中与兄弟共享对齐、换行、gap 和 grow，在 Grid 中各自占一格，在 Stack 中叠放。release 测量（本机 CJK 测试字体，7 次中位数）：1000 行 `for` 首次构建加刷新 3.6 ms，追加一行 0.8 ms，整体反序 5.8 ms；大数据仍应使用 ListView。
-
-`component Name(p: type = literal, q: type) { state ...; Root { ... } }` 声明组件，组件体只有一个根节点；`Name { p: expr }` 实例化，参数随调用方表达式读取的 state 更新，组件 state 每个实例独立。实例本身不接受 `id`；子节点只能放入组件的 `slot`，事件只能是组件声明的 `event`（见下文）；递归实例化、与元素同名或重复组件名均为错误。`use "relative.aegle"` 导入另一文件声明的所有组件：路径相对于导入方文件、以 `/` 分隔且不能为绝对路径；导入环为错误，重复导入只加载一次，被导入文件只能声明组件，一个程序最多 256 个文件。组件名在已加载文件间全局可见。
-
-**record、key、let、宿主动作、slot、组件事件与限额**：
-
-```text
-record Task { id: int; title: string; done: bool }
-component Card(title: string) {
-    event closed(int)
-    state taps: int = 0
-    Column {
-        Text { text: title + "#" + str(taps) }
-        slot
-        Button { text: "close"; on clicked { taps += 1; let n = taps * 10; host.note(title, n); emit closed(n) } }
-    }
-}
 Column {
-    state tasks: list<Task> = [Task(1, "a", false)]
-    state total: int = 0
-    for task in tasks key task.id {
-        Card { title: task.title; on closed(n) { total += n }; Text { text: "extra " + task.title } }
+    if show_details {
+        Text { text: "详细信息内容" }
     }
-}
-```
 
-- `record Name { field: type }` 全局声明（跨文件，与组件名不得重名），字段为 bool/int/float/string；值用位置式调用 `Task(1, "a", false)` 构造，读取用 `task.title`；record 可作为 state、参数和 `list<Task>` 的元素类型，`==`/`!=` 比较各字段。
-- `for item in list key expression { }`：key 表达式可读本次循环项，类型为 int 或 string；record 列表必须写 key，标量列表默认以项值为 key。同一 key 的行在项值不变时保留控件与本地状态，项值变化则就地重建；重复 key 仍为错误并保留原有行。
-- `let name = expression` 在事件块内声明局部，作用到所在块结束；`on name(value)` 把组件事件携带的值绑定为局部。
-- `host.name(args)`：调用宿主注册的动作。动作用 `aegle::loader::action(name, &[Type], f)` 注册，对本线程的所有程序与 `ui!` 视图生效，`f` 返回 `()` 或 `Result`；构建视图时校验每个调用有同名动作且参数类型一致，缺失或不符在挂载前报错。动作在 UI 借用外运行，返回的错误停止本次处理；动作不返回值，结果通过更新 state 带回。
-- `slot` 写在组件体中，放置实例的子节点：`Card { title: "x"; Text {} }`；子节点在调用方的环境里求值；组件把 slot 恰好放置一次时（slot 不在组件体的 `if`/`for` 块内，经内层组件的 slot 转放时内层也恰好放置一次），入口文档中块外实例的 slot 内容可以带 `id`，否则不可带，每个组件至多一个 slot，没有 slot 的组件不接受子节点。
-- 复制控件内容：`Text { id: order; text: "订单号 A-42" }` 旁写 `Button { text: "复制"; on clicked { copy(order.text) } }`，点击时复制标签当前的文字；同样可写 `copy("姓名：" + name.text)` 读文本框，或 `copy(self.text)` 复制按钮自身。可执行示例见 `crates/aegle/tests/fixtures/copy.aegle`。
-- 组件事件：组件体内 `event name` 或 `event name(type)` 声明，事件块里 `emit name` / `emit name(expr)` 触发，实例上 `on name { }` / `on name(v) { }` 在调用方的环境里处理。
-- 限额：`Program::set_limits(Limits { steps, rows, emit_depth })`，默认每次处理最多 10,000 条语句、单个 `for` 最多 10,000 行、嵌套 emit 最多 64 层；超限是运行时错误，保留此前的赋值与旧的行。运行时错误带文件路径与字节跨度。
-- Rust 一侧：record 与 record 列表的 state 以 `State<Data>` 访问（`Data::Record`），设置时检查形状；`StateValue::accepts` 取代旧的 `ty()`。
-
-`id` 只能用于入口文档中不在块或组件体内的控件，包括恰好放置一次的 slot 内容（见上）。`ui!` 的 View 在 `root` 和各 `id` 外，为入口根的每个 state 生成 `loader::State<T>` 字段（bool、i64、f32、String、Vec<i64>、Vec<String>），`get`/`set` 读写并触发绑定。`id` 与入口 state 同名由共享检查器拒绝（“names both a control and a state”），`ui!` 与运行时加载给出同一诊断。绑定和块由控件通过 `Node::keep_alive` 持有，丢弃 View 不影响更新。
-
-运行时加载使用 `aegle::loader::Program::load(path)`、`load_with(path, &elements)` 或 `from_sources(entry, &elements, read)`，再 `build(&container)` 片段或 `open(&app)` Window 文档；`View` 提供 `root`、`handle(id)`（`Handle::typed::<T>()` 取得有类型句柄）、`get`/`set`、`state::<T>(name)` 和 `reload`。加载复用同一解析、检查和诊断，因此携带解析器；示例文档解析并检查约 0.1 ms。`reload` 与首次构建一样先校验宿主动作，再完整构建新界面、移除旧界面，失败保留旧界面；同名同类型的入口 state 保留取值，其余控件本地状态重置。Window 文档保留原生窗口、标题和尺寸并重建内容，新版本省略的窗口属性保留原值。没有文件监视器。可执行示例：`cargo run -p aegle --example dynamic`，其中面板运行时从磁盘加载并可重载。
-
-## 后续目标：结构、值和状态
-
-当前动态标记之外，更多值类型（color、length、duration、enum）、嵌套 record 仍是目标；示例中的事件块和 state 已按上节实现。
-
-```text
-Window {
-    title: "计数器"
-    state count: int = 0
-    Column {
-        gap: 8dp
-        Text { text: str(count) }
-        Button {
-            text: "增加"
-            on clicked { count += 1 }
+    for item in items key item.id {
+        Row {
+            Text { text: item.title }
+            Button { text: "删除"; on click { remove(item.id) } }
         }
     }
 }
 ```
 
-类型名区分大小写。`name: value` 设置属性，子元素写在花括号内；换行或分号分隔声明，行尾没有强制分号。`id: counter` 定义当前组件内的稳定名称，跨组件不能直接写其私有节点。
-
-内建值包括 bool、int（有符号 64 位）、float（有限 32 位）、string、color、length、duration、enum、具名 record 和 list。`8dp` 是逻辑长度，`50%` 仅用于允许比例的布局属性，`120ms` 是时长，`#RRGGBB`/`#RRGGBBAA` 是颜色。类型不正确直接报错；不隐式把字符串变数值，不接受 NaN/Infinity。
-
-整数溢出和除零为带源位置的错误，两条执行路径一致。float 计算结果非有限时也报错。字符串是 UTF-8，用户可见字符操作遵守文本模块的 grapheme 规则，不按字节切割。
-
-属性表达式当前读取 state、组件参数、`for` 项与事件块里的 `self` 字段和具名控件字段，编译/加载时建立依赖；`text: str(count)` 在 count 改变时更新，不每帧求值。在绑定中读取具名节点的属性（需要控件变化通知）和宿主导出的只读数据仍是目标。赋值和动画优先级见[架构](architecture.md)。
-
-## 后续目标：事件与宿主
-
-当前事件块支持赋值、`let`、if/else、宿主动作与 `emit`，并受可配置的语句与嵌套限额约束。当前没有循环或派生 state，绑定不会互相触发。
-
-事件块允许赋值、局部 let、if/else 和调用已声明的宿主动作。内建纯函数只含数值、字符串格式化与 clamp 等有限集合；不允许任意函数定义、递归、while、文件访问或网络访问。
-
-宿主注册具名动作及参数/返回类型，界面使用 `host.refresh()` 等直接调用。耗时操作由宿主异步执行，结果通过更新 state/模型返回；标记语言不内置 await 或通用 VM。动作只能使用宿主明确暴露的能力。
-
-每次事件处理最多执行 10,000 条语句，嵌套 `emit` 最多 64 层，单个 `for` 最多 10,000 行；超限报告错误并停止本次处理，保留此前合法赋值。绑定不写 state，没有传播轮次。编译型与运行时执行型均遵守这些语义，限制可由宿主经 `Program::set_limits` 调整。
-
-## 后续目标：条件、列表和组件
-
-条件、带 key 的列表（含 record）、组件参数、slot、组件事件与 `use` 文件导入已按[当前动态标记](#当前动态标记)实现；Rust 组件映射仍是目标。
-
+### 2. 自定义组件与插槽 (`component` / `slot`)
 ```text
-if online {
-    Text { text: "已连接" }
-} else {
-    Text { text: "离线" }
-}
-for item in items key item.id {
-    Text { text: item.title }
-}
-```
+component Card {
+    property title: string = "默认标题"
+    slot content
 
-结构条件为假时销毁对应子树，重新出现时重新初始化本地状态。列表必须给稳定唯一 key；重复 key 为错误，既有列表保持不变。更新保留 key 未变的控件身份和本地状态，移动仅修改顺序，不执行全树 diff。大数据使用虚拟列表控件，普通 for 不自动虚拟化。
-
-```text
-component Counter(start: int = 0) {
-    state count: int = start
     Column {
-        Text { text: str(count) }
-        Button { text: "+1"; on clicked { count += 1 } }
+        border_width: 1
+        border_color: #ccc
+        Text { text: self.title; font_size: 16 }
+        slot content
     }
 }
+
+// 使用组件
+Card {
+    title: "用户资料"
+    Text { text: "姓名: 张三" }
+}
 ```
-
-组件支持有类型的输入属性、具名事件和一个默认 slot（具名 slot 仍是目标）；slot 只表示由调用方提供的子内容，不引入继承层次。首版使用组合，不做组件类继承。导入通过 `use "relative.aegle"` 或 `use md3 from rust("my_md3")`，依赖环拒绝，Rust 映射需构建时或宿主显式注册。
-
-组件间通信采用输入属性和事件。唯一的线程级共享状态是宿主动作表：`aegle::loader::action` 把动作登记给本线程所有没有同名动作的程序，`ui!` 生成的视图经它调用宿主。样式通过主题 token 与本地属性，不实现 CSS 选择器/级联语言。动画通过按属性组的 transition，例如 `scale_transition: [120ms, ease_out]`；详见[主题动画](components-theme-animation.md)。
-
-## 后续目标：加载与重载
-
-编译工具和 loader 共用解析、源位置和类型检查规则；前者生成构造已检查程序的 Rust 代码，后者在运行时解析，两者交给同一引擎执行。当前引擎保留已检查程序（含表达式树）供绑定和块重建使用，不保留源码或解析器状态；表达式以小型树解释，不引入 JIT、GC 或动态代码加载。
-
-第三方元素在运行时由 `Elements::with` 登记；宿主动作只有一张按线程的表（`aegle::loader::action`），运行时加载的程序与 `ui!` 视图都从中查找。未注册组件、未知属性、错误类型和不支持能力均在挂载前报错，不能静默忽略拼写错误。
-
-首版只提供显式 `reload()`，不内置文件监视器。先解析、检查、构造未挂载子树，成功后原子替换根；失败保留旧界面。替换保留宿主显式模型，重置控件本地状态，结束旧 IME 会话和动画，不承诺复杂热重载状态迁移。
-
-默认解析上限：源文件总计 1 MiB、嵌套 64 层、10,000 个语法节点；`for` 展开的行数另受 `Limits::rows` 约束；超限错误，不隐式无限扩容。宿主可配置上限。错误包含文件、行列、组件路径和原因，提供数据结构及文本呈现，不依赖重型常驻语言服务器。
-
-首版不做通用脚本插件、在线包管理器、动态 Rust 编译、反射式任意方法调用或独立可视化 IDE。
+* **单向作用域**：组件内部通过 `self.property` 访问自身属性，插槽内容继承外部作用域，避免状态冲突。

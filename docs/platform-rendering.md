@@ -1,178 +1,150 @@
-# 平台与绘制
+# 平台与渲染后端
 
-状态：v0.1 设计决定。平台窗口与绘制后端分别选择，通过显式窗口资源与生命周期契约连接。
+Aegle 的窗口系统接入（平台）与图形绘制（渲染器）分属不同职责。平台负责原生连接、窗口生命周期、输入分发和事件等待；渲染器负责消费不可变 `Scene` 绘制记录并输出像素。
 
-## 支持目标
+---
 
-| 平台 | 首版目标 | 绘制与输入 |
-| --- | --- | --- |
-| Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland 会话 | 软件绘制（默认，tiny-skia 或系统 cairo 覆盖光栅）、可选 ash/Vulkan 与 wgpu；窗口默认经发行版的 SDL3（`sdl3`，Wayland/X11 由 SDL 选择），`wayland` feature 换成 SCTK + wayland-client 原生客户端（layer-shell、拖动源、text-input-v3 周边文字） |
-| Windows | Windows 11，x86_64/aarch64 | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；原生窗口；TSF 文本存储输入法 |
-| macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 软件绘制（默认）或经可选 wgpu 使用 Metal；AppKit 窗口、NSTextInputClient；无 Vulkan |
+## 一、 平台支持矩阵
 
-macOS 的原生平台已建立（`aegle-platform-macos`）：普通顶层窗口、输入、`NSTextInputClient` 输入法、剪贴板、拖放与软件/GPU 呈现；layer 表面返回 `Unsupported`。它目前只在 Linux 上交叉 `cargo check`/`clippy`/`cargo test --no-run` 过，未在 Mac 硬件上运行，见[实现状态](implementation.md)。
-
-这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 自身不实现 X11 客户端：原生 Wayland 后端要求 xdg-shell（shell 表面另要求 layer-shell），SDL3 后端则让 SDL 在 Wayland 与 X11 之间选择，因此同一程序在只有 X11 的桌面上也能运行，但 X11 不是验收目标，那里没有 layer 表面、text-input-v3 周边文字与协议级帧回调。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。
-
-Linux 原生 Wayland 后端使用一个连接和事件队列承载普通窗口及可选 layer-shell，补齐预编辑、提交、周边文字/删除、焦点和提交时序。SCTK 的 input_method 面向输入法程序，不代替普通客户端 text-input-v3。默认不会引入 winit 再维护另一套窗口循环。
-
-各平台按事件等待；Linux 使用 FD readiness 和协议要求的读取流程，Windows 保留原生消息循环，AppKit 用 `nextEventMatchingMask:untilDate:inMode:dequeue:` 按截止时间等待并自己驱动 `NSApplication`，不进入 `NSApplicationMain`。文本输入、系统偏好、剪贴板和无障碍动作归一化后交给 UI 主线程，不跨 FFI 展开 panic。
-
-## 绘制契约
-
-Vulkan 最低 API 1.1，采用传统 render pass、普通 descriptor、fence 与 binary semaphore；不要求 descriptor indexing、timeline semaphore 或 dynamic rendering。还必须检查 graphics/present queue、swapchain、surface format 和所用纹理格式能力。
-
-可选 wgpu 后端是全平台通用的第二条 GPU 路径，经 wgpu 选择 Vulkan、Metal 或 Direct3D 12，shader 以 WGSL 在运行时交给 wgpu；原生 Metal 后端方案已放弃。Vulkan 的 shader 在构建期编译为 SPIR-V，开发工具不进入运行依赖。两个小型二维实现共用 Scene，不建立通用三维 RHI；契约见 [wgpu](wgpu.md)。
-
-基础绘制目标包括文字图集、RGBA 图像、矩形/圆角/边框、透明度、二维仿射变换和裁剪。颜色在线性空间混合，输出转换遵循目标色彩格式。默认字形用灰度抗锯齿，不依赖 LCD 子像素排列。
-
-具体颜色边界：调用方和 scene 的 `Color` 为非预乘 sRGB RGBA8；renderer 在合成时解码并预乘，输出遵循目标格式。软件缓冲为预乘 sRGB RGBA8，不能将其直接当作线性颜色或透明 PNG 的非预乘颜色使用。
-
-GPU 路径的轴对齐裁剪用整数范围，圆角与小数裁剪由 shader 解析，最多 8 层，超过时返回明确错误。批次合并只处理相邻绘制，不做复杂全局重排。任意路径不做三角细分或 stencil：两个后端都在 CPU 上把路径光栅化为覆盖率 mask，软件直接用 tiny-skia，Vulkan 用 swash 已依赖的 zeno 生成 R8 mask 存入图集并缓存；路径不能作为裁剪。软件裁剪使用下文的覆盖率 mask。
-
-高级效果包括渐变、阴影和区域模糊。当前已实现渐变填充与解析式柔和阴影（见下文 scene 支持范围），它们无需离屏纹理，三个后端始终可用；组透明度与背景模糊经离屏层实现（见下文“图层”）。模糊只作用于本窗口已绘制的内容，不承诺跨平台桌面背景模糊。超出特效预算的背景模糊被跳过并计数（`skipped_blurs()`），层本身超预算则返回错误，不会静默丢弃内容。默认组件不依赖这些特效保持可用。
-
-原生 GPU 呈现目标为默认 FIFO、最多两帧在途；有像素变化才请求新帧；GPU 路径每次绘制完整窗口，Vulkan 在支持 `VK_KHR_incremental_present` 时只向合成器上报变化区域；软件路径只重绘并上报变化区域（见[资源](resources.md)）。四条路径的像素结果相同，差别只在重绘与上报的范围。当前离屏 Vulkan 只保留一次在途提交。后台上传和临时资源遵守[资源预算](resources.md)。DeviceLost 停止相关提交并报告，首版不隐藏地切换后端。
-
-各后端的能力差异如下，没有运行时能力查询：差异在编译期（feature）或创建时（所选后端）已确定，未支持的命令使帧返回错误，不静默跳过。两个 CPU 后端（软件 tiny-skia 与 Linux 的 cairo）共用同一套合成实现，能力完全相同，见下文“CPU 后端的共享合成”。
-
-| | 软件（tiny-skia / cairo） | Vulkan | wgpu |
-| --- | --- | --- | --- |
-| 应用纹理（`SceneBuilder::texture`） | 不支持，帧返回 `UnsupportedCommand` | 支持（独立使用需 `text`） | 支持（独立使用需 `text`） |
-| 文字、图像、路径 | 支持 | 需 `text` feature | 需 `text` feature |
-| 窗口透明 | 不支持：原生软件窗口不透明 | `Options::transparent` 且合成器支持预乘 alpha | 同 Vulkan |
-| 重绘与上报范围 | 只重绘并上报变化区域 | 整幅重绘，有 `VK_KHR_incremental_present` 时上报变化区域 | 整幅重绘并上报整个 surface |
-| 大帧 | 不分段 | 每 16,384 个图元或图集/纹理绑定/上传用尽时分段提交 | 每 16,384 个图元或图集用尽时分段提交 |
-| 设备故障 | 无设备 | Vulkan 错误（如 `ERROR_DEVICE_LOST`）返回给调用方 | `Error::Gpu`/`Error::DeviceLost`，此后拒绝工作 |
-
-原生 App 总是为 GPU renderer 启用 `text`。应用纹理是否可用即 `App::wgpu()` 或 `App::vulkan()` 是否返回设备。原生窗口的背景（根主题的 `background`）在软件后端必须不透明，App 在交给平台前检查一次并返回错误；GPU 后端由各自的 `begin_frame` 对不透明 surface 做同样检查。渐变与阴影在 WGSL（两个 GPU 后端共用）和软件 Rust 中各有一份公式，两个 GPU 后端的 `tests/effects.rs` 逐像素对照软件结果。
-
-## 坐标与平台差异
-
-内部使用逻辑 dp、统一二维变换；平台层转换为物理像素和平台坐标，整数边界向外取整。命中、IME 光标矩形和语义位置共享几何来源。
-
-三套视图坐标都以左上角为原点、逻辑 dp；AppKit 视图本身以左下角为原点，`aegle-platform-macos` 在边界处转换（指针、IME 光标矩形、命中与屏幕矩形），软件呈现按帧的图像高度定位。
-
-Wayland 通常不向普通客户端公开全局窗口位置。平台能力必须区分窗口局部坐标与可取得的屏幕原点，不能编造全局坐标；对应辅助技术的屏幕定位能力受 compositor 和 adapter 限制，但角色、文本、焦点和动作仍需正确。具体支持矩阵通过真实 compositor 验收。
-
-首版 shell 只含面板/背景层、输出绑定、锚点、exclusive zone 与键盘交互策略；托盘、通知、全局快捷键等桌面服务不进入平台窗口模块，由独立的 `aegle-desktop` 提供（见[模块](modules.md)）。
-
-## 当前软件绘制接口
-
-已实现部分以 `SceneBuilder → Scene → Renderer::begin_frame → Frame::draw` 连接。录制时非有限、负尺寸或变换后超出 `f32` 范围的几何以及不配对的作用域是调用方的程序错误，`SceneBuilder` 的方法、`RoundedRect::new`、`Affine::translation`/`scale`、`PathBuilder::finish` 与 `GlyphRun::new` 以 `SceneError` 的消息 panic；校验外部数据的构造（`Image::new`、渐变、`Affine::new`、`Layer::new`）仍返回 `SceneError`。`Scene` 为不可变局部绘制记录；重新构建时可以取回并清空 builder，复用命令分配。每次 draw 传入布局位置与设备缩放组成的 Affine，移动控件不必重建其局部图元。场景的变换/裁剪作用域只在本次 draw 内生效，不泄漏到其他记录。
-
-`Frame::draw_clipped(scene, transform, clip)` 接受可选设备坐标矩形，非有限或负尺寸的矩形 panic，超出设备坐标范围返回错误；矩形不随节点 transform 再次变换，并与 scene 内部裁剪相交。它复用既有 mask 路径，增加一层预算；调用结束不影响后续 scene。Ui 的 `visit_scenes` 返回局部记录、窗口逻辑平移及可选祖先矩形；宿主必须同时缩放平移和裁剪，不能丢弃第三个参数。原生软件宿主已接入。多个 ScrollView 的祖先矩形先求交，所以嵌套滚动本身只增加一个外部 mask 层；控件自身的圆角裁剪另外计层。
-
-目前支持实色矩形、统一圆角、居中边框、共享 RGBA 图像、填充/描边路径、二维仿射变换及嵌套矩形/圆角裁剪；可选 `text` 支持定位后的字形。`fill_gradient(shape, &Gradient)` 用线性或圆形渐变（2–16 个非递减色标，两端外延）填充圆角矩形，色标间在预乘线性光中插值；`shadow(shape, color, blur)` 绘制形状与标准差为 blur 的高斯卷积：x 方向用 erf 精确积分，y 方向取四行并按各区间的高斯质量加权（直角形状精确，圆角处近似，参照 Evan Wallace 的闭式解），三倍标准差之外不绘制。偏移与扩展由调用方移动或放大 shape。软件与 GPU 在像素中心用同一公式求值。builder 检查非有限几何、负尺寸、不可逆变换及作用域配对，总嵌套最多 64 层。空形状不绘制，空 clip 排除绘制；软件后端拒绝超出 ±1,048,576 的设备路径/字形坐标。Wayland 原生软件呈现与输入已接入；独立 Vulkan 几何范围见下节。
-
-`Image` 是非预乘 sRGB RGBA8，单边 1..=16384，clone 共享像素；`Path` 由 move/line/quad/cubic/close 组成并带填充规则，`PathBuilder::finish` 一次检查顺序与有限值。两者带进程内唯一 id，renderer 以此缓存，不比较内容。图像拉伸到目标矩形，在线性预乘空间双线性过滤，采样钳制到边缘纹素，矩形边缘按解析覆盖率抗锯齿，放大时边界不向外渐隐；单位缩放且整像素对齐时直接复制纹素。没有 mipmap，大幅缩小会走样，调用方应提供接近显示尺寸的图像。描边居中、宽度为局部单位，cap/join 可选，miter 上限固定为 4；零宽描边和无线段路径不录入命令。两个后端的曲线细分和描边偏移近似不同，边缘可差零点几像素。
-
-scene 字形 run 保存共享字体句柄、字号、变化轴、前景色及基线位置；`aegle-text/scene` 可从保留段落生成它们。软件 `text` 必须显式启用：如果 Cargo 统一开启了 scene/text 而 renderer/text 关闭，遇到字形命令返回 `UnsupportedCommand`，不能跳过文字后假称成功。
-
-保留 `Editor` 也使用同一文字绘制函数；选区背景、预编辑下划线和 caret 从当前排版生成几何，再录入普通 scene 命令。宿主负责焦点/闪烁时机、滚动与裁剪，模块没有自己的定时器。候选窗使用 `ime_rect()` 的未裁剪局部文字几何；长单行文字溢出字段宽度时不能只截断右边缘而产生负宽度。原生平台 adapter 应统一应用呈现/滚动变换后再转换坐标。
-
-字形光栅化按平台走系统后端，抗锯齿由系统完成：Linux 是 FreeType，Windows 是 DirectWrite 的 glyph-run analysis（灰度抗锯齿、1x1 alpha 纹理），macOS 是 CoreText 画进 alpha-only `CGBitmapContext`，输出相同格式的 8-bit 灰度 mask，因此三个平台的 scene 字形记录与 renderer 路径完全一致。alpha 纹理与 alpha 位图都不带颜色，所以 Windows 上带 COLR/SVG/位图表示的字形（按 `IDWriteFontFace4::GetGlyphImageFormats` 逐字形判断）、macOS 上带彩色字形特征的字体中的可见字形（CoreText 只按字体报告）返回 `UnsupportedGlyph`，不画成黑白剪影。
-
-正向、轴对齐、均匀缩放的文字在设备字号光栅化，基线取整到设备像素、水平原点按四分之一像素相位取整，排版 advance 保持原值；灰度覆盖率经与前景亮度相关的共用对比曲线，平衡线性混合下深色/浅色文字的粗细；旋转、反射、斜切和非均匀缩放通过逆变换双线性采样。彩色字形在线性预乘空间过滤，字形接口输出非预乘 sRGB，合成后仍遵守 `Surface` 的预乘 sRGB 格式。前景透明度只应用一次。灰度 glyph 与前景色分离，颜色主题更新可复用字形缓存；彩色格式范围与错误见[文字](text-input.md)。
-
-`Surface` 借用紧密排列、从上到下的 RGBA8（`Surface::new`）或 BGRA8（`Surface::new_bgra`）字节切片，要求长度准确等于宽×高×4。BGRA8 是小端 Wayland XRGB8888 与 Windows 32 位 DIB 的内存顺序，原生软件宿主直接画进平台缓冲，不再逐像素转换；renderer 在生成颜色处（纯色、渐变色标、图像与彩色字形纹素、阴影色）交换红蓝，混合按通道独立进行，两种顺序的结果只差红蓝互换。大端 Wayland 目标在呈现前把区域内像素反转为 XRGB。begin_frame 清空整帧；`begin_region(surface, clear, rect)` 只清空并绘制向外取整到整像素的矩形，其余像素保留，供保留上一帧的宿主局部重绘，矩形外的绘制不需要 mask；损伤有多个矩形时宿主逐个调用。draw 按调用次序合成保留记录；无像素变化时宿主不调用绘制。错误可能发生在部分像素已更新之后，失败帧不得呈现。
-
-tiny-skia 仅负责几何覆盖率。线性光合成使用约 8 KiB 的共享、按需初始化转换表，避免逐像素幂运算；每次绘制量化到 RGBA8，完全不透明覆盖直接复制。透明背景、半透明叠加与旋转已有像素级验证。裁剪 mask 的预算、复用与释放见[资源](resources.md)。
-
-## CPU 后端的共享合成
-
-`aegle-render-cpu` 持有两个 CPU 后端共用的部分：线性光 source-over 合成、矩形与圆角裁剪及其 mask 预算、离屏图层与三次盒式背景模糊、解析式渐变与阴影、双线性图像采样、以及 `aegle-glyph` 字形的采样。只有抗锯齿几何覆盖率经 `Rasterizer` trait 交给具体光栅器，因此光栅器从不接触颜色。`aegle-render-tiny-skia` 与 `aegle-render-cairo` 都只是这个合成器加一种覆盖率实现，两者公开的 `Renderer`/`Frame`/`Surface` 与错误类型相同。
-
-像素对齐由合成器保证，不由光栅器决定：正立、直角、轴对齐的填充与边框按逐像素精确面积计算，完全不经过光栅器；轴对齐的显式路径虽经光栅器，整像素边缘的覆盖率在两者也都是精确的 0/255。设备边缘落在整像素时，覆盖正好是整像素的 255 与相邻像素的 0；落在半像素时相邻两像素各 128。因此两个 CPU 后端对这类几何输出逐字节相同，`aegle-render-cairo/tests/parity.rs` 直接比较两者：填充、边框、整像素裁剪、轴对齐路径（填充、描边与 even-odd）、图像、渐变、阴影与组透明度层在 cairo 1.18.6 上**逐字节相同**。圆角、任意路径与描边经各自光栅器，边缘覆盖率按光栅器自身的曲线细分与采样量化而不同：tiny-skia 每像素取四条子扫描线（覆盖量化到 1/4 步），cairo 计算精确面积，实测差在单个覆盖率步内、不跨越全覆与未覆。
-
-Linux 的 cairo 后端（`cairo` feature，替代默认的 tiny-skia）在运行时用 `libloading` 打开发行版的 `libcairo.so.2`，构建期不链接、不读头文件；只绑定图像 surface、路径与 mask 入口，不涉及窗口系统、字体、PDF/SVG 后端。缺失该库时 `aegle_render_cairo::renderer()` 返回 `RenderError::BackendUnavailable`，`App` 创建即失败，不会静默换成另一光栅器（构建里也没有另一个）。覆盖缓冲区是 cairo `A8` 图像 surface，行距按 cairo 要求补到 4 字节倍数；补白从不被读，且计入 mask 预算。曲线细分容差取 0.01 设备像素（cairo 默认 0.1 在 UI 半径的浅弧上误差可见）。代价实测（i5-13600KF，1280×800，224 个矩形，`cargo run --release -p aegle-render-cairo --example cairo_cost`，三次运行中位数）：直角填充与边框两者相同（1.70 ms，都不进光栅器），圆角版本 tiny-skia 4.45 ms、cairo 5.18 ms（+17%）。
-
-## 图层
-
-`Frame::push_layer(&Layer)` 与 `pop_layer()` 在各后端语义一致。`Layer` 记录形状（圆角矩形加变换）、内容范围、可选设备裁剪、不透明度和背景模糊标准差。push 后的绘制进入一张覆盖范围（与裁剪求交）的线性图像，pop 时以不透明度 source-over 合成到下层，仍受裁剪限制。可嵌套；帧结束时仍打开的层先依次合成。软件 `Frame` 在 drop 时同样合成，所以读取表面前要先结束 frame。
-
-背景模糊为正时，push 先对已绘制内容做模糊，按层形状和裁剪、以层不透明度画回，再开始绘制层内容。模糊采用 W3C 三次盒式近似：`d = floor(σ·3√(2π)/4 + 0.5)`，上限 4095。d 为奇数时用三个居中的盒；为偶数时用 (左 d/2, 宽 d)、(左 d/2−1, 宽 d)、(左 d/2, 宽 d+1)。先横向三遍再纵向三遍，边缘夹取。σ 先乘层变换的 √|det|。软件后端在线性光预乘下计算；GPU 端按 `aegle-gpu` 的计划，把采样区复制到暂存图像后跑六遍 `blur.wgsl`，参数编码在实例索引中。
-
-GPU 合成复用 text 的图像管线，因此 wgpu 与 Vulkan 的图层需要 `text` feature，未启用时 `push_layer` 返回 `UnsupportedCommand`。Vulkan 在每个层边界提交一次并等待。直接写 swapchain 的路径需要 `TRANSFER_SRC` 才能复制背景，因此创建 swapchain 时只要表面支持就请求该用法；表面不支持时，该路径上的背景模糊返回 `Unsupported` 错误。三个后端的离屏层测试（`tests/layers.rs`）比较同一场景：GPU 与软件结果仅在抗锯齿边缘处不同，平均通道差 RX 6800 XT 为 0.128，lavapipe 为 0.104。窗口路径由 `aegle-app/tests/native.rs` 的 `layers_draw_into_native_windows`（私有 headless Sway，`AEGLE_TEST_COMPOSITOR=private`）覆盖：条纹上一块半透明、σ=4 背景模糊的圆角面板，内含组透明度 0.5 的子树，分别以软件、Vulkan（直接写 sRGB swapchain，复制 swapchain 图像做模糊）与 wgpu 呈现；grim 截图与软件窗口相比，RX 6800 XT 上 Vulkan/wgpu 的平均通道差为 0.055/0.040，lavapipe 上为 0.071/0.034，超过 8 级的像素只有面板圆角上的 21–27 个。
-
-每个后端的代价由 `{software,vulkan,wgpu}_layer_cost` 示例实测（`cargo run --release -p aegle-render-<后端> [--features text] --example <后端>_layer_cost`）：1280×800 帧铺满条纹，再加一个 480×320 圆角卡片的组透明度层，或在其下加 σ=8 背景模糊。i5-13600KF 与 RX 6800 XT（RADV）上的中位数：
-
-| 后端 | 无层 | 组透明度层 | 加背景模糊 | 说明 |
+| 平台 | 窗口后端 | 默认状态 | 绘制方式 | 特色能力与限制 |
 |---|---|---|---|---|
-| 软件 | 0.46 ms | 5.2 ms | 10.8 ms | 层内半透明填充走非不透明目标的逐像素路径，合成按 8 通道向量化；直接把同一卡片画到窗口约 2.7 ms，层约为其两倍。模糊在线性光 f32 中做六遍盒式 |
-| Vulkan | 9.1 ms | +0.11 ms | +0.37 ms | 含读回；基线主要是不带 HOST_CACHED 的读回内存，窗口路径没有这一步。每个层边界提交一次并等待 |
-| wgpu | 0.50 ms | +0.04 ms | +0.17 ms | 含读回 |
-| Vulkan / wgpu（lavapipe） | 3.2 / 3.5 ms | 5.2 / 5.5 ms | 12.7 / 13.4 ms | CPU 实现，与软件后端同一量级 |
-| Windows 11 软件 | 0.43 ms | 5.2 ms | 11.3 ms | 同一台机器，2026-10-11 |
-| Windows 11 Vulkan（AMD 专有驱动 25.10.30） | 10.2 ms | +0.3 ms | +0.8 ms | 含读回，基线同样由读回内存决定 |
-| Windows 11 wgpu Vulkan / DX12 | 0.69 / 0.67 ms | +0.23 / +0.14 ms | +0.85 / +0.44 ms | 含读回；`WGPU_BACKEND` 选择后端 |
+| **Linux** | **`aegle-platform-sdl3`** | **默认** | 软件 / Vulkan / wgpu | 运行时加载 `libSDL3.so.0`；自动选 Wayland/X11；无 layer-shell；只收拖放 |
+| **Linux** | **`aegle-platform-wayland`** | 可选 (`wayland`) | 软件 / Vulkan / wgpu | 原生 Wayland 客户端（SCTK）；支持 layer-shell 面板、双向拖放、text-input-v3 周边文字 |
+| **Windows** | **`aegle-platform-win32`** | 原生默认 | 软件 (GDI) / Vulkan / wgpu | Win32 消息循环、DPI 感知、TSF 文本存储输入法、OLE 拖放 |
+| **macOS** | **`aegle-platform-macos`** | 原生默认 | 软件 (CGImage) / wgpu (Metal) | AppKit 窗口、NSTextInputClient、NSPasteboard、NSDragging |
 
-因此软件后端上的大面积模糊会明显占用帧时间，默认组件不使用它；GPU 后端上层的代价可以忽略。
+> **Linux X11 说明**：Aegle 自身不实现 X11 客户端协议。默认的 SDL3 后端会让 SDL 自行选择 Wayland 或 X11 驱动，因此同一二进制可附带在纯 X11 桌面上运行。
 
-Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该子树以层绘制。`visit_scenes` 依次给出 `Visit::Scene`、`Visit::PushLayer(Layer)` 与 `Visit::PopLayer`，层坐标是窗口逻辑坐标，宿主像处理 scene 变换那样缩放它们（`layer.then(scale)`、裁剪对齐到整像素）。不透明度为 0 的子树不再访问。
+---
 
-## 当前 Vulkan 离屏接口
+## 二、 平台抽象契约 (`aegle-platform`)
 
-`aegle-render-vulkan` 已独立实现相同 Scene 的实色/圆角/居中边框、仿射变换与裁剪；外部设备矩形与内部裁剪合计最多八层，draw 之间不泄漏作用域。离屏与透明窗口在 RGBA16F attachment 线性混合，再由 GPU 编码为预乘 sRGB RGBA8；不透明窗口直接写 sRGB swapchain，由硬件解码/编码线性混合；解析抗锯齿与软件覆盖率不要求边缘位精确。
+宿主 `aegle-app` 针对 `Platform` 和 `SurfacePlatform` 两个 trait 编写，单一 `Native` 类型完成绑定：
 
-可选 `text` 已将共享 aegle-glyph 缓存接到按需 R8 灰度/RGBA8_SRGB 彩色图集；缓存身份、像素基线与水平相位、灰度对比曲线及仿射光栅策略与软件共用。彩色图集在线性预乘空间过滤，灰度图集复用不同前景色；默认纯几何构建不带字体，遇到文字命令返回不支持错误。
+```rust
+pub trait Platform: Sized {
+    fn connect() -> Result<Self>;
+    fn preferences(&self) -> Preferences;
+    fn wake_handle(&mut self) -> Result<WakeHandle>;
+    fn ime_available(&self) -> bool;
+    fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId>;
+    fn remove_window(&mut self, window: WindowId) -> Result<()>;
+    fn window_info(&self, window: WindowId) -> Result<WindowInfo>;
+    fn dispatch(&mut self, timeout: Option<Duration>) -> Result<()>;
+    fn next_event(&mut self) -> Option<Event>;
+    fn request_redraw(&mut self, window: WindowId) -> Result<()>;
+    fn set_title(&mut self, window: WindowId, title: &str) -> Result<()>;
+    fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()>;
+    fn configure_ime(&mut self, window: WindowId, request: Option<ImeRequest>) -> Result<()>;
+    fn set_clipboard(&mut self, window: WindowId, seat: SeatId, text: &str) -> Result<()>;
+    fn request_clipboard(&mut self, window: WindowId, seat: SeatId) -> Result<()>;
+    fn accept_drag(&mut self, window: WindowId, seat: SeatId, accept: bool) -> Result<()>;
+    fn start_drag(&mut self, window: WindowId, seat: SeatId, data: &DragData) -> Result<()>;
+    fn present(
+        &mut self,
+        window: WindowId,
+        damage: Option<Region<PixelRect>>,
+        draw: impl FnOnce(&mut [u8], PixelSize, &Region<PixelRect>) -> DrawResult,
+    ) -> Result<bool>;
+}
 
-`begin_frame → draw/draw_clipped → finish` 完成提交，`wait` 或下一帧等待 fence 后复用资源；只有显式 `read_pixels` 才分配并使用读回缓冲。shader 由构建期 Naga 生成 Vulkan 1.1 SPIR-V。几何与文字测试/示例已在 RX 6800 XT 和 Lavapipe 上执行验证层检查；可选 window 已支持 Wayland/Win32 swapchain，App 使用本构建唯一的渲染器，Vulkan 由 `vulkan` feature 编入（渲染器 feature 互斥）。资源及失败恢复契约见 [Vulkan](vulkan.md)，设备执行证据见[实现状态](implementation.md)。
+pub trait SurfacePlatform: Platform {
+    type Surface: 'static; // 实现 raw-window-handle 0.6 的句柄租约
+    fn window_surface(&self, window: WindowId) -> Result<Self::Surface>;
+    fn present_external(
+        &mut self,
+        window: WindowId,
+        present: impl FnOnce(PixelSize) -> DrawResult<bool>,
+    ) -> Result<bool>;
+}
+```
 
-## 平台契约
+### 契约约定与坐标系
+* **逻辑坐标**：API 输入、点击、命中、滚轮和 IME 候选框矩形均使用以左上角为原点的逻辑 dp 坐标。
+* **物理像素与比例**：`WindowInfo.buffer` 为物理像素，`scale = buffer.width / size.width`。
+* **Seat 机制**：输入事件带有 `SeatId`。多 seat 平台以协议对象区分；单 seat 平台（如 Windows、SDL3）恒为 `SeatId(0)`。
+* **跨线程唤醒**：`WakeHandle` 为可克隆无锁发送句柄，向平台事件循环发送 `Event::Wake`，无轮询定时器。
 
-`aegle-platform` 是每个原生平台实现的唯一契约：`Platform` trait（连接、偏好、wake、窗口创建/移除/几何与标题、`dispatch`/`next_event`、重绘请求、光标、IME、剪贴板、拖放与软件 `present`）与 `SurfacePlatform`（给 GPU presenter 和无障碍 adapter 的原生句柄租约及 `present_external`），以及它们共用的词汇：`Event`（窗口、seat、逻辑坐标、平台毫秒时间）、`PointerKind`、`ImeRequest`/`ImeEvent`/`ImeUpdate`、`WindowOptions`（含可选 `LayerOptions`）、`WindowInfo`（逻辑尺寸、物理 `buffer` 尺寸、scale、active、configured）、`SeatId`、`WakeHandle` 与统一的 `Error`。`Key`、`Modifiers`、`PointerButton`、`Cursor`、`Preferences`、`TouchPhase`、`DragData` 来自 aegle-types，控件行为与平台用同一套键值，不再在宿主中翻译。
+---
 
-平台在自己的 crate 内把原生值翻译成契约：XKB keysym 与 Win32 虚拟键都变成 `Key`，evdev 与 Win32 按钮变成 `PointerKind`，Wayland 的 seat 以协议对象 id 作 `SeatId`，单 seat 平台（Windows）恒用 `SeatId(0)`；AltGr 在按键事件里不报告 Control；只随指针消息得到修饰键的平台在变化时先发 `Event::Modifiers`。按键文字随按键给出（`Key { text }`，Wayland）或单独给出（`Event::Text`，Win32 的 WM_CHAR）。剪贴板一律异步：`request_clipboard` 的结果作为 `Event::Clipboard` 进入同一队列（Win32 同步读出后立即入队）。平台没有的能力返回 `Error::Unsupported`（如 Windows 上的 layer-shell）或 `ImeUnavailable`，不伪装成功；已消失 seat 的请求被忽略，其移除已由事件报告。
+## 三、 平台窗口后端实现
 
-`aegle-app` 只按契约编写：一处 `type Native` 选定目标平台（Linux 上是 SDL3 或原生 Wayland 客户端，二者互斥），一条输入翻译路径（seat 焦点域、点击、滚动与松手惯性、触摸、IME、剪贴板、拖放），一处按平台选择的无障碍 adapter（`native_access`，AT-SPI 用逻辑坐标、UIA 用物理像素）。新增平台只需实现契约并在这两处各加一行，不改动宿主其余代码。macOS（AppKit）已建立但未实机验证。
+### 1. SDL3 后端 (`aegle-platform-sdl3`，Linux 默认)
+* **动态加载**：运行时通过 `libloading` 打开 `libSDL3.so.0`，无构建期头文件依赖。
+* **呈现与帧节流**：借出 `SDL_GetWindowSurface` 的紧密 BGRA8 缓冲（非 BGRA8 时经 `SDL_ConvertPixels` 暂存转换），以 `SDL_UpdateWindowSurfaceRects` 上报损伤。因缺少逐表面帧回调，软件帧以 `SDL_GetDesktopDisplayMode` 刷新率的截止时间在 `dispatch` 中节流。
+* **文本输入**：获焦时 `SDL_StartTextInput`，失焦时停止并发送 `ImeEvent::Left`；光标区域传给 `SDL_SetTextInputArea`。SDL3 不支持周边文本，`ImeRequest.surrounding` 校验后丢弃。
+* **拖放与剪贴板**：仅支持接收拖入（`start_drag` 返回 `Unsupported`）；剪贴板为进程级全局同步读写。
+* **GPU 租约**：从 SDL 窗口属性中读取 `wl_display`/`wl_surface` 或 X11 `Display`/`Window`，构造 `raw-window-handle` 租约。
 
-## 当前 Wayland 接口
+### 2. Wayland 原生客户端 (`aegle-platform-wayland`)
+* **协议支撑**：基于 SCTK 0.21 与 `wayland-client` 0.31，管理单个连接与事件队列。
+* **Layer Shell**：`WindowOptions.layer` 创建 `zwlr_layer_shell_v1` 面板或覆盖层，支持边缘锚定与 exclusive zone。
+* **IME 事务**：为每个 seat 绑定 `zwp_text_input_v3`，支持完整周边文字切片、选区偏移与变更原因。
+* **双向拖放**：基于 `wl_data_device` 支持非阻塞管道读写的拖入与拖出发起。
+* **SHM 呈现**：有界双缓冲 SlotPool 借出，提交后以协议 frame callback 推进动画。
 
-`Wayland` 实现 `Platform`（`gpu` feature 下还有 `SurfacePlatform`），一个连接上可有多个 xdg-toplevel。需要 wl_compositor ≥4、xdg-shell 与 wl_shm；text-input-v3 可查询，启用缺失能力返回 `ImeUnavailable`。窗口初始 configure 前不分配像素或呈现；SCTK 处理 configure acknowledgement，`WindowInfo::buffer` 是物理 framebuffer 尺寸。compositor 同时提供 wp-fractional-scale-v1 与 wp-viewporter 时，surface 保持 buffer scale 1，缓冲区为 `round(逻辑尺寸 × scale)`，viewport 把它映射回逻辑尺寸，scale 取 compositor 的 preferred_scale（1/120 单位）；否则退回输出的整数 scale。preferred_scale 在 surface 映射后才送达，首帧按 1 绘制。输出变换由 compositor 处理。
+### 3. Windows 后端 (`aegle-platform-win32`)
+* **消息循环**：标准 Win32 消息泵；支持 per-monitor DPI 感知缩放。
+* **软件呈现**：GDI `SetDIBitsToDevice` 上传 32 位 DIB，等待 `DwmFlush` 同步。
+* **TSF 文本服务**：为每个窗口实现 `ITextStoreACP`，支持输入法读取周边文字并重转换已提交内容。
+* **OLE 拖放**：注册 `IDropTarget`，支持 `CF_HDROP` 与 `CF_UNICODETEXT`。
 
-`request_redraw` 合并变化，仅在已配置、前一 frame callback 完成且有空闲缓冲时通知宿主。每次实际提交才请求下一次 frame callback；没有变化不会持续呈现。`dispatch(None)` 使用 calloop/WaylandSource 的 FD 等待和 prepare-read 流程；已有应用事件时只做非阻塞分发。帧失败不附着，宿主显式请求重试；同时保持活动窗口的最新状态。
+### 4. macOS 后端 (`aegle-platform-macos`)
+* **AppKit 循环**：以截止时间驱动 `nextEventMatchingMask:`，不进入 `NSApplicationMain`。
+* **呈现与输入**：`CGImage` 软件呈现；`NSTextInputClient` 协议映射文本编辑与预编辑；`CAMetalLayer` 原生租约。
 
-`present` 借出紧密排列的预乘 BGRA8 缓冲，即小端 XRGB8888 的内存顺序（大端目标呈现前就地反转），再 attach/commit。XRGB8888 与 ARGB8888 都是 wl_shm 必备格式；用 XRGB 表明窗口不透明，合成器忽略 alpha，可省去混合。不使用额外完整颜色缓冲。每窗口至多两个独立 SlotPool，尺寸变化仅释放空闲旧缓冲，不改写 compositor 尚未 release 的映射；具体预算见[资源](resources.md)。
+---
 
-`configure_ime` 使用带可选周边文字的契约 `ImeRequest`，`multiline` 与 `input_method` 映射为 text-input-v3 的内容提示与变更原因；长选区不能完整容纳时可保留组合输入而不报告 surrounding。显式禁用立即结束会话并清除该窗口已排队的 IME Update，避免焦点切换后的串写；其余序号、批次和编辑事务见[文字](text-input.md)。
+## 四、 渲染后端架构
 
-输入事件携带 seat 身份（`SeatId`，即 wl_seat 的协议对象 id）。键盘翻译与 compose 复用 SCTK/XKB；指针保留 button、axis 和 logical position，光标使用 compositor cursor-shape 或系统 cursor theme。窗口移除时结束输入焦点与 IME 会话，删除尚未消费的窗口事件；窗口 ID 不复用。layer-shell 表面复用同一窗口表与帧门控：两侧相对边同时锚定时该轴拉伸到输出，configure 为 0 的轴保留当前尺寸，层表面始终报告 active。剪贴板按 seat 以 data device 设置/读取，管道读写不阻塞事件循环。拖放复用同一 data device：拖动进入窗口或移动时发出 `Event::Drag`（seat、逻辑坐标），宿主以 `accept_drag(window, seat, bool)` 回答，接受时选 `text/uri-list` 优先、其次文本类型并设置复制动作；compositor 只把放下交给已接受的窗口，数据经同一非阻塞管道读完后作为 `Event::Drop` 交出并 `finish` offer，读不出或拒绝时为 `DragLeave`。`start_drag(window, seat, data)` 以该 seat 最近的按键/按钮 serial 发起复制拖动，按需非阻塞写出数据。外观偏好由会话总线上的 desktop portal 提供：连接时以最多 100 ms 的有界等待读取，之后的回复与 SettingChanged 通过同一事件循环的 socket 源转成 `Event::Preferences`；没有总线或 portal 时偏好保持未知，不影响 Wayland 连接。`wl_touch` 以 `Event::Touch`（手指 ID、逻辑坐标、毫秒时间、阶段）交给宿主，窗口移除、能力丢失或 compositor cancel 时合成 Cancel。客户端窗口装饰及完整系统无障碍仍待接入；gpu feature 的原生租约与 present_external 复用当前窗口与帧门控。没有服务端装饰的 compositor 不会因此获得完整窗口标题栏。
+一个 Aegle 构建**恰好编入一个渲染器**。四个渲染器实现同一个 `Renderer` trait：
 
-`wake_handle()` 按需创建一个共享的 calloop ping source（包成契约的 `WakeHandle`），克隆句柄可从后台线程请求 `Event::Wake`；宿主先将工作入自己的队列，再发信号，不引入轮询。该连接点已用于可选无障碍回调：原生 App 启用 `accessibility` 后，由独立 aegle-access adapter 导出控件树；Wayland 库的正常依赖仍不包含它。
+```rust
+pub(crate) trait Renderer {
+    fn add_window(&mut self, window: WindowId, setup: &mut Setup<'_>) -> Result<()>;
+    fn remove_window(&mut self, window: WindowId);
+    fn present(&mut self, window: WindowId, present: &mut Present<'_>) -> Result<bool>;
+}
+```
 
-## 当前 SDL3 接口
+### 渲染器特性对比
 
-`Sdl3`（`aegle-platform-sdl3`，Linux 默认窗口后端）在一条 SDL 视频连接上实现 `Platform`（`gpu` feature 下还有 `SurfacePlatform`）。发行版的 `libSDL3.so.0` 用 libloading 在首次连接时打开，构建期不链接、不读头文件：缺失时 `connect()` 返回 `Backend` 错误，程序不会静默换窗口后端。SDL 自己选择视频驱动（本机 Plasma Wayland 会话中为 `wayland`，有 X 而无 Wayland 时为 `x11`），`SDL_VIDEODRIVER` 可固定它。
+| 特性 | tiny-skia / cairo (CPU) | Vulkan 1.1 | wgpu (通用 GPU) |
+|---|---|---|---|
+| **执行载体** | CPU 多线程/单线程光栅 | GPU 硬件着色器 | GPU 硬件 (Vulkan/Metal/D3D12) |
+| **覆盖率计算** | tiny-skia 算法 / cairo 动态库 | 片元着色器导数估计边缘 | 片元着色器导数估计边缘 |
+| **混合空间** | 预乘线性光混合 | 预乘线性光混合 (RGBA16F) | 预乘线性光混合 (RGBA16F) |
+| **外部应用纹理** | 不支持 (`UnsupportedCommand`) | 支持 (`register_texture`) | 支持 (`register_texture`) |
+| **多层嵌套裁剪** | 覆盖率 mask 栈 (最多 64 层) | 硬件着色器解析 (最多 8 层) | 硬件着色器解析 (最多 8 层) |
+| **字形与图像图集** | CPU 灰度/彩色缓存 | 按需 R8/RGBA8 货架图集 | 按需 1024² 灰度/彩色图集 |
+| **呈现范围** | 仅重绘并上报有变化的区域 | 整幅重绘，支持增量呈现上报 | 整幅重绘并提交整幅 surface |
+| **批次拆分** | 整帧绘制不分段 | 每 16,384 图元或图集满分段提交 | 每 16,384 图元分段提交 |
 
-窗口由 SDL 创建与销毁，`WindowOptions::layer` 返回 `Unsupported("layer surfaces")`：SDL3 没有桌面 shell 层，不把面板降级成普通窗口。`WindowInfo` 的逻辑尺寸取 `SDL_GetWindowSize`，buffer 取 `SDL_GetWindowSizeInPixels`，`scale` 取两者之比（保证损伤换算与布局一致），`active` 取 `WINDOW_INPUT_FOCUS`，`configured` 为“已显示且未最小化”。`RESIZED`/`PIXEL_SIZE_CHANGED`/`DISPLAY_SCALE_CHANGED`/显示切换/最小化/恢复/焦点变化与 `EXPOSED` 都会重算并报 `Configure`；`EXPOSED` 使整窗重绘（SDL 已丢弃像素）。`SDL.app.metadata.identifier` 是进程唯一的应用标识，最后创建窗口的 `app_id` 生效。
+### 1. CPU 软件渲染器 (`aegle-render-tiny-skia` / `aegle-render-cairo`)
+* **共享合成器 (`aegle-render-cpu`)**：像素缓冲直接借用平台的 BGRA8 内存切片。正立直角填充和边框直接由合成器按精确像素覆盖率解析绘制，不进入光栅库。
+* **光栅器插件**：
+  * `tiny-skia`（默认）：纯 Rust 静态编译，无外部运行依赖。
+  * `cairo`：运行时加载系统 `libcairo.so.2`，适合追求极小发布体积的 Linux 发行版环境。
 
-软件呈现借 `SDL_GetWindowSurface` 的像素：行距等于 `宽×4` 且格式为 XRGB8888/ARGB8888 时把该缓冲直接交给宿主（即契约的紧密 BGRA8），否则画进复用的一块紧密 BGRA8 暂存区再经 `SDL_ConvertPixels` 转换；两种路径都只用 `SDL_UpdateWindowSurfaceRects` 提交损伤矩形。`buffer_budget` 按窗口像素字节检查；SDL 自己的 surface 与上传路径不计入该预算（与 Windows 的 DIB 上传同一口径）。窗口不透明，半透明像素按预乘颜色显示。
+### 2. Vulkan 渲染器 (`aegle-render-vulkan`)
+* **基线要求**：Vulkan 1.1，标准 graphics queue，单个 descriptor pool。
+* **数据流**：图元记录直接写入 host-visible storage buffer，顶点在顶点着色器中按 instance 展开，相邻同管线图元自动合并单次 instanced draw。
+* **多层裁剪**：着色器内解析最多 8 层矩形、圆角与仿射裁剪链。
+* **字形图集与路径**：灰度 R8 与彩色 RGBA8 分页管理；路径由 CPU（zeno）生成 R8 覆盖率后上传图集。
+* **应用纹理**：`Renderer::register_texture` 接受外部 `vk::ImageView`，分配独立描述符集接入渲染管线。
 
-SDL3 没有逐表面的 frame callback，因此软件帧按显示刷新率（`SDL_GetDesktopDisplayMode` 的分子/分母，缺失时 60 Hz）的截止时间节流：每个窗口每帧至多收到一次 `Redraw`，动画请求的下一帧由 `dispatch` 的等待界（截止时间）推进，而不是轮询定时器；GPU 路径另有交换链自身的同步。`dispatch(None)` 用 `SDL_WaitEventTimeout(-1)` 阻塞，已有事件或到期帧时只做非阻塞分发。
+### 3. wgpu 渲染器 (`aegle-render-wgpu`)
+* **定位**：全平台通用的跨 API 路径，同一份代码覆盖 Vulkan、Metal 与 Direct3D 12。
+* **着色器**：采用 WGSL 源码（来自共享的 `aegle-gpu`），在运行时由 wgpu 编译。
+* **资源管理**：单图元 112 B、单裁剪 64 B 存储行；超出图集的大尺寸图像和路径 mask 分配独立临时纹理，使用两帧后自动回收。
 
-`wake_handle()` 复用 `SDL_RegisterEvents` 预留的一个用户事件码，句柄可从任意线程 `SDL_PushEvent`；没有额外的 socket 或定时器。外部事件里 `SDL_EVENT_QUIT` 被翻译成每个窗口的 `Close`（SDL 用它表示桌面请求或被接管的信号），`WINDOW_CLOSE_REQUESTED` 只关闭该窗口。
+---
 
-输入：键码与修饰位翻译成 `Key`/`Modifiers`，`AltGr`（`KMOD_MODE`）不报告 Control，F1–F12 与 F13–F24 是两段不连续键码所以分开映射；按键带修饰位，指针/滚轮事件前用 `SDL_GetModState` 比对上次报告值并补发 `Event::Modifiers`（焦点切换后的 Shift 点击、Ctrl 滚轮因此带上正确的修饰键）；键事件不带文字，生产文字来自 `SDL_EVENT_TEXT_INPUT`，编辑器聚焦时它按 IME 提交应用（替换预编辑），否则作为 `Event::Text`。指针与滚轮使用 SDL 的逻辑坐标，滚轮一格按 40 逻辑像素（SDL 的正方向朝上，这里取反）；`SDL_TOUCH_MOUSEID` 的合成鼠标事件被丢弃，因为同一根手指已作为 `Event::Touch` 归一化坐标上报；按钮包含 SDL 自己的连击计数。SDL 不报告触摸板滚动的结束，因此没有 `ScrollEnd`，松手惯性滚动在该后端不发生。
+## 五、 高级视觉效果（阴影、渐变与图层）
 
-IME 使用 SDL 自己的模型：窗口获得键盘焦点时 `SDL_StartTextInput`（可带 `SDL.textinput.multiline` 属性），失焦时停止并发 `ImeEvent::Left`；`configure_ime(Some)` 校验请求后把光标矩形交给 `SDL_SetTextInputArea`，`SDL_EVENT_TEXT_EDITING` 变成预编辑、`SDL_EVENT_TEXT_INPUT` 变成提交。周边文字、选区与变更原因无法传给平台：SDL3 没有对应接口，这几项被校验后丢弃，输入法只能看到光标位置。`ime_available()` 对 `dummy`/`offscreen` 之外的驱动为真；SDL3 无法查询 compositor 是否提供 text-input-v3，因此缺该协议的 Wayland compositor 上请求会成功而不会有组合事件。
-
-剪贴板是进程级的一个，`set_clipboard`/`request_clipboard` 同步读写并立即入队 `Event::Clipboard`（空文本不产生事件）。拖入经 `DROP_BEGIN`/`DROP_POSITION`/`DROP_FILE`/`DROP_TEXT`/`DROP_COMPLETE` 重建成 `Event::Drag`、`Event::Drop`（多个文件合并成一个 `Files`）或 `Event::DragLeave`；SDL 不能拒绝放下，所以宿主 `accept_drag(.., false)` 的回答在结束时变成 `DragLeave` 而不是交付数据。`start_drag` 返回 `Unsupported`：SDL3 只能接收拖动。光标用 SDL 系统光标缓存实现，指针进入窗口时套用该窗口的形状。
-
-外观偏好同样来自 desktop portal（`aegle-portal`，与原生 Wayland 后端共用）：连接时读取 `color-scheme`/`contrast`/`reduced-motion`/`text-scaling-factor`/`double-click`，`SDL_GetSystemTheme` 的暗色结论优先于 portal。之后的 `SettingChanged` 由一个读取 portal socket 的辅助线程处理，它只写共享偏好并 `SDL_PushEvent` 唤醒（SDL 的等待无法与另一个 fd 合并），因此空闲时没有轮询；该线程随平台 `drop` 关闭 socket 退出。`SDL_EVENT_SYSTEM_THEME_CHANGED` 直接更新暗色偏好。
-
-`gpu` feature 的窗口租约从 SDL 窗口属性取 `wl_display`/`wl_surface` 或 X11 `Display`/`Window`，实现 raw-window-handle 0.6；租约持有 SDL 窗口的引用计数，所以移除窗口不会提前销毁 GPU presenter 需要的句柄（drop presenter 仍须早于平台，因为 SDL 退出会关闭视频驱动）。
-
-## 当前应用宿主
-
-`aegle-app/sdl3`、`wayland` 与 `windows` 经同一套契约代码把目标平台接到 Ui（见上文“平台契约”）；每窗口独立保留树，应用共享 TextSystem。software 共享 renderer/字形缓存；vulkan 与 wgpu 的窗口共享第一个窗口创建的实例/设备/队列（wgpu 还共享管线），每窗口仍有自己的 surface/swapchain、图集（Vulkan 还有管线），通过原生 swapchain 呈现；共享设备不能向某窗口呈现时创建返回错误，不静默换设备。`App::run` 在最后窗口关闭后返回，`dispatch(timeout)` 可由已有主循环显式驱动。嵌套 dispatch 返回重入错误，回调产生的新动作在下一轮执行，有待执行动作时不会进入无限期平台等待。
-
-启用 motion 时，App 共享一个 Instant 时钟；每次刷新先采样活动过渡，实际呈现后仍有活动动画才请求下一帧。平台的帧回调（Wayland）或刷新率截止时间（SDL3）继续限定呈现节奏；无活动动画或 compositor 暂停回调时不加入轮询定时器。外观动画不改变几何，绘制和语义前景共用呈现值。
-
-窗口、输入和辅助技术动作使用同一个 Ui。每个相关事件后刷新布局并取消旧 IME 会话，再处理下一条排队输入；不存在 text-input-v3 时，请求编辑会话返回能力错误。每窗口由最近聚焦它的 seat 管理一个逻辑焦点域，其他 seat 的按键与指针在它离开前被忽略；失焦取消组合/手势，返回时恢复仍可用的原控件。编辑器的剪贴板请求在刷新前交给活动键盘 seat；异步读取在该 seat 仍持有焦点时粘贴，失焦后丢弃。连击由 Ui 按时间与距离统一计数（1、2、3 循环，编辑器据此选词/选行，`Node::on_double_click` 与 Canvas 的 `Press { clicks }` 读取它），App 把系统双击间隔交给它：Windows 为 `GetDoubleClickTime`，Linux 读 portal 的 GNOME `org.gnome.desktop.peripherals.mouse double-click`，都没有时 400 ms；右键按下、Menu 键与 Shift+F10 由 Ui 转成上下文菜单请求（`Node::on_context_menu`），不读取 Win32 `WM_CONTEXTMENU`；平台拖动事件经 `Ui::drag_motion`/`drag_leave`/`drop_data` 找到点下最近的 `on_drop` 节点并回答平台，控件 `start_drag` 的数据在刷新时交给平台。Win32 连接时 `OleInitialize`，每窗口注册 `IDropTarget`：OLE 同步询问效果而宿主异步回答，因此同一次拖动在宿主回答前接受任何文字/文件（本线程自己的阻塞拖动循环期间宿主无法回答，自拖自放因此可用），回答后以最新结果为准；`start_drag` 用 `SHCreateDataObject` 承载 `CF_UNICODETEXT` 或 `CF_HDROP`，`SHDoDragDrop` 使用系统默认的拖动源；动态窗口属性尚未接入应用 API；触摸经 `Ui::touch` 接入：点击与控件拖动成为指针事件，非拖动内容上超过 10 px 的拖动取消点击并平移滚动视图，抬起时带速度惯性滚动。
-
-## 当前 Windows 原生路径
-
-`Win32` 实现 `Platform` 与 `SurfacePlatform`，直接管理 Win32 HWND、消息循环、每显示器 DPI、鼠标/滚轮/双击、键盘和 UTF-16 字符输入。空闲以 MsgWaitForMultipleObjectsEx 等待消息与共享 wake event；重绘期间仍泵消息，避免动画饿死关闭和输入。窗口先隐藏创建，GPU/UIA 完成安装并成功绘制后才显示。逻辑关闭先停路由和隐藏，最后一个原生租约释放时才 DestroyWindow。
-
-软件呈现借用一个有界 RGBA8 CPU buffer，经 GDI DIB 上传，窗口不透明：GDI 忽略 alpha，半透明像素按预乘颜色（等同叠在黑色上）显示，与 Wayland 的 XRGB 呈现一致，不逐像素检查；Vulkan 用同一 HWND 直接呈现。平台与 renderer 的预算独立，GDI/DWM 与驱动分配不属于 CPU buffer_budget。输入法经每窗口的 TSF 文本存储（周边文字、重转换），触屏键盘与 InputScope 尚未接入，见[文字输入](text-input.md#当前-windows-输入边界)。UIA 通过独立 aegle-access/windows 接入。Windows 11 实机上已运行原生窗口生命周期、软件与硬件 Vulkan/wgpu（Vulkan、DX12）呈现、TSF 与 Microsoft Pinyin 组合、OLE 拖放、桌面服务与 UIA 客户端查询，证据与仍缺的 ARM64、其他 GPU 驱动及屏幕阅读器验收见[实现状态](implementation.md)；Wine 或交叉编译不能替代这些证据。
+* **渐变填充**：线性与径向渐变支持 2–16 个色标，在预乘线性空间中插值；无需离屏纹理，直接在几何图元中计算。
+* **解析式柔和阴影**：基于高斯卷积闭式解在像素中心直接解析求值（x 方向 erf 积分，y 方向分段加权），三倍标准差之外自动剔除，无需离屏高斯模糊 pass。
+* **离屏图层与模糊**：
+  * 节点设置 `opacity` 或 `backdrop_blur` 时触发离屏层绘制。
+  * 背景模糊仅对当前窗口已绘制内容生效，采用三次盒式模糊逼近高斯模糊。
+  * 超出预算的背景模糊将被自动跳过并记录（`skipped_blurs()`），不会丢弃界面基础图元。

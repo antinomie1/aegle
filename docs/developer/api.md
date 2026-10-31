@@ -1,6 +1,6 @@
 # Aegle 开发者 API 指南
 
-本文面向用 Aegle 编写应用的开发者，按任务介绍当前已实现的接口；不使用 `aegle` facade、只用控件库时见[不经 facade 使用控件库](standalone.md)。各控件的外观、状态和专属方法见[控件参考](controls.md)；设计契约与验证记录分别见 [Rust API 契约](../rust-api.md)、[标记语言](../markup.md)和[实现状态](../implementation.md)。
+本文面向用 Aegle 编写应用的开发者，按任务介绍当前已实现的接口；不使用 `aegle` facade、只用控件库时见[不经 facade 使用控件库](standalone.md)。各控件的外观、状态和专属方法见[控件参考](controls.md)；架构契约与验证记录分别见[架构与生命周期](../architecture.md)、[标记语言](../markup.md)和[实现状态](../implementation.md)。
 
 Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没有每帧重建界面的入口。创建、修改和读取控件的方法直接返回值，不返回 `Result`；误用是程序错误，会 panic：控件已删除或窗口已关闭（可先用 `is_alive()` 判断）、在绘制器或钩子里使用句柄、传入文档排除的参数（如负宽度、NaN）。会因环境或应用代码失败的操作才返回 `Result<T>`（`aegle::ui::Result`，即 `Result<T, Box<dyn Error>>`，prelude 已引入）：创建 App 与窗口、关闭窗口、加载标记、`refresh` 与输入投递等宿主操作。事件处理器可以返回 `()` 或 `Result`，错误交给 `App::on_error`（见第 7 节），默认不会结束程序。
 
@@ -18,7 +18,7 @@ aegle = { path = "../aegle/crates/aegle" }
 | `native` | ✓ | 原生窗口的宿主；Windows Win32、macOS AppKit 按编译目标选择，Linux 另需 `sdl3`（`aegle` 默认）或 `wayland` |
 | `sdl3` | | Linux：经发行版的 `libSDL3.so.0` 开窗（默认），运行时加载 |
 | `wayland` | | Linux：原生 Wayland 客户端，layer-shell、拖动源与 text-input-v3 周边文字 |
-| `software` | ✓ | CPU 软件绘制 |
+| `tiny-skia` | ✓ | CPU 软件绘制（默认渲染器） |
 | `system-fonts` | ✓ | 系统字体发现（Linux 用 Pango 的 Fontconfig 配置，运行时加载） |
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
 | `motion` | ✓ | 外观/位移/缩放旋转过渡、惯性滚动 |
@@ -27,8 +27,8 @@ aegle = { path = "../aegle/crates/aegle" }
 | `jpeg` / `webp` / `gif` |  | `aegle::image::decode` 解码 JPEG、WebP（静态）、GIF（首帧） |
 | `svg` |  | 静态 SVG（无文字）：`aegle::image::svg` 栅格化，并渲染 OpenType-SVG 字形 |
 | `grid` |  | 网格与叠放容器（`grid`、`stack`）及标记的 `Grid`/`Stack`；release 约增加 244 KiB |
-| `vulkan` |  | Vulkan 绘制，与 `software` 可同时编译；macOS 上没有 Vulkan，显式选择后构造返回 `Unsupported` |
-| `wgpu` |  | 全平台通用的最小 wgpu 绘制（几何、文字、图像与路径），macOS 上经 Metal；可与其他后端同时编译 |
+| `vulkan` |  | Vulkan 1.1 硬件加速绘制；每个构建恰好一个渲染器 |
+| `wgpu` |  | 全平台通用的最小 wgpu 硬件绘制（macOS 经 Metal）；每个构建恰好一个渲染器 |
 | `accessibility` |  | 语义树导出，并接上编译目标的系统适配：Linux AT-SPI（引入 zbus）、Windows UI Automation、macOS NSAccessibility。只取语义树而不接系统时直接用 `aegle-ui`/`aegle-widgets` 的同名 feature |
 
 按词移动与双击选词要中日文/泰文分词时，运行环境需要系统分词器：Linux 需安装 `libicu`（多数桌面发行版已随系统安装，程序用 `dlopen` 在运行时查找，`libicui18n.so.<版本>` 与未带版本的 soname 都会探测），Windows 用系统的 `icu.dll`/`icuin.dll`（Windows 10 1903+/1703+），macOS 用系统自带的 `CFStringTokenizer`。都找不到时不报错，也没有回退：按词移动（Ctrl/Alt+←→）与双击选词停用——按键不移动插入点，双击只放置插入点；其余编辑操作不受影响。`aegle_text::segment::available()` 返回当前进程是否找到分词器，环境变量 `AEGLE_SEGMENT=none` 可强制停用以便调试。
@@ -36,8 +36,6 @@ aegle = { path = "../aegle/crates/aegle" }
 Linux 默认后端在运行时加载 `libSDL3.so.0`，构建期不需要任何窗口库头文件；改用 `wayland` 后端时构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon。文字与字形改用系统栈后，运行时还需要 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1` 与 `libfreetype.so.6`（所有桌面发行版都随系统提供，程序用 `dlopen` 查找，构建时不链接）；完全没有 Pango 的环境里 `TextSystem::system()` 报告不可用。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。Linux 的 `sdl3` 与 `wayland` 互斥：同时开启是编译错误；`aegle` facade 对“`native` 而没有 Linux 后端”也在编译期报错并给出重建命令（直接用 `aegle-app` 时则保留宿主，`App` 创建时报出缺哪个 feature）。
 
 `use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入与 `scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口与 `desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
-
-`use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入、`scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口、`desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
 
 ## 2. 最小程序
 
@@ -102,7 +100,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 | `window.scale()` | 窗口最近配置的设备像素比（物理像素/逻辑像素，可为小数），供按设备分辨率渲染的应用纹理使用；窗口关闭后返回错误 |
 | `window.ui()` | 窗口的引擎 `Ui`：窗口级 `on_key`、`set_reduced_motion`、`set_token`、`set_default_transition` 等；主题用根节点的 `window.set_theme(theme)` |
 
-`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`renderer: RendererBackend`（`Software`/`Cairo`/`Vulkan`/`Wgpu`；编译了软件绘制时默认 `Software`，`Cairo` 仅在 Linux 的 `cairo` feature 下可用并需要运行时的 `libcairo.so.2`）；`vulkan`（Vulkan 预算）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。
+`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`vulkan`（Vulkan 预算配置）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。注意：渲染器由构建期 feature 单一决定（`tiny-skia` 默认，或 `cairo`、`vulkan`、`wgpu`），一个构建只编入一个渲染器，`AppOptions` 不包含渲染器选择字段。
 
 `WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）与 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（Windows、macOS）创建失败并返回 `Unsupported`：
 

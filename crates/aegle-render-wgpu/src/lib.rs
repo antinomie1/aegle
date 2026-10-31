@@ -7,7 +7,7 @@
 //! simultaneous clips. Optional `text` adds mask and color glyphs from one bounded
 //! atlas per kind, images, and CPU-rasterized path masks; without it those
 //! commands, like any future one, return [`Error::UnsupportedCommand`]. Optional `window`
-//! adds [`WindowRenderer`] over any `raw-window-handle` surface with FIFO
+//! adds `WindowRenderer` over any `raw-window-handle` surface with FIFO
 //! presentation.
 //!
 //! The OpenGL backend is not enabled: it has no vertex-stage storage buffers.

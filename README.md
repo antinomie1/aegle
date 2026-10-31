@@ -72,7 +72,7 @@ A build contains exactly one renderer. The four renderer features (`tiny-skia`, 
 | `wgpu` |  | Renderer: portable wgpu (Vulkan, Metal, Direct3D 12) |
 | `accessibility` |  | Semantic tree plus the target's system adapter: AT-SPI on Linux (pulls in zbus), UI Automation on Windows, NSAccessibility on macOS. Implies `native` |
 
-`native` builds only the target's platform crate, and `accessibility` only the target's adapter. On Linux `sdl3` and `wayland` are exclusive: enabling both is a compile error, and so is `native` through this facade without either, which names the rebuild command. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).
+`native` builds only the target's platform crate, and `accessibility` only the target's adapter. On Linux `sdl3` and `wayland` are exclusive: enabling both is a compile error, and so is `native` through this facade without either, which names the rebuild command. The crate-level breakdown is in the [module guide](docs/modules.md).
 
 ## Documentation
 
@@ -81,7 +81,7 @@ The developer documentation is written in Chinese:
 - [API guide](docs/developer/api.md): dependencies, applications and windows, layout, styling, events, animation, markup and embedding.
 - [Control reference](docs/developer/controls.md): every default control with screenshots of its states.
 - [Controls without the facade](docs/developer/standalone.md) (Chinese): aegle-ui, aegle-widgets, aegle-theme and aegle-motion in your own host, and custom controls.
-- [Crates, examples and builds](docs/crates-and-examples.md), [design index](docs/README.md) and [implementation status](docs/implementation.md).
+- [Modules, dependencies and builds](docs/modules.md), [design index](docs/README.md) and [implementation status](docs/implementation.md).
 
 ## License
 
