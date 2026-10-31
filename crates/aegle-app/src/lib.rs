@@ -39,6 +39,12 @@ compile_error!(
 
 #[cfg(native)]
 mod event_clock;
+#[cfg(all(
+    native,
+    target_os = "linux",
+    not(any(feature = "sdl3", feature = "wayland"))
+))]
+mod missing_backend;
 #[cfg(native)]
 mod native;
 #[cfg(access)]
@@ -64,20 +70,21 @@ compile_error!(
      mutually exclusive. `sdl3` is the default; build the native Wayland client \
      with `--no-default-features --features desktop,wayland,<renderer>`."
 );
-#[cfg(all(
-    feature = "native",
-    target_os = "linux",
-    not(any(feature = "sdl3", feature = "wayland"))
-))]
-compile_error!(
-    "aegle-app: a Linux native build needs a window backend: enable `sdl3` \
-     (the default) or `wayland`."
-);
-
 /// The target's platform; a new platform adds one line.
 #[cfg(all(native, target_os = "linux", feature = "sdl3"))]
 type Native = aegle_platform_sdl3::Sdl3;
-#[cfg(all(native, target_os = "linux", not(feature = "sdl3")))]
+#[cfg(all(
+    native,
+    target_os = "linux",
+    not(any(feature = "sdl3", feature = "wayland"))
+))]
+type Native = missing_backend::Missing;
+#[cfg(all(
+    native,
+    target_os = "linux",
+    feature = "wayland",
+    not(feature = "sdl3")
+))]
 type Native = aegle_platform_wayland::Wayland;
 #[cfg(all(native, target_os = "windows"))]
 type Native = aegle_platform_win32::Win32;

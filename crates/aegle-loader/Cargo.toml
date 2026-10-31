@@ -14,7 +14,8 @@ categories.workspace = true
 motion = ["aegle-ui/motion", "aegle-widgets/motion"]
 grid = ["aegle-ui/grid"]
 # Window documents: opening and reloading a Window through the native App of
-# the target.
+# the target. The Linux window backend is the application's choice (`sdl3` or
+# `wayland`), so this feature cannot name one.
 window = ["dep:aegle-app", "aegle-app/native"]
 
 [dependencies]

@@ -135,6 +135,7 @@ dependencies = [
  "aegle-types",
  "aegle-ui",
  "aegle-widgets",
+ "raw-window-handle",
  "wayland-client",
  "wayland-protocols-wlr",
  "windows",

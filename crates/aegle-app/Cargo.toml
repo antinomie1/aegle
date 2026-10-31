@@ -28,8 +28,8 @@ accessibility = [
 # always use their own crate; a Linux build gets one from `sdl3` (the facade's
 # default) or `wayland`, which are mutually exclusive.
 native = ["windows", "macos"]
-sdl3 = ["dep:aegle-platform-sdl3"]
-wayland = ["dep:aegle-platform-wayland"]
+sdl3 = ["native", "dep:aegle-platform-sdl3"]
+wayland = ["native", "dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
 macos = ["dep:aegle-platform-macos"]
 tiny-skia = ["dep:aegle-render-tiny-skia", "dep:aegle-render-cpu"]
@@ -38,8 +38,8 @@ tiny-skia = ["dep:aegle-render-tiny-skia", "dep:aegle-render-cpu"]
 cairo = ["dep:aegle-render-cairo", "dep:aegle-render-cpu"]
 # Vulkan is the Linux and Windows GPU path and reports `Unsupported` on macOS;
 # `wgpu` reaches Metal there.
-vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
-wgpu = ["dep:aegle-render-wgpu", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
+vulkan = ["dep:aegle-render-vulkan", "dep:raw-window-handle", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
+wgpu = ["dep:aegle-render-wgpu", "dep:raw-window-handle", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
 # File dialogs, notifications, a tray icon and global shortcuts (`App::desktop`).
 desktop-services = ["native", "dep:aegle-desktop"]
 
@@ -50,6 +50,9 @@ aegle-platform.workspace = true
 aegle-types.workspace = true
 aegle-scene.workspace = true
 aegle-text.workspace = true
+# Only the GPU renderers and a build without a window backend need the handle
+# traits here; both backends bring their own copy of the crate.
+raw-window-handle = { version = "0.6.2", optional = true }
 aegle-access = { workspace = true, optional = true }
 aegle-render-tiny-skia = { workspace = true, features = ["text"], optional = true }
 # The compositor both CPU backends share; named here so the host can draw into

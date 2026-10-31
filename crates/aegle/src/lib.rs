@@ -20,6 +20,19 @@
 //! [`prelude`] holds the common names; everything else stays under the crate
 //! it comes from: [`ui`](mod@ui), [`widgets`] and [`app`].
 
+// A Linux native build without a window backend would compile into a library
+// without `App`; name the missing feature here, where the default backs it.
+#[cfg(all(
+    feature = "native",
+    target_os = "linux",
+    not(any(feature = "sdl3", feature = "wayland"))
+))]
+compile_error!(
+    "aegle: a Linux native build needs a window backend: enable `sdl3` \
+     (the default) or `wayland`, e.g. \
+     `--no-default-features --features desktop,wayland,tiny-skia`."
+);
+
 /// Native application host: `App`, windows, the build's renderer and desktop
 /// services. Empty without a native platform or GPU renderer feature.
 pub use aegle_app as app;

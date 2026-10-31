@@ -36,10 +36,10 @@ desktop-services = ["native", "aegle-app/desktop-services"]
 # already name the one Linux uses.
 native = ["aegle-app/native", "aegle-loader?/window"]
 # Linux: windows through the distribution's SDL3 (Wayland or X11, chosen by SDL).
-sdl3 = ["aegle-app/sdl3"]
+sdl3 = ["native", "aegle-app/sdl3"]
 # Linux: the native Wayland client instead, with layer-shell surfaces, a drag
 # source and text-input-v3 surrounding text. Needs libxkbcommon at build time.
-wayland = ["aegle-app/wayland"]
+wayland = ["native", "aegle-app/wayland"]
 motion = ["aegle-ui/motion", "aegle-widgets/motion", "aegle-app/motion", "aegle-loader?/motion"]
 effects = ["aegle-image/effects"]
 markup = ["dep:aegle-macros", "dep:aegle-loader"]
