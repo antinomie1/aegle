@@ -15,7 +15,9 @@ aegle = { path = "../aegle/crates/aegle" }
 
 | feature | 默认 | 作用 |
 | --- | :---: | --- |
-| `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit（按编译目标选择） |
+| `native` | ✓ | 原生窗口的宿主；Windows Win32、macOS AppKit 按编译目标选择，Linux 另需 `sdl3`（`aegle` 默认）或 `wayland` |
+| `sdl3` | | Linux：经发行版的 `libSDL3.so.0` 开窗（默认），运行时加载 |
+| `wayland` | | Linux：原生 Wayland 客户端，layer-shell、拖动源与 text-input-v3 周边文字 |
 | `software` | ✓ | CPU 软件绘制 |
 | `system-fonts` | ✓ | 系统字体发现（Linux 用 Pango 的 Fontconfig 配置，运行时加载） |
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
@@ -31,7 +33,7 @@ aegle = { path = "../aegle/crates/aegle" }
 
 按词移动与双击选词要中日文/泰文分词时，运行环境需要系统分词器：Linux 需安装 `libicu`（多数桌面发行版已随系统安装，程序用 `dlopen` 在运行时查找，`libicui18n.so.<版本>` 与未带版本的 soname 都会探测），Windows 用系统的 `icu.dll`/`icuin.dll`（Windows 10 1903+/1703+），macOS 用系统自带的 `CFStringTokenizer`。都找不到时不报错，也没有回退：按词移动（Ctrl/Alt+←→）与双击选词停用——按键不移动插入点，双击只放置插入点；其余编辑操作不受影响。`aegle_text::segment::available()` 返回当前进程是否找到分词器，环境变量 `AEGLE_SEGMENT=none` 可强制停用以便调试。
 
-Linux 构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon。文字与字形改用系统栈后，运行时还需要 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1` 与 `libfreetype.so.6`（所有桌面发行版都随系统提供，程序用 `dlopen` 查找，构建时不链接）；完全没有 Pango 的环境里 `TextSystem::system()` 报告不可用。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。
+Linux 默认后端在运行时加载 `libSDL3.so.0`，构建期不需要任何窗口库头文件；改用 `wayland` 后端时构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon。文字与字形改用系统栈后，运行时还需要 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1` 与 `libfreetype.so.6`（所有桌面发行版都随系统提供，程序用 `dlopen` 查找，构建时不链接）；完全没有 Pango 的环境里 `TextSystem::system()` 报告不可用。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。Linux 的 `sdl3` 与 `wayland` 互斥：同时开启、或只要 `native` 而没有后端，都是带重建命令的编译错误。
 
 `use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入与 `scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口与 `desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
 

@@ -4,7 +4,7 @@
 
 ## 结论摘要
 
-**两者不在同一竞争层。** GPUI 是 Zed 的生产级应用框架，GPU 优先、混合即时/保留模式，随 Zed 在 macOS/Linux/Windows 上实际使用；但 API 仍 pre-1.0，0.2.2 发布包不含默认控件库、主题系统和无障碍接口。Aegle 是面向低资源设备、保留模式、可组合模块的 GUI 库，自带控件、主题、动画、文字编辑、系统文字栈、无障碍与标记语言；但项目处于 v0.1、未发布、没有外部用户，macOS 未实机运行，Linux 只支持 Wayland。
+**两者不在同一竞争层。** GPUI 是 Zed 的生产级应用框架，GPU 优先、混合即时/保留模式，随 Zed 在 macOS/Linux/Windows 上实际使用；但 API 仍 pre-1.0，0.2.2 发布包不含默认控件库、主题系统和无障碍接口。Aegle 是面向低资源设备、保留模式、可组合模块的 GUI 库，自带控件、主题、动画、文字编辑、系统文字栈、无障碍与标记语言；但项目处于 v0.1、未发布、没有外部用户，macOS 未实机运行，Linux 的验收目标是 Wayland（默认经 SDL3 开窗，`wayland` feature 换成原生客户端）。
 
 一句话选型：
 
@@ -26,7 +26,7 @@
 | 主题 | 内建类型化 token、浅/深/高对比、局部覆盖、跟随系统 | 仅 `WindowAppearance` 与默认色板；主题在 Zed 的独立 crate | Aegle 内建 |
 | 动画 | 过渡、弹簧、关键帧、减少动态效果 | `Animation`/`AnimationExt`、缓动函数 | 都有；Aegle 更系统 |
 | 无障碍 | AccessKit + AT-SPI/UIA/NSAccessibility，feature 开关 | 0.2.2 公开 API 未见无障碍语义树/系统适配 | Aegle 明显更完整 |
-| 平台 | Linux Wayland（无 X11）、Win32、AppKit（未实机） | macOS、Linux X11+Wayland、Windows（D3D11） | GPUI 更广 |
+| 平台 | Linux（Wayland 验收，默认 SDL3；原生客户端另选）、Win32、AppKit（未实机） | macOS、Linux X11+Wayland、Windows（D3D11） | GPUI 更广 |
 | layer-shell | 支持（面板/背景层） | 未提供 | Aegle 独有 |
 | 桌面服务 | 文件对话框、通知、托盘、全局快捷键 | 0.2.2：文件对话框、原生菜单、屏幕捕获；托盘/通知/全局快捷键未见（main 有通知示例） | 方向不同 |
 | 异步 | 无运行时；`UiProxy` 有界队列 | 内建 smol 执行器、`Task`、异步上下文 | GPUI 内建 |
@@ -169,7 +169,7 @@ GPUI 在 Linux 上用 cosmic-text，macOS/Windows 用系统栈，因此三平台
 
 | 方面 | Aegle | GPUI 0.2.2 |
 | --- | --- | --- |
-| Linux 窗口 | Wayland（xdg-shell）；**不实现 X11** | X11 + Wayland（默认 features 同时启用） |
+| Linux 窗口 | 默认 SDL3（SDL 选 Wayland/X11），可选原生 Wayland 客户端（xdg-shell、layer-shell）；自身**不实现 X11** | X11 + Wayland（默认 features 同时启用） |
 | Linux 特有 | layer-shell 面板/背景层、text-input-v3、分数缩放、portal 主题偏好 | 未见公开的 layer-shell 表面 API；常规桌面窗口 |
 | Windows | Win32、TSF、GDI/Vulkan/wgpu-DX12；Windows 11 实机验证 | Windows 后端：DirectX 11 + DirectWrite；Zed 于 2025-10-15 宣布 Windows 正式支持，README 仍写 macOS/Linux |
 | macOS | AppKit + 软件/wgpu-Metal；**未在 Mac 实机运行** | Metal；Zed 的主力平台，生产验证最充分；Zed 最低 macOS 10.15.7 |
@@ -222,7 +222,7 @@ Aegle 的主要风险是采用风险而非技术空白：项目年轻、单作�
 | 标记优先、需要编译期检查或运行时热重载、AI 生成 UI | Aegle | `.aegle` + `ui!`/`loader` 的双路径是明确设计目标 |
 | 要嵌入现有窗口/渲染宿主，只用 UI 引擎 | Aegle | `aegle-ui` 无窗口，可单独组合 renderer/platform |
 | macOS/Linux/Windows 三平台 GPU 桌面应用 | GPUI | Metal/Vulkan/D3D11 + Zed 生产验证 |
-| 必须同时支持 Linux X11 与 Wayland | GPUI | Aegle 明确不实现 X11 |
+| 必须同时支持 Linux X11 与 Wayland | GPUI | Aegle 自身不实现 X11（SDL3 后端只是附带能在 X11 上运行，没有 layer 表面与 text-input-v3） |
 | 需要异步、Action/KeyBinding、原生菜单、Inspector | GPUI | GPUI 内建；Aegle 需自行搭建 |
 | 严格的无障碍采购要求（AT-SPI/UIA/VoiceOver） | 两者都不够；Aegle 起点更高 | Aegle 有语义树与 AT-SPI/UIA 验证，但 macOS/真实屏幕阅读器未验收；GPUI 0.2.2 无公开接口 |
 | 今天就要生产稳定、长期维护承诺 | 两者都不满足 1.0；GPUI 更接近 | GPUI 有 Zed 生产使用但 API 会破坏；Aegle 未发布 |

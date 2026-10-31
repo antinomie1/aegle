@@ -78,7 +78,7 @@ macOS：`macos`（`accessibility` 隐含）feature 编译 `MacosAdapter`，复�
 | 按钮动作、文本框与按钮焦点 | AT-SPI GrabFocus/DoAction 经过保留控件状态验证 |
 | CJK 文本、字符数、选择和 caret | AT-SPI Text 查询及选择动作通过；本地桥覆盖只读、run 边界、失效范围与 IME 拒绝 |
 | 通过辅助技术替换文本 | 上游 `accesskit_unix` 0.22.1 未实现 `org.a11y.atspi.EditableText`；当前不能宣称支持 |
-| 几何 | 从绘制使用的逻辑窗口几何与滚动偏移派生；Wayland 无全局窗口位置，不调用 set_root_window_bounds；adapter 的默认原点不能作为真实屏幕位置，也未完成屏幕定位验收 |
+| 几何 | 从绘制使用的逻辑窗口几何与滚动偏移派生；Wayland（含默认的 SDL3 后端）无全局窗口位置，不调用 set_root_window_bounds；adapter 的默认原点不能作为真实屏幕位置，也未完成屏幕定位验收 |
 | Windows | UIA adapter 已接入；兼容环境与实机证据见实现状态 |
 | 密码控件 | 导出 `PasswordInput` 与遮盖值；无窗口 ui 场景验证语义树不含明文，AT-SPI/UIA 客户端未验收 |
 | macOS、真实屏幕阅读器 | 尚未接入或验收 |

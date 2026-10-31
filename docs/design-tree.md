@@ -9,7 +9,7 @@
 | Q7–Q8 | 三平台普通窗口，Linux 可选 layer-shell/多显示器；高级绘制独立按需启用 |
 | Q9–Q11 | 完整系统语义及可检查控件树；不要求原生控件；中性极简并适配系统偏好 |
 | Q12 | Linux/Windows 使用 ash/Vulkan；放弃原生 Metal，改增可选的最小 wgpu 后端作为全平台通用路径；加入独立 CPU 软件 renderer 支持无 GPU 设备 |
-| Q13 | 独立原生平台适配；Linux 复用 SCTK/wayland-client，补齐客户端 IME |
+| Q13 | 独立原生平台适配；Linux 默认经 SDL3 开窗，`wayland` feature 复用 SCTK/wayland-client 并补齐客户端 IME |
 | Q14–Q15 | 文字与字形默认使用操作系统文字栈（Linux：Pango/Fontconfig/FreeType，运行时加载；Windows：DirectWrite；macOS：CoreText）；Parley/Fontique/HarfRust/Swash 只在显式 `text-parley` 下作为不再维护的回退；AccessKit 独立平台适配 |
 | Q16–Q18 | 花括号标记、受限表达式与命令式事件；Tkinter 式直接创建/修改；完整手写源码计行 |
 | Q19 | 单 UI 主线程、后台消息回传、事件驱动、活动动画请求帧，核心无强制通用异步运行时 |

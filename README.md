@@ -4,7 +4,7 @@
 
 Aegle is a modular retained-mode GUI library for Rust 2024, built for low memory use, event-driven updates, CJK text and native input methods. Controls are created once and changed through handles; nothing redraws or polls while the UI is idle.
 
-It is a workspace of independent crates (retained tree, Taffy layout, text and glyphs, drawing scenes, software (tiny-skia or system cairo) / Vulkan / wgpu renderers, Wayland and Win32 platform backends, controls, themes, markup) plus the `aegle` facade that ties them together. The project is in progress and not yet published to crates.io; see the [implementation status](docs/implementation.md) for what works today.
+It is a workspace of independent crates (retained tree, Taffy layout, text and glyphs, drawing scenes, software (tiny-skia or system cairo) / Vulkan / wgpu renderers, SDL3, Wayland and Win32 platform backends, controls, themes, markup) plus the `aegle` facade that ties them together. The project is in progress and not yet published to crates.io; see the [implementation status](docs/implementation.md) for what works today.
 
 ## Quick start
 
@@ -57,7 +57,9 @@ A build contains exactly one renderer. The four renderer features (`tiny-skia`, 
 
 | Feature | Default | Purpose |
 | --- | :---: | --- |
-| `native` | ✓ | Native windows: Wayland on Linux, Win32 on Windows, AppKit on macOS |
+| `native` | ✓ | The native window host: Win32 on Windows, AppKit on macOS; on Linux it needs `sdl3` (the default) or `wayland` |
+| `sdl3` | ✓ | Linux: windows through the distribution's `libSDL3.so.0`, loaded at run time |
+| `wayland` |  | Linux: the native Wayland client instead, with layer surfaces, a drag source and text-input-v3 surrounding text |
 | `tiny-skia` | ✓ | Renderer: CPU rendering with tiny-skia coverage |
 | `cairo` |  | Renderer: CPU rendering with system cairo coverage (Linux), `libcairo.so.2` loaded at run time |
 | `system-fonts` | ✓ | System font discovery |
@@ -70,7 +72,7 @@ A build contains exactly one renderer. The four renderer features (`tiny-skia`, 
 | `wgpu` |  | Renderer: portable wgpu (Vulkan, Metal, Direct3D 12) |
 | `accessibility` |  | Semantic tree plus the target's system adapter: AT-SPI on Linux (pulls in zbus), UI Automation on Windows, NSAccessibility on macOS. Implies `native` |
 
-`native` builds only the target's platform crate, and `accessibility` only the target's adapter. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).
+`native` builds only the target's platform crate, and `accessibility` only the target's adapter. On Linux `sdl3` and `wayland` are exclusive: enabling both, or `native` with neither, is a compile error that names the rebuild command. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).
 
 ## Documentation
 

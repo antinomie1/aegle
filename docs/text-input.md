@@ -1,6 +1,6 @@
 # 文本、CJK 与 IME
 
-状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。文字后端在 Linux（Pango + FreeType，本机运行验证）、Windows（DirectWrite，仅交叉编译检查）与 macOS（CoreText + CoreGraphics，仅交叉编译检查）三处各有实现，验证程度不同。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows 经 TSF 文本存储接入输入法（见末节），macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。
+状态：段落显示、CJK 排版、按需字形软件绘制、保留式纯文本编辑及 Wayland 原生窗口/text-input-v3 已实现。文字后端在 Linux（Pango + FreeType，本机运行验证）、Windows（DirectWrite，仅交叉编译检查）与 macOS（CoreText + CoreGraphics，仅交叉编译检查）三处各有实现，验证程度不同；Linux 的窗口默认走 SDL3 后端，原生 Wayland 客户端是 `wayland` feature。共享 TextField 行为与原生编辑示例连接了这些模块；通用应用/皮肤层已接入，Windows 经 TSF 文本存储接入输入法（见末节），macOS 输入仍未实现，系统剪贴板与密码模式已接入 Wayland/Win32 应用宿主，Unix 无障碍已接入部分查询与选择能力。
 
 排版引擎默认是**操作系统的文字栈**：Linux 用 Pango（bidi、UAX #14 换行、字体回退）加 Fontconfig 与 FreeType，全部在运行时从发行版的共享库加载；Windows 用 DirectWrite（`backend_directwrite/`），macOS 用 CoreText（`backend_coretext/`）。三者的验证程度不同：Linux 路径在本机运行并通过全部测试与像素核对；Windows 与 macOS 路径只在 Linux 上交叉 `cargo check`/`clippy` 过，**没有在目标系统上运行**（见[实现状态](implementation.md)）。Aegle 自己拥有的是保留段落、光标与选择语义（`document`/`nav`/`edit`）以及字形记录，不重写 shaping、bidi 或换行。`aegle-text/text-parley` 与 `aegle-glyph/swash` 是**默认关闭、不再维护**的回退：只在显式启用时编译 Parley/HarfRust/Skrifa/Swash。三个有系统后端的 target 上它们只作 opt-in；其他 target 没有系统后端，仍默认编译回退实现，避免默认构建静默失去文字。
 
@@ -55,6 +55,12 @@ Editor 自己保存显示缓冲与每个硬换行段落的排版结果（段落�
 `set_password(true)` 把已提交值移入 Editor 自己的字符串，显示缓冲只排版等量 `•`；选择、命中、`display_text` 与 `selected_text` 都是遮盖缓冲的字节偏移，替换按遮盖字符索引同步到明文。`text()` 返回明文。切换时取消组合、光标移到末尾并清空撤销历史；密码模式不记录历史、拒绝 IME 组合（`TextError::Password`），TextField 不向宿主请求 IME 会话。
 
 TextField 在 Ctrl（macOS 为 Command）+C/X/V 时只返回 `Outcome::clipboard` 请求，不访问系统服务；应用经 `Node::copy_text` 发出的写入请求（标记的 `copy(e)` 同此）走同一条路径；密码模式或空选区不复制/剪切，只读不剪切/粘贴。App 在刷新前把请求交给平台：Wayland 每 seat 一个 `wl_data_device`，以最近按键/按钮 serial 设置选区，写出与读取都是 calloop 非阻塞管道，读取上限 `CLIPBOARD_LIMIT` 4 MiB，结果作为 `Event::Clipboard` 回到原 seat 的焦点控件；Win32 同步读写 `CF_UNICODETEXT`，读出的文字同样作为 `Event::Clipboard` 进入事件队列，两个平台经同一条宿主路径粘贴。粘贴作为一次独立撤销，单行编辑器丢弃换行类字符。辅助技术编辑动作仍待集成。
+
+## 当前 SDL3 输入法边界
+
+`aegle-platform-sdl3` 使用 SDL3 自己的文本输入模型，不是 text-input-v3 的事务模型。窗口获得键盘焦点时开始文本输入（`SDL_StartTextInput`，编辑控件报 `multiline` 时改用 `SDL_StartTextInputWithProperties` 的 `SDL.textinput.multiline`），失焦时停止并发 `ImeEvent::Left`。`SDL_EVENT_TEXT_EDITING` 转换成一次 `ImeUpdate`（`commit: None`，预编辑与其选区；`start`/`length` 越界或不在字符边界时隐藏光标而不是截断），`SDL_EVENT_TEXT_INPUT` 在编辑控件聚焦时转换成提交（替换当前预编辑），否则作为普通 `Event::Text`。
+
+代价是明确的：SDL3 没有周边文字、选区同步与变更原因接口，`ImeRequest` 的这些字段被 `validate` 校验后丢弃，输入法只能拿到光标矩形（经 `SDL_SetTextInputArea` 向外取整为整数窗口坐标）；长选区无法“保留组合但不报告周边文字”，因为根本没有报告通道。`ImeRequest::multiline` 只决定输入类型提示，`input_method` 无从传达。`ime_available()` 只按视频驱动判断：SDL3 不暴露 compositor 是否提供 text-input-v3，因此缺该协议的 Wayland compositor 上请求会成功却不会产生组合事件。候选窗定位与真实输入法（fcitx/IBus）在该后端尚未验收。
 
 ## 当前 Wayland 原生接口
 

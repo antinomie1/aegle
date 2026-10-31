@@ -20,7 +20,9 @@ jobs:
       - run: cargo test --workspace
       # The renderer features of aegle-app are mutually exclusive, so
       # `--all-features` covers every other crate; the `renderers` job covers
-      # aegle and aegle-app once per renderer.
+      # aegle and aegle-app once per renderer. The SDL3 backend loads
+      # libSDL3.so.0 at run time, so its tests report a missing library and pass
+      # here rather than needing a distribution package.
       - run: cargo clippy --workspace --exclude aegle --exclude aegle-app --all-targets --all-features
       - run: cargo test --workspace --exclude aegle --exclude aegle-app --all-features
       - run: cargo doc --workspace --exclude aegle --exclude aegle-app --all-features --no-deps
@@ -29,8 +31,9 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
       RUSTDOCFLAGS: -D warnings
-      # Every aegle feature except the renderers.
-      FEATURES: aegle/desktop,aegle/accessibility,aegle/jpeg,aegle/webp,aegle/gif,aegle/svg,aegle/colrv1,aegle/grid
+      # Every aegle feature except the renderers, including the window backend
+      # the renderers present into.
+      FEATURES: aegle/desktop,aegle/sdl3,aegle/accessibility,aegle/jpeg,aegle/webp,aegle/gif,aegle/svg,aegle/colrv1,aegle/grid
     strategy:
       fail-fast: false
       matrix:
@@ -56,14 +59,17 @@ jobs:
           - ""
           - markup
           - markup,native
-          - markup,native,tiny-skia
+          - markup,native,sdl3
+          - markup,native,sdl3,tiny-skia
           - markup,motion
-          - motion,native,tiny-skia
+          - motion,native,sdl3,tiny-skia
           - grid,markup
-          - native,vulkan
-          - native,wgpu
-          - native,cairo
-          - accessibility
+          - native,sdl3,vulkan
+          - native,sdl3,wgpu
+          - native,sdl3,cairo
+          - accessibility,sdl3
+          # The native Wayland client instead of SDL3, with its own renderer.
+          - native,wayland,tiny-skia
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -78,7 +84,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev
       - run: cargo check --workspace --exclude aegle --exclude aegle-app --all-features
-      - run: cargo check -p aegle -p aegle-app --all-targets --features aegle/accessibility,aegle/jpeg,aegle/webp,aegle/gif,aegle/svg,aegle/colrv1,aegle/grid
+      - run: cargo check -p aegle -p aegle-app --all-targets --features aegle/sdl3,aegle/accessibility,aegle/jpeg,aegle/webp,aegle/gif,aegle/svg,aegle/colrv1,aegle/grid
   windows:
     runs-on: windows-latest
     steps:

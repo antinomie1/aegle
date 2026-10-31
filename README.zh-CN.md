@@ -4,7 +4,7 @@
 
 Aegle 是面向 Rust 2024 的模块化保留模式 GUI 库，关注低内存占用、事件驱动更新、CJK 文字与原生输入法。控件创建一次，之后通过句柄修改；界面空闲时不重绘也不轮询。
 
-它由一组相互独立的 crate 组成（保留树、Taffy 布局、文字与字形、绘制 scene、软件（tiny-skia 或系统 cairo）/ Vulkan / wgpu 渲染器、Wayland、Win32 与 macOS 平台后端、控件、主题、标记语言），再加上把它们串起来的 `aegle` facade。项目仍在开发中，尚未发布到 crates.io；当前可用的能力见[实现状态](docs/implementation.md)。
+它由一组相互独立的 crate 组成（保留树、Taffy 布局、文字与字形、绘制 scene、软件（tiny-skia 或系统 cairo）/ Vulkan / wgpu 渲染器、SDL3、Wayland、Win32 与 macOS 平台后端、控件、主题、标记语言），再加上把它们串起来的 `aegle` facade。项目仍在开发中，尚未发布到 crates.io；当前可用的能力见[实现状态](docs/implementation.md)。
 
 ## 最小开始
 
@@ -57,7 +57,9 @@ fn main() -> Result<()> {
 
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
-| `native` | ✓ | 原生窗口：Linux Wayland、Windows Win32、macOS AppKit |
+| `native` | ✓ | 原生窗口宿主：Windows Win32、macOS AppKit；Linux 另需 `sdl3`（默认）或 `wayland` |
+| `sdl3` | ✓ | Linux：经发行版 `libSDL3.so.0` 开窗，运行时加载 |
+| `wayland` |  | Linux：改用原生 Wayland 客户端，带 layer 表面、拖动源与 text-input-v3 周边文字 |
 | `tiny-skia` | ✓ | 渲染器：CPU 绘制（tiny-skia 覆盖率） |
 | `cairo` |  | 渲染器：CPU 绘制（系统 cairo 覆盖率，仅 Linux），运行时加载 `libcairo.so.2` |
 | `system-fonts` | ✓ | 系统字体发现 |
@@ -70,7 +72,7 @@ fn main() -> Result<()> {
 | `wgpu` |  | 渲染器：全平台通用的 wgpu（Vulkan、Metal、Direct3D 12） |
 | `accessibility` |  | 语义树与目标平台的系统适配（Linux AT-SPI，引入 zbus；Windows UI Automation；macOS NSAccessibility）；隐含 `native` |
 
-`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
+`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；Linux 上 `sdl3` 与 `wayland` 互斥，同时开启或 `native` 没有后端都是带重建命令的编译错误；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
 
 ## 文档
 

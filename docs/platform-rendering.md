@@ -6,15 +6,15 @@
 
 | 平台 | 首版目标 | 绘制与输入 |
 | --- | --- | --- |
-| Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland | 软件绘制（默认，tiny-skia 或系统 cairo 覆盖光栅）、可选 ash/Vulkan 与 wgpu；SCTK + wayland-client；text-input-v3 |
+| Linux | x86_64/aarch64，glibc 2.36+、内核 6.1+；Wayland 会话 | 软件绘制（默认，tiny-skia 或系统 cairo 覆盖光栅）、可选 ash/Vulkan 与 wgpu；窗口默认经发行版的 SDL3（`sdl3`，Wayland/X11 由 SDL 选择），`wayland` feature 换成 SCTK + wayland-client 原生客户端（layer-shell、拖动源、text-input-v3 周边文字） |
 | Windows | Windows 11，x86_64/aarch64 | 软件绘制（默认）、可选 ash/Vulkan 与 wgpu；原生窗口；TSF 文本存储输入法 |
 | macOS | macOS 13+，x86_64/aarch64，存在可用 Metal 设备 | 软件绘制（默认）或经可选 wgpu 使用 Metal；AppKit 窗口、NSTextInputClient；无 Vulkan |
 
 macOS 的原生平台已建立（`aegle-platform-macos`）：普通顶层窗口、输入、`NSTextInputClient` 输入法、剪贴板、拖放与软件/GPU 呈现；layer 表面返回 `Unsupported`。它目前只在 Linux 上交叉 `cargo check`/`clippy`/`cargo test --no-run` 过，未在 Mac 硬件上运行，见[实现状态](implementation.md)。
 
-这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 不实现 X11；基础普通窗口要求 xdg-shell，shell 表面另要求 layer-shell。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。
+这些是验收目标，不是已经验证所有 OS/GPU 组合。Linux 自身不实现 X11 客户端：原生 Wayland 后端要求 xdg-shell（shell 表面另要求 layer-shell），SDL3 后端则让 SDL 在 Wayland 与 X11 之间选择，因此同一程序在只有 X11 的桌面上也能运行，但 X11 不是验收目标，那里没有 layer 表面、text-input-v3 周边文字与协议级帧回调。没有对应协议时报告明确能力缺失，不假造成功。无 GPU 设备通过独立软件 renderer 支持；与 GPU 共用 scene、布局、文字和输入，不建立第二套 UI。软件像素缓冲由各平台呈现，按可用后端显式选择。
 
-Linux 使用一个连接和事件队列承载普通窗口及可选 layer-shell，补齐预编辑、提交、周边文字/删除、焦点和提交时序。SCTK 的 input_method 面向输入法程序，不代替普通客户端 text-input-v3。默认不会引入 winit 再维护另一套窗口循环。
+Linux 原生 Wayland 后端使用一个连接和事件队列承载普通窗口及可选 layer-shell，补齐预编辑、提交、周边文字/删除、焦点和提交时序。SCTK 的 input_method 面向输入法程序，不代替普通客户端 text-input-v3。默认不会引入 winit 再维护另一套窗口循环。
 
 各平台按事件等待；Linux 使用 FD readiness 和协议要求的读取流程，Windows 保留原生消息循环，AppKit 用 `nextEventMatchingMask:untilDate:inMode:dequeue:` 按截止时间等待并自己驱动 `NSApplication`，不进入 `NSApplicationMain`。文本输入、系统偏好、剪贴板和无障碍动作归一化后交给 UI 主线程，不跨 FFI 展开 panic。
 
@@ -125,7 +125,7 @@ Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该�
 
 平台在自己的 crate 内把原生值翻译成契约：XKB keysym 与 Win32 虚拟键都变成 `Key`，evdev 与 Win32 按钮变成 `PointerKind`，Wayland 的 seat 以协议对象 id 作 `SeatId`，单 seat 平台（Windows）恒用 `SeatId(0)`；AltGr 在按键事件里不报告 Control；只随指针消息得到修饰键的平台在变化时先发 `Event::Modifiers`。按键文字随按键给出（`Key { text }`，Wayland）或单独给出（`Event::Text`，Win32 的 WM_CHAR）。剪贴板一律异步：`request_clipboard` 的结果作为 `Event::Clipboard` 进入同一队列（Win32 同步读出后立即入队）。平台没有的能力返回 `Error::Unsupported`（如 Windows 上的 layer-shell）或 `ImeUnavailable`，不伪装成功；已消失 seat 的请求被忽略，其移除已由事件报告。
 
-`aegle-app` 只按契约编写：一处 `type Native` 选定目标平台，一条输入翻译路径（seat 焦点域、点击、滚动与松手惯性、触摸、IME、剪贴板、拖放），一处按平台选择的无障碍 adapter（`native_access`，AT-SPI 用逻辑坐标、UIA 用物理像素）。新增平台只需实现契约并在这两处各加一行，不改动宿主其余代码。macOS（AppKit）尚未实现。
+`aegle-app` 只按契约编写：一处 `type Native` 选定目标平台（Linux 上是 SDL3 或原生 Wayland 客户端，二者互斥），一条输入翻译路径（seat 焦点域、点击、滚动与松手惯性、触摸、IME、剪贴板、拖放），一处按平台选择的无障碍 adapter（`native_access`，AT-SPI 用逻辑坐标、UIA 用物理像素）。新增平台只需实现契约并在这两处各加一行，不改动宿主其余代码。macOS（AppKit）已建立但未实机验证。
 
 ## 当前 Wayland 接口
 
@@ -141,11 +141,33 @@ Ui 中 `Node::set_opacity`（0..=1，可过渡）和 `set_backdrop_blur` 让该�
 
 `wake_handle()` 按需创建一个共享的 calloop ping source（包成契约的 `WakeHandle`），克隆句柄可从后台线程请求 `Event::Wake`；宿主先将工作入自己的队列，再发信号，不引入轮询。该连接点已用于可选无障碍回调：原生 App 启用 `accessibility` 后，由独立 aegle-access adapter 导出控件树；Wayland 库的正常依赖仍不包含它。
 
+## 当前 SDL3 接口
+
+`Sdl3`（`aegle-platform-sdl3`，Linux 默认窗口后端）在一条 SDL 视频连接上实现 `Platform`（`gpu` feature 下还有 `SurfacePlatform`）。发行版的 `libSDL3.so.0` 用 libloading 在首次连接时打开，构建期不链接、不读头文件：缺失时 `connect()` 返回 `Backend` 错误，程序不会静默换窗口后端。SDL 自己选择视频驱动（本机 Plasma Wayland 会话中为 `wayland`，有 X 而无 Wayland 时为 `x11`），`SDL_VIDEODRIVER` 可固定它。
+
+窗口由 SDL 创建与销毁，`WindowOptions::layer` 返回 `Unsupported("layer surfaces")`：SDL3 没有桌面 shell 层，不把面板降级成普通窗口。`WindowInfo` 的逻辑尺寸取 `SDL_GetWindowSize`，buffer 取 `SDL_GetWindowSizeInPixels`，`scale` 取两者之比（保证损伤换算与布局一致），`active` 取 `WINDOW_INPUT_FOCUS`，`configured` 为“已显示且未最小化”。`RESIZED`/`PIXEL_SIZE_CHANGED`/`DISPLAY_SCALE_CHANGED`/显示切换/最小化/恢复/焦点变化与 `EXPOSED` 都会重算并报 `Configure`；`EXPOSED` 使整窗重绘（SDL 已丢弃像素）。`SDL.app.metadata.identifier` 是进程唯一的应用标识，最后创建窗口的 `app_id` 生效。
+
+软件呈现借 `SDL_GetWindowSurface` 的像素：行距等于 `宽×4` 且格式为 XRGB8888/ARGB8888 时把该缓冲直接交给宿主（即契约的紧密 BGRA8），否则画进复用的一块紧密 BGRA8 暂存区再经 `SDL_ConvertPixels` 转换；两种路径都只用 `SDL_UpdateWindowSurfaceRects` 提交损伤矩形。`buffer_budget` 按窗口像素字节检查；SDL 自己的 surface 与上传路径不计入该预算（与 Windows 的 DIB 上传同一口径）。窗口不透明，半透明像素按预乘颜色显示。
+
+SDL3 没有逐表面的 frame callback，因此软件帧按显示刷新率（`SDL_GetDesktopDisplayMode` 的分子/分母，缺失时 60 Hz）的截止时间节流：每个窗口每帧至多收到一次 `Redraw`，动画请求的下一帧由 `dispatch` 的等待界（截止时间）推进，而不是轮询定时器；GPU 路径另有交换链自身的同步。`dispatch(None)` 用 `SDL_WaitEventTimeout(-1)` 阻塞，已有事件或到期帧时只做非阻塞分发。
+
+`wake_handle()` 复用 `SDL_RegisterEvents` 预留的一个用户事件码，句柄可从任意线程 `SDL_PushEvent`；没有额外的 socket 或定时器。外部事件里 `SDL_EVENT_QUIT` 被翻译成每个窗口的 `Close`（SDL 用它表示桌面请求或被接管的信号），`WINDOW_CLOSE_REQUESTED` 只关闭该窗口。
+
+输入：键码与修饰位翻译成 `Key`/`Modifiers`，`AltGr`（`KMOD_MODE`）不报告 Control，F1–F12 与 F13–F24 是两段不连续键码所以分开映射；键事件不带文字，生产文字来自 `SDL_EVENT_TEXT_INPUT`，编辑器聚焦时它按 IME 提交应用（替换预编辑），否则作为 `Event::Text`。指针与滚轮使用 SDL 的逻辑坐标，滚轮一格按 40 逻辑像素（SDL 的正方向朝上，这里取反）；`SDL_TOUCH_MOUSEID` 的合成鼠标事件被丢弃，因为同一根手指已作为 `Event::Touch` 归一化坐标上报；按钮包含 SDL 自己的连击计数。SDL 不报告触摸板滚动的结束，因此没有 `ScrollEnd`，松手惯性滚动在该后端不发生。
+
+IME 使用 SDL 自己的模型：窗口获得键盘焦点时 `SDL_StartTextInput`（可带 `SDL.textinput.multiline` 属性），失焦时停止并发 `ImeEvent::Left`；`configure_ime(Some)` 校验请求后把光标矩形交给 `SDL_SetTextInputArea`，`SDL_EVENT_TEXT_EDITING` 变成预编辑、`SDL_EVENT_TEXT_INPUT` 变成提交。周边文字、选区与变更原因无法传给平台：SDL3 没有对应接口，这几项被校验后丢弃，输入法只能看到光标位置。`ime_available()` 对 `dummy`/`offscreen` 之外的驱动为真；SDL3 无法查询 compositor 是否提供 text-input-v3，因此缺该协议的 Wayland compositor 上请求会成功而不会有组合事件。
+
+剪贴板是进程级的一个，`set_clipboard`/`request_clipboard` 同步读写并立即入队 `Event::Clipboard`（空文本不产生事件）。拖入经 `DROP_BEGIN`/`DROP_POSITION`/`DROP_FILE`/`DROP_TEXT`/`DROP_COMPLETE` 重建成 `Event::Drag`、`Event::Drop`（多个文件合并成一个 `Files`）或 `Event::DragLeave`；SDL 不能拒绝放下，所以宿主 `accept_drag(.., false)` 的回答在结束时变成 `DragLeave` 而不是交付数据。`start_drag` 返回 `Unsupported`：SDL3 只能接收拖动。光标用 SDL 系统光标缓存实现，指针进入窗口时套用该窗口的形状。
+
+外观偏好同样来自 desktop portal（`aegle-portal`，与原生 Wayland 后端共用）：连接时读取 `color-scheme`/`contrast`/`reduced-motion`/`text-scaling-factor`/`double-click`，`SDL_GetSystemTheme` 的暗色结论优先于 portal。之后的 `SettingChanged` 由一个读取 portal socket 的辅助线程处理，它只写共享偏好并 `SDL_PushEvent` 唤醒（SDL 的等待无法与另一个 fd 合并），因此空闲时没有轮询；该线程随平台 `drop` 关闭 socket 退出。`SDL_EVENT_SYSTEM_THEME_CHANGED` 直接更新暗色偏好。
+
+`gpu` feature 的窗口租约从 SDL 窗口属性取 `wl_display`/`wl_surface` 或 X11 `Display`/`Window`，实现 raw-window-handle 0.6；租约持有 SDL 窗口的引用计数，所以移除窗口不会提前销毁 GPU presenter 需要的句柄（drop presenter 仍须早于平台，因为 SDL 退出会关闭视频驱动）。
+
 ## 当前应用宿主
 
-`aegle-app/wayland` 与 `windows` 经同一套契约代码把目标平台接到 Ui（见上文“平台契约”）；每窗口独立保留树，应用共享 TextSystem。software 共享 renderer/字形缓存；vulkan 与 wgpu 的窗口共享第一个窗口创建的实例/设备/队列（wgpu 还共享管线），每窗口仍有自己的 surface/swapchain、图集（Vulkan 还有管线），通过原生 swapchain 呈现；共享设备不能向某窗口呈现时创建返回错误，不静默换设备。`App::run` 在最后窗口关闭后返回，`dispatch(timeout)` 可由已有主循环显式驱动。嵌套 dispatch 返回重入错误，回调产生的新动作在下一轮执行，有待执行动作时不会进入无限期平台等待。
+`aegle-app/sdl3`、`wayland` 与 `windows` 经同一套契约代码把目标平台接到 Ui（见上文“平台契约”）；每窗口独立保留树，应用共享 TextSystem。software 共享 renderer/字形缓存；vulkan 与 wgpu 的窗口共享第一个窗口创建的实例/设备/队列（wgpu 还共享管线），每窗口仍有自己的 surface/swapchain、图集（Vulkan 还有管线），通过原生 swapchain 呈现；共享设备不能向某窗口呈现时创建返回错误，不静默换设备。`App::run` 在最后窗口关闭后返回，`dispatch(timeout)` 可由已有主循环显式驱动。嵌套 dispatch 返回重入错误，回调产生的新动作在下一轮执行，有待执行动作时不会进入无限期平台等待。
 
-启用 motion 时，App 共享一个 Instant 时钟；每次刷新先采样活动过渡，实际呈现后仍有活动动画才请求下一帧。平台的 frame callback 与缓冲门控继续生效；无活动动画或 compositor 暂停回调时不加入轮询定时器。外观动画不改变几何，绘制和语义前景共用呈现值。
+启用 motion 时，App 共享一个 Instant 时钟；每次刷新先采样活动过渡，实际呈现后仍有活动动画才请求下一帧。平台的帧回调（Wayland）或刷新率截止时间（SDL3）继续限定呈现节奏；无活动动画或 compositor 暂停回调时不加入轮询定时器。外观动画不改变几何，绘制和语义前景共用呈现值。
 
 窗口、输入和辅助技术动作使用同一个 Ui。每个相关事件后刷新布局并取消旧 IME 会话，再处理下一条排队输入；不存在 text-input-v3 时，请求编辑会话返回能力错误。每窗口由最近聚焦它的 seat 管理一个逻辑焦点域，其他 seat 的按键与指针在它离开前被忽略；失焦取消组合/手势，返回时恢复仍可用的原控件。编辑器的剪贴板请求在刷新前交给活动键盘 seat；异步读取在该 seat 仍持有焦点时粘贴，失焦后丢弃。连击由 Ui 按时间与距离统一计数（1、2、3 循环，编辑器据此选词/选行，`Node::on_double_click` 与 Canvas 的 `Press { clicks }` 读取它），App 把系统双击间隔交给它：Windows 为 `GetDoubleClickTime`，Linux 读 portal 的 GNOME `org.gnome.desktop.peripherals.mouse double-click`，都没有时 400 ms；右键按下、Menu 键与 Shift+F10 由 Ui 转成上下文菜单请求（`Node::on_context_menu`），不读取 Win32 `WM_CONTEXTMENU`；平台拖动事件经 `Ui::drag_motion`/`drag_leave`/`drop_data` 找到点下最近的 `on_drop` 节点并回答平台，控件 `start_drag` 的数据在刷新时交给平台。Win32 连接时 `OleInitialize`，每窗口注册 `IDropTarget`：OLE 同步询问效果而宿主异步回答，因此同一次拖动在宿主回答前接受任何文字/文件（本线程自己的阻塞拖动循环期间宿主无法回答，自拖自放因此可用），回答后以最新结果为准；`start_drag` 用 `SHCreateDataObject` 承载 `CF_UNICODETEXT` 或 `CF_HDROP`，`SHDoDragDrop` 使用系统默认的拖动源；动态窗口属性尚未接入应用 API；触摸经 `Ui::touch` 接入：点击与控件拖动成为指针事件，非拖动内容上超过 10 px 的拖动取消点击并平移滚动视图，抬起时带速度惯性滚动。
 

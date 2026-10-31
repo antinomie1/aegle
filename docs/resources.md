@@ -17,7 +17,7 @@
 | 输入到首次相关呈现 | p95 ≤ 33 ms，p99 ≤ 50 ms | 60 Hz 场景；端到端测量，不仅测 setter |
 | UI 布局及构造绘制提交工作 | p95 ≤ 4 ms | 不把 GPU 等待计为纯 CPU 计算 |
 | 首帧 | 热启动 ≤ 200 ms，冷启动 ≤ 600 ms | 包含字体发现，分别报告缓存冷热 |
-| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-11-02 起文字与字形改用系统栈（Pango/Fontconfig/FreeType，运行时加载），x86_64 Linux 默认 feature 构建 `hello` 为 **2,580,056 B（2.46 MiB）**（2026-11-02 工具链上的测量；同一台机器 2026-10-28 的工具链测得 2,494,112 B，加入后端无关字体身份后同构建的相对增量为 +2,144 B），比 Parley 时代同构建的 4,891,328 B（4.66 MiB）少 2.31 MiB，**达到**且余量充足。构成：`.text` 1.98 MB、`.rodata` 95 KB、`.eh_frame` 165 KB、`.rela.dyn` 138 KB；`ldd` 只剩 libxkbcommon、libm、libc 与 libgcc_s，Pango/FreeType/Fontconfig 由 `libloading` 在运行时打开，不计入发布文件。内置 ICU 词典数据在后一阶段已彻底移除，改由运行时向系统分词器取词，所以同一构建不再有 3.63 MiB 的词典增量。只开 `native,software,system-fonts` 的最小组合与默认组合只差 markup/motion/effects/desktop-services。Windows 同类构建在 Parley 时代为 3,487,232 B（2026-10-10 测量）。DirectWrite + GDI 后端已落地但**未在 Windows 上构建或测量**，因此这里不写新数字，只记口径：同为 release、thin LTO、strip 的默认 feature `hello`，不含系统 DLL 与系统字体；需在真机重测。macOS 同此。 |
+| 最小 Hello world 发布文件 | ≤ 8 MiB | release、LTO、strip；不含系统库和系统字体，另列前提。2026-11-02 起文字与字形改用系统栈（Pango/Fontconfig/FreeType，运行时加载），x86_64 Linux 默认 feature 构建 `hello` 为 **2,580,056 B（2.46 MiB）**（2026-11-02 工具链上的测量；同一台机器 2026-10-28 的工具链测得 2,494,112 B，加入后端无关字体身份后同构建的相对增量为 +2,144 B），比 Parley 时代同构建的 4,891,328 B（4.66 MiB）少 2.31 MiB，**达到**且余量充足。构成：`.text` 1.98 MB、`.rodata` 95 KB、`.eh_frame` 165 KB、`.rela.dyn` 138 KB；`ldd` 只剩 libxkbcommon、libm、libc 与 libgcc_s，Pango/FreeType/Fontconfig 由 `libloading` 在运行时打开，不计入发布文件。内置 ICU 词典数据在后一阶段已彻底移除，改由运行时向系统分词器取词，所以同一构建不再有 3.63 MiB 的词典增量。只开 `native,software,system-fonts` 的最小组合与默认组合只差 markup/motion/effects/desktop-services。Windows 同类构建在 Parley 时代为 3,487,232 B（2026-10-10 测量）。DirectWrite + GDI 后端已落地但**未在 Windows 上构建或测量**，因此这里不写新数字，只记口径：同为 release、thin LTO、strip 的默认 feature `hello`，不含系统 DLL 与系统字体；需在真机重测。macOS 同此。2026-11-01 起 Linux 默认窗口后端改为 SDL3（运行时加载 `libSDL3.so.0`），同一工具链（rustc 1.99.1）下 release `hello` 为 **1,538,024 B（1.47 MiB）**，`ldd` 只剩 libc/libm/libgcc_s（不再链接 libxkbcommon）；同一工具链、`desktop,wayland,tiny-skia` 构建为 2,495,816 B，即后端替换本身省下 957,792 B，文字栈与其余部分不变 |
 | 默认组件文字场景发布文件 | ≤ 16 MiB | 包含默认无障碍、主题、补间；不含可选高级模块 |
 | 最小窗口 / 100 控件场景 PSS | ≤ 32 / 48 MiB | Linux 测量，包含可归因的用户态驱动映射；系统服务进程另列。Windows/macOS 未测 |
 | 场景显式 GPU 分配 | ≤ 16 MiB | 800×480；计入图集、纹理和临时附件；swapchain 估计与驱动隐藏分配另列 |
@@ -119,7 +119,7 @@ Wayland 的 wake handle 在首次请求时创建并复用一个 calloop ping sou
 
 ## 发布清单
 
-默认不随包附送字体，允许系统字体；嵌入式须明确指定或打包有合法分发许可的字体。Linux 运行前提按实际组合列出：当前 Wayland 软件路径需要 libxkbcommon runtime，采用 Rust Wayland backend；gpu feature 的 system/dlopen backend 需要 libwayland-client，系统字体另需 Fontconfig。独立 Vulkan renderer 通过 ash 动态加载 Vulkan loader/driver；Naga 仅在构建期使用，validation layer 仅用于显式验证。启用 Unix 无障碍还需要会话 D-Bus 与 AT-SPI 服务；zbus 使用 Rust 协议实现，不因此新增 libdbus 链接要求。系统提供的库与服务也必须写入对应发布清单。
+默认不随包附送字体，允许系统字体；嵌入式须明确指定或打包有合法分发许可的字体。Linux 运行前提按实际组合列出：默认 SDL3 软件路径需要 `libSDL3.so.0`（SDL 自己加载 Wayland 或 X11 客户端库），系统字体另需 Pango/Fontconfig/FreeType；改用 `wayland` feature 时需要 libxkbcommon runtime，gpu feature 的 system/dlopen backend 需要 libwayland-client。独立 Vulkan renderer 通过 ash 动态加载 Vulkan loader/driver；Naga 仅在构建期使用，validation layer 仅用于显式验证。启用 Unix 无障碍还需要会话 D-Bus 与 AT-SPI 服务；zbus 使用 Rust 协议实现，不因此新增 libdbus 链接要求。系统提供的库与服务也必须写入对应发布清单。
 
 Windows 使用系统窗口/文本/无障碍 API 和 Vulkan loader/driver；macOS 使用系统 AppKit/CoreText，GPU 绘制经可选 wgpu 使用 Metal。开发 SDK、shader 编译器、Rust proc macro 和构建期 SVG 转换器不进入运行依赖。
 

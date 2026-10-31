@@ -4,7 +4,7 @@
 
 ## 当前能力概览
 
-紧凑共享类型、保留树、Taffy 布局、保留式 Unicode 段落与编辑器、按需 CJK 字形、绘制记录和软件光栅化已可用。独立 Wayland 后端提供原生窗口、有界 SHM 呈现、键盘/指针输入与 text-input-v3。应用层提供窗口、行、列、透明分组（可选网格与叠放）及对齐、换行、外边距、最小/最大尺寸、百分比、绝对定位等 flex/grid 布局，滚动视图、标签、按钮、纯文本字段、复选框、开关、滑块和进度条，并带浅色/深色/高对比主题。编译型 `.aegle` 标记与简洁的命令式 Rust 创建相同的保留控件。局部颜色、字体排印和小型主题/状态皮肤函数让组件库复用这些控件。共享的控件行为把输入和焦点接到保留树与编辑器。可选的绘制过渡共享同一状态，以帧驱动采样、平滑重定向，并显式支持减少动态效果；缩放/旋转、惯性滚动、渐变/阴影图像、触摸手势、后台 `UiProxy`、按字段的主题覆盖与系统文本缩放也已提供，可选的 JPEG/WebP/GIF/SVG 解码在 `aegle-image`。
+紧凑共享类型、保留树、Taffy 布局、保留式 Unicode 段落与编辑器、按需 CJK 字形、绘制记录和软件光栅化已可用。Linux 默认经发行版的 SDL3 提供原生窗口、输入、剪贴板与呈现，原生 Wayland 后端（`wayland` feature）另提供有界 SHM 呈现、layer 表面、拖动源与 text-input-v3 周边文字。应用层提供窗口、行、列、透明分组（可选网格与叠放）及对齐、换行、外边距、最小/最大尺寸、百分比、绝对定位等 flex/grid 布局，滚动视图、标签、按钮、纯文本字段、复选框、开关、滑块和进度条，并带浅色/深色/高对比主题。编译型 `.aegle` 标记与简洁的命令式 Rust 创建相同的保留控件。局部颜色、字体排印和小型主题/状态皮肤函数让组件库复用这些控件。共享的控件行为把输入和焦点接到保留树与编辑器。可选的绘制过渡共享同一状态，以帧驱动采样、平滑重定向，并显式支持减少动态效果；缩放/旋转、惯性滚动、渐变/阴影图像、触摸手势、后台 `UiProxy`、按字段的主题覆盖与系统文本缩放也已提供，可选的 JPEG/WebP/GIF/SVG 解码在 `aegle-image`。
 
 可选的 Unix 无障碍通过 AT-SPI 暴露控件、CJK 文本、选择、焦点与按钮动作；AT-SPI 文本替换仍不支持。Windows 增加 Win32 窗口、软件/Vulkan/wgpu 呈现、TSF 输入法与可选 UIA。macOS 增加 AppKit 窗口、NSTextInputClient 输入法、软件/wgpu（Metal）呈现与可选 NSAccessibility；macOS 平台只经 Linux 交叉编译检查，未在 Mac 上运行，完整的辅助技术验收仍未完成。
 
@@ -12,11 +12,11 @@
 
 ## 默认组合与平台前提
 
-`aegle` 默认启用原生窗口（Linux Wayland / Windows Win32 / macOS AppKit）、软件绘制、系统字体、标记（含动态标记引擎）与过渡。系统无障碍适配默认关闭：单个 `--features accessibility` 接上目标平台的适配器（Linux AT-SPI，需要会话 D-Bus 并引入 zbus 栈；Windows UI Automation；macOS NSAccessibility），另一平台的适配器与其依赖不进入构建。
+`aegle` 默认启用原生窗口（Linux 走 SDL3，Windows Win32，macOS AppKit）、软件绘制、系统字体、标记（含动态标记引擎）与过渡。系统无障碍适配默认关闭：单个 `--features accessibility` 接上目标平台的适配器（Linux AT-SPI，需要会话 D-Bus 并引入 zbus 栈；Windows UI Automation；macOS NSAccessibility），另一平台的适配器与其依赖不进入构建。
 
 - 系统字体必须覆盖所请求的文字；Linux 的系统字体发现还链接系统 Fontconfig 及其发行版相关的运行时依赖，显式提供应用字体可避免该依赖。
-- Wayland IME 需要 text-input-v3；没有它时聚焦可编辑字段返回能力错误。
-- Wayland 需要 xdg-shell 与版本不低于 4 的 wl_compositor；构建需要 libxkbcommon 的 pkg-config 元数据，运行需要 libxkbcommon 运行时。
+- 默认的 Linux 后端在运行时打开发行版的 `libSDL3.so.0`（`pkg-config --modversion sdl3` 可查），缺失时 `App` 创建失败并说明；SDL 自己选择 Wayland 或 X11 驱动，`SDL_VIDEODRIVER` 可固定。
+- 原生 Wayland 后端（`--no-default-features --features desktop,wayland,<渲染器>`）需要 xdg-shell 与版本不低于 4 的 wl_compositor；构建需要 libxkbcommon 的 pkg-config 元数据，运行需要 libxkbcommon 运行时。它的 IME 需要 text-input-v3，没有它时聚焦可编辑字段返回能力错误；SDL3 后端的输入法只有预编辑与提交，没有周边文字。
 - Windows 输入法经 TSF 文本存储，输入法可读取周边文字并重转换已提交文字。macOS 输入法经 `NSTextInputClient`，同样得到周边摘录、预编辑与提交；日文/韩文等输入法未实测。
 
 ## 示例与检查命令
@@ -86,16 +86,16 @@ cargo doc --workspace --no-deps
 仅软件、系统字体，不带标记与过渡：
 
 ```sh
-cargo run -p aegle --no-default-features --features native,software,system-fonts --example controls --release
+cargo run -p aegle --no-default-features --features native,sdl3,software,system-fonts --example controls --release
 ```
 
 仅 Vulkan，运行时依赖里没有软件渲染器：
 
 ```sh
-cargo run -p aegle --no-default-features --features native,vulkan,system-fonts,markup --example scrolling --release
+cargo run -p aegle --no-default-features --features native,sdl3,vulkan,system-fonts,markup --example scrolling --release
 ```
 
-四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级且互斥，一个构建恰好编入一个：同时启用两个由 `aegle-app` 的 `compile_error!` 拒绝，所以运行时没有可选的东西，`AppOptions` 也没有渲染器字段，`aegle::app::RENDERER` 给出本构建的渲染器名。`aegle` 的 `default` 是 `desktop` 加 `tiny-skia`，换渲染器用 `--no-default-features --features desktop,<渲染器>`。没有渲染器的 `native` 构建可以编译，但创建 `App` 时报错。宿主没有后端枚举，四个后端实现同一个 `Renderer` trait；驱动或预算失败返回错误，不会切换后端。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
+四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级且互斥，一个构建恰好编入一个：同时启用两个由 `aegle-app` 的 `compile_error!` 拒绝，所以运行时没有可选的东西，`AppOptions` 也没有渲染器字段，`aegle::app::RENDERER` 给出本构建的渲染器名。`aegle` 的 `default` 是 `desktop` 加 `sdl3` 加 `tiny-skia`：换渲染器或 Linux 窗口后端都用 `--no-default-features`，例如 `--features desktop,cairo` 或 `--features desktop,wayland,tiny-skia`。没有渲染器的 `native` 构建可以编译，但创建 `App` 时报错。宿主没有后端枚举，四个后端实现同一个 `Renderer` trait；驱动或预算失败返回错误，不会切换后端。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
 
 可选的 wgpu 后端（`wgpu` feature）绘制几何、文字、图像与路径；用 `WGPU_BACKEND` 和 `WGPU_ADAPTER_NAME` 选择适配器。契约见 [wgpu](wgpu.md)。
 
