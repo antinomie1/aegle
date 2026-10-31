@@ -72,7 +72,7 @@ fn main() -> Result<()> {
 | `wgpu` |  | 渲染器：全平台通用的 wgpu（Vulkan、Metal、Direct3D 12） |
 | `accessibility` |  | 语义树与目标平台的系统适配（Linux AT-SPI，引入 zbus；Windows UI Automation；macOS NSAccessibility）；隐含 `native` |
 
-`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；Linux 上 `sdl3` 与 `wayland` 互斥，同时开启或 `native` 没有后端都是带重建命令的编译错误；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
+`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；Linux 上 `sdl3` 与 `wayland` 互斥，同时开启是编译错误，经本 facade 只给 `native` 而没有后端同样是带重建命令的编译错误；各 crate 的分工见 [Crate、示例与构建组合](docs/crates-and-examples.md)。
 
 ## 文档
 

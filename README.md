@@ -72,7 +72,7 @@ A build contains exactly one renderer. The four renderer features (`tiny-skia`, 
 | `wgpu` |  | Renderer: portable wgpu (Vulkan, Metal, Direct3D 12) |
 | `accessibility` |  | Semantic tree plus the target's system adapter: AT-SPI on Linux (pulls in zbus), UI Automation on Windows, NSAccessibility on macOS. Implies `native` |
 
-`native` builds only the target's platform crate, and `accessibility` only the target's adapter. On Linux `sdl3` and `wayland` are exclusive: enabling both, or `native` with neither, is a compile error that names the rebuild command. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).
+`native` builds only the target's platform crate, and `accessibility` only the target's adapter. On Linux `sdl3` and `wayland` are exclusive: enabling both is a compile error, and so is `native` through this facade without either, which names the rebuild command. The crate-level breakdown is in the [crate guide](docs/crates-and-examples.md).
 
 ## Documentation
 

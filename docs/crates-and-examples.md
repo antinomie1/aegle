@@ -95,7 +95,7 @@ cargo run -p aegle --no-default-features --features native,sdl3,software,system-
 cargo run -p aegle --no-default-features --features native,sdl3,vulkan,system-fonts,markup --example scrolling --release
 ```
 
-四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级且互斥，一个构建恰好编入一个：同时启用两个由 `aegle-app` 的 `compile_error!` 拒绝，所以运行时没有可选的东西，`AppOptions` 也没有渲染器字段，`aegle::app::RENDERER` 给出本构建的渲染器名。`aegle` 的 `default` 是 `desktop` 加 `sdl3` 加 `tiny-skia`：换渲染器或 Linux 窗口后端都用 `--no-default-features`，例如 `--features desktop,cairo` 或 `--features desktop,wayland,tiny-skia`。没有渲染器的 `native` 构建可以编译，但创建 `App` 时报错。宿主没有后端枚举，四个后端实现同一个 `Renderer` trait；驱动或预算失败返回错误，不会切换后端。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
+四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级且互斥，一个构建恰好编入一个：同时启用两个由 `aegle-app` 的 `compile_error!` 拒绝，所以运行时没有可选的东西，`AppOptions` 也没有渲染器字段，`aegle::app::RENDERER` 给出本构建的渲染器名。`aegle` 的 `default` 是 `desktop` 加 `sdl3` 加 `tiny-skia`：换渲染器或 Linux 窗口后端都用 `--no-default-features`，例如 `--features desktop,cairo` 或 `--features desktop,wayland,tiny-skia`。没有渲染器的 `native` 构建可以编译，但创建 `App` 时报错；Linux 上没有 `sdl3`/`wayland` 的 `aegle-app` 构建同理（`aegle` facade 对这种组合在编译期就报错）。宿主没有后端枚举，四个后端实现同一个 `Renderer` trait；驱动或预算失败返回错误，不会切换后端。原生 Vulkan 目前为每个窗口创建一个设备，大窗口可能需要调大 `AppOptions.vulkan.memory_budget`。
 
 可选的 wgpu 后端（`wgpu` feature）绘制几何、文字、图像与路径；用 `WGPU_BACKEND` 和 `WGPU_ADAPTER_NAME` 选择适配器。契约见 [wgpu](wgpu.md)。
 

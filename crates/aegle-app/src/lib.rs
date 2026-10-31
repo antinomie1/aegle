@@ -3,7 +3,9 @@
 //! `aegle-ui` [`Ui`](aegle_ui::Ui). `native` hosts the target's platform crate:
 //! Win32 on Windows and AppKit on macOS, and on Linux exactly one of the
 //! mutually exclusive `sdl3` (windows through the distribution's SDL3) or
-//! `wayland` (the native Wayland client). It comes with exactly one renderer
+//! `wayland` (the native Wayland client); a Linux build with neither still
+//! compiles and fails when the application connects, naming the missing
+//! feature. It comes with exactly one renderer
 //! feature (`tiny-skia`, `cairo`, `vulkan` or `wgpu`). Both kinds of backend
 //! features are exclusive: enabling two is a compile error, so a binary never
 //! carries a backend it cannot use, and [`RENDERER`] names the renderer it
