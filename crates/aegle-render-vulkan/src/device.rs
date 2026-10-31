@@ -60,10 +60,7 @@ impl Device {
     /// The device's CPU glyph cache, created with `limits` by the first caller;
     /// later callers share it and their own limits are ignored.
     #[cfg(feature = "text")]
-    pub fn glyph_cache(
-        &self,
-        limits: aegle_glyph::CacheLimits,
-    ) -> crate::SharedGlyphCache {
+    pub fn glyph_cache(&self, limits: aegle_glyph::CacheLimits) -> crate::SharedGlyphCache {
         let mut slot = self.glyph_cache.borrow_mut();
         slot.get_or_insert_with(|| {
             Rc::new(RefCell::new(aegle_glyph::GlyphCache::with_limits(limits)))

@@ -1,12 +1,19 @@
-//! XDG desktop portal appearance settings over the session bus.
+//! Appearance preferences from the XDG desktop portal.
 //!
-//! Reads `color-scheme`, `contrast`, `reduced-motion` and GNOME's
-//! `text-scaling-factor` and `double-click` with a short bounded wait, then
-//! follows `SettingChanged` signals from the event loop. A missing bus or
-//! portal leaves preferences unknown instead of failing the Wayland connection.
+//! Wayland has no protocol for the user's color scheme, contrast, motion,
+//! text size or double-click time, so desktop applications ask the
+//! `org.freedesktop.portal.Settings` interface on the session bus. This crate
+//! reads those keys once with a short bounded wait and then follows
+//! `SettingChanged` signals, so a platform that owns a Unix socket can wait on
+//! it with its own event loop.
+//!
+//! Reads are a convenience, not a requirement: a session without a bus or a
+//! portal leaves the corresponding [`Preferences`] fields at `None` instead of
+//! failing. The caller decides how to wait on the returned socket and when to
+//! apply [`Portal::read`]'s changes to the interface.
 
-use crate::Preferences;
 use aegle_dbus::{Connection, Incoming, Kind, Message, Value};
+use aegle_types::Preferences;
 use std::{
     os::unix::net::UnixStream,
     time::{Duration, Instant},
@@ -25,18 +32,19 @@ const KEYS: [(&str, &str); 5] = [
     (NAMESPACES[2], "double-click"),
 ];
 /// Bounds startup when the portal is slow to activate; later replies still apply.
-const STARTUP_WAIT: Duration = Duration::from_millis(100);
+pub const STARTUP_WAIT: Duration = Duration::from_millis(100);
 
-/// The bus connection's reading end and the ReadOne calls still unanswered.
-pub(crate) struct Portal {
+/// A subscription to the portal's appearance settings.
+pub struct Portal {
     incoming: Incoming,
     /// The serial of each `KEYS` entry's ReadOne call, 0 once answered.
     pending: [u32; KEYS.len()],
 }
 
-/// Connects, requests all settings and applies replies arriving within the
-/// startup bound. Returns a socket for the event loop to wait on.
-pub(crate) fn connect(preferences: &mut Preferences) -> Option<(UnixStream, Portal)> {
+/// Connects, requests every setting and applies replies arriving within
+/// [`STARTUP_WAIT`]. Returns the socket to wait on for later changes, or
+/// `None` when there is no session bus or no portal to ask.
+pub fn connect(preferences: &mut Preferences) -> Option<(UnixStream, Portal)> {
     let bus = Connection::session(STARTUP_WAIT).ok()?;
     for namespace in NAMESPACES {
         let rule = format!(
@@ -77,8 +85,11 @@ pub(crate) fn connect(preferences: &mut Preferences) -> Option<(UnixStream, Port
 }
 
 impl Portal {
-    /// Reads available bytes and applies complete messages. Returns false when
-    /// the connection closed, failed or sent a malformed message.
+    /// Reads available bytes and applies complete messages to `preferences`.
+    /// Returns false when the connection closed, failed or sent a malformed
+    /// message; the subscription is over then. On a nonblocking socket with
+    /// nothing to read this returns true immediately, on a blocking one it
+    /// waits for the next message.
     pub fn read(&mut self, preferences: &mut Preferences) -> bool {
         if !matches!(self.incoming.fill(), Ok(true)) {
             return false;

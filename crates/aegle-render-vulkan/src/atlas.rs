@@ -1,7 +1,8 @@
 //! Bounded glyph, image and path-mask pages. Renderer fences previous GPU use
 //! before each frame.
 use aegle_glyph::{
-    CacheLimits, CacheStats, Content, FontSource, Glyph, GlyphKey, Placement, RasterOptions};
+    CacheLimits, CacheStats, Content, FontSource, Glyph, GlyphKey, Placement, RasterOptions,
+};
 use ash::vk;
 
 pub(crate) use crate::atlas_pages::{AtlasGlyph, ResourceKey};

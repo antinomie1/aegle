@@ -17,7 +17,6 @@ mod ime;
 mod ime_types;
 mod input;
 mod platform;
-mod portal;
 mod scale;
 mod state;
 mod window;

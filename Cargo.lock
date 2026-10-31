@@ -281,6 +281,7 @@ version = "0.1.0"
 dependencies = [
  "aegle-dbus",
  "aegle-platform",
+ "aegle-portal",
  "aegle-types",
  "raw-window-handle",
  "smithay-client-toolkit",
@@ -299,6 +300,14 @@ dependencies = [
  "raw-window-handle",
  "windows",
  "windows-core",
+]
+
+[[package]]
+name = "aegle-portal"
+version = "0.1.0"
+dependencies = [
+ "aegle-dbus",
+ "aegle-types",
 ]
 
 [[package]]

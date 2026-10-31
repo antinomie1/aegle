@@ -373,7 +373,9 @@ impl Control for CanvasControl {
                 delete_after: edit.delete_after,
                 commit: edit.commit.map(str::to_owned),
                 preedit: edit.preedit.to_owned(),
-                cursor: edit.cursor.map(|selection| (selection.anchor, selection.focus)),
+                cursor: edit
+                    .cursor
+                    .map(|selection| (selection.anchor, selection.focus)),
             })),
             _ => Outcome::default(),
         }

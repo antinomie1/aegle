@@ -1,0 +1,18 @@
+[package]
+name = "aegle-portal"
+description = "Appearance preferences from the XDG desktop portal's Settings interface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords = ["wayland", "portal", "theme", "dbus", "accessibility"]
+categories = ["gui", "os::linux-apis"]
+
+[dependencies]
+aegle-types = { workspace = true, features = ["std"] }
+aegle-dbus.workspace = true
+
+[lints]
+workspace = true

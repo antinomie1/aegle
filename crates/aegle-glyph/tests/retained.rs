@@ -288,7 +288,9 @@ fn one_cache_serves_several_owners_through_with_glyph() {
     };
     // Two renderers on one device share the cache the way a window renderer and
     // an application do; the image is borrowed only for the callback.
-    let cache = Rc::new(RefCell::new(GlyphCache::with_limits(CacheLimits::default())));
+    let cache = Rc::new(RefCell::new(
+        GlyphCache::with_limits(CacheLimits::default()),
+    ));
     let mut first = Vec::new();
     cache
         .clone()

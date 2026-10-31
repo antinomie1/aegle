@@ -22,9 +22,11 @@
 | aegle-render-cairo | Linux 上同一 CPU 合成器加系统 cairo 覆盖率（运行时加载） | render-cpu、scene、libloading |
 | aegle-render-wgpu | 可选的最小跨平台 GPU 后端：几何、字形图集、裁剪、离屏读回与原生 surface 呈现 | types、scene；glyph 按 text feature 接入 |
 | aegle-dbus | Linux 会话总线：认证、Hello、消息编解码（无 Unix fd 与 16 位整数），任意线程发送，阻塞或非阻塞读取 | 无 |
+| aegle-portal | Linux 桌面 portal 的外观偏好：读 `org.freedesktop.portal.Settings` 的 `color-scheme`/`contrast`/`reduced-motion`，加 GNOME 的 `text-scaling-factor`/`double-click`，并跟随 `SettingChanged`；只给出 `Preferences` 与一个可等待的 socket，不决定事件循环 | types、dbus |
 | aegle-desktop | 桌面服务：文件选择对话框、通知、托盘及其菜单、全局快捷键；Linux 走会话总线（portal FileChooser/GlobalShortcuts、`org.freedesktop.Notifications`、StatusNotifierItem + dbusmenu），Windows 走 `IFileDialog`、`Shell_NotifyIconW`、`RegisterHotKey`；结果经一个线程安全回调送出，不依赖窗口或 UI | Linux 为 dbus |
 | aegle-platform | 平台契约：`Platform`/`SurfacePlatform` trait 与共用的事件、指针、IME、窗口选项与几何、seat、wake 和错误；不含实现 | types |
-| aegle-platform-wayland | 以契约提供 Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板与拖放、输出与平台偏好 | types、platform、dbus |
+| aegle-platform-wayland | 以契约提供 Wayland 窗口、可选 layer-shell 表面、事件、IME、剪贴板与拖放、输出与平台偏好 | types、platform、portal |
+| aegle-platform-sdl3 | 以契约提供 SDL3 窗口（toplevel）、事件、IME、剪贴板、拖放接收、光标、软件呈现与 GPU 句柄租约；运行时加载 `libSDL3.so.0`，无 layer 表面、无拖动源、无逐表面帧回调 | types、platform、portal |
 | aegle-platform-win32 | 以契约提供 Win32 窗口、TSF 文本存储输入法、DPI、OLE 拖放、GDI 软件与 GPU 句柄、外观偏好 | types、platform |
 | aegle-platform-macos | 以契约提供 AppKit 顶部窗口、`NSTextInputClient` 输入法、`NSView` 上的拖放、`CGImage` 软件呈现与 GPU 视图租约、外观偏好；`NSApplication` 由平台自己驱动 | types、platform、objc2 |
 | aegle-access | 原生回调排队/唤醒与可选 AccessKit adapter；宿主派生语义更新 | 无内部依赖；schema 为 AccessKit，`platform` 按目标启用 AT-SPI/UIA/NSAccessibility 之一 |

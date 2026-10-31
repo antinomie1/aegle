@@ -81,7 +81,7 @@ impl Wayland {
             preferences: Default::default(),
         };
         state.init_input(&connection, &qh);
-        if let Some((stream, mut portal)) = crate::portal::connect(&mut state.preferences) {
+        if let Some((stream, mut portal)) = aegle_portal::connect(&mut state.preferences) {
             let source = Generic::new(stream, Interest::READ, Mode::Level);
             event_loop
                 .handle()
