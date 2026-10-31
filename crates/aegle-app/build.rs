@@ -8,7 +8,11 @@ fn main() {
     let feature = |name: &str| std::env::var_os(format!("CARGO_FEATURE_{name}")).is_some();
     // (target OS, platform feature, accessibility feature); the accessibility
     // feature selects the same target's adapter inside `aegle-access`.
+    // (target OS, backend feature, accessibility feature); Linux has two
+    // mutually exclusive backends, so it appears twice and either one turns the
+    // host's native configuration on.
     let platforms = [
+        ("linux", "SDL3", "ACCESSIBILITY"),
         ("linux", "WAYLAND", "ACCESSIBILITY"),
         ("windows", "WINDOWS", "ACCESSIBILITY"),
         ("macos", "MACOS", "ACCESSIBILITY"),

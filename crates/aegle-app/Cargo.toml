@@ -24,8 +24,11 @@ accessibility = [
     "aegle-access/platform",
     "aegle-ui/accessibility",
 ]
-# Native windows: exactly the target's platform crate is built.
-native = ["wayland", "windows", "macos"]
+# Native windows: the host plus the target's window backend. Windows and macOS
+# always use their own crate; a Linux build gets one from `sdl3` (the facade's
+# default) or `wayland`, which are mutually exclusive.
+native = ["windows", "macos"]
+sdl3 = ["dep:aegle-platform-sdl3"]
 wayland = ["dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
 macos = ["dep:aegle-platform-macos"]
@@ -35,8 +38,8 @@ tiny-skia = ["dep:aegle-render-tiny-skia", "dep:aegle-render-cpu"]
 cairo = ["dep:aegle-render-cairo", "dep:aegle-render-cpu"]
 # Vulkan is the Linux and Windows GPU path and reports `Unsupported` on macOS;
 # `wgpu` reaches Metal there.
-vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu"]
-wgpu = ["dep:aegle-render-wgpu", "aegle-platform-wayland?/gpu"]
+vulkan = ["dep:aegle-render-vulkan", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
+wgpu = ["dep:aegle-render-wgpu", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
 # File dialogs, notifications, a tray icon and global shortcuts (`App::desktop`).
 desktop-services = ["native", "dep:aegle-desktop"]
 
@@ -57,6 +60,7 @@ aegle-render-vulkan = { workspace = true, features = ["text", "window"], optiona
 aegle-render-wgpu = { workspace = true, features = ["text", "window"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+aegle-platform-sdl3 = { workspace = true, optional = true }
 aegle-platform-wayland = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

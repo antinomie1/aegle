@@ -1,0 +1,35 @@
+[package]
+name = "aegle-platform-sdl3"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords = ["gui", "windowing", "sdl", "wayland", "platform"]
+categories = ["gui"]
+
+description = "SDL3 windows, input, IME, clipboard, drag arrival and presentation behind the Aegle platform contract"
+
+[features]
+# Native surface leases for GPU presenters (`raw-window-handle`).
+gpu = ["dep:raw-window-handle"]
+
+[dependencies]
+aegle-platform.workspace = true
+aegle-portal.workspace = true
+aegle-types = { workspace = true, features = ["std"] }
+raw-window-handle = { version = "0.6.2", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+# Loads the distribution's libSDL3 at run time instead of linking it.
+libloading = "0.8.9"
+
+[lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
+[dev-dependencies]
+# The input tests push SDL events through the same runtime library the backend
+# loads, so they describe the C ABI instead of a mock.
+libloading = "0.8.9"

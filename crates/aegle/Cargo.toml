@@ -11,9 +11,12 @@ categories.workspace = true
 description = "A small retained GUI with imperative controls and composable backends"
 
 [features]
-# `desktop` holds everything but the renderer, so another renderer replaces
-# tiny-skia with `--no-default-features --features desktop,<renderer>`.
-default = ["desktop", "tiny-skia"]
+# `desktop` holds everything but the renderer and the Linux window backend, so
+# another renderer replaces tiny-skia with
+# `--no-default-features --features desktop,<renderer>` and the native Wayland
+# client replaces SDL3 with
+# `--no-default-features --features desktop,wayland,<renderer>`.
+default = ["desktop", "sdl3", "tiny-skia"]
 # System accessibility is opt-in: one feature adds the semantic tree and the
 # adapter of the target (AT-SPI over zbus on Linux, UI Automation on Windows,
 # NSAccessibility on macOS). Only that target's adapter is compiled.
@@ -27,9 +30,16 @@ desktop = ["native", "system-fonts", "markup", "motion", "effects", "desktop-ser
 # File dialogs, notifications, a tray icon and global shortcuts: `App::desktop`
 # and `aegle::desktop`.
 desktop-services = ["native", "aegle-app/desktop-services"]
-# The target's native window: Wayland on Linux, Win32 on Windows, AppKit on
-# macOS. The other targets' platform crates are not built.
+# Native windows: Win32 on Windows and AppKit on macOS, plus the window host.
+# On Linux the backend is a separate feature (`sdl3`, the default, or
+# `wayland`), because a build carries exactly one and the facade's defaults
+# already name the one Linux uses.
 native = ["aegle-app/native", "aegle-loader?/window"]
+# Linux: windows through the distribution's SDL3 (Wayland or X11, chosen by SDL).
+sdl3 = ["aegle-app/sdl3"]
+# Linux: the native Wayland client instead, with layer-shell surfaces, a drag
+# source and text-input-v3 surrounding text. Needs libxkbcommon at build time.
+wayland = ["aegle-app/wayland"]
 motion = ["aegle-ui/motion", "aegle-widgets/motion", "aegle-app/motion", "aegle-loader?/motion"]
 effects = ["aegle-image/effects"]
 markup = ["dep:aegle-macros", "dep:aegle-loader"]

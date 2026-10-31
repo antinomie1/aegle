@@ -3,6 +3,7 @@
 //! Every scenario draws with the build's one renderer, so each renderer is
 //! covered by running these tests with its feature.
 #![cfg(any(
+    all(feature = "sdl3", target_os = "linux"),
     all(feature = "wayland", target_os = "linux"),
     all(feature = "windows", target_os = "windows")
 ))]
@@ -213,7 +214,7 @@ fn software_windows_reject_a_translucent_background() -> Result {
     };
     assert_eq!(
         error.to_string(),
-        "software windows require an opaque background"
+        "a native software window requires an opaque background"
     );
     Ok(())
 }
@@ -280,7 +281,7 @@ fn cairo_windows_present_and_reject_a_translucent_background() -> Result {
     };
     assert_eq!(
         error.to_string(),
-        "software windows require an opaque background"
+        "a native software window requires an opaque background"
     );
     Ok(())
 }

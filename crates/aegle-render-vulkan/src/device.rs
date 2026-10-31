@@ -1,5 +1,6 @@
 #![allow(unsafe_code)]
 
+#[cfg(feature = "text")]
 use std::{cell::RefCell, rc::Rc};
 
 use ash::{Entry, vk};

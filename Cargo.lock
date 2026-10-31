@@ -122,6 +122,7 @@ dependencies = [
  "aegle-desktop",
  "aegle-platform",
  "aegle-platform-macos",
+ "aegle-platform-sdl3",
  "aegle-platform-wayland",
  "aegle-platform-win32",
  "aegle-render-cairo",
@@ -272,6 +273,17 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
+ "raw-window-handle",
+]
+
+[[package]]
+name = "aegle-platform-sdl3"
+version = "0.1.0"
+dependencies = [
+ "aegle-platform",
+ "aegle-portal",
+ "aegle-types",
+ "libloading",
  "raw-window-handle",
 ]
 

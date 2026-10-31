@@ -54,8 +54,28 @@ mod native_render;
 #[cfg(native)]
 mod renderer;
 
+// A Linux build carries exactly one window backend; the others pick their
+// target's own. Enabling two is a compile error rather than a silent winner.
+#[cfg(all(feature = "sdl3", feature = "wayland", target_os = "linux"))]
+compile_error!(
+    "aegle-app: `sdl3` and `wayland` are the Linux window backends and are \
+     mutually exclusive. `sdl3` is the default; build the native Wayland client \
+     with `--no-default-features --features desktop,wayland,<renderer>`."
+);
+#[cfg(all(
+    feature = "native",
+    target_os = "linux",
+    not(any(feature = "sdl3", feature = "wayland"))
+))]
+compile_error!(
+    "aegle-app: a Linux native build needs a window backend: enable `sdl3` \
+     (the default) or `wayland`."
+);
+
 /// The target's platform; a new platform adds one line.
-#[cfg(all(native, target_os = "linux"))]
+#[cfg(all(native, target_os = "linux", feature = "sdl3"))]
+type Native = aegle_platform_sdl3::Sdl3;
+#[cfg(all(native, target_os = "linux", not(feature = "sdl3")))]
 type Native = aegle_platform_wayland::Wayland;
 #[cfg(all(native, target_os = "windows"))]
 type Native = aegle_platform_win32::Win32;
