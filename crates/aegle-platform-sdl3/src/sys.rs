@@ -366,6 +366,7 @@ pub(crate) struct Lib {
     pub create_system_cursor: unsafe extern "C" fn(c_int) -> *mut Cursor,
     pub set_cursor: unsafe extern "C" fn(*mut Cursor) -> bool,
     pub destroy_cursor: unsafe extern "C" fn(*mut Cursor),
+    pub get_mod_state: unsafe extern "C" fn() -> u16,
     pub start_text_input: unsafe extern "C" fn(*mut Window) -> bool,
     pub start_text_input_with_properties: unsafe extern "C" fn(*mut Window, u32) -> bool,
     pub stop_text_input: unsafe extern "C" fn(*mut Window) -> bool,
@@ -455,6 +456,7 @@ fn load() -> Option<Lib> {
                 : unsafe extern "C" fn(c_int) -> *mut Cursor),
             set_cursor: bind!("SDL_SetCursor" : unsafe extern "C" fn(*mut Cursor) -> bool),
             destroy_cursor: bind!("SDL_DestroyCursor" : unsafe extern "C" fn(*mut Cursor)),
+            get_mod_state: bind!("SDL_GetModState" : unsafe extern "C" fn() -> u16),
             start_text_input: bind!("SDL_StartTextInput"
                 : unsafe extern "C" fn(*mut Window) -> bool),
             start_text_input_with_properties: bind!("SDL_StartTextInputWithProperties"

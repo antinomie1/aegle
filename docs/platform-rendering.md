@@ -153,7 +153,7 @@ SDL3 没有逐表面的 frame callback，因此软件帧按显示刷新率（`SD
 
 `wake_handle()` 复用 `SDL_RegisterEvents` 预留的一个用户事件码，句柄可从任意线程 `SDL_PushEvent`；没有额外的 socket 或定时器。外部事件里 `SDL_EVENT_QUIT` 被翻译成每个窗口的 `Close`（SDL 用它表示桌面请求或被接管的信号），`WINDOW_CLOSE_REQUESTED` 只关闭该窗口。
 
-输入：键码与修饰位翻译成 `Key`/`Modifiers`，`AltGr`（`KMOD_MODE`）不报告 Control，F1–F12 与 F13–F24 是两段不连续键码所以分开映射；键事件不带文字，生产文字来自 `SDL_EVENT_TEXT_INPUT`，编辑器聚焦时它按 IME 提交应用（替换预编辑），否则作为 `Event::Text`。指针与滚轮使用 SDL 的逻辑坐标，滚轮一格按 40 逻辑像素（SDL 的正方向朝上，这里取反）；`SDL_TOUCH_MOUSEID` 的合成鼠标事件被丢弃，因为同一根手指已作为 `Event::Touch` 归一化坐标上报；按钮包含 SDL 自己的连击计数。SDL 不报告触摸板滚动的结束，因此没有 `ScrollEnd`，松手惯性滚动在该后端不发生。
+输入：键码与修饰位翻译成 `Key`/`Modifiers`，`AltGr`（`KMOD_MODE`）不报告 Control，F1–F12 与 F13–F24 是两段不连续键码所以分开映射；按键带修饰位，指针/滚轮事件前用 `SDL_GetModState` 比对上次报告值并补发 `Event::Modifiers`（焦点切换后的 Shift 点击、Ctrl 滚轮因此带上正确的修饰键）；键事件不带文字，生产文字来自 `SDL_EVENT_TEXT_INPUT`，编辑器聚焦时它按 IME 提交应用（替换预编辑），否则作为 `Event::Text`。指针与滚轮使用 SDL 的逻辑坐标，滚轮一格按 40 逻辑像素（SDL 的正方向朝上，这里取反）；`SDL_TOUCH_MOUSEID` 的合成鼠标事件被丢弃，因为同一根手指已作为 `Event::Touch` 归一化坐标上报；按钮包含 SDL 自己的连击计数。SDL 不报告触摸板滚动的结束，因此没有 `ScrollEnd`，松手惯性滚动在该后端不发生。
 
 IME 使用 SDL 自己的模型：窗口获得键盘焦点时 `SDL_StartTextInput`（可带 `SDL.textinput.multiline` 属性），失焦时停止并发 `ImeEvent::Left`；`configure_ime(Some)` 校验请求后把光标矩形交给 `SDL_SetTextInputArea`，`SDL_EVENT_TEXT_EDITING` 变成预编辑、`SDL_EVENT_TEXT_INPUT` 变成提交。周边文字、选区与变更原因无法传给平台：SDL3 没有对应接口，这几项被校验后丢弃，输入法只能看到光标位置。`ime_available()` 对 `dummy`/`offscreen` 之外的驱动为真；SDL3 无法查询 compositor 是否提供 text-input-v3，因此缺该协议的 Wayland compositor 上请求会成功而不会有组合事件。
 

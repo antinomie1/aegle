@@ -126,6 +126,9 @@ impl Sdl3 {
                 let Some(id) = self.id_of(key.window_id) else {
                     return;
                 };
+                let modifiers = keys::modifiers(key.modifiers);
+                // Keys carry the modifier state, so the pointer need not repeat it.
+                self.modifiers = modifiers;
                 self.emit(Event::Key {
                     window: id,
                     seat: SEAT,
@@ -134,7 +137,7 @@ impl Sdl3 {
                     text: None,
                     pressed: key.down != 0,
                     repeat: key.repeat != 0,
-                    modifiers: keys::modifiers(key.modifiers),
+                    modifiers,
                     time: millis(key.timestamp),
                 });
             }
@@ -204,6 +207,7 @@ impl Sdl3 {
                 let Some(id) = self.id_of(motion.window_id) else {
                     return;
                 };
+                self.report_modifiers(id);
                 self.emit(Event::Pointer {
                     window: id,
                     seat: SEAT,
@@ -224,6 +228,7 @@ impl Sdl3 {
                 let Some(kind) = button_kind(button.button, button.down != 0, button.clicks) else {
                     return;
                 };
+                self.report_modifiers(id);
                 self.emit(Event::Pointer {
                     window: id,
                     seat: SEAT,
@@ -248,6 +253,7 @@ impl Sdl3 {
                 if delta.x == 0.0 && delta.y == 0.0 {
                     return;
                 }
+                self.report_modifiers(id);
                 self.emit(Event::Pointer {
                     window: id,
                     seat: SEAT,

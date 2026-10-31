@@ -143,6 +143,9 @@ pub struct Sdl3 {
     cursors: [Option<NonNull<sys::Cursor>>; 10],
     /// Preferences last reported to the host.
     pub(crate) preferences: Preferences,
+    /// Modifiers last reported to the host, so a pointer event can report a
+    /// change the keyboard made while the host was not looking.
+    pub(crate) modifiers: aegle_platform::Modifiers,
     portal: Option<Portal>,
     /// Whether the video driver can compose text through an input method.
     ime: bool,
@@ -206,6 +209,7 @@ impl Sdl3 {
             wake_type,
             cursors: [None; 10],
             preferences,
+            modifiers: aegle_platform::Modifiers::default(),
             portal,
             ime: !matches!(driver.as_str(), "" | "dummy" | "offscreen"),
             app_id: None,
@@ -716,6 +720,23 @@ impl Sdl3 {
                 self.windows[index].dirty = true;
                 Err(Error::Draw(error))
             }
+        }
+    }
+
+    /// Reports a modifier change since the host last saw one. SDL carries the
+    /// modifier state on key events and keeps it for the pointer, so a
+    /// Shift-click or Ctrl-scroll after a focus change reaches the interface
+    /// with the modifiers it was made with.
+    pub(crate) fn report_modifiers(&mut self, window: WindowId) {
+        // SAFETY: SDL keeps this thread's keyboard modifier state.
+        let modifiers = crate::keys::modifiers(unsafe { (self.lib.get_mod_state)() });
+        if modifiers != self.modifiers {
+            self.modifiers = modifiers;
+            self.events.push_back(Event::Modifiers {
+                window,
+                seat: SEAT,
+                modifiers,
+            });
         }
     }
 
