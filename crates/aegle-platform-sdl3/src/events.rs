@@ -129,13 +129,49 @@ impl Sdl3 {
                 let modifiers = keys::modifiers(key.modifiers);
                 // Keys carry the modifier state, so the pointer need not repeat it.
                 self.modifiers = modifiers;
+                let pressed = key.down != 0;
+                let mut text: Option<String> = None;
+                if pressed {
+                    let composing = self.window(id).map_or(false, |w| w.composing);
+                    if !composing {
+                        // When text input is active, SDL immediately pushes a
+                        // TEXT_INPUT event for character keys. Peep and consume
+                        // it so this key event carries the text and the character
+                        // is not delivered a second time.
+                        let mut next = sys::Event::zeroed();
+                        let count = unsafe {
+                            (self.lib.peep_events)(
+                                &mut next,
+                                1,
+                                sys::PEEKEVENT,
+                                sys::EVENT_FIRST,
+                                sys::EVENT_LAST,
+                            )
+                        };
+                        if count == 1 && unsafe { next.kind } == sys::EVENT_TEXT_INPUT {
+                            let (win_id, text_ptr) =
+                                unsafe { (next.text.window_id, next.text.text) };
+                            if win_id == key.window_id {
+                                unsafe {
+                                    (self.lib.peep_events)(
+                                        &mut next,
+                                        1,
+                                        sys::GETEVENT,
+                                        sys::EVENT_TEXT_INPUT,
+                                        sys::EVENT_TEXT_INPUT,
+                                    );
+                                }
+                                text = unsafe { sys::string(text_ptr) }.filter(|s| !s.is_empty());
+                            }
+                        }
+                    }
+                }
                 self.emit(Event::Key {
                     window: id,
                     seat: SEAT,
                     key: keys::key(key.key),
-                    // SDL reports produced text as a separate event.
-                    text: None,
-                    pressed: key.down != 0,
+                    text,
+                    pressed,
                     repeat: key.repeat != 0,
                     modifiers,
                     time: millis(key.timestamp),
@@ -152,6 +188,10 @@ impl Sdl3 {
                 }
                 // SAFETY: SDL lends the string for the duration of this event.
                 let text = unsafe { sys::string(edit.text) }.unwrap_or_default();
+                let composing = !text.is_empty();
+                if let Ok(window) = self.window_mut(id) {
+                    window.composing = composing;
+                }
                 let cursor = preedit_cursor(edit.start, edit.length, &text);
                 self.emit(Event::Ime {
                     window: id,
@@ -175,9 +215,11 @@ impl Sdl3 {
                 else {
                     return;
                 };
-                if self.editing(id) {
-                    // An editor is focused: this is a composition commit, which
-                    // replaces the preedit instead of inserting beside it.
+                let was_composing = self
+                    .window_mut(id)
+                    .map_or(false, |w| std::mem::replace(&mut w.composing, false));
+                if self.editing(id) && was_composing {
+                    // An input method was composing: this is a composition commit.
                     self.emit(Event::Ime {
                         window: id,
                         seat: SEAT,
@@ -189,6 +231,7 @@ impl Sdl3 {
                         }),
                     });
                 } else {
+                    // Non-composing text input not preceded by KEY_DOWN (e.g. on-screen keyboard, paste)
                     self.emit(Event::Text {
                         window: id,
                         seat: SEAT,

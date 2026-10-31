@@ -98,6 +98,7 @@ pub(crate) struct WindowState {
     pub(crate) drag_text: Option<String>,
     /// Last known drag position, in logical window coordinates.
     pub(crate) drag_at: Option<Point>,
+    pub(crate) composing: bool,
 }
 
 impl WindowState {
@@ -166,6 +167,11 @@ impl Sdl3 {
         })?;
         // SAFETY: the first SDL video call of the process on this thread, which
         // initializes SDL's video subsystem.
+        // Prefer server-side decorations (KWin, Sway) so windows match the
+        // desktop's theme instead of libdecor's fallback client-side title bar.
+        unsafe {
+            (lib.set_hint)(c"SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR".as_ptr(), c"0".as_ptr());
+        };
         if unsafe { !(lib.init)(sys::INIT_VIDEO) } {
             return Err(Error::backend(format!(
                 "SDL_Init(SDL_INIT_VIDEO) failed: {}",
@@ -266,13 +272,18 @@ impl Sdl3 {
         let height = c_int::try_from(options.size.height).map_err(|_| Error::InvalidSize)?;
         // SAFETY: the title outlives the call and SDL copies it; the flags are
         // the documented window flags.
-        let window = unsafe {
-            (lib.create_window)(
-                title.as_ptr(),
-                width,
-                height,
-                sys::WINDOW_RESIZABLE | sys::WINDOW_HIDDEN | sys::WINDOW_HIGH_PIXEL_DENSITY,
-            )
+        let flags = sys::WINDOW_RESIZABLE
+            | sys::WINDOW_HIDDEN
+            | sys::WINDOW_HIGH_PIXEL_DENSITY
+            | sys::WINDOW_TRANSPARENT;
+        let window = unsafe { (lib.create_window)(title.as_ptr(), width, height, flags) };
+        let window = if window.is_null() {
+            // Fall back without transparency if the driver/platform rejects it.
+            let fallback_flags =
+                sys::WINDOW_RESIZABLE | sys::WINDOW_HIDDEN | sys::WINDOW_HIGH_PIXEL_DENSITY;
+            unsafe { (lib.create_window)(title.as_ptr(), width, height, fallback_flags) }
+        } else {
+            window
         };
         let window = NonNull::new(window).ok_or_else(|| {
             Error::backend(format!("SDL_CreateWindow failed: {}", sys::error(lib)))
@@ -314,6 +325,7 @@ impl Sdl3 {
             drag_files: Vec::new(),
             drag_text: None,
             drag_at: None,
+            composing: false,
         };
         self.windows.push(state);
         // A window reports its configure only once it is mapped. Showing blocks

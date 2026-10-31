@@ -25,6 +25,17 @@ pub(crate) const WINDOW_MINIMIZED: u64 = 0x0000_0000_0000_0040;
 pub(crate) const WINDOW_INPUT_FOCUS: u64 = 0x0000_0000_0000_0200;
 /// `SDL_WINDOW_HIGH_PIXEL_DENSITY`.
 pub(crate) const WINDOW_HIGH_PIXEL_DENSITY: u64 = 0x0000_0000_0000_2000;
+/// `SDL_WINDOW_TRANSPARENT`.
+pub(crate) const WINDOW_TRANSPARENT: u64 = 0x0000_0000_4000_0000;
+
+/// `SDL_PEEKEVENT`.
+pub(crate) const PEEKEVENT: c_int = 1;
+/// `SDL_GETEVENT`.
+pub(crate) const GETEVENT: c_int = 2;
+/// `SDL_EVENT_FIRST`.
+pub(crate) const EVENT_FIRST: u32 = 0;
+/// `SDL_EVENT_LAST`.
+pub(crate) const EVENT_LAST: u32 = 0xFFFF;
 
 /// `SDL_SYSTEM_THEME_UNKNOWN`.
 pub(crate) const THEME_UNKNOWN: c_int = 0;
@@ -334,6 +345,8 @@ pub(crate) struct Lib {
     pub poll_event: unsafe extern "C" fn(*mut Event) -> bool,
     pub wait_event_timeout: unsafe extern "C" fn(*mut Event, c_int) -> bool,
     pub push_event: unsafe extern "C" fn(*const Event) -> bool,
+    pub peep_events: unsafe extern "C" fn(*mut Event, c_int, c_int, u32, u32) -> c_int,
+    pub set_hint: unsafe extern "C" fn(*const c_char, *const c_char) -> bool,
     pub create_window: unsafe extern "C" fn(*const c_char, c_int, c_int, u64) -> *mut Window,
     pub destroy_window: unsafe extern "C" fn(*mut Window),
     pub show_window: unsafe extern "C" fn(*mut Window) -> bool,
@@ -431,6 +444,8 @@ fn load() -> Option<Lib> {
             wait_event_timeout: bind!("SDL_WaitEventTimeout"
                 : unsafe extern "C" fn(*mut Event, c_int) -> bool),
             push_event: bind!("SDL_PushEvent" : unsafe extern "C" fn(*const Event) -> bool),
+            peep_events: bind!("SDL_PeepEvents" : unsafe extern "C" fn(*mut Event, c_int, c_int, u32, u32) -> c_int),
+            set_hint: bind!("SDL_SetHint" : unsafe extern "C" fn(*const c_char, *const c_char) -> bool),
             create_window: bind!("SDL_CreateWindow"
                 : unsafe extern "C" fn(*const c_char, c_int, c_int, u64) -> *mut Window),
             destroy_window: bind!("SDL_DestroyWindow" : unsafe extern "C" fn(*mut Window)),

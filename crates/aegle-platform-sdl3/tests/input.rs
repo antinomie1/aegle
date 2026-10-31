@@ -556,3 +556,44 @@ fn a_dropped_drag_carries_files_and_a_refused_one_leaves() {
             .any(|event| matches!(event, Event::Drop { .. }))
     );
 }
+
+#[test]
+fn key_down_absorbs_immediate_text_input_without_duplication() {
+    let Some((_guard, mut platform, api)) = platform() else {
+        return;
+    };
+    let window = api.focused_window();
+    let text = std::ffi::CString::new("r").unwrap();
+    let mut key_event = sdl::Event::of(sdl::KEY_DOWN);
+    key_event.key = sdl::KeyboardEvent {
+        kind: sdl::KEY_DOWN,
+        window_id: window,
+        key: b'r' as u32,
+        modifiers: 0,
+        down: 1,
+        repeat: 0,
+        ..Default::default()
+    };
+    let mut text_event = sdl::Event::of(sdl::TEXT_INPUT);
+    text_event.text = sdl::TextInputEvent {
+        kind: sdl::TEXT_INPUT,
+        window_id: window,
+        text: text.as_ptr(),
+        ..Default::default()
+    };
+    let events = push(&mut platform, &api, &[key_event, text_event]);
+    assert_eq!(
+        events.len(),
+        1,
+        "text_input must be absorbed by key_down, got: {events:?}"
+    );
+    let Event::Key {
+        key, text, pressed, ..
+    } = &events[0]
+    else {
+        panic!("expected Event::Key, got: {:?}", events[0]);
+    };
+    assert_eq!(*key, Key::Character('r'));
+    assert_eq!(text.as_deref(), Some("r"));
+    assert!(pressed);
+}
