@@ -394,6 +394,10 @@ static LIB: OnceLock<Option<&'static Lib>> = OnceLock::new();
 
 /// The process's SDL3 entry points, or `None` when the library is missing or
 /// lacks one of the entry points below. Loading is attempted once.
+///
+/// The table is kept for the life of the process instead of being unloaded with
+/// the platform: SDL owns process-wide state that a `WakeHandle` or a GPU lease
+/// may still reach, and unloading it would leave those pointers dangling.
 pub(crate) fn lib() -> Option<&'static Lib> {
     *LIB.get_or_init(|| load().map(|lib| &*Box::leak(Box::new(lib))))
 }
