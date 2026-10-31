@@ -337,6 +337,7 @@ pub(crate) struct Lib {
     pub create_window: unsafe extern "C" fn(*const c_char, c_int, c_int, u64) -> *mut Window,
     pub destroy_window: unsafe extern "C" fn(*mut Window),
     pub show_window: unsafe extern "C" fn(*mut Window) -> bool,
+    pub sync_window: unsafe extern "C" fn(*mut Window) -> bool,
     pub set_window_title: unsafe extern "C" fn(*mut Window, *const c_char) -> bool,
     pub get_window_id: unsafe extern "C" fn(*mut Window) -> u32,
     pub get_window_flags: unsafe extern "C" fn(*mut Window) -> u64,
@@ -434,6 +435,7 @@ fn load() -> Option<Lib> {
                 : unsafe extern "C" fn(*const c_char, c_int, c_int, u64) -> *mut Window),
             destroy_window: bind!("SDL_DestroyWindow" : unsafe extern "C" fn(*mut Window)),
             show_window: bind!("SDL_ShowWindow" : unsafe extern "C" fn(*mut Window) -> bool),
+            sync_window: bind!("SDL_SyncWindow" : unsafe extern "C" fn(*mut Window) -> bool),
             set_window_title: bind!("SDL_SetWindowTitle"
                 : unsafe extern "C" fn(*mut Window, *const c_char) -> bool),
             get_window_id: bind!("SDL_GetWindowID" : unsafe extern "C" fn(*mut Window) -> u32),

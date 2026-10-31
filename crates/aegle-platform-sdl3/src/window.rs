@@ -316,9 +316,15 @@ impl Sdl3 {
             drag_at: None,
         };
         self.windows.push(state);
-        // A window reports its configure only once it is mapped.
+        // A window reports its configure only once it is mapped. Showing blocks
+        // until the window system has applied the request, so the extent this
+        // returns is the one a GPU presenter creates its first surface with; a
+        // Wayland surface has no size before its initial configure.
         // SAFETY: the window is owned by this backend and shown once.
-        unsafe { (lib.show_window)(window.as_ptr()) };
+        unsafe {
+            (lib.show_window)(window.as_ptr());
+            (lib.sync_window)(window.as_ptr());
+        }
         if let Some(state) = self.windows.last_mut() {
             state.shown = true;
             state.interval = refresh_interval(lib, state.ptr());
