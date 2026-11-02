@@ -20,7 +20,6 @@ impl PangoLayout {
             None => return,
         };
         unsafe {
-            self.apply_line_height(p);
             let mut w: c_int = 0;
             let mut h: c_int = 0;
             (p.layout_get_pixel_size)(self.raw, &mut w, &mut h);

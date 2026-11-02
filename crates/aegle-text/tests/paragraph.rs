@@ -1,6 +1,6 @@
 //! Retained Unicode shaping and explicit font-policy boundaries.
 
-use aegle_text::{Alignment, TextError, TextStyle, TextSystem};
+use aegle_text::{Alignment, LineHeight, TextError, TextStyle, TextSystem};
 use std::sync::Arc;
 
 #[test]
@@ -165,4 +165,55 @@ fn color_changes_skip_shaping_and_released_layouts_are_restored() {
     system.report_idle(12, 4);
     assert_eq!(system.idle_bytes(), 4);
     assert!(!system.over_idle_budget());
+}
+
+#[test]
+fn line_height_sets_every_line_box_including_the_first() {
+    let mut system = TextSystem::new();
+    system
+        .register_fonts(Arc::new(
+            include_bytes!("../../../tests/assets/aegle-test-cjk.otf").as_slice(),
+        ))
+        .unwrap();
+    let mut measure = |text: &str, line_height: LineHeight| {
+        let style = TextStyle {
+            families: "Aegle Test CJK",
+            size: 12.0,
+            line_height,
+            ..TextStyle::default()
+        };
+        let mut paragraph = system.paragraph(text, &style).unwrap();
+        let size = paragraph.reflow(None, Alignment::Start).unwrap();
+        (size.height, paragraph.first_baseline().unwrap())
+    };
+    let (natural, natural_baseline) = measure("Inbox", LineHeight::default());
+    let near = |actual: f32, expected: f32| (actual - expected).abs() <= 1.0;
+
+    // Taller and shorter than the font's own line, on one line and on two:
+    // a label's box is its line height, not the font's natural height.
+    for target in [30.0, 16.0] {
+        let (one, baseline) = measure("Inbox", LineHeight::Absolute(target));
+        assert!(near(one, target), "one line of {target} px measured {one}");
+        let (two, _) = measure("Inbox\nOutbox", LineHeight::Absolute(target));
+        assert!(
+            near(two, 2.0 * target),
+            "two lines of {target} px measured {two}"
+        );
+        // The difference from the natural line is split above and below.
+        let shift = (target - natural) / 2.0;
+        assert!(
+            near(baseline, natural_baseline + shift),
+            "baseline {baseline} for {target} px, natural {natural_baseline} in {natural}"
+        );
+    }
+    let (relative, _) = measure("Inbox", LineHeight::FontSizeRelative(2.0));
+    assert!(
+        near(relative, 24.0),
+        "twice the font size measured {relative}"
+    );
+    let (doubled, _) = measure("Inbox", LineHeight::MetricsRelative(2.0));
+    assert!(
+        near(doubled, 2.0 * natural),
+        "twice {natural} measured {doubled}"
+    );
 }

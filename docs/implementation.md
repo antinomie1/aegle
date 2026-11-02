@@ -60,6 +60,7 @@
 * **原生 Wayland 后端验证**：
   * **无头隔离环境**：在专用无头 Sway 会话（Pixman 软件渲染）中完成。
   * **核心场景通过**：覆盖生命周期配置、多窗口管理、虚拟指针拖放（坐标精度与源释放正确）、`text-input-v3` 中日韩输入法事务、分式缩放及 portal 偏好更新。
+* **Pango 行高**：`LineHeight` 改用 Pango 1.50 行高属性后，单行段落的高度等于所设行高（此前 `line_spacing` 只作用于行间，12 px 字号设 30 px 行高的单行仍量得 18 px）。`aegle-text/tests/paragraph.rs` 覆盖绝对、字号倍数与字体度量倍数三种形式的单行与两行高度及基线位置；本机 Pango 1.58.2 验证。
 * **系统文字栈收益**：Linux 默认切换至系统文字栈（Pango + FreeType + Fontconfig，动态加载）后，去除了内置 ICU 词典数据，排版与分词直接委托系统库。
 
 ### 3. Windows 平台

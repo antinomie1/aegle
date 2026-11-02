@@ -10,12 +10,12 @@ use aegle_scene::Glyph;
 
 use super::sys::{
     PANGO_ALIGN_CENTER, PANGO_ALIGN_LEFT, PANGO_ALIGN_RIGHT, PANGO_SCALE, PANGO_UNDERLINE_SINGLE,
-    PANGO_WRAP_WORD_CHAR, PangoLib, PangoRectangle, pango,
+    PANGO_WRAP_WORD_CHAR, PangoLib, pango,
 };
 use super::system::PangoSystem;
 use crate::layout::LineMetrics;
 use crate::style::Shaping;
-use crate::{Alignment, ContentWidths};
+use crate::{Alignment, ContentWidths, LineHeight};
 
 #[cfg(feature = "scene")]
 pub(super) struct StoredRun {
@@ -31,8 +31,9 @@ pub(crate) struct PangoLayout {
     pub(super) text: String,
     pub(super) width: Option<f32>,
     pub(super) wrap: bool,
+    /// Pixel size the captured glyph runs are drawn at.
+    #[cfg(feature = "scene")]
     pub(super) font_size: f32,
-    pub(super) line_height: crate::LineHeight,
     pub(super) alignment: Alignment,
     pub(super) lines: Vec<LineMetrics>,
     pub(super) size: (f32, f32),
@@ -91,6 +92,9 @@ impl PangoLayout {
                 );
                 (p.attr_list_insert)(attrs, attr);
             }
+            if let Some(attr) = line_height_attr(p, shaping.line_height, shaping.size) {
+                (p.attr_list_insert)(attrs, attr);
+            }
             (p.layout_set_attributes)(raw, attrs);
             (p.attr_list_unref)(attrs);
 
@@ -99,8 +103,8 @@ impl PangoLayout {
                 text: text.to_string(),
                 width: None,
                 wrap,
+                #[cfg(feature = "scene")]
                 font_size: shaping.size,
-                line_height: shaping.line_height,
                 alignment: Alignment::Start,
                 lines: Vec::new(),
                 size: (0.0, 0.0),
@@ -139,42 +143,6 @@ impl PangoLayout {
             };
             (p.layout_set_alignment)(self.raw, p_align);
             self.recompute_metrics_and_runs();
-        }
-    }
-
-    /// Applies Aegle's line height as Pango's extra-spacing factor.
-    ///
-    /// Pango's factor adds that fraction of each line's own height, so a target
-    /// height becomes `extra / natural` after measuring the first line, whose
-    /// metrics stand in for the paragraph's.
-    pub(super) fn apply_line_height(&self, p: &PangoLib) {
-        unsafe {
-            let iter = (p.layout_get_iter)(self.raw);
-            if iter.is_null() {
-                return;
-            }
-            let mut logical = PangoRectangle {
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 0,
-            };
-            (p.layout_iter_get_line_extents)(iter, std::ptr::null_mut(), &mut logical);
-            (p.layout_iter_free)(iter);
-            let natural = f64::from(logical.height) / PANGO_SCALE;
-            if natural <= 0.0 {
-                return;
-            }
-            let target = match self.line_height {
-                crate::LineHeight::MetricsRelative(factor) => natural * f64::from(factor),
-                crate::LineHeight::FontSizeRelative(factor) => {
-                    f64::from(self.font_size) * f64::from(factor)
-                }
-                crate::LineHeight::Absolute(pixels) => f64::from(pixels),
-            };
-            // Pango multiplies each line's height by this factor; zero means natural.
-            let factor = (target / natural).max(f64::EPSILON);
-            (p.layout_set_line_spacing)(self.raw, factor as f32);
         }
     }
 
@@ -238,6 +206,28 @@ impl PangoLayout {
         let index = self.boundary(index);
         index + self.text[index..].chars().next().map_or(0, char::len_utf8)
     }
+}
+
+/// The attribute that makes every line box `line_height` tall, the first too.
+///
+/// Pango's line-height attribute follows CSS: the difference from the font's
+/// own line is split evenly above and below, so a single-line label gets the
+/// requested box. (`pango_layout_set_line_spacing` only spaces baselines apart
+/// and leaves one line at its natural height.) The font's own height needs no
+/// attribute, and the style boundary has already rejected unusable values.
+fn line_height_attr(p: &PangoLib, line_height: LineHeight, font_size: f32) -> Option<*mut c_void> {
+    let pixels = match line_height {
+        LineHeight::MetricsRelative(1.0) => return None,
+        // SAFETY: the constructor returns a new attribute the caller inserts.
+        LineHeight::MetricsRelative(factor) => {
+            return Some(unsafe { (p.attr_line_height_new)(f64::from(factor)) });
+        }
+        LineHeight::FontSizeRelative(factor) => font_size * factor,
+        LineHeight::Absolute(pixels) => pixels,
+    };
+    let units = (f64::from(pixels) * PANGO_SCALE).round() as c_int;
+    // SAFETY: as above.
+    Some(unsafe { (p.attr_line_height_new_absolute)(units) })
 }
 
 impl std::fmt::Debug for PangoLayout {

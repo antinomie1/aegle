@@ -133,8 +133,6 @@ pub(super) struct PangoLib {
     #[allow(dead_code)]
     pub(super) layout_iter_get_run_extents:
         unsafe extern "C" fn(*mut c_void, *mut PangoRectangle, *mut PangoRectangle),
-    pub(super) layout_iter_get_line_extents:
-        unsafe extern "C" fn(*mut c_void, *mut PangoRectangle, *mut PangoRectangle),
     pub(super) layout_line_get_extents:
         unsafe extern "C" fn(*mut PangoLayoutLine, *mut PangoRectangle, *mut PangoRectangle),
 
@@ -154,7 +152,10 @@ pub(super) struct PangoLib {
     pub(super) attr_underline_new: unsafe extern "C" fn(c_int) -> *mut c_void,
     pub(super) attr_letter_spacing_new: unsafe extern "C" fn(c_int) -> *mut c_void,
     pub(super) layout_set_attributes: unsafe extern "C" fn(*mut c_void, *mut c_void),
-    pub(super) layout_set_line_spacing: unsafe extern "C" fn(*mut c_void, f32),
+    /// Pango 1.50: a line box as a factor of the font's own line height.
+    pub(super) attr_line_height_new: unsafe extern "C" fn(c_double) -> *mut c_void,
+    /// Pango 1.50: a line box of an absolute height in Pango units.
+    pub(super) attr_line_height_new_absolute: unsafe extern "C" fn(c_int) -> *mut c_void,
 
     pub(super) ft2_font_map_new: unsafe extern "C" fn() -> *mut c_void,
     pub(super) ft2_font_map_set_resolution: unsafe extern "C" fn(*mut c_void, c_double, c_double),
@@ -277,7 +278,6 @@ pub(super) fn pango() -> Option<&'static PangoLib> {
                 ),
                 layout_iter_get_baseline: get!(pango, b"pango_layout_iter_get_baseline\0"),
                 layout_iter_get_run_extents: get!(pango, b"pango_layout_iter_get_run_extents\0"),
-                layout_iter_get_line_extents: get!(pango, b"pango_layout_iter_get_line_extents\0"),
                 layout_line_get_extents: get!(pango, b"pango_layout_line_get_extents\0"),
 
                 layout_xy_to_index: get!(pango, b"pango_layout_xy_to_index\0"),
@@ -292,7 +292,11 @@ pub(super) fn pango() -> Option<&'static PangoLib> {
                 attr_underline_new: get!(pango, b"pango_attr_underline_new\0"),
                 attr_letter_spacing_new: get!(pango, b"pango_attr_letter_spacing_new\0"),
                 layout_set_attributes: get!(pango, b"pango_layout_set_attributes\0"),
-                layout_set_line_spacing: get!(pango, b"pango_layout_set_line_spacing\0"),
+                attr_line_height_new: get!(pango, b"pango_attr_line_height_new\0"),
+                attr_line_height_new_absolute: get!(
+                    pango,
+                    b"pango_attr_line_height_new_absolute\0"
+                ),
 
                 ft2_font_map_new: get!(pangoft2, b"pango_ft2_font_map_new\0"),
                 ft2_font_map_set_resolution: get!(pangoft2, b"pango_ft2_font_map_set_resolution\0"),

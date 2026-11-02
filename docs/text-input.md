@@ -8,10 +8,11 @@ Aegle 的文本策略是：**排版、双向文字（Bidi）、断行与字形�
 
 | 操作系统 | 排版与断行后端 | 字体匹配与发现 | 字形覆盖率光栅 | 加载方式 |
 |---|---|---|---|---|
-| **Linux** | **Pango** (UAX #14 换行、Bidi) | **Fontconfig** | **FreeType** (`FT_LOAD_COLOR`) | 运行时 `libloading` 动态加载 |
+| **Linux** | **Pango ≥ 1.50** (UAX #14 换行、Bidi) | **Fontconfig** | **FreeType** (`FT_LOAD_COLOR`) | 运行时 `libloading` 动态加载 |
 | **Windows** | **DirectWrite** (`backend_directwrite/`) | DirectWrite Font Collection | DirectWrite 8-bit Alpha 纹理 | 动态链接系统 DLL |
 | **macOS** | **CoreText** (`backend_coretext/`) | CoreText Font Descriptor | CoreGraphics Alpha 位图 | 动态链接系统 Framework |
 
+* **行高**：`LineHeight` 在三个后端上都是每一行（含首行）的行盒高度，与字体自然行高之差上下各分一半，与 CSS `line-height` 一致；单行标签的高度因此等于所设行高。Linux 用 Pango 1.50 起的行高属性（`pango_attr_line_height_new[_absolute]`）实现，`pango_layout_set_line_spacing` 只拉开基线间距、不改变单行高度，故不使用。
 * **零数据打包**：默认 release 构建不打包任何字体文件或 HarfBuzz/Swash 代码；`text-parley` 为仅在显式开启时编译的非维护回退。
 * **字体身份抽象 (`FontSource`)**：`Scene` 中的字形身份为不透明的 `FontSource::System(SystemFont { backend, id })` 或 `FontSource::Bytes(FontData)`，渲染器不保存任何原生系统指针。
 * **彩色字形**：Linux 下 FreeType 直接支持 COLR 与内嵌位图；若启用 `colrv1` 或 `svg` feature，由 `aegle-glyph` 在光栅化前使用 Skrifa/resvg 解析，未开启对应 feature 的彩色字形安全返回 `UnsupportedGlyph`。
