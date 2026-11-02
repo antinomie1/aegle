@@ -138,7 +138,12 @@ impl Swapchain {
             bytes: 0,
             dirty: false,
             presented: false,
-            transparent: !pipeline.direct && alpha == vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+            // Windows DWM blends the alpha channel of the swapchain's UNORM surface
+            // (via DwmExtendFrameIntoClientArea) even though Win32 Vulkan surfaces
+            // only report VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR.
+            transparent: !pipeline.direct
+                && (alpha == vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED
+                    || cfg!(target_os = "windows")),
         };
         // SAFETY: The selected graphics family can present; formats/caps were queried.
         // Partial initialization is reclaimed by Drop, before the device/surface.

@@ -202,21 +202,16 @@ impl DirectWriteLayout {
         if broke.is_err() {
             return caret..caret;
         }
-        let mut breaks = Vec::new();
-        let mut byte = 0usize;
+        let mut breaks = vec![0];
         for (units_seen, attr) in attrs.iter().enumerate() {
-            // `fCharStop` is bit 0 of SCRIPT_LOGATTR. Attributes are per code
+            // `fCharStop` is bit 2 (1 << 2) of SCRIPT_LOGATTR. Attributes are per code
             // unit; a low surrogate is skipped, its pair's start carries the
             // character stop.
             let unit = units[units_seen];
             let low_surrogate = (0xdc00..=0xdfff).contains(&unit);
-            if attr._bitfield & 1 != 0 && !low_surrogate {
-                breaks.push(offsets::to_utf8(line_text, byte as u32));
+            if attr._bitfield & (1 << 2) != 0 && !low_surrogate {
+                breaks.push(offsets::to_utf8(line_text, units_seen as u32));
             }
-            byte += match unit {
-                0xd800..=0xdbff => 2,
-                _ => 1,
-            };
         }
         breaks.push(line_text.len());
         breaks.dedup();

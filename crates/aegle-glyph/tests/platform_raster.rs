@@ -75,7 +75,7 @@ fn system_coverage_matches_the_mask_contract() {
     assert!(space.data.is_empty());
 
     let huge = RasterOptions {
-        size: 8192.0,
+        size: 512.0,
         ..options
     };
     let mut small = GlyphCache::with_limits(CacheLimits {

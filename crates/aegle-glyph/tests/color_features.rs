@@ -24,8 +24,16 @@ fn cache() -> GlyphCache {
     })
 }
 
+fn register() {
+    #[cfg(all(target_os = "windows", not(feature = "swash")))]
+    let _ = aegle_glyph::directwrite::register();
+    #[cfg(all(target_os = "macos", not(feature = "swash")))]
+    let _ = aegle_glyph::cg::register();
+}
+
 #[test]
 fn ordinary_outlines_still_rasterize_when_a_color_feature_is_on() {
+    register();
     // The CJK test font has no color representation, so this exercises the
     // platform rasterizer whatever features are enabled.
     let font = FontData::new(

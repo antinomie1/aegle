@@ -174,14 +174,27 @@ fn build(ui: &Ui, source: &'static str) -> Result {
 fn scenes(ui: &Ui) -> Result<Vec<String>> {
     let mut scenes = Vec::new();
     ui.visit_scenes(|visit| {
-        // Without the process-wide ids of chevron paths.
+        // Without the process-wide ids of chevron paths and system fonts.
         let scene = format!("{visit:?}");
         let mut parts = scene.split("Path#");
         let mut plain = parts.next().unwrap_or_default().to_owned();
         for part in parts {
             plain.push_str(part.trim_start_matches(|c: char| c.is_ascii_digit()));
         }
-        scenes.push(plain);
+        let mut font_parts = plain.split("SystemFont { backend: ");
+        let mut normalized = font_parts.next().unwrap_or_default().to_owned();
+        for part in font_parts {
+            normalized.push_str("SystemFont { backend: ");
+            if let Some((backend_part, rest)) = part.split_once(", id: ") {
+                normalized.push_str(backend_part);
+                normalized.push_str(", id: _");
+                let rest_trimmed = rest.trim_start_matches(|c: char| c.is_ascii_digit());
+                normalized.push_str(rest_trimmed);
+            } else {
+                normalized.push_str(part);
+            }
+        }
+        scenes.push(normalized);
         Ok(())
     })?;
     Ok(scenes)

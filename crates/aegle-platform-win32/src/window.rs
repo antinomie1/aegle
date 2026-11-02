@@ -22,12 +22,14 @@ use std::{
 use windows::{
     Win32::{
         Foundation::{HANDLE, HINSTANCE, HWND, RECT, WAIT_FAILED, WAIT_OBJECT_0},
+        Graphics::Dwm::DwmExtendFrameIntoClientArea,
         System::{
             LibraryLoader::GetModuleHandleW,
             Ole::{OleInitialize, OleUninitialize, RegisterDragDrop, RevokeDragDrop},
             Threading::{CreateEventW, SetEvent},
         },
         UI::{
+            Controls::MARGINS,
             HiDpi::*,
             Input::{
                 Ime::{HIMC, ImmAssociateContext},
@@ -236,6 +238,13 @@ impl Win32 {
                 Some(HINSTANCE(GetModuleHandleW(None)?.0)),
                 Some(Rc::as_ptr(&native).cast()),
             )?;
+            let margins = MARGINS {
+                cxLeftWidth: -1,
+                cxRightWidth: -1,
+                cyTopHeight: -1,
+                cyBottomHeight: -1,
+            };
+            let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
             RegisterDragDrop(hwnd, &crate::drag::target(&native))?;
             // Input methods compose only through TSF, never through the
             // thread's shared default IMM context.

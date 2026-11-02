@@ -19,7 +19,7 @@ use windows::Win32::Graphics::DirectWrite::{
     IDWriteFontCollection, IDWriteFontFallback, IDWriteFontFile, IDWriteTextFormat,
     IDWriteTextFormat1,
 };
-use windows::core::{Interface, PCWSTR};
+use windows::core::Interface;
 
 use super::fonts::{self, Built, Registered};
 use super::sys::{WideString, factory, factory2, stretch, style, weight};
@@ -124,23 +124,23 @@ impl DirectWriteSystem {
 
     /// Creates the text format for one shaping key, with fallback attached.
     pub fn format(&self, shaping: &Shaping) -> Option<IDWriteTextFormat> {
+        let collection = self.collection.as_ref()?;
         let factory = factory()?;
-        let family = WideString::new(&self.family(&shaping.families));
-        let locale = shaping.locale.as_deref().map(WideString::new);
+        let resolved_family = self.family(&shaping.families);
+        let family = WideString::new(&resolved_family);
+        let locale = WideString::new(shaping.locale.as_deref().unwrap_or(""));
         // SAFETY: both strings outlive the call and the collection is owned by
         // this system; the returned format is reference counted.
         let format = unsafe {
             factory
                 .CreateTextFormat(
                     family.as_pcwstr(),
-                    self.collection.as_ref(),
+                    Some(collection),
                     weight(shaping.weight),
                     style(shaping.slant),
                     stretch(shaping.width),
                     shaping.size,
-                    locale
-                        .as_ref()
-                        .map_or(PCWSTR::null(), WideString::as_pcwstr),
+                    locale.as_pcwstr(),
                 )
                 .ok()?
         };

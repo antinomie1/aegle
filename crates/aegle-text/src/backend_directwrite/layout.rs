@@ -197,16 +197,17 @@ impl DirectWriteLayout {
                     for line in &lines[..count as usize] {
                         // `baseline` already includes the line's top offset, so
                         // it is absolute within the layout.
-                        let end = start + line.length as usize;
+                        let text_end = start + (line.length - line.newlineLength) as usize;
+                        let next = start + line.length as usize;
                         self.lines.push(LineMetrics {
                             start: offsets::to_utf8(&self.text, start as u32),
-                            end: offsets::to_utf8(&self.text, end as u32),
+                            end: offsets::to_utf8(&self.text, text_end as u32),
                             y,
                             height: line.height,
                             baseline: line.baseline,
                         });
                         y += line.height;
-                        start = end;
+                        start = next;
                     }
                     self.first_baseline = self.lines.first().map(|line| line.baseline);
                 }
