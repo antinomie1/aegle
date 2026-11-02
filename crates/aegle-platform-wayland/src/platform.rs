@@ -31,6 +31,19 @@ impl Platform for Wayland {
         self.create_window(options)
     }
 
+    fn set_layer(
+        &mut self,
+        window: WindowId,
+        layer: aegle_platform::LayerOptions,
+        size: PixelSize,
+    ) -> Result<()> {
+        self.set_layer(window, layer, size)
+    }
+
+    fn outputs(&self) -> Result<Vec<aegle_platform::OutputInfo>> {
+        Ok(self.outputs())
+    }
+
     fn remove_window(&mut self, window: WindowId) -> Result<()> {
         self.remove_window(window)
     }

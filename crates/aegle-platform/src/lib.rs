@@ -26,8 +26,8 @@ pub use error::{DrawResult, Error, Result};
 pub use event::{Event, PointerKind};
 pub use ime::{ImeEvent, ImeRequest, ImeUpdate, MAX_SURROUNDING, Preedit};
 pub use window::{
-    Anchor, KeyboardInteractivity, Layer, LayerOptions, PixelSize, SeatId, WakeHandle, WindowId,
-    WindowInfo, WindowOptions,
+    Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, PixelSize, Placement,
+    PopupOptions, SeatId, WakeHandle, WindowId, WindowInfo, WindowOptions,
 };
 
 use std::time::Duration;
@@ -54,9 +54,27 @@ pub trait Platform: Sized {
     fn ime_available(&self) -> bool;
 
     /// Creates a window that stays hidden or unconfigured until its first
-    /// [`Event::Configure`]. Layer surfaces fail with [`Error::Unsupported`]
-    /// where the platform has none.
+    /// [`Event::Configure`]. Layer surfaces and popups fail with
+    /// [`Error::Unsupported`] where the platform has none.
     fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId>;
+
+    /// Replaces a layer surface's placement and preferred logical `size` in
+    /// place, keeping the surface and its content; an [`Event::Configure`]
+    /// follows when the resulting geometry changes. The output cannot change:
+    /// `layer.output` must equal the one the surface was created with, or the
+    /// call fails with [`Error::InvalidRole`], as it does for a window that is
+    /// not a layer. Platforms without layers fail with [`Error::Unsupported`].
+    fn set_layer(&mut self, window: WindowId, layer: LayerOptions, size: PixelSize) -> Result<()> {
+        self.window_info(window)?;
+        let _ = (layer, size);
+        Err(Error::Unsupported("layer surfaces"))
+    }
+
+    /// The connected display outputs. Changes to the set or to an output's
+    /// geometry arrive as [`Event::Outputs`].
+    fn outputs(&self) -> Result<Vec<OutputInfo>> {
+        Err(Error::Unsupported("output enumeration"))
+    }
 
     /// Destroys a window and drops its queued events. Identities are never reused.
     fn remove_window(&mut self, window: WindowId) -> Result<()>;

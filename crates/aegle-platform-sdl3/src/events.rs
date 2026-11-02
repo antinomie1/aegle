@@ -41,11 +41,26 @@ impl Sdl3 {
                 }
                 platform.reconfigure(id);
             }),
+            sys::EVENT_DISPLAY_FIRST..=sys::EVENT_DISPLAY_LAST => {
+                if !self
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, Event::Outputs))
+                {
+                    self.emit(Event::Outputs);
+                }
+            }
             sys::EVENT_WINDOW_HIDDEN => self.window_event(event, |platform, id, _| {
+                let mut dismissed = false;
                 if let Ok(window) = platform.window_mut(id) {
+                    // A shown popup hides only when the window system dismisses it.
+                    dismissed = window.parent.is_some() && window.shown;
                     window.shown = false;
                 }
                 platform.reconfigure(id);
+                if dismissed {
+                    platform.emit(Event::Close { window: id });
+                }
             }),
             sys::EVENT_WINDOW_EXPOSED => self.window_event(event, |platform, id, _| {
                 // The compositor discarded this window's pixels: redraw all of

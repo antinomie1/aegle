@@ -61,6 +61,8 @@ pub(crate) struct WindowState {
     /// SDL's own window ID, which every event names; cached so event
     /// translation does not call into SDL to find the window.
     pub(crate) native_id: u32,
+    /// The window a popup is attached to.
+    pub(crate) parent: Option<WindowId>,
     pub(crate) info: WindowInfo,
     /// The window was shown and not hidden again.
     pub(crate) shown: bool,
@@ -249,9 +251,9 @@ impl Sdl3 {
         self.ime
     }
 
-    /// Creates an ordinary window. SDL3 has no desktop-shell layers, so a layer
-    /// request fails with [`Error::Unsupported`] instead of becoming an
-    /// ordinary window.
+    /// Creates an ordinary window or a popup. SDL3 has no desktop-shell
+    /// layers, so a layer request fails with [`Error::Unsupported`] instead of
+    /// becoming an ordinary window.
     pub(crate) fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
         if options.layer.is_some() {
             return Err(Error::Unsupported("layer surfaces"));
@@ -276,8 +278,15 @@ impl Sdl3 {
             | sys::WINDOW_HIDDEN
             | sys::WINDOW_HIGH_PIXEL_DENSITY
             | sys::WINDOW_TRANSPARENT;
-        let window = unsafe { (lib.create_window)(title.as_ptr(), width, height, flags) };
-        let window = if window.is_null() {
+        let window = match &options.popup {
+            Some(popup) => self.create_popup(
+                popup,
+                (width, height),
+                sys::WINDOW_HIDDEN | sys::WINDOW_HIGH_PIXEL_DENSITY | sys::WINDOW_TRANSPARENT,
+            )?,
+            None => unsafe { (lib.create_window)(title.as_ptr(), width, height, flags) },
+        };
+        let window = if window.is_null() && options.popup.is_none() {
             // Fall back without transparency if the driver/platform rejects it.
             let fallback_flags =
                 sys::WINDOW_RESIZABLE | sys::WINDOW_HIDDEN | sys::WINDOW_HIGH_PIXEL_DENSITY;
@@ -286,7 +295,10 @@ impl Sdl3 {
             window
         };
         let window = NonNull::new(window).ok_or_else(|| {
-            Error::backend(format!("SDL_CreateWindow failed: {}", sys::error(lib)))
+            Error::backend(format!(
+                "creating an SDL window failed: {}",
+                sys::error(lib)
+            ))
         })?;
         let id = WindowId(self.next_id);
         self.next_id = self
@@ -299,6 +311,7 @@ impl Sdl3 {
             id,
             native: Rc::new(NativeWindow { window, lib }),
             native_id,
+            parent: options.popup.map(|popup| popup.parent),
             info: WindowInfo {
                 size: options.size,
                 buffer: PixelSize::default(),
@@ -345,13 +358,20 @@ impl Sdl3 {
         Ok(id)
     }
 
-    /// Removes a window, its queued events and any composition session.
+    /// Removes a window, its queued events and any composition session. A
+    /// window with open popups fails, as on Wayland, where SDL would destroy
+    /// them behind the host's back.
     pub(crate) fn remove_window(&mut self, id: WindowId) -> Result<(), Error> {
         let index = self
             .windows
             .iter()
             .position(|window| window.id == id)
             .ok_or(Error::InvalidWindow)?;
+        if self.windows.iter().any(|window| window.parent == Some(id)) {
+            return Err(Error::InvalidRole(
+                "remove a window's popups before the window",
+            ));
+        }
         // Dropping the last reference destroys the native window; a lease taken
         // before this call keeps it (and its handles) alive instead.
         self.windows.swap_remove(index);

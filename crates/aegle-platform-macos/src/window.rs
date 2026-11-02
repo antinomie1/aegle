@@ -144,6 +144,9 @@ impl MacOs {
         if options.layer.is_some() {
             return Err(Error::Unsupported("layer surfaces"));
         }
+        if options.popup.is_some() {
+            return Err(Error::Unsupported("popup surfaces"));
+        }
         let PixelSize { width, height } = options.size;
         if width == 0 || height == 0 || width > MAX_EDGE || height > MAX_EDGE {
             return Err(Error::InvalidSize);

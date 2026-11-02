@@ -31,6 +31,10 @@ impl Platform for Sdl3 {
         self.create_window(options)
     }
 
+    fn outputs(&self) -> Result<Vec<aegle_platform::OutputInfo>> {
+        self.outputs()
+    }
+
     fn remove_window(&mut self, window: WindowId) -> Result<()> {
         self.remove_window(window)
     }

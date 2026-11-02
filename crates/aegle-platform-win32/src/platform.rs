@@ -31,6 +31,9 @@ impl Platform for Win32 {
         if options.layer.is_some() {
             return Err(Error::Unsupported("layer surfaces"));
         }
+        if options.popup.is_some() {
+            return Err(Error::Unsupported("popup surfaces"));
+        }
         Ok(self.create_window(options)?)
     }
 

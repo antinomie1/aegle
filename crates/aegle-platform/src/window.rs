@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::{Point, Rect};
+
 /// A window's identity on its platform connection; never reused by it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct WindowId(pub u64);
@@ -33,6 +35,11 @@ pub struct WindowOptions<'a> {
     /// A desktop-shell layer such as a panel or overlay instead of an ordinary
     /// window; [`crate::Error::Unsupported`] where the platform has no layers.
     pub layer: Option<LayerOptions>,
+    /// A popup attached to another window of this connection, such as a menu
+    /// or a tooltip, instead of an ordinary window; `size` is its preferred
+    /// extent. [`crate::Error::Unsupported`] where the platform has no
+    /// popups. Setting both `layer` and `popup` is [`crate::Error::InvalidRole`].
+    pub popup: Option<PopupOptions>,
     /// The renderer presents per-pixel alpha that the window system composites
     /// with what lies behind the window. Win32 then gives the window no
     /// redirection surface, so only a DirectComposition presenter shows it.
@@ -50,6 +57,7 @@ impl Default for WindowOptions<'_> {
             },
             buffer_budget: usize::MAX,
             layer: None,
+            popup: None,
             transparent: false,
         }
     }
@@ -58,8 +66,9 @@ impl Default for WindowOptions<'_> {
 /// Placement of a desktop-shell layer surface, such as a panel or overlay.
 ///
 /// Anchoring both opposite edges stretches that axis to the output; otherwise
-/// the preferred size applies.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// the preferred size applies. Everything but `output` can change while the
+/// surface lives, through [`crate::Platform::set_layer`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct LayerOptions {
     /// Stacking layer.
     pub layer: Layer,
@@ -69,16 +78,24 @@ pub struct LayerOptions {
     pub exclusive_zone: i32,
     /// Keyboard focus policy.
     pub keyboard: KeyboardInteractivity,
+    /// Logical distance from the anchored edges, in CSS order: top, right,
+    /// bottom, left. Edges that are not anchored ignore theirs.
+    pub margin: [i32; 4],
+    /// The output the surface is shown on, from [`crate::Platform::outputs`];
+    /// `None` lets the compositor choose, usually the focused output. Fixed
+    /// for the surface's life.
+    pub output: Option<OutputId>,
 }
 
 /// Stacking order of a layer surface, bottom to top.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Layer {
     /// Below everything, like a wallpaper.
     Background,
     /// Below ordinary windows.
     Bottom,
     /// Above ordinary windows, like a panel.
+    #[default]
     Top,
     /// Above everything, including fullscreen windows.
     Overlay,
@@ -123,6 +140,68 @@ pub enum KeyboardInteractivity {
     Exclusive,
     /// Focused when clicked, like an ordinary window.
     OnDemand,
+}
+
+/// A popup's attachment to its parent window.
+///
+/// The popup is placed against `anchor` on the side `placement` names, and
+/// the window system flips it to the opposite side or slides it along the
+/// edge when it would leave the screen. A popup closes ([`crate::Event::Close`])
+/// when the window system dismisses it; remove it before its parent.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PopupOptions {
+    /// The window the popup belongs to: an ordinary window, a layer or
+    /// another popup.
+    pub parent: WindowId,
+    /// The rectangle of the parent's content it attaches to, in the parent's
+    /// logical coordinates; its extent must be positive.
+    pub anchor: Rect,
+    /// The side of `anchor` the popup opens on.
+    pub placement: Placement,
+    /// Takes an explicit grab for this seat's latest press, as menus do: the
+    /// popup receives the seat's keyboard focus and a press outside the
+    /// popup's chain dismisses it. `None` makes a passive popup, like a
+    /// tooltip, that never takes focus.
+    pub grab: Option<SeatId>,
+}
+
+/// The side of its anchor a popup opens on, its start aligned with the
+/// anchor's start.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Placement {
+    /// Below the anchor, left edges aligned, like a dropdown menu.
+    #[default]
+    Below,
+    /// Above the anchor, left edges aligned.
+    Above,
+    /// Left of the anchor, top edges aligned.
+    Left,
+    /// Right of the anchor, top edges aligned, like a submenu.
+    Right,
+}
+
+/// An output's identity on its platform connection, valid while the output
+/// is connected; a reconnected monitor may get a new one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OutputId(pub u64);
+
+/// A connected display output, as [`crate::Platform::outputs`] lists them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutputInfo {
+    /// Identity for [`LayerOptions::output`].
+    pub id: OutputId,
+    /// The window system's name for the output, such as `DP-1` or
+    /// `HDMI-A-1` on Wayland; empty when it reports none.
+    pub name: String,
+    /// Human-readable make and model; empty when unreported.
+    pub description: String,
+    /// Logical position of the top-left corner in the desktop; some window
+    /// systems report the origin for every output.
+    pub position: Point,
+    /// Logical extent, the space a layer surface lays out in.
+    pub size: PixelSize,
+    /// Physical pixels per logical pixel, possibly fractional.
+    pub scale: f32,
 }
 
 /// A window's latest configured geometry and activation.

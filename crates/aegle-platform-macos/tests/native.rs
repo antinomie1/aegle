@@ -118,6 +118,7 @@ fn native_lifecycle_pixels_and_owned_surface() -> Result<(), Box<dyn std::error:
                 anchor: aegle_platform::Anchor::NONE,
                 exclusive_zone: -1,
                 keyboard: aegle_platform::KeyboardInteractivity::None,
+                ..Default::default()
             }),
             ..Default::default()
         }),

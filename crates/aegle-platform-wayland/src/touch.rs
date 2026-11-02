@@ -78,6 +78,7 @@ impl TouchHandler for State {
         };
         let input = &mut self.input.seats[index];
         self.clipboard.input(&input.seat, serial);
+        input.serial = Some(serial);
         input.fingers.retain(|(finger, _)| *finger != id);
         input.fingers.push((id, window));
         self.touch_event(index, id, position, time, TouchPhase::Down);

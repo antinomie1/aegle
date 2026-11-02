@@ -23,6 +23,10 @@ pub(crate) const WINDOW_RESIZABLE: u64 = 0x0000_0000_0000_0020;
 pub(crate) const WINDOW_MINIMIZED: u64 = 0x0000_0000_0000_0040;
 /// `SDL_WINDOW_INPUT_FOCUS`.
 pub(crate) const WINDOW_INPUT_FOCUS: u64 = 0x0000_0000_0000_0200;
+/// `SDL_WINDOW_TOOLTIP`: a passive popup that never takes focus.
+pub(crate) const WINDOW_TOOLTIP: u64 = 0x0000_0000_0004_0000;
+/// `SDL_WINDOW_POPUP_MENU`: a popup that takes keyboard focus.
+pub(crate) const WINDOW_POPUP_MENU: u64 = 0x0000_0000_0008_0000;
 /// `SDL_WINDOW_HIGH_PIXEL_DENSITY`.
 pub(crate) const WINDOW_HIGH_PIXEL_DENSITY: u64 = 0x0000_0000_0000_2000;
 /// `SDL_WINDOW_TRANSPARENT`.
@@ -54,6 +58,10 @@ pub(crate) const TOUCH_MOUSEID: u32 = u32::MAX;
 // Event types.
 pub(crate) const EVENT_QUIT: u32 = 0x100;
 pub(crate) const EVENT_SYSTEM_THEME_CHANGED: u32 = 0x108;
+/// `SDL_EVENT_DISPLAY_ORIENTATION` through `SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED`:
+/// a display was added, removed or changed.
+pub(crate) const EVENT_DISPLAY_FIRST: u32 = 0x151;
+pub(crate) const EVENT_DISPLAY_LAST: u32 = 0x157;
 pub(crate) const EVENT_WINDOW_SHOWN: u32 = 0x202;
 pub(crate) const EVENT_WINDOW_HIDDEN: u32 = 0x203;
 pub(crate) const EVENT_WINDOW_EXPOSED: u32 = 0x204;
@@ -348,6 +356,12 @@ pub(crate) struct Lib {
     pub peep_events: unsafe extern "C" fn(*mut Event, c_int, c_int, u32, u32) -> c_int,
     pub set_hint: unsafe extern "C" fn(*const c_char, *const c_char) -> bool,
     pub create_window: unsafe extern "C" fn(*const c_char, c_int, c_int, u64) -> *mut Window,
+    pub create_popup_window:
+        unsafe extern "C" fn(*mut Window, c_int, c_int, c_int, c_int, u64) -> *mut Window,
+    pub get_displays: unsafe extern "C" fn(*mut c_int) -> *mut u32,
+    pub get_display_name: unsafe extern "C" fn(u32) -> *const c_char,
+    pub get_display_bounds: unsafe extern "C" fn(u32, *mut Rect) -> bool,
+    pub get_display_content_scale: unsafe extern "C" fn(u32) -> f32,
     pub destroy_window: unsafe extern "C" fn(*mut Window),
     pub show_window: unsafe extern "C" fn(*mut Window) -> bool,
     pub sync_window: unsafe extern "C" fn(*mut Window) -> bool,
@@ -448,6 +462,14 @@ fn load() -> Option<Lib> {
             set_hint: bind!("SDL_SetHint" : unsafe extern "C" fn(*const c_char, *const c_char) -> bool),
             create_window: bind!("SDL_CreateWindow"
                 : unsafe extern "C" fn(*const c_char, c_int, c_int, u64) -> *mut Window),
+            create_popup_window: bind!("SDL_CreatePopupWindow"
+                : unsafe extern "C" fn(*mut Window, c_int, c_int, c_int, c_int, u64) -> *mut Window),
+            get_displays: bind!("SDL_GetDisplays" : unsafe extern "C" fn(*mut c_int) -> *mut u32),
+            get_display_name: bind!("SDL_GetDisplayName" : unsafe extern "C" fn(u32) -> *const c_char),
+            get_display_bounds: bind!("SDL_GetDisplayBounds"
+                : unsafe extern "C" fn(u32, *mut Rect) -> bool),
+            get_display_content_scale: bind!("SDL_GetDisplayContentScale"
+                : unsafe extern "C" fn(u32) -> f32),
             destroy_window: bind!("SDL_DestroyWindow" : unsafe extern "C" fn(*mut Window)),
             show_window: bind!("SDL_ShowWindow" : unsafe extern "C" fn(*mut Window) -> bool),
             sync_window: bind!("SDL_SyncWindow" : unsafe extern "C" fn(*mut Window) -> bool),

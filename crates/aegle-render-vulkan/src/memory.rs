@@ -332,7 +332,11 @@ pub(crate) fn check_budget(required: u64, limit: u64) -> Result {
     }
 }
 
-pub(crate) fn memory_type(device: &Device, bits: u32, properties: vk::MemoryPropertyFlags) -> Result<u32> {
+pub(crate) fn memory_type(
+    device: &Device,
+    bits: u32,
+    properties: vk::MemoryPropertyFlags,
+) -> Result<u32> {
     (0..device.memory.memory_type_count)
         .find(|&index| {
             let flags = device.memory.memory_types[index as usize].property_flags;

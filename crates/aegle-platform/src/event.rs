@@ -24,7 +24,12 @@ pub enum Event {
         /// Target window.
         window: WindowId,
     },
-    /// The user asked to close the window; the host decides whether to remove it.
+    /// An output was connected, disconnected or changed its geometry or
+    /// scale; read [`crate::Platform::outputs`] again. Several changes may
+    /// coalesce into one event.
+    Outputs,
+    /// The user asked to close the window; the host decides whether to remove
+    /// it. A dismissed popup reports this too and is removed by the host.
     Close {
         /// Target window.
         window: WindowId,
@@ -176,7 +181,7 @@ impl Event {
             | Self::Drag { window, .. }
             | Self::DragLeave { window, .. }
             | Self::Drop { window, .. } => Some(*window),
-            Self::Wake | Self::Preferences(_) | Self::Error(_) => None,
+            Self::Wake | Self::Outputs | Self::Preferences(_) | Self::Error(_) => None,
         }
     }
 }

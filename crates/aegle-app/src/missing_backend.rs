@@ -43,6 +43,10 @@ impl Platform for Missing {
         Err(Error::Backend(MESSAGE.into()))
     }
 
+    fn outputs(&self) -> Result<Vec<aegle_platform::OutputInfo>> {
+        Err(Error::Backend(MESSAGE.into()))
+    }
+
     fn remove_window(&mut self, _window: WindowId) -> Result<()> {
         Err(Error::Backend(MESSAGE.into()))
     }

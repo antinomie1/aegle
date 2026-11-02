@@ -12,7 +12,7 @@ use smithay_client_toolkit::{
     registry::RegistryState,
     seat::SeatState,
     shell::{
-        wlr_layer::{Anchor, LayerShell},
+        wlr_layer::LayerShell,
         xdg::{XdgShell, window::WindowDecorations},
     },
     shm::Shm,
@@ -50,7 +50,7 @@ impl Wayland {
     /// text-input-v3 is optional; enabling it explicitly reports missing support.
     pub(crate) fn connect() -> Result<Self, Error> {
         let connection = Connection::connect_to_env().map_err(Error::backend)?;
-        let (globals, queue) = registry_queue_init(&connection).map_err(Error::backend)?;
+        let (globals, mut queue) = registry_queue_init(&connection).map_err(Error::backend)?;
         let qh = queue.handle();
         let event_loop = EventLoop::try_new().map_err(Error::backend)?;
         let compositor = CompositorState::bind(&globals, &qh).map_err(Error::backend)?;
@@ -101,6 +101,11 @@ impl Wayland {
                 })
                 .map_err(|error| Error::backend(error.error))?;
         }
+        // Outputs describe themselves after binding, xdg-output names one
+        // round later: two round trips let `outputs` answer before dispatch.
+        for _ in 0..2 {
+            queue.roundtrip(&mut state).map_err(Error::backend)?;
+        }
         let source = WaylandSource::new(connection.clone(), queue)
             .insert(event_loop.handle())
             .map_err(Error::backend)?;
@@ -139,9 +144,9 @@ impl Wayland {
         Ok(self.wake.as_ref().unwrap().0.clone())
     }
 
-    /// Creates an ordinary toplevel, or a layer surface when requested, and
-    /// requests its initial configure. No pixel memory is allocated until the
-    /// first presentation. Layers require `zwlr_layer_shell_v1`.
+    /// Creates an ordinary toplevel, a layer surface or a popup, and requests
+    /// its initial configure. No pixel memory is allocated until the first
+    /// presentation. Layers require `zwlr_layer_shell_v1`.
     pub(crate) fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
         let mut info = WindowInfo {
             size: options.size,
@@ -171,38 +176,39 @@ impl Wayland {
             .scale
             .as_ref()
             .map(|scale| scale.attach(&surface, &self.qh));
-        let window = if let Some(layer) = options.layer {
-            let shell = self.state.layer_shell.as_ref().ok_or_else(|| {
+        let window = match (options.layer, options.popup) {
+            (Some(_), Some(_)) => {
                 surface.destroy();
-                Error::backend("zwlr_layer_shell_v1 is unavailable")
-            })?;
-            let (stacking, anchor) = crate::events::layer(&layer);
-            let native =
-                shell.create_layer_surface(&self.qh, surface, stacking, Some(options.app_id), None);
-            let stretch = |edges: Anchor, extent: u32| {
-                if anchor.contains(edges) { 0 } else { extent }
-            };
-            native.set_size(
-                stretch(Anchor::LEFT | Anchor::RIGHT, options.size.width),
-                stretch(Anchor::TOP | Anchor::BOTTOM, options.size.height),
-            );
-            native.set_anchor(anchor);
-            native.set_exclusive_zone(layer.exclusive_zone);
-            native.set_keyboard_interactivity(crate::events::interactivity(layer.keyboard));
-            Shell::Layer(native)
-        } else {
-            let native =
-                self.state
-                    .shell
-                    .create_window(surface, WindowDecorations::RequestServer, &self.qh);
-            native.set_title(options.title);
-            native.set_app_id(options.app_id);
-            Shell::Xdg(native)
+                return Err(Error::InvalidRole("a window is either a layer or a popup"));
+            }
+            (Some(layer), None) => crate::shell::layer(
+                &self.state,
+                &self.qh,
+                surface,
+                options.app_id,
+                options.size,
+                &layer,
+            )?,
+            (None, Some(popup)) => {
+                crate::shell::popup(&self.state, &self.qh, surface, options.size, &popup)?
+            }
+            (None, None) => {
+                let native = self.state.shell.create_window(
+                    surface,
+                    WindowDecorations::RequestServer,
+                    &self.qh,
+                );
+                native.set_title(options.title);
+                native.set_app_id(options.app_id);
+                Shell::Xdg(native)
+            }
         };
         window.commit();
         self.state.windows.push(WindowState {
             id,
             window,
+            layer: options.layer,
+            parent: options.popup.map(|popup| popup.parent),
             info,
             buffers: SoftwareBuffers::new(options.buffer_budget),
             dirty: true,
@@ -215,7 +221,8 @@ impl Wayland {
         Ok(id)
     }
 
-    /// Removes the window and its IME session. Its ID is never reused.
+    /// Removes the window and its IME session. Its ID is never reused. A
+    /// window with open popups fails: the protocol destroys popups first.
     pub(crate) fn remove_window(&mut self, id: WindowId) -> Result<(), Error> {
         let index = self
             .state
@@ -223,6 +230,11 @@ impl Wayland {
             .iter()
             .position(|w| w.id == id)
             .ok_or(Error::InvalidWindow)?;
+        if self.state.windows.iter().any(|w| w.parent == Some(id)) {
+            return Err(Error::InvalidRole(
+                "remove a window's popups before the window",
+            ));
+        }
         self.state.ime.remove_window(id);
         self.state
             .remove_input_window(id, &self.connection, &self.qh);
@@ -295,6 +307,7 @@ impl Wayland {
                 Ok(())
             }
             Shell::Layer(_) => Err(Error::Unsupported("title of a layer surface")),
+            Shell::Popup(_) => Err(Error::Unsupported("title of a popup")),
         }
     }
 

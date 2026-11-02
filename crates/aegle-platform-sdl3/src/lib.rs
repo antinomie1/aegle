@@ -11,6 +11,11 @@
 //! read, so a machine without SDL3 fails [`aegle_platform::Platform::connect`]
 //! with a `Backend` error instead of failing the build.
 //!
+//! Popups are SDL popup windows: a grabbing popup is a popup menu, any other
+//! a tooltip. SDL takes an offset rather than an anchor rectangle, so a popup
+//! opens on the requested side and SDL slides it back onto the display, but
+//! never flips it to the other side. Outputs are SDL's displays.
+//!
 //! SDL3 imposes three limits this backend reports rather than hides:
 //!
 //! - There are no desktop-shell layers: a [`aegle_platform::WindowOptions`]
@@ -26,6 +31,7 @@ mod events;
 #[cfg(feature = "gpu")]
 mod gpu;
 mod keys;
+mod outputs;
 mod platform;
 mod sys;
 mod text;

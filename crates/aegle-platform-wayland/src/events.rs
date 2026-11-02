@@ -1,10 +1,7 @@
 //! Translation of Wayland and XKB values into the platform contract.
 
-use aegle_platform::{Key, KeyboardInteractivity, Layer, LayerOptions, Modifiers};
-use smithay_client_toolkit::{
-    seat::keyboard::{self, KeyEvent, Keysym},
-    shell::wlr_layer,
-};
+use aegle_platform::{Key, Modifiers};
+use smithay_client_toolkit::seat::keyboard::{self, KeyEvent, Keysym};
 use wayland_client::Proxy;
 
 use crate::{Event, PixelSize, SeatId, WindowId, WindowInfo, WlSeat};
@@ -102,32 +99,3 @@ pub(crate) fn button(code: u32) -> Option<aegle_platform::PointerButton> {
 
 /// The evdev code of the primary button.
 pub(crate) const PRIMARY: u32 = 0x110;
-
-pub(crate) fn layer(options: &LayerOptions) -> (wlr_layer::Layer, wlr_layer::Anchor) {
-    let layer = match options.layer {
-        Layer::Background => wlr_layer::Layer::Background,
-        Layer::Bottom => wlr_layer::Layer::Bottom,
-        Layer::Top => wlr_layer::Layer::Top,
-        Layer::Overlay => wlr_layer::Layer::Overlay,
-    };
-    let mut anchor = wlr_layer::Anchor::empty();
-    for (edge, native) in [
-        (aegle_platform::Anchor::TOP, wlr_layer::Anchor::TOP),
-        (aegle_platform::Anchor::BOTTOM, wlr_layer::Anchor::BOTTOM),
-        (aegle_platform::Anchor::LEFT, wlr_layer::Anchor::LEFT),
-        (aegle_platform::Anchor::RIGHT, wlr_layer::Anchor::RIGHT),
-    ] {
-        if options.anchor.contains(edge) {
-            anchor |= native;
-        }
-    }
-    (layer, anchor)
-}
-
-pub(crate) fn interactivity(value: KeyboardInteractivity) -> wlr_layer::KeyboardInteractivity {
-    match value {
-        KeyboardInteractivity::None => wlr_layer::KeyboardInteractivity::None,
-        KeyboardInteractivity::Exclusive => wlr_layer::KeyboardInteractivity::Exclusive,
-        KeyboardInteractivity::OnDemand => wlr_layer::KeyboardInteractivity::OnDemand,
-    }
-}

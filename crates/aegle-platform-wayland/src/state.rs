@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_registry,
-    output::{OutputHandler, OutputState},
+    output::OutputState,
     reexports::calloop::LoopHandle,
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -13,6 +13,7 @@ use smithay_client_toolkit::{
         wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
         xdg::{
             XdgShell,
+            popup::Popup,
             window::{Window, WindowConfigure, WindowHandler},
         },
     },
@@ -28,11 +29,12 @@ use crate::{
     ime::ImeState, input::InputState,
 };
 
-/// Surface role: an ordinary toplevel or a wlr layer surface.
+/// Surface role: an ordinary toplevel, a wlr layer surface or an xdg popup.
 #[derive(Clone, Debug)]
 pub(crate) enum Shell {
     Xdg(Window),
     Layer(LayerSurface),
+    Popup(Popup),
 }
 
 impl Shell {
@@ -40,6 +42,7 @@ impl Shell {
         match self {
             Self::Xdg(window) => window.wl_surface(),
             Self::Layer(layer) => layer.wl_surface(),
+            Self::Popup(popup) => popup.wl_surface(),
         }
     }
     pub(crate) fn commit(&self) {
@@ -50,6 +53,10 @@ impl Shell {
 pub(crate) struct WindowState {
     pub(crate) id: WindowId,
     pub(crate) window: Shell,
+    /// The current placement of a layer surface.
+    pub(crate) layer: Option<aegle_platform::LayerOptions>,
+    /// The window a popup is attached to.
+    pub(crate) parent: Option<WindowId>,
     pub(crate) info: WindowInfo,
     pub(crate) buffers: SoftwareBuffers,
     pub(crate) dirty: bool,
@@ -106,7 +113,7 @@ impl State {
     }
 
     /// Applies a configure; `None` keeps the current or preferred extent.
-    fn configured(
+    pub(crate) fn configured(
         &mut self,
         surface: &wl_surface::WlSurface,
         size: (Option<u32>, Option<u32>),
@@ -259,15 +266,6 @@ impl CompositorHandler for State {
         _: &wl_output::WlOutput,
     ) {
     }
-}
-
-impl OutputHandler for State {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 
 impl ShmHandler for State {

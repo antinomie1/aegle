@@ -52,6 +52,8 @@ struct SeatInput {
     pointer_focus: Option<(WindowId, Point)>,
     modifiers: Modifiers,
     repeat: Repeat,
+    /// Serial of the latest key, button or touch press, which popup grabs cite.
+    serial: Option<u32>,
 }
 
 impl Drop for SeatInput {
@@ -80,6 +82,16 @@ pub(crate) struct InputState {
 
 impl State {
     /// The live seat with this contract identity.
+    /// A seat and the serial of its latest press, for a popup grab.
+    pub(crate) fn latest_press(&self, id: crate::SeatId) -> Option<(WlSeat, u32)> {
+        let input = self
+            .input
+            .seats
+            .iter()
+            .find(|input| crate::events::seat_id(&input.seat) == id)?;
+        Some((input.seat.clone(), input.serial?))
+    }
+
     pub(crate) fn seat(&self, id: crate::SeatId) -> Option<WlSeat> {
         self.input
             .seats
@@ -221,6 +233,7 @@ impl SeatHandler for State {
             pointer_focus: None,
             modifiers: Modifiers::default(),
             repeat: Repeat::new(&self.loop_handle),
+            serial: None,
         });
     }
 
@@ -382,6 +395,7 @@ impl KeyboardHandler for State {
             .find(|input| input.keyboard.as_ref() == Some(keyboard))
         {
             self.clipboard.input(&input.seat, serial);
+            input.serial = Some(serial);
             if input.focus.is_some()
                 && let Err(error) = input.repeat.press(&key, keyboard)
             {

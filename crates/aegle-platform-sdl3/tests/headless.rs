@@ -47,6 +47,7 @@ fn options(width: u32, height: u32) -> WindowOptions<'static> {
         size: PixelSize { width, height },
         buffer_budget: usize::MAX,
         layer: None,
+        popup: None,
         transparent: false,
     }
 }
@@ -154,11 +155,46 @@ fn layers_are_unsupported() {
         anchor: aegle_platform::Anchor::TOP,
         exclusive_zone: 0,
         keyboard: aegle_platform::KeyboardInteractivity::None,
+        ..Default::default()
     });
     assert!(matches!(
         platform.create_window(options),
         Err(Error::Unsupported("layer surfaces"))
     ));
+}
+
+#[test]
+fn displays_are_outputs_and_popups_are_checked() {
+    let Some((_guard, mut platform)) = platform() else {
+        return;
+    };
+    let outputs = platform.outputs().unwrap();
+    assert!(!outputs.is_empty());
+    assert!(outputs.iter().all(|o| o.size.width > 0 && o.scale > 0.0));
+    let parent = platform.create_window(options(200, 100)).unwrap();
+    let popup = aegle_platform::PopupOptions {
+        parent,
+        anchor: aegle_platform::Rect::new(10.0, 10.0, 40.0, 20.0),
+        placement: aegle_platform::Placement::Below,
+        grab: Some(SeatId(0)),
+    };
+    let mut menu = options(80, 60);
+    menu.popup = Some(popup);
+    // The dummy driver has no popups; `window.rs` covers a session driver.
+    assert!(matches!(
+        platform.create_window(menu),
+        Err(Error::Unsupported("popup surfaces"))
+    ));
+    let mut empty = options(80, 60);
+    empty.popup = Some(aegle_platform::PopupOptions {
+        anchor: aegle_platform::Rect::new(0.0, 0.0, 0.0, 20.0),
+        ..popup
+    });
+    assert!(matches!(
+        platform.create_window(empty),
+        Err(Error::InvalidRole(_))
+    ));
+    platform.remove_window(parent).unwrap();
 }
 
 #[test]

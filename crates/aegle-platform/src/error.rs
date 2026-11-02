@@ -19,6 +19,10 @@ pub enum Error {
     InvalidSize,
     /// The window was removed or belongs to another connection.
     InvalidWindow,
+    /// The request does not fit the window's role: a layer change for a
+    /// window that is not a layer or that moves it to another output, a
+    /// popup that is also a layer, or one whose anchor is empty.
+    InvalidRole(&'static str),
     /// A title or application identifier contains NUL or exceeds 4000 UTF-8 bytes.
     InvalidString,
     /// No native composition is available.
@@ -52,6 +56,7 @@ impl fmt::Display for Error {
             Self::Unsupported(what) => write!(f, "{what} is unsupported on this platform"),
             Self::InvalidSize => f.write_str("invalid window size"),
             Self::InvalidWindow => f.write_str("unknown window"),
+            Self::InvalidRole(reason) => write!(f, "invalid window role: {reason}"),
             Self::InvalidString => {
                 f.write_str("window strings must be NUL-free and at most 4000 UTF-8 bytes")
             }

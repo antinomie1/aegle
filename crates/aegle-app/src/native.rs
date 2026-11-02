@@ -292,6 +292,7 @@ impl App {
                 },
                 buffer_budget: options.buffer_budget,
                 layer: options.layer,
+                popup: None,
                 transparent,
             })?;
         // The renderer and the platform are separate fields, so they are

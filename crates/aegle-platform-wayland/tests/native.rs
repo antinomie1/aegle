@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use aegle_platform::{
     Anchor, Error, Event, ImeRequest, KeyboardInteractivity, Layer, LayerOptions, PixelSize,
-    Platform, WindowId, WindowOptions,
+    Placement, Platform, PopupOptions, Rect, WindowId, WindowOptions,
 };
 use aegle_platform_wayland::Wayland;
 
@@ -53,6 +53,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
         },
         buffer_budget: 2 * 1024 * 1024,
         layer: None,
+        popup: None,
         transparent: false,
     };
     let window = platform.create_window(options).unwrap();
@@ -175,6 +176,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
                 anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
                 exclusive_zone: 24,
                 keyboard: KeyboardInteractivity::None,
+                ..Default::default()
             }),
             ..options
         })
@@ -206,6 +208,7 @@ fn preferred_scale_sizes_the_buffer_of_a_fractional_window() {
             },
             buffer_budget: 2 * 1024 * 1024,
             layer: None,
+            popup: None,
             transparent: false,
         })
         .unwrap();
@@ -253,5 +256,109 @@ fn preferred_scale_sizes_the_buffer_of_a_fractional_window() {
             break;
         }
     }
+    platform.remove_window(window).unwrap();
+}
+
+#[test]
+#[ignore = "requires a dedicated WAYLAND_DISPLAY compositor with layer-shell and an output"]
+fn panels_sit_on_named_outputs_change_in_place_and_own_popups() {
+    let mut platform = Wayland::connect().unwrap();
+    // Outputs are described before the first dispatch.
+    let outputs = platform.outputs().unwrap();
+    let output = outputs.first().expect("an output");
+    assert!(output.size.width > 0 && output.size.height > 0 && output.scale > 0.0);
+    let layer = LayerOptions {
+        layer: Layer::Top,
+        anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+        exclusive_zone: 30,
+        margin: [4, 0, 0, 0],
+        output: Some(output.id),
+        ..Default::default()
+    };
+    let options = WindowOptions {
+        size: PixelSize {
+            width: 200,
+            height: 30,
+        },
+        layer: Some(layer),
+        ..Default::default()
+    };
+    let panel = platform.create_window(options).unwrap();
+    redraw(&mut platform, panel);
+    assert_eq!(
+        platform.window_info(panel).unwrap().size.width,
+        output.size.width
+    );
+    present(&mut platform, panel);
+
+    // Moving the panel to the bottom keeps its surface and window identity.
+    platform
+        .set_layer(
+            panel,
+            LayerOptions {
+                anchor: Anchor::BOTTOM | Anchor::LEFT,
+                keyboard: KeyboardInteractivity::OnDemand,
+                ..layer
+            },
+            options.size,
+        )
+        .unwrap();
+    redraw(&mut platform, panel);
+    assert_eq!(platform.window_info(panel).unwrap().size.width, 200);
+    present(&mut platform, panel);
+    assert!(matches!(
+        platform.set_layer(
+            panel,
+            LayerOptions {
+                output: None,
+                ..layer
+            },
+            options.size
+        ),
+        Err(Error::InvalidRole(_))
+    ));
+
+    // A popup attaches to the panel, configures and presents on its own.
+    let popup = PopupOptions {
+        parent: panel,
+        anchor: Rect::new(10.0, 0.0, 40.0, 30.0),
+        placement: Placement::Above,
+        grab: None,
+    };
+    let menu = platform
+        .create_window(WindowOptions {
+            size: PixelSize {
+                width: 120,
+                height: 80,
+            },
+            layer: None,
+            popup: Some(popup),
+            ..Default::default()
+        })
+        .unwrap();
+    redraw(&mut platform, menu);
+    let info = platform.window_info(menu).unwrap();
+    assert_eq!((info.size.width, info.size.height), (120, 80));
+    present(&mut platform, menu);
+    assert!(matches!(
+        platform.create_window(WindowOptions {
+            layer: Some(layer),
+            popup: Some(popup),
+            ..Default::default()
+        }),
+        Err(Error::InvalidRole(_))
+    ));
+    assert!(matches!(
+        platform.remove_window(panel),
+        Err(Error::InvalidRole(_))
+    ));
+    platform.remove_window(menu).unwrap();
+    platform.remove_window(panel).unwrap();
+    // An ordinary window is not a layer and keeps its role.
+    let window = platform.create_window(WindowOptions::default()).unwrap();
+    assert!(matches!(
+        platform.set_layer(window, layer, options.size),
+        Err(Error::InvalidRole(_))
+    ));
     platform.remove_window(window).unwrap();
 }

@@ -267,6 +267,7 @@ fn platform() -> Option<(MutexGuard<'static, ()>, Sdl3, sdl::Api)> {
             },
             buffer_budget: usize::MAX,
             layer: None,
+            popup: None,
             transparent: false,
         })
         .unwrap();

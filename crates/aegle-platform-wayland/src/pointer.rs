@@ -30,6 +30,7 @@ impl PointerHandler for State {
             let input = &mut self.input.seats[index];
             if let PointerEventKind::Press { serial, .. } = event.kind {
                 self.clipboard.input(&input.seat, serial);
+                input.serial = Some(serial);
             }
             let position = Point {
                 x: event.position.0 as f32,

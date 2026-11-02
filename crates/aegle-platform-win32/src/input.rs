@@ -69,7 +69,9 @@ fn typed(native: &Native) -> Option<String> {
             units.push(unit);
         }
     }
-    String::from_utf16(&units).ok().filter(|text| !text.is_empty())
+    String::from_utf16(&units)
+        .ok()
+        .filter(|text| !text.is_empty())
 }
 
 /// The logical key of a Win32 virtual-key code.

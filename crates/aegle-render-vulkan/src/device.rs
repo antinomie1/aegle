@@ -239,8 +239,8 @@ fn initialize(
         let incremental = false;
         // Transparent Win32 windows import D3D11 textures.
         #[cfg(all(windows, feature = "window"))]
-        let external =
-            surface.is_some() && supports(instance, physical, ash::khr::external_memory_win32::NAME);
+        let external = surface.is_some()
+            && supports(instance, physical, ash::khr::external_memory_win32::NAME);
         #[cfg(not(all(windows, feature = "window")))]
         let external = false;
         #[cfg(feature = "window")]
@@ -264,7 +264,15 @@ fn initialize(
             unsafe { instance.create_device(physical, &info, None) }.map_err(Error::Vulkan)?;
         // SAFETY: physical belongs to instance, which still outlives this device.
         let memory = unsafe { instance.get_physical_device_memory_properties(physical) };
-        return Ok((raw, physical, family, properties, memory, incremental, external));
+        return Ok((
+            raw,
+            physical,
+            family,
+            properties,
+            memory,
+            incremental,
+            external,
+        ));
     }
     Err(Error::Unsupported("no compatible Vulkan graphics device"))
 }

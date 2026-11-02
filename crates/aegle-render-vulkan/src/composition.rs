@@ -22,10 +22,10 @@ use windows::{
             Direct3D11::{
                 D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE,
                 D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_FENCE_FLAG_NONE,
-                D3D11_RESOURCE_MISC_SHARED, D3D11_RESOURCE_MISC_SHARED_NTHANDLE,
-                D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11CreateDevice,
-                ID3D11Device, ID3D11Device5, ID3D11DeviceContext, ID3D11DeviceContext4,
-                ID3D11Fence, ID3D11Texture2D,
+                D3D11_RESOURCE_MISC_SHARED, D3D11_RESOURCE_MISC_SHARED_NTHANDLE, D3D11_SDK_VERSION,
+                D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11CreateDevice, ID3D11Device,
+                ID3D11Device5, ID3D11DeviceContext, ID3D11DeviceContext4, ID3D11Fence,
+                ID3D11Texture2D,
             },
             DirectComposition::{
                 DCompositionCreateDevice, IDCompositionDevice, IDCompositionTarget,
@@ -36,9 +36,9 @@ use windows::{
                     DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM,
                     DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC,
                 },
-                CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_PRESENT,
-                DXGI_SCALING_STRETCH, DXGI_SHARED_RESOURCE_READ, DXGI_SHARED_RESOURCE_WRITE,
-                DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
+                CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_PRESENT, DXGI_SCALING_STRETCH,
+                DXGI_SHARED_RESOURCE_READ, DXGI_SHARED_RESOURCE_WRITE, DXGI_SWAP_CHAIN_DESC1,
+                DXGI_SWAP_CHAIN_FLAG, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
                 DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIAdapter, IDXGIDevice, IDXGIFactory4,
                 IDXGIResource1, IDXGISwapChain1,
             },
@@ -87,7 +87,9 @@ impl Compositor {
                 .get_physical_device_properties2(device.physical, &mut properties)
         };
         if id.device_luid_valid == vk::FALSE {
-            return Err(Error::Unsupported("the Vulkan device reports no adapter LUID"));
+            return Err(Error::Unsupported(
+                "the Vulkan device reports no adapter LUID",
+            ));
         }
         let luid = LUID {
             LowPart: u32::from_ne_bytes(id.device_luid[..4].try_into().unwrap()),
@@ -116,8 +118,7 @@ impl Compositor {
             d3d.cast::<ID3D11Device5>()?
                 .CreateFence(0, D3D11_FENCE_FLAG_NONE, &mut fence)?;
             let event = OwnedHandle::from_raw_handle(CreateEventW(None, false, false, None)?.0);
-            let dcomp: IDCompositionDevice =
-                DCompositionCreateDevice(&d3d.cast::<IDXGIDevice>()?)?;
+            let dcomp: IDCompositionDevice = DCompositionCreateDevice(&d3d.cast::<IDXGIDevice>()?)?;
             let target = dcomp.CreateTargetForHwnd(HWND(hwnd as _), true)?;
             let visual = dcomp.CreateVisual()?;
             target.SetRoot(&visual)?;
@@ -197,7 +198,11 @@ impl Shared {
         let dxgi = match format {
             vk::Format::B8G8R8A8_UNORM => DXGI_FORMAT_B8G8R8A8_UNORM,
             vk::Format::R8G8B8A8_UNORM => DXGI_FORMAT_R8G8B8A8_UNORM,
-            _ => return Err(Error::Unsupported("composition needs an RGBA8 UNORM format")),
+            _ => {
+                return Err(Error::Unsupported(
+                    "composition needs an RGBA8 UNORM format",
+                ));
+            }
         };
         compositor.resize(dxgi, extent)?;
         let desc = D3D11_TEXTURE2D_DESC {

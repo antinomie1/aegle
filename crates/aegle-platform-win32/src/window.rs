@@ -222,13 +222,7 @@ impl Win32 {
         // SAFETY: class is registered, strings terminate in NUL, stable Native Rc
         // remains alive through creation callbacks and all later native leases.
         unsafe {
-            AdjustWindowRectExForDpi(
-                &mut rect,
-                WS_OVERLAPPEDWINDOW,
-                false,
-                style,
-                dpi,
-            )?;
+            AdjustWindowRectExForDpi(&mut rect, WS_OVERLAPPEDWINDOW, false, style, dpi)?;
             let hwnd = CreateWindowExW(
                 style,
                 w!("Aegle.NativeWindow.v1"),
