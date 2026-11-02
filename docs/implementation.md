@@ -21,9 +21,9 @@
 | **aegle-render-cairo** | 结合 `render-cpu`，由系统 cairo 提供几何覆盖率（Linux 专用，运行时动态加载） | 运行时加载 `libcairo.so.2` |
 | **aegle-render-vulkan** | Vulkan 1.1 硬件加速渲染：storage buffer 图元合并、按需灰度/彩色字形图集、最多八层裁剪、应用纹理登记、原生 swapchain 呈现 | ash 0.38, bytemuck 1.25 |
 | **aegle-render-wgpu** | 全平台通用 GPU 渲染：WGSL 着色器、多层裁剪、字形/图像专用纹理、FIFO 呈现 | wgpu 30.0.1 |
-| **aegle-platform** | 统一平台契约：`Platform` 与 `SurfacePlatform` trait、标准事件（`Event`）、窗口选项、IME 事务、剪贴板与拖放契约 | 纯契约抽象，无特定窗口库依赖 |
-| **aegle-platform-sdl3** | Linux 默认后端：普通窗口生命周期、键盘/指针/触摸/滚轮、系统光标、文本输入与 IME、进程剪贴板、拖入、软件呈现与 GPU 句柄租约 | 运行时加载 `libSDL3.so.0` |
-| **aegle-platform-wayland** | Linux 原生客户端：xdg-shell 顶层窗口、wlr layer-shell 表面、text-input-v3（周边文字与选区）、双向拖放、SHM 呈现与 GPU 租约 | wayland-client 0.31, SCTK 0.21, libxkbcommon |
+| **aegle-platform** | 统一平台契约：`Platform` 与 `SurfacePlatform` trait、标准事件（`Event`）、窗口选项与角色（层、弹出层）、输出枚举、IME 事务、剪贴板与拖放契约 | 纯契约抽象，无特定窗口库依赖 |
+| **aegle-platform-sdl3** | Linux 默认后端：普通窗口与弹出菜单/提示窗口、显示器枚举、键盘/指针/触摸/滚轮、系统光标、文本输入与 IME、进程剪贴板、拖入、软件呈现与 GPU 句柄租约 | 运行时加载 `libSDL3.so.0` |
+| **aegle-platform-wayland** | Linux 原生客户端：xdg-shell 顶层窗口、指定输出且可原地改放置的 wlr layer-shell 表面、xdg_popup（父为顶层、弹出层或 layer）、输出枚举、text-input-v3（周边文字与选区）、双向拖放、SHM 呈现与 GPU 租约 | wayland-client 0.31, SCTK 0.21, libxkbcommon |
 | **aegle-platform-win32** | Windows 原生后端：Win32 窗口、DPI 适配、TSF 文本存储输入法、OLE 拖放、GDI 软件呈现与 GPU HWND 租约 | windows 0.62 |
 | **aegle-platform-macos** | macOS 原生后端：AppKit 窗口、NSTextInputClient、NSPasteboard、NSDragging、CGImage 软件呈现与 CAMetalLayer 租约 | objc2 0.6 系列 |
 | **aegle-portal** | Linux 桌面 portal（`org.freedesktop.portal.Settings`）外观偏好读取与 `SettingChanged` 监听 | aegle-dbus |
@@ -36,9 +36,9 @@
 | **aegle-widgets** | 完整默认控件库（Label、Button、TextField、CheckBox、Switch、Slider、Progress、ScrollView、ListView、Table、Dialog、Drawer 等） | 基于 aegle-ui |
 | **aegle-markup** | 简洁花括号标记语言有界解析器、类型与作用域检查、诊断跨度报告 | 纯 Rust 解析器 |
 | **aegle-macros** | `ui!` 声明宏：将标记直接编译为零开销 Rust 控件树调用代码 | 过程宏 |
-| **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载 | 解释执行引擎 |
+| **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载；`layer` 窗口文档直接打开为面板并原地重载；`State::on_change` 状态变化处理器（随重载转移） | 解释执行引擎 |
 | **aegle-ui** | 无窗口保留式 UI 核心引擎：树生命周期、Taffy 布局调度、输入捕获冒泡路由、焦点管理、动画调度、IME 与语义同步 | 组合核心 |
-| **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理、后台代理消息传递（`UiProxy`） | 宿主调度层 |
+| **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理、后台代理消息传递（`UiProxy`）、输出列表与变化回调、`Window::set_layer`、原生弹出层（随父窗口关闭） | 宿主调度层 |
 | **aegle** | 顶层便捷 Facade：统一默认导出、一键 `App::run_ui` | 门面 Crate |
 
 ---
@@ -46,7 +46,7 @@
 ## 二、 跨平台实测与验证证据
 
 ### 1. 自动化测试套件
-* **工作区测试**：`cargo test --workspace` 共计 **207 项通过、0 项失败、19 项 ignored**（需独立显示环境/硬件的集成场景）。
+* **工作区测试**：`cargo test --workspace` 共计 **213 项通过、0 项失败、22 项 ignored**（需独立显示环境/硬件的集成场景）。
 * **代码规范**：`cargo fmt --all --check` 与 `cargo clippy --workspace --all-targets`（`-D warnings`）零告警。
 * **Feature 组合矩阵**：CI 矩阵包含极简构建、markup 独立、渲染器 4 选 1（tiny-skia / cairo / vulkan / wgpu）、Linux 窗口后端 2 选 1（sdl3 / wayland）及无障碍组合，均通过编译与单测。
 
@@ -60,6 +60,12 @@
 * **原生 Wayland 后端验证**：
   * **无头隔离环境**：在专用无头 Sway 会话（Pixman 软件渲染）中完成。
   * **核心场景通过**：覆盖生命周期配置、多窗口管理、虚拟指针拖放（坐标精度与源释放正确）、`text-input-v3` 中日韩输入法事务、分式缩放及 portal 偏好更新。
+* **桌面 Shell 表面（层、弹出层、输出）**：在无头 `kwin_wayland --virtual`（1280×800 虚拟输出，`WAYLAND_DISPLAY=aegle-test`）中验证：
+  * `aegle-platform-wayland` native 测试：首次调度前即列出输出（名称 `Virtual-0`）；在该输出上创建顶部面板并拉伸至输出宽度，`set_layer` 原地移到左下角后宽度为 200 dp；layer 上的 xdg_popup 配置为 120×80 并呈现；换输出、对普通窗口 `set_layer`、层与弹出层同设、先移除父窗口均返回 `InvalidRole`。
+  * `aegle-platform-sdl3` 会话测试（SDL Wayland 驱动）：显示器枚举、弹出层配置为请求尺寸、父窗口先移除被拒；dummy 驱动下弹出层返回 `Unsupported`。
+  * `aegle-app` native 套件（wayland 后端 5 项、sdl3 后端新增 1 项）：弹出层随父窗口关闭、控件句柄失效；`App::output(name)`；`on_outputs` 回调；面板 `set_layer` 后控件存活。
+  * `aegle` window 测试：同一 `layer` 文档经 `Program::open` 与 `ui!` 打开为整宽面板；重载为左下角 300 dp 时窗口句柄、state 值与 `on_change` 处理器保持；去掉 `layer` 或改指输出的重载在构建前被拒；`open_on` 为每个输出各开一个面板。
+  * 未覆盖：弹出层抓取（需真实输入 serial）、输出热插拔事件、多输出场景，以及真实 KDE/Sway 桌面上的外观。
 * **Pango 行高**：`LineHeight` 改用 Pango 1.50 行高属性后，单行段落的高度等于所设行高（此前 `line_spacing` 只作用于行间，12 px 字号设 30 px 行高的单行仍量得 18 px）。`aegle-text/tests/paragraph.rs` 覆盖绝对、字号倍数与字体度量倍数三种形式的单行与两行高度及基线位置；本机 Pango 1.58.2 验证。
 * **系统文字栈收益**：Linux 默认切换至系统文字栈（Pango + FreeType + Fontconfig，动态加载）后，去除了内置 ICU 词典数据，排版与分词直接委托系统库。
 
@@ -87,5 +93,10 @@
 2. **多平台实机**：
    * macOS 平台目前仅为交叉编译通过，需要实机环境补齐渲染、高分屏缩放与输入验收。
    * Windows ARM64 尚未完成实机编译与驱动兼容性核验。
-3. **桌面服务**：
+3. **桌面 Shell 表面**：
+   * Win32 与 macOS 未实现弹出层（创建返回 `Unsupported`）与输出枚举；`set_layer` 仅 Wayland 后端可用（其他平台无层）。
+   * SDL3 弹出层不按锚定矩形翻转，只由 SDL 滑回屏幕内；显示器名称取决于 SDL 驱动，不保证为连接器名。
+   * 控件库的 `Popup`/`Menu`/`Dropdown` 仍是窗口内浮层，尚未改用原生弹出层；标记语言没有弹出层元素，原生弹出层只能由 Rust 的 `Window::popup` 打开。
+   * 输出热插拔时按输出增删面板需由宿主在 `App::on_outputs` 中完成；按 layer-shell 协议，输出断开时合成器关闭其上的层，宿主收到 `Close` 后移除该窗口（此路径尚未实测）。
+4. **桌面服务**：
    * `aegle-desktop` 目前在 macOS 上各服务方法直接返回 `Unavailable`（需要主线程消息循环深度适配）。

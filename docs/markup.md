@@ -130,3 +130,34 @@ Card {
 }
 ```
 * **单向作用域**：组件内部通过 `self.property` 访问自身属性，插槽内容继承外部作用域，避免状态冲突。
+
+---
+
+## 五、 窗口文档与桌面面板
+
+根为 `Window` 的文档由 `Program::open(&app)`（或 `ui!(&app, ...)`）打开为原生窗口。`title`、`width`、`height`、`theme` 作用于窗口本身。加上 `layer` 后同一文档打开为桌面 shell 的层（Wayland wlr layer-shell），一个文件即一个面板：
+
+```text
+Window {
+    layer: top                     // background | bottom | top | overlay
+    anchor: [top, left, right]     // 一个或多个不重复的 top / bottom / left / right
+    exclusive_zone: 32dp           // 非负整数 dp，或 ignore（与其他保留区重叠）
+    keyboard: on_demand            // none | exclusive | on_demand
+    margin: [4dp, 0dp]             // 整数 dp，一个、两个或四个（CSS 顺序）
+    output: "DP-1"                 // 输出名，未连接时打开失败
+    height: 32dp
+
+    Row { Text { text: "面板" } }
+}
+```
+
+* 这些属性只接受字面量，并且都要求同时写 `layer`；锚定两条相对边的轴随输出拉伸，否则使用 `width`/`height`。
+* `program.open_on(&app, output.id)` 忽略文档里的 `output`，把同一文档放到给定输出上，配合 `app.outputs()` 与 `app.on_outputs` 可为每个显示器各开一个面板。
+* **热重载**：`view.reload(&program)` 保留原生 surface、窗口句柄和同名同类型 state，原地应用新的 `layer`、`anchor`、`exclusive_zone`、`keyboard`、`margin` 与尺寸；增删 `layer` 或改指 `output` 会在构建前被拒绝，原面板不变，需重新打开。
+
+---
+
+## 六、 与宿主交互
+
+* **宿主函数**：事件块中的 `host.name(args)` 调用宿主以 `aegle::loader::action(name, &[Type], f)` 注册的函数（本线程所有程序共享）；构建时校验存在性与参数类型。
+* **状态变化**：`State<T>::on_change(f)` 在 state 每次变化后调用 `f(新值)`，无论变化来自事件块、绑定源还是 Rust；绑定先更新，处理器在所有 UI 借用之外运行，不会被自身对该 state 的修改重入；返回的错误中止本次更新并交给修改方。返回的 `Watch::remove()` 注销处理器。重载后处理器与 `State` 句柄跟随同名同类型的 state。

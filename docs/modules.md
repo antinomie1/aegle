@@ -21,9 +21,9 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 | **aegle-render-cairo** | CPU 渲染器：`render-cpu` 合成器 + 发行版 `libcairo.so.2` 覆盖率（Linux 专享，运行时动态加载） | render-cpu, scene |
 | **aegle-render-vulkan** | Vulkan 1.1 硬件加速渲染器：storage buffer 图元合并、按需灰度/彩色字形图集、最多八层裁剪、应用纹理登记 | types, scene, (text, window) |
 | **aegle-render-wgpu** | 全平台通用 GPU 渲染器：WGSL 着色器、专用字形/图像纹理、多层裁剪、surface 呈现 | types, scene, (text, window) |
-| **aegle-platform** | 跨平台统一契约：`Platform` 与 `SurfacePlatform` trait、统一事件模型（`Event`）、窗口配置、IME 事务、剪贴板与拖放 | types |
-| **aegle-platform-sdl3** | Linux 默认窗口后端：窗口生命周期、输入分发、系统光标、文本输入、剪贴板、拖入、软件呈现与 GPU 租约 | types, platform, portal |
-| **aegle-platform-wayland** | Linux 原生窗口客户端：xdg-shell、wlr layer-shell、text-input-v3（周边文字与选区）、双向拖放、SHM 与 GPU 租约 | types, platform, portal |
+| **aegle-platform** | 跨平台统一契约：`Platform` 与 `SurfacePlatform` trait、统一事件模型（`Event`）、窗口配置与角色（层、弹出层）、输出枚举、IME 事务、剪贴板与拖放 | types |
+| **aegle-platform-sdl3** | Linux 默认窗口后端：窗口与弹出层生命周期、显示器枚举、输入分发、系统光标、文本输入、剪贴板、拖入、软件呈现与 GPU 租约 | types, platform, portal |
+| **aegle-platform-wayland** | Linux 原生窗口客户端：xdg-shell、xdg_popup、wlr layer-shell（指定输出、原地改放置）、输出枚举、text-input-v3（周边文字与选区）、双向拖放、SHM 与 GPU 租约 | types, platform, portal |
 | **aegle-platform-win32** | Windows 原生窗口后端：Win32 窗口、DPI 动态感知、TSF 文本存储输入法、OLE 拖放、GDI 呈现与 HWND 租约 | types, platform |
 | **aegle-platform-macos** | macOS 原生窗口后端：AppKit 窗口、NSTextInputClient、NSPasteboard、NSDragging、CGImage 呈现与 Metal 租约 | types, platform |
 | **aegle-portal** | Linux 桌面 portal（`org.freedesktop.portal.Settings`）外观偏好读取与 `SettingChanged` 监听 | types, dbus |
@@ -36,9 +36,9 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 | **aegle-widgets** | 完整默认控件库（Label、Button、TextField、CheckBox、Switch、Slider、ScrollView、ListView、Table、Dialog 等） | ui, controls, theme, text |
 | **aegle-markup** | 花括号标记语言解析器、类型与作用域检查、诊断跨度报告 | 纯 Rust 解析器 |
 | **aegle-macros** | `ui!` 声明宏：将标记编译为零开销 Rust 控件树调用代码 | 过程宏 |
-| **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载 | ui, widgets, markup, macros |
+| **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载、layer 窗口文档（面板）、state 变化处理器 | ui, widgets, markup, macros |
 | **aegle-ui** | 无窗口保留式 UI 核心引擎：树生命周期、Taffy 布局调度、输入捕获冒泡路由、焦点管理、动画调度、IME 与语义同步 | core, layout, scene, text, theme, motion |
-| **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理、后台代理消息传递（`UiProxy`） | ui, platform, scene, text |
+| **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理、后台代理消息传递（`UiProxy`）、输出与原生弹出层 | ui, platform, scene, text |
 | **aegle** | 顶层便捷 Facade：统一默认导出、一键 `App::run_ui` | app, ui, widgets, image |
 
 ---

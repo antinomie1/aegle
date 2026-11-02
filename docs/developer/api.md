@@ -102,22 +102,28 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 
 `AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`vulkan`（Vulkan 预算配置）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。注意：渲染器由构建期 feature 单一决定（`tiny-skia` 默认，或 `cairo`、`vulkan`、`wgpu`），一个构建只编入一个渲染器，`AppOptions` 不包含渲染器选择字段。
 
-`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）与 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（Windows、macOS）创建失败并返回 `Unsupported`：
+`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）与 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（SDL3、Windows、macOS）创建失败并返回 `Unsupported`。`LayerOptions` 实现 `Default`（`Layer::Top`、无锚定、零保留区、不取键盘焦点），另有 `margin: [i32; 4]`（上右下左）与 `output: Option<OutputId>`（所在输出，`None` 由合成器选择）：
 
 ```rust
-use aegle::app::{Anchor, KeyboardInteractivity, Layer, LayerOptions};
+use aegle::app::{Anchor, LayerOptions};
 
-let panel = app.window_with_options("Panel", WindowOptions {
-    height: 32,
-    layer: Some(LayerOptions {
-        layer: Layer::Top,
-        anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
-        exclusive_zone: 32,
-        keyboard: KeyboardInteractivity::None,
-    }),
+let output = app.output("DP-1")?;        // 或 app.outputs()? 遍历全部输出
+let layer = LayerOptions {
+    anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+    exclusive_zone: 32,
+    output: Some(output.id),
     ..Default::default()
-})?;
+};
+let panel = app.window_with_options("", WindowOptions { height: 32, layer: Some(layer), ..Default::default() })?;
+// 原地改变放置与建议尺寸，保留原生 surface、控件与状态；不能换输出
+panel.set_layer(LayerOptions { anchor: Anchor::BOTTOM | Anchor::LEFT, ..layer }, 300, 32)?;
 ```
+
+| 输出与弹出层 | 说明 |
+|---|---|
+| `app.outputs()`、`app.output(name)` | 已连接输出的 `OutputInfo`（`id`、`name` 如 `DP-1`、`description`、逻辑 `position`/`size`、`scale`）；Win32、macOS 暂返回 `Unsupported` |
+| `app.on_outputs(\|app\| ...)` | 输出增删或几何变化后，每轮调度最多调用一次，在所有运行时借用之外，可开关窗口（如每个输出一个面板） |
+| `window.popup(PopupOptions::new(anchor, w, h))` | 依附于该窗口（普通窗口、层或另一弹出层）的原生弹出 surface，有自己的控件树，可超出父窗口（如面板的菜单）。`anchor` 为父窗口逻辑坐标矩形（如控件的 `bounds()`），`side` 选 `Side::Below/Above/Left/Right`，越界时由系统翻转或滑动；`grab: true`（默认）取得键盘并在外部按下时关闭，应在按下处理器里打开；`false` 为被动提示。父窗口关闭时其弹出层先关闭；系统撤销弹出层时它自行关闭。Wayland 用 xdg_popup，SDL3 用弹出菜单/提示窗口（只滑动不翻转），Win32、macOS 返回 `Unsupported` |
 
 ## 4. 控件树与句柄
 
@@ -509,7 +515,7 @@ Column {
 }
 ```
 
-View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。运行时加载与重载：
+View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。`view.count.on_change(|v| ...)` 在每次变化（来自事件块或 Rust）且绑定更新后调用处理器，返回可 `remove()` 的 `Watch`；处理器不会被自身对该 state 的修改重入。运行时加载与重载：
 
 ```rust
 use aegle::loader::Program;
@@ -518,6 +524,8 @@ let mut view = Program::load("ui/panel.aegle")?.build(&window)?; // 第三方元
 view.set("count", aegle::loader::Data::Int(2))?;
 view.reload(&Program::load("ui/panel.aegle")?);   // 失败时保留旧界面
 ```
+
+重载保留同名同类型 state 的值，其 `State` 句柄与 `on_change` 处理器随之转移。根为带 `layer` 的 `Window` 的文档即一个面板：`Program::open(&app)` 直接创建 layer surface，`program.open_on(&app, output.id)` 放在指定输出（每个输出一个面板），重载原地更新放置而不重建 surface（见[标记语言](../markup.md)第五节）。
 
 还可声明 `record`、写 `for item in items key item.id`、在事件块里用 `let`、`emit` 和 `host.name(args)`（宿主用 `aegle::loader::action(name, &[Type], f)` 为本线程的所有程序注册），组件可有 `slot` 与自己的 `event`。完整语法、可绑定属性、类型规则和限制见[标记语言](../markup.md)。
 
