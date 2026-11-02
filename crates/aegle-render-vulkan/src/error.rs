@@ -13,6 +13,10 @@ pub enum Error {
     /// The native surface changed; request another frame to recreate its swapchain.
     #[cfg(feature = "window")]
     SurfaceOutOfDate,
+    /// A Direct3D, DXGI or DirectComposition call of a transparent Win32
+    /// window failed.
+    #[cfg(all(windows, feature = "window"))]
+    Composition(windows::core::Error),
     /// Invalid or unsupported target extent.
     InvalidSize,
     /// An operation requires a completed frame or another established state.
@@ -72,6 +76,8 @@ impl fmt::Display for Error {
             }
             #[cfg(feature = "window")]
             Self::SurfaceOutOfDate => f.write_str("Vulkan surface changed; redraw required"),
+            #[cfg(all(windows, feature = "window"))]
+            Self::Composition(e) => write!(f, "DirectComposition: {e}"),
             Self::InvalidSize => f.write_str("invalid Vulkan render target size"),
             Self::InvalidState(reason) => f.write_str(reason),
             Self::Coordinates => f.write_str("Vulkan geometry exceeds the coordinate range"),
@@ -126,6 +132,13 @@ impl From<aegle_gpu::Error> for Error {
 impl From<aegle_scene::SceneError> for Error {
     fn from(value: aegle_scene::SceneError) -> Self {
         Self::Scene(value)
+    }
+}
+
+#[cfg(all(windows, feature = "window"))]
+impl From<windows::core::Error> for Error {
+    fn from(value: windows::core::Error) -> Self {
+        Self::Composition(value)
     }
 }
 

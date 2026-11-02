@@ -47,6 +47,7 @@ fn options(width: u32, height: u32) -> WindowOptions<'static> {
         size: PixelSize { width, height },
         buffer_budget: usize::MAX,
         layer: None,
+        transparent: false,
     }
 }
 

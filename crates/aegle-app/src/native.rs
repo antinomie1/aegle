@@ -275,6 +275,12 @@ impl App {
         ui.set_double_click(runtime.double_click(), 4.0);
         ui.resize(Size::new(options.width as f32, options.height as f32));
         let app_id = runtime.options.app_id.clone();
+        // Only the Vulkan renderer presents a Win32 window's alpha, through
+        // DirectComposition; wgpu keeps an ordinary native surface.
+        #[cfg(feature = "vulkan")]
+        let transparent = runtime.options.vulkan.transparent;
+        #[cfg(not(feature = "vulkan"))]
+        let transparent = false;
         let id = runtime
             .backend
             .create_window(aegle_platform::WindowOptions {
@@ -286,6 +292,7 @@ impl App {
                 },
                 buffer_budget: options.buffer_budget,
                 layer: options.layer,
+                transparent,
             })?;
         // The renderer and the platform are separate fields, so they are
         // borrowed separately while the window is handed over. A renderer that

@@ -12,7 +12,7 @@ description = "Bounded Vulkan 1.1 rendering of retained Aegle scenes"
 
 [features]
 default = []
-window = ["dep:raw-window-handle"]
+window = ["dep:raw-window-handle", "dep:windows"]
 text = ["aegle-scene/text", "aegle-gpu/vector", "dep:aegle-glyph", "dep:hashbrown"]
 
 [dependencies]
@@ -25,6 +25,14 @@ aegle-glyph = { workspace = true, optional = true, features = ["scene"] }
 hashbrown = { version = "0.17.1", default-features = false, optional = true }
 
 raw-window-handle = { version = "0.6.2", optional = true }
+
+# Transparent Win32 windows present through DirectComposition.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", default-features = false, optional = true, features = [
+    "Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_DirectComposition", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common",
+    "Win32_Security", "Win32_System_Threading",
+] }
 
 [build-dependencies]
 aegle-gpu.workspace = true

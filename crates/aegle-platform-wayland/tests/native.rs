@@ -53,6 +53,7 @@ fn configured_frames_reuse_bounded_shm_and_idle_without_redrawing() {
         },
         buffer_budget: 2 * 1024 * 1024,
         layer: None,
+        transparent: false,
     };
     let window = platform.create_window(options).unwrap();
     assert!(matches!(
@@ -205,6 +206,7 @@ fn preferred_scale_sizes_the_buffer_of_a_fractional_window() {
             },
             buffer_budget: 2 * 1024 * 1024,
             layer: None,
+            transparent: false,
         })
         .unwrap();
     // The compositor sends the preferred scale once the surface is mapped, so

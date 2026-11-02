@@ -374,6 +374,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "naga",
  "raw-window-handle",
+ "windows",
 ]
 
 [[package]]

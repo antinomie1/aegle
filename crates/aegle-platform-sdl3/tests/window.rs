@@ -34,6 +34,7 @@ fn a_window_presents_on_the_session_driver() {
             },
             buffer_budget: usize::MAX,
             layer: None,
+            transparent: false,
         })
         .unwrap();
     let info = loop {

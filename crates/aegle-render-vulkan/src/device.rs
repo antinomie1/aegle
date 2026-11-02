@@ -32,6 +32,10 @@ pub(crate) struct Device {
     /// that changed.
     #[cfg(feature = "window")]
     pub incremental_present: bool,
+    /// `VK_KHR_external_memory_win32` is enabled: a transparent window can
+    /// import the D3D11 texture it presents through DirectComposition.
+    #[cfg(all(windows, feature = "window"))]
+    pub external_memory_win32: bool,
     // Vulkan function pointers remain valid only while their loader is loaded.
     _entry: Entry,
 }
@@ -133,7 +137,7 @@ impl Device {
             surface.as_ref(),
         );
         match initialized {
-            Ok((raw, physical, family, properties, memory, _incremental)) => {
+            Ok((raw, physical, family, properties, memory, _incremental, _external)) => {
                 // SAFETY: initialize created one queue at index zero in family.
                 let queue = unsafe { raw.get_device_queue(family, 0) };
                 Ok(Self {
@@ -152,6 +156,8 @@ impl Device {
                     surface,
                     #[cfg(feature = "window")]
                     incremental_present: _incremental,
+                    #[cfg(all(windows, feature = "window"))]
+                    external_memory_win32: _external,
                     _entry: entry,
                 })
             }
@@ -172,6 +178,7 @@ type Initialized = (
     u32,
     vk::PhysicalDeviceProperties,
     vk::PhysicalDeviceMemoryProperties,
+    bool,
     bool,
 );
 
@@ -230,14 +237,24 @@ fn initialize(
             surface.is_some() && supports(instance, physical, ash::khr::incremental_present::NAME);
         #[cfg(not(feature = "window"))]
         let incremental = false;
+        // Transparent Win32 windows import D3D11 textures.
+        #[cfg(all(windows, feature = "window"))]
+        let external =
+            surface.is_some() && supports(instance, physical, ash::khr::external_memory_win32::NAME);
+        #[cfg(not(all(windows, feature = "window")))]
+        let external = false;
         #[cfg(feature = "window")]
         let extensions = [
-            ash::khr::swapchain::NAME.as_ptr(),
-            ash::khr::incremental_present::NAME.as_ptr(),
-        ];
+            (true, ash::khr::swapchain::NAME),
+            (incremental, ash::khr::incremental_present::NAME),
+            (external, ash::khr::external_memory_win32::NAME),
+        ]
+        .into_iter()
+        .filter_map(|(enabled, name)| enabled.then_some(name.as_ptr()))
+        .collect::<Vec<_>>();
         #[cfg(feature = "window")]
         let info = if surface.is_some() {
-            info.enabled_extension_names(&extensions[..1 + usize::from(incremental)])
+            info.enabled_extension_names(&extensions)
         } else {
             info
         };
@@ -247,7 +264,7 @@ fn initialize(
             unsafe { instance.create_device(physical, &info, None) }.map_err(Error::Vulkan)?;
         // SAFETY: physical belongs to instance, which still outlives this device.
         let memory = unsafe { instance.get_physical_device_memory_properties(physical) };
-        return Ok((raw, physical, family, properties, memory, incremental));
+        return Ok((raw, physical, family, properties, memory, incremental, external));
     }
     Err(Error::Unsupported("no compatible Vulkan graphics device"))
 }

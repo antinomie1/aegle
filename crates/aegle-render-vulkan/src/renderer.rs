@@ -448,7 +448,8 @@ impl Renderer {
         let signal;
         #[cfg(feature = "window")]
         let signals = match self.acquired {
-            Some((_, semaphore, _)) if last => {
+            // A DirectComposition image has no semaphore to signal.
+            Some((_, semaphore, _)) if last && semaphore != vk::Semaphore::null() => {
                 signal = [semaphore];
                 &signal[..]
             }

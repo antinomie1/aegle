@@ -7,6 +7,13 @@ use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 pub(crate) struct Surface {
     pub loader: ash::khr::surface::Instance,
     pub handle: vk::SurfaceKHR,
+    /// The window a transparent renderer composites onto.
+    #[cfg(windows)]
+    hwnd: vk::HWND,
+    /// Its DirectComposition tree, created by the first transparent frame and
+    /// kept across resizes.
+    #[cfg(windows)]
+    compositor: std::cell::OnceCell<std::rc::Rc<crate::composition::Compositor>>,
 }
 
 pub(crate) fn extensions(display: RawDisplayHandle) -> Result<[*const i8; 2]> {
@@ -29,6 +36,11 @@ impl Surface {
         display: RawDisplayHandle,
         window: RawWindowHandle,
     ) -> Result<Self> {
+        #[cfg(windows)]
+        let hwnd = match window {
+            RawWindowHandle::Win32(w) => w.hwnd.get(),
+            _ => 0,
+        };
         // SAFETY: WindowRenderer retains the owners supplying these borrowed handles.
         // The instance enabled the matching platform extension before this call.
         let handle = unsafe {
@@ -63,6 +75,10 @@ impl Surface {
         Ok(Self {
             loader: ash::khr::surface::Instance::new(entry, instance),
             handle,
+            #[cfg(windows)]
+            hwnd,
+            #[cfg(windows)]
+            compositor: Default::default(),
         })
     }
     /// Prefers an sRGB format for direct opaque rendering unless transparency
@@ -97,6 +113,18 @@ impl Surface {
         Err(Error::Unsupported(
             "surface needs RGBA8/BGRA8 UNORM or sRGB in sRGB color space",
         ))
+    }
+    /// This window's compositor, created on `device` the first time.
+    #[cfg(windows)]
+    pub fn compositor(
+        &self,
+        device: &crate::device::Device,
+    ) -> Result<std::rc::Rc<crate::composition::Compositor>> {
+        if let Some(compositor) = self.compositor.get() {
+            return Ok(compositor.clone());
+        }
+        let compositor = std::rc::Rc::new(crate::composition::Compositor::new(device, self.hwnd)?);
+        Ok(self.compositor.get_or_init(|| compositor).clone())
     }
     pub fn supports(
         &self,

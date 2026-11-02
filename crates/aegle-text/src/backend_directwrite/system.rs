@@ -95,31 +95,60 @@ impl DirectWriteSystem {
 
     /// Resolves a CSS family list to the family a format is created with,
     /// replacing generic families that a registration stands in for.
+    ///
+    /// DirectWrite knows no generic names and silently substitutes its default
+    /// UI face for a family it lacks, so the first family of the list that the
+    /// collection holds wins, and a generic family without a registration
+    /// stands for the Windows fonts that CSS engines use for it. With none
+    /// present, the first name is kept and DirectWrite's fallback applies.
     pub fn family(&self, css: &str) -> String {
+        let mut first = None;
         for token in css.split(',') {
             let name = token.trim().trim_matches(['"', '\'']);
             if name.is_empty() {
                 continue;
             }
-            let generic = match name.to_ascii_lowercase().as_str() {
-                "serif" => Some(GenericFamily::Serif),
-                "sans-serif" => Some(GenericFamily::SansSerif),
-                "monospace" => Some(GenericFamily::Monospace),
-                "cursive" => Some(GenericFamily::Cursive),
-                "fantasy" => Some(GenericFamily::Fantasy),
-                "system-ui" => Some(GenericFamily::SystemUi),
-                "emoji" => Some(GenericFamily::Emoji),
-                _ => None,
+            let (generic, system): (_, &[&str]) = match name.to_ascii_lowercase().as_str() {
+                "serif" => (Some(GenericFamily::Serif), &["Times New Roman"]),
+                "sans-serif" => (Some(GenericFamily::SansSerif), &["Segoe UI", "Arial"]),
+                "monospace" => (
+                    Some(GenericFamily::Monospace),
+                    &["Cascadia Mono", "Consolas", "Courier New"],
+                ),
+                "cursive" => (Some(GenericFamily::Cursive), &["Comic Sans MS"]),
+                "fantasy" => (Some(GenericFamily::Fantasy), &["Impact"]),
+                "system-ui" => (Some(GenericFamily::SystemUi), &["Segoe UI"]),
+                "emoji" => (Some(GenericFamily::Emoji), &["Segoe UI Emoji"]),
+                _ => (None, &[]),
             };
-            if let Some(first) = generic
+            if let Some(registered) = generic
                 .and_then(|generic| self.generics.get(&generic))
                 .and_then(|names| names.first())
             {
-                return first.clone();
+                return registered.clone();
             }
-            return name.to_owned();
+            let candidates = match generic {
+                Some(_) => system,
+                None => std::slice::from_ref(&name),
+            };
+            if let Some(found) = candidates.iter().find(|family| self.contains(family)) {
+                return (*found).to_owned();
+            }
+            first.get_or_insert(name);
         }
-        "sans-serif".to_owned()
+        first.unwrap_or("sans-serif").to_owned()
+    }
+
+    /// Whether the collection has a family of this name.
+    fn contains(&self, family: &str) -> bool {
+        let Some(collection) = &self.collection else {
+            return false;
+        };
+        let name = WideString::new(family);
+        let (mut index, mut exists) = (0, windows::core::BOOL(0));
+        // SAFETY: the name outlives the call and both outputs are locals.
+        unsafe { collection.FindFamilyName(name.as_pcwstr(), &mut index, &mut exists) }.is_ok()
+            && exists.as_bool()
     }
 
     /// Creates the text format for one shaping key, with fallback attached.

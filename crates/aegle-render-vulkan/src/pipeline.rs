@@ -189,11 +189,20 @@ impl Pipeline {
         if direct {
             return Ok(this);
         }
+        // D3D11 copies a DirectComposition window's image, which is no
+        // presentable image.
+        #[cfg(feature = "window")]
+        let presented = match cfg!(windows) && transparent {
+            true => vk::ImageLayout::GENERAL,
+            false => vk::ImageLayout::PRESENT_SRC_KHR,
+        };
+        #[cfg(not(feature = "window"))]
+        let presented = vk::ImageLayout::PRESENT_SRC_KHR;
         this.passes[1] = render_pass(
             &this.raw,
             format,
             if window {
-                vk::ImageLayout::PRESENT_SRC_KHR
+                presented
             } else {
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL
             },

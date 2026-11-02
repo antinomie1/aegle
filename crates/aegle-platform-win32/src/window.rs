@@ -22,14 +22,12 @@ use std::{
 use windows::{
     Win32::{
         Foundation::{HANDLE, HINSTANCE, HWND, RECT, WAIT_FAILED, WAIT_OBJECT_0},
-        Graphics::Dwm::DwmExtendFrameIntoClientArea,
         System::{
             LibraryLoader::GetModuleHandleW,
             Ole::{OleInitialize, OleUninitialize, RegisterDragDrop, RevokeDragDrop},
             Threading::{CreateEventW, SetEvent},
         },
         UI::{
-            Controls::MARGINS,
             HiDpi::*,
             Input::{
                 Ime::{HIMC, ImmAssociateContext},
@@ -154,7 +152,8 @@ impl Win32 {
         Ok(self.wake.as_ref().unwrap().0.clone())
     }
 
-    /// Creates a hidden opaque toplevel; the first successful frame shows it.
+    /// Creates a hidden toplevel, opaque unless `options.transparent`; the first
+    /// successful frame shows it.
     /// UIA adapters and Vulkan surfaces can attach before that first presentation.
     pub(crate) fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId, Error> {
         crate::error::bytes(options.size)?;
@@ -208,6 +207,12 @@ impl Win32 {
             drag_accept: Cell::new(None),
         });
         let title: Vec<u16> = options.title.encode_utf16().chain(Some(0)).collect();
+        // A transparent window keeps no redirection surface: its renderer shows
+        // premultiplied alpha through DirectComposition instead.
+        let style = match options.transparent {
+            true => WS_EX_NOREDIRECTIONBITMAP,
+            false => WINDOW_EX_STYLE(0),
+        };
         let mut rect = RECT {
             left: 0,
             top: 0,
@@ -221,11 +226,11 @@ impl Win32 {
                 &mut rect,
                 WS_OVERLAPPEDWINDOW,
                 false,
-                WINDOW_EX_STYLE(0),
+                style,
                 dpi,
             )?;
             let hwnd = CreateWindowExW(
-                WINDOW_EX_STYLE(0),
+                style,
                 w!("Aegle.NativeWindow.v1"),
                 PCWSTR(title.as_ptr()),
                 WS_OVERLAPPEDWINDOW,
@@ -238,13 +243,6 @@ impl Win32 {
                 Some(HINSTANCE(GetModuleHandleW(None)?.0)),
                 Some(Rc::as_ptr(&native).cast()),
             )?;
-            let margins = MARGINS {
-                cxLeftWidth: -1,
-                cxRightWidth: -1,
-                cyTopHeight: -1,
-                cyBottomHeight: -1,
-            };
-            let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
             RegisterDragDrop(hwnd, &crate::drag::target(&native))?;
             // Input methods compose only through TSF, never through the
             // thread's shared default IMM context.

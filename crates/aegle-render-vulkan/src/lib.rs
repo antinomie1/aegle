@@ -20,6 +20,8 @@ mod atlas;
 #[cfg(feature = "text")]
 mod atlas_pages;
 mod commands;
+#[cfg(all(windows, feature = "window"))]
+mod composition;
 mod device;
 mod error;
 #[cfg(feature = "text")]

@@ -22,6 +22,10 @@ pub(crate) struct Swapchain {
     pub transparent: bool,
     /// An image was presented: later presents may report only changed regions.
     presented: bool,
+    /// A transparent Win32 window's single image, presented through
+    /// DirectComposition instead of a Vulkan swapchain.
+    #[cfg(windows)]
+    composition: Option<crate::composition::Shared>,
 }
 
 impl Swapchain {
@@ -138,23 +142,40 @@ impl Swapchain {
             bytes: 0,
             dirty: false,
             presented: false,
-            // Windows DWM blends the alpha channel of the swapchain's UNORM surface
-            // (via DwmExtendFrameIntoClientArea) even though Win32 Vulkan surfaces
-            // only report VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR.
+            #[cfg(windows)]
+            composition: None,
+            // Win32 surfaces composite only opaquely; a transparent window
+            // presents through DirectComposition instead.
             transparent: !pipeline.direct
                 && (alpha == vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED
-                    || cfg!(target_os = "windows")),
+                    || (cfg!(windows) && transparent)),
         };
         // SAFETY: The selected graphics family can present; formats/caps were queried.
         // Partial initialization is reclaimed by Drop, before the device/surface.
         unsafe {
-            this.handle = this.loader.create_swapchain(&info, None)?;
-            let images = this.loader.get_swapchain_images(this.handle)?;
-            this.bytes = estimate(images.len() as u64)?;
+            #[cfg(windows)]
+            if this.transparent {
+                let shared = crate::composition::Shared::new(
+                    device,
+                    surface.compositor(device)?,
+                    format.format,
+                    extent,
+                    usage,
+                )?;
+                this.images.push(shared.image);
+                this.composition = Some(shared);
+                // The shared image and the composition swapchain's two buffers.
+                this.bytes = estimate(3)?;
+            }
+            if this.images.is_empty() {
+                this.handle = this.loader.create_swapchain(&info, None)?;
+                this.images = this.loader.get_swapchain_images(this.handle)?;
+                this.bytes = estimate(this.images.len() as u64)?;
+            }
+            let images = this.images.clone();
             this.acquire_fence = this
                 .raw
                 .create_fence(&vk::FenceCreateInfo::default(), None)?;
-            this.images.clone_from(&images);
             for image in images {
                 let view = this.raw.create_image_view(
                     &vk::ImageViewCreateInfo::default()
@@ -192,6 +213,12 @@ impl Swapchain {
     }
     pub fn acquire(&mut self) -> Result<(u32, vk::Semaphore, bool)> {
         self.dirty = true; // An error after acquisition requires teardown, never unsafe reuse.
+        // No semaphore: presenting waits for the queue on the CPU.
+        #[cfg(windows)]
+        if let Some(shared) = &self.composition {
+            shared.acquire()?;
+            return Ok((0, vk::Semaphore::null(), false));
+        }
         // SAFETY: Previous acquisition was waited on before rendering; one image is
         // acquired at a time. Waiting the acquire fence makes image access available
         // before queue submission without needing another binary semaphore.
@@ -225,6 +252,14 @@ impl Swapchain {
         suboptimal: bool,
         damage: Option<&[vk::RectLayerKHR]>,
     ) -> Result {
+        #[cfg(windows)]
+        if let Some(shared) = &self.composition {
+            // SAFETY: the queue is this device's; D3D11 copies only finished work.
+            unsafe { self.raw.queue_wait_idle(queue)? };
+            shared.present()?;
+            self.dirty = false;
+            return Ok(());
+        }
         let waits = [self.signals[index as usize]];
         let chains = [self.handle];
         let indices = [index];

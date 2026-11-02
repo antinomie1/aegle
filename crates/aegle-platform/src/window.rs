@@ -33,6 +33,10 @@ pub struct WindowOptions<'a> {
     /// A desktop-shell layer such as a panel or overlay instead of an ordinary
     /// window; [`crate::Error::Unsupported`] where the platform has no layers.
     pub layer: Option<LayerOptions>,
+    /// The renderer presents per-pixel alpha that the window system composites
+    /// with what lies behind the window. Win32 then gives the window no
+    /// redirection surface, so only a DirectComposition presenter shows it.
+    pub transparent: bool,
 }
 
 impl Default for WindowOptions<'_> {
@@ -46,6 +50,7 @@ impl Default for WindowOptions<'_> {
             },
             buffer_budget: usize::MAX,
             layer: None,
+            transparent: false,
         }
     }
 }
