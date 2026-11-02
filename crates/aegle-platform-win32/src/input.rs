@@ -42,12 +42,34 @@ pub(crate) fn key(native: &Native, msg: u32, w: WPARAM, l: LPARAM) {
         window: native.id,
         seat: crate::SEAT,
         key: key_id(w.0 as u32),
-        text: None,
+        text: match msg {
+            WM_KEYDOWN => typed(native),
+            _ => None,
+        },
         pressed: matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN),
         repeat: l.0 & (1 << 30) != 0,
         modifiers,
         time: message_time(),
     });
+}
+
+/// The text of the key being dispatched. `TranslateMessage` queued its
+/// `WM_CHAR`s before the key-down reached the window procedure, and posted
+/// messages precede later input, so the first ones queued belong to this key.
+/// They are taken here and travel with the key, as on SDL3, so the text is not
+/// delivered a second time. Control characters stay key commands.
+fn typed(native: &Native) -> Option<String> {
+    let hwnd = native.hwnd.get();
+    let mut units = Vec::new();
+    let mut next = MSG::default();
+    // SAFETY: our live HWND on its own UI thread; `next` is a writable local.
+    while unsafe { PeekMessageW(&mut next, Some(hwnd), WM_CHAR, WM_CHAR, PM_REMOVE) }.as_bool() {
+        let unit = next.wParam.0 as u16;
+        if unit >= 0x20 && unit != 0x7f {
+            units.push(unit);
+        }
+    }
+    String::from_utf16(&units).ok().filter(|text| !text.is_empty())
 }
 
 /// The logical key of a Win32 virtual-key code.

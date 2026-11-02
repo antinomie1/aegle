@@ -106,6 +106,22 @@ fn native_lifecycle_pixels_input_and_owned_surface() -> Result<(), Box<dyn std::
         }
     }
     assert!(delivered);
+    // A typed key carries the text TranslateMessage produced for it, which is
+    // not delivered again: the key C (scan code 0x2e) types "c" once.
+    unsafe {
+        PostMessageW(Some(hwnd), WM_KEYDOWN, WPARAM(0x43), LPARAM(1 | 0x2e << 16))
+            .map_err(Error::backend)?;
+    }
+    backend.dispatch(Some(Duration::ZERO))?;
+    let mut typed = Vec::new();
+    while let Some(event) = backend.next_event() {
+        match event {
+            Event::Key { key, text, .. } => typed.push(format!("{key:?} {text:?}")),
+            Event::Text { text, .. } => typed.push(format!("text {text:?}")),
+            _ => {}
+        }
+    }
+    assert_eq!(typed, [r#"Character('C') Some("c")"#]);
     // SAFETY: resize the owned native toplevel; WM_SIZE must publish actual client geometry.
     unsafe {
         SetWindowPos(hwnd, None, 0, 0, 280, 180, SWP_NOMOVE | SWP_NOZORDER)
