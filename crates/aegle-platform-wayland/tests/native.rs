@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use aegle_platform::{
     Anchor, Error, Event, ImeRequest, KeyboardInteractivity, Layer, LayerOptions, PixelSize,
-    Placement, Platform, PopupOptions, Rect, WindowId, WindowOptions,
+    Platform, PopupOptions, Rect, Side, WindowId, WindowOptions,
 };
 use aegle_platform_wayland::Wayland;
 
@@ -322,7 +322,7 @@ fn panels_sit_on_named_outputs_change_in_place_and_own_popups() {
     let popup = PopupOptions {
         parent: panel,
         anchor: Rect::new(10.0, 0.0, 40.0, 30.0),
-        placement: Placement::Above,
+        side: Side::Above,
         grab: None,
     };
     let menu = platform

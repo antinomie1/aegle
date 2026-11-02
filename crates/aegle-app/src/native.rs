@@ -72,7 +72,8 @@ impl Default for AppOptions {
     }
 }
 
-/// Initial window size, presentation budget and surface role.
+/// Initial window size, presentation budget and surface role. Popups are
+/// opened from their parent with [`Window::popup`].
 #[derive(Clone, Copy, Debug)]
 pub struct WindowOptions {
     /// Preferred width in logical pixels; the compositor may override it.
@@ -113,6 +114,7 @@ pub struct App {
     pub(crate) runtime: Rc<RefCell<Runtime>>,
     pub(crate) dispatching: Cell<bool>,
     pub(crate) on_error: RefCell<Option<crate::native_loop::ErrorHandler>>,
+    pub(crate) on_outputs: RefCell<Option<crate::native_shell::OutputsHandler>>,
     /// The desktop connection for controls' file dialogs, made on first use.
     #[cfg(feature = "desktop-services")]
     pub(crate) files: RefCell<Option<crate::native_files::Service>>,
@@ -157,6 +159,8 @@ pub(crate) struct Entry {
     /// Maps this window's platform input timestamps onto `Instant`.
     pub clock: crate::event_clock::EventClock,
     pub ready: bool,
+    /// The window a popup is attached to.
+    pub parent: Option<WindowId>,
     #[cfg(access)]
     pub accessibility: crate::native_access::Access,
 }
@@ -167,8 +171,8 @@ pub(crate) struct Entry {
 /// native window and its retained tree, invalidating all of its control handles.
 #[derive(Clone)]
 pub struct Window {
-    runtime: Weak<RefCell<Runtime>>,
-    id: WindowId,
+    pub(crate) runtime: Weak<RefCell<Runtime>>,
+    pub(crate) id: WindowId,
     root: Container,
 }
 
@@ -244,6 +248,7 @@ impl App {
             runtime: Rc::new(RefCell::new(runtime)),
             dispatching: Cell::new(false),
             on_error: RefCell::new(None),
+            on_outputs: RefCell::new(None),
             #[cfg(feature = "desktop-services")]
             files: RefCell::new(None),
         })
@@ -262,91 +267,7 @@ impl App {
 
     /// Creates an independently owned tree on the application's shared connection.
     pub fn window_with_options(&self, title: &str, options: WindowOptions) -> Result<Window> {
-        let mut runtime = self.runtime.borrow_mut();
-        let ui = Rc::new(Ui::with_fonts(runtime.fonts.clone(), runtime.theme())?);
-        // New windows join the application clock before callers can start a
-        // transition, including windows created long after the first dispatch.
-        #[cfg(feature = "motion")]
-        {
-            ui.advance_animations(runtime.clock.elapsed())?;
-            ui.set_default_transition(runtime.options.transition);
-            ui.set_reduced_motion(runtime.reduced_motion());
-        }
-        ui.set_double_click(runtime.double_click(), 4.0);
-        ui.resize(Size::new(options.width as f32, options.height as f32));
-        let app_id = runtime.options.app_id.clone();
-        // Only the Vulkan renderer presents a Win32 window's alpha, through
-        // DirectComposition; wgpu keeps an ordinary native surface.
-        #[cfg(feature = "vulkan")]
-        let transparent = runtime.options.vulkan.transparent;
-        #[cfg(not(feature = "vulkan"))]
-        let transparent = false;
-        let id = runtime
-            .backend
-            .create_window(aegle_platform::WindowOptions {
-                title,
-                app_id: &app_id,
-                size: PixelSize {
-                    width: options.width,
-                    height: options.height,
-                },
-                buffer_budget: options.buffer_budget,
-                layer: options.layer,
-                popup: None,
-                transparent,
-            })?;
-        // The renderer and the platform are separate fields, so they are
-        // borrowed separately while the window is handed over. A renderer that
-        // cannot take this window must not leave the native window behind, and
-        // whatever it already acquired must go first.
-        let Runtime {
-            renderer,
-            backend,
-            options: settings,
-            ..
-        } = &mut *runtime;
-        let outcome = renderer.add_window(
-            id,
-            &mut crate::renderer::Setup {
-                backend,
-                options: settings,
-            },
-        );
-        if let Err(error) = outcome {
-            renderer.remove_window(id);
-            runtime.backend.remove_window(id)?;
-            return Err(error);
-        }
-        #[cfg(access)]
-        let accessibility = match crate::native_access::Access::new(&mut runtime.backend, id) {
-            Ok(adapter) => adapter,
-            Err(error) => {
-                runtime.renderer.remove_window(id);
-                runtime.backend.remove_window(id)?;
-                return Err(error);
-            }
-        };
-        let root = ui.root();
-        runtime.windows.push(Entry {
-            id,
-            ui,
-            cursor: aegle_ui::Cursor::Default,
-            seat: None,
-            #[cfg(feature = "motion")]
-            flick: Vec::new(),
-            modifiers: Modifiers::default(),
-            clock: Default::default(),
-            ready: false,
-            #[cfg(access)]
-            title: title.into(),
-            #[cfg(access)]
-            accessibility,
-        });
-        Ok(Window {
-            runtime: Rc::downgrade(&self.runtime),
-            id,
-            root,
-        })
+        open(&self.runtime, title, options, None)
     }
 
     /// Whether this platform supports native composition (Wayland text-input-v3,
@@ -362,10 +283,106 @@ impl App {
     }
 }
 
+/// Opens a window, layer or popup with its own tree and renderer state.
+pub(crate) fn open(
+    shared: &Rc<RefCell<Runtime>>,
+    title: &str,
+    options: WindowOptions,
+    popup: Option<aegle_platform::PopupOptions>,
+) -> Result<Window> {
+    let mut runtime = shared.borrow_mut();
+    let ui = Rc::new(Ui::with_fonts(runtime.fonts.clone(), runtime.theme())?);
+    // New windows join the application clock before callers can start a
+    // transition, including windows created long after the first dispatch.
+    #[cfg(feature = "motion")]
+    {
+        ui.advance_animations(runtime.clock.elapsed())?;
+        ui.set_default_transition(runtime.options.transition);
+        ui.set_reduced_motion(runtime.reduced_motion());
+    }
+    ui.set_double_click(runtime.double_click(), 4.0);
+    ui.resize(Size::new(options.width as f32, options.height as f32));
+    let app_id = runtime.options.app_id.clone();
+    // Only the Vulkan renderer presents a Win32 window's alpha, through
+    // DirectComposition; wgpu keeps an ordinary native surface.
+    #[cfg(feature = "vulkan")]
+    let transparent = runtime.options.vulkan.transparent;
+    #[cfg(not(feature = "vulkan"))]
+    let transparent = false;
+    let id = runtime
+        .backend
+        .create_window(aegle_platform::WindowOptions {
+            title,
+            app_id: &app_id,
+            size: PixelSize {
+                width: options.width,
+                height: options.height,
+            },
+            buffer_budget: options.buffer_budget,
+            layer: options.layer,
+            popup,
+            transparent,
+        })?;
+    // The renderer and the platform are separate fields, so they are
+    // borrowed separately while the window is handed over. A renderer that
+    // cannot take this window must not leave the native window behind, and
+    // whatever it already acquired must go first.
+    let Runtime {
+        renderer,
+        backend,
+        options: settings,
+        ..
+    } = &mut *runtime;
+    let outcome = renderer.add_window(
+        id,
+        &mut crate::renderer::Setup {
+            backend,
+            options: settings,
+        },
+    );
+    if let Err(error) = outcome {
+        renderer.remove_window(id);
+        runtime.backend.remove_window(id)?;
+        return Err(error);
+    }
+    #[cfg(access)]
+    let accessibility = match crate::native_access::Access::new(&mut runtime.backend, id) {
+        Ok(adapter) => adapter,
+        Err(error) => {
+            runtime.renderer.remove_window(id);
+            runtime.backend.remove_window(id)?;
+            return Err(error);
+        }
+    };
+    let root = ui.root();
+    runtime.windows.push(Entry {
+        id,
+        ui,
+        cursor: aegle_ui::Cursor::Default,
+        seat: None,
+        #[cfg(feature = "motion")]
+        flick: Vec::new(),
+        modifiers: Modifiers::default(),
+        clock: Default::default(),
+        ready: false,
+        parent: popup.map(|popup| popup.parent),
+        #[cfg(access)]
+        title: title.into(),
+        #[cfg(access)]
+        accessibility,
+    });
+    Ok(Window {
+        runtime: Rc::downgrade(shared),
+        id,
+        root,
+    })
+}
+
 impl Window {
     /// Closes this window immediately and removes its controls; their
-    /// handles then panic like those of removed controls. Fails if the
-    /// window was already closed or the platform fails to destroy it.
+    /// handles then panic like those of removed controls. Its popups close
+    /// first. Fails if the window was already closed or the platform fails
+    /// to destroy it.
     pub fn close(&self) -> Result<()> {
         let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
         let mut runtime = runtime.borrow_mut();
@@ -419,7 +436,11 @@ impl Deref for Window {
 }
 
 impl Runtime {
+    /// Closes a window after its popups, innermost first.
     pub(crate) fn close(&mut self, id: WindowId) -> Result<()> {
+        while let Some(child) = self.windows.iter().find(|e| e.parent == Some(id)) {
+            self.close(child.id)?;
+        }
         let index = self
             .windows
             .iter()

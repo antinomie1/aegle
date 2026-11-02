@@ -26,8 +26,8 @@ pub use error::{DrawResult, Error, Result};
 pub use event::{Event, PointerKind};
 pub use ime::{ImeEvent, ImeRequest, ImeUpdate, MAX_SURROUNDING, Preedit};
 pub use window::{
-    Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, PixelSize, Placement,
-    PopupOptions, SeatId, WakeHandle, WindowId, WindowInfo, WindowOptions,
+    Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, PixelSize,
+    PopupOptions, SeatId, Side, WakeHandle, WindowId, WindowInfo, WindowOptions,
 };
 
 use std::time::Duration;

@@ -4,7 +4,7 @@
 
 use std::ffi::c_int;
 
-use aegle_platform::{Error, OutputId, OutputInfo, PixelSize, Placement, Point, PopupOptions};
+use aegle_platform::{Error, OutputId, OutputInfo, PixelSize, Point, PopupOptions, Side};
 
 use crate::{Sdl3, sys};
 
@@ -87,11 +87,11 @@ impl Sdl3 {
             rect.size.width.round() as c_int,
             rect.size.height.round() as c_int,
         );
-        let (x, y) = match options.placement {
-            Placement::Below => (x, y + h),
-            Placement::Above => (x, y - size.1),
-            Placement::Left => (x - size.0, y),
-            Placement::Right => (x + w, y),
+        let (x, y) = match options.side {
+            Side::Below => (x, y + h),
+            Side::Above => (x, y - size.1),
+            Side::Left => (x - size.0, y),
+            Side::Right => (x + w, y),
         };
         // A grabbing popup is a menu that takes the keyboard; SDL has one seat.
         let kind = match options.grab {

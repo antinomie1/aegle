@@ -285,3 +285,96 @@ fn cairo_windows_present_and_reject_a_translucent_background() -> Result {
     );
     Ok(())
 }
+
+/// A popup opened from a window lives on its own surface and closes with its
+/// parent; outputs are listed, and the outputs hook runs outside the loop's
+/// borrows. On Wayland a panel on the first output moves in place.
+#[test]
+#[ignore = "requires an isolated test desktop; never run on the user's desktop"]
+fn popups_close_with_their_parent_and_panels_move_in_place() -> Result {
+    assert_eq!(
+        std::env::var("AEGLE_TEST_COMPOSITOR").as_deref(),
+        Ok("private")
+    );
+    let app = App::with_fonts(test_fonts()?, AppOptions::default())?;
+    let outputs = app.outputs()?;
+    let first = outputs.first().expect("an output");
+    assert_eq!(app.output(&first.name)?.id, first.id);
+    assert!(app.output("no such output").is_err());
+    let hooked = Rc::new(Cell::new(false));
+    let seen = hooked.clone();
+    app.on_outputs(move |app| {
+        assert!(!app.outputs()?.is_empty());
+        seen.set(true);
+        Ok(())
+    });
+    let pump = |app: &App, millis| -> Result {
+        let deadline = Instant::now() + Duration::from_millis(millis);
+        while Instant::now() < deadline {
+            app.dispatch(Some(Duration::from_millis(20)))?;
+        }
+        Ok(())
+    };
+    let window = app.window_with_options(
+        "Parent",
+        WindowOptions {
+            width: 240,
+            height: 160,
+            ..Default::default()
+        },
+    )?;
+    let anchor = window.button("Menu");
+    pump(&app, 300)?;
+    let mut options = aegle_app::PopupOptions::new(anchor.bounds(), 120, 90);
+    options.grab = false;
+    let popup = window.popup(options)?;
+    let item = popup.text("Item");
+    pump(&app, 300)?;
+    assert!(item.bounds().size.width > 0.0);
+    window.close()?;
+    assert!(!item.is_alive());
+    assert!(popup.close().is_err());
+
+    #[cfg(feature = "wayland")]
+    {
+        use aegle_app::{Anchor, LayerOptions};
+        let layer = LayerOptions {
+            anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+            exclusive_zone: 32,
+            output: Some(first.id),
+            ..Default::default()
+        };
+        let panel = app.window_with_options(
+            "",
+            WindowOptions {
+                width: 200,
+                height: 32,
+                layer: Some(layer),
+                ..Default::default()
+            },
+        )?;
+        let label = panel.text("Panel");
+        pump(&app, 300)?;
+        assert_eq!(panel.bounds().size.width, first.size.width as f32);
+        let moved = LayerOptions {
+            anchor: Anchor::BOTTOM | Anchor::LEFT,
+            ..layer
+        };
+        panel.set_layer(moved, 200, 32)?;
+        pump(&app, 300)?;
+        assert_eq!(panel.bounds().size.width, 200.0);
+        assert!(label.is_alive());
+        let other = LayerOptions {
+            output: None,
+            ..moved
+        };
+        assert!(panel.set_layer(other, 200, 32).is_err());
+        panel.close()?;
+    }
+    // Wayland describes its outputs while connecting, which the hook sees.
+    #[cfg(feature = "wayland")]
+    assert!(hooked.get());
+    #[cfg(not(feature = "wayland"))]
+    let _ = hooked;
+    Ok(())
+}

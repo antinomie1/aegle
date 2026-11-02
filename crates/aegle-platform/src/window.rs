@@ -144,7 +144,7 @@ pub enum KeyboardInteractivity {
 
 /// A popup's attachment to its parent window.
 ///
-/// The popup is placed against `anchor` on the side `placement` names, and
+/// The popup is placed against `anchor` on the `side` it names, and
 /// the window system flips it to the opposite side or slides it along the
 /// edge when it would leave the screen. A popup closes ([`crate::Event::Close`])
 /// when the window system dismisses it; remove it before its parent.
@@ -157,7 +157,7 @@ pub struct PopupOptions {
     /// logical coordinates; its extent must be positive.
     pub anchor: Rect,
     /// The side of `anchor` the popup opens on.
-    pub placement: Placement,
+    pub side: Side,
     /// Takes an explicit grab for this seat's latest press, as menus do: the
     /// popup receives the seat's keyboard focus and a press outside the
     /// popup's chain dismisses it. `None` makes a passive popup, like a
@@ -168,7 +168,7 @@ pub struct PopupOptions {
 /// The side of its anchor a popup opens on, its start aligned with the
 /// anchor's start.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Placement {
+pub enum Side {
     /// Below the anchor, left edges aligned, like a dropdown menu.
     #[default]
     Below,

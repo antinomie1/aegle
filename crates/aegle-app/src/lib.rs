@@ -62,6 +62,8 @@ mod native_proxy;
 #[cfg(native)]
 mod native_render;
 #[cfg(native)]
+mod native_shell;
+#[cfg(native)]
 mod renderer;
 
 // A Linux build carries exactly one window backend; the others pick their
@@ -95,7 +97,9 @@ type Native = aegle_platform_macos::MacOs;
 
 #[cfg(feature = "desktop-services")]
 pub use aegle_desktop as desktop;
-pub use aegle_platform::{Anchor, KeyboardInteractivity, Layer, LayerOptions, Preferences};
+pub use aegle_platform::{
+    Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, Preferences, Side,
+};
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::{
     Options as VulkanOptions, RawDevice, SharedDevice, SharedGlyphCache, ash,
@@ -106,5 +110,7 @@ pub use aegle_render_wgpu::{Options as WgpuOptions, SharedGpu, wgpu};
 pub use native::{App, AppOptions, Window, WindowOptions};
 #[cfg(native)]
 pub use native_proxy::UiProxy;
+#[cfg(native)]
+pub use native_shell::PopupOptions;
 #[cfg(native)]
 pub use renderer::RENDERER;

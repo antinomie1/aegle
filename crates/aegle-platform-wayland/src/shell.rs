@@ -3,8 +3,8 @@
 //! placed on.
 
 use aegle_platform::{
-    KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, PixelSize, Placement, Point,
-    PopupOptions,
+    KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, PixelSize, Point,
+    PopupOptions, Side,
 };
 use smithay_client_toolkit::{
     output::{OutputHandler, OutputState},
@@ -151,11 +151,11 @@ pub(crate) fn popup(
     };
     positioner.set_size(size.width as i32, size.height as i32);
     positioner.set_anchor_rect(x as i32, y as i32, width as i32, height as i32);
-    let (edge, gravity) = match options.placement {
-        Placement::Below => (Edge::BottomLeft, Gravity::BottomRight),
-        Placement::Above => (Edge::TopLeft, Gravity::TopRight),
-        Placement::Left => (Edge::TopLeft, Gravity::BottomLeft),
-        Placement::Right => (Edge::TopRight, Gravity::BottomRight),
+    let (edge, gravity) = match options.side {
+        Side::Below => (Edge::BottomLeft, Gravity::BottomRight),
+        Side::Above => (Edge::TopLeft, Gravity::TopRight),
+        Side::Left => (Edge::TopLeft, Gravity::BottomLeft),
+        Side::Right => (Edge::TopRight, Gravity::BottomRight),
     };
     positioner.set_anchor(edge);
     positioner.set_gravity(gravity);

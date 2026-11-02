@@ -175,7 +175,7 @@ fn displays_are_outputs_and_popups_are_checked() {
     let popup = aegle_platform::PopupOptions {
         parent,
         anchor: aegle_platform::Rect::new(10.0, 10.0, 40.0, 20.0),
-        placement: aegle_platform::Placement::Below,
+        side: aegle_platform::Side::Below,
         grab: Some(SeatId(0)),
     };
     let mut menu = options(80, 60);

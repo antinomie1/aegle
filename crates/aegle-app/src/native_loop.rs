@@ -80,13 +80,15 @@ impl App {
                 (a, b) => a.or(b),
             }
         })?;
-        let mut stale = false;
+        let (mut stale, mut outputs) = (false, false);
         loop {
             let event = self.runtime.borrow_mut().backend.next_event();
             let Some(event) = event else { break };
             let motion = crate::native_input::is_motion(&event);
             if matches!(event, Event::Wake) {
                 self.drain_proxies()?;
+            } else if matches!(event, Event::Outputs) {
+                outputs = true;
             } else {
                 let result = self.runtime.borrow_mut().event(event);
                 self.report(result)?;
@@ -102,6 +104,11 @@ impl App {
             }
         }
         if stale {
+            self.runtime.borrow_mut().refresh()?;
+        }
+        if outputs {
+            self.outputs_changed()?;
+            self.callbacks(callbacks)?;
             self.runtime.borrow_mut().refresh()?;
         }
         #[cfg(access)]

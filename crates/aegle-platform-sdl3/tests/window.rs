@@ -100,7 +100,7 @@ fn a_popup_opens_beside_its_parent_and_outlives_nothing() {
             popup: Some(aegle_platform::PopupOptions {
                 parent,
                 anchor: aegle_platform::Rect::new(20.0, 20.0, 60.0, 24.0),
-                placement: aegle_platform::Placement::Below,
+                side: aegle_platform::Side::Below,
                 grab: None,
             }),
             ..options
