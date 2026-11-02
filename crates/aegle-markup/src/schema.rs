@@ -31,7 +31,8 @@ pub enum PropertyName {
     AspectRatio,
     /// Inner spacing: one length or a CSS-order list of two or four.
     Padding,
-    /// Outer spacing: like padding, but may be negative or auto.
+    /// Outer spacing: like padding, but may be negative or auto. On a layer
+    /// window, whole dp distances from its anchored edges.
     Margin,
     /// Absolute placement from the parent's edges, in CSS order; removes the item from the flow.
     Inset,
@@ -89,6 +90,19 @@ pub enum PropertyName {
     Label,
     /// Named built-in window theme.
     Theme,
+    /// Desktop-shell layer of a window document, which makes it a layer
+    /// surface such as a panel: `background`, `bottom`, `top` or `overlay`.
+    Layer,
+    /// Output edges a layer attaches to: one of `top`, `bottom`, `left` and
+    /// `right`, or a list of them.
+    Anchor,
+    /// Whole dp a layer reserves along its anchored edge, or `ignore` to
+    /// overlap other surfaces' reserved zones.
+    ExclusiveZone,
+    /// A layer's keyboard focus policy: `none`, `exclusive` or `on_demand`.
+    Keyboard,
+    /// The name of the output a layer is shown on, such as `"DP-1"`.
+    Output,
     /// Normal background color.
     Background,
     /// Normal text foreground color.

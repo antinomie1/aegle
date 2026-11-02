@@ -41,6 +41,11 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "enabled" => Enabled,
         "label" => Label,
         "theme" => Theme,
+        "layer" => Layer,
+        "anchor" => Anchor,
+        "exclusive_zone" => ExclusiveZone,
+        "keyboard" => Keyboard,
+        "output" => Output,
         "background" => Background,
         "foreground" => Foreground,
         "border_color" => BorderColor,
@@ -99,6 +104,8 @@ pub fn choices(name: PropertyName) -> &'static [&'static str] {
         Justify | AlignContent => JUSTIFY,
         Flow => &["row", "column", "row_dense", "column_dense"],
         Theme => &["light", "dark", "high_contrast"],
+        Layer => &["background", "bottom", "top", "overlay"],
+        Keyboard => &["none", "exclusive", "on_demand"],
         _ => &[],
     }
 }
@@ -140,7 +147,7 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
     let window = matches!(target, Target::Window);
     let styles = target.styles();
     match name {
-        Title | Theme => window,
+        Title | Theme | Layer | Anchor | ExclusiveZone | Keyboard | Output => window,
         FontSize => styles.contains(Styles::TEXT),
         SelectionColor | CaretColor => styles.contains(Styles::EDITOR),
         HoverBackground | FocusColor | FocusWidth => styles.contains(Styles::INTERACTIVE),
@@ -151,10 +158,34 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
         Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems | Areas => {
             target.layout() == Layout::Grid
         }
-        Tooltip | MaxWidth | MaxHeight | AspectRatio | Margin | Inset | Shrink | Basis
-        | AlignSelf | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale
-        | Rotation | Shadow | Opacity | BackdropBlur => !window,
+        Tooltip | MaxWidth | MaxHeight | AspectRatio | Inset | Shrink | Basis | AlignSelf
+        | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale | Rotation
+        | Shadow | Opacity | BackdropBlur => !window,
         _ => true,
+    }
+}
+
+/// The output edges a layer may anchor to.
+pub(crate) const EDGES: &[&str] = &["top", "bottom", "left", "right"];
+
+/// A whole dp length within `range`.
+fn whole(value: &Literal, range: std::ops::RangeInclusive<f32>) -> bool {
+    matches!(value, Literal::Length(n) if n.fract() == 0.0 && range.contains(n))
+}
+
+/// One edge, or a list of distinct edges.
+fn anchor(value: &Literal) -> bool {
+    let edge = |v: &Literal| matches!(v, Literal::Identifier(e) if EDGES.contains(&e.as_str()));
+    match value {
+        Literal::List(items) => {
+            !items.is_empty()
+                && items.iter().all(edge)
+                && items
+                    .iter()
+                    .enumerate()
+                    .all(|(i, v)| !items[..i].contains(v))
+        }
+        value => edge(value),
     }
 }
 
@@ -299,7 +330,17 @@ pub(crate) fn validate(
         (Opacity, Literal::Number(n)) => (0.0..=1.0).contains(n),
         (BackdropBlur, Literal::Length(n)) => n.is_finite() && *n >= 0.0,
         (Padding, value) if target.container() => edges(value, true, false),
+        (Margin, Literal::List(items)) if window => {
+            matches!(items.len(), 2 | 4) && items.iter().all(|i| whole(i, LAYER_RANGE))
+        }
+        (Margin, value) if window => whole(value, LAYER_RANGE),
         (Margin | Inset, value) => edges(value, false, true),
+        (Anchor, value) => anchor(value),
+        (ExclusiveZone, Literal::Identifier(name)) => name == "ignore",
+        (ExclusiveZone, value) => whole(value, 0.0..=LAYER_RANGE.end().to_owned()),
+        (Output, Literal::String(name)) => {
+            !name.is_empty() && name.len() <= 4000 && !name.contains('\0')
+        }
         (Gap, Literal::List(items)) => {
             items.len() == 2 && items.iter().all(|i| length(i, true, false))
         }
@@ -343,7 +384,11 @@ pub(crate) fn validate(
         Padding if target.container() => "a nonnegative dp length or percentage, a list of two \
             or four, or token(\"package.name\")"
             .into(),
+        Margin if window => "a whole dp length, or a list of two or four".into(),
         Margin | Inset => "a dp length, percentage or auto, or a list of two or four".into(),
+        Anchor => format!("one of {}, or a list of distinct ones", EDGES.join(", ")),
+        ExclusiveZone => "a nonnegative whole dp length or `ignore`".into(),
+        Output => "a nonempty output name of at most 4000 bytes without NUL".into(),
         Gap => "a nonnegative dp length or percentage, a [row, column] list or \
             token(\"package.name\")"
             .into(),
@@ -386,10 +431,14 @@ pub(crate) fn validate(
         Grow | Shrink => "a finite nonnegative number".into(),
         Visible | Enabled => "true or false".into(),
         Direction | LayoutDirection | Wrap | Align | Justify | AlignContent | AlignSelf
-        | JustifySelf | JustifyItems | Flow | Theme => choices(name).join(", "),
+        | JustifySelf | JustifyItems | Flow | Theme | Layer | Keyboard => choices(name).join(", "),
     };
     Err(format!("{name:?} requires {expected}"))
 }
+
+/// Whole dp lengths a layer's margin and zone may take: they become `i32`
+/// protocol values with room for scaling.
+const LAYER_RANGE: std::ops::RangeInclusive<f32> = -1_000_000.0..=1_000_000.0;
 
 pub(crate) fn valid_id(id: &str) -> bool {
     let mut bytes = id.bytes();

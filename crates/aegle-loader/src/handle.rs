@@ -77,6 +77,16 @@ pub(crate) fn consumed(name: PropertyName) -> bool {
     )
 }
 
+/// Window properties that shape the native window when it opens (or a
+/// layer when it reloads) rather than its root container.
+pub(crate) fn opens_window(name: PropertyName) -> bool {
+    use PropertyName::*;
+    matches!(
+        name,
+        Width | Height | Layer | Anchor | ExclusiveZone | Keyboard | Margin | Output
+    )
+}
+
 /// Applies one checked node property other than a window's or timing one.
 pub fn apply(node: &Node, name: PropertyName, value: &Literal) -> Result {
     let color = |value: &Literal| {

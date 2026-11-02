@@ -31,6 +31,8 @@ mod layout;
 mod motion;
 mod reactive;
 mod view;
+#[cfg(feature = "window")]
+mod window;
 
 use std::{fmt, fs::File, io::Read, path::Path, rc::Rc};
 
@@ -46,7 +48,7 @@ pub use element::__private;
 pub use element::{Arg, Element, Elements, Lines};
 pub use elements::{Column, Grid, Image, RadioButton, Row, ScrollView, Stack, Tab, Text, TextArea};
 pub use handle::Handle;
-pub use view::{State, StateValue, View};
+pub use view::{State, StateValue, View, Watch};
 
 /// Declares markup elements: each one's spec, and the glue that creates its
 /// control and applies its properties, events and `self` fields.
@@ -242,8 +244,21 @@ impl Program {
     }
 
     /// Opens a document whose root is a Window. A failure closes that window.
+    ///
+    /// With `layer`, the window opens as a desktop-shell layer surface on
+    /// the output named by `output`, or the compositor's choice without it,
+    /// so one document describes one panel. An `output` that is not
+    /// connected fails.
     #[cfg(feature = "window")]
     pub fn open(&self, app: &aegle_app::App) -> Result<View> {
-        view::window(self, app)
+        view::window(self, app, None)
+    }
+
+    /// Like [`open`](Self::open), placing a layer document on `output`
+    /// instead of the one it names, such as one panel per entry of
+    /// [`App::outputs`](aegle_app::App::outputs). An ordinary window ignores it.
+    #[cfg(feature = "window")]
+    pub fn open_on(&self, app: &aegle_app::App, output: aegle_app::OutputId) -> Result<View> {
+        view::window(self, app, Some(output))
     }
 }

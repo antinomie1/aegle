@@ -155,6 +155,21 @@ impl Checker<'_> {
             element.properties.push((prop, value));
         }
         let has = |prop| element.properties.iter().any(|(p, _)| *p == prop);
+        if let Target::Window = target
+            && !has(Prop::Node(PropertyName::Layer))
+            && let Some(name) = [
+                PropertyName::Anchor,
+                PropertyName::ExclusiveZone,
+                PropertyName::Keyboard,
+                PropertyName::Margin,
+                PropertyName::Output,
+            ]
+            .into_iter()
+            .find(|name| has(Prop::Node(*name)))
+        {
+            let message = format!("{name:?} applies to layer windows; set `layer` too");
+            return Err(Error::new(node.span, message));
+        }
         if let Target::Element(spec) = target
             && let Some(missing) = (0..spec.properties.len())
                 .find(|&index| spec.properties[index].required && !has(Prop::Element(index)))
@@ -274,6 +289,8 @@ fn identifier_literal(name: PropertyName) -> bool {
                 | Basis
                 | Margin
                 | Inset
+                | Anchor
+                | ExclusiveZone
                 | Columns
                 | Rows
                 | AutoColumns

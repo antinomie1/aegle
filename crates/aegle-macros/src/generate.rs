@@ -69,11 +69,13 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
             let (field, value) = (Ident::new(field, Span::call_site()), *value as u32);
             Some(quote! { #field: #value, })
         });
+        let layer = layer(root, &cx.facade, &parent);
         (
             quote! { #facade::app::App },
             quote! {
                 #parent.window_with_options(#title, #facade::app::WindowOptions {
                     #(#size)*
+                    #layer
                     ..::core::default::Default::default()
                 })?
             },
@@ -126,6 +128,69 @@ pub(super) fn builder(cx: &Context<'_>) -> TokenStream {
             }
         }
     }}
+}
+
+/// The `layer:` field of a layer window's options, opening it on its named
+/// output; nothing for an ordinary window.
+fn layer(root: &Element, facade: &TokenStream, app: &Ident) -> TokenStream {
+    let Some(Value::Identifier(layer)) = literal(root, PropertyName::Layer) else {
+        return TokenStream::new();
+    };
+    let camel = |name: &str| {
+        let name: String = name
+            .split('_')
+            .map(|part| part[..1].to_uppercase() + &part[1..])
+            .collect();
+        Ident::new(&name, Span::call_site())
+    };
+    let whole = |value: &Value| match value {
+        Value::Length(n) => *n as i32,
+        _ => unreachable!("checked whole dp length"),
+    };
+    let layer = camel(layer);
+    let edges: Vec<_> = match literal(root, PropertyName::Anchor) {
+        Some(Value::List(edges)) => edges.iter().collect(),
+        Some(edge) => vec![edge],
+        None => Vec::new(),
+    };
+    let edges = edges.into_iter().map(|edge| match edge {
+        Value::Identifier(edge) => Ident::new(&edge.to_uppercase(), Span::call_site()),
+        _ => unreachable!("checked anchor"),
+    });
+    let zone = match literal(root, PropertyName::ExclusiveZone) {
+        Some(Value::Identifier(_)) => -1,
+        Some(value) => whole(value),
+        None => 0,
+    };
+    let keyboard = match literal(root, PropertyName::Keyboard) {
+        Some(Value::Identifier(policy)) => camel(policy),
+        _ => camel("none"),
+    };
+    let [top, right, bottom, left] = match literal(root, PropertyName::Margin) {
+        Some(Value::List(edges)) => match &edges[..] {
+            [v, h] => [whole(v), whole(h), whole(v), whole(h)],
+            [t, r, b, l] => [whole(t), whole(r), whole(b), whole(l)],
+            _ => unreachable!("checked margin"),
+        },
+        Some(value) => [whole(value); 4],
+        None => [0; 4],
+    };
+    let output = match literal(root, PropertyName::Output) {
+        Some(Value::String(name)) => {
+            quote! { ::core::option::Option::Some(#app.output(#name)?.id) }
+        }
+        _ => quote! { ::core::option::Option::None },
+    };
+    quote! {
+        layer: ::core::option::Option::Some(#facade::app::LayerOptions {
+            layer: #facade::app::Layer::#layer,
+            anchor: #facade::app::Anchor::NONE #(| #facade::app::Anchor::#edges)*,
+            exclusive_zone: #zone,
+            keyboard: #facade::app::KeyboardInteractivity::#keyboard,
+            margin: [#top, #right, #bottom, #left],
+            output: #output,
+        }),
+    }
 }
 
 fn literal(element: &Element, name: PropertyName) -> Option<&Value> {
@@ -236,7 +301,17 @@ impl Output {
                         .push(quote! { #handle.set_theme(#facade::ui::Theme::#theme()); });
                 }
                 (
-                    Prop::Node(PropertyName::Title | PropertyName::Width | PropertyName::Height),
+                    Prop::Node(
+                        PropertyName::Title
+                        | PropertyName::Width
+                        | PropertyName::Height
+                        | PropertyName::Layer
+                        | PropertyName::Anchor
+                        | PropertyName::ExclusiveZone
+                        | PropertyName::Keyboard
+                        | PropertyName::Margin
+                        | PropertyName::Output,
+                    ),
                     None,
                 ) => {}
                 (Prop::Node(name), _) if timing(*name) => {

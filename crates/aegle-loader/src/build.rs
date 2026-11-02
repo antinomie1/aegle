@@ -11,7 +11,7 @@ use aegle_ui::{Container, Result};
 use crate::{
     Arg, Data, Lines, RuntimeError,
     eval::{Emit, Env, Param, Slot, eval, handle as run, truth},
-    handle::{Handle, apply, consumed},
+    handle::{Handle, apply, consumed, opens_window},
     reactive::Effect,
 };
 
@@ -291,8 +291,10 @@ fn instance(element: &Element, template: usize, env: &Env) -> Result<Env> {
 /// Applies an element's or window's literal properties and bindings, except
 /// the ones its constructor or the finishing pass consumes.
 fn properties(element: &Element, handle: &Handle, env: &Env, block: &mut Block) -> Result {
+    let window = element.kind == ElementKind::Window;
     for (prop, bound) in &element.properties {
         match (prop, bound) {
+            (Prop::Node(name), Bound::Literal(_)) if window && opens_window(*name) => {}
             (Prop::Node(name), Bound::Literal(value)) if !consumed(*name) => {
                 apply(handle.node(), *name, value)?
             }

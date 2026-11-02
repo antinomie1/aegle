@@ -1,9 +1,14 @@
 //! Built interfaces: root, named controls, entry states and reloading.
 
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{
+    cell::RefCell,
+    marker::PhantomData,
+    rc::{Rc, Weak},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use aegle_markup::{ElementKind, Span, Type};
-use aegle_ui::{Container, Result};
+use aegle_ui::{Container, HandlerResult, Result};
 
 use crate::{
     Data, Program, RuntimeError,
@@ -29,6 +34,11 @@ pub struct View {
     content: Vec<Handle>,
     /// Container of a fragment root.
     parent: Option<Container>,
+    /// Entry states that typed handles share, repointed by a reload.
+    slots: RefCell<Vec<Option<Rc<Slot>>>>,
+    /// A Window document's role and output, which a reload keeps.
+    #[cfg(feature = "window")]
+    surface: Option<crate::window::Surface>,
 }
 
 type Carried<'a> = &'a dyn Fn(&str, &Type) -> Option<Data>;
@@ -61,35 +71,24 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
         effects,
         content: Vec::new(),
         parent: Some(parent.clone()),
+        slots: RefCell::new(Vec::new()),
+        #[cfg(feature = "window")]
+        surface: None,
     })
 }
 
 #[cfg(feature = "window")]
-pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
-    use aegle_markup::{Bound, Prop, PropertyName, Value};
+pub(crate) fn window(
+    program: &Program,
+    app: &aegle_app::App,
+    output: Option<aegle_app::OutputId>,
+) -> Result<View> {
     let root = &program.0.checked.templates[0].root;
     if root.kind != ElementKind::Window {
         return Err("Program::open requires a Window document root".into());
     }
     crate::actions::validate(&program.0.checked)?;
-    let literal = |name| {
-        root.properties.iter().find_map(|(n, bound)| match bound {
-            Bound::Literal(value) if *n == Prop::Node(name) => Some(value),
-            _ => None,
-        })
-    };
-    let title = match literal(PropertyName::Title) {
-        Some(Value::String(title)) => title.as_str(),
-        _ => "Aegle",
-    };
-    let mut options = aegle_app::WindowOptions::default();
-    if let Some(Value::Length(width)) = literal(PropertyName::Width) {
-        options.width = *width as u32;
-    }
-    if let Some(Value::Length(height)) = literal(PropertyName::Height) {
-        options.height = *height as u32;
-    }
-    let window = app.window_with_options(title, options)?;
+    let (window, surface) = crate::window::open(app, root, output)?;
     let handle = Handle::window(window.clone());
     let effects = Rc::new(RefCell::new(Block::new()));
     let mut view = View {
@@ -101,6 +100,8 @@ pub(crate) fn window(program: &Program, app: &aegle_app::App) -> Result<View> {
         effects: effects.clone(),
         content: Vec::new(),
         parent: None,
+        slots: RefCell::new(Vec::new()),
+        surface: Some(surface),
     };
     if let Err(error) = view.fill(program, view.env.clone()) {
         window.close()?;
@@ -162,22 +163,57 @@ impl View {
 
     /// A typed handle to entry state number `index`; `T` must match its type.
     pub fn state_at<T: StateValue>(&self, index: usize) -> State<T> {
-        let ty = self.program.0.checked.templates[0].states[index].1.clone();
-        debug_assert!(T::accepts(&ty));
+        debug_assert!(T::accepts(
+            &self.program.0.checked.templates[0].states[index].1
+        ));
+        let mut slots = self.slots.borrow_mut();
+        if slots.len() <= index {
+            slots.resize(index + 1, None);
+        }
+        let slot = slots[index].get_or_insert_with(|| {
+            Rc::new(Slot {
+                cell: RefCell::new(self.env.scope.states[index].clone()),
+                program: RefCell::new(self.program.clone()),
+                index: std::cell::Cell::new(index),
+            })
+        });
         State {
-            cell: self.env.scope.states[index].clone(),
-            ty,
-            program: self.program.clone(),
+            slot: slot.clone(),
             marker: PhantomData,
         }
+    }
+
+    /// Hands every typed state handle to the state of the same name and type
+    /// in `next`, with its change handlers; others keep their detached state.
+    fn hand_over(&self, next: &Program, env: &Env) -> Vec<Option<Rc<Slot>>> {
+        let states = &next.0.checked.templates[0].states;
+        let mut slots = vec![None; states.len()];
+        let old = &self.program.0.checked.templates[0].states;
+        for slot in self.slots.borrow().iter().flatten() {
+            let (name, ty, _) = &old[slot.index.get()];
+            let Some(index) = states.iter().position(|(n, t, _)| n == name && t == ty) else {
+                continue;
+            };
+            let cell = env.scope.states[index].clone();
+            cell.adopt(&slot.cell.borrow());
+            *slot.cell.borrow_mut() = cell;
+            *slot.program.borrow_mut() = next.clone();
+            slot.index.set(index);
+            slots[index] = Some(slot.clone());
+        }
+        slots
     }
 
     /// Replaces this interface with one built from `program`, atomically: the
     /// new interface is fully built before the old one is removed, and a
     /// failure keeps the old one. Entry states with the same name and type
-    /// keep their values; other control-local state is reset. A Window
+    /// keep their values, and their typed [`State`] handles and change
+    /// handlers follow them; other control-local state is reset. A Window
     /// document keeps its native window, title and size, and rebuilds its
     /// content; window properties the new version omits keep their values.
+    /// A layer window keeps its surface and output and applies the new
+    /// layer, anchor, zone, keyboard policy, margin and size in place; a
+    /// reload that adds or removes `layer` or names another output fails.
     pub fn reload(&mut self, program: &Program) -> Result {
         let states = &self.program.0.checked.templates[0].states;
         let carried = |name: &str, ty: &Type| {
@@ -191,14 +227,21 @@ impl View {
         }
         if let Some(parent) = &self.parent {
             let view = fragment(program, parent, &carried)?;
+            *view.slots.borrow_mut() = self.hand_over(program, &view.env);
             self.root.node().remove();
             *self = view;
             return Ok(());
         }
         crate::actions::validate(&program.0.checked)?;
+        #[cfg(feature = "window")]
+        let layer = match &self.surface {
+            Some(surface) => surface.reload(&program.0.checked.templates[0].root)?,
+            None => None,
+        };
         let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), &carried)?;
         let old = std::mem::take(&mut self.content);
         let (old_ids, old_block) = (std::mem::take(&mut self.ids), self.effects.take());
+        let previous = self.program.clone();
         if let Err(error) = self.fill(program, env) {
             for handle in std::mem::replace(&mut self.content, old) {
                 handle.node().remove();
@@ -209,6 +252,16 @@ impl View {
         }
         for handle in old {
             handle.node().remove();
+        }
+        let current = std::mem::replace(&mut self.program, previous);
+        let slots = self.hand_over(&current, &self.env);
+        self.program = current;
+        *self.slots.borrow_mut() = slots;
+        // The surface stays; only its placement changes, in place.
+        #[cfg(feature = "window")]
+        if let Some((layer, width, height)) = layer {
+            let window = self.root.typed::<aegle_app::Window>().unwrap();
+            window.set_layer(layer, width, height)?;
         }
         Ok(())
     }
@@ -283,20 +336,30 @@ fn conforms(value: &Data, ty: &Type, program: &aegle_markup::Program) -> bool {
     }
 }
 
+/// One entry state as its typed handles see it. A reload repoints it to
+/// the new interface's state of the same name and type.
+pub(crate) struct Slot {
+    cell: RefCell<Rc<Cell>>,
+    /// The program whose records a value is checked against.
+    program: RefCell<Program>,
+    /// The state's index in that program's entry document.
+    index: std::cell::Cell<usize>,
+}
+
 /// A typed handle to an entry-document state, as `ui!` views expose them.
+///
+/// Handles of one view share the state through every [`View::reload`] that
+/// keeps a state of this name and type; after a reload that drops it, a
+/// handle keeps a detached value that nothing displays.
 pub struct State<T> {
-    cell: Rc<Cell>,
-    ty: Type,
-    program: Program,
+    slot: Rc<Slot>,
     marker: PhantomData<fn() -> T>,
 }
 
 impl<T> Clone for State<T> {
     fn clone(&self) -> Self {
         Self {
-            cell: self.cell.clone(),
-            ty: self.ty.clone(),
-            program: self.program.clone(),
+            slot: self.slot.clone(),
             marker: PhantomData,
         }
     }
@@ -305,19 +368,63 @@ impl<T> Clone for State<T> {
 impl<T: StateValue> State<T> {
     /// The current value.
     pub fn get(&self) -> T {
-        T::from_data(self.cell.get(None))
+        T::from_data(self.slot.cell.borrow().get(None))
     }
 
-    /// Assigns the state and updates every binding that reads it. A value that
-    /// does not fit the declared type, such as a record list of the wrong shape,
-    /// is an error and changes nothing.
+    /// Assigns the state and updates every binding that reads it, then runs
+    /// its change handlers. A value that does not fit the declared type, such
+    /// as a record list of the wrong shape, is an error and changes nothing.
     pub fn set(&self, value: T) -> Result {
         let data = value.into_data()?;
-        if !conforms(&data, &self.ty, &self.program.0.checked) {
-            let message = format!("state requires {:?}", self.ty);
+        let program = self.slot.program.borrow().clone();
+        let ty = &program.0.checked.templates[0].states[self.slot.index.get()].1;
+        if !conforms(&data, ty, &program.0.checked) {
+            let message = format!("state requires {ty:?}");
             return Err(RuntimeError::new(Span::default(), message).into());
         }
-        self.cell.set(data)
+        let cell = self.slot.cell.borrow().clone();
+        cell.set(data)
+    }
+
+    /// Runs `handler` with the new value whenever the state changes, from
+    /// markup event blocks, bindings' sources or Rust alike, after the
+    /// bindings that read it have updated. It runs outside every UI borrow,
+    /// like an event handler, and is not re-entered by changes it makes to
+    /// this state itself; an error it returns stops that update and reaches
+    /// whoever changed the state. The handler lives with the interface and
+    /// follows the state through reloads; [`Watch::remove`] stops it. A
+    /// handler that captures a handle of its own state keeps the state alive
+    /// until it is removed.
+    pub fn on_change<R: HandlerResult>(&self, mut handler: impl FnMut(T) -> R + 'static) -> Watch {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let run = move |data: &Data| handler(T::from_data(data.clone())).into_result();
+        self.slot
+            .cell
+            .borrow()
+            .watch((id, Rc::new(RefCell::new(run))));
+        Watch {
+            slot: Rc::downgrade(&self.slot),
+            id,
+        }
+    }
+}
+
+/// A registered state change handler; see [`State::on_change`]. Dropping it
+/// keeps the handler.
+#[derive(Clone, Debug)]
+pub struct Watch {
+    slot: Weak<Slot>,
+    id: u64,
+}
+
+impl Watch {
+    /// Unregisters the handler: it never runs again. Removing it twice, or
+    /// after its state is gone, does nothing.
+    pub fn remove(&self) {
+        if let Some(slot) = self.slot.upgrade() {
+            slot.cell.borrow().unwatch(self.id);
+        }
     }
 }
 

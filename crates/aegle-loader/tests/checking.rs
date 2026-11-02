@@ -359,3 +359,58 @@ fn named_controls_are_read_and_copied_only_in_entry_handlers() {
     let error = check(parse(window).unwrap()).unwrap_err();
     assert!(error.message.contains("is the window"), "{}", error.message);
 }
+
+#[test]
+fn layer_windows_check_their_placement_and_require_a_layer() {
+    let source = r#"Window {
+        layer: top; anchor: [top, left, right]; exclusive_zone: 32dp
+        keyboard: on_demand; margin: [4dp, 8dp]; output: "DP-1"; height: 32dp
+        Row { margin: 10%; Text { text: "panel" } }
+    }"#;
+    let program = check(parse(source).unwrap()).unwrap();
+    let root = &program.templates[0].root;
+    assert_eq!(root.kind, ElementKind::Window);
+    assert!(
+        root.properties
+            .iter()
+            .any(|(p, _)| *p == Prop::Node(PropertyName::Output))
+    );
+    let ignore = "Window { layer: overlay; anchor: bottom; exclusive_zone: ignore }";
+    check(parse(ignore).unwrap()).unwrap();
+    for (source, message) in [
+        ("Window { anchor: top }", "applies to layer windows"),
+        ("Window { margin: 4dp }", "applies to layer windows"),
+        ("Window { layer: middle }", "Layer requires"),
+        (
+            "Window { layer: top; anchor: [top, top] }",
+            "Anchor requires",
+        ),
+        ("Window { layer: top; anchor: middle }", "Anchor requires"),
+        (
+            "Window { layer: top; exclusive_zone: 2.5dp }",
+            "ExclusiveZone requires",
+        ),
+        (
+            "Window { layer: top; exclusive_zone: -1dp }",
+            "ExclusiveZone requires",
+        ),
+        ("Window { layer: top; margin: 10% }", "Margin requires"),
+        ("Window { layer: top; output: \"\" }", "Output requires"),
+        (
+            "Window { layer: top; keyboard: always }",
+            "Keyboard requires",
+        ),
+        ("Window { Row { layer: top } }", "not supported on Row"),
+        (
+            "Window { state z: int = 1\n layer: top; exclusive_zone: z }",
+            "ExclusiveZone requires",
+        ),
+        (
+            "Window { state n: string = \"DP-1\"\n layer: top; output: n }",
+            "only literal",
+        ),
+    ] {
+        let error = check(parse(source).unwrap()).unwrap_err().to_string();
+        assert!(error.contains(message), "{source}: {error}");
+    }
+}

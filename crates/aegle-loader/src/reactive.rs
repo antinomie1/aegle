@@ -11,10 +11,14 @@ use crate::Data;
 
 type Run = Box<dyn FnMut(&Rc<Effect>) -> Result>;
 
-/// One typed state value and the effects that read it.
+/// A host handler of a state's changes, by registration number.
+pub(crate) type Watcher = (u64, Rc<RefCell<dyn FnMut(&Data) -> Result>>);
+
+/// One typed state value, the effects that read it and the host's watchers.
 pub(crate) struct Cell {
     value: RefCell<Data>,
     subscribers: RefCell<Vec<Weak<Effect>>>,
+    watchers: RefCell<Vec<Watcher>>,
 }
 
 impl Cell {
@@ -22,7 +26,24 @@ impl Cell {
         Rc::new(Self {
             value: RefCell::new(value),
             subscribers: RefCell::new(Vec::new()),
+            watchers: RefCell::new(Vec::new()),
         })
+    }
+
+    /// Adds a host watcher, run after the effects on every change.
+    pub fn watch(&self, watcher: Watcher) {
+        self.watchers.borrow_mut().push(watcher);
+    }
+
+    /// Removes the watcher registered as `id`, if it is still here.
+    pub fn unwatch(&self, id: u64) {
+        self.watchers.borrow_mut().retain(|(n, _)| *n != id);
+    }
+
+    /// Takes over the watchers of the cell this one replaces in a reload.
+    pub fn adopt(&self, old: &Cell) {
+        let moved = std::mem::take(&mut *old.watchers.borrow_mut());
+        self.watchers.borrow_mut().extend(moved);
     }
 
     /// Sets the initial value before any effect reads it.
@@ -38,8 +59,9 @@ impl Cell {
         self.value.borrow().clone()
     }
 
-    /// Stores a changed value and re-runs live subscribers in subscription order.
-    /// The first failing effect stops this update and returns its error.
+    /// Stores a changed value and re-runs live subscribers in subscription
+    /// order, then the watchers in registration order with the new value.
+    /// The first failure stops this update and returns its error.
     pub fn set(&self, value: Data) -> Result {
         if *self.value.borrow() == value {
             return Ok(());
@@ -52,6 +74,23 @@ impl Cell {
         };
         for effect in subscribers.iter().filter_map(Weak::upgrade) {
             effect.run()?;
+        }
+        if self.watchers.borrow().is_empty() {
+            return Ok(());
+        }
+        let watchers = self.watchers.borrow().clone();
+        for (id, watcher) in watchers {
+            // A watcher removed by an earlier one no longer runs.
+            if !self.watchers.borrow().iter().any(|(n, _)| *n == id) {
+                continue;
+            }
+            // Bindings settle synchronously, so a watcher sees the latest value.
+            let value = self.value.borrow().clone();
+            // Like an effect, a watcher is not re-entered by its own changes.
+            let Ok(mut watcher) = watcher.try_borrow_mut() else {
+                continue;
+            };
+            watcher(&value)?;
         }
         Ok(())
     }

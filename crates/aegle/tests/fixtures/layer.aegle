@@ -1,0 +1,10 @@
+Window {
+    layer: top
+    anchor: [top, left, right]
+    exclusive_zone: 28dp
+    height: 28dp
+    Row {
+        id: bar
+        Text { text: "panel" }
+    }
+}
