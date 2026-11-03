@@ -314,7 +314,7 @@ impl Output {
                     ),
                     None,
                 ) => {}
-                (Prop::Node(name), _) if timing(*name) => {
+                (Prop::Node(name), _) if name.timed() => {
                     let (name, value) = (variant(name), value(literal, &m));
                     timed.push(quote! { (#m::PropertyName::#name, &#value) });
                 }
@@ -358,18 +358,4 @@ impl Output {
             self.visit(cx, child, &child_handle);
         }
     }
-}
-
-fn timing(name: PropertyName) -> bool {
-    use PropertyName::*;
-    matches!(
-        name,
-        Transition
-            | PaintTransition
-            | OffsetTransition
-            | ScaleTransition
-            | RotationTransition
-            | ShadowTransition
-            | OpacityTransition
-    )
 }

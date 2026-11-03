@@ -7,6 +7,14 @@ use std::time::Duration;
 
 mod common;
 
+fn build(source: &'static str) -> Result<(aegle_ui::Ui, aegle_loader::View)> {
+    let ui = common::ui()?;
+    let program =
+        Program::from_sources("main.aegle", &Elements::new(), &mut |_| Ok(source.into()))?;
+    let view = program.build(&ui.root())?;
+    Ok((ui, view))
+}
+
 #[test]
 fn timings_name_presets_bezier_curves_and_springs() -> Result {
     let source = r#"Text { id: label
@@ -41,5 +49,31 @@ fn timings_name_presets_bezier_curves_and_springs() -> Result {
         timing(TransitionProperty::Rotation),
         Transition::new(ms(50), bouncy)
     );
+    Ok(())
+}
+
+#[test]
+fn animations_start_when_built_and_repeat_on_request() -> Result {
+    let (ui, view) = build(
+        r#"Column {
+            Text { id: once; text: "a"; scale_animation: [[1, 1.5, 2], 100ms, ease_out] }
+            Text { id: spin; text: "b"; rotation_animation: [[0, 360], 100ms, forever] }
+            Text { id: pulse; text: "c"
+                opacity_animation: [[0.4, 1], 100ms, ease_in_out, alternate] }
+        }"#,
+    )?;
+    let node = |id| view.handle(id).unwrap().node().clone();
+    let (once, spin, pulse) = (node("once"), node("spin"), node("pulse"));
+    assert!(once.is_animating() && spin.is_animating() && pulse.is_animating());
+    // The first refresh starts them; the second is past the once animation.
+    for seconds in [1, 10] {
+        ui.advance_animations(Duration::from_secs(seconds))?;
+        ui.refresh()?;
+    }
+    assert!(!once.is_animating());
+    assert_eq!(once.transform().scale, 2.0);
+    assert!(spin.is_animating() && pulse.is_animating());
+    spin.finish_transition();
+    assert!((spin.transform().rotation - 360f32.to_radians()).abs() < 1e-4);
     Ok(())
 }

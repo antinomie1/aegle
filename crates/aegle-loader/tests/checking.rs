@@ -32,6 +32,9 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
                     offset_transition: spring(170, 26)
                     scale_transition: [300ms, cubic_bezier(0.2, -0.5, 0.3, 1.4)]
                     rotation_transition: [1ms, spring(300, 10)]
+                    scale_animation: [[1, 1.2, 1], 800ms]
+                    rotation_animation: [[0, -360], 2000ms, linear, forever]
+                    opacity_animation: [[0.4, 1], 1000ms, spring(170, 26), alternate]
                 }
             }
             TextField { id: title; text: "你好"; read_only: false }
@@ -78,6 +81,13 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "transition: spring(0, 10)",
         "transition: [1ms, spring(100)]",
         "transition: cubic_bezier(0, 0, 1, 1)",
+        "scale_animation: [[1, 2], 100ms]",
+        "Text { scale_animation: [[1], 100ms] }",
+        "Text { scale_animation: [[1, 0], 100ms] }",
+        "Text { opacity_animation: [[0, 2], 100ms] }",
+        "Text { rotation_animation: [[0, 1], 100ms, forever, linear] }",
+        "Text { rotation_animation: [[0, 1], 100ms, twice] }",
+        "Text { rotation_animation: [[0, 1]] }",
         "offset_x: 1dp",
         "Text { offset_x: 1 }",
         "Text { rotation: 1dp }",

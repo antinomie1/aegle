@@ -166,6 +166,39 @@ pub enum PropertyName {
     ShadowTransition,
     /// Opacity transition timing, as [`Self::Transition`].
     OpacityTransition,
+    /// A scale animation started when the node is built, as
+    /// [`Self::RotationAnimation`] with scales in `(0, 1000]`.
+    ScaleAnimation,
+    /// A rotation animation started when the node is built: `[values,
+    /// duration]`, optionally followed by an easing as for
+    /// [`Self::Transition`] and then `forever` or `alternate` (forever, every
+    /// second cycle backwards). The two or more values, here in degrees, are
+    /// spread evenly over the cycle; it plays once by default.
+    RotationAnimation,
+    /// An opacity animation started when the node is built, as
+    /// [`Self::RotationAnimation`] with opacities in `[0, 1]`.
+    OpacityAnimation,
+}
+
+impl PropertyName {
+    /// Transition timings and animations: a host installs them after every
+    /// other property, and they need motion support.
+    pub fn timed(self) -> bool {
+        use PropertyName::*;
+        matches!(
+            self,
+            Transition
+                | PaintTransition
+                | OffsetTransition
+                | ScaleTransition
+                | RotationTransition
+                | ShadowTransition
+                | OpacityTransition
+                | ScaleAnimation
+                | RotationAnimation
+                | OpacityAnimation
+        )
+    }
 }
 
 pub(crate) const TOO_DEEP: &str = "nesting exceeds 256 levels";

@@ -1,4 +1,4 @@
-//! Presented geometry and transition timing properties.
+//! Presented geometry, transition timing and animation properties.
 
 use aegle_markup::{PropertyName, Value};
 use aegle_ui::{Node, Point, Transform};
@@ -87,10 +87,10 @@ fn numbers<const N: usize>(arguments: &[Value]) -> [f32; N] {
 }
 
 /// Installs a node's literal node-wide `transition`, then each per-property
-/// timing over it; other properties are ignored.
+/// timing over it, then starts its animations; other properties are ignored.
 #[cfg(feature = "motion")]
 pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) {
-    use aegle_ui::TransitionProperty as Property;
+    use aegle_ui::{Animate, TransitionProperty as Property};
     if let Some((_, value)) = properties
         .iter()
         .find(|(name, _)| *name == PropertyName::Transition)
@@ -105,27 +105,72 @@ pub fn transitions(node: &Node, properties: &[(PropertyName, &Value)]) {
             PropertyName::RotationTransition => Property::Rotation,
             PropertyName::ShadowTransition => Property::Shadow,
             PropertyName::OpacityTransition => Property::Opacity,
+            PropertyName::ScaleAnimation => {
+                node.animate(Animate::Scale(animation(value, 1.0)));
+                continue;
+            }
+            PropertyName::RotationAnimation => {
+                node.animate(Animate::Rotation(animation(value, 1f32.to_radians())));
+                continue;
+            }
+            PropertyName::OpacityAnimation => {
+                node.animate(Animate::Opacity(animation(value, 1.0)));
+                continue;
+            }
             _ => continue,
         };
         node.set_property_transition(property, timing(value));
     }
 }
 
+/// A checked `[[values...], duration, easing?, repeat?]` with its values
+/// spread evenly over the cycle and multiplied by `unit`.
+#[cfg(feature = "motion")]
+fn animation(value: &Value, unit: f32) -> aegle_ui::Animation<f32> {
+    use aegle_ui::{Animation, Cycles, Easing, Keyframe};
+    let Value::List(items) = value else {
+        unreachable!("checked animation")
+    };
+    let [
+        Value::List(values),
+        Value::Duration(milliseconds),
+        rest @ ..,
+    ] = &items[..]
+    else {
+        unreachable!("checked animation")
+    };
+    let repeat = |v: &Value| matches!(v, Value::Identifier(name) if name == "forever" || name == "alternate");
+    let (curve, repeat) = match rest {
+        [] => (Easing::Linear, None),
+        [last] if repeat(last) => (Easing::Linear, Some(last)),
+        [curve] => (easing(curve), None),
+        [curve, last] => (easing(curve), Some(last)),
+        _ => unreachable!("checked animation"),
+    };
+    let last = (values.len() - 1) as f32;
+    let frames: Vec<_> = (values.iter().zip(0..))
+        .map(|(value, index)| {
+            let Value::Number(value) = value else {
+                unreachable!("checked animation value")
+            };
+            Keyframe::new(index as f32 / last, value * unit).easing(curve)
+        })
+        .collect();
+    let animation = Animation::new(duration(*milliseconds), frames).expect("checked animation");
+    match repeat.map(crate::layout::identifier) {
+        None => animation,
+        Some(name) => animation
+            .cycles(Cycles::Forever)
+            .alternate(name == "alternate"),
+    }
+}
+
 /// Installs timing properties; they require the `motion` feature.
 #[cfg(not(feature = "motion"))]
 pub fn transitions(_: &Node, properties: &[(PropertyName, &Value)]) {
-    use PropertyName::*;
-    let timed = properties.iter().any(|(name, _)| {
-        matches!(
-            name,
-            Transition
-                | PaintTransition
-                | OffsetTransition
-                | ScaleTransition
-                | RotationTransition
-                | ShadowTransition
-                | OpacityTransition
-        )
-    });
-    assert!(!timed, "markup transitions require the motion feature");
+    let timed = properties.iter().any(|(name, _)| name.timed());
+    assert!(
+        !timed,
+        "markup transitions and animations require the motion feature"
+    );
 }

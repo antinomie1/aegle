@@ -77,6 +77,9 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "backdrop_blur" => BackdropBlur,
         "shadow_transition" => ShadowTransition,
         "opacity_transition" => OpacityTransition,
+        "scale_animation" => ScaleAnimation,
+        "rotation_animation" => RotationAnimation,
+        "opacity_animation" => OpacityAnimation,
         _ => return None,
     })
 }
@@ -160,7 +163,8 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
         }
         Tooltip | MaxWidth | MaxHeight | AspectRatio | Inset | Shrink | Basis | AlignSelf
         | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale | Rotation
-        | Shadow | Opacity | BackdropBlur => !window,
+        | Shadow | Opacity | BackdropBlur | ScaleAnimation | RotationAnimation
+        | OpacityAnimation => !window,
         _ => true,
     }
 }
@@ -221,6 +225,31 @@ fn easing(value: &Literal) -> bool {
 fn spring(value: &Literal) -> bool {
     matches!(value, Literal::Call(function, arguments) if function == "spring"
         && matches!(&arguments[..], [Literal::Number(k), Literal::Number(d)] if *k > 0.0 && *d > 0.0))
+}
+
+/// How an animation repeats; it plays once without one.
+pub(crate) const REPEATS: &[&str] = &["forever", "alternate"];
+
+/// `[[values...], duration]`, then an optional easing and an optional repeat,
+/// with two or more values that `value` accepts.
+fn animation(value: &Literal, value_ok: fn(f32) -> bool) -> bool {
+    let Literal::List(items) = value else {
+        return false;
+    };
+    let [Literal::List(values), Literal::Duration(_), rest @ ..] = &items[..] else {
+        return false;
+    };
+    let repeat = |v: &Literal| matches!(v, Literal::Identifier(r) if REPEATS.contains(&r.as_str()));
+    values.len() >= 2
+        && values
+            .iter()
+            .all(|v| matches!(v, Literal::Number(n) if value_ok(*n)))
+        && match rest {
+            [] => true,
+            [last] => easing(last) || repeat(last),
+            [curve, last] => easing(curve) && repeat(last),
+            _ => false,
+        }
 }
 
 /// `token("package.name")`.
@@ -380,6 +409,9 @@ pub(crate) fn validate(
             | ShadowTransition | OpacityTransition,
             value,
         ) => timing(value),
+        (ScaleAnimation, value) => animation(value, |n| n > 0.0 && n <= 1000.0),
+        (RotationAnimation, value) => animation(value, f32::is_finite),
+        (OpacityAnimation, value) => animation(value, |n| (0.0..=1.0).contains(&n)),
         (
             Background | Foreground | BorderColor | FocusColor | SelectionColor | CaretColor
             | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
@@ -438,8 +470,19 @@ pub(crate) fn validate(
         BackdropBlur => "a nonnegative dp length".into(),
         Transition | PaintTransition | OffsetTransition | ScaleTransition | RotationTransition
         | ShadowTransition | OpacityTransition => format!(
-            "milliseconds, or [milliseconds, easing] with easing one of {}",
+            "milliseconds, [milliseconds, easing] or spring(stiffness, damping), with easing \
+            one of {}, cubic_bezier(x1, y1, x2, y2) or a spring",
             EASINGS.join(", ")
+        ),
+        ScaleAnimation | RotationAnimation | OpacityAnimation => format!(
+            "[[values...], milliseconds], optionally followed by an easing and then by {}, \
+            with two or more {}",
+            REPEATS.join(" or "),
+            match name {
+                ScaleAnimation => "scales in (0, 1000]",
+                RotationAnimation => "finite degrees",
+                _ => "opacities in [0, 1]",
+            }
         ),
         OffsetX | OffsetY => "a finite dp length".into(),
         Scale => "a number in (0, 1000]".into(),

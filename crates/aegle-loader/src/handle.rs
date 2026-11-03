@@ -62,19 +62,7 @@ impl Handle {
 /// Node properties a window consumes when it opens, and timing properties
 /// installed after every other property.
 pub(crate) fn consumed(name: PropertyName) -> bool {
-    use PropertyName::*;
-    matches!(
-        name,
-        Title
-            | Theme
-            | Transition
-            | PaintTransition
-            | OffsetTransition
-            | ScaleTransition
-            | RotationTransition
-            | ShadowTransition
-            | OpacityTransition
-    )
+    matches!(name, PropertyName::Title | PropertyName::Theme) || name.timed()
 }
 
 /// Window properties that shape the native window when it opens (or a
