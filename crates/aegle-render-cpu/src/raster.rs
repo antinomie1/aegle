@@ -179,6 +179,7 @@ impl<R: Rasterizer> Renderer<R> {
                         | Command::Stroke { .. }
                         | Command::FillGradient { .. }
                         | Command::InsetShadow { .. }
+                        | Command::Cut(_)
                         | Command::FillPath { .. }
                         | Command::StrokePath { .. }
                 )
@@ -366,6 +367,7 @@ impl<R: Rasterizer> Frame<'_, '_, '_, R> {
                     color,
                     blur,
                 } => self.paint_inset_shadow(shape, hole, color, blur, state)?,
+                Command::Cut(shape) => self.paint_cut(shape, state)?,
                 #[cfg(feature = "text")]
                 Command::Glyphs(index) => self.paint_text(&scene.glyph_runs()[index], state)?,
                 _ => return Err(RenderError::UnsupportedCommand),

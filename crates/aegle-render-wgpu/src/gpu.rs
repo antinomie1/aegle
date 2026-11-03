@@ -27,6 +27,8 @@ pub(crate) struct Gpu {
     /// Group 0: clip and primitive storage rows.
     pub records: BindGroupLayout,
     pub geometry: RenderPipeline,
+    /// The geometry pipeline removing what lies beneath, for cut records.
+    pub cut: RenderPipeline,
     #[cfg(feature = "text")]
     pub pages: BindGroupLayout,
     #[cfg(feature = "text")]
@@ -151,6 +153,23 @@ impl Gpu {
             LINEAR,
             BlendState::PREMULTIPLIED_ALPHA_BLENDING,
         );
+        // Destination out: the target keeps one minus the source's alpha.
+        let out = wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::Zero,
+            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+            operation: wgpu::BlendOperation::Add,
+        };
+        let cut = pipeline(
+            &device,
+            &shader,
+            "fs_main",
+            &[Some(&records)],
+            LINEAR,
+            BlendState {
+                color: out,
+                alpha: out,
+            },
+        );
         #[cfg(feature = "text")]
         let (pages, text) = {
             let pages = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -216,6 +235,7 @@ impl Gpu {
             name,
             records,
             geometry,
+            cut,
             #[cfg(feature = "text")]
             pages,
             #[cfg(feature = "text")]

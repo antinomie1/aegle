@@ -18,6 +18,8 @@ pub(crate) struct Pipeline {
     pub resume: vk::RenderPass,
     pub layouts: [vk::PipelineLayout; 2],
     pub pipelines: [vk::Pipeline; 2],
+    /// The geometry pipeline removing what lies beneath, for cut records.
+    pub cut: vk::Pipeline,
     /// The format pass 0 draws in, which layer images share so the geometry
     /// and text pipelines draw into them too.
     pub working: vk::Format,
@@ -61,6 +63,7 @@ impl Pipeline {
             resume: vk::RenderPass::null(),
             layouts: [vk::PipelineLayout::null(); 2],
             pipelines: [vk::Pipeline::null(); 2],
+            cut: vk::Pipeline::null(),
             working: if direct {
                 format
             } else {
@@ -150,15 +153,21 @@ impl Pipeline {
         };
         this.passes[0] = first(false)?;
         this.resume = first(true)?;
-        this.pipelines[0] = graphics(
-            &this.raw,
-            this.passes[0],
-            this.layouts[0],
-            true,
-            include_bytes!(concat!(env!("OUT_DIR"), "/geometry.vert.spv")),
-            include_bytes!(concat!(env!("OUT_DIR"), "/geometry.frag.spv")),
-            c"fs_main",
-        )?;
+        for (blend, slot) in [(Blend::Over, 0), (Blend::Out, 1)] {
+            let made = graphics(
+                &this.raw,
+                this.passes[0],
+                this.layouts[0],
+                blend,
+                include_bytes!(concat!(env!("OUT_DIR"), "/geometry.vert.spv")),
+                include_bytes!(concat!(env!("OUT_DIR"), "/geometry.frag.spv")),
+                c"fs_main",
+            )?;
+            match slot {
+                0 => this.pipelines[0] = made,
+                _ => this.cut = made,
+            }
+        }
         for (index, resume) in [false, true].into_iter().enumerate() {
             this.layer_passes[index] = render_pass(
                 &this.raw,
@@ -181,7 +190,7 @@ impl Pipeline {
             &this.raw,
             this.blur_pass,
             this.layouts[1],
-            false,
+            Blend::Off,
             include_bytes!(concat!(env!("OUT_DIR"), "/blur.vert.spv")),
             include_bytes!(concat!(env!("OUT_DIR"), "/blur.frag.spv")),
             c"fs_main",
@@ -222,7 +231,7 @@ impl Pipeline {
             &this.raw,
             this.passes[1],
             this.layouts[1],
-            false,
+            Blend::Off,
             include_bytes!(concat!(env!("OUT_DIR"), "/resolve.vert.spv")),
             include_bytes!(concat!(env!("OUT_DIR"), "/resolve.frag.spv")),
             c"fs_main",
@@ -284,7 +293,7 @@ impl Drop for Pipeline {
         // SAFETY: Renderer waits before drop and drops target framebuffers first.
         // Vulkan destroy accepts null handles for incomplete initialization.
         unsafe {
-            for p in self.pipelines.into_iter().chain([self.blur]) {
+            for p in self.pipelines.into_iter().chain([self.cut, self.blur]) {
                 self.raw.destroy_pipeline(p, None);
             }
             for l in self.layouts {
@@ -393,11 +402,22 @@ impl Drop for Shader<'_> {
     }
 }
 
+/// How a pipeline's output meets what the target holds, all premultiplied.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Blend {
+    /// Replaces it.
+    Off,
+    /// Source over destination.
+    Over,
+    /// Destination out: what lies beneath loses the source's coverage.
+    Out,
+}
+
 pub(crate) fn graphics(
     raw: &ash::Device,
     pass: vk::RenderPass,
     layout: vk::PipelineLayout,
-    blend: bool,
+    blend: Blend,
     vertex: &[u8],
     fragment: &[u8],
     fragment_entry: &std::ffi::CStr,
@@ -427,12 +447,16 @@ pub(crate) fn graphics(
         .line_width(1.0);
     let samples = vk::PipelineMultisampleStateCreateInfo::default()
         .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+    let source = match blend {
+        Blend::Out => vk::BlendFactor::ZERO,
+        _ => vk::BlendFactor::ONE,
+    };
     let attachment = [vk::PipelineColorBlendAttachmentState::default()
-        .blend_enable(blend)
-        .src_color_blend_factor(vk::BlendFactor::ONE)
+        .blend_enable(blend != Blend::Off)
+        .src_color_blend_factor(source)
         .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
         .color_blend_op(vk::BlendOp::ADD)
-        .src_alpha_blend_factor(vk::BlendFactor::ONE)
+        .src_alpha_blend_factor(source)
         .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
         .alpha_blend_op(vk::BlendOp::ADD)
         .color_write_mask(vk::ColorComponentFlags::RGBA)];

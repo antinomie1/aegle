@@ -154,49 +154,53 @@ impl Commands {
         recording: &Recording,
         #[cfg(feature = "text")] text: &crate::text_pipeline::TextPipeline,
     ) {
-        #[cfg(not(feature = "text"))]
-        let _ = pipeline;
         // SAFETY: as for `render`: the command buffer records inside a render
         // pass whose pipelines and descriptor sets are bound and current.
         unsafe {
-            // Adjacent records sharing a pipeline and atlas page form one draw.
-            let key =
-                |primitive: &aegle_gpu::Primitive| (primitive.header[1] != 0, primitive.header[2]);
+            // Adjacent records sharing a pipeline and atlas page form one
+            // draw: geometry (kind 0), atlas texels (1 to 3) or cuts (4).
+            let key = |primitive: &aegle_gpu::Primitive| {
+                let pipeline = match primitive.header[1] {
+                    0 => 0u8,
+                    aegle_gpu::KIND_CUT => 2,
+                    _ => 1,
+                };
+                (pipeline, primitive.header[2])
+            };
             let primitives = &recording.primitives;
             let mut first = 0;
-            #[cfg(feature = "text")]
-            let mut current = (false, u32::MAX);
+            // The caller bound the geometry pipeline.
+            let mut current = (0u8, u32::MAX);
             while first < primitives.len() {
                 let batch = key(&primitives[first]);
                 let count = primitives[first..]
                     .iter()
                     .take_while(|primitive| key(primitive) == batch)
                     .count();
+                if current.0 != batch.0 {
+                    let bound = match batch.0 {
+                        0 => pipeline.pipelines[0],
+                        2 => pipeline.cut,
+                        #[cfg(feature = "text")]
+                        _ => text.pipeline,
+                        #[cfg(not(feature = "text"))]
+                        _ => unreachable!("atlas records need the text feature"),
+                    };
+                    self.raw
+                        .cmd_bind_pipeline(self.buffer, vk::PipelineBindPoint::GRAPHICS, bound);
+                    current.0 = batch.0;
+                }
                 #[cfg(feature = "text")]
-                {
-                    if current.0 != batch.0 {
-                        self.raw.cmd_bind_pipeline(
-                            self.buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            if batch.0 {
-                                text.pipeline
-                            } else {
-                                pipeline.pipelines[0]
-                            },
-                        );
-                        current.0 = batch.0;
-                    }
-                    if batch.0 && current.1 != batch.1 {
-                        self.raw.cmd_bind_descriptor_sets(
-                            self.buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            text.layout,
-                            1,
-                            &[text.set(batch.1)],
-                            &[],
-                        );
-                        current.1 = batch.1;
-                    }
+                if batch.0 == 1 && current.1 != batch.1 {
+                    self.raw.cmd_bind_descriptor_sets(
+                        self.buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        text.layout,
+                        1,
+                        &[text.set(batch.1)],
+                        &[],
+                    );
+                    current.1 = batch.1;
                 }
                 self.raw
                     .cmd_draw(self.buffer, 6, count as u32, 0, first as u32);

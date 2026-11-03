@@ -101,7 +101,7 @@ impl TextPipeline {
             &this.raw,
             geometry.passes[0],
             this.layout,
-            true,
+            crate::pipeline::Blend::Over,
             include_bytes!(concat!(env!("OUT_DIR"), "/geometry.vert.spv")),
             include_bytes!(concat!(env!("OUT_DIR"), "/geometry.text.frag.spv")),
             c"fs_text",

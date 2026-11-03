@@ -101,6 +101,9 @@ impl<'a> Walker<'a> {
             Command::Shadow { shape, color, blur } => {
                 recording.shadow(state, shape, color, blur, self.viewport)?;
             }
+            Command::Cut(shape) => {
+                recording.cut(state, shape, self.viewport)?;
+            }
             Command::InsetShadow {
                 shape,
                 hole,

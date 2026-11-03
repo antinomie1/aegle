@@ -67,6 +67,26 @@ impl Node {
         })
     }
 
+    /// Makes this node a hole: instead of its background it removes what
+    /// lies beneath inside its shape, so a transparent surface shows what is
+    /// behind it there. Its border, focus ring and content still draw; inside
+    /// a group with its own opacity or backdrop blur it cuts that group only.
+    pub fn set_cut(&self, cut: bool) {
+        self.change(|state, id| {
+            let element = &mut state.tree.get_mut(id).unwrap().context;
+            if element.cut != cut {
+                element.cut = cut;
+                state.invalidate(id, Dirty::PAINT)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Whether this node is a hole, see [`Self::set_cut`].
+    pub fn is_cut(&self) -> bool {
+        self.change(|state, id| Ok(state.tree.get(id).unwrap().context.cut))
+    }
+
     /// The shadow set by [`Self::set_inset_shadow`].
     pub fn inset_shadow(&self) -> Option<Shadow> {
         self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.inset_shadow)))

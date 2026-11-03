@@ -31,7 +31,7 @@ pub struct Primitive {
     pub params: [f32; 4],
     /// Linear premultiplied paint, or repeated color-glyph opacity.
     pub color: [f32; 4],
-    /// Clip head, kind (0 geometry, 1 mask, 2 color glyph, 3 image), atlas
+    /// Clip head, kind (0 geometry, 1 mask, 2 color glyph, 3 image, 4 cut), atlas
     /// page or first gradient stop row, and for geometry the effect (0 solid,
     /// 1 linear or 2 radial gradient, 3 shadow, 4 inset shadow) with the stop count above bit 8.
     pub header: [u32; 4],
@@ -54,6 +54,10 @@ pub struct Clip {
 }
 
 const _: () = assert!(size_of::<Primitive>() == 112 && size_of::<Clip>() == 64);
+
+/// The primitive kind of a cut: geometry coverage that renderers draw with
+/// destination-out blending, so batches of it need their own pipeline.
+pub const KIND_CUT: u32 = 4;
 
 /// Per-scope drawing state while walking a scene.
 #[derive(Clone, Copy)]
@@ -209,6 +213,25 @@ impl Recording {
                 params: [0.0, local.stroke, viewport[0], viewport[1]],
                 color: linear_rgba(color.to_rgba()),
                 header: [state.clip, 0, 0, 0],
+            },
+            state.bounds,
+        )
+    }
+
+    /// Records a cut through `shape`, drawn by a pipeline that removes the
+    /// row's coverage from the target. Returns whether a row was added.
+    pub fn cut(&mut self, state: State, shape: RoundedRect, viewport: [f32; 2]) -> Result<bool> {
+        let area = bounds(shape, state.transform, 0.0, 1.0)?;
+        let local = local_shape(shape, state.transform, -1.0)?;
+        self.record(
+            Primitive {
+                bounds: area,
+                row0: local.row0,
+                row1: local.row1,
+                rect: local.rect,
+                params: [0.0, -1.0, viewport[0], viewport[1]],
+                color: [1.0; 4],
+                header: [state.clip, KIND_CUT, 0, 0],
             },
             state.bounds,
         )

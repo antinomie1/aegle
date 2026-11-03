@@ -33,6 +33,8 @@ pub struct Element {
     pub(crate) clips: bool,
     /// The corners its radius rounds.
     pub(crate) corners: crate::Corners,
+    /// Cuts its shape through what lies beneath instead of a background.
+    pub(crate) cut: bool,
     /// Current scroll offset of a viewport.
     pub(crate) scroll: Point,
     /// Whether the node itself is shown.
@@ -107,6 +109,7 @@ impl Element {
             clip: None,
             clips: false,
             corners: crate::Corners::ALL,
+            cut: false,
             scroll: Point::default(),
             visible: true,
             shown_display: aegle_layout::Display::Flex,

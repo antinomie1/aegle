@@ -6,7 +6,7 @@ use aegle_types::{Color, Point};
 
 use crate::{
     Frame, Mask, Rasterizer, RenderError,
-    blend::{blend_linear_span, linear_rgba},
+    blend::{blend_linear_span, cut, linear_rgba},
     bounds::Bounds,
     outline,
     raster::{FillRule, State, coverage_product},
@@ -58,6 +58,45 @@ impl<R: Rasterizer> Frame<'_, '_, '_, R> {
                 let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
                 (ramp(stops, offset(gradient, local)), alpha)
             });
+        }
+        self.renderer.raster.release(path);
+        Ok(())
+    }
+
+    /// Removes `shape`'s coverage from what the surface holds.
+    pub(crate) fn paint_cut(
+        &mut self,
+        shape: RoundedRect,
+        state: State,
+    ) -> Result<(), RenderError> {
+        if shape.is_empty() || state.bounds.is_empty() {
+            return Ok(());
+        }
+        let path = self.shape(shape, None, state.transform)?;
+        let bounds = state.bounds.intersect(self.path_bounds(&path));
+        let (coverage, clips) = self.renderer.masks.split_at_mut(1);
+        crate::raster::fill_mask(
+            &mut self.renderer.raster,
+            &mut coverage[0],
+            &path,
+            FillRule::EvenOdd,
+            bounds,
+        )?;
+        let clip = state.clips.checked_sub(1).map(|index| &clips[index]);
+        let width = self.surface.width as usize;
+        for (y, row) in (bounds.top..).zip(bounds.rows(width)) {
+            let mask = coverage[0].row(y);
+            let clip_row = clip.map(|clip| clip.row(y));
+            let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
+            for (pixel, x) in pixels
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(row.start % width..)
+            {
+                let alpha = clip_row.map_or(mask[x], |clip| coverage_product(mask[x], clip[x]));
+                cut(pixel, alpha);
+            }
         }
         self.renderer.raster.release(path);
         Ok(())

@@ -79,6 +79,16 @@ pub(crate) fn premultiplied_linear(pixel: [u8; 4]) -> [f32; 4] {
     ]
 }
 
+/// Destination out: the pixel keeps one minus `coverage` of itself. Stored
+/// channels are encoded colors times alpha, so scaling all four is exact.
+#[inline]
+pub(crate) fn cut(dst: &mut [u8], coverage: u8) {
+    let keep = u16::from(255 - coverage);
+    for channel in dst {
+        *channel = ((u16::from(*channel) * keep + 127) / 255) as u8;
+    }
+}
+
 /// Source-over of premultiplied linear `source` scaled by `coverage`.
 #[inline]
 pub(crate) fn blend_linear(dst: &mut [u8], source: [f32; 4], coverage: u8) {

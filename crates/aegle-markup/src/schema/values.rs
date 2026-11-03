@@ -82,6 +82,7 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "opacity_animation" => OpacityAnimation,
         "corners" => Corners,
         "inset_shadow" => InsetShadow,
+        "cut" => Cut,
         _ => return None,
     })
 }
@@ -165,8 +166,8 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
         }
         Tooltip | MaxWidth | MaxHeight | AspectRatio | Inset | Shrink | Basis | AlignSelf
         | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale | Rotation
-        | Shadow | InsetShadow | Opacity | BackdropBlur | ScaleAnimation | RotationAnimation
-        | OpacityAnimation => !window,
+        | Shadow | InsetShadow | Cut | Opacity | BackdropBlur | ScaleAnimation
+        | RotationAnimation | OpacityAnimation => !window,
         _ => true,
     }
 }
@@ -433,7 +434,7 @@ pub(crate) fn validate(
             | IndicatorColor,
             Literal::Color(_),
         ) => true,
-        (Visible | Enabled, Literal::Bool(_)) => true,
+        (Visible | Enabled | Cut, Literal::Bool(_)) => true,
         (_, Literal::Identifier(value)) => choices(name).contains(&value.as_str()),
         _ => false,
     };
@@ -508,7 +509,7 @@ pub(crate) fn validate(
         | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
         | IndicatorColor => "a #RRGGBB or #RRGGBBAA color or token(\"package.name\")".into(),
         Grow | Shrink => "a finite nonnegative number".into(),
-        Visible | Enabled => "true or false".into(),
+        Visible | Enabled | Cut => "true or false".into(),
         Direction | LayoutDirection | Wrap | Align | Justify | AlignContent | AlignSelf
         | JustifySelf | JustifyItems | Flow | Theme | Layer | Keyboard => choices(name).join(", "),
     };

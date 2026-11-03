@@ -119,6 +119,10 @@ pub enum Command {
         /// Positive Gaussian standard deviation in local units.
         blur: f32,
     },
+    /// Remove what lies beneath inside `shape`: the target keeps one minus
+    /// the shape's coverage of its color and alpha, so a transparent window
+    /// shows what is behind it there. Inside a layer it cuts the layer.
+    Cut(RoundedRect),
     /// Draw a positioned glyph run from [`Scene::glyph_runs`].
     #[cfg(feature = "text")]
     Glyphs(usize),

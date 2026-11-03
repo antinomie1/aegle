@@ -128,10 +128,43 @@ fn inset_shadows_match_software() -> Result {
     Ok(())
 }
 
+#[test]
+#[ignore = "requires an explicitly selected Vulkan ICD/device"]
+fn cuts_remove_what_lies_beneath() -> Result {
+    let mut builder = SceneBuilder::new();
+    builder
+        .fill(
+            RoundedRect::new(Rect::new(8.0, 8.0, 80.0, 80.0), 0.0),
+            Color::rgb(30, 90, 220),
+        )
+        .push_transform(Affine::new([0.8, 0.6, -0.6, 0.8, 48.0, 20.0])?)
+        .cut(RoundedRect::new(Rect::new(0.0, 0.0, 30.0, 30.0), 15.0))
+        .pop();
+    let (pixels, expected) = render_on(&builder.finish(), Color::TRANSPARENT)?;
+    let total: u64 = (pixels.iter().zip(&expected))
+        .map(|(a, b)| u64::from(a.abs_diff(*b)))
+        .sum();
+    let mean = total as f64 / pixels.len() as f64;
+    eprintln!("GPU/software cut difference: mean {mean:.3}");
+    assert!(mean < 0.5);
+    let alpha = |pixels: &[u8], x: usize, y: usize| pixels[(y * SIZE as usize + x) * 4 + 3];
+    for pixels in [&pixels, &expected] {
+        // The circle's middle is clear again; the square around it is not.
+        assert_eq!(alpha(pixels, 42, 44), 0);
+        assert_eq!(alpha(pixels, 12, 80), 255);
+    }
+    Ok(())
+}
+
 /// The scene drawn by the GPU and by the software renderer, as RGBA rows.
 fn render(scene: &aegle_scene::Scene) -> Result<(Vec<u8>, Vec<u8>)> {
+    render_on(scene, Color::WHITE)
+}
+
+/// [`render`] onto `clear`.
+fn render_on(scene: &aegle_scene::Scene, clear: Color) -> Result<(Vec<u8>, Vec<u8>)> {
     let mut renderer = Renderer::new(Options::default())?;
-    let mut frame = renderer.begin_frame(SIZE, SIZE, Color::WHITE)?;
+    let mut frame = renderer.begin_frame(SIZE, SIZE, clear)?;
     frame.draw(scene, Affine::IDENTITY)?;
     frame.finish()?;
     let mut pixels = vec![0; (SIZE * SIZE * 4) as usize];
@@ -139,7 +172,7 @@ fn render(scene: &aegle_scene::Scene) -> Result<(Vec<u8>, Vec<u8>)> {
     let mut expected = vec![0; pixels.len()];
     let mut surface = aegle_render_tiny_skia::Surface::new(&mut expected, SIZE, SIZE)?;
     aegle_render_tiny_skia::Renderer::default()
-        .begin_frame(&mut surface, Color::WHITE)
+        .begin_frame(&mut surface, clear)
         .draw(scene, Affine::IDENTITY)?;
     Ok((pixels, expected))
 }

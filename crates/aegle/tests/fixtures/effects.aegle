@@ -14,4 +14,5 @@ Column {
         rotation_animation: [[0, 360], 1000ms, linear, forever] }
     Arc { width: 24dp; height: 24dp; sweep: 90; stroke: #000000; cap: round }
     Shape { width: 8dp; height: 8dp; path: "M 0 0 L 8 8"; stroke: #000000 }
+    Column { id: hole; width: 8dp; height: 8dp; radius: 4dp; cut: true }
 }

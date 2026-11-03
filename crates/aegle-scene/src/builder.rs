@@ -227,6 +227,18 @@ impl SceneBuilder {
         self
     }
 
+    /// Records a cut through what lies beneath; see [`Command::Cut`]. Empty
+    /// shapes produce no command.
+    #[track_caller]
+    pub fn cut(&mut self, shape: RoundedRect) -> &mut Self {
+        if !shape.is_empty() {
+            crate::valid(self.transform.validate_shape(shape, 0.0));
+            self.cover(shape.rect(), 0.0);
+            self.scene.commands.push(Command::Cut(shape));
+        }
+        self
+    }
+
     /// Records the inner shadow of `shape` around `hole`; see
     /// [`Command::InsetShadow`]. The blur must be positive: an unblurred
     /// inner shadow is a border. Empty shapes produce no command.

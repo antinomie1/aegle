@@ -46,6 +46,7 @@ impl Default for Options {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Geometry,
+    Cut,
     #[cfg(feature = "text")]
     Atlas(crate::atlas::Slot),
 }
@@ -54,6 +55,7 @@ impl Kind {
     fn of(primitive: &Primitive) -> Self {
         match primitive.header[1] {
             0 => Self::Geometry,
+            aegle_gpu::KIND_CUT => Self::Cut,
             #[cfg(feature = "text")]
             _ => Self::Atlas(crate::atlas::Slot::from_page(primitive.header[2])),
             #[cfg(not(feature = "text"))]
@@ -394,6 +396,7 @@ impl Renderer {
     fn bind(&self, pass: &mut wgpu::RenderPass<'_>, kind: Kind) {
         match kind {
             Kind::Geometry => pass.set_pipeline(&self.gpu.geometry),
+            Kind::Cut => pass.set_pipeline(&self.gpu.cut),
             #[cfg(feature = "text")]
             Kind::Atlas(slot) => {
                 pass.set_pipeline(&self.gpu.text);

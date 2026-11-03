@@ -221,5 +221,30 @@ fn inset_shadows_lie_over_the_background_around_their_hole() -> Result {
     );
     well.set_inset_shadow(None);
     assert_eq!(well.inset_shadow(), None);
+
+    // A cut replaces the background with a hole of the same shape.
+    well.set_cut(true);
+    assert!(well.is_cut());
+    ui.refresh()?;
+    let mut cuts = Vec::new();
+    ui.visit_scenes(|visit| {
+        if let aegle_ui::Visit::Scene { scene, .. } = visit {
+            for command in scene.commands() {
+                match command {
+                    Command::Cut(shape) => cuts.push(*shape),
+                    Command::Fill { color, .. } => {
+                        assert_ne!(*color, Color::WHITE, "no background")
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    })?;
+    assert_eq!(cuts.len(), 1);
+    assert_eq!(
+        (cuts[0].rect().size, cuts[0].radii()),
+        (Size::new(80.0, 40.0), [6.0; 4])
+    );
     Ok(())
 }

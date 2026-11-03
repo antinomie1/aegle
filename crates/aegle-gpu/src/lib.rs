@@ -24,7 +24,8 @@ pub use layer::{
     shifted,
 };
 pub use records::{
-    Clip, MAX_PRIMITIVES, NO_CLIP, Primitive, Recording, State, Textured, bounds, viewport, visible,
+    Clip, KIND_CUT, MAX_PRIMITIVES, NO_CLIP, Primitive, Recording, State, Textured, bounds,
+    viewport, visible,
 };
 pub use shelf::Shelf;
 #[cfg(feature = "vector")]

@@ -59,12 +59,14 @@ impl State {
                 decorator.under(&mut cx);
             }
             effects::paint_shadow(decoration, cx.builder, size, radii);
-            let gradient =
-                frame.background && effects::paint_gradient(decoration, cx.builder, shape);
-            if frame.background && !gradient && appearance.background.to_rgba()[3] != 0 {
-                cx.builder.fill(shape, appearance.background);
-            }
-            if frame.background {
+            if element.cut {
+                cx.builder.cut(shape);
+            } else if frame.background {
+                if !effects::paint_gradient(decoration, cx.builder, shape)
+                    && appearance.background.to_rgba()[3] != 0
+                {
+                    cx.builder.fill(shape, appearance.background);
+                }
                 effects::paint_inset_shadow(decoration, cx.builder, shape);
             }
             if frame.border {

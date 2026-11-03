@@ -21,6 +21,7 @@ pub(crate) fn apply(node: &Node, name: PropertyName, value: &Value) -> Option<Re
         (PropertyName::Opacity, Value::Number(opacity)) => node.set_opacity(*opacity),
         (PropertyName::BackdropBlur, Value::Length(blur)) => node.set_backdrop_blur(*blur),
         (PropertyName::Corners, value) => node.set_corners(corners(value)),
+        (PropertyName::Cut, Value::Bool(cut)) => node.set_cut(*cut),
         _ => return None,
     }
     Some(Ok(()))

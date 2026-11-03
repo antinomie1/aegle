@@ -25,8 +25,8 @@ fn raised(theme: &Theme) -> Shadow {
     }
 }
 
-/// The effects of the fixture's card, caption and halo, after a theme switch.
-fn check(ui: &Ui, card: &Node, caption: &Node, halo: &Node) -> Result {
+/// The effects of the fixture's card, caption, halo and hole, after a theme switch.
+fn check(ui: &Ui, card: &Node, caption: &Node, halo: &Node, hole: &Node) -> Result {
     assert_eq!(card.shadow(), Some(raised(&Theme::light())));
     let gradient = card.background_gradient().unwrap();
     let GradientGeometry::Linear { start, end } = gradient.geometry() else {
@@ -56,6 +56,7 @@ fn check(ui: &Ui, card: &Node, caption: &Node, halo: &Node) -> Result {
     assert!(matches!(spring.easing, aegle::ui::Easing::Spring(_)));
     assert!(halo.is_animating());
     assert_eq!(halo.inset_shadow().unwrap().offset, Point::new(0.0, 2.0));
+    assert!(hole.is_cut());
     let offsets: Vec<_> = (halo.background_gradient().unwrap().stops().iter())
         .map(|s| s.offset)
         .collect();
@@ -79,13 +80,19 @@ fn effects_build_alike_from_both_paths() -> Result {
     register_token("studio.raised", raised)?;
     let compiled = ui()?;
     let view = aegle::ui!(compiled.root(), "tests/fixtures/effects.aegle")?;
-    check(&compiled, &view.card, &view.caption, &view.halo)?;
+    check(&compiled, &view.card, &view.caption, &view.halo, &view.hole)?;
 
     let loaded = ui()?;
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/effects.aegle");
     let view = Program::load(path)?.build(&loaded.root())?;
     let node = |id| -> Result<Node> { Ok(view.handle(id).unwrap().node().clone()) };
-    check(&loaded, &node("card")?, &node("caption")?, &node("halo")?)
+    let (card, caption, halo, hole) = (
+        node("card")?,
+        node("caption")?,
+        node("halo")?,
+        node("hole")?,
+    );
+    check(&loaded, &card, &caption, &halo, &hole)
 }
 
 #[test]

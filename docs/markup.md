@@ -60,6 +60,7 @@ Column {
 
 * **过渡时序**（`transition` 与 `paint_`/`offset_`/`scale_`/`rotation_`/`shadow_`/`opacity_transition`）：时长、`[时长, 缓动]` 或 `spring(刚度, 阻尼)`（时长为弹簧自身的稳定时间）。缓动为 `linear`、`ease_in`、`ease_out`、`ease_in_out`、`cubic_bezier(x1, y1, x2, y2)`（`x` 在 0..=1）或弹簧。
 * **动画**（`scale_animation`、`rotation_animation`、`opacity_animation`）：`[[值...], 时长]`，可再跟一个缓动和 `forever` 或 `alternate`（永远往返）。两个以上的值均匀分布在一个周期上；节点建好即开始，默认播放一次。只接受字面量。
+* **挖洞**：`cut: true` 的节点不画背景，而是把自身形状内已画的内容清成透明（透明窗口在那里露出后面的桌面）；边框、焦点环与内容照常绘制。在有自身 opacity 或 backdrop_blur 的组里只挖穿该组。
 * **内阴影**：`inset_shadow: [x, y, blur, spread, color]` 画在背景之上、边框与内容之下，跟随圆角；偏移移动未被遮暗的中间，正的 spread 加宽阴影边。blur 必须为正（无模糊的内阴影就是边框），不参与过渡。
 * **圆角**：`corners: [bottom_left, bottom_right]` 让 `radius` 只作用于列出的角（`top_left`、`top_right`、`bottom_right`、`bottom_left`，默认全部），例如贴在屏幕顶边的栏只圆下面两个角。
 * **形状**：`Shape` 的 `path` 是 SVG 路径数据（全部命令，含圆弧与相对坐标），单位为 dp、原点在左上角，解析失败时不绘制；`Arc` 画能放进边界的最大圆上从 `start` 起 `sweep` 度的弧（0 度向上、顺时针，默认整圈）。两者都有 `fill`、`stroke`、`stroke_width`、`cap`（`butt`/`round`/`square`），没有固有尺寸。缩放形状用 `scale`。
