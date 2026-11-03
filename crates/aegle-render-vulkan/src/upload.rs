@@ -12,6 +12,10 @@ pub(crate) struct Region {
     copy: vk::BufferImageCopy,
 }
 
+/// Upload buffer capacity kept between frames: [`crate::TextOptions`]'s
+/// default `upload_bytes`.
+const RETAINED_BYTES: usize = 1024 * 1024;
+
 #[derive(Default)]
 pub(crate) struct Uploads {
     pub bytes: Vec<u8>,
@@ -32,6 +36,9 @@ impl Uploads {
     pub fn commit(&mut self) {
         self.bytes.clear();
         self.regions.clear();
+        // An image upload can grow the buffer far beyond what glyphs need;
+        // keep at most the default limit between frames.
+        self.bytes.shrink_to(RETAINED_BYTES);
     }
 
     pub fn append(

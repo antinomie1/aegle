@@ -24,6 +24,8 @@ pub struct TextOptions {
     /// Maximum resident glyph records, each owning at most 64 variation coordinates.
     pub max_entries: u32,
     /// Maximum CPU upload vector capacity, including four-byte alignment padding.
+    /// It bounds the largest image one frame uploads; capacity beyond the
+    /// default 1 MiB is released once the frame's uploads are recorded.
     pub upload_bytes: usize,
     /// Independent CPU glyph image, decoder and entry limits.
     pub glyph_cache: CacheLimits,
