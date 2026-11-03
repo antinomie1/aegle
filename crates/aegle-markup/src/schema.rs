@@ -178,6 +178,9 @@ pub enum PropertyName {
     /// An opacity animation started when the node is built, as
     /// [`Self::RotationAnimation`] with opacities in `[0, 1]`.
     OpacityAnimation,
+    /// `[x, y, blur, spread, color]` inner shadow over the background, with
+    /// a positive blur.
+    InsetShadow,
     /// The corners `radius` rounds: one of `top_left`, `top_right`,
     /// `bottom_right` and `bottom_left`, or a list of distinct ones; every
     /// corner by default.

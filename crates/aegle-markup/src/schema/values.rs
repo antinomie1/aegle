@@ -81,6 +81,7 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "rotation_animation" => RotationAnimation,
         "opacity_animation" => OpacityAnimation,
         "corners" => Corners,
+        "inset_shadow" => InsetShadow,
         _ => return None,
     })
 }
@@ -164,7 +165,7 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
         }
         Tooltip | MaxWidth | MaxHeight | AspectRatio | Inset | Shrink | Basis | AlignSelf
         | JustifySelf | GridColumn | GridRow | GridArea | OffsetX | OffsetY | Scale | Rotation
-        | Shadow | Opacity | BackdropBlur | ScaleAnimation | RotationAnimation
+        | Shadow | InsetShadow | Opacity | BackdropBlur | ScaleAnimation | RotationAnimation
         | OpacityAnimation => !window,
         _ => true,
     }
@@ -383,6 +384,10 @@ pub(crate) fn validate(
             token(value)
         }
         (Shadow, value) => shadow(value),
+        (InsetShadow, value) => {
+            shadow(value)
+                && matches!(value, Literal::List(items) if matches!(items[2], Literal::Length(blur) if blur > 0.0))
+        }
         (BackgroundGradient, value) => gradient(value),
         (Opacity, Literal::Number(n)) => (0.0..=1.0).contains(n),
         (BackdropBlur, Literal::Length(n)) => n.is_finite() && *n >= 0.0,
@@ -473,6 +478,7 @@ pub(crate) fn validate(
         Shadow => "[x, y, blur, spread, color] with dp lengths and a nonnegative blur, or \
             token(\"package.name\")"
             .into(),
+        InsetShadow => "[x, y, blur, spread, color] with dp lengths and a positive blur".into(),
         BackgroundGradient => "linear(degrees, stops...) or radial(stops...) with 2 to 16 \
             stops, each a color, token(\"package.name\") or [color, percent], with \
             nondecreasing positions on every stop or none"

@@ -101,6 +101,14 @@ impl<'a> Walker<'a> {
             Command::Shadow { shape, color, blur } => {
                 recording.shadow(state, shape, color, blur, self.viewport)?;
             }
+            Command::InsetShadow {
+                shape,
+                hole,
+                color,
+                blur,
+            } => {
+                recording.inset_shadow(state, shape, hole, color, blur, self.viewport)?;
+            }
             #[allow(unreachable_patterns)]
             command => return Ok(Step::Command(command, state)),
         }

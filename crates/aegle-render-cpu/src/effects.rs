@@ -63,6 +63,62 @@ impl<R: Rasterizer> Frame<'_, '_, '_, R> {
         Ok(())
     }
 
+    /// Shades `shape`'s coverage by one minus the shadow of `hole`.
+    pub(crate) fn paint_inset_shadow(
+        &mut self,
+        shape: RoundedRect,
+        hole: RoundedRect,
+        color: Color,
+        blur: f32,
+        state: State,
+    ) -> Result<(), RenderError> {
+        if shape.is_empty() || color.to_rgba()[3] == 0 || state.bounds.is_empty() {
+            return Ok(());
+        }
+        let inverse = inverse(state.transform)?;
+        let paint = linear_rgba(self.surface.color(color).to_rgba());
+        let path = self.shape(shape, None, state.transform)?;
+        let bounds = state.bounds.intersect(self.path_bounds(&path));
+        let (coverage, clips) = self.renderer.masks.split_at_mut(1);
+        crate::raster::fill_mask(
+            &mut self.renderer.raster,
+            &mut coverage[0],
+            &path,
+            FillRule::EvenOdd,
+            bounds,
+        )?;
+        let rect = hole.rect();
+        let half = (rect.size.width * 0.5, rect.size.height * 0.5);
+        let center = (rect.origin.x + half.0, rect.origin.y + half.1);
+        let shadow = Shadow {
+            half,
+            radii: hole.radii(),
+            sigma: blur,
+        };
+        let clip = state.clips.checked_sub(1).map(|index| &clips[index]);
+        let width = self.surface.width as usize;
+        for (y, row) in (bounds.top..).zip(bounds.rows(width)) {
+            let (pixels, mask) = (
+                &mut self.surface.data[row.start * 4..row.end * 4],
+                coverage[0].row(y),
+            );
+            let clip_row = clip.map(|clip| clip.row(y));
+            blend_linear_span(pixels, row.start, |i, _| {
+                let x = i % width;
+                let alpha = clip_row.map_or(mask[x], |clip| coverage_product(mask[x], clip[x]));
+                if alpha == 0 {
+                    return ([0.0; 4], 0);
+                }
+                let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
+                let rows = shadow.rows(local.y - center.1);
+                let value = 1.0 - shadow.across(local.x - center.0, &rows);
+                (paint.map(|channel| channel * value), alpha)
+            });
+        }
+        self.renderer.raster.release(path);
+        Ok(())
+    }
+
     pub(crate) fn paint_shadow(
         &mut self,
         shape: RoundedRect,

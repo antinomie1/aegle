@@ -16,6 +16,7 @@ pub struct Decoration {
     pub font: Option<Font>,
     pub cursor: Option<aegle_types::Cursor>,
     pub shadow: Option<crate::Shadow>,
+    pub inset_shadow: Option<crate::Shadow>,
     pub gradient: Option<aegle_scene::Gradient>,
 }
 
@@ -27,6 +28,7 @@ impl Decoration {
             && self.font.is_none()
             && self.cursor.is_none()
             && self.shadow.is_none()
+            && self.inset_shadow.is_none()
             && self.gradient.is_none()
     }
 }

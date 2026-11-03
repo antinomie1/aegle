@@ -227,6 +227,37 @@ impl SceneBuilder {
         self
     }
 
+    /// Records the inner shadow of `shape` around `hole`; see
+    /// [`Command::InsetShadow`]. The blur must be positive: an unblurred
+    /// inner shadow is a border. Empty shapes produce no command.
+    #[track_caller]
+    pub fn inset_shadow(
+        &mut self,
+        shape: RoundedRect,
+        hole: RoundedRect,
+        color: Color,
+        blur: f32,
+    ) -> &mut Self {
+        if !blur.is_finite() {
+            crate::fail(SceneError::NonFinite);
+        }
+        if blur <= 0.0 {
+            crate::fail(SceneError::NegativeExtent);
+        }
+        if !shape.is_empty() {
+            crate::valid(self.transform.validate_shape(shape, 0.0));
+            crate::valid(self.transform.validate_shape(hole, blur * 3.0));
+            self.cover(shape.rect(), 0.0);
+            self.scene.commands.push(Command::InsetShadow {
+                shape,
+                hole,
+                color,
+                blur,
+            });
+        }
+        self
+    }
+
     /// Records `image` stretched over `rect`. Empty rectangles produce no command.
     #[track_caller]
     pub fn image(&mut self, image: &Image, rect: Rect) -> &mut Self {

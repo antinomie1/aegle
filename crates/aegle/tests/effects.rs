@@ -55,6 +55,7 @@ fn check(ui: &Ui, card: &Node, caption: &Node, halo: &Node) -> Result {
     let spring = card.property_transition(TransitionProperty::Scale).unwrap();
     assert!(matches!(spring.easing, aegle::ui::Easing::Spring(_)));
     assert!(halo.is_animating());
+    assert_eq!(halo.inset_shadow().unwrap().offset, Point::new(0.0, 2.0));
     let offsets: Vec<_> = (halo.background_gradient().unwrap().stops().iter())
         .map(|s| s.offset)
         .collect();
@@ -105,6 +106,10 @@ fn malformed_effects_are_rejected_before_building() {
         ),
         ("opacity: 1.5", "Opacity requires"),
         ("backdrop_blur: -1dp", "BackdropBlur requires"),
+        (
+            "inset_shadow: [0dp, 1dp, 0dp, 0dp, #000000]",
+            "InsetShadow requires",
+        ),
     ] {
         let source = format!("Column {{ {value} }}");
         let error =

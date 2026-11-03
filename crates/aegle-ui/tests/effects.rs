@@ -168,3 +168,58 @@ fn shadows_follow_their_transition() -> Result {
 fn panics(change: impl FnOnce()) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(change)).is_err()
 }
+
+#[test]
+fn inset_shadows_lie_over_the_background_around_their_hole() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(200.0, 100.0));
+    let well = ui.root().column();
+    well.set_width(80.0);
+    well.set_height(40.0);
+    well.set_radius(6.0);
+    well.set_background(Color::WHITE);
+    let pressed = Shadow {
+        offset: Point::new(0.0, 2.0),
+        blur: 3.0,
+        spread: 1.0,
+        color: Color::rgba(0, 0, 0, 90),
+    };
+    assert!(panics(|| well.set_inset_shadow(Shadow {
+        blur: 0.0,
+        ..pressed
+    })));
+    well.set_inset_shadow(pressed);
+    assert_eq!(well.inset_shadow(), Some(pressed));
+    ui.refresh()?;
+    let mut found = Vec::new();
+    ui.visit_scenes(|visit| {
+        if let aegle_ui::Visit::Scene { scene, .. } = visit
+            && let [Command::Fill { .. }, Command::InsetShadow { .. }, ..] = scene.commands()
+        {
+            found = scene.commands().to_vec();
+        }
+        Ok(())
+    })?;
+    let [
+        _,
+        Command::InsetShadow {
+            shape, hole, blur, ..
+        },
+        ..,
+    ] = found[..]
+    else {
+        panic!("background then inset shadow, got {found:?}");
+    };
+    assert_eq!(
+        (shape.rect().size, shape.radii(), blur),
+        (Size::new(80.0, 40.0), [6.0; 4], 3.0)
+    );
+    assert_eq!(hole.rect().origin, Point::new(1.0, 3.0));
+    assert_eq!(
+        (hole.rect().size, hole.radii()),
+        (Size::new(78.0, 38.0), [5.0; 4])
+    );
+    well.set_inset_shadow(None);
+    assert_eq!(well.inset_shadow(), None);
+    Ok(())
+}

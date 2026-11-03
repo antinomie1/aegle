@@ -64,6 +64,9 @@ impl State {
             if frame.background && !gradient && appearance.background.to_rgba()[3] != 0 {
                 cx.builder.fill(shape, appearance.background);
             }
+            if frame.background {
+                effects::paint_inset_shadow(decoration, cx.builder, shape);
+            }
             if frame.border {
                 outline(
                     cx.builder,

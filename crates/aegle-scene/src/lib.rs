@@ -105,6 +105,20 @@ pub enum Command {
         /// fades out within three of them beyond the shape.
         blur: f32,
     },
+    /// Shade the inside of `shape` with `color`, faded where the soft shadow
+    /// of `hole` lies: the color times one minus the hole's coverage
+    /// convolved with a Gaussian, within `shape`. Offset and spread are
+    /// applied by moving or shrinking `hole`.
+    InsetShadow {
+        /// Shape shaded, in the current local coordinate system.
+        shape: RoundedRect,
+        /// Shape whose soft shadow leaves the inside unshaded.
+        hole: RoundedRect,
+        /// Unpremultiplied sRGB shadow color.
+        color: Color,
+        /// Positive Gaussian standard deviation in local units.
+        blur: f32,
+    },
     /// Draw a positioned glyph run from [`Scene::glyph_runs`].
     #[cfg(feature = "text")]
     Glyphs(usize),

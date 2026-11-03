@@ -10,6 +10,7 @@ use crate::{
 const LINEAR: u32 = 1;
 const RADIAL: u32 = 2;
 const SHADOW: u32 = 3;
+const INSET_SHADOW: u32 = 4;
 
 impl Recording {
     /// Records `shape` filled with `gradient`, appending its stops to the clip
@@ -104,6 +105,40 @@ impl Recording {
                 header: [state.clip, 0, 0, SHADOW],
             },
             state.bounds,
+        )
+    }
+
+    /// Records the inner shadow of `shape` around `hole`: `shape` joins the
+    /// clip chain for this row, which takes one minus the hole's shadow.
+    /// Returns whether a row was added.
+    #[allow(clippy::too_many_arguments)]
+    pub fn inset_shadow(
+        &mut self,
+        state: State,
+        shape: RoundedRect,
+        hole: RoundedRect,
+        color: Color,
+        blur: f32,
+        viewport: [f32; 2],
+    ) -> Result<bool> {
+        if color.to_rgba()[3] == 0 {
+            return Ok(false);
+        }
+        let area = bounds(shape, state.transform, 0.0, 1.0)?;
+        let local = local_shape(hole, state.transform, -1.0)?;
+        let mut inside = state;
+        self.push_clip(&mut inside, shape, state.transform)?;
+        self.record(
+            Primitive {
+                bounds: area,
+                row0: local.row0,
+                row1: local.row1,
+                rect: local.rect,
+                params: [0.0, blur / local.scale, viewport[0], viewport[1]],
+                color: linear_rgba(color.to_rgba()),
+                header: [inside.clip, 0, 0, INSET_SHADOW],
+            },
+            inside.bounds,
         )
     }
 }

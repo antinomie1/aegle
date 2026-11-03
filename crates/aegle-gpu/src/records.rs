@@ -33,7 +33,7 @@ pub struct Primitive {
     pub color: [f32; 4],
     /// Clip head, kind (0 geometry, 1 mask, 2 color glyph, 3 image), atlas
     /// page or first gradient stop row, and for geometry the effect (0 solid,
-    /// 1 linear or 2 radial gradient, 3 shadow) with the stop count above bit 8.
+    /// 1 linear or 2 radial gradient, 3 shadow, 4 inset shadow) with the stop count above bit 8.
     pub header: [u32; 4],
 }
 

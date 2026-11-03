@@ -1,4 +1,4 @@
-//! Node shadows and gradient backgrounds, drawn with the scene's native
+//! Node shadows, inner shadows and gradient backgrounds, drawn with the scene's native
 //! effect commands on every backend.
 
 use crate::{Color, Node, OrFail, Point, Result, Shadow, UiError, style::Decoration};
@@ -46,6 +46,30 @@ impl Node {
             }
             Ok(state.decorations.get(&id).and_then(|d| d.shadow))
         })
+    }
+
+    /// Shades this node's inside along its edges with `shadow`, like a CSS
+    /// `inset` box shadow: the offset moves the unshaded middle, a positive
+    /// spread widens the shaded rim. It lies over the background and under
+    /// the border and content, following the corners; `None` or a fully
+    /// transparent shadow removes it. The blur must be positive, since an
+    /// unblurred inner shadow is a border. It does not transition.
+    pub fn set_inset_shadow(&self, shadow: impl Into<Option<Shadow>>) {
+        let shadow = shadow.into().filter(|s| !s.is_clear());
+        if shadow.is_some_and(|s| !s.is_valid() || s.blur <= 0.0) {
+            panic!("{}", UiError::InvalidValue);
+        }
+        self.change(|state, id| {
+            state.decorations.entry(id).or_default().inset_shadow = shadow;
+            state.trim_decoration(id);
+            state.invalidate(id, Dirty::PAINT)?;
+            Ok(())
+        })
+    }
+
+    /// The shadow set by [`Self::set_inset_shadow`].
+    pub fn inset_shadow(&self) -> Option<Shadow> {
+        self.change(|state, id| Ok(state.decorations.get(&id).and_then(|d| d.inset_shadow)))
     }
 
     /// Fills this node's background with `gradient` instead of its background
@@ -225,6 +249,35 @@ pub(crate) fn paint_shadow(
     });
     let shape = RoundedRect::with_radii(rect, radii);
     builder.shadow(shape, shadow.color, shadow.blur);
+}
+
+/// Records a node's inner shadow within `shape`.
+pub(crate) fn paint_inset_shadow(
+    decoration: Option<&Decoration>,
+    builder: &mut SceneBuilder,
+    shape: RoundedRect,
+) {
+    let Some(shadow) = decoration.and_then(|d| d.inset_shadow) else {
+        return;
+    };
+    let (rect, spread) = (shape.rect(), shadow.spread);
+    let hole = Rect::new(
+        rect.origin.x + shadow.offset.x + spread,
+        rect.origin.y + shadow.offset.y + spread,
+        (rect.size.width - spread * 2.0).max(0.0),
+        (rect.size.height - spread * 2.0).max(0.0),
+    );
+    // The hole's rounded corners shrink with the spread; square ones stay.
+    let radii = shape.radii().map(|radius| match radius {
+        0.0 => 0.0,
+        radius => (radius - spread).max(0.0),
+    });
+    builder.inset_shadow(
+        shape,
+        RoundedRect::with_radii(hole, radii),
+        shadow.color,
+        shadow.blur,
+    );
 }
 
 /// Records a node's gradient background in place of its color; returns

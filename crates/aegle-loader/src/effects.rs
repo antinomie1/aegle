@@ -1,4 +1,5 @@
-//! Shadows, gradient backgrounds, group opacity, backdrop blur and rounded corners.
+//! Shadows, inner shadows, gradient backgrounds, group opacity, backdrop
+//! blur and rounded corners.
 
 use aegle_markup::{PropertyName, Value};
 use aegle_ui::{
@@ -10,7 +11,10 @@ use aegle_ui::{
 /// if a gradient stop names no color token.
 pub(crate) fn apply(node: &Node, name: PropertyName, value: &Value) -> Option<Result> {
     match (name, value) {
-        (PropertyName::Shadow, Value::List(items)) => shadow(node, items),
+        (PropertyName::Shadow, Value::List(items)) => node.set_shadow(Some(shadow(items))),
+        (PropertyName::InsetShadow, Value::List(items)) => {
+            node.set_inset_shadow(Some(shadow(items)))
+        }
         (PropertyName::BackgroundGradient, Value::Call(function, arguments)) => {
             return Some(gradient(node, function, arguments));
         }
@@ -56,7 +60,7 @@ fn color(value: &Value) -> Color {
     }
 }
 
-fn shadow(node: &Node, items: &[Value]) {
+fn shadow(items: &[Value]) -> Shadow {
     let [
         Value::Length(x),
         Value::Length(y),
@@ -67,12 +71,12 @@ fn shadow(node: &Node, items: &[Value]) {
     else {
         unreachable!("checked shadow")
     };
-    node.set_shadow(Some(Shadow {
+    Shadow {
         offset: Point::new(*x, *y),
         blur: *blur,
         spread: *spread,
         color: color(paint),
-    }));
+    }
 }
 
 fn gradient(node: &Node, function: &str, arguments: &[Value]) -> Result {

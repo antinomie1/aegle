@@ -191,6 +191,9 @@ fn fs_main(input: Vertex) -> @location(0) vec4<f32> {
     var alpha: f32;
     if effect == 3u {
         alpha = shadow(point, primitive.rect, radii, width);
+    } else if effect == 4u {
+        // Inside the clip of the shaded shape, away from the hole.
+        alpha = 1.0 - shadow(point, primitive.rect, radii, width);
     } else if width < 0.0 {
         alpha = coverage(point, primitive.rect, radii);
     } else {

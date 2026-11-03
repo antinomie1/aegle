@@ -90,6 +90,44 @@ fn per_corner_radii_match_software() -> Result {
     Ok(())
 }
 
+#[test]
+#[ignore = "requires an explicitly selected Vulkan ICD/device"]
+fn inset_shadows_match_software() -> Result {
+    let rect = |x, y, w, h| Rect::new(x, y, w, h);
+    // A rounded card pressed in from the top left, and a rotated square
+    // whose hole spreads to nothing, so it is fully shaded.
+    let card = RoundedRect::new(rect(8.0, 8.0, 48.0, 32.0), 10.0);
+    let hole = RoundedRect::new(rect(12.0, 12.0, 44.0, 28.0), 6.0);
+    let mut builder = SceneBuilder::new();
+    builder
+        .fill(card, Color::rgb(240, 240, 250))
+        .inset_shadow(card, hole, Color::rgba(0, 0, 0, 160), 3.0)
+        .push_transform(Affine::new([0.8, 0.6, -0.6, 0.8, 60.0, 50.0])?)
+        .inset_shadow(
+            RoundedRect::new(rect(0.0, 0.0, 24.0, 24.0), 0.0),
+            RoundedRect::new(rect(12.0, 12.0, 0.0, 0.0), 0.0),
+            Color::rgb(200, 0, 0),
+            2.0,
+        )
+        .pop();
+    let (pixels, expected) = render(&builder.finish())?;
+    let total: u64 = (pixels.iter().zip(&expected))
+        .map(|(a, b)| u64::from(a.abs_diff(*b)))
+        .sum();
+    let mean = total as f64 / pixels.len() as f64;
+    eprintln!("GPU/software inset shadow difference: mean {mean:.3}");
+    assert!(mean < 0.5);
+    let at = |pixels: &[u8], x: usize, y: usize| pixels[(y * SIZE as usize + x) * 4];
+    for pixels in [&pixels, &expected] {
+        // Dark along the pressed-in top left, light in the middle and toward
+        // the bottom right, white outside the card.
+        let (edge, middle) = (at(pixels, 20, 9), at(pixels, 40, 30));
+        assert!(edge + 60 < middle && middle > 230, "{edge} {middle}");
+        assert_eq!(at(pixels, 4, 4), 255);
+    }
+    Ok(())
+}
+
 /// The scene drawn by the GPU and by the software renderer, as RGBA rows.
 fn render(scene: &aegle_scene::Scene) -> Result<(Vec<u8>, Vec<u8>)> {
     let mut renderer = Renderer::new(Options::default())?;
