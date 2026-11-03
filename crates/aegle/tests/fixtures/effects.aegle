@@ -6,6 +6,11 @@ Column {
     backdrop_blur: 6dp
     shadow_transition: 200ms
     opacity_transition: [120ms, linear]
+    corners: [bottom_left, bottom_right]
+    scale_transition: spring(170, 26)
     Text { id: caption; text: "Card"; shadow: [0dp, -1dp, 2dp, 0dp, #00000040] }
-    Column { id: halo; background_gradient: radial(#FF000080, #FF000000) }
+    Column { id: halo; background_gradient: radial(#FF000080, #FF000000)
+        rotation_animation: [[0, 360], 1000ms, linear, forever] }
+    Arc { width: 24dp; height: 24dp; sweep: 90; stroke: #000000; cap: round }
+    Shape { width: 8dp; height: 8dp; path: "M 0 0 L 8 8"; stroke: #000000 }
 }

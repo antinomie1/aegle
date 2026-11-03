@@ -45,7 +45,7 @@ Window {
 
 ```text
 Column {
-    radius: 12dp; opacity: 0.95; backdrop_blur: 8dp
+    radius: 12dp; corners: [bottom_left, bottom_right]; opacity: 0.95; backdrop_blur: 8dp
     shadow: [0dp, 4dp, 12dp, 0dp, #00000040]
     background_gradient: linear(90, #89b4fa, #f5c2e7)
     transition: spring(170, 26)                          // 所有过渡用弹簧
@@ -60,6 +60,7 @@ Column {
 
 * **过渡时序**（`transition` 与 `paint_`/`offset_`/`scale_`/`rotation_`/`shadow_`/`opacity_transition`）：时长、`[时长, 缓动]` 或 `spring(刚度, 阻尼)`（时长为弹簧自身的稳定时间）。缓动为 `linear`、`ease_in`、`ease_out`、`ease_in_out`、`cubic_bezier(x1, y1, x2, y2)`（`x` 在 0..=1）或弹簧。
 * **动画**（`scale_animation`、`rotation_animation`、`opacity_animation`）：`[[值...], 时长]`，可再跟一个缓动和 `forever` 或 `alternate`（永远往返）。两个以上的值均匀分布在一个周期上；节点建好即开始，默认播放一次。只接受字面量。
+* **圆角**：`corners: [bottom_left, bottom_right]` 让 `radius` 只作用于列出的角（`top_left`、`top_right`、`bottom_right`、`bottom_left`，默认全部），例如贴在屏幕顶边的栏只圆下面两个角。
 * **形状**：`Shape` 的 `path` 是 SVG 路径数据（全部命令，含圆弧与相对坐标），单位为 dp、原点在左上角，解析失败时不绘制；`Arc` 画能放进边界的最大圆上从 `start` 起 `sweep` 度的弧（0 度向上、顺时针，默认整圈）。两者都有 `fill`、`stroke`、`stroke_width`、`cap`（`butt`/`round`/`square`），没有固有尺寸。缩放形状用 `scale`。
 
 ---

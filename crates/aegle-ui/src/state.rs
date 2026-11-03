@@ -31,6 +31,8 @@ pub struct Element {
     pub(crate) clip: Option<Rect>,
     /// Clips its children's painting and hit testing to its bounds.
     pub(crate) clips: bool,
+    /// The corners its radius rounds.
+    pub(crate) corners: crate::Corners,
     /// Current scroll offset of a viewport.
     pub(crate) scroll: Point,
     /// Whether the node itself is shown.
@@ -104,6 +106,7 @@ impl Element {
             bounds: Rect::default(),
             clip: None,
             clips: false,
+            corners: crate::Corners::ALL,
             scroll: Point::default(),
             visible: true,
             shown_display: aegle_layout::Display::Flex,

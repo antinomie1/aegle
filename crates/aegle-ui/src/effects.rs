@@ -203,7 +203,7 @@ pub(crate) fn paint_shadow(
     decoration: Option<&Decoration>,
     builder: &mut SceneBuilder,
     size: Size,
-    radius: f32,
+    radii: [f32; 4],
 ) {
     let Some(shadow) = decoration.and_then(|d| d.shadow) else {
         return;
@@ -218,7 +218,12 @@ pub(crate) fn paint_shadow(
         width,
         height,
     );
-    let shape = RoundedRect::new(rect, (radius + shadow.spread).max(0.0));
+    // Spread grows the rounded corners and keeps square ones square.
+    let radii = radii.map(|radius| match radius {
+        0.0 => 0.0,
+        radius => (radius + shadow.spread).max(0.0),
+    });
+    let shape = RoundedRect::with_radii(rect, radii);
     builder.shadow(shape, shadow.color, shadow.blur);
 }
 

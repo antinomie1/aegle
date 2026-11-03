@@ -1,4 +1,5 @@
-//! Shadows, gradients, group opacity and backdrop blur written in markup reach
+//! Shadows, gradients, group opacity, backdrop blur, corners, timings,
+//! animations and shapes written in markup reach
 //! the same node state from `ui!` and the run-time engine, and their tokens
 //! follow the theme.
 #![cfg(all(feature = "markup", feature = "motion"))]
@@ -49,6 +50,11 @@ fn check(ui: &Ui, card: &Node, caption: &Node, halo: &Node) -> Result {
         .unwrap();
     assert_eq!(timing.duration, Duration::from_millis(200));
     assert_eq!(caption.shadow().unwrap().offset, Point::new(0.0, -1.0));
+    let corners = card.corners();
+    assert!(corners.bottom_left && corners.bottom_right && !corners.top_left);
+    let spring = card.property_transition(TransitionProperty::Scale).unwrap();
+    assert!(matches!(spring.easing, aegle::ui::Easing::Spring(_)));
+    assert!(halo.is_animating());
     let offsets: Vec<_> = (halo.background_gradient().unwrap().stops().iter())
         .map(|s| s.offset)
         .collect();

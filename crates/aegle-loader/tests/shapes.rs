@@ -40,10 +40,13 @@ fn shapes_draw_svg_paths_and_arcs_follow_their_sweep() -> Result {
         Shape { width: 20dp; height: 10dp; path: data; fill: #ff0000; stroke: #000000 }
         Arc { width: 40dp; height: 40dp; sweep: sweep; stroke: #00ff00
             stroke_width: 4dp; cap: round }
+        Column { id: tab; radius: 8dp; corners: [bottom_left, bottom_right] }
     }"#;
     let program =
         Program::from_sources("main.aegle", &Elements::new(), &mut |_| Ok(source.into()))?;
     let view = program.build(&ui.root())?;
+    let corners = view.handle("tab").unwrap().node().corners();
+    assert!(corners.bottom_left && corners.bottom_right && !corners.top_left && !corners.top_right);
     let near = |a: Point, b: Point| (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() < 1e-3;
     let paths = drawn(&ui)?;
     // The triangle is filled and stroked; the arc only stroked.

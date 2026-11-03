@@ -80,6 +80,7 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "scale_animation" => ScaleAnimation,
         "rotation_animation" => RotationAnimation,
         "opacity_animation" => OpacityAnimation,
+        "corners" => Corners,
         _ => return None,
     })
 }
@@ -172,6 +173,9 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
 /// The output edges a layer may anchor to.
 pub(crate) const EDGES: &[&str] = &["top", "bottom", "left", "right"];
 
+/// The corners `corners` names, in the order nodes store them.
+pub(crate) const CORNERS: &[&str] = &["top_left", "top_right", "bottom_right", "bottom_left"];
+
 /// A whole dp length within `range`.
 fn whole(value: &Literal, range: std::ops::RangeInclusive<f32>) -> bool {
     matches!(value, Literal::Length(n) if n.fract() == 0.0 && range.contains(n))
@@ -179,7 +183,12 @@ fn whole(value: &Literal, range: std::ops::RangeInclusive<f32>) -> bool {
 
 /// One edge, or a list of distinct edges.
 fn anchor(value: &Literal) -> bool {
-    let edge = |v: &Literal| matches!(v, Literal::Identifier(e) if EDGES.contains(&e.as_str()));
+    names(value, EDGES)
+}
+
+/// One of `names`, or a nonempty list of distinct ones.
+fn names(value: &Literal, names: &[&str]) -> bool {
+    let edge = |v: &Literal| matches!(v, Literal::Identifier(e) if names.contains(&e.as_str()));
     match value {
         Literal::List(items) => {
             !items.is_empty()
@@ -384,6 +393,7 @@ pub(crate) fn validate(
         (Margin, value) if window => whole(value, LAYER_RANGE),
         (Margin | Inset, value) => edges(value, false, true),
         (Anchor, value) => anchor(value),
+        (Corners, value) => names(value, CORNERS),
         (ExclusiveZone, Literal::Identifier(name)) => name == "ignore",
         (ExclusiveZone, value) => whole(value, 0.0..=LAYER_RANGE.end().to_owned()),
         (Output, Literal::String(name)) => {
@@ -438,6 +448,7 @@ pub(crate) fn validate(
         Margin if window => "a whole dp length, or a list of two or four".into(),
         Margin | Inset => "a dp length, percentage or auto, or a list of two or four".into(),
         Anchor => format!("one of {}, or a list of distinct ones", EDGES.join(", ")),
+        Corners => format!("one of {}, or a list of distinct ones", CORNERS.join(", ")),
         ExclusiveZone => "a nonnegative whole dp length or `ignore`".into(),
         Output => "a nonempty output name of at most 4000 bytes without NUL".into(),
         Gap => "a nonnegative dp length or percentage, a [row, column] list or \

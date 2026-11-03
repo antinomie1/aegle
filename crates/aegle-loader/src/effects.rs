@@ -1,8 +1,8 @@
-//! Shadows, gradient backgrounds, group opacity and backdrop blur.
+//! Shadows, gradient backgrounds, group opacity, backdrop blur and rounded corners.
 
 use aegle_markup::{PropertyName, Value};
 use aegle_ui::{
-    Color, ColorSlot, Node, Point, Result, Shadow,
+    Color, ColorSlot, Corners, Node, Point, Result, Shadow,
     scene::{Gradient, GradientStop},
 };
 
@@ -16,9 +16,25 @@ pub(crate) fn apply(node: &Node, name: PropertyName, value: &Value) -> Option<Re
         }
         (PropertyName::Opacity, Value::Number(opacity)) => node.set_opacity(*opacity),
         (PropertyName::BackdropBlur, Value::Length(blur)) => node.set_backdrop_blur(*blur),
+        (PropertyName::Corners, value) => node.set_corners(corners(value)),
         _ => return None,
     }
     Some(Ok(()))
+}
+
+/// A checked corner name or list of them.
+fn corners(value: &Value) -> Corners {
+    let names = match value {
+        Value::List(items) => items.iter().map(crate::layout::identifier).collect(),
+        name => vec![crate::layout::identifier(name)],
+    };
+    let on = |corner: &str| names.contains(&corner);
+    Corners {
+        top_left: on("top_left"),
+        top_right: on("top_right"),
+        bottom_right: on("bottom_right"),
+        bottom_left: on("bottom_left"),
+    }
 }
 
 /// A checked token call's name.

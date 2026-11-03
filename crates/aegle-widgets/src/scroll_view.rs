@@ -40,7 +40,7 @@ impl Control for ScrollControl {
         aegle_ui::paint::outline(
             cx.builder,
             cx.size,
-            cx.appearance.radius,
+            cx.shape.radii(),
             cx.appearance.border_width,
             cx.appearance.border_color,
         );

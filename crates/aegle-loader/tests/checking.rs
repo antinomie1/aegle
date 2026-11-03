@@ -17,7 +17,7 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         padding: 12dp; gap: 8dp; min_width: 0dp; min_height: 1dp
         visible: true; enabled: true; label: "文档"
         background: #ffffff; foreground: #000000; border_color: #12345678
-        border_width: 0dp; radius: 6dp
+        border_width: 0dp; radius: 6dp; corners: [bottom_left, bottom_right]
         transition: [120ms, ease_out]
         Column {
             Row { gap: 4dp; grow: 1
@@ -82,6 +82,9 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "transition: [1ms, spring(100)]",
         "transition: cubic_bezier(0, 0, 1, 1)",
         "scale_animation: [[1, 2], 100ms]",
+        "corners: middle",
+        "corners: [top_left, top_left]",
+        "corners: []",
         "Text { scale_animation: [[1], 100ms] }",
         "Text { scale_animation: [[1, 0], 100ms] }",
         "Text { opacity_animation: [[0, 2], 100ms] }",

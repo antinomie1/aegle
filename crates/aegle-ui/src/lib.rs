@@ -24,6 +24,7 @@ pub mod bar;
 mod callbacks;
 mod clicks;
 pub mod control;
+mod corners;
 mod cursor;
 mod damage;
 mod decorator;
@@ -100,6 +101,7 @@ pub use aegle_types::{
 };
 pub use callbacks::{HandlerResult, Subscription};
 pub use control::{CONTAINER, Control, Plain};
+pub use corners::Corners;
 pub use decorator::Decorator;
 pub use drag::{DropEvent, Drops};
 pub use events::KeyEvent;

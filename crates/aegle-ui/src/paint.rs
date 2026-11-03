@@ -32,10 +32,9 @@ impl State {
         builder.clear();
         let frame = element.control.frame();
         if element.effective_visible {
-            let shape = RoundedRect::new(
-                Rect::new(0.0, 0.0, size.width, size.height),
-                appearance.radius,
-            );
+            let radii = element.corners.radii(appearance.radius);
+            let shape =
+                RoundedRect::with_radii(Rect::new(0.0, 0.0, size.width, size.height), radii);
             let mut decorators = match self.decorators.is_empty() {
                 true => None,
                 false => self.decorators.get_mut(&id),
@@ -59,7 +58,7 @@ impl State {
             for decorator in decorators.iter_mut().flat_map(|list| list.iter_mut()) {
                 decorator.under(&mut cx);
             }
-            effects::paint_shadow(decoration, cx.builder, size, appearance.radius);
+            effects::paint_shadow(decoration, cx.builder, size, radii);
             let gradient =
                 frame.background && effects::paint_gradient(decoration, cx.builder, shape);
             if frame.background && !gradient && appearance.background.to_rgba()[3] != 0 {
@@ -69,7 +68,7 @@ impl State {
                 outline(
                     cx.builder,
                     size,
-                    appearance.radius,
+                    radii,
                     appearance.border_width,
                     appearance.border_color,
                 );
@@ -82,7 +81,7 @@ impl State {
             outline(
                 cx.builder,
                 size,
-                appearance.radius,
+                radii,
                 appearance.focus_width,
                 appearance.focus_color,
             );
@@ -100,9 +99,9 @@ impl State {
                     appearance: &appearance,
                     visual,
                     scroll: element.scroll,
-                    shape: RoundedRect::new(
+                    shape: RoundedRect::with_radii(
                         Rect::new(0.0, 0.0, size.width, size.height),
-                        appearance.radius,
+                        element.corners.radii(appearance.radius),
                     ),
                     bars,
                     bar_color,
@@ -125,17 +124,18 @@ impl State {
 
 // Keep centered scene strokes inside the logical bounds. Large requested widths
 // saturate at half the smaller extent, preserving a drawable center rectangle.
-/// Strokes a centered border inside `size`, saturating wide widths at half the
-/// smaller extent; nothing is drawn for zero width or a transparent color.
-pub fn outline(builder: &mut SceneBuilder, size: Size, radius: f32, width: f32, color: Color) {
+/// Strokes a centered border inside `size` along a shape with `radii` (as
+/// [`RoundedRect::radii`]), saturating wide widths at half the smaller
+/// extent; nothing is drawn for zero width or a transparent color.
+pub fn outline(builder: &mut SceneBuilder, size: Size, radii: [f32; 4], width: f32, color: Color) {
     let width = width.min(size.width.min(size.height) * 0.5);
     if width == 0.0 || color.to_rgba()[3] == 0 {
         return;
     }
     let inset = width / 2.0;
-    let shape = RoundedRect::new(
+    let shape = RoundedRect::with_radii(
         Rect::new(inset, inset, size.width - width, size.height - width),
-        (radius - inset).max(0.0),
+        radii.map(|radius| (radius - inset).max(0.0)),
     );
     builder.stroke(shape, color, width);
 }

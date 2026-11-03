@@ -265,7 +265,7 @@ card.set_style(Style { background: Some(Color::WHITE), radius: Some(8.0), ..card
 card.set_border_width(1.0);   // 等同于只改 Style::border_width
 ```
 
-所有控件都有 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground`；传 `None` 让该项回到皮肤值。只对部分控件有意义的 setter 只出现在对应句柄上，用错控件在编译期报错：
+所有控件都有 `set_background`、`set_foreground`、`set_border_color`、`set_border_width`、`set_radius`、`set_disabled_background`、`set_disabled_foreground`；传 `None` 让该项回到皮肤值。`set_corners(Corners { bottom_left: true, bottom_right: true, ..Corners::NONE })` 让圆角只作用于部分角（默认 `Corners::ALL`），背景、边框、焦点环、阴影、图层与背景模糊都跟随；标记写 `corners: [bottom_left, bottom_right]`。只对部分控件有意义的 setter 只出现在对应句柄上，用错控件在编译期报错：
 
 可清除的属性只有一个 setter：传值设置，传 `None` 清除（参数为 `impl Into<Option<T>>`），没有另外的 `clear_*` 方法。这适用于样式与字体、主题与覆盖、token 覆盖、过渡、对齐、绝对定位、宽高比、光标、布局方向、无障碍描述、提示和菜单快捷键提示。皮肤是函数指针，Rust 不会把函数项隐式转换进 `Into`，因此 `set_skin`、`set_kind_skin` 保持 `Some(skin)` / `None`。
 

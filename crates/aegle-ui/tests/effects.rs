@@ -4,7 +4,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use aegle_ui::{
-    Color, Point, Result, Shadow, Size, TextSystem, Theme, Ui,
+    Color, Corners, Point, Result, Shadow, Size, TextSystem, Theme, Ui,
     scene::{Command, Gradient, GradientGeometry, GradientStop},
 };
 
@@ -72,6 +72,26 @@ fn shadows_and_gradient_backgrounds() -> Result {
         (shape.rect().origin, shape.radii(), blur),
         (Point::new(-2.0, 2.0), [8.0; 4], 6.0)
     );
+
+    // Only the bottom corners round: the gradient and the shadow follow,
+    // and the spread leaves the square corners square.
+    panel.set_corners(Corners {
+        bottom_left: true,
+        bottom_right: true,
+        ..Corners::NONE
+    });
+    let found = commands(&ui)?;
+    let [
+        Command::Shadow { shape, .. },
+        Command::FillGradient { shape: fill, .. },
+        ..,
+    ] = found[..]
+    else {
+        panic!("shadow and gradient, got {found:?}");
+    };
+    assert_eq!(fill.radii(), [0.0, 0.0, 6.0, 6.0]);
+    assert_eq!(shape.radii(), [0.0, 0.0, 8.0, 8.0]);
+    assert!(!panel.corners().top_left);
 
     panel.set_shadow(None);
     panel.set_background_gradient(None);
