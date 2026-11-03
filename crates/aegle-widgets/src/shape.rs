@@ -78,14 +78,12 @@ impl Control for ShapeControl {
                 let center = Point::new(size.width / 2.0, size.height / 2.0);
                 // Zero degrees points up, as for rotation.
                 let start = (start - 90.0).to_radians();
-                let mut builder = PathBuilder::new();
-                builder.arc(
+                arc(
                     center,
                     radius,
                     start,
                     sweep.clamp(-360.0, 360.0).to_radians(),
-                );
-                builder.finish(FillRule::NonZero)
+                )
             }
         };
         if self.fill.to_rgba()[3] > 0 {
@@ -100,6 +98,37 @@ impl Control for ShapeControl {
     fn semantics(&self, cx: &mut aegle_ui::control::SemanticsCx<'_>) {
         cx.set_role(aegle_ui::Role::Image);
     }
+}
+
+/// The arc on the circle of `radius` around `center` from angle `start` for
+/// `sweep`, in radians clockwise from the positive x axis (y points down);
+/// one cubic segment per quarter turn.
+fn arc(center: Point, radius: f32, start: f32, sweep: f32) -> Path {
+    let at = |angle: f32| {
+        let (sin, cos) = angle.sin_cos();
+        Point::new(center.x + radius * cos, center.y + radius * sin)
+    };
+    let mut builder = PathBuilder::new();
+    builder.move_to(at(start));
+    let segments = (sweep.abs() / std::f32::consts::FRAC_PI_2).ceil();
+    let step = sweep / segments;
+    // Control points along the tangents, 4/3·tan(θ/4) of the radius away.
+    let reach = radius * 4.0 / 3.0 * (step / 4.0).tan();
+    for index in 0..segments as u32 {
+        let (from, to) = (
+            start + step * index as f32,
+            start + step * (index + 1) as f32,
+        );
+        let (a, b) = (at(from), at(to));
+        let (sin_a, cos_a) = from.sin_cos();
+        let (sin_b, cos_b) = to.sin_cos();
+        builder.cubic_to(
+            Point::new(a.x - reach * sin_a, a.y + reach * cos_a),
+            Point::new(b.x + reach * sin_b, b.y - reach * cos_b),
+            b,
+        );
+    }
+    builder.finish(FillRule::NonZero)
 }
 
 pub(crate) fn shape(container: &Container) -> Shape {

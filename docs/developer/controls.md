@@ -427,7 +427,7 @@ Shape { width: 24dp; height: 24dp; path: icon; fill: #ffffff }
 
 - 一个路径或一段圆弧，带填充和描边（默认都透明，描边宽 1、平头、圆角连接）；没有固有尺寸。`set_path(None)` 不绘制。
 - `set_arc(start, sweep)`：能连同描边放进边界的最大圆，角度为度，0 向上、顺时针，负值逆时针；`arc()` 读回。
-- `Path::from_svg`（`aegle-scene` 的 `svg` feature）解析 SVG 路径数据，`PathBuilder::arc` 在 Canvas 里画同样的圆弧（弧度，自正 x 轴顺时针）。
+- `Path::from_svg`（`aegle-scene` 的 `svg` feature）解析 SVG 路径数据，Canvas 里同样可用。
 - 标记元素 `Shape`（`path` 字符串，解析失败不绘制）与 `Arc`（`start`、`sweep` float），共有 `fill`、`stroke`、`stroke_width`、`cap` `butt`/`round`/`square`。
 - 无障碍角色 Image。
 

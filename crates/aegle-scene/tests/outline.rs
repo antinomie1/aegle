@@ -1,35 +1,14 @@
-//! Outlines from SVG path data and arcs.
+//! Outlines from SVG path data.
+#![cfg(feature = "svg")]
 
-use aegle_scene::{FillRule, PathBuilder, Point, Verb};
+use aegle_scene::{Path, Point, SceneError, Verb};
 
 fn close(a: Point, b: Point) -> bool {
     (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() < 1e-3
 }
 
 #[test]
-fn arcs_follow_the_circle_one_cubic_per_quarter() {
-    let mut builder = PathBuilder::new();
-    let center = Point::new(10.0, 10.0);
-    // Three quarters clockwise from the top: top, right, bottom, left.
-    let quarter = std::f32::consts::FRAC_PI_2;
-    builder.arc(center, 10.0, -quarter, 3.0 * quarter);
-    let path = builder.finish(FillRule::NonZero);
-    assert_eq!(
-        path.verbs(),
-        [Verb::Move, Verb::Cubic, Verb::Cubic, Verb::Cubic]
-    );
-    let points = path.points();
-    assert!(close(points[0], Point::new(10.0, 0.0)));
-    assert!(close(points[3], Point::new(20.0, 10.0)));
-    assert!(close(points[9], Point::new(0.0, 10.0)));
-    // The first control point leaves the top along the clockwise tangent.
-    assert!(points[1].x > 10.0 && close(Point::new(0.0, points[1].y), Point::new(0.0, 0.0)));
-}
-
-#[cfg(feature = "svg")]
-#[test]
 fn svg_path_data_becomes_absolute_segments() {
-    use aegle_scene::{Path, SceneError};
     let triangle = Path::from_svg("M 2 2 L 22 2 l -10 18 z").unwrap();
     assert_eq!(
         triangle.verbs(),

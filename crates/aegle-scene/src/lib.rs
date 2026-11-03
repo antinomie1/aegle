@@ -16,6 +16,7 @@ extern crate alloc;
 mod builder;
 mod geometry;
 mod layer;
+#[cfg(feature = "svg")]
 mod outline;
 mod paint;
 mod resource;
