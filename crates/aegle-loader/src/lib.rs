@@ -29,6 +29,8 @@ mod eval;
 mod handle;
 mod layout;
 mod motion;
+#[cfg(feature = "shaders")]
+mod program;
 mod reactive;
 mod view;
 #[cfg(feature = "window")]
@@ -45,7 +47,7 @@ pub use aegle_macros::__element;
 pub use aegle_markup as markup;
 #[doc(hidden)]
 pub use element::__private;
-pub use element::{Arg, Element, Elements, Lines};
+pub use element::{Arg, Element, Elements, Lines, Numbers};
 pub use elements::{
     Arc, Column, Grid, Image, RadioButton, Row, ScrollView, Stack, Tab, Text, TextArea,
 };
@@ -94,10 +96,12 @@ pub use view::{State, StateValue, View, Watch};
 ///
 /// Types are `bool`, `int`, `int(min, max)`, `float`, `float(min)`,
 /// `float(min, max)`, `fraction`, `length`, `string`, `line`, `color`,
-/// `choice(a, b, ...)` and `lines` (a nonempty list of single-line strings,
-/// without a default; it binds to `list<string>`, checked as it changes), arriving as `bool`, `i64`, `f64`, `f32`,
-/// `f32`, `&str`, `&str`, `Color`, `&str` and [`Lines`]. A `get` field is
-/// none of the last three.
+/// `choice(a, b, ...)`, `lines` (a nonempty list of single-line strings,
+/// without a default; it binds to `list<string>`, checked as it changes) and
+/// `numbers(max)` (at most `max` finite numbers, without a default; it binds
+/// to `list<float>`, checked as it changes), arriving as `bool`, `i64`, `f64`,
+/// `f32`, `f32`, `&str`, `&str`, `Color`, `&str`, [`Lines`] and [`Numbers`].
+/// A `get` field is none of the last four.
 #[macro_export]
 macro_rules! element {
     ($($input:tt)*) => {

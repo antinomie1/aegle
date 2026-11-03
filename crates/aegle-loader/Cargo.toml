@@ -13,6 +13,8 @@ categories.workspace = true
 [features]
 motion = ["aegle-ui/motion", "aegle-widgets/motion"]
 grid = ["aegle-ui/grid"]
+# The Shader element: views filled by custom fragment programs.
+shaders = ["aegle-widgets/shaders"]
 # Window documents: opening and reloading a Window through the native App of
 # the target. The Linux window backend is the application's choice (`sdl3` or
 # `wayland`), so this feature cannot name one.
@@ -35,3 +37,7 @@ aegle-scene.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "shaders"
+required-features = ["shaders"]

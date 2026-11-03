@@ -18,6 +18,9 @@ pub struct Decoration {
     pub shadow: Option<crate::Shadow>,
     pub inset_shadow: Option<crate::Shadow>,
     pub gradient: Option<aegle_scene::Gradient>,
+    /// A custom fragment program filling the background, boxed since few
+    /// nodes have one.
+    pub program: Option<Box<crate::shader::Program>>,
 }
 
 impl Decoration {
@@ -30,6 +33,7 @@ impl Decoration {
             && self.shadow.is_none()
             && self.inset_shadow.is_none()
             && self.gradient.is_none()
+            && self.program.is_none()
     }
 }
 

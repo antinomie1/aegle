@@ -48,6 +48,8 @@ pub enum Arg<'a> {
     Color(Color),
     /// `lines`.
     Lines(Lines<'a>),
+    /// `numbers`.
+    Numbers(Numbers<'a>),
 }
 
 /// A checked `lines` value: a nonempty list of strings without hard line
@@ -99,6 +101,54 @@ impl<'a> Lines<'a> {
     }
 }
 
+/// A checked `numbers` value: finite numbers, at most as many as the
+/// property takes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Numbers<'a>(NumberItems<'a>);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum NumberItems<'a> {
+    Literal(&'a [Value]),
+    Bound(&'a [Data]),
+    Static(&'a [f32]),
+}
+
+impl<'a> Numbers<'a> {
+    /// Numbers `ui!` checked at compile time.
+    #[doc(hidden)]
+    pub const fn from_static(items: &'a [f32]) -> Self {
+        Self(NumberItems::Static(items))
+    }
+    /// The numbers in order.
+    pub fn iter(self) -> impl Iterator<Item = f32> + 'a {
+        let count = match self.0 {
+            NumberItems::Literal(items) => items.len(),
+            NumberItems::Bound(items) => items.len(),
+            NumberItems::Static(items) => items.len(),
+        };
+        (0..count).map(move |index| match self.0 {
+            NumberItems::Literal(items) => match items[index] {
+                Value::Number(n) => n,
+                _ => unreachable!("checked numbers"),
+            },
+            NumberItems::Bound(items) => match items[index] {
+                Data::Float(n) => n,
+                _ => unreachable!("checked numbers"),
+            },
+            NumberItems::Static(items) => items[index],
+        })
+    }
+    /// The numbers in order, as a setter taking a slice wants them.
+    pub fn to_vec(self) -> Vec<f32> {
+        self.iter().collect()
+    }
+    /// Whether a bound `list<float>` is valid for `numbers(max)`.
+    pub(crate) fn admits(items: &[Data], max: usize) -> bool {
+        items.len() <= max
+            && (items.iter()).all(|item| matches!(item, Data::Float(n) if n.is_finite()))
+    }
+}
+
 macro_rules! read {
     ($($name:ident -> $ty:ty: $($pattern:pat => $value:expr),+;)*) => {
         impl<'a> Arg<'a> {
@@ -123,6 +173,7 @@ read! {
     str -> &'a str: Arg::Str(value) => value;
     color -> Color: Arg::Color(value) => value;
     lines -> Lines<'a>: Arg::Lines(value) => value;
+    numbers -> Numbers<'a>: Arg::Numbers(value) => value;
 }
 
 impl<'a> Arg<'a> {
@@ -130,6 +181,9 @@ impl<'a> Arg<'a> {
     pub(crate) fn literal(ty: ValueType<'_>, value: &'a Value) -> Self {
         match (ty, value) {
             (ValueType::Lines, Value::List(items)) => Self::Lines(Lines(Items::Literal(items))),
+            (ValueType::Numbers(_), Value::List(items)) => {
+                Self::Numbers(Numbers(NumberItems::Literal(items)))
+            }
             (_, Value::Bool(value)) => Self::Bool(*value),
             (ValueType::Int(..), Value::Number(value)) => Self::Int(*value as i64),
             (_, Value::Number(value) | Value::Length(value)) => Self::Float(f64::from(*value)),
@@ -140,9 +194,12 @@ impl<'a> Arg<'a> {
         }
     }
 
-    /// The value of a checked binding.
-    pub(crate) fn data(value: &'a Data) -> Self {
+    /// The value of a checked binding to a property of type `ty`.
+    pub(crate) fn data(ty: ValueType<'_>, value: &'a Data) -> Self {
         match value {
+            Data::List(items) if matches!(ty, ValueType::Numbers(_)) => {
+                Self::Numbers(Numbers(NumberItems::Bound(items)))
+            }
             Data::Bool(value) => Self::Bool(*value),
             Data::Int(value) => Self::Int(*value),
             Data::Float(value) => Self::Float(f64::from(*value)),

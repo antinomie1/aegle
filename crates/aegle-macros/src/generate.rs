@@ -249,6 +249,13 @@ fn arg(ty: ValueType<'_>, value: &Value, loader: &TokenStream) -> TokenStream {
             });
             quote! { #arg::Lines(#loader::Lines::from_static(&[#(#items),*])) }
         }
+        (ValueType::Numbers(_), Value::List(items)) => {
+            let items = items.iter().map(|item| match item {
+                Value::Number(n) => *n,
+                _ => unreachable!("checked numbers"),
+            });
+            quote! { #arg::Numbers(#loader::Numbers::from_static(&[#(#items),*])) }
+        }
         _ => unreachable!("checked element literal"),
     }
 }

@@ -194,6 +194,7 @@ dependencies = [
  "aegle-scene",
  "aegle-types",
  "bytemuck",
+ "naga",
  "zeno",
 ]
 
@@ -465,6 +466,7 @@ dependencies = [
  "aegle-access",
  "aegle-controls",
  "aegle-core",
+ "aegle-gpu",
  "aegle-image",
  "aegle-layout",
  "aegle-motion",

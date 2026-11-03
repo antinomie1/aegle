@@ -109,6 +109,10 @@ fn value_type(input: ParseStream<'_>) -> syn::Result<ValueType<'static>> {
         "line" => ValueType::Line,
         "color" => ValueType::Color,
         "lines" => ValueType::Lines,
+        "numbers" => match arguments(input)?[..] {
+            [max] if max >= 1.0 && max.fract() == 0.0 => ValueType::Numbers(max as usize),
+            _ => return Err(syn::Error::new(span, "numbers takes (max), a whole count")),
+        },
         "choice" => {
             let inner;
             parenthesized!(inner in input);
@@ -228,8 +232,8 @@ impl Parse for Def {
                         body.parse::<Token![:]>()?;
                         let ty = value_type(&body)?;
                         let default = if body.parse::<Option<Token![=]>>()?.is_some() {
-                            if ty == ValueType::Lines {
-                                return Err(syn::Error::new(name.span(), "lines has no default"));
+                            if matches!(ty, ValueType::Lines | ValueType::Numbers(_)) {
+                                return Err(syn::Error::new(name.span(), "lists have no default"));
                             }
                             let negative = body.parse::<Option<Token![-]>>()?;
                             let literal: syn::Lit = body.parse()?;
@@ -280,7 +284,10 @@ impl Parse for Def {
                     let ty = value_type(&body)?;
                     if matches!(
                         ty,
-                        ValueType::Color | ValueType::Choice(_) | ValueType::Lines
+                        ValueType::Color
+                            | ValueType::Choice(_)
+                            | ValueType::Lines
+                            | ValueType::Numbers(_)
                     ) {
                         return Err(syn::Error::new(
                             span,

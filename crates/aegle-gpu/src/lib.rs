@@ -7,8 +7,13 @@
 //! image into premultiplied sRGB. Commands that need a texture atlas (glyphs and,
 //! with `vector`, images and paths) are handed back to the backend.
 //!
+//! Custom fragment programs ([`aegle_scene::Shader`]) record as
+//! [`KIND_SHADER`] rows; with `shaders`, [`shader_module`] composes and
+//! validates their modules and [`check_shader`] reports where one is wrong.
+//!
 //! Nothing here touches a graphics API, so the geometry, clip and placement rules
 //! are tested once and behave identically on every backend.
+mod custom;
 mod effects;
 mod error;
 mod layer;
@@ -18,6 +23,9 @@ mod shelf;
 mod vector;
 mod walk;
 
+pub use custom::KIND_SHADER;
+#[cfg(feature = "shaders")]
+pub use custom::{ShaderError, check_shader, shader_module, shader_wgsl};
 pub use error::{Error, Result};
 pub use layer::{
     BLUR_WGSL, BlurPlan, LayerPlan, Pixels, composite, empty, pixels, plan_blur, plan_layer,
@@ -38,6 +46,6 @@ pub use walk::{Step, Walker};
 pub use zeno::Scratch;
 
 /// Rounded-rectangle, stroke, gradient, shadow and atlas shaders: entries `vs_main`, `fs_main`, `fs_text`.
-pub const GEOMETRY_WGSL: &str = include_str!("shader.wgsl");
+pub const GEOMETRY_WGSL: &str = concat!(include_str!("common.wgsl"), include_str!("shader.wgsl"));
 /// Full-screen pass encoding the linear image into premultiplied sRGB.
 pub const RESOLVE_WGSL: &str = include_str!("resolve.wgsl");

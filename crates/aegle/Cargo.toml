@@ -54,6 +54,9 @@ cairo = ["aegle-app/cairo"]
 vulkan = ["aegle-app/vulkan"]
 wgpu = ["aegle-app/wgpu"]
 system-fonts = ["aegle-ui/system-fonts", "aegle-app/system-fonts"]
+# Custom fragment programs: `ShaderView`, markup's `Shader` and
+# `Node::set_shader`, drawn by the `vulkan` and `wgpu` renderers.
+shaders = ["aegle-app/shaders", "aegle-widgets/shaders", "aegle-loader?/shaders"]
 # Extra image formats beyond the always-available PNG, in `aegle::image`; `effects`
 # adds `aegle::image::effects`.
 jpeg = ["aegle-image/jpeg"]

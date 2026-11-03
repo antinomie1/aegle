@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use crate::{
     Affine, Color, Command, Gradient, Image, MAX_SCOPE_DEPTH, Path, Rect, RoundedRect, SceneError,
-    Stroke, TextureId,
+    Shader, Stroke, TextureId,
 };
 
 /// Immutable validated drawing commands with no renderer or tree ownership.
@@ -14,6 +14,7 @@ pub struct Scene {
     images: Vec<Image>,
     paths: Vec<Path>,
     gradients: Vec<Gradient>,
+    shaders: Vec<Shader>,
     max_depth: usize,
     max_clip_depth: usize,
     bounds: Option<Rect>,
@@ -61,7 +62,8 @@ impl Scene {
         let bytes = self.commands.capacity() * core::mem::size_of::<Command>()
             + self.images.capacity() * core::mem::size_of::<Image>()
             + self.paths.capacity() * core::mem::size_of::<Path>()
-            + self.gradients.capacity() * core::mem::size_of::<Gradient>();
+            + self.gradients.capacity() * core::mem::size_of::<Gradient>()
+            + self.shaders.capacity() * core::mem::size_of::<Shader>();
         #[cfg(feature = "text")]
         let bytes = bytes
             + self.glyph_runs.capacity() * core::mem::size_of::<crate::GlyphRun>()
@@ -86,6 +88,11 @@ impl Scene {
     /// Gradients addressed by [`Command::FillGradient`].
     pub fn gradients(&self) -> &[Gradient] {
         &self.gradients
+    }
+
+    /// Programs addressed by [`Command::Shader`].
+    pub fn shaders(&self) -> &[Shader] {
+        &self.shaders
     }
 
     /// Positioned glyph resources addressed by [`Command::Glyphs`].
@@ -168,6 +175,7 @@ impl SceneBuilder {
         self.scene.images.clear();
         self.scene.paths.clear();
         self.scene.gradients.clear();
+        self.scene.shaders.clear();
         self.scene.max_depth = 0;
         self.scene.max_clip_depth = 0;
         self.scene.bounds = None;
@@ -265,6 +273,39 @@ impl SceneBuilder {
                 hole,
                 color,
                 blur,
+            });
+        }
+        self
+    }
+
+    /// Fills `shape` with `shader` at `time` seconds with `values`; see
+    /// [`Command::Shader`]. Empty shapes produce no command.
+    #[track_caller]
+    pub fn shade(
+        &mut self,
+        shape: RoundedRect,
+        shader: &Shader,
+        time: f32,
+        values: [f32; Shader::VALUES],
+    ) -> &mut Self {
+        if !shape.is_empty() {
+            crate::valid(self.transform.validate_shape(shape, 0.0));
+            if !time.is_finite() || values.iter().any(|v| !v.is_finite()) {
+                crate::fail(SceneError::NonFinite);
+            }
+            self.cover(shape.rect(), 0.0);
+            let index = match self.scene.shaders.iter().position(|s| s == shader) {
+                Some(index) => index,
+                None => {
+                    self.scene.shaders.push(shader.clone());
+                    self.scene.shaders.len() - 1
+                }
+            };
+            self.scene.commands.push(Command::Shader {
+                shape,
+                shader: index,
+                time,
+                values,
             });
         }
         self

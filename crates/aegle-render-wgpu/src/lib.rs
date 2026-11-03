@@ -8,7 +8,8 @@
 //! atlas per kind, images, and CPU-rasterized path masks; without it those
 //! commands, like any future one, return [`Error::UnsupportedCommand`]. Optional `window`
 //! adds `WindowRenderer` over any `raw-window-handle` surface with FIFO
-//! presentation.
+//! presentation. Optional `shaders` draws custom fragment programs
+//! ([`aegle_scene::Shader`]), compiled on first use.
 //!
 //! The OpenGL backend is not enabled: it has no vertex-stage storage buffers.
 //! A CPU Vulkan driver can be selected and is not proof of GPU acceleration;
@@ -22,6 +23,8 @@ mod frame;
 mod gpu;
 #[cfg(feature = "text")]
 mod layer;
+#[cfg(feature = "shaders")]
+mod programs;
 mod renderer;
 #[cfg(feature = "text")]
 mod text;

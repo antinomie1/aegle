@@ -188,6 +188,11 @@ impl Renderer {
             self.acquired = None;
         }
         self.recording.clear();
+        #[cfg(feature = "shaders")]
+        {
+            let raw = self.device.raw.clone();
+            self.pipeline.programs.trim(&raw);
+        }
         #[cfg(feature = "text")]
         {
             self.text.atlas.begin_frame();

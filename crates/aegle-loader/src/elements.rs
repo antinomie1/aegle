@@ -372,8 +372,7 @@ crate::element! {
 
 /// Every built-in element.
 pub(crate) fn builtin() -> Elements {
-    let elements = Elements(Vec::new());
-    elements
+    let elements = Elements(Vec::new())
         .with::<Column>()
         .with::<Row>()
         .with::<ScrollView>()
@@ -401,5 +400,8 @@ pub(crate) fn builtin() -> Elements {
         .with::<TreeView>()
         .with::<TreeNode>()
         .with::<Dialog>()
-        .with::<Drawer>()
+        .with::<Drawer>();
+    #[cfg(feature = "shaders")]
+    let elements = elements.with::<crate::program::Shader>();
+    elements
 }

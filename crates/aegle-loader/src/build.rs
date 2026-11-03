@@ -325,20 +325,35 @@ fn binding(handle: Handle, prop: Prop, expr: Rc<Expr>, env: Env) -> Result<Rc<Ef
         let value = eval(&expr, &env, Some(effect), None).map_err(|e| env.locate(e))?;
         if last.as_ref() != Some(&value) {
             match (prop, &value) {
-                (Prop::Element(index), Data::List(items)) if !Lines::admits(items) => {
-                    let name = handle.glue().spec().properties[index].name;
+                (Prop::Element(index), Data::List(items))
+                    if !admits(handle.glue().spec().properties[index].ty, items) =>
+                {
+                    let property = handle.glue().spec().properties[index];
                     let message = format!(
-                        "`{name}` requires a nonempty list of strings without hard line separators; it is unchanged"
+                        "`{}` requires {}; it is unchanged",
+                        property.name,
+                        property.ty.describe()
                     );
                     return Err(env.locate(RuntimeError::new(expr.span, message).into()));
                 }
                 (Prop::Node(name), _) => apply(handle.node(), name, &node_value(&value))?,
-                (Prop::Element(index), _) => handle.glue().set(&handle, index, Arg::data(&value)),
+                (Prop::Element(index), _) => {
+                    let ty = handle.glue().spec().properties[index].ty;
+                    handle.glue().set(&handle, index, Arg::data(ty, &value))
+                }
             }
             last = Some(value);
         }
         Ok(())
     })
+}
+
+/// Whether a bound list suits a `lines` or `numbers` property.
+fn admits(ty: aegle_markup::ValueType<'_>, items: &[Data]) -> bool {
+    match ty {
+        aegle_markup::ValueType::Numbers(max) => crate::element::Numbers::admits(items, max),
+        _ => Lines::admits(items),
+    }
 }
 
 /// The literal a bound node property takes.

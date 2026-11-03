@@ -11,6 +11,8 @@
 //! the same atlases hold images and CPU-rasterized path coverage masks.
 //! Without that feature, text, image and path commands return an error. Optional `window` adds
 //! `WindowRenderer` for Wayland and Win32 surfaces with FIFO presentation.
+//! Optional `shaders` draws custom fragment programs ([`aegle_scene::Shader`]),
+//! compiling each to SPIR-V on first use; without it they return an error.
 //! Loading a Vulkan CPU driver is possible and is not proof
 //! of hardware GPU acceleration; [`Renderer::device_name`] identifies the device.
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -31,6 +33,8 @@ mod frame;
 mod layer;
 mod memory;
 mod pipeline;
+#[cfg(feature = "shaders")]
+mod programs;
 mod renderer;
 #[cfg(feature = "window")]
 mod surface;

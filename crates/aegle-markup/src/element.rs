@@ -89,6 +89,9 @@ pub enum ValueType<'a> {
     /// A nonempty list of strings without hard line separators; binds to
     /// `list<string>`, whose values the engine checks when they change.
     Lines,
+    /// A list of at most this many finite numbers; binds to `list<float>`,
+    /// whose length the engine checks when it changes.
+    Numbers(usize),
 }
 
 /// One element property.
@@ -140,6 +143,7 @@ impl ValueType<'_> {
             Self::Float(..) | Self::Fraction | Self::Length => Type::Float,
             Self::String | Self::Line => Type::String,
             Self::Lines => Type::List(Box::new(Type::String)),
+            Self::Numbers(_) => Type::List(Box::new(Type::Float)),
             Self::Color | Self::Choice(_) => return None,
         })
     }
@@ -165,12 +169,21 @@ impl ValueType<'_> {
                         .all(|item| matches!(item, Value::String(text) if Self::single_line(text)))
             }
             (Self::Choice(choices), Value::Identifier(name)) => choices.contains(&name.as_str()),
+            (Self::Numbers(max), Value::List(items)) => {
+                items.len() <= max
+                    && (items.iter()).all(|item| matches!(item, Value::Number(n) if n.is_finite()))
+            }
             _ => false,
         };
         if valid {
             return Ok(());
         }
-        Err(match self {
+        Err(self.describe())
+    }
+
+    /// What a value of this type is, as errors name it.
+    pub fn describe(self) -> String {
+        match self {
             Self::Bool => "true or false".into(),
             Self::Int(min, max) => format!("a whole number from {min} to {max}"),
             Self::Float(min, max) if min == f64::MIN && max == f64::MAX => "a finite number".into(),
@@ -185,7 +198,8 @@ impl ValueType<'_> {
             Self::Color => "a #RRGGBB or #RRGGBBAA color".into(),
             Self::Choice(choices) => choices.join(", "),
             Self::Lines => "a nonempty list of strings without hard line separators".into(),
-        })
+            Self::Numbers(max) => format!("a list of at most {max} numbers"),
+        }
     }
 }
 

@@ -14,6 +14,8 @@ description = "Bounded Vulkan 1.1 rendering of retained Aegle scenes"
 default = []
 window = ["dep:raw-window-handle", "dep:windows"]
 text = ["aegle-scene/text", "aegle-gpu/vector", "dep:aegle-glyph", "dep:hashbrown"]
+# Custom fragment programs, compiled from WGSL to SPIR-V on first use.
+shaders = ["aegle-gpu/shaders", "dep:naga"]
 
 [dependencies]
 aegle-gpu.workspace = true
@@ -23,6 +25,7 @@ ash = { version = "0.38.0", default-features = false, features = ["loaded", "std
 bytemuck = { version = "1.25.0", features = ["derive"] }
 aegle-glyph = { workspace = true, optional = true, features = ["scene"] }
 hashbrown = { version = "0.17.1", default-features = false, optional = true }
+naga = { version = "30.0.1", default-features = false, features = ["spv-out"], optional = true }
 
 raw-window-handle = { version = "0.6.2", optional = true }
 
@@ -62,3 +65,7 @@ required-features = ["text"]
 [[example]]
 name = "vulkan_layer_cost"
 required-features = ["text"]
+
+[[test]]
+name = "shaders"
+required-features = ["shaders"]

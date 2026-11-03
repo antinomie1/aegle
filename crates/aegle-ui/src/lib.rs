@@ -58,6 +58,7 @@ pub mod scroll_geometry;
 mod scrollbar;
 #[cfg(feature = "accessibility")]
 mod semantics;
+mod shader;
 mod skins;
 mod state;
 mod state_api;

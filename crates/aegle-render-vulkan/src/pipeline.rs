@@ -28,12 +28,21 @@ pub(crate) struct Pipeline {
     /// A box pass of a backdrop blur into an RGBA16F scratch image.
     pub blur_pass: vk::RenderPass,
     pub blur: vk::Pipeline,
+    /// Custom fragment programs drawn by this pipeline's passes.
+    #[cfg(feature = "shaders")]
+    pub programs: crate::programs::Programs,
     pub sets: [vk::DescriptorSet; 2],
     set_layouts: [vk::DescriptorSetLayout; 2],
     pool: vk::DescriptorPool,
 }
 
 impl Pipeline {
+    /// The device the pipeline objects belong to.
+    #[cfg(feature = "shaders")]
+    pub fn raw(&self) -> &ash::Device {
+        &self.raw
+    }
+
     pub fn new(
         device: &Device,
         #[cfg(feature = "window")] surface: Option<&crate::surface::Surface>,
@@ -64,6 +73,8 @@ impl Pipeline {
             layouts: [vk::PipelineLayout::null(); 2],
             pipelines: [vk::Pipeline::null(); 2],
             cut: vk::Pipeline::null(),
+            #[cfg(feature = "shaders")]
+            programs: Default::default(),
             working: if direct {
                 format
             } else {
@@ -292,6 +303,8 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         // SAFETY: Renderer waits before drop and drops target framebuffers first.
         // Vulkan destroy accepts null handles for incomplete initialization.
+        #[cfg(feature = "shaders")]
+        self.programs.destroy(&self.raw);
         unsafe {
             for p in self.pipelines.into_iter().chain([self.cut, self.blur]) {
                 self.raw.destroy_pipeline(p, None);

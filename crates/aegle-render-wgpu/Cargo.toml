@@ -14,6 +14,8 @@ description = "Minimal portable wgpu rendering of retained Aegle scenes"
 default = []
 window = ["dep:raw-window-handle"]
 text = ["aegle-scene/text", "aegle-gpu/vector", "dep:aegle-glyph", "dep:hashbrown"]
+# Custom fragment programs, compiled from WGSL on first use.
+shaders = ["aegle-gpu/shaders"]
 
 [dependencies]
 aegle-gpu.workspace = true
@@ -45,3 +47,7 @@ required-features = ["text"]
 [[example]]
 name = "wgpu_layer_cost"
 required-features = ["text"]
+
+[[test]]
+name = "shaders"
+required-features = ["shaders"]

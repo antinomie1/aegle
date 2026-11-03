@@ -66,6 +66,21 @@ impl Frame<'_> {
                 match walker.step(&mut renderer.recording)? {
                     Step::Done => return Ok(()),
                     Step::Recorded => {}
+                    #[cfg(feature = "shaders")]
+                    Step::Command(
+                        aegle_scene::Command::Shader {
+                            shape,
+                            shader,
+                            time,
+                            values,
+                        },
+                        state,
+                    ) => {
+                        let slot = renderer.pipeline.program(&scene.shaders()[shader])?;
+                        renderer
+                            .recording
+                            .shader(state, shape, slot, time, values, view)?;
+                    }
                     #[cfg(feature = "text")]
                     Step::Command(command, state) => loop {
                         match renderer.record(scene, command, state, view) {

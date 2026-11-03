@@ -40,6 +40,8 @@ mod number_field;
 mod numeric;
 mod paint;
 mod popup;
+#[cfg(feature = "shaders")]
+mod program;
 mod range_control;
 mod scroll_view;
 mod separator;
@@ -76,6 +78,8 @@ pub use paint::{
     slider_track, toggle,
 };
 pub use popup::Popup;
+#[cfg(feature = "shaders")]
+pub use program::{ShaderControl, ShaderView};
 pub use range_control::{Orientation, ProgressControl, SliderControl};
 pub use scroll_view::ScrollControl;
 pub use separator::{Separator, SeparatorControl, Splitter};
@@ -193,6 +197,10 @@ pub trait Widgets {
     /// Appends an empty image view, sized zero until [`ImageView::set_image`]
     /// or [`ImageView::load`] gives it an image.
     fn image_view(&self) -> ImageView;
+    /// Appends an empty view for a custom fragment program, sized zero
+    /// until sized or stretched.
+    #[cfg(feature = "shaders")]
+    fn shader_view(&self) -> ShaderView;
     /// Appends a path field and a button that opens the host's native file
     /// dialog in `mode`, which must not be [`FileMode::OpenMany`].
     fn file_picker(&self, mode: FileMode) -> FilePicker;
@@ -287,6 +295,10 @@ impl Widgets for Container {
     }
     fn image(&self, image: &Image) -> ImageView {
         visual::image(self, Some(image))
+    }
+    #[cfg(feature = "shaders")]
+    fn shader_view(&self) -> ShaderView {
+        program::shader_view(self)
     }
     fn image_view(&self) -> ImageView {
         visual::image(self, None)

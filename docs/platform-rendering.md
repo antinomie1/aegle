@@ -122,6 +122,7 @@ pub(crate) trait Renderer {
 | **覆盖率计算** | tiny-skia 算法 / cairo 动态库 | 片元着色器导数估计边缘 | 片元着色器导数估计边缘 |
 | **混合空间** | 预乘线性光混合 | 预乘线性光混合 (RGBA16F) | 预乘线性光混合 (RGBA16F) |
 | **外部应用纹理** | 不支持 (`UnsupportedCommand`) | 支持 (`register_texture`) | 支持 (`register_texture`) |
+| **自定义片元程序** | 不支持 (`UnsupportedCommand`) | 首次使用编成 SPIR-V (`shaders`) | 首次使用编译 WGSL (`shaders`) |
 | **多层嵌套裁剪** | 覆盖率 mask 栈 (最多 64 层) | 硬件着色器解析 (最多 8 层) | 硬件着色器解析 (最多 8 层) |
 | **字形与图像图集** | CPU 灰度/彩色缓存 | 按需 R8/RGBA8 货架图集 | 按需 1024² 灰度/彩色图集 |
 | **呈现范围** | 仅重绘并上报有变化的区域 | 整幅重绘，支持增量呈现上报 | 整幅重绘并提交整幅 surface |
@@ -138,6 +139,7 @@ pub(crate) trait Renderer {
 * **数据流**：图元记录直接写入 host-visible storage buffer，顶点在顶点着色器中按 instance 展开，相邻同管线图元自动合并单次 instanced draw。
 * **多层裁剪**：着色器内解析最多 8 层矩形、圆角与仿射裁剪链。
 * **挖洞**：`Cut(shape)` 以 destination-out 合成（目标保留 1 − 覆盖率）。GPU 后端为其单独建一条混合状态不同的几何管线（种类 4，按批切换）；软件渲染器把像素四个分量同乘 1 − 覆盖率，对预乘 sRGB 存储是精确的。
+* **自定义片元程序**（`shaders` 特性）：`Shader { shape, shader, time, values }` 用 WGSL 程序的颜色填充形状。`aegle-gpu` 把共享前导（记录、存储、实例四边形、覆盖率与裁剪，`common.wgsl`）、全局 `time`/`values` 与程序的 `shade` 拼成模块，入口 `fs_shader` 先算覆盖率再调用程序，结果由 sRGB 转线性预乘后按覆盖率合成；`check_shader` 用 naga 校验并把错误位置换算到程序自己的行列。记录为种类 5，页槽放后端的程序管线号，`values` 占一行裁剪行。Vulkan 首次使用时经 naga 编成 SPIR-V（顶点阶段复用构建期的 geometry.vert），wgpu 直接交给 wgpu；两者都按源码哈希缓存管线，超过 8 条时在帧开始丢弃上一帧未用的。编译失败返回 `Error::Shader`；软件渲染器返回 `UnsupportedCommand`。
 * **内阴影**：`InsetShadow { shape, hole, color, blur }` 在 `shape` 内画颜色乘以（1 − `hole` 的高斯阴影）。GPU 把 `shape` 作为该图元的一层裁剪压入裁剪链，着色器取 1 减阴影；软件渲染器用 `shape` 的覆盖遮罩逐像素取同一阴影公式。
 * **逐角圆角**：`RoundedRect::with_radii` 给四个角各自的半径（左上、右上、右下、左下，相邻两角之和超过边长时按同一比例缩小，同 CSS）。GPU 把四个半径以 16 位定点数放进图元行未用的 w 分量，按点所在象限取角；阴影逐行取该行一侧的两个角，软件渲染器用同样公式。
 * **字形图集与路径**：灰度 R8 与彩色 RGBA8 分页管理；路径由 CPU（zeno）生成 R8 覆盖率后上传图集。

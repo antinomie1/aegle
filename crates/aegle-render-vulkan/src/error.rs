@@ -64,6 +64,9 @@ pub enum Error {
     FrameFailed,
     /// A layer was popped without a matching push.
     UnbalancedLayer,
+    /// A custom fragment program does not compile.
+    #[cfg(feature = "shaders")]
+    Shader(aegle_gpu::ShaderError),
 }
 
 impl fmt::Display for Error {
@@ -105,6 +108,8 @@ impl fmt::Display for Error {
             Self::Allocation => f.write_str("Vulkan host allocation failed"),
             Self::FrameFailed => f.write_str("cannot submit a failed Vulkan frame"),
             Self::UnbalancedLayer => f.write_str("Vulkan layer pop has no matching push"),
+            #[cfg(feature = "shaders")]
+            Self::Shader(e) => write!(f, "shader: {e}"),
         }
     }
 }

@@ -150,6 +150,7 @@ fn rust(ty: ValueType<'_>, p: &TokenStream) -> (TokenStream, Ident) {
         ValueType::Fraction | ValueType::Length => (quote! { f32 }, "f32"),
         ValueType::Color => (quote! { #p::Color }, "color"),
         ValueType::Lines => (quote! { #p::Lines<'_> }, "lines"),
+        ValueType::Numbers(_) => (quote! { #p::Numbers<'_> }, "numbers"),
         _ => (quote! { &str }, "str"),
     };
     (ty, Ident::new(read, Span::call_site()))
@@ -176,6 +177,7 @@ fn placeholder(ty: ValueType<'_>, p: &TokenStream) -> TokenStream {
             quote! { #first }
         }
         ValueType::Lines => quote! { #p::Lines::from_static(&[""]) },
+        ValueType::Numbers(_) => quote! { #p::Numbers::from_static(&[]) },
     }
 }
 
@@ -194,6 +196,7 @@ fn spec_tokens(spec: &ElementSpec<'_>, m: &TokenStream) -> TokenStream {
         ValueType::Int(min, max) => quote! { #m::ValueType::Int(#min, #max) },
         ValueType::Float(min, max) => quote! { #m::ValueType::Float(#min, #max) },
         ValueType::Choice(choices) => quote! { #m::ValueType::Choice(&[#(#choices),*]) },
+        ValueType::Numbers(max) => quote! { #m::ValueType::Numbers(#max) },
         other => {
             let name = Ident::new(&format!("{other:?}"), Span::call_site());
             quote! { #m::ValueType::#name }

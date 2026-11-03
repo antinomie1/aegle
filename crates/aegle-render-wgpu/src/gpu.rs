@@ -292,7 +292,7 @@ impl Gpu {
     }
 }
 
-fn pipeline(
+pub(crate) fn pipeline(
     device: &Device,
     shader: &ShaderModule,
     fragment: &str,

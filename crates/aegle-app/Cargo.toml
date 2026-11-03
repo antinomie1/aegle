@@ -40,6 +40,9 @@ cairo = ["dep:aegle-render-cairo", "dep:aegle-render-cpu"]
 # `wgpu` reaches Metal there.
 vulkan = ["dep:aegle-render-vulkan", "dep:raw-window-handle", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
 wgpu = ["dep:aegle-render-wgpu", "dep:raw-window-handle", "aegle-platform-wayland?/gpu", "aegle-platform-sdl3?/gpu"]
+# Custom fragment programs on the GPU renderers; the CPU ones fail frames
+# that draw them.
+shaders = ["aegle-render-vulkan?/shaders", "aegle-render-wgpu?/shaders"]
 # File dialogs, notifications, a tray icon and global shortcuts (`App::desktop`).
 desktop-services = ["native", "dep:aegle-desktop"]
 

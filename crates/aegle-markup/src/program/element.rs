@@ -113,13 +113,30 @@ impl Checker<'_> {
                     matches!(element_property().unwrap().1.ty, ValueType::Choice(_))
                 }
             };
-            let value = match literal(property.value) {
-                Value::Identifier(id) if !identifier => Err(Expr {
-                    kind: ExprKind::Name(id),
-                    span: property.value_span,
-                }),
-                Value::Expr(expr) => Err(*expr),
-                value => Ok(value),
+            let numbers = matches!(
+                element_property().map(|(_, spec)| spec.ty),
+                Some(ValueType::Numbers(_))
+            );
+            let value = match property.value {
+                // A list of numbers naming states is an expression, not
+                // a list of identifiers.
+                Value::Expr(expr)
+                    if numbers
+                        && !matches!(
+                            crate::schema::constant(&expr),
+                            Some(Value::List(items)) if items.iter().all(|i| matches!(i, Value::Number(_)))
+                        ) =>
+                {
+                    Err(*expr)
+                }
+                value => match literal(value) {
+                    Value::Identifier(id) if !identifier => Err(Expr {
+                        kind: ExprKind::Name(id),
+                        span: property.value_span,
+                    }),
+                    Value::Expr(expr) => Err(*expr),
+                    value => Ok(value),
+                },
             };
             let value = match (value, prop) {
                 (Ok(value), Prop::Node(name)) => {

@@ -47,6 +47,9 @@ impl Default for Options {
 enum Kind {
     Geometry,
     Cut,
+    /// A custom program, by slot.
+    #[cfg(feature = "shaders")]
+    Program(u32),
     #[cfg(feature = "text")]
     Atlas(crate::atlas::Slot),
 }
@@ -56,6 +59,8 @@ impl Kind {
         match primitive.header[1] {
             0 => Self::Geometry,
             aegle_gpu::KIND_CUT => Self::Cut,
+            #[cfg(feature = "shaders")]
+            aegle_gpu::KIND_SHADER => Self::Program(primitive.header[2]),
             #[cfg(feature = "text")]
             _ => Self::Atlas(crate::atlas::Slot::from_page(primitive.header[2])),
             #[cfg(not(feature = "text"))]
@@ -109,6 +114,9 @@ pub struct Renderer {
     /// Open layers, innermost last, and images kept for reuse.
     #[cfg(feature = "text")]
     pub(crate) layers: crate::layer::Layers,
+    /// Custom fragment programs this renderer compiled.
+    #[cfg(feature = "shaders")]
+    pub(crate) programs: crate::programs::Programs,
 }
 
 impl Renderer {
@@ -146,6 +154,8 @@ impl Renderer {
             loaded: false,
             #[cfg(feature = "text")]
             layers: Default::default(),
+            #[cfg(feature = "shaders")]
+            programs: Default::default(),
         })
     }
 
@@ -205,6 +215,8 @@ impl Renderer {
         self.clear = linear_rgba(clear.to_rgba()).map(f64::from);
         self.loaded = false;
         self.rec.clear();
+        #[cfg(feature = "shaders")]
+        self.programs.trim();
         Ok(())
     }
 
@@ -397,6 +409,8 @@ impl Renderer {
         match kind {
             Kind::Geometry => pass.set_pipeline(&self.gpu.geometry),
             Kind::Cut => pass.set_pipeline(&self.gpu.cut),
+            #[cfg(feature = "shaders")]
+            Kind::Program(slot) => pass.set_pipeline(self.programs.pipeline(slot)),
             #[cfg(feature = "text")]
             Kind::Atlas(slot) => {
                 pass.set_pipeline(&self.gpu.text);

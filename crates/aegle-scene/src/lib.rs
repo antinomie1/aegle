@@ -20,6 +20,7 @@ mod layer;
 mod outline;
 mod paint;
 mod resource;
+mod shader;
 #[cfg(feature = "text")]
 mod text;
 
@@ -29,6 +30,7 @@ pub use geometry::{Affine, RoundedRect};
 pub use layer::{BlurBox, Layer, blur_boxes, blur_reach};
 pub use paint::{Gradient, GradientGeometry, GradientStop};
 pub use resource::{FillRule, Image, LineCap, LineJoin, Path, PathBuilder, Stroke, Verb};
+pub use shader::Shader;
 #[cfg(feature = "text")]
 pub use text::{Blob, FontData, FontSource, Glyph, GlyphRun, SystemFont};
 
@@ -123,6 +125,19 @@ pub enum Command {
     /// the shape's coverage of its color and alpha, so a transparent window
     /// shows what is behind it there. Inside a layer it cuts the layer.
     Cut(RoundedRect),
+    /// Fill `shape` with [`Scene::shaders`]`[shader]`: the program's color at
+    /// each point, clipped to the shape. GPU renderers only; the software
+    /// renderer fails the frame.
+    Shader {
+        /// Shape in the current local coordinate system; `uv` spans its rect.
+        shape: RoundedRect,
+        /// Index into [`Scene::shaders`].
+        shader: usize,
+        /// The program's `time`, in seconds.
+        time: f32,
+        /// The program's `values`.
+        values: [f32; Shader::VALUES],
+    },
     /// Draw a positioned glyph run from [`Scene::glyph_runs`].
     #[cfg(feature = "text")]
     Glyphs(usize),

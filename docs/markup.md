@@ -55,6 +55,15 @@ Column {
           stroke_width: 4dp; cap: round }
     Shape { width: 24dp; height: 24dp; path: "M 4 12 L 10 18 L 20 6"; stroke: #ffffff
             stroke_width: 2dp; cap: round }
+    Shader { source: "glow.wgsl"; values: [level, 0.5]; height: 24dp; radius: 6dp }
+}
+```
+
+```wgsl
+// glow.wgsl：uv 为 0..1（自左上角），size 为逻辑像素；返回非预乘 sRGB。
+fn shade(uv: vec2f, size: vec2f) -> vec4f {
+    let pulse = 0.5 + 0.5 * sin(time * 3.0 - uv.x * 6.0);
+    return vec4f(0.54, 0.71, 0.98, values[0] * pulse);
 }
 ```
 
@@ -63,6 +72,7 @@ Column {
 * **挖洞**：`cut: true` 的节点不画背景，而是把自身形状内已画的内容清成透明（透明窗口在那里露出后面的桌面）；边框、焦点环与内容照常绘制。在有自身 opacity 或 backdrop_blur 的组里只挖穿该组。
 * **内阴影**：`inset_shadow: [x, y, blur, spread, color]` 画在背景之上、边框与内容之下，跟随圆角；偏移移动未被遮暗的中间，正的 spread 加宽阴影边。blur 必须为正（无模糊的内阴影就是边框），不参与过渡。
 * **圆角**：`corners: [bottom_left, bottom_right]` 让 `radius` 只作用于列出的角（`top_left`、`top_right`、`bottom_right`、`bottom_left`，默认全部），例如贴在屏幕顶边的栏只圆下面两个角。
+* **着色器**（`shaders` 特性）：`Shader` 以 `source` 处的 WGSL 文件（相对工作目录）作背景，跟随圆角，没有固有尺寸；程序定义 `fn shade(uv: vec2f, size: vec2f) -> vec4f`，可读全局 `time`（程序开始后的秒数）与 `values`（`array<f32, 8>`，来自 `values: [...]`，至多 8 个数，可绑定 `list<float>`）。源码（注释外）提到 `time` 时节点在可见期间每帧重绘，否则只画一次；减少动态效果时 `time` 停在 0。编译失败时视图清空并触发 `failed`，`self.error` 带文件、行、列。只有 Vulkan 与 wgpu 渲染器能画，软件渲染器让该帧失败。
 * **形状**：`Shape` 的 `path` 是 SVG 路径数据（全部命令，含圆弧与相对坐标），单位为 dp、原点在左上角，解析失败时不绘制；`Arc` 画能放进边界的最大圆上从 `start` 起 `sweep` 度的弧（0 度向上、顺时针，默认整圈）。两者都有 `fill`、`stroke`、`stroke_width`、`cap`（`butt`/`round`/`square`），没有固有尺寸。缩放形状用 `scale`。
 
 ---

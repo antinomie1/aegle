@@ -24,6 +24,8 @@ impl State {
         #[cfg(not(feature = "motion"))]
         let reduced_motion = false;
         let mut next_frame = false;
+        // A program reading `time` draws again next frame.
+        let mut program_frame = false;
         let decoration = self.decorations.get(&id);
         let element = &mut self.tree.get_mut(id).unwrap().context;
         let padding = element.inset(&theme);
@@ -62,7 +64,11 @@ impl State {
             if element.cut {
                 cx.builder.cut(shape);
             } else if frame.background {
-                if !effects::paint_gradient(decoration, cx.builder, shape)
+                let (shaded, animated) =
+                    crate::shader::paint(decoration, cx.builder, shape, time, reduced_motion);
+                program_frame = animated;
+                if !shaded
+                    && !effects::paint_gradient(decoration, cx.builder, shape)
                     && appearance.background.to_rgba()[3] != 0
                 {
                     cx.builder.fill(shape, appearance.background);
@@ -82,7 +88,7 @@ impl State {
             for decorator in decorators.iter_mut().flat_map(|list| list.iter_mut()) {
                 decorator.over(&mut cx);
             }
-            next_frame = cx.next_frame;
+            next_frame = cx.next_frame || program_frame;
             outline(
                 cx.builder,
                 size,

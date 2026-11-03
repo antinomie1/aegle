@@ -14,12 +14,15 @@ description = "Backend-independent GPU draw records, shared shaders and atlas he
 default = []
 # Image placement and CPU path-mask rasterization for atlas-backed renderers.
 vector = ["dep:zeno"]
+# Checked custom fragment programs; the GPU renderers' `shaders` compile them.
+shaders = ["dep:naga"]
 
 [dependencies]
 aegle-scene.workspace = true
 aegle-types = { workspace = true, features = ["color-math"] }
 bytemuck = { version = "1.25.0", features = ["derive"] }
 # Already used by aegle-glyph through swash.
+naga = { version = "30.0.1", default-features = false, features = ["wgsl-in"], optional = true }
 zeno = { version = "0.3.3", default-features = false, features = ["eval", "std"], optional = true }
 
 [lints]

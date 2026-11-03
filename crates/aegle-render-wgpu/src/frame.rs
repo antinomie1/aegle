@@ -127,6 +127,20 @@ impl Renderer {
             match walker.step(&mut self.rec)? {
                 Step::Done => return Ok(()),
                 Step::Recorded => {}
+                #[cfg(feature = "shaders")]
+                Step::Command(
+                    aegle_scene::Command::Shader {
+                        shape,
+                        shader,
+                        time,
+                        values,
+                    },
+                    state,
+                ) => {
+                    let slot = self.program(&scene.shaders()[shader])?;
+                    let view = self.viewport;
+                    self.rec.shader(state, shape, slot, time, values, view)?;
+                }
                 #[cfg(feature = "text")]
                 Step::Command(command, state) => {
                     use aegle_scene::Command;

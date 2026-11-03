@@ -15,12 +15,12 @@
 | **aegle-text** | 段落成形与断行、段落块多行编辑器（`Editor` 分块增量重排、有界撤销、预编辑保持提交值稳定、密码模式）、空闲文字内存预算回收 | 默认系统文字栈（Linux Pango/Fontconfig、Win DirectWrite、macOS CoreText）；Parley 为 opt-in 回退 |
 | **aegle-glyph** | 8-bit 灰度字形覆盖率、LRU 限制内存条目与字节预算、COLRv1/SVG 颜色字形分离支持 | 默认系统字形（Linux FreeType、Win DirectWrite 纹理、macOS CoreText 位图）；Swash 为 opt-in 回退 |
 | **aegle-scene** | 局部绘制记录（Scene）、矩形/圆角/边框/图像/路径/仿射变换/最多八层嵌套裁剪、图层与盒式模糊、字形记录 | `no_std` + `alloc` |
-| **aegle-gpu** | GPU 图元与裁剪存储行（Recording，112B 图元 / 64B 裁剪）、图集货架装箱、WGSL 着色器 | 纯逻辑，无图形 API 依赖 |
+| **aegle-gpu** | GPU 图元与裁剪存储行（Recording，112B 图元 / 64B 裁剪）、图集货架装箱、WGSL 着色器；`shaders` 下拼装并校验自定义片元程序（naga），错误定位到程序行列 | 纯逻辑，无图形 API 依赖；naga 30（可选） |
 | **aegle-render-cpu** | CPU 合成器（线性光混合、裁剪 mask 预算、离屏图层模糊、渐变与解析式阴影、字形/图像双线性采样） | 纯 Safe/Unsafe Rust 内存操作 |
 | **aegle-render-tiny-skia** | 结合 `render-cpu`，由 tiny-skia 0.12 提供抗锯齿几何覆盖率（直角几何由合成器直接解析计算） | tiny-skia 0.12 |
 | **aegle-render-cairo** | 结合 `render-cpu`，由系统 cairo 提供几何覆盖率（Linux 专用，运行时动态加载） | 运行时加载 `libcairo.so.2` |
-| **aegle-render-vulkan** | Vulkan 1.1 硬件加速渲染：storage buffer 图元合并、按需灰度/彩色字形图集、最多八层裁剪、应用纹理登记、原生 swapchain 呈现 | ash 0.38, bytemuck 1.25 |
-| **aegle-render-wgpu** | 全平台通用 GPU 渲染：WGSL 着色器、多层裁剪、字形/图像专用纹理、FIFO 呈现 | wgpu 30.0.1 |
+| **aegle-render-vulkan** | Vulkan 1.1 硬件加速渲染：storage buffer 图元合并、按需灰度/彩色字形图集、最多八层裁剪、应用纹理登记、原生 swapchain 呈现；`shaders` 下首次使用时把自定义片元程序编成 SPIR-V 管线（lavapipe 上与同色填充逐像素一致） | ash 0.38, bytemuck 1.25；naga 30（可选） |
+| **aegle-render-wgpu** | 全平台通用 GPU 渲染：WGSL 着色器、多层裁剪、字形/图像专用纹理、FIFO 呈现；`shaders` 下首次使用时编译自定义片元程序 | wgpu 30.0.1 |
 | **aegle-platform** | 统一平台契约：`Platform` 与 `SurfacePlatform` trait、标准事件（`Event`）、窗口选项与角色（层、弹出层）、输出枚举、IME 事务、剪贴板与拖放契约 | 纯契约抽象，无特定窗口库依赖 |
 | **aegle-platform-sdl3** | Linux 默认后端：普通窗口与弹出菜单/提示窗口、显示器枚举、键盘/指针/触摸/滚轮、系统光标、文本输入与 IME、进程剪贴板、拖入、软件呈现与 GPU 句柄租约 | 运行时加载 `libSDL3.so.0` |
 | **aegle-platform-wayland** | Linux 原生客户端：xdg-shell 顶层窗口、指定输出且可原地改放置的 wlr layer-shell 表面、xdg_popup（父为顶层、弹出层或 layer）、输出枚举、text-input-v3（周边文字与选区）、双向拖放、SHM 呈现与 GPU 租约 | wayland-client 0.31, SCTK 0.21, libxkbcommon |
