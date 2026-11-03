@@ -168,4 +168,8 @@ impl Element {
     pub fn is_shown(&self) -> bool {
         self.effective_visible
     }
+    /// Whether the node is a hole, see [`crate::Node::set_cut`].
+    pub fn is_cut(&self) -> bool {
+        self.cut
+    }
 }
