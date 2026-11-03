@@ -192,16 +192,35 @@ fn anchor(value: &Literal) -> bool {
 /// The easing curves a transition timing may name.
 pub(crate) const EASINGS: &[&str] = &["linear", "ease_in", "ease_out", "ease_in_out"];
 
-/// A duration, or a `[duration, easing]` pair.
+/// A duration, a `[duration, easing]` pair, or a bare `spring(..)` that
+/// lasts its own settling time.
 fn timing(value: &Literal) -> bool {
     match value {
         Literal::Duration(_) => true,
         Literal::List(items) => {
-            matches!(&items[..], [Literal::Duration(_), Literal::Identifier(easing)]
-                if EASINGS.contains(&easing.as_str()))
+            matches!(&items[..], [Literal::Duration(_), easing] if self::easing(easing))
         }
-        _ => false,
+        value => spring(value),
     }
+}
+
+/// A named easing, `cubic_bezier(x1, y1, x2, y2)` with `x1` and `x2` in
+/// `0..=1`, or a spring.
+fn easing(value: &Literal) -> bool {
+    match value {
+        Literal::Identifier(name) => EASINGS.contains(&name.as_str()),
+        Literal::Call(function, arguments) if function == "cubic_bezier" => {
+            matches!(&arguments[..], [Literal::Number(x1), Literal::Number(_), Literal::Number(x2), Literal::Number(_)]
+                if (0.0..=1.0).contains(x1) && (0.0..=1.0).contains(x2))
+        }
+        value => spring(value),
+    }
+}
+
+/// `spring(stiffness, damping)`, both positive.
+fn spring(value: &Literal) -> bool {
+    matches!(value, Literal::Call(function, arguments) if function == "spring"
+        && matches!(&arguments[..], [Literal::Number(k), Literal::Number(d)] if *k > 0.0 && *d > 0.0))
 }
 
 /// `token("package.name")`.

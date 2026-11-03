@@ -131,16 +131,18 @@ pub enum PropertyName {
     DisabledForeground,
     /// Positive font size in logical pixels for text-bearing controls.
     FontSize,
-    /// Timing of every transitioned property: a duration or `[duration,
-    /// easing]`; requires motion support.
+    /// Timing of every transitioned property: a duration, `[duration,
+    /// easing]` or `spring(stiffness, damping)` over its settling time. An
+    /// easing is `linear`, `ease_in`, `ease_out`, `ease_in_out`,
+    /// `cubic_bezier(x1, y1, x2, y2)` or a spring; requires motion support.
     Transition,
-    /// Paint transition timing: a duration or `[duration, easing]`.
+    /// Paint transition timing, as [`Self::Transition`].
     PaintTransition,
-    /// Offset transition timing: a duration or `[duration, easing]`.
+    /// Offset transition timing, as [`Self::Transition`].
     OffsetTransition,
-    /// Scale transition timing: a duration or `[duration, easing]`.
+    /// Scale transition timing, as [`Self::Transition`].
     ScaleTransition,
-    /// Rotation transition timing: a duration or `[duration, easing]`.
+    /// Rotation transition timing, as [`Self::Transition`].
     RotationTransition,
     /// Horizontal presented translation in dp, after layout.
     OffsetX,
@@ -160,9 +162,9 @@ pub enum PropertyName {
     Opacity,
     /// Nonnegative blur radius in dp of what lies behind the node.
     BackdropBlur,
-    /// Shadow transition timing: a duration or `[duration, easing]`.
+    /// Shadow transition timing, as [`Self::Transition`].
     ShadowTransition,
-    /// Opacity transition timing: a duration or `[duration, easing]`.
+    /// Opacity transition timing, as [`Self::Transition`].
     OpacityTransition,
 }
 

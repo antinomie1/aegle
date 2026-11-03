@@ -1,6 +1,6 @@
 //! Constant property values: lists of literals and bare identifiers, and the
-//! functions `repeat`, `minmax`, `fit_content`, `calc`, `token`, `linear`
-//! and `radial`.
+//! functions `repeat`, `minmax`, `fit_content`, `calc`, `token`, `linear`,
+//! `radial`, and the easings `cubic_bezier` and `spring`.
 
 use crate::{Expr, ExprKind, Value};
 
@@ -34,7 +34,14 @@ pub(crate) fn constant(expr: &Expr) -> Option<Value> {
         ExprKind::Call(name, arguments)
             if matches!(
                 name.as_str(),
-                "repeat" | "minmax" | "fit_content" | "token" | "linear" | "radial"
+                "repeat"
+                    | "minmax"
+                    | "fit_content"
+                    | "token"
+                    | "linear"
+                    | "radial"
+                    | "cubic_bezier"
+                    | "spring"
             ) =>
         {
             let arguments = arguments.iter().map(item).collect::<Option<_>>()?;

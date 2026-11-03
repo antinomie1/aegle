@@ -29,8 +29,9 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
                 }
                 Text { id: status; text: "Ready"; offset_x: -2dp; offset_y: 1.5dp
                     scale: 1.25; rotation: -45; paint_transition: [80ms, ease_in]
-                    offset_transition: 200ms; scale_transition: [0ms, linear]
-                    rotation_transition: [1ms, ease_in_out]
+                    offset_transition: spring(170, 26)
+                    scale_transition: [300ms, cubic_bezier(0.2, -0.5, 0.3, 1.4)]
+                    rotation_transition: [1ms, spring(300, 10)]
                 }
             }
             TextField { id: title; text: "你好"; read_only: false }
@@ -72,6 +73,11 @@ fn built_in_schema_rejects_invalid_documents_as_a_whole() {
         "transition: 120dp",
         "transition: [1ms, cubic]",
         "transition: [1ms, 100]",
+        "transition: [1ms, cubic_bezier(1.5, 0, 0, 1)]",
+        "transition: [1ms, cubic_bezier(0, 0, 1)]",
+        "transition: spring(0, 10)",
+        "transition: [1ms, spring(100)]",
+        "transition: cubic_bezier(0, 0, 1, 1)",
         "offset_x: 1dp",
         "Text { offset_x: 1 }",
         "Text { rotation: 1dp }",
