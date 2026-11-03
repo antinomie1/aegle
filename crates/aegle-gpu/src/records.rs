@@ -27,7 +27,7 @@ pub struct Primitive {
     pub row1: [f32; 4],
     /// Shape rect, or atlas origin and glyph size excluding the gutter.
     pub rect: [f32; 4],
-    /// Radius or mask contrast, stroke width (-1 fills) and viewport size.
+    /// Mask contrast, stroke width (-1 fills) and viewport size.
     pub params: [f32; 4],
     /// Linear premultiplied paint, or repeated color-glyph opacity.
     pub color: [f32; 4],
@@ -49,7 +49,7 @@ pub struct Clip {
     pub row1: [f32; 4],
     /// Local rect.
     pub rect: [f32; 4],
-    /// Radius bits and parent clip index.
+    /// Unused, then the parent clip index.
     pub extra: [u32; 4],
 }
 
@@ -136,7 +136,6 @@ pub(crate) struct LocalShape {
     pub(crate) row0: [f32; 4],
     pub(crate) row1: [f32; 4],
     pub(crate) rect: [f32; 4],
-    pub(crate) radius: f32,
     pub(crate) stroke: f32,
     /// Local units per normalized shader unit; the shape origin maps to zero.
     pub(crate) scale: f32,
@@ -179,7 +178,7 @@ impl Recording {
             row0: local.row0,
             row1: local.row1,
             rect: local.rect,
-            extra: [local.radius.to_bits(), state.clip, 0, 0],
+            extra: [0, state.clip, 0, 0],
         });
         state.clip = index;
         state.bounds = intersection(state.bounds, area);
@@ -207,7 +206,7 @@ impl Recording {
                 row0: local.row0,
                 row1: local.row1,
                 rect: local.rect,
-                params: [local.radius, local.stroke, viewport[0], viewport[1]],
+                params: [0.0, local.stroke, viewport[0], viewport[1]],
                 color: linear_rgba(color.to_rgba()),
                 header: [state.clip, 0, 0, 0],
             },
@@ -258,16 +257,22 @@ pub(crate) fn local_shape(
         .map_err(|_| Error::Coordinates)?
         .coefficients()
         .map(f64::from);
-    let row0 = [a / scale, c / scale, (e - x) / scale, 0.0].map(|v| v as f32);
-    let row1 = [b / scale, d / scale, (f - y) / scale, 0.0].map(|v| v as f32);
+    let mut row0 = [a / scale, c / scale, (e - x) / scale, 0.0].map(|v| v as f32);
+    let mut row1 = [b / scale, d / scale, (f - y) / scale, 0.0].map(|v| v as f32);
     if row0.into_iter().chain(row1).any(|v| !v.is_finite()) {
         return Err(Error::Coordinates);
     }
+    // The rows' unused w lanes carry the corner radii as 16-bit fractions of
+    // the normalized unit, top-left and top-right, then bottom-right and
+    // bottom-left; a radius never exceeds the larger extent.
+    let unit = |radius: f32| ((f64::from(radius) / scale).clamp(0.0, 1.0) * 65535.0).round() as u32;
+    let [top_left, top_right, bottom_right, bottom_left] = shape.radii().map(unit);
+    row0[3] = f32::from_bits(top_left | top_right << 16);
+    row1[3] = f32::from_bits(bottom_right | bottom_left << 16);
     Ok(LocalShape {
         row0,
         row1,
         rect: [0.0, 0.0, (w / scale) as f32, (h / scale) as f32],
-        radius: (f64::from(shape.radius()) / scale) as f32,
         stroke: if stroke < 0.0 {
             -1.0
         } else {

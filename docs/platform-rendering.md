@@ -137,6 +137,7 @@ pub(crate) trait Renderer {
 * **基线要求**：Vulkan 1.1，标准 graphics queue，单个 descriptor pool。
 * **数据流**：图元记录直接写入 host-visible storage buffer，顶点在顶点着色器中按 instance 展开，相邻同管线图元自动合并单次 instanced draw。
 * **多层裁剪**：着色器内解析最多 8 层矩形、圆角与仿射裁剪链。
+* **逐角圆角**：`RoundedRect::with_radii` 给四个角各自的半径（左上、右上、右下、左下，相邻两角之和超过边长时按同一比例缩小，同 CSS）。GPU 把四个半径以 16 位定点数放进图元行未用的 w 分量，按点所在象限取角；阴影逐行取该行一侧的两个角，软件渲染器用同样公式。
 * **字形图集与路径**：灰度 R8 与彩色 RGBA8 分页管理；路径由 CPU（zeno）生成 R8 覆盖率后上传图集。
 * **应用纹理**：`Renderer::register_texture` 接受外部 `vk::ImageView`，分配独立描述符集接入渲染管线。
 

@@ -57,24 +57,24 @@ pub fn shape_segments(shape: RoundedRect, stroke: Option<f32>, mut emit: impl Fn
     let rect = shape.rect();
     let (x, y) = (rect.origin.x, rect.origin.y);
     let (w, h) = (rect.size.width, rect.size.height);
-    let r = shape.radius();
+    let radii = shape.radii();
     match stroke {
         Some(width) => {
             let half = width * 0.5;
             rounded(
                 [x - half, y - half, w + width, h + width],
-                if r == 0.0 { 0.0 } else { r + half },
+                radii.map(|r| if r == 0.0 { 0.0 } else { r + half }),
                 &mut emit,
             );
             if w > width && h > width {
                 rounded(
                     [x + half, y + half, w - width, h - width],
-                    (r - half).max(0.0),
+                    radii.map(|r| (r - half).max(0.0)),
                     &mut emit,
                 );
             }
         }
-        None => rounded([x, y, w, h], r, &mut emit),
+        None => rounded([x, y, w, h], radii, &mut emit),
     }
 }
 
@@ -127,62 +127,66 @@ pub fn path_segments(path: &Path, mut emit: impl FnMut(Segment)) {
     }
 }
 
-fn rounded([x, y, w, h]: [f32; 4], r: f32, emit: &mut impl FnMut(Segment)) {
-    let right = x + w;
-    let bottom = y + h;
-    let k = r * 0.552_284_8;
-    emit(Segment::Move { x: x + r, y });
-    emit(Segment::Line { x: right - r, y });
-    if r > 0.0 {
-        emit(Segment::Cubic {
-            x1: right - r + k,
-            y1: y,
-            x2: right,
-            y2: y + r - k,
-            x: right,
-            y: y + r,
-        });
-    }
+/// A rounded rectangle with top-left, top-right, bottom-right and
+/// bottom-left radii, clockwise from the end of the top-left corner.
+fn rounded(
+    [x, y, w, h]: [f32; 4],
+    [top_left, top_right, bottom_right, bottom_left]: [f32; 4],
+    emit: &mut impl FnMut(Segment),
+) {
+    let (right, bottom) = (x + w, y + h);
+    emit(Segment::Move { x: x + top_left, y });
+    emit(Segment::Line {
+        x: right - top_right,
+        y,
+    });
+    corner(
+        emit,
+        (right - top_right, y),
+        (right, y),
+        (right, y + top_right),
+    );
     emit(Segment::Line {
         x: right,
-        y: bottom - r,
+        y: bottom - bottom_right,
     });
-    if r > 0.0 {
-        emit(Segment::Cubic {
-            x1: right,
-            y1: bottom - r + k,
-            x2: right - r + k,
-            y2: bottom,
-            x: right - r,
-            y: bottom,
-        });
-    }
+    corner(
+        emit,
+        (right, bottom - bottom_right),
+        (right, bottom),
+        (right - bottom_right, bottom),
+    );
     emit(Segment::Line {
-        x: x + r,
+        x: x + bottom_left,
         y: bottom,
     });
-    if r > 0.0 {
-        emit(Segment::Cubic {
-            x1: x + r - k,
-            y1: bottom,
-            x2: x,
-            y2: bottom - r + k,
-            x,
-            y: bottom - r,
-        });
-    }
-    emit(Segment::Line { x, y: y + r });
-    if r > 0.0 {
-        emit(Segment::Cubic {
-            x1: x,
-            y1: y + r - k,
-            x2: x + r - k,
-            y2: y,
-            x: x + r,
-            y,
-        });
-    }
+    corner(
+        emit,
+        (x + bottom_left, bottom),
+        (x, bottom),
+        (x, bottom - bottom_left),
+    );
+    emit(Segment::Line { x, y: y + top_left });
+    corner(emit, (x, y + top_left), (x, y), (x + top_left, y));
     emit(Segment::Close);
+}
+
+/// A quarter circle from `from` to `to` around the square corner `apex`, its
+/// control points 0.5523 of the radius from the ends toward the apex;
+/// nothing for a square corner.
+fn corner(emit: &mut impl FnMut(Segment), from: (f32, f32), apex: (f32, f32), to: (f32, f32)) {
+    if from == to {
+        return;
+    }
+    let k = 0.552_284_8;
+    emit(Segment::Cubic {
+        x1: from.0 + (apex.0 - from.0) * k,
+        y1: from.1 + (apex.1 - from.1) * k,
+        x2: to.0 + (apex.0 - to.0) * k,
+        y2: to.1 + (apex.1 - to.1) * k,
+        x: to.0,
+        y: to.1,
+    });
 }
 
 /// Rejects device geometry a rasterizer cannot represent.

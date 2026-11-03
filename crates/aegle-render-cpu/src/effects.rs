@@ -106,7 +106,7 @@ impl<R: Rasterizer> Frame<'_, '_, '_, R> {
         let center = (rect.origin.x + half.0, rect.origin.y + half.1);
         let shadow = Shadow {
             half,
-            corner: shape.radius(),
+            radii: shape.radii(),
             sigma: blur,
         };
         // Without rotation or skew, a device row has one local y, so the
@@ -130,7 +130,10 @@ impl<R: Rasterizer> Frame<'_, '_, '_, R> {
         for (y, row) in (bounds.top..).zip(bounds.rows(row_width)) {
             let start = inverse.map_point(Point::new(bounds.left as f32 + 0.5, y as f32 + 0.5));
             let rows = shadow.rows(start.y - center.1);
-            let shared = !columns.is_empty() && rows.iter().all(|&(curved, _)| curved == straight);
+            let shared = !columns.is_empty()
+                && rows
+                    .iter()
+                    .all(|&(left, right, _)| left == straight && right == straight);
             let clip_row = clip.map(|index| self.renderer.masks[index + 1].row(y));
             let pixels = &mut self.surface.data[row.start * 4..row.end * 4];
             blend_linear_span(pixels, row.start, |i, _| {
@@ -138,7 +141,7 @@ impl<R: Rasterizer> Frame<'_, '_, '_, R> {
                 let alpha = clip_row.map_or(255, |clip| clip[x]);
                 let value = if shared {
                     let part = columns[x - bounds.left];
-                    let value: f32 = rows.iter().map(|&(_, mass)| part * mass).sum();
+                    let value: f32 = rows.iter().map(|&(_, _, mass)| part * mass).sum();
                     value.clamp(0.0, 1.0)
                 } else {
                     let local = inverse.map_point(Point::new(x as f32 + 0.5, y as f32 + 0.5));
@@ -192,22 +195,25 @@ fn ramp(stops: &[(f32, [f32; 4])], t: f32) -> [f32; 4] {
 
 /// A rounded rectangle convolved with a Gaussian, centered at the origin:
 /// exact across x; across y, four rows weighted by the Gaussian's exact mass
-/// over their intervals within four deviations (after Evan Wallace).
+/// over their intervals within four deviations (after Evan Wallace). A row's
+/// left and right edges follow the corners on its side of the center.
 struct Shadow {
     half: (f32, f32),
-    corner: f32,
+    /// Top-left, top-right, bottom-right and bottom-left radii.
+    radii: [f32; 4],
     sigma: f32,
 }
 
 impl Shadow {
-    /// The vertical part at `y`: four rows as (half width of the curved
-    /// shape there, Gaussian mass of the row).
-    fn rows(&self, y: f32) -> [(f32, f32); 4] {
+    /// The vertical part at `y`: four rows as (left and right half widths
+    /// of the curved shape there, Gaussian mass of the row).
+    fn rows(&self, y: f32) -> [(f32, f32, f32); 4] {
         let (low, high) = (y - self.half.1, y + self.half.1);
         let start = (-4.0 * self.sigma).clamp(low, high);
         let end = (4.0 * self.sigma).clamp(low, high);
         let step = (end - start) * 0.25;
         let scale = std::f32::consts::FRAC_1_SQRT_2 / self.sigma;
+        let [top_left, top_right, bottom_right, bottom_left] = self.radii;
         std::array::from_fn(|index| {
             let (from, to) = (
                 start + step * index as f32,
@@ -215,30 +221,38 @@ impl Shadow {
             );
             let mass = 0.5 * (erf(to * scale) - erf(from * scale));
             let row = y - (from + to) * 0.5;
-            let delta = (self.half.1 - self.corner - row.abs()).min(0.0);
-            let curved = self.half.0 - self.corner
-                + (self.corner * self.corner - delta * delta).max(0.0).sqrt();
-            (curved, mass)
+            let (left, right) = match row > 0.0 {
+                true => (bottom_left, bottom_right),
+                false => (top_left, top_right),
+            };
+            // Beside the straight sides the half width is exactly the
+            // straight one, which keeps shared columns exact.
+            let curved = |corner: f32| match (self.half.1 - corner - row.abs()).min(0.0) {
+                0.0 => self.half.0,
+                delta => self.half.0 - corner + (corner * corner - delta * delta).max(0.0).sqrt(),
+            };
+            (curved(left), curved(right), mass)
         })
     }
 
     /// The value at `x` across the rows of [`Self::rows`].
-    fn across(&self, x: f32, rows: &[(f32, f32); 4]) -> f32 {
+    fn across(&self, x: f32, rows: &[(f32, f32, f32); 4]) -> f32 {
         // The same arithmetic as `part` for each row, as eight independent
         // lanes the compiler can evaluate together.
         let scale = std::f32::consts::FRAC_1_SQRT_2 / self.sigma;
         let edges: [f32; 8] = std::array::from_fn(|i| match i % 2 {
             0 => (x + rows[i / 2].0) * scale,
-            _ => (x - rows[i / 2].0) * scale,
+            _ => (x - rows[i / 2].1) * scale,
         });
         let erfs = edges.map(erf);
         let value: f32 = (0..4)
-            .map(|i| 0.5 * (erfs[i * 2] - erfs[i * 2 + 1]) * rows[i].1)
+            .map(|i| 0.5 * (erfs[i * 2] - erfs[i * 2 + 1]) * rows[i].2)
             .sum();
         value.clamp(0.0, 1.0)
     }
 
-    /// The horizontal part at `x` of a row whose half width is `curved`.
+    /// The horizontal part at `x` of a row whose half width is `curved` on
+    /// both sides.
     fn part(&self, x: f32, curved: f32) -> f32 {
         let scale = std::f32::consts::FRAC_1_SQRT_2 / self.sigma;
         0.5 * (erf((x + curved) * scale) - erf((x - curved) * scale))
@@ -247,8 +261,7 @@ impl Shadow {
     /// The half width of a row beside the straight sides, as [`Self::rows`]
     /// computes it there.
     fn straight(&self) -> f32 {
-        let delta = 0.0f32;
-        self.half.0 - self.corner + (self.corner * self.corner - delta * delta).max(0.0).sqrt()
+        self.half.0
     }
 }
 

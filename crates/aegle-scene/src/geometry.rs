@@ -1,38 +1,51 @@
 use crate::{Point, Rect, SceneError};
 
-/// A finite rectangle with one nonnegative radius shared by all four corners.
+/// A finite rectangle with a nonnegative radius for each corner.
 ///
-/// A zero radius gives square corners. Zero-sized shapes have no drawable area,
+/// Zero radii give square corners. Zero-sized shapes have no drawable area,
 /// including when stroked; when used as clips they exclude all drawing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RoundedRect {
     rect: Rect,
-    radius: f32,
+    radii: [f32; 4],
 }
 
 impl RoundedRect {
-    /// Clamps the radius to half the smaller extent.
+    /// A rectangle with the same `radius` at every corner, clamped to half
+    /// the smaller extent.
     ///
     /// # Panics
     ///
     /// On negative sizes or radius, nonfinite values and overflowing far edges.
     #[track_caller]
     pub fn new(rect: Rect, radius: f32) -> Self {
-        crate::valid(Self::checked(rect, radius))
+        Self::with_radii(rect, [radius; 4])
     }
 
-    pub(crate) fn checked(rect: Rect, radius: f32) -> Result<Self, SceneError> {
-        let values = [
-            rect.origin.x,
-            rect.origin.y,
-            rect.size.width,
-            rect.size.height,
-            radius,
-        ];
-        if !values.iter().all(|v| v.is_finite()) {
+    /// A rectangle with `radii` for its top-left, top-right, bottom-right and
+    /// bottom-left corners. Where two corners on one side would overlap, all
+    /// radii shrink by the same factor until they meet, as in CSS.
+    ///
+    /// # Panics
+    ///
+    /// On negative sizes or radii, nonfinite values and overflowing far edges.
+    #[track_caller]
+    pub fn with_radii(rect: Rect, radii: [f32; 4]) -> Self {
+        crate::valid(Self::checked(rect, radii))
+    }
+
+    pub(crate) fn checked(rect: Rect, radii: [f32; 4]) -> Result<Self, SceneError> {
+        let extents = [rect.size.width, rect.size.height];
+        let values = [rect.origin.x, rect.origin.y];
+        if !values
+            .iter()
+            .chain(&extents)
+            .chain(&radii)
+            .all(|v| v.is_finite())
+        {
             return Err(SceneError::NonFinite);
         }
-        if values[2..].iter().any(|v| *v < 0.0) {
+        if extents.iter().chain(&radii).any(|v| *v < 0.0) {
             return Err(SceneError::NegativeExtent);
         }
         if !(rect.origin.x + rect.size.width).is_finite()
@@ -40,9 +53,20 @@ impl RoundedRect {
         {
             return Err(SceneError::CoordinateRange);
         }
+        let [top_left, top_right, bottom_right, bottom_left] = radii;
+        let sides = [
+            (rect.size.width, top_left + top_right),
+            (rect.size.width, bottom_left + bottom_right),
+            (rect.size.height, top_left + bottom_left),
+            (rect.size.height, top_right + bottom_right),
+        ];
+        let factor = sides
+            .iter()
+            .filter(|(_, sum)| *sum > 0.0)
+            .fold(1.0f32, |factor, (length, sum)| factor.min(length / sum));
         Ok(Self {
             rect,
-            radius: radius.min(rect.size.width.min(rect.size.height) * 0.5),
+            radii: radii.map(|radius| radius * factor),
         })
     }
 
@@ -51,9 +75,15 @@ impl RoundedRect {
         self.rect
     }
 
-    /// Returns the clamped corner radius in logical pixels.
-    pub const fn radius(self) -> f32 {
-        self.radius
+    /// Returns the clamped top-left, top-right, bottom-right and bottom-left
+    /// radii in logical pixels.
+    pub const fn radii(self) -> [f32; 4] {
+        self.radii
+    }
+
+    /// Whether every corner is square.
+    pub fn is_square(self) -> bool {
+        self.radii == [0.0; 4]
     }
 
     /// Whether this shape has zero width or height.

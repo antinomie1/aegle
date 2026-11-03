@@ -2,12 +2,13 @@
 // fragment of one primitive; storage loads obscure that from WGSL analysis.
 diagnostic(off, derivative_uniformity);
 
+// Geometry and clip rows end in the corner radii, see `radii`.
 struct Primitive {
     bounds: vec4<f32>,
     row0: vec4<f32>,
     row1: vec4<f32>,
     rect: vec4<f32>, // shape rect or atlas origin and glyph size, excluding gutter
-    params: vec4<f32>, // radius or mask contrast, stroke width (-1 for fill), viewport size (negative height flips Y)
+    params: vec4<f32>, // mask contrast, stroke width (-1 for fill), viewport size (negative height flips Y)
     color: vec4<f32>, // linear premultiplied paint, or repeated color-glyph opacity
     header: vec4<u32>, // clip head, geometry/mask/color-glyph/image kind, atlas page or first stop row, effect | stop count << 8
 }
@@ -16,7 +17,7 @@ struct Clip {
     row0: vec4<f32>,
     row1: vec4<f32>,
     rect: vec4<f32>,
-    extra: vec4<u32>, // radius bits, parent index, reserved
+    extra: vec4<u32>, // reserved, parent index, reserved
 }
 // Gradient stops reuse clip rows, two per row: colors in row0 and row1,
 // offsets in rect.xy.
@@ -55,7 +56,19 @@ fn local_point(point: vec2<f32>, row0: vec4<f32>, row1: vec4<f32>) -> vec2<f32> 
     return vec2(dot(row0.xyz, homogeneous), dot(row1.xyz, homogeneous));
 }
 
-fn coverage(point: vec2<f32>, rect: vec4<f32>, radius: f32) -> f32 {
+// Top-left, top-right, bottom-right and bottom-left radii, packed as 16-bit
+// fractions of the normalized unit in the rows' w lanes.
+fn unpack_radii(row0: vec4<f32>, row1: vec4<f32>) -> vec4<f32> {
+    return vec4(unpack2x16unorm(bitcast<u32>(row0.w)), unpack2x16unorm(bitcast<u32>(row1.w)));
+}
+
+// The radius of the corner in the quadrant of `p`, relative to the center.
+fn corner(p: vec2<f32>, radii: vec4<f32>) -> f32 {
+    let side = select(radii.xw, radii.yz, p.x > 0.0);
+    return select(side.x, side.y, p.y > 0.0);
+}
+
+fn coverage(point: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>) -> f32 {
     // Integrating opposing straight edges preserves subpixel rectangles and
     // fractional axis-aligned clips; SDF derivatives alone can flatten between
     // two equally distant samples and turn a thin rectangle fully opaque.
@@ -63,11 +76,13 @@ fn coverage(point: vec2<f32>, rect: vec4<f32>, radius: f32) -> f32 {
     let far = clamp((rect.xy + rect.zw - point) / footprint + 0.5, vec2(0.0), vec2(1.0));
     let near = clamp((rect.xy - point) / footprint + 0.5, vec2(0.0), vec2(1.0));
     let box_alpha = (far.x - near.x) * (far.y - near.y);
-    if radius == 0.0 {
+    if all(radii == vec4(0.0)) {
         return box_alpha;
     }
     let half_size = rect.zw * 0.5;
-    let q = abs(point - rect.xy - half_size) - half_size + radius;
+    let p = point - rect.xy - half_size;
+    let radius = corner(p, radii);
+    let q = abs(p) - half_size + radius;
     let distance = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
     return min(box_alpha, clamp(0.5 - distance / max(fwidth(distance), 0.000001), 0.0, 1.0));
 }
@@ -81,7 +96,7 @@ fn clip_coverage(position: vec2<f32>, first: u32) -> f32 {
         }
         let clip = clips[head];
         let local = local_point(position, clip.row0, clip.row1);
-        alpha *= coverage(local, clip.rect, bitcast<f32>(clip.extra.x));
+        alpha *= coverage(local, clip.rect, unpack_radii(clip.row0, clip.row1));
         head = clip.extra.y;
     }
     return alpha;
@@ -134,18 +149,20 @@ fn erf2(x: vec2<f32>) -> vec2<f32> {
     return s - s / (r * r);
 }
 
-// Horizontal integral of the shadow at row offset y from the shape center.
-fn shadow_row(x: f32, y: f32, sigma: f32, corner: f32, half: vec2<f32>) -> f32 {
-    let delta = min(half.y - corner - abs(y), 0.0);
-    let curved = half.x - corner + sqrt(max(0.0, corner * corner - delta * delta));
-    let integral = 0.5 + 0.5 * erf2((x + vec2(-curved, curved)) * (0.70710677 / sigma));
+// Horizontal integral of the shadow at row offset y from the shape center,
+// whose left and right edges follow the corners on the row's side.
+fn shadow_row(x: f32, y: f32, sigma: f32, radii: vec4<f32>, half: vec2<f32>) -> f32 {
+    let corners = select(radii.xy, radii.wz, y > 0.0);
+    let delta = min(half.y - corners - abs(y), vec2(0.0));
+    let curved = half.x - corners + sqrt(max(vec2(0.0), corners * corners - delta * delta));
+    let integral = 0.5 + 0.5 * erf2((x + vec2(-curved.y, curved.x)) * (0.70710677 / sigma));
     return integral.y - integral.x;
 }
 
 // A rounded rectangle convolved with a Gaussian: exact across x; across y,
 // four rows weighted by the Gaussian's exact mass over their intervals within
 // four deviations, so straight edges are exact (after Evan Wallace).
-fn shadow(point: vec2<f32>, rect: vec4<f32>, corner: f32, sigma: f32) -> f32 {
+fn shadow(point: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>, sigma: f32) -> f32 {
     let half = rect.zw * 0.5;
     let p = point - rect.xy - half;
     let start = clamp(-4.0 * sigma, p.y - half.y, p.y + half.y);
@@ -157,7 +174,7 @@ fn shadow(point: vec2<f32>, rect: vec4<f32>, corner: f32, sigma: f32) -> f32 {
         let edges = start + step * vec2(f32(index), f32(index + 1));
         let mass = erf2(edges * scale);
         let y = (edges.x + edges.y) * 0.5;
-        value += shadow_row(p.x, p.y - y, sigma, corner, half) * 0.5 * (mass.y - mass.x);
+        value += shadow_row(p.x, p.y - y, sigma, radii, half) * 0.5 * (mass.y - mass.x);
     }
     return clamp(value, 0.0, 1.0);
 }
@@ -167,24 +184,24 @@ fn fs_main(input: Vertex) -> @location(0) vec4<f32> {
     let primitive = primitives[input.index];
     let position = input.position;
     let point = local_point(position.xy, primitive.row0, primitive.row1);
-    let radius = primitive.params.x;
+    let radii = unpack_radii(primitive.row0, primitive.row1);
     let width = primitive.params.y;
     let effect = primitive.header.w & 0xffu;
     var paint = primitive.color;
     var alpha: f32;
     if effect == 3u {
-        alpha = shadow(point, primitive.rect, radius, width);
+        alpha = shadow(point, primitive.rect, radii, width);
     } else if width < 0.0 {
-        alpha = coverage(point, primitive.rect, radius);
+        alpha = coverage(point, primitive.rect, radii);
     } else {
         let half_width = width * 0.5;
         let outer = vec4(primitive.rect.xy - half_width, primitive.rect.zw + width);
         // A square stroke keeps its mitered corners. abs(SDF) would round them.
-        let outer_radius = select(radius + half_width, 0.0, radius == 0.0);
-        alpha = coverage(point, outer, outer_radius);
+        let outer_radii = select(radii + half_width, vec4(0.0), radii == vec4(0.0));
+        alpha = coverage(point, outer, outer_radii);
         if all(primitive.rect.zw > vec2(width)) {
             let inner = vec4(primitive.rect.xy + half_width, primitive.rect.zw - width);
-            alpha = max(alpha - coverage(point, inner, max(radius - half_width, 0.0)), 0.0);
+            alpha = max(alpha - coverage(point, inner, max(radii - half_width, vec4(0.0))), 0.0);
         }
     }
     if effect == 1u || effect == 2u {
@@ -204,7 +221,7 @@ fn fs_text(input: Vertex) -> @location(0) vec4<f32> {
     // Images (kind 3) clamp to their edge texels and take analytic edge
     // coverage instead, so scaled images keep sharp boundaries.
     let image = primitive.header.y == 3u;
-    let edge = select(1.0, coverage(local, vec4(vec2(0.0), primitive.rect.zw), 0.0), image);
+    let edge = select(1.0, coverage(local, vec4(vec2(0.0), primitive.rect.zw), vec4(0.0)), image);
     let inset = select(vec2(-0.5), vec2(0.5), image);
     let bounded = clamp(local, inset, primitive.rect.zw - inset);
     let uv = (primitive.rect.xy + bounded) / vec2<f32>(textureDimensions(glyph_page));

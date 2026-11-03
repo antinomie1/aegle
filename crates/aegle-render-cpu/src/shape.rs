@@ -37,7 +37,7 @@ impl<R: Rasterizer> Frame<'_, '_, '_, R> {
             return Ok(());
         }
         if let [a, 0.0, 0.0, d, e, f] = state.transform.coefficients()
-            && shape.radius() == 0.0
+            && shape.is_square()
         {
             let (outer, hole) = sharp(shape, width, [a, d, e, f]);
             outline::validate_bounds(outer)?;
@@ -179,7 +179,9 @@ fn rounded_hole(shape: RoundedRect, width: Option<f32>, transform: Affine) -> Op
     let (w, h) = (rect.size.width, rect.size.height);
     let width = width.filter(|&width| b == 0.0 && c == 0.0 && w > width && h > width)?;
     let half = width * 0.5;
-    let inset = half + (shape.radius() - half).max(0.0);
+    // The largest corner bounds every inner corner from the hole.
+    let radius = shape.radii().into_iter().fold(0.0, f32::max);
+    let inset = half + (radius - half).max(0.0);
     let (x0, x1) = (rect.origin.x + inset, rect.origin.x + w - inset);
     let (y0, y1) = (rect.origin.y + inset, rect.origin.y + h - inset);
     let (left, right) = ((a * x0 + e).min(a * x1 + e), (a * x0 + e).max(a * x1 + e));

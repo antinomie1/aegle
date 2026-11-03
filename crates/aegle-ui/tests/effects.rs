@@ -69,8 +69,8 @@ fn shadows_and_gradient_backgrounds() -> Result {
         panic!("shadow and gradient, got {found:?}");
     };
     assert_eq!(
-        (shape.rect().origin, shape.radius(), blur),
-        (Point::new(-2.0, 2.0), 8.0, 6.0)
+        (shape.rect().origin, shape.radii(), blur),
+        (Point::new(-2.0, 2.0), [8.0; 4], 6.0)
     );
 
     panel.set_shadow(None);

@@ -17,7 +17,14 @@ fn rejects(error: SceneError, record: impl FnOnce()) {
 #[test]
 fn validated_scopes_and_reused_recording() {
     let shape = RoundedRect::new(Rect::new(0.0, 0.0, 40.0, 20.0), 100.0);
-    assert_eq!(shape.radius(), 10.0);
+    assert_eq!(shape.radii(), [10.0; 4]);
+    // Overlapping corners on a side shrink every radius by one factor.
+    let tab = RoundedRect::with_radii(Rect::new(0.0, 0.0, 40.0, 20.0), [30.0, 30.0, 0.0, 0.0]);
+    assert_eq!(tab.radii(), [20.0, 20.0, 0.0, 0.0]);
+    assert!(!tab.is_square() && RoundedRect::new(Rect::new(0.0, 0.0, 1.0, 1.0), 0.0).is_square());
+    rejects(SceneError::NegativeExtent, || {
+        RoundedRect::with_radii(Rect::new(0.0, 0.0, 1.0, 1.0), [0.0, -1.0, 0.0, 0.0]);
+    });
     rejects(SceneError::NegativeExtent, || {
         RoundedRect::new(Rect::new(0.0, 0.0, -1.0, 2.0), 0.0);
     });

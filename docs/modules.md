@@ -14,7 +14,7 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 | **aegle-segment** | 词边界断词（供按词移动与双击选词）；运行时加载系统 ICU 或 `CFStringTokenizer`，无内置词典数据 | 无 |
 | **aegle-text** | 字体管理、保留段落排版、多行分块增量编辑器（`Editor`）、有界历史撤销、空闲段落文字内存预算回收 | types, segment, (scene) |
 | **aegle-glyph** | 8-bit 灰度字形光栅覆盖率、LRU 限制内存与条目预算；可选 COLRv1/SVG 颜色字形分离支持 | (scene, image) |
-| **aegle-scene** | 局部绘制记录（Scene）；矩形/圆角/边框/图像/路径/仿射变换/最多八层嵌套裁剪；图层与盒式模糊 | types |
+| **aegle-scene** | 局部绘制记录（Scene）；矩形/逐角圆角/边框/图像/路径/仿射变换/最多八层嵌套裁剪；图层与盒式模糊 | types |
 | **aegle-gpu** | GPU 图元与裁剪行记录（Recording，112B 图元 / 64B 裁剪）、图集货架装箱算法、通用 WGSL 着色器 | types, scene |
 | **aegle-render-cpu** | CPU 共享合成器：线性光混合、裁剪 mask 预算与复用、离屏图层模糊、渐变与解析式阴影、双线性采样 | types, scene, (text) |
 | **aegle-render-tiny-skia** | CPU 渲染器：`render-cpu` 合成器 + tiny-skia 0.12 几何覆盖率（直角几何由合成器直接解析） | render-cpu, tiny-skia, scene |
