@@ -24,6 +24,7 @@ aegle-widgets.workspace = true
 aegle-app = { workspace = true, optional = true }
 aegle-markup.workspace = true
 aegle-macros.workspace = true
+aegle-scene = { workspace = true, features = ["svg"] }
 
 [dev-dependencies]
 aegle-access.workspace = true

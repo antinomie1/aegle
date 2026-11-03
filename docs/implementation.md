@@ -36,7 +36,7 @@
 | **aegle-widgets** | 完整默认控件库（Label、Button、TextField、CheckBox、Switch、Slider、Progress、ScrollView、ListView、Table、Dialog、Drawer 等） | 基于 aegle-ui |
 | **aegle-markup** | 简洁花括号标记语言有界解析器、类型与作用域检查、诊断跨度报告 | 纯 Rust 解析器 |
 | **aegle-macros** | `ui!` 声明宏：将标记直接编译为零开销 Rust 控件树调用代码 | 过程宏 |
-| **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载；`layer` 窗口文档直接打开为面板并原地重载；`State::on_change` 状态变化处理器（随重载转移） | 解释执行引擎 |
+| **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载；`layer` 窗口文档直接打开为面板并原地重载；`State::on_change` 状态变化处理器（随重载转移）；弹簧/贝塞尔过渡、缩放/旋转/透明度关键帧动画、`Shape`（SVG 路径）与 `Arc` 元素 | 解释执行引擎 |
 | **aegle-ui** | 无窗口保留式 UI 核心引擎：树生命周期、Taffy 布局调度、输入捕获冒泡路由、焦点管理、动画调度、IME 与语义同步 | 组合核心 |
 | **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理、后台代理消息传递（`UiProxy`）、输出列表与变化回调、`Window::set_layer`、原生弹出层（随父窗口关闭） | 宿主调度层 |
 | **aegle** | 顶层便捷 Facade：统一默认导出、一键 `App::run_ui` | 门面 Crate |

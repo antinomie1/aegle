@@ -1,10 +1,11 @@
 //! The built-in elements, declared with [`element!`](crate::element) exactly
 //! like a control library's.
 
+use aegle_scene::{LineCap, Path};
 use aegle_ui::{Container, FileDialog, FileMode};
 use aegle_widgets::{
     Button, CheckBox, Dialog, Drawer, DrawerSide, Dropdown, FilePicker, Fit, ImageView, Label,
-    NumberField, Orientation, Progress, Radio, Separator, Slider, Splitter, Switch, Tabs,
+    NumberField, Orientation, Progress, Radio, Separator, Shape, Slider, Splitter, Switch, Tabs,
     TextField, TreeNode, TreeView, Widgets,
 };
 
@@ -43,6 +44,22 @@ fn source(view: &ImageView, path: &str) {
     } else {
         let _ = view.load(path);
     }
+}
+
+fn cap(name: &str) -> LineCap {
+    match name {
+        "butt" => LineCap::Butt,
+        "round" => LineCap::Round,
+        "square" => LineCap::Square,
+        other => unreachable!("checked cap `{other}`"),
+    }
+}
+
+/// A full turn from the top until `start` or `sweep` changes it.
+fn arc(shape: &Shape, start: Option<f64>, sweep: Option<f64>) {
+    let (old_start, old_sweep) = shape.arc().unwrap_or((0.0, 360.0));
+    let start = start.map_or(old_start, |start| start as f32);
+    shape.set_arc(start, sweep.map_or(old_sweep, |sweep| sweep as f32));
 }
 
 fn file_mode(name: &str) -> FileMode {
@@ -240,6 +257,28 @@ crate::element! {
         event failed => |view, run| view.on_error(move |_| run());
         get error: string => |view| view.error().unwrap_or_default();
     }
+    /// A vector outline from SVG path data in dp from its top-left corner,
+    /// with no intrinsic size; data that does not parse draws nothing.
+    pub Shape {
+        create |parent| parent.shape();
+        set path: string => |shape, data| shape.set_path(Path::from_svg(data).ok());
+        set fill: color => |shape, color| shape.set_fill(color);
+        set stroke: color => |shape, color| shape.set_stroke(color);
+        set stroke_width: length => |shape, width| shape.set_stroke_width(width);
+        set cap: choice(butt, round, square) => |shape, name| shape.set_cap(cap(name));
+    }
+    /// An arc of the largest circle that fits its bounds with its stroke:
+    /// `start` and `sweep` in degrees clockwise from the top, a full turn
+    /// by default. Bind `sweep` for a progress ring.
+    pub Arc(Shape) {
+        create |parent| { let shape = parent.shape(); shape.set_arc(0.0, 360.0); shape };
+        set start: float => |shape, start| arc(shape, Some(start), None);
+        set sweep: float => |shape, sweep| arc(shape, None, Some(sweep));
+        set fill: color => |shape, color| shape.set_fill(color);
+        set stroke: color => |shape, color| shape.set_stroke(color);
+        set stroke_width: length => |shape, width| shape.set_stroke_width(width);
+        set cap: choice(butt, round, square) => |shape, name| shape.set_cap(cap(name));
+    }
     /// A path field and a button opening the native file dialog; dropping a
     /// file on it chooses that file too.
     pub FilePicker {
@@ -353,6 +392,8 @@ pub(crate) fn builtin() -> Elements {
         .with::<NumberField>()
         .with::<FilePicker>()
         .with::<Image>()
+        .with::<Shape>()
+        .with::<Arc>()
         .with::<Separator>()
         .with::<Tabs>()
         .with::<Tab>()

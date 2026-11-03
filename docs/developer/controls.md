@@ -26,6 +26,7 @@
 | [ImageView](#imageview) | `image(&Image) -> ImageView`、`image_view() -> ImageView` | `Image` |
 | [FilePicker](#filepicker) | `file_picker(mode) -> FilePicker` | `FilePicker` |
 | [Canvas](#canvas) | `canvas(painter) -> Canvas` | — |
+| [Shape](#shape) | `shape() -> Shape` | `Shape`、`Arc` |
 
 ## Text
 
@@ -401,6 +402,34 @@ Image { source: skin_path; fit: contain; width: 128dp; height: 128dp
 - 标记元素 `Image`：`source` 单行字符串路径（可绑定，空串清空），`fit` `fill`/`contain`/`cover`；事件 `failed`，`self.error` 为原因。
 - `Image` 克隆共享像素；renderer 按图像 id 缓存上传结果，双线性采样（像素画放大会变模糊，尚无最近邻采样）。
 - 无障碍角色 Image，名称用 `set_accessible_label` 设置。
+
+## Shape
+
+```rust
+use aegle::ui::scene::{LineCap, Path};
+
+let check = window.shape();
+check.set_width(24.0);
+check.set_height(24.0);
+check.set_path(Path::from_svg("M 4 12 L 10 18 L 20 6").ok());
+check.set_stroke(Color::WHITE);
+check.set_stroke_width(2.0);
+check.set_cap(LineCap::Round);
+
+let ring = window.shape();                          // 进度环
+ring.set_arc(0.0, 252.0);                           // 从顶部顺时针 252 度
+```
+
+```text
+Arc { width: 40dp; height: 40dp; sweep: level * 360.0; stroke: #89b4fa; stroke_width: 4dp; cap: round }
+Shape { width: 24dp; height: 24dp; path: icon; fill: #ffffff }
+```
+
+- 一个路径或一段圆弧，带填充和描边（默认都透明，描边宽 1、平头、圆角连接）；没有固有尺寸。`set_path(None)` 不绘制。
+- `set_arc(start, sweep)`：能连同描边放进边界的最大圆，角度为度，0 向上、顺时针，负值逆时针；`arc()` 读回。
+- `Path::from_svg`（`aegle-scene` 的 `svg` feature）解析 SVG 路径数据，`PathBuilder::arc` 在 Canvas 里画同样的圆弧（弧度，自正 x 轴顺时针）。
+- 标记元素 `Shape`（`path` 字符串，解析失败不绘制）与 `Arc`（`start`、`sweep` float），共有 `fill`、`stroke`、`stroke_width`、`cap` `butt`/`round`/`square`。
+- 无障碍角色 Image。
 
 ## FilePicker
 

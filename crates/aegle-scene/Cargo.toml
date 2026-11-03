@@ -13,10 +13,13 @@ categories.workspace = true
 [features]
 default = []
 text = ["dep:linebender_resource_handle"]
+# Path::from_svg: SVG path data.
+svg = ["dep:svgtypes"]
 
 [dependencies]
 aegle-types.workspace = true
 linebender_resource_handle = { workspace = true, optional = true }
+svgtypes = { workspace = true, optional = true }
 
 [lints]
 workspace = true

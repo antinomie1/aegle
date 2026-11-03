@@ -3,7 +3,7 @@
 //!
 //! Content controls: [`Label`], [`Button`], [`TextField`] (single line and
 //! multiline), [`CheckBox`], [`Switch`], [`Radio`], [`Slider`], [`Progress`],
-//! [`ImageView`], [`Canvas`]. Containers and composites: scroll views
+//! [`ImageView`], [`Canvas`], [`Shape`]. Containers and composites: scroll views
 //! (a `Container` whose children scroll), [`ListView`] (virtual, equal or
 //! content-sized rows), [`Table`], [`Popup`] (also menus), [`Dropdown`] and
 //! [`MenuBar`]. Composite handles dereference to their `Node`, not to a
@@ -43,6 +43,7 @@ mod popup;
 mod range_control;
 mod scroll_view;
 mod separator;
+mod shape;
 mod table;
 mod tabs;
 mod toggle;
@@ -78,6 +79,7 @@ pub use popup::Popup;
 pub use range_control::{Orientation, ProgressControl, SliderControl};
 pub use scroll_view::ScrollControl;
 pub use separator::{Separator, SeparatorControl, Splitter};
+pub use shape::{Shape, ShapeControl};
 pub use table::{Table, TableColumn};
 pub use tabs::{Tabs, TabsControl};
 pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
@@ -198,6 +200,9 @@ pub trait Widgets {
     /// size or flex grow. The painter runs during refresh while the UI is
     /// borrowed, so it must not use UI handles. Drawing is not clipped to the bounds.
     fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) + 'static) -> Canvas;
+    /// Appends an empty vector shape with zero intrinsic size; give it a
+    /// size, then a path or an arc and a fill or stroke.
+    fn shape(&self) -> Shape;
     /// Appends a scrollable column. Children retain their state outside the viewport.
     /// Both axes scroll on overflow; nested views pass unused wheel delta outward.
     /// [`Node::scroll_to`] and the other scroll methods move it.
@@ -291,6 +296,9 @@ impl Widgets for Container {
     }
     fn canvas(&self, painter: impl FnMut(&mut SceneBuilder, Size) + 'static) -> Canvas {
         canvas::canvas(self, painter)
+    }
+    fn shape(&self) -> Shape {
+        shape::shape(self)
     }
     fn scroll_view(&self) -> Container {
         scroll_view::create(self)

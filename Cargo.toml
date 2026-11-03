@@ -47,6 +47,7 @@ aegle-motion = { path = "crates/aegle-motion", version = "0.1.0" }
 aegle-image = { path = "crates/aegle-image", version = "0.1.0" }
 accesskit = { version = "0.24.1", default-features = false }
 linebender_resource_handle = { version = "0.1.1", default-features = false }
+svgtypes = "0.16.1"
 parley = { version = "0.11.1", default-features = false, features = ["std"] }
 swash = { version = "0.2.10", default-features = false, features = ["std", "render"] }
 taffy = { version = "0.14.0", default-features = false, features = ["std", "flexbox", "block_layout", "content_size"] }

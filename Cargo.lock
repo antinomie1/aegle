@@ -399,6 +399,7 @@ version = "0.1.0"
 dependencies = [
  "aegle-types",
  "linebender_resource_handle",
+ "svgtypes",
 ]
 
 [[package]]

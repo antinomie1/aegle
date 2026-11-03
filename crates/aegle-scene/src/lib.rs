@@ -16,6 +16,7 @@ extern crate alloc;
 mod builder;
 mod geometry;
 mod layer;
+mod outline;
 mod paint;
 mod resource;
 #[cfg(feature = "text")]
@@ -152,6 +153,8 @@ pub enum SceneError {
     /// Gradient stops are too few, too many, unordered or outside `0..=1`, or its
     /// line has no length or its radius is not positive.
     InvalidGradient,
+    /// SVG path data does not parse.
+    InvalidPathData,
 }
 
 impl core::fmt::Display for SceneError {
@@ -168,6 +171,7 @@ impl core::fmt::Display for SceneError {
             Self::InvalidImage => "image extents or pixel length are invalid",
             Self::InvalidPath => "path segment does not follow a move",
             Self::InvalidGradient => "gradient stops or geometry are invalid",
+            Self::InvalidPathData => "SVG path data is malformed",
         })
     }
 }
