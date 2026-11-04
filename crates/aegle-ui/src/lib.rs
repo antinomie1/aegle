@@ -123,5 +123,6 @@ pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token
 
 pub use transform::Transform;
 pub use ui::{
-    ClipboardRequest, ImeRequest, ImeState, Result, Ui, UiError, container_style, scroll_padding,
+    ClipboardRequest, ImeRequest, ImeState, PrimaryRequest, Result, Ui, UiError, container_style,
+    scroll_padding,
 };

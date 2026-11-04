@@ -116,6 +116,21 @@ pub trait Platform: Sized {
     /// non-text selections produce no event.
     fn request_clipboard(&mut self, window: WindowId, seat: SeatId) -> Result<()>;
 
+    /// Offers `text` as the primary selection of `seat`, the one a middle
+    /// click pastes, authorized by its latest input. Platforms without one
+    /// ignore it.
+    fn set_primary(&mut self, window: WindowId, seat: SeatId, text: &str) -> Result<()> {
+        let _ = (window, seat, text);
+        Ok(())
+    }
+
+    /// Requests `seat`'s primary selection for `window`; it arrives as
+    /// [`Event::Primary`]. Platforms without one send nothing.
+    fn request_primary(&mut self, window: WindowId, seat: SeatId) -> Result<()> {
+        let _ = (window, seat);
+        Ok(())
+    }
+
     /// Answers the latest [`Event::Drag`] of `seat` over `window`.
     fn accept_drag(&mut self, window: WindowId, seat: SeatId, accept: bool) -> Result<()>;
 

@@ -182,6 +182,11 @@ pub struct State {
     pub(crate) input_method: bool,
     /// Pending host clipboard request.
     pub(crate) clipboard: Option<crate::ClipboardRequest>,
+    /// Text newly selected in the focused editor, to offer as the primary
+    /// selection.
+    pub(crate) primary: Option<String>,
+    /// A middle click asks for the primary selection.
+    pub(crate) primary_read: bool,
     /// File dialogs for the host and their requesters.
     pub(crate) files: crate::files::Files,
     /// A repaint was requested.

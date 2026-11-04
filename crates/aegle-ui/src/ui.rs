@@ -99,6 +99,18 @@ pub enum ClipboardRequest {
     Read,
 }
 
+/// Primary-selection work: the X11-style selection that a middle click pastes;
+/// see [`Ui::take_primary`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum PrimaryRequest {
+    /// Offer this text, just selected in the focused editor, as the primary
+    /// selection.
+    Write(String),
+    /// A middle click put the caret in an editor: read the primary selection
+    /// and deliver it through [`Ui::paste`].
+    Read,
+}
+
 /// A retained UI with shared text resources and no native platform dependency.
 ///
 /// This owner is deliberately not `Clone`: handles hold weak references, so
@@ -153,6 +165,8 @@ impl Ui {
                     ime_reset: false,
                     input_method: false,
                     clipboard: None,
+                    primary: None,
+                    primary_read: false,
                     files: Default::default(),
                     repaint: true,
                     callbacks: HashMap::new(),
@@ -387,6 +401,16 @@ impl Ui {
     /// request a write; cut has already deleted its selection.
     pub fn take_clipboard(&self) -> Option<ClipboardRequest> {
         self.write().clipboard.take()
+    }
+
+    /// Consumes the next primary-selection request: a middle-click paste
+    /// before a new selection to offer. Password fields offer nothing.
+    pub fn take_primary(&self) -> Option<PrimaryRequest> {
+        let mut state = self.write();
+        if std::mem::take(&mut state.primary_read) {
+            return Some(PrimaryRequest::Read);
+        }
+        state.primary.take().map(PrimaryRequest::Write)
     }
 
     /// Consumes pending IME synchronization after refresh and event callbacks.

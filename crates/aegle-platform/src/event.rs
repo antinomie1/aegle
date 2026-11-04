@@ -129,6 +129,15 @@ pub enum Event {
         /// Complete UTF-8 text.
         text: String,
     },
+    /// Text a [`crate::Platform::request_primary`] call asked for.
+    Primary {
+        /// Requesting window.
+        window: WindowId,
+        /// Seat whose primary selection was read.
+        seat: SeatId,
+        /// Complete UTF-8 text.
+        text: String,
+    },
     /// A drag entered or moved over the window. Answer with
     /// [`crate::Platform::accept_drag`].
     Drag {
@@ -178,6 +187,7 @@ impl Event {
             | Self::Touch { window, .. }
             | Self::Ime { window, .. }
             | Self::Clipboard { window, .. }
+            | Self::Primary { window, .. }
             | Self::Drag { window, .. }
             | Self::DragLeave { window, .. }
             | Self::Drop { window, .. } => Some(*window),

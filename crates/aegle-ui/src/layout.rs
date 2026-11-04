@@ -51,10 +51,18 @@ impl State {
         #[cfg(feature = "motion")]
         self.start_offsets();
         self.rebuild_order();
+        let focused = self.focus.current(&self.tree);
         for index in 0..self.order.len() {
             let id = self.order[index];
             if let Some(field) = self.tree.get_mut(id).unwrap().context.control.editor_mut() {
                 let changes = field.editor_mut().take_changes();
+                let editor = field.editor();
+                if changes.selection && Some(id) == focused && !editor.is_password() {
+                    let selected = editor.selected_text();
+                    if !selected.is_empty() {
+                        self.primary = Some(selected.to_owned());
+                    }
+                }
                 self.tree.get_mut(id).unwrap().context.ensure_caret |=
                     changes.layout || changes.selection;
                 if changes.layout {

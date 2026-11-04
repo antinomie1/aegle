@@ -131,6 +131,16 @@ impl Ui {
         if target != hit {
             state.sync_hover(id, position)?;
         }
+        if kind == PointerKind::ButtonDown(PointerButton::Middle)
+            && let Some(editor) = hit.and_then(|hit| state.editor_at(hit))
+        {
+            // A click there puts the caret, where the primary selection goes.
+            for kind in [PointerKind::Down { clicks: 1 }, PointerKind::Up] {
+                let input = state.pointer_input(editor, id, kind, position, modifiers);
+                state.dispatch(editor, input)?;
+            }
+            state.primary_read = true;
+        }
         if matches!(
             kind,
             PointerKind::Down { clicks: 2 } | PointerKind::ButtonDown(PointerButton::Secondary)
@@ -249,6 +259,17 @@ impl Ui {
 }
 
 impl State {
+    /// The writable editor at or above `node`.
+    fn editor_at(&self, mut node: NodeId) -> Option<NodeId> {
+        loop {
+            let element = &self.tree.get(node)?.context;
+            if let Some(field) = element.control.editor() {
+                return (!field.editor().is_read_only() && self.usable(node)).then_some(node);
+            }
+            node = self.parent(node)?;
+        }
+    }
+
     /// Delivers `input` to `target` through the control, then applies the outcome; unusable targets ignore it.
     pub fn dispatch(&mut self, target: NodeId, input: Input<'_>) -> Result {
         if !self.usable(target) {
