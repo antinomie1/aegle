@@ -131,6 +131,11 @@ pub enum PropertyName {
     DisabledForeground,
     /// Positive font size in logical pixels for text-bearing controls.
     FontSize,
+    /// Ordered font families for text-bearing controls, such as
+    /// `"JetBrains Mono, monospace"`.
+    FontFamily,
+    /// Font weight for text-bearing controls: 1–1000, `normal` or `bold`.
+    FontWeight,
     /// Timing of every transitioned property: a duration, `[duration,
     /// easing]` or `spring(stiffness, damping)` over its settling time. An
     /// easing is `linear`, `ease_in`, `ease_out`, `ease_in_out`,
@@ -181,6 +186,8 @@ pub enum PropertyName {
     /// Whether the node cuts its shape through what lies beneath instead of
     /// painting a background.
     Cut,
+    /// Clips a container's children to its bounds when painting and hit testing.
+    Clip,
     /// `[x, y, blur, spread, color]` inner shadow over the background, with
     /// a positive blur.
     InsetShadow,

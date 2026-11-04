@@ -60,6 +60,8 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "disabled_background" => DisabledBackground,
         "disabled_foreground" => DisabledForeground,
         "font_size" => FontSize,
+        "font_family" => FontFamily,
+        "font_weight" => FontWeight,
         "transition" => Transition,
         "indicator_color" => IndicatorColor,
         "tooltip" => Tooltip,
@@ -83,6 +85,7 @@ pub(crate) fn property_name(name: &str) -> Option<PropertyName> {
         "corners" => Corners,
         "inset_shadow" => InsetShadow,
         "cut" => Cut,
+        "clip" => Clip,
         _ => return None,
     })
 }
@@ -112,6 +115,7 @@ pub fn choices(name: PropertyName) -> &'static [&'static str] {
         Theme => &["light", "dark", "high_contrast"],
         Layer => &["background", "bottom", "top", "overlay"],
         Keyboard => &["none", "exclusive", "on_demand"],
+        FontWeight => &["normal", "bold"],
         _ => &[],
     }
 }
@@ -154,12 +158,12 @@ pub(crate) fn allowed(target: Target<'_>, name: PropertyName) -> bool {
     let styles = target.styles();
     match name {
         Title | Theme | Layer | Anchor | ExclusiveZone | Keyboard | Output => window,
-        FontSize => styles.contains(Styles::TEXT),
+        FontSize | FontFamily | FontWeight => styles.contains(Styles::TEXT),
         SelectionColor | CaretColor => styles.contains(Styles::EDITOR),
         HoverBackground | FocusColor | FocusWidth => styles.contains(Styles::INTERACTIVE),
         PressedBackground => styles.contains(Styles::PRESSED),
         IndicatorColor => styles.contains(Styles::INDICATOR),
-        Gap | Align | Justify | AlignContent => target.container(),
+        Gap | Align | Justify | AlignContent | Clip => target.container(),
         Direction | Wrap => target.layout() == Layout::Flex,
         Columns | Rows | AutoColumns | AutoRows | Flow | JustifyItems | Areas => {
             target.layout() == Layout::Grid
@@ -418,6 +422,10 @@ pub(crate) fn validate(
         | (Grow | Shrink, Literal::Number(n)) => n.is_finite() && *n >= 0.0,
         (AspectRatio, Literal::Number(n)) => n.is_finite() && *n > 0.0,
         (FontSize, Literal::Length(n)) => n.is_finite() && *n > 0.0,
+        (FontFamily, Literal::String(families)) => {
+            !families.trim().is_empty() && families.len() <= 1000 && !families.contains('\0')
+        }
+        (FontWeight, Literal::Number(n)) => n.fract() == 0.0 && (1.0..=1000.0).contains(n),
         (OffsetX | OffsetY, Literal::Length(n)) | (Rotation, Literal::Number(n)) => n.is_finite(),
         (Scale, Literal::Number(n)) => *n > 0.0 && *n <= 1000.0,
         (
@@ -434,7 +442,7 @@ pub(crate) fn validate(
             | IndicatorColor,
             Literal::Color(_),
         ) => true,
-        (Visible | Enabled | Cut, Literal::Bool(_)) => true,
+        (Visible | Enabled | Cut | Clip, Literal::Bool(_)) => true,
         (_, Literal::Identifier(value)) => choices(name).contains(&value.as_str()),
         _ => false,
     };
@@ -476,6 +484,8 @@ pub(crate) fn validate(
         Padding => "a nonnegative dp length or token(\"package.name\")".into(),
         AspectRatio => "a finite positive number".into(),
         FontSize => "a positive dp length or token(\"package.name\")".into(),
+        FontFamily => "a nonempty list of font families, such as \"Inter, sans-serif\"".into(),
+        FontWeight => "a whole number from 1 to 1000, `normal` or `bold`".into(),
         Shadow => "[x, y, blur, spread, color] with dp lengths and a nonnegative blur, or \
             token(\"package.name\")"
             .into(),
@@ -509,7 +519,7 @@ pub(crate) fn validate(
         | HoverBackground | PressedBackground | DisabledBackground | DisabledForeground
         | IndicatorColor => "a #RRGGBB or #RRGGBBAA color or token(\"package.name\")".into(),
         Grow | Shrink => "a finite nonnegative number".into(),
-        Visible | Enabled | Cut => "true or false".into(),
+        Visible | Enabled | Cut | Clip => "true or false".into(),
         Direction | LayoutDirection | Wrap | Align | Justify | AlignContent | AlignSelf
         | JustifySelf | JustifyItems | Flow | Theme | Layer | Keyboard => choices(name).join(", "),
     };

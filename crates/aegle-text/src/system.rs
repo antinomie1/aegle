@@ -173,6 +173,32 @@ impl TextSystem {
         Ok(paragraph)
     }
 
+    /// Shapes other text in `from`'s style and color, without soft wrapping:
+    /// a shortened or decorated copy of a paragraph whose style is not at hand.
+    pub fn derive(
+        &mut self,
+        from: &Paragraph,
+        text: impl Into<String>,
+    ) -> Result<Paragraph, TextError> {
+        let text = text.into();
+        if text.len() > u32::MAX as usize {
+            return Err(TextError::TextTooLong);
+        }
+        let mut paragraph = Paragraph {
+            text,
+            layout: Layout::empty(),
+            width: None,
+            alignment: Alignment::Start,
+            diagnostics: TextDiagnostics::default(),
+            content_widths: ContentWidths { min: 0.0, max: 0.0 },
+            shaping: from.shaping.clone(),
+            color: from.color,
+            released: false,
+        };
+        self.build(&mut paragraph);
+        Ok(paragraph)
+    }
+
     /// Replaces content and styling, reusing owned text and layout allocations.
     ///
     /// The current wrapping width and alignment are preserved. Invalid arguments

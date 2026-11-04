@@ -151,6 +151,8 @@ crate::element! {
         create |parent, text: string = ""| parent.button(text);
         set text: string => |button, text| button.set_text(text);
         event clicked => |button, run| button.on_click(move |_| run());
+        // A secondary-button press, or the Menu key while it has focus.
+        event context_menu => |button, run| button.on_context_menu(move |_, _| run());
         get text: string => |button| button.text();
     }
     /// A single-line editor.

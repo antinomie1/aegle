@@ -96,6 +96,7 @@ pub(crate) fn apply(node: &Node, name: PropertyName, value: &Literal) -> Option<
             value => node.set_gap(length(value), length(value)),
         },
         AlignSelf => node.set_align_self(align(value)),
+        Clip => container().set_clip(matches!(value, Literal::Bool(true))),
         Direction => container().set_direction(match identifier(value) {
             "row" => aegle_ui::Direction::Row,
             "column" => aegle_ui::Direction::Column,

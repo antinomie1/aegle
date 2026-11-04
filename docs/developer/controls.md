@@ -39,11 +39,13 @@ title.set_text("新的文字");
 ```
 
 ```text
-Text { text: "Hello, 世界"; font_size: 20dp }
+Text { text: "Hello, 世界"; font_size: 20dp; font_family: "JetBrains Mono, monospace"; font_weight: bold }
 ```
 
-- 方法：`set_text`、`text`、`set_font_size`（`None` 回到主题字号）、`set_foreground`。
+- 方法：`set_text`、`text`、`set_font_size`（`None` 回到主题字号）、`set_font`、`set_foreground`。
+- 标记中所有带文字的控件都接受 `font_family`（有序字体族，可用 `sans-serif`、`monospace` 等通用族）与 `font_weight`（1–1000、`normal` 或 `bold`），两者分别设置、互不覆盖。
 - 按父容器宽度自动换行；默认无内边距，不可聚焦，不压缩高度。
+- 不换行时若布局给的宽度小于文字（例如 `shrink: 1; min_width: 0dp`），显示能放下的最长前缀加 "…"，`is_elided` 报告这一状态；无障碍仍读完整文字。
 - 无障碍角色 Label，值为文字内容。
 
 ## Button
@@ -57,7 +59,7 @@ save.activate();            // 按用户激活的规则排队回调
 ```
 
 ```text
-Button { id: save; text: "Save"; on clicked { saved = true } }
+Button { id: save; text: "Save"; on clicked { saved = true }; on context_menu { menu = true } }
 ```
 
 点击按钮复制另一个控件的内容：
@@ -75,7 +77,8 @@ Button { text: "复制"; on clicked { copy(order.text) } }
 
 - 方法：`text`、`set_text`、`on_click`、`activate`；任意句柄的 `copy_text` 把文字交给所在窗口的剪贴板。标记中 `self.text` 与具名按钮的 `id.text` 读取按钮文字。
 - 指针在按钮上按下并在按钮上释放才激活；Space 在释放时激活，Enter 在首次按下时激活，按键重复不重复触发。失焦、禁用或指针取消时不激活。
-- 默认高度为主题 `control_height`（32），宽度为文字加两侧各两倍内边距；底色为主题 `control`，`set_accent(true)` 使其成为强调色填充的强调按钮；`set_width`、`set_grow` 可改变。
+- 默认高度为主题 `control_height`（32），宽度为文字加两侧各两倍内边距；底色为主题 `control`，`set_accent(true)` 使其成为强调色填充的强调按钮；`set_width`、`set_grow` 可改变。设置 `set_min_height`（标记 `min_height`）后高度改为自动，按钮可在 `align: stretch` 的行里填满行高，或缩到文字高度。
+- 标记中 `on context_menu` 在副键（右键）按下、或按钮有焦点时按 Menu 键时运行，与 Rust 的 `on_context_menu` 相同。
 - 无障碍角色 Button，名称默认为按钮文字，支持 Focus/Click 动作。
 
 ## TextField / TextArea

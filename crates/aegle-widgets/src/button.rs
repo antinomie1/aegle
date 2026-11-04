@@ -182,7 +182,13 @@ impl Control for ButtonControl {
         _: bool,
         style: &mut LayoutStyle,
     ) {
-        if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
+        // A local minimum height replaces the themed fixed height, so a
+        // button can fill a stretched row or hug its text.
+        if local.contains(aegle_ui::LocalLayout::MIN_HEIGHT) {
+            if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
+                style.set_height(aegle_ui::Length::Auto);
+            }
+        } else if !local.contains(aegle_ui::LocalLayout::HEIGHT) {
             style.set_height(theme.control_height);
         }
     }

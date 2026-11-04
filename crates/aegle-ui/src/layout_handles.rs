@@ -83,7 +83,23 @@ impl Node {
     /// content up as a minimum.
     pub fn set_min_height(&self, height: impl Into<Length>) {
         let height = height.into();
-        self.layout(LocalLayout::MIN_HEIGHT, |s| s.set_min_height(height))
+        self.layout(LocalLayout::MIN_HEIGHT, |s| s.set_min_height(height));
+        // A control with a themed fixed height (a button) gives it up for
+        // the local minimum, so it can stretch or shrink to its content.
+        self.change(|state, id| {
+            let is_root = id == state.root;
+            let theme = *state.theme_of(id);
+            let node = state.tree.get_mut(id).unwrap();
+            let mut style = node.style().clone();
+            let local = node.context.local_layout;
+            node.context
+                .control
+                .retheme(&theme, local, is_root, &mut style);
+            if style != *node.style() {
+                aegle_layout::set_style(&mut state.tree, id, style)?;
+            }
+            Ok(())
+        })
     }
     /// Sets the maximum width; automatic removes the limit.
     pub fn set_max_width(&self, width: impl Into<Length>) {

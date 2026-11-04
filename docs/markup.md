@@ -10,12 +10,13 @@ Aegle 提供类 QML 风格的花括号标记语言（扩展名 `.aegle`），作
 ```text
 Window {
     title: "Aegle 示例"
-    width: 480
-    height: 320
+    width: 480dp
+    height: 320dp
+    state count: int = 0
 
     Column {
-        padding: 16
-        gap: 8
+        padding: 16dp
+        gap: 8dp
 
         Text {
             id: label
@@ -25,14 +26,10 @@ Window {
         Button {
             id: btn
             text: "增加"
-            on click {
+            on clicked {
                 count = count + 1
             }
         }
-    }
-
-    state {
-        count: int = 0
     }
 }
 ```
@@ -69,6 +66,7 @@ fn shade(uv: vec2f, size: vec2f) -> vec4f {
 
 * **过渡时序**（`transition` 与 `paint_`/`offset_`/`scale_`/`rotation_`/`shadow_`/`opacity_transition`）：时长、`[时长, 缓动]` 或 `spring(刚度, 阻尼)`（时长为弹簧自身的稳定时间）。缓动为 `linear`、`ease_in`、`ease_out`、`ease_in_out`、`cubic_bezier(x1, y1, x2, y2)`（`x` 在 0..=1）或弹簧。
 * **动画**（`scale_animation`、`rotation_animation`、`opacity_animation`）：`[[值...], 时长]`，可再跟一个缓动和 `forever` 或 `alternate`（永远往返）。两个以上的值均匀分布在一个周期上；节点建好即开始，默认播放一次。只接受字面量。
+* **裁剪**：容器上的 `clip: true` 把子项的绘制、命中测试与指针形状限制在自身边界内，布局不变。
 * **挖洞**：`cut: true` 的节点不画背景，而是把自身形状内已画的内容清成透明（透明窗口在那里露出后面的桌面）；边框、焦点环与内容照常绘制。在有自身 opacity 或 backdrop_blur 的组里只挖穿该组。
 * **内阴影**：`inset_shadow: [x, y, blur, spread, color]` 画在背景之上、边框与内容之下，跟随圆角；偏移移动未被遮暗的中间，正的 spread 加宽阴影边。blur 必须为正（无模糊的内阴影就是边框），不参与过渡。
 * **圆角**：`corners: [bottom_left, bottom_right]` 让 `radius` 只作用于列出的角（`top_left`、`top_right`、`bottom_right`、`bottom_left`，默认全部），例如贴在屏幕顶边的栏只圆下面两个角。
@@ -137,7 +135,7 @@ Column {
     for item in items key item.id {
         Row {
             Text { text: item.title }
-            Button { text: "删除"; on click { remove(item.id) } }
+            Button { text: "删除"; on clicked { host.remove(item.id) } }
         }
     }
 }
@@ -145,15 +143,12 @@ Column {
 
 ### 2. 自定义组件与插槽 (`component` / `slot`)
 ```text
-component Card {
-    property title: string = "默认标题"
-    slot content
-
+component Card(title: string = "默认标题") {
     Column {
-        border_width: 1
-        border_color: #ccc
-        Text { text: self.title; font_size: 16 }
-        slot content
+        border_width: 1dp
+        border_color: #cccccc
+        Text { text: title; font_size: 16dp }
+        slot
     }
 }
 
@@ -163,7 +158,8 @@ Card {
     Text { text: "姓名: 张三" }
 }
 ```
-* **单向作用域**：组件内部通过 `self.property` 访问自身属性，插槽内容继承外部作用域，避免状态冲突。
+* **参数**：`component 名称(参数: 类型 = 默认值, ...)`，没有默认值的参数必须在使用处写出；组件内部直接按名字读取参数，参数可绑定外部表达式并随之更新。组件可声明自己的 `state`，用 `event 名称(类型)` 与 `emit` 向外发事件。
+* **单向作用域**：插槽内容继承外部作用域，避免状态冲突。
 
 ---
 

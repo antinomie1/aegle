@@ -117,6 +117,11 @@ fn literal(node: &Node, name: PropertyName, value: &Literal, color: impl Fn(&Lit
                 state.set_font_size(id, Some(*n))
             })
         }),
+        (FontFamily, Literal::String(families)) => font(node, |f| f.families = intern(families)),
+        (FontWeight, Literal::Number(n)) => font(node, |f| f.weight = *n as u16),
+        (FontWeight, Literal::Identifier(weight)) => {
+            font(node, |f| f.weight = if weight == "bold" { 700 } else { 400 })
+        }
         (Visible, Literal::Bool(v)) => node.set_visible(*v),
         (Enabled, Literal::Bool(v)) => node.set_enabled(*v),
         (Label, Literal::String(text)) => node.set_accessible_label(text),
@@ -144,6 +149,30 @@ fn literal(node: &Node, name: PropertyName, value: &Literal, color: impl Fn(&Lit
         }),
         _ => unreachable!("checked property {name:?}"),
     }
+}
+
+/// Changes one part of `node`'s font, keeping the others.
+fn font(node: &Node, edit: impl FnOnce(&mut aegle_ui::Font)) {
+    node.change(|state, id| {
+        let mut font = state.font(id).unwrap_or_default();
+        edit(&mut font);
+        state.write_unbound(id, TokenSlot::Font, |state| state.set_font(id, Some(font)))
+    })
+}
+
+/// Font families as the `'static` text fonts hold. Only literals reach here,
+/// so each distinct one is kept once for the life of the program.
+fn intern(families: &str) -> &'static str {
+    use std::{collections::HashSet, sync::Mutex};
+    static FAMILIES: Mutex<Option<HashSet<&'static str>>> = Mutex::new(None);
+    let mut set = FAMILIES.lock().unwrap_or_else(|e| e.into_inner());
+    let set = set.get_or_insert_with(HashSet::new);
+    if let Some(known) = set.get(families) {
+        return known;
+    }
+    let leaked: &'static str = Box::leak(families.to_owned().into_boxed_str());
+    set.insert(leaked);
+    leaked
 }
 
 /// Sets the style field the markup checker accepted on `node`.
