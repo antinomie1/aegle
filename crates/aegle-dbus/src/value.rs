@@ -7,6 +7,10 @@ pub enum Value {
     Byte(u8),
     /// `b`
     Bool(bool),
+    /// `n`
+    I16(i16),
+    /// `q`
+    U16(u16),
     /// `i`
     I32(i32),
     /// `u`
@@ -67,6 +71,8 @@ impl Value {
         let code = match self {
             Self::Byte(_) => 'y',
             Self::Bool(_) => 'b',
+            Self::I16(_) => 'n',
+            Self::U16(_) => 'q',
             Self::I32(_) => 'i',
             Self::U32(_) => 'u',
             Self::I64(_) => 'x',
@@ -111,7 +117,9 @@ impl Value {
     pub fn as_u64(&self) -> Option<u64> {
         match *self {
             Self::Byte(n) => Some(n.into()),
+            Self::U16(n) => Some(n.into()),
             Self::U32(n) => Some(n.into()),
+            Self::I16(n) => n.try_into().ok(),
             Self::U64(n) => Some(n),
             Self::I32(n) => n.try_into().ok(),
             Self::I64(n) => n.try_into().ok(),
@@ -123,9 +131,12 @@ impl Value {
     /// A signed integer, looking through a variant.
     pub fn as_i64(&self) -> Option<i64> {
         match *self {
+            Self::I16(n) => Some(n.into()),
             Self::I32(n) => Some(n.into()),
             Self::I64(n) => Some(n),
-            Self::Byte(_) | Self::U32(_) | Self::U64(_) => self.as_u64()?.try_into().ok(),
+            Self::Byte(_) | Self::U16(_) | Self::U32(_) | Self::U64(_) => {
+                self.as_u64()?.try_into().ok()
+            }
             Self::Variant(ref inner) => inner.as_i64(),
             _ => None,
         }
@@ -190,6 +201,14 @@ pub(crate) fn write(out: &mut Vec<u8>, value: &Value) {
         Value::Bool(b) => {
             pad(out, 4);
             out.extend(u32::from(*b).to_le_bytes());
+        }
+        Value::I16(n) => {
+            pad(out, 2);
+            out.extend(n.to_le_bytes());
+        }
+        Value::U16(n) => {
+            pad(out, 2);
+            out.extend(n.to_le_bytes());
         }
         Value::I32(n) => {
             pad(out, 4);
@@ -328,6 +347,8 @@ impl<'a> Reader<'a> {
                 1 => true,
                 _ => return None,
             }),
+            b'n' => Value::I16(i16::from_le_bytes(self.fixed()?)),
+            b'q' => Value::U16(u16::from_le_bytes(self.fixed()?)),
             b'i' => Value::I32(i32::from_le_bytes(self.fixed()?)),
             b'u' => Value::U32(self.u32()?),
             b'x' => Value::I64(i64::from_le_bytes(self.fixed()?)),

@@ -47,6 +47,14 @@ impl Connection {
         Self::connect(&address, timeout)
     }
 
+    /// Connects to the system bus from `DBUS_SYSTEM_BUS_ADDRESS` or
+    /// `/run/dbus/system_bus_socket`, like [`Self::session`].
+    pub fn system(timeout: Duration) -> io::Result<Self> {
+        let address = env::var("DBUS_SYSTEM_BUS_ADDRESS")
+            .unwrap_or_else(|_| "unix:path=/run/dbus/system_bus_socket".into());
+        Self::connect(&address, timeout)
+    }
+
     /// [`Self::session`] for the bus at `address`, in the same form as
     /// `DBUS_SESSION_BUS_ADDRESS`.
     pub fn connect(address: &str, timeout: Duration) -> io::Result<Self> {

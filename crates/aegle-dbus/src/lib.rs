@@ -1,12 +1,13 @@
 //! A small D-Bus client over Unix sockets, without dependencies; empty on
 //! targets other than Linux.
 //!
-//! [`Connection::session`] authenticates to the session bus and says Hello;
+//! [`Connection::session`] and [`Connection::system`] authenticate to a bus
+//! and say Hello;
 //! [`Connection::send`] writes a [`Message`] from any thread, and an
 //! [`Incoming`] reads messages from a clone of the socket, blocking or
 //! nonblocking. [`Value`] covers the basic and container types that portals,
-//! notifications and status items use: no Unix file descriptors, and no 16-bit
-//! integers. A message using them is skipped as undecodable.
+//! notifications, status items and system services use, but no Unix file
+//! descriptors: a message carrying them is skipped as undecodable.
 //!
 //! ```no_run
 //! use aegle_dbus::{Connection, Message, Value};

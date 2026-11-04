@@ -68,6 +68,8 @@ fn messages_cross_a_bus() -> std::io::Result<()> {
             ])],
         ),
         Value::Array("s".into(), vec![]),
+        // 16-bit integers keep their alignment after a byte.
+        Value::Struct(vec![Value::Byte(1), Value::I16(-3), Value::U16(9)]),
         Value::Path("/org/example/Thing".into()),
     ];
     let call = Message::call(
