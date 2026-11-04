@@ -1,5 +1,7 @@
 //! Tooltips: a short hint near the pointer after it rests on a control, also
-//! given to assistive technology as the control's description.
+//! given to assistive technology as the control's description. A host whose
+//! windows are too small to hold them, such as a panel, shows them itself:
+//! see [`host_tooltips`].
 
 use std::{
     collections::HashMap,
@@ -8,8 +10,8 @@ use std::{
 
 use aegle_controls::{Key, KeyInput};
 use aegle_core::NodeId;
-use aegle_types::Point;
-use aegle_ui::{Control, Node, Result, State};
+use aegle_types::{Point, Rect};
+use aegle_ui::{Control, Node, Result, State, Ui};
 use aegle_ui::{Insets, LayoutStyle, Length};
 
 use crate::label::LabelControl;
@@ -28,6 +30,41 @@ struct Tooltips {
     shown: Option<(NodeId, NodeId, Point)>,
     /// A shown label whose anchor was removed, to remove after that removal.
     orphan: Option<NodeId>,
+    /// The host shows tooltips: none are drawn in the window.
+    host: bool,
+    /// The anchor whose tooltip the host shows.
+    hosted: Option<NodeId>,
+    /// What the host has not been told yet.
+    report: Option<Option<HostTooltip>>,
+}
+
+/// A tooltip for the host to show outside the window.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostTooltip {
+    /// Its text.
+    pub text: String,
+    /// The control it describes, in window coordinates.
+    pub anchor: Rect,
+    /// The pointer, in window coordinates.
+    pub pointer: Point,
+}
+
+/// Has the host show `ui`'s tooltips: they are reported by
+/// [`take_tooltip`] instead of drawn inside the window.
+pub fn host_tooltips(ui: &Ui) -> Result {
+    ui.with_state(|state| {
+        state.install(&crate::HOOKS);
+        state.ext::<Tooltips>().host = true;
+        Ok(())
+    })
+}
+
+/// What changed since the last call for a window with [`host_tooltips`]:
+/// `Some(Some(tip))` to show, `Some(None)` to hide, `None` for no change.
+pub fn take_tooltip(ui: &Ui) -> Option<Option<HostTooltip>> {
+    ui.with_state(|state| Ok(state.ext::<Tooltips>().report.take()))
+        .ok()
+        .flatten()
 }
 
 pub(crate) fn set_tooltip(node: &Node, text: Option<&str>) {
@@ -42,8 +79,9 @@ pub(crate) fn set_tooltip(node: &Node, text: Option<&str>) {
                 hovered(state, hover)?;
             }
             None => {
-                state.ext::<Tooltips>().texts.remove(&id);
-                if state.ext::<Tooltips>().shown.is_some_and(|s| s.0 == id) {
+                let tooltips = state.ext::<Tooltips>();
+                tooltips.texts.remove(&id);
+                if tooltips.shown.is_some_and(|s| s.0 == id) || tooltips.hosted == Some(id) {
                     hide(state)?;
                 }
             }
@@ -67,6 +105,9 @@ fn anchor(state: &mut State, mut node: Option<NodeId>) -> Option<NodeId> {
 pub(crate) fn hide(state: &mut State) -> Result {
     let tooltips = state.ext::<Tooltips>();
     tooltips.pending = None;
+    if tooltips.hosted.take().is_some() {
+        tooltips.report = Some(None);
+    }
     if let Some((_, label, _)) = tooltips.shown.take() {
         state.remove_subtree(label)?;
     }
@@ -79,7 +120,7 @@ pub(crate) fn hovered(state: &mut State, hit: Option<NodeId>) -> Result {
     }
     let target = anchor(state, hit);
     let tooltips = state.ext::<Tooltips>();
-    if target.is_some() && tooltips.shown.map(|s| s.0) == target {
+    if target.is_some() && (tooltips.shown.map(|s| s.0) == target || tooltips.hosted == target) {
         return Ok(());
     }
     hide(state)?;
@@ -103,6 +144,18 @@ pub(crate) fn wake(state: &mut State, _: Instant) -> Result {
     let text = state.ext::<Tooltips>().texts[&target].clone();
     let theme = *state.theme_of(target);
     let pointer = state.pointer_position().unwrap_or_default();
+    if state.ext::<Tooltips>().host {
+        let anchor = state.element(target).bounds();
+        let tooltips = state.ext::<Tooltips>();
+        tooltips.pending = None;
+        tooltips.hosted = Some(target);
+        tooltips.report = Some(Some(HostTooltip {
+            text,
+            anchor,
+            pointer,
+        }));
+        return Ok(());
+    }
     let at = Point::new(pointer.x + OFFSET.x, pointer.y + OFFSET.y);
     let mut style = LayoutStyle::default();
     style
@@ -150,13 +203,13 @@ pub(crate) fn place(state: &mut State) -> bool {
 pub(crate) fn tooltip_key(state: &mut State, key: &KeyInput<'_>) -> Result<bool> {
     if state
         .ext_ref::<Tooltips>()
-        .is_none_or(|t| t.shown.is_none() && t.pending.is_none())
+        .is_none_or(|t| t.shown.is_none() && t.hosted.is_none() && t.pending.is_none())
     {
         return Ok(false);
     }
     let shown = state
         .ext_ref::<Tooltips>()
-        .is_some_and(|t| t.shown.is_some());
+        .is_some_and(|t| t.shown.is_some() || t.hosted.is_some());
     hide(state)?;
     Ok(shown && key.key == Key::Escape)
 }
@@ -169,6 +222,10 @@ pub(crate) fn removed(state: &mut State, node: NodeId) {
     tooltips.texts.remove(&node);
     if tooltips.pending == Some(node) {
         tooltips.pending = None;
+    }
+    if tooltips.hosted == Some(node) {
+        tooltips.hosted = None;
+        tooltips.report = Some(None);
     }
     match tooltips.shown {
         Some((_, label, _)) if label == node => tooltips.shown = None,

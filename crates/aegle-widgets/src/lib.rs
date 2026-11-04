@@ -87,7 +87,7 @@ pub use shape::{Shape, ShapeControl};
 pub use table::{Table, TableColumn};
 pub use tabs::{Tabs, TabsControl};
 pub use toggle::{CheckBox, Radio, Switch, ToggleControl};
-pub use tooltip::TOOLTIP_DELAY;
+pub use tooltip::{HostTooltip, TOOLTIP_DELAY, host_tooltips, take_tooltip};
 pub use tree::{TreeNode, TreeNodeControl, TreeView};
 pub use visual::{Fit, ImageControl, ImageView};
 
