@@ -68,6 +68,9 @@ pub fn take_tooltip(ui: &Ui) -> Option<Option<HostTooltip>> {
 }
 
 pub(crate) fn set_tooltip(node: &Node, text: Option<&str>) {
+    // Empty text is no tooltip, so a bound one can come and go; an empty
+    // bubble would show otherwise.
+    let text = text.filter(|text| !text.is_empty());
     node.set_accessible_description(text);
     node.change(|state, id| {
         state.install(&crate::HOOKS);

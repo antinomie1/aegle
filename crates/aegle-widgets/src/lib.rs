@@ -381,7 +381,7 @@ pub trait NodeWidgets {
     fn context_menu(&self) -> Popup;
     /// Shows `text` after the pointer rests on this control (or a descendant
     /// without its own tooltip) and sets it as the accessible description;
-    /// `None` removes it. Pressing, Escape or leaving hides it.
+    /// `None` or empty text removes it. Pressing, Escape or leaving hides it.
     fn set_tooltip<'a>(&self, text: impl Into<Option<&'a str>>);
     /// Creates a modal dialog anchored to this control's window.
     fn dialog(&self, title: &str) -> Dialog;

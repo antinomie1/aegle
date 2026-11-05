@@ -48,3 +48,21 @@ fn host_shows_tooltips() -> Result {
     assert_eq!(take_tooltip(&ui), Some(None));
     Ok(())
 }
+
+#[test]
+fn an_empty_tooltip_is_none() -> Result {
+    let ui = ui()?;
+    host_tooltips(&ui)?;
+    let button = ui.root().button("Volume");
+    button.set_tooltip(Some(""));
+    ui.refresh()?;
+    let bounds = button.bounds();
+    let center = Point::new(
+        bounds.origin.x + bounds.size.width / 2.0,
+        bounds.origin.y + bounds.size.height / 2.0,
+    );
+    ui.pointer(PointerId(1), PointerKind::Move, center, Modifiers::default())?;
+    assert_eq!(ui.next_wake(), None, "nothing pending");
+    assert_eq!(take_tooltip(&ui), None);
+    Ok(())
+}
