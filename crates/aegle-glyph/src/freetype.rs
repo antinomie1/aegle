@@ -52,6 +52,16 @@ struct FT_GlyphSlotRec {
     bitmap_top: c_int,
 }
 
+/// One fixed strike of a bitmap face; ppem values are 26.6 fixed point.
+#[repr(C)]
+struct FT_Bitmap_Size {
+    height: c_short,
+    width: c_short,
+    size: c_long,
+    x_ppem: c_long,
+    y_ppem: c_long,
+}
+
 #[repr(C)]
 struct FT_Generic {
     data: *mut c_void,
@@ -68,7 +78,7 @@ struct FtFaceRec {
     family_name: *mut c_char,
     style_name: *mut c_char,
     num_fixed_sizes: c_int,
-    available_sizes: *mut c_void,
+    available_sizes: *const FT_Bitmap_Size,
     num_charmaps: c_int,
     charmaps: *mut c_void,
     generic: FT_Generic,
@@ -88,6 +98,8 @@ type FtLibrary = *mut c_void;
 type FtFace = *mut FtFaceRec;
 type FtError = c_int;
 
+/// The face has outlines; without it, only the fixed strikes draw.
+const FT_FACE_FLAG_SCALABLE: c_long = 1;
 const FT_LOAD_DEFAULT: c_int = 0;
 const FT_LOAD_NO_HINTING: c_int = 1 << 1;
 /// Ask FreeType for embedded color layers and bitmap strikes.
@@ -106,6 +118,7 @@ struct FreeTypeLib {
         unsafe extern "C" fn(FtLibrary, *const u8, c_long, c_long, *mut FtFace) -> FtError,
     done_face: unsafe extern "C" fn(FtFace) -> FtError,
     set_pixel_sizes: unsafe extern "C" fn(FtFace, c_uint, c_uint) -> FtError,
+    select_size: unsafe extern "C" fn(FtFace, c_int) -> FtError,
     load_glyph: unsafe extern "C" fn(FtFace, c_uint, c_int) -> FtError,
     render_glyph: unsafe extern "C" fn(*mut FT_GlyphSlotRec, c_uint) -> FtError,
     embolden: unsafe extern "C" fn(*mut FT_GlyphSlotRec),
@@ -140,6 +153,10 @@ fn ft_lib() -> Option<&'static FreeTypeLib> {
                         Ok(sym) => *sym,
                         Err(_) => continue,
                     };
+                    let select_size = match lib.get(b"FT_Select_Size\0") {
+                        Ok(sym) => *sym,
+                        Err(_) => continue,
+                    };
                     let load_glyph = match lib.get(b"FT_Load_Glyph\0") {
                         Ok(sym) => *sym,
                         Err(_) => continue,
@@ -163,6 +180,7 @@ fn ft_lib() -> Option<&'static FreeTypeLib> {
                         new_memory_face,
                         done_face,
                         set_pixel_sizes,
+                        select_size,
                         load_glyph,
                         render_glyph,
                         embolden,
@@ -252,14 +270,38 @@ impl FreeTypeRasterizer {
 
         unsafe {
             let rec = &*face;
-            if rec.units_per_em == 0 || (glyph as c_long) >= rec.num_glyphs {
+            let scalable = rec.face_flags & FT_FACE_FLAG_SCALABLE != 0;
+            // FreeType reports no units per em for a face that is only bitmaps.
+            let sized = match scalable {
+                true => rec.units_per_em != 0,
+                false => rec.num_fixed_sizes > 0 && !rec.available_sizes.is_null(),
+            };
+            if !sized || (glyph as c_long) >= rec.num_glyphs {
                 return Err(GlyphError::InvalidFont);
             }
 
-            let px = options.size.round().max(1.0) as c_uint;
-            if (ft.set_pixel_sizes)(face, 0, px) != 0 {
-                return Err(GlyphError::InvalidOptions);
-            }
+            // A bitmap-only face (color emoji) draws its nearest strike,
+            // which is then resampled to the requested size.
+            let scale = match scalable {
+                true => {
+                    let px = options.size.round().max(1.0) as c_uint;
+                    if (ft.set_pixel_sizes)(face, 0, px) != 0 {
+                        return Err(GlyphError::InvalidOptions);
+                    }
+                    1.0
+                }
+                false => {
+                    let sizes = std::slice::from_raw_parts(
+                        rec.available_sizes,
+                        rec.num_fixed_sizes as usize,
+                    );
+                    let (index, ppem) = strike(sizes, options.size);
+                    if ppem <= 0.0 || (ft.select_size)(face, index) != 0 {
+                        return Err(GlyphError::InvalidFont);
+                    }
+                    options.size / ppem
+                }
+            };
 
             let mut matrix = FT_Matrix {
                 xx: 0x10000,
@@ -293,7 +335,7 @@ impl FreeTypeRasterizer {
                 return Err(GlyphError::UnsupportedGlyph);
             }
 
-            if options.embolden {
+            if options.embolden && scalable {
                 (ft.embolden)(slot);
             }
 
@@ -321,10 +363,13 @@ impl FreeTypeRasterizer {
                 _ => return Err(GlyphError::UnsupportedGlyph),
             };
             let channels = if color { 4 } else { 1 };
-            let pixels = (width as usize) * (height as usize);
-            let bytes = pixels * channels;
-            reserve(bytes)?;
-            if bytes > limits.bitmap_bytes {
+            let (out_width, out_height) = match scale == 1.0 {
+                true => (width, height),
+                false => (scaled(width, scale), scaled(height, scale)),
+            };
+            reserve(out_width as usize * out_height as usize * channels)?;
+            let source_bytes = (width as usize) * (height as usize) * channels;
+            if source_bytes > limits.bitmap_bytes {
                 return Err(GlyphError::BitmapBudget);
             }
 
@@ -334,42 +379,51 @@ impl FreeTypeRasterizer {
                 return Err(GlyphError::UnsupportedGlyph);
             }
             let row_len = width as usize * channels;
-            let mut out = Vec::with_capacity(bytes);
+            let mut raw = Vec::with_capacity(source_bytes);
             for row in 0..height as usize {
                 let row_offset = match pitch >= 0 {
                     true => row * pitch as usize,
                     false => (height as usize - 1 - row) * (-pitch) as usize,
                 };
-                let row_slice = std::slice::from_raw_parts(buffer.add(row_offset), row_len);
-                match color {
-                    // FreeType composites color layers premultiplied; images are
-                    // straight sRGB, so divide the color channels by alpha.
-                    true => {
-                        for pixel in row_slice.as_chunks::<4>().0 {
-                            let alpha = u32::from(pixel[3]);
-                            let straight = |value: u8| {
-                                (u32::from(value) * 255)
-                                    .checked_div(alpha)
-                                    .map_or(0, |v| v.min(255) as u8)
-                            };
-                            out.extend_from_slice(&[
-                                straight(pixel[2]),
-                                straight(pixel[1]),
-                                straight(pixel[0]),
-                                pixel[3],
-                            ]);
-                        }
-                    }
-                    false => out.extend_from_slice(row_slice),
-                }
+                raw.extend_from_slice(std::slice::from_raw_parts(
+                    buffer.add(row_offset),
+                    row_len,
+                ));
             }
+            // Resampled while premultiplied, so transparent pixels add no color.
+            if (out_width, out_height) != (width, height) {
+                raw = resample(&raw, [width, height], [out_width, out_height], channels);
+            }
+            let out = match color {
+                // FreeType composites color layers premultiplied; images are
+                // straight sRGB, so divide the color channels by alpha.
+                true => {
+                    let mut out = Vec::with_capacity(raw.len());
+                    for pixel in raw.as_chunks::<4>().0 {
+                        let alpha = u32::from(pixel[3]);
+                        let straight = |value: u8| {
+                            (u32::from(value) * 255)
+                                .checked_div(alpha)
+                                .map_or(0, |v| v.min(255) as u8)
+                        };
+                        out.extend_from_slice(&[
+                            straight(pixel[2]),
+                            straight(pixel[1]),
+                            straight(pixel[0]),
+                            pixel[3],
+                        ]);
+                    }
+                    out
+                }
+                false => raw,
+            };
 
             Ok(Image {
                 placement: Placement {
-                    left: slot_rec.bitmap_left,
-                    top: slot_rec.bitmap_top,
-                    width,
-                    height,
+                    left: (slot_rec.bitmap_left as f32 * scale).round() as i32,
+                    top: (slot_rec.bitmap_top as f32 * scale).round() as i32,
+                    width: out_width,
+                    height: out_height,
                 },
                 // A color glyph keeps its own pixels; a mask takes the run color.
                 content: match color {
@@ -390,6 +444,62 @@ impl FreeTypeRasterizer {
             }
         }
     }
+}
+
+/// The strike to draw at `size` pixels per em: the smallest at least that
+/// large, else the largest. Returns its index and pixels per em.
+fn strike(sizes: &[FT_Bitmap_Size], size: f32) -> (c_int, f32) {
+    let ppem = |s: &FT_Bitmap_Size| s.y_ppem as f32 / 64.0;
+    let pick = (sizes.iter().enumerate())
+        .filter(|(_, s)| ppem(s) >= size)
+        .min_by(|a, b| ppem(a.1).total_cmp(&ppem(b.1)))
+        .or_else(|| (sizes.iter().enumerate()).max_by(|a, b| ppem(a.1).total_cmp(&ppem(b.1))));
+    pick.map_or((0, 0.0), |(i, s)| (i as c_int, ppem(s)))
+}
+
+fn scaled(length: c_uint, scale: f32) -> c_uint {
+    ((length as f32 * scale).round() as c_uint).max(1)
+}
+
+/// Resamples tightly packed pixels from `from` to `to` size, each output
+/// pixel the average of the source area it covers.
+fn resample(source: &[u8], from: [c_uint; 2], to: [c_uint; 2], channels: usize) -> Vec<u8> {
+    // Source pixels and their weights for each output column or row.
+    let spans = |from: c_uint, to: c_uint| -> Vec<Vec<(usize, f32)>> {
+        let step = from as f32 / to as f32;
+        (0..to)
+            .map(|o| {
+                let (start, end) = (o as f32 * step, ((o + 1) as f32 * step).min(from as f32));
+                let first = start.floor() as usize;
+                let last = (end.ceil() as usize).min(from as usize);
+                (first..last)
+                    .map(|i| {
+                        let cover = end.min(i as f32 + 1.0) - start.max(i as f32);
+                        (i, cover / (end - start))
+                    })
+                    .filter(|(_, w)| *w > 0.0)
+                    .collect()
+            })
+            .collect()
+    };
+    let (columns, rows) = (spans(from[0], to[0]), spans(from[1], to[1]));
+    let stride = from[0] as usize * channels;
+    let mut out = Vec::with_capacity(to[0] as usize * to[1] as usize * channels);
+    for row in &rows {
+        for column in &columns {
+            let mut sum = [0.0f32; 4];
+            for &(y, wy) in row {
+                for &(x, wx) in column {
+                    let at = y * stride + x * channels;
+                    for (c, total) in sum.iter_mut().enumerate().take(channels) {
+                        *total += f32::from(source[at + c]) * wx * wy;
+                    }
+                }
+            }
+            out.extend(sum[..channels].iter().map(|v| v.round().min(255.0) as u8));
+        }
+    }
+    out
 }
 
 impl Drop for FreeTypeRasterizer {

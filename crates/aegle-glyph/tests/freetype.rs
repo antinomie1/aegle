@@ -54,3 +54,40 @@ fn freetype_rasterizes_cjk_and_spaces() {
         GlyphError::ImageBudget
     );
 }
+
+#[test]
+fn freetype_scales_bitmap_only_color_strikes() {
+    // One CBDT glyph (U+1F3AF) at a 109 ppem strike, no outlines: FreeType
+    // reports no units per em and accepts no other pixel size.
+    let font = FontData::new(
+        Blob::from(include_bytes!("../../../tests/assets/aegle-test-bitmap.ttf").to_vec()),
+        0,
+    );
+    let mut cache = GlyphCache::with_limits(CacheLimits {
+        image_bytes: 1 << 20,
+        entries: 16,
+        bitmap_bytes: 1 << 20,
+    });
+    let mut size = |size: f32| {
+        let options = RasterOptions {
+            size,
+            ..Default::default()
+        };
+        let image = cache
+            .rasterize(&font.clone().into(), 1, options)
+            .expect("rasterize a bitmap glyph");
+        assert_eq!(image.content, Content::Color);
+        let placement = image.placement;
+        assert_eq!(
+            image.data.len(),
+            (placement.width * placement.height * 4) as usize
+        );
+        assert!(image.data.as_chunks::<4>().0.iter().any(|p| p[3] == 255));
+        (placement.width, placement.height, placement.top)
+    };
+    let strike = size(109.0);
+    let small = size(16.0);
+    assert_eq!(strike, (136, 128, 101));
+    // Scaled from the strike: 16 / 109 of each length.
+    assert_eq!(small, (20, 19, 15));
+}

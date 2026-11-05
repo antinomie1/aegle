@@ -45,6 +45,12 @@ Regenerate after the CJK fixture with:
 PYTHONPATH=target/fonttools python3 tests/assets/color-font.py
 ```
 
+`aegle-test-bitmap.ttf` (4,368 bytes) is a one-glyph OFL subset of **Noto Color
+Emoji** (Arch `noto-fonts-emoji` `1:20260924-1`), renamed **Aegle Test Bitmap**:
+U+1F3AF as a 109 ppem CBDT PNG strike and no outlines, the shape of a bitmap-only
+color emoji font. Regenerate with
+`uv run --with fonttools==4.62.1 python tests/assets/bitmap-font.py path/to/NotoColorEmoji.ttf`.
+
 `aegle-test-colrv1.ttf` (984 bytes) and `aegle-test-svg.ttf` (876 bytes) are
 built from scratch by `colrv1-font.py` with FontTools 4.62.1; they contain only
 a 1000-unit square outline, so no third-party glyph data applies. The first has
