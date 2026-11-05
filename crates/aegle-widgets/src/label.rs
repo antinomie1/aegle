@@ -137,10 +137,15 @@ impl Control for LabelControl {
     fn measure(&mut self, cx: &MeasureCx<'_>) -> Size {
         let width = if self.wrap { cx.content_width() } else { None };
         let size = self.text.reflow(width, cx.alignment()).or_fail();
-        Size::new(
-            size.width + 2.0 * cx.padding,
-            size.height + 2.0 * cx.padding,
-        )
+        let mut outer = size.width + 2.0 * cx.padding;
+        // A single line narrower than its text elides, never drawing past the
+        // width it is offered; reporting its whole text there would make a
+        // scroll view scroll sideways to nothing. 0 asks for the min-content
+        // width, which stays the whole line.
+        if let Some(offered) = cx.width.filter(|&w| !self.wrap && w > 0.0) {
+            outer = outer.min(offered);
+        }
+        Size::new(outer, size.height + 2.0 * cx.padding)
     }
     fn finalize(&mut self, cx: &MeasureCx<'_>) {
         let width = if self.wrap { cx.content_width() } else { None };

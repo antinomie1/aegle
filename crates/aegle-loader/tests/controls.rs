@@ -1,4 +1,4 @@
-//! Markup reaches text faces, button sizing and secondary presses.
+//! Markup reaches text faces, button sizing, secondary presses and elided lines.
 
 use aegle_loader::{
     Elements, Program,
@@ -106,6 +106,25 @@ fn a_shrunk_single_line_ends_in_an_ellipsis() -> Result {
     assert!(label("long").bounds().size.width <= 60.0);
     assert_eq!(label("long").text(), "一二三四五六七八九十");
     assert!(!label("short").is_elided());
+    Ok(())
+}
+
+#[test]
+fn an_elided_line_does_not_scroll_its_view_sideways() -> Result {
+    let ui = common::ui()?;
+    let view = build(
+        &ui,
+        r#"Column {
+            ScrollView { id: list; width: 60dp; height: 40dp
+                Text { text: "一二三四五六七八九十"; shrink: 1; min_width: 0dp }
+                Column { height: 100dp }
+            }
+        }"#,
+    )?;
+    ui.refresh()?;
+    let limit = view.handle("list").unwrap().node().max_scroll_offset();
+    assert_eq!(limit.x, 0.0);
+    assert!(limit.y > 0.0);
     Ok(())
 }
 
