@@ -114,7 +114,11 @@ impl LabelControl {
             }
         }
         let source = source.to_owned();
-        self.elided = Some(Elided { room, source, shown });
+        self.elided = Some(Elided {
+            room,
+            source,
+            shown,
+        });
     }
 }
 

@@ -119,9 +119,9 @@ fn literal(node: &Node, name: PropertyName, value: &Literal, color: impl Fn(&Lit
         }),
         (FontFamily, Literal::String(families)) => font(node, |f| f.families = intern(families)),
         (FontWeight, Literal::Number(n)) => font(node, |f| f.weight = *n as u16),
-        (FontWeight, Literal::Identifier(weight)) => {
-            font(node, |f| f.weight = if weight == "bold" { 700 } else { 400 })
-        }
+        (FontWeight, Literal::Identifier(weight)) => font(node, |f| {
+            f.weight = if weight == "bold" { 700 } else { 400 }
+        }),
         (Visible, Literal::Bool(v)) => node.set_visible(*v),
         (Enabled, Literal::Bool(v)) => node.set_enabled(*v),
         (Label, Literal::String(text)) => node.set_accessible_label(text),

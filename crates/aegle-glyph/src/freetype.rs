@@ -385,10 +385,7 @@ impl FreeTypeRasterizer {
                     true => row * pitch as usize,
                     false => (height as usize - 1 - row) * (-pitch) as usize,
                 };
-                raw.extend_from_slice(std::slice::from_raw_parts(
-                    buffer.add(row_offset),
-                    row_len,
-                ));
+                raw.extend_from_slice(std::slice::from_raw_parts(buffer.add(row_offset), row_len));
             }
             // Resampled while premultiplied, so transparent pixels add no color.
             if (out_width, out_height) != (width, height) {
