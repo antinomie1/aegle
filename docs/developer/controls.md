@@ -189,7 +189,7 @@ volume.on_change(|slider| {
 Slider { min: 0; max: 100; value: 30; step: 5; on changed { volume = self.value } }
 ```
 
-- 方法：`value`、`range`、`set_value`、`set_range`、`step`、`set_step`（0 为连续）、`increment` / `decrement`、`on_change`。越界的有限值会被限制到范围内。
+- 方法：`value`、`range`、`set_value`、`set_range`、`step`、`set_step`（0 为连续）、`increment` / `decrement`、`on_change`。越界的有限值会被限制到范围内。启用 `motion` 时，程序设置的值缓动到位；首次绘制前（如标记绑定的初值）或 `snap` 内直接显示。
 - 键盘：方向键移动一步（连续时为跨度的 1%），PageUp/PageDown 十步（或 10%），Home/End 到端点。指针按下轨道直接设值并可拖动。
 - 手柄 20 dp 圆盘（表面色、边框色描边、强调色圆点），轨道与已完成部分均为 4 dp 胶囊；宽度不足时缩小。默认长 160 dp，在窄行中沿轴向收缩而不越出窗口；横向的厚度以 `control_height` 为最小高度，拥挤的列也不会压扁它，需要更矮时先 `set_min_height`（与文本框相同）。
 - 无障碍角色 Slider，带数值、范围与步长。

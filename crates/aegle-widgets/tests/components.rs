@@ -110,6 +110,13 @@ fn range_variants_number_fields_and_separators() -> Result {
         progress.snap(|| progress.set_value(0.0));
         ui.refresh()?;
         assert!(!ui.wants_frames());
+        // Set before its first paint, as markup bindings do, it shows the
+        // value at once instead of easing up from the placeholder.
+        let fresh = self::ui()?;
+        let late = fresh.root().slider(0.0, 100.0, 0.0);
+        late.set_value(60.0);
+        fresh.refresh()?;
+        assert!(!fresh.wants_frames());
         // After an idle period it starts now, not at the long-past last frame.
         let idle = self::ui()?;
         let bar = idle.root().progress(0.0, 1.0, 0.0);

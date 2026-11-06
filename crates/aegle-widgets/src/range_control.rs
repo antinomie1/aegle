@@ -35,6 +35,7 @@ const GLIDE: f64 = 0.12;
 const SWEEP: f64 = 1.6;
 
 /// The displayed fraction easing toward a new value, outside pointer drags.
+/// Before its first paint it has shown nothing, so a change jumps.
 #[derive(Default)]
 pub(crate) struct Glide {
     from: f64,
@@ -42,6 +43,7 @@ pub(crate) struct Glide {
     start: Option<Instant>,
     moving: bool,
     shown: f64,
+    painted: bool,
 }
 
 impl Glide {
@@ -53,7 +55,8 @@ impl Glide {
             ..Self::default()
         }
     }
-    /// Eases from the displayed fraction; `jump` shows the target at once.
+    /// Eases from the displayed fraction; `jump`, or a glide never painted,
+    /// shows the target at once.
     pub fn retarget(&mut self, to: f64, jump: bool) {
         if to == self.to {
             return;
@@ -61,10 +64,11 @@ impl Glide {
         self.from = self.shown;
         self.to = to;
         self.start = None;
-        self.moving = !jump && cfg!(feature = "motion");
+        self.moving = self.painted && !jump && cfg!(feature = "motion");
     }
     /// The fraction to draw at `now`, requesting another frame while easing.
     pub(crate) fn sample(&mut self, cx: &mut PaintCx<'_>) -> f64 {
+        self.painted = true;
         if !self.moving || cx.reduced_motion {
             self.moving = false;
             self.shown = self.to;
