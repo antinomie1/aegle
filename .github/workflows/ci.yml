@@ -58,7 +58,6 @@ jobs:
         features:
           - ""
           - markup
-          - markup,native
           - markup,native,sdl3
           - markup,native,sdl3,tiny-skia
           - markup,motion

@@ -147,7 +147,7 @@ impl Sdl3 {
                 let pressed = key.down != 0;
                 let mut text: Option<String> = None;
                 if pressed {
-                    let composing = self.window(id).map_or(false, |w| w.composing);
+                    let composing = self.window(id).is_ok_and(|w| w.composing);
                     if !composing {
                         // When text input is active, SDL immediately pushes a
                         // TEXT_INPUT event for character keys. Peep and consume
@@ -232,7 +232,7 @@ impl Sdl3 {
                 };
                 let was_composing = self
                     .window_mut(id)
-                    .map_or(false, |w| std::mem::replace(&mut w.composing, false));
+                    .is_ok_and(|w| std::mem::replace(&mut w.composing, false));
                 if self.editing(id) && was_composing {
                     // An input method was composing: this is a composition commit.
                     self.emit(Event::Ime {
