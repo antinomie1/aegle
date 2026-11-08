@@ -152,22 +152,33 @@ fn retained_cjk_pixels_clip_recolor_and_transform() -> Result<(), Box<dyn std::e
 
     // Fixture B (glyph 2) is a 2×2 color strike. Reflect by half a pixel to
     // mix translucent red with green; linear filtering gives ~[117,160,0,192].
+    // The platform rasterizers place the strike differently (CoreText two
+    // pixels right of FreeType), so the glyph first moves the strike to x = 0.
     let font = FontData::new(
         Blob::from(include_bytes!("../../../tests/assets/aegle-test-color.otf").to_vec()),
         0,
     );
-    let mut builder = SceneBuilder::new();
-    builder.glyphs(GlyphRun::new(
-        font,
-        16.0,
-        Color::WHITE,
-        vec![],
-        vec![Glyph {
-            id: 2,
-            position: Point::new(0.0, 2.0),
-        }],
-    ));
-    let color_scene = builder.finish();
+    let strike = |x: f32| {
+        let mut builder = SceneBuilder::new();
+        builder.glyphs(GlyphRun::new(
+            font.clone(),
+            16.0,
+            Color::WHITE,
+            vec![],
+            vec![Glyph {
+                id: 2,
+                position: Point::new(x, 2.0),
+            }],
+        ));
+        builder.finish()
+    };
+    renderer
+        .begin_frame(&mut surface, Color::TRANSPARENT)
+        .draw(&strike(0.0), Affine::IDENTITY)?;
+    let left = (0..64)
+        .find(|x| (0..48).any(|y| surface.data()[(y * 64 + x) * 4 + 3] != 0))
+        .expect("the strike is drawn");
+    let color_scene = strike(-(left as f32));
     renderer
         .begin_frame(&mut surface, Color::TRANSPARENT)
         .draw(&color_scene, Affine::new([-1.0, 0.0, 0.0, 1.0, 2.5, 0.0])?)?;

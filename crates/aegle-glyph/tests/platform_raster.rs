@@ -115,3 +115,63 @@ fn synthetic_bold_and_slant_change_the_glyph() {
         "slanted {slanted:?} upright {upright:?}"
     );
 }
+
+/// CoreText draws a color-glyph font's strike in color and its plain outlines
+/// as coverage. The fixture's B glyph is a 2×2 sbix strike at 16 ppem; with an
+/// sbix table present CoreText draws A's outline instead of its COLRv0 layers.
+#[cfg(target_os = "macos")]
+#[test]
+fn color_glyph_fonts_rasterize_strikes_in_color_and_outlines_as_masks() {
+    register();
+    let font: aegle_glyph::FontSource = FontData::new(
+        Blob::from(include_bytes!("../../../tests/assets/aegle-test-color.otf").to_vec()),
+        0,
+    )
+    .into();
+    let mut cache = cache();
+    let options = RasterOptions {
+        size: 16.0,
+        ..Default::default()
+    };
+    let strike = cache.rasterize(&font, 2, options).expect("strike");
+    assert_eq!(strike.content, Content::Color);
+    let width = strike.placement.width as usize;
+    let opaque: Vec<_> = strike
+        .data
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .enumerate()
+        .filter(|(_, pixel)| pixel[3] != 0)
+        .map(|(i, pixel)| (i % width, i / width, *pixel))
+        .collect();
+    // Red, green / blue, transparent, one image pixel per strike pixel, in
+    // straight alpha: the half-transparent red keeps full intensity.
+    let (x, y, _) = opaque[0];
+    assert_eq!(
+        opaque,
+        [
+            (x, y, [255, 0, 0, 128]),
+            (x + 1, y, [0, 255, 0, 255]),
+            (x, y + 1, [0, 0, 255, 255]),
+        ]
+    );
+    // Bitmap rows are top-down from the placement's top edge, and the strike
+    // rises two pixels above the baseline.
+    assert_eq!(strike.placement.top - y as i32, 2);
+
+    let outline = cache.rasterize(&font, 1, options).expect("outline");
+    assert_eq!(outline.content, Content::Mask);
+    assert!(outline.data.contains(&255));
+    // Masks ignore the foreground, so another text color reuses the entry.
+    let entries = cache.stats().entries;
+    let white = RasterOptions {
+        foreground: [255, 255, 255, 255],
+        ..options
+    };
+    assert_eq!(
+        cache.rasterize(&font, 1, white).expect("outline").content,
+        Content::Mask
+    );
+    assert_eq!(cache.stats().entries, entries);
+}

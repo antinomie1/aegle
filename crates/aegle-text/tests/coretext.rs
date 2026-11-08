@@ -1,9 +1,9 @@
 //! The CoreText backend on a real Mac: generic families resolve to installed
-//! faces, painted runs sit on their own lines' baselines, and every run's
-//! system font rasterizes through CoreGraphics.
+//! faces, painted runs sit on their own lines' baselines, every run's system
+//! font rasterizes through CoreGraphics, and emoji rasterize in color.
 #![cfg(all(target_os = "macos", feature = "scene", feature = "system-fonts"))]
 
-use aegle_glyph::{GlyphCache, RasterOptions};
+use aegle_glyph::{Content, GlyphCache, RasterOptions};
 use aegle_scene::{FontSource, SceneBuilder};
 use aegle_text::{Alignment, TextStyle, TextSystem};
 
@@ -83,4 +83,57 @@ fn runs_sit_on_their_line_baselines_and_rasterize() {
     }
     assert!(fonts.len() >= 2, "expected a CJK fallback face");
     assert!(fonts.iter().all(|&(_, covered)| covered > 0), "{fonts:?}");
+}
+
+#[test]
+fn emoji_rasterize_in_color_beside_monochrome_text() {
+    // "A" stays a coverage mask; the emoji falls back to Apple Color Emoji,
+    // whose glyphs become straight color pixels that do not follow the ink.
+    let mut system = TextSystem::system();
+    let paragraph = system.paragraph("A 😀", &style("sans-serif")).unwrap();
+    assert_eq!(paragraph.diagnostics(), Default::default());
+    let mut builder = SceneBuilder::new();
+    paragraph.paint(&mut builder);
+    let scene = builder.finish();
+    let mut cache = GlyphCache::default();
+    let (mut masks, mut colors) = (0, 0);
+    for run in scene.glyph_runs() {
+        for glyph in run.glyphs() {
+            let mut pixels = Vec::new();
+            for foreground in [[0, 0, 0, 255], [255, 255, 255, 255]] {
+                let options = RasterOptions {
+                    size: run.size(),
+                    foreground,
+                    ..RasterOptions::default()
+                };
+                let image = cache.rasterize(run.font(), glyph.id, options).unwrap();
+                let size = (image.placement.width * image.placement.height) as usize;
+                match image.content {
+                    Content::Mask => assert_eq!(image.data.len(), size),
+                    Content::Color => assert_eq!(image.data.len(), 4 * size),
+                }
+                pixels.push((image.content, image.data.to_vec()));
+            }
+            assert_eq!(pixels[0], pixels[1], "neither form depends on the ink");
+            let (content, data) = &pixels[0];
+            if data.is_empty() {
+                continue; // the space
+            }
+            match content {
+                Content::Mask => masks += 1,
+                Content::Color => {
+                    // Opaque pixels of several hues, not a tinted silhouette.
+                    let opaque: Vec<_> = data
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .filter(|p| p[3] == 255)
+                        .collect();
+                    assert!(opaque.iter().any(|p| p[0] != p[2]), "{opaque:?}");
+                    colors += 1;
+                }
+            }
+        }
+    }
+    assert_eq!((masks, colors), (1, 1));
 }

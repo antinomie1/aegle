@@ -7,10 +7,16 @@
 //! coverage is the plain antialiased area the renderers' contrast curve expects.
 //! Synthetic slant is the text matrix, and synthetic bold strokes the glyph's
 //! outline while filling it, growing every side by half of `size / 32` like
-//! `FT_Outline_Embolden`. An alpha-only context drops color, and CoreText
-//! reports color glyphs (sbix, COLR, SVG) only per font, so every visible glyph
-//! of a font with the color-glyphs trait returns
-//! [`GlyphError::UnsupportedGlyph`] instead of a monochrome silhouette.
+//! `FT_Outline_Embolden`.
+//!
+//! CoreText reports color glyphs (sbix, COLR, SVG) only per font, through the
+//! color-glyphs trait, so a glyph of such a font is drawn into an sRGB RGBA
+//! context instead, twice: once with black ink and once with white. A glyph
+//! whose pixels do not depend on the ink is a color glyph and becomes straight
+//! [`Content::Color`] pixels; one drawn only in the ink (the outlines a color
+//! emoji font also carries) becomes the same coverage mask as above; one that
+//! mixes both (a COLR layer in the text color) is drawn a third time with
+//! [`RasterOptions::foreground`] and cached per color.
 //!
 //! CoreText's own runs name the `CTFont` they were shaped with through
 //! [`register_font`], so the glyph comes from exactly that face, variable
@@ -28,7 +34,10 @@ use aegle_scene::SystemFont;
 use objc2_core_foundation::{
     CFArray, CFData, CFRetained, CFURL, CGAffineTransform, CGPoint, CGRect,
 };
-use objc2_core_graphics::{CGBitmapContextCreate, CGContext, CGImageAlphaInfo, CGTextDrawingMode};
+use objc2_core_graphics::{
+    CGBitmapContextCreate, CGColor, CGColorSpace, CGContext, CGImageAlphaInfo, CGTextDrawingMode,
+    kCGColorSpaceSRGB,
+};
 use objc2_core_text::{
     CTFont, CTFontDescriptor, CTFontManagerCreateFontDescriptorsFromData,
     CTFontManagerCreateFontDescriptorsFromURL, CTFontOrientation, CTFontSymbolicTraits,
@@ -170,11 +179,6 @@ impl SystemRasterizer for CgRasterizer {
             reserve(0)?;
             return Ok(empty());
         }
-        // SAFETY: the font is live; reading its traits has no other effect.
-        let traits = unsafe { font.symbolic_traits() };
-        if traits.contains(CTFontSymbolicTraits::TraitColorGlyphs) {
-            return Err(GlyphError::UnsupportedGlyph);
-        }
         if ![left, right, bottom, top]
             .into_iter()
             .all(|v| v.is_finite() && v.abs() <= MAX_COORD)
@@ -184,6 +188,23 @@ impl SystemRasterizer for CgRasterizer {
         let (left, right, bottom, top) = (left.floor(), right.ceil(), bottom.floor(), top.ceil());
         let width = (right - left) as usize;
         let height = (top - bottom) as usize;
+        let placement = Placement {
+            left: left as i32,
+            top: top as i32,
+            width: width as u32,
+            height: height as u32,
+        };
+        let pen = Pen {
+            glyph,
+            skew,
+            embolden,
+            position: (origin.0 - left, origin.1 - bottom),
+        };
+        // SAFETY: the font is live; reading its traits has no other effect.
+        let traits = unsafe { font.symbolic_traits() };
+        if traits.contains(CTFontSymbolicTraits::TraitColorGlyphs) {
+            return color_glyph(&font, pen, placement, options.foreground, reserve);
+        }
         let bytes = width.checked_mul(height).ok_or(GlyphError::ImageBudget)?;
         reserve(bytes)?;
         let mut data = vec![0u8; bytes];
@@ -203,38 +224,118 @@ impl SystemRasterizer for CgRasterizer {
             )
         }
         .ok_or(GlyphError::ImageBudget)?;
-        draw(
-            &context,
-            &font,
-            glyph,
-            skew,
-            embolden,
-            (origin.0 - left, origin.1 - bottom),
-        );
+        draw(&context, &font, pen, None);
         drop(context);
         // The bitmap's first row is its top edge, so `data` is already top-down.
         Ok(Image {
-            placement: Placement {
-                left: left as i32,
-                top: top as i32,
-                width: width as u32,
-                height: height as u32,
-            },
+            placement,
             content: Content::Mask,
             data: data.into_boxed_slice(),
         })
     }
 }
 
-/// Draws `glyph` with its origin at `position` in the context's y-up pixels.
-fn draw(
-    context: &CGContext,
-    font: &CTFont,
+/// One glyph and how to draw it into its image.
+#[derive(Clone, Copy)]
+struct Pen {
     glyph: u16,
+    /// Synthetic slant as the text matrix's x shear.
     skew: f64,
+    /// Synthetic bold stroke width in pixels, or zero.
     embolden: f64,
+    /// The glyph origin in the context's y-up pixels.
     position: (f64, f64),
-) {
+}
+
+/// Rasterizes a glyph of a font with the color-glyphs trait, as described in
+/// the module documentation.
+///
+/// The budget is reserved for the RGBA image before any drawing; a glyph that
+/// turns out to be a mask keeps a quarter of it.
+fn color_glyph(
+    font: &CTFont,
+    pen: Pen,
+    placement: Placement,
+    foreground: [u8; 4],
+    reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
+) -> Result<Image, GlyphError> {
+    let pixels = (placement.width as usize)
+        .checked_mul(placement.height as usize)
+        .ok_or(GlyphError::ImageBudget)?;
+    let bytes = pixels.checked_mul(4).ok_or(GlyphError::ImageBudget)?;
+    reserve(bytes)?;
+    // SAFETY: the constant is a static CoreGraphics string.
+    let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))
+        .ok_or(GlyphError::ImageBudget)?;
+    let render = |ink: [f64; 4]| -> Result<Vec<u8>, GlyphError> {
+        let mut data = vec![0u8; bytes];
+        // SAFETY: `data` holds `width * height` premultiplied RGBA pixels with
+        // rows `4 * width` bytes apart, 8 bits per component in memory order,
+        // and outlives the context, which is dropped before it is returned.
+        let context = unsafe {
+            CGBitmapContextCreate(
+                data.as_mut_ptr().cast(),
+                placement.width as usize,
+                placement.height as usize,
+                8,
+                4 * placement.width as usize,
+                Some(&space),
+                CGImageAlphaInfo::PremultipliedLast.0,
+            )
+        }
+        .ok_or(GlyphError::ImageBudget)?;
+        let ink = CGColor::new_srgb(ink[0], ink[1], ink[2], ink[3]);
+        draw(&context, font, pen, Some(&ink));
+        drop(context);
+        Ok(data)
+    };
+    let black = render([0.0, 0.0, 0.0, 1.0])?;
+    let white = render([1.0, 1.0, 1.0, 1.0])?;
+    let fixed = black == white;
+    let pixels = black.as_chunks::<4>().0;
+    if !fixed && pixels.iter().all(|pixel| pixel[..3] == [0, 0, 0]) {
+        // Only the ink was drawn: its alpha is the coverage.
+        let mask = pixels.iter().map(|pixel| pixel[3]).collect::<Vec<_>>();
+        return Ok(Image {
+            placement,
+            content: Content::Mask,
+            data: mask.into_boxed_slice(),
+        });
+    }
+    let mut data = match fixed {
+        true => black,
+        false => render(foreground.map(|channel| f64::from(channel) / 255.0))?,
+    };
+    unpremultiply(&mut data);
+    Ok(Image {
+        placement,
+        content: Content::Color,
+        data: data.into_boxed_slice(),
+    })
+}
+
+/// Converts premultiplied RGBA bytes to straight alpha in place, rounding.
+fn unpremultiply(data: &mut [u8]) {
+    for pixel in data.as_chunks_mut::<4>().0 {
+        let alpha = u32::from(pixel[3]);
+        if alpha == 0 || alpha == 255 {
+            continue;
+        }
+        for channel in &mut pixel[..3] {
+            let straight = (u32::from(*channel) * 255 + alpha / 2) / alpha;
+            *channel = straight.min(255) as u8;
+        }
+    }
+}
+
+/// Draws the pen's glyph in `ink`, or in opaque gray for an alpha-only context.
+fn draw(context: &CGContext, font: &CTFont, pen: Pen, ink: Option<&CGColor>) {
+    let Pen {
+        glyph,
+        skew,
+        embolden,
+        position,
+    } = pen;
     let context_ref = Some(context);
     CGContext::set_should_antialias(context_ref, true);
     CGContext::set_allows_font_smoothing(context_ref, false);
@@ -244,7 +345,10 @@ fn draw(
     CGContext::set_allows_font_subpixel_quantization(context_ref, false);
     CGContext::set_should_subpixel_quantize_fonts(context_ref, false);
     // In an alpha-only context only the alpha of a color is stored.
-    CGContext::set_gray_fill_color(context_ref, 0.0, 1.0);
+    match ink {
+        Some(ink) => CGContext::set_fill_color_with_color(context_ref, Some(ink)),
+        None => CGContext::set_gray_fill_color(context_ref, 0.0, 1.0),
+    }
     CGContext::set_text_matrix(
         context_ref,
         CGAffineTransform {
@@ -257,7 +361,10 @@ fn draw(
         },
     );
     if embolden > 0.0 {
-        CGContext::set_gray_stroke_color(context_ref, 0.0, 1.0);
+        match ink {
+            Some(ink) => CGContext::set_stroke_color_with_color(context_ref, Some(ink)),
+            None => CGContext::set_gray_stroke_color(context_ref, 0.0, 1.0),
+        }
         CGContext::set_line_width(context_ref, embolden);
         CGContext::set_text_drawing_mode(context_ref, CGTextDrawingMode::FillStroke);
     }

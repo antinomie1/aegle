@@ -55,7 +55,7 @@ objc2-core-foundation = { version = "0.3.2", default-features = false, features 
     "std", "CFArray", "CFData", "CFCGTypes", "CFString", "CFURL",
 ] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
-    "std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage",
+    "std", "CGBitmapContext", "CGColor", "CGColorSpace", "CGContext", "CGImage",
 ] }
 objc2-core-text = { version = "0.3.2", default-features = false, features = [
     "std", "CTFont", "CTFontDescriptor", "CTFontManager", "CTFontTraits", "objc2-core-graphics",

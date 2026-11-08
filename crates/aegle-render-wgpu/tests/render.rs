@@ -1,9 +1,12 @@
-//! One explicit-adapter scenario: geometry, clips, blending, atlas recycling and
-//! frame failure, checked against the software renderer.
+//! One explicit-adapter scenario: geometry, clips, blending, mask and color
+//! glyph atlases, atlas recycling and frame failure, checked against the
+//! software renderer.
 #![cfg(feature = "text")]
 
 use aegle_render_wgpu::{Error, Options, Renderer};
-use aegle_scene::{Affine, Color, Rect, RoundedRect, Scene, SceneBuilder};
+use aegle_scene::{
+    Affine, Blob, Color, FontData, Glyph, GlyphRun, Point, Rect, RoundedRect, Scene, SceneBuilder,
+};
 use aegle_text::{TextStyle, TextSystem};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -124,6 +127,39 @@ fn geometry_text_atlas_recycling_and_failed_frames() -> Result {
         .filter(|p| p[0] != 250)
         .count();
     assert!(inked > 100, "text produced {inked} inked pixels");
+    for (i, (a, e)) in actual.iter().zip(&expected).enumerate() {
+        assert!(a.abs_diff(*e) <= 3, "byte {i}: GPU {a}, software {e}");
+    }
+
+    // A color strike (the fixture's 2×2 sbix glyph at twice its size, which
+    // still fits the small atlas) takes the color atlas and keeps its own
+    // colors under a white run color.
+    let mut builder = SceneBuilder::new();
+    builder.glyphs(GlyphRun::new(
+        FontData::new(
+            Blob::from(include_bytes!("../../../tests/assets/aegle-test-color.otf").to_vec()),
+            0,
+        ),
+        32.0,
+        Color::WHITE,
+        vec![],
+        vec![Glyph {
+            id: 2,
+            position: Point::new(8.0, 60.0),
+        }],
+    ));
+    let strike = builder.finish();
+    let (actual, expected) = (gpu(&mut renderer, &strike, None)?, software(&strike, None)?);
+    let green = |pixels: &[u8]| {
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| p[1] > 200 && p[0] < 60 && p[2] < 60)
+            .count()
+    };
+    assert!(green(&expected) > 0, "the strike is drawn in color");
+    assert_eq!(green(&actual), green(&expected));
     for (i, (a, e)) in actual.iter().zip(&expected).enumerate() {
         assert!(a.abs_diff(*e) <= 3, "byte {i}: GPU {a}, software {e}");
     }
