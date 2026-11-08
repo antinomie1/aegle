@@ -17,7 +17,7 @@ use aegle_platform::{
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
     NSApplication, NSBackingStoreType, NSCursor, NSPasteboardTypeFileURL, NSPasteboardTypeString,
-    NSWindow, NSWindowStyleMask,
+    NSWindow, NSWindowOcclusionState, NSWindowStyleMask,
 };
 use objc2_foundation::{MainThreadMarker, NSArray, NSPoint, NSRect, NSSize, NSString};
 use raw_window_handle::{
@@ -297,6 +297,16 @@ impl MacOs {
         // A window must be on screen before the compositor gives it drawables.
         native.show(self.mtm);
         if !draw(info.buffer).map_err(Error::Draw)? {
+            // Metal gives no drawable to a window that is not visible, which
+            // includes a newly ordered one until the window server confirms
+            // it; its occlusion callback asks for the frame again.
+            if !native
+                .window
+                .occlusionState()
+                .contains(NSWindowOcclusionState::Visible)
+            {
+                native.occluded.set(true);
+            }
             return Ok(false);
         }
         native.dirty.set(false);

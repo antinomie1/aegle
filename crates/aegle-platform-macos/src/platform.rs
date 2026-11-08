@@ -16,37 +16,41 @@ impl MacOs {
     /// Waits for native work until `timeout` elapses or, without one, until
     /// something arrives, then returns. Frames that come due while waiting
     /// are queued before returning, so animation keeps the screen's rate
-    /// without an idle timer.
+    /// without an idle timer. Every call takes at least one turn of the run
+    /// loop, even with events already queued: a host that redraws every turn
+    /// must not starve AppKit, whose turns commit the window's layers and
+    /// deliver its occlusion changes.
     pub(crate) fn dispatch(&mut self, timeout: Option<Duration>) -> Result<()> {
         let deadline = timeout.and_then(|timeout| Instant::now().checked_add(timeout));
         loop {
             // Queues due frames; the next one bounds the wait below.
             let next_frame = self.refresh();
-            if !self.shared.events.borrow().is_empty() {
-                return Ok(());
-            }
-            let wait = [
-                deadline.map(|deadline| deadline.saturating_duration_since(Instant::now())),
-                next_frame.map(|frame| frame.saturating_duration_since(Instant::now())),
-            ]
-            .into_iter()
-            .flatten()
-            .min();
-            if wait.is_some_and(|left| left.is_zero()) {
-                // The earliest deadline is now: report the frames it held.
-                self.refresh();
-                return Ok(());
-            }
-            let date = wait.map(|left| NSDate::dateWithTimeIntervalSinceNow(left.as_secs_f64()));
+            let wait = if self.shared.events.borrow().is_empty() {
+                [
+                    deadline.map(|deadline| deadline.saturating_duration_since(Instant::now())),
+                    next_frame.map(|frame| frame.saturating_duration_since(Instant::now())),
+                ]
+                .into_iter()
+                .flatten()
+                .min()
+            } else {
+                Some(Duration::ZERO)
+            };
+            // A nil date would not wait at all.
+            let date = match wait {
+                Some(left) => NSDate::dateWithTimeIntervalSinceNow(left.as_secs_f64()),
+                None => NSDate::distantFuture(),
+            };
             let event = self.app.nextEventMatchingMask_untilDate_inMode_dequeue(
                 NSEventMask::Any,
-                date.as_deref(),
+                Some(&date),
                 // SAFETY: a static AppKit run-loop mode constant.
                 unsafe { NSDefaultRunLoopMode },
                 true,
             );
             let Some(event) = event else {
-                // The wait ended with nothing to translate.
+                // The wait ended with nothing to translate; report the frames
+                // its deadline held.
                 self.refresh();
                 return Ok(());
             };
@@ -62,8 +66,9 @@ impl MacOs {
         }
     }
 
-    /// Reports pending frames and system preferences. Returns when the next
-    /// frame becomes due, if a window waits for one.
+    /// Queues due frames. An occluded window waits for its occlusion callback
+    /// instead. Returns when the next frame becomes due, if a window waits
+    /// for one.
     pub(crate) fn refresh(&mut self) -> Option<Instant> {
         let now = Instant::now();
         let mut next: Option<Instant> = None;
@@ -73,17 +78,6 @@ impl MacOs {
                 (Some(due), None) => Some(due),
                 (None, next) => next,
             };
-            // A window ordered in from another space reports itself visible
-            // again through its occlusion callback; a hidden or minimized one
-            // must not present.
-            if native.shown.get()
-                && native.occluded.get()
-                && native.window.isVisible()
-                && !native.window.isMiniaturized()
-            {
-                native.occluded.set(false);
-                native.dirty.set(true);
-            }
         }
         next
     }
