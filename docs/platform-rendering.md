@@ -97,8 +97,9 @@ pub trait SurfacePlatform: Platform {
 * **OLE 拖放**：注册 `IDropTarget`，支持 `CF_HDROP` 与 `CF_UNICODETEXT`。
 
 ### 4. macOS 后端 (`aegle-platform-macos`)
-* **AppKit 循环**：以截止时间驱动 `nextEventMatchingMask:`，不进入 `NSApplicationMain`。
-* **呈现与输入**：`CGImage` 软件呈现；`NSTextInputClient` 协议映射文本编辑与预编辑；`CAMetalLayer` 原生租约。
+* **AppKit 循环**：以截止时间驱动 `nextEventMatchingMask:`（无截止时间时等到 `distantFuture`），不进入 `NSApplicationMain`；每次分发至少运行一轮 run loop，持续重绘也不会饿死 AppKit。
+* **呈现与输入**：`CGImage` 软件呈现；`NSTextInputClient` 协议映射文本编辑与预编辑；`CAMetalLayer` 原生租约。Metal 在窗口不可见时（包括刚排到前台、窗口服务器尚未确认时）不给 drawable，窗口随即等待遮挡回调再重绘。
+* **透明**：`WindowOptions::transparent` 使窗口非不透明、背景透明，wgpu 以非不透明 `CAMetalLayer`（wgpu 称 `PostMultiplied`，Core Animation 按预乘合成）呈现预乘 alpha。
 
 ---
 

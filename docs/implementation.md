@@ -79,9 +79,9 @@
   * Windows UI Automation 无障碍客户端节点属性查询。
 
 ### 4. macOS 平台
-* **状态**：已完成代码编写并在 Linux 宿主上完成交叉编译检查（`cargo check`、`cargo clippy`、`cargo test --no-run`）。
-* **已实现边界**：AppKit 窗口、`NSTextInputClient`、CoreText + CoreGraphics 字形渲染、`CAMetalLayer` 租约。
-* **未实机运行**：尚未在 Apple 硬件实机上执行渲染、输入与 VoiceOver 验收。
+* **状态**：已在 macOS 15（x86_64，Metal）实机运行：`gpu_texture` 示例与 Axo 终端经 wgpu 正常显示、Retina 2× 缩放、空闲 CPU 0%；`opacity` 下的透明窗口（`WgpuOptions::transparent`）合成正确。
+* **已实现边界**：AppKit 窗口、`NSTextInputClient`、CoreText + CoreGraphics 字形渲染（`aegle-text/tests/coretext.rs` 覆盖通用字族、行基线、CJK 回退与光栅化）、`CAMetalLayer` 租约与透明窗口。
+* **未验收**：输入法、拖放、VoiceOver 与软件（CGImage）呈现尚未实机验收；`aegle-text` 的 `document`、`editor`、`paragraph` 测试在 CoreText 下仍有 4 项失败（硬换行处光标移动、单行重排、缺字计数、无字体 `TextSystem::new()`）。
 
 ---
 
@@ -91,7 +91,7 @@
    * SDL3 后端受限于上游 API，不支持拖动发起（只能作为放置目标）、无触摸板松手惯性（缺少滚动结束事件），输入法仅支持候选框定位与提交，不支持传递周边文字。
    * 真实触摸屏多点手势与压感尚未在物理硬件上验收。
 2. **多平台实机**：
-   * macOS 平台目前仅为交叉编译通过，需要实机环境补齐渲染、高分屏缩放与输入验收。
+   * macOS 平台已实机验证 wgpu 呈现与文字渲染，输入法、拖放与 VoiceOver 尚待验收，CoreText 编辑器语义仍有上述 4 项测试失败。
    * Windows ARM64 尚未完成实机编译与驱动兼容性核验。
 3. **桌面 Shell 表面**：
    * Win32 与 macOS 未实现弹出层（创建返回 `Unsupported`）与输出枚举；`set_layer` 仅 Wayland 后端可用（其他平台无层）。
