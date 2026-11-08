@@ -85,7 +85,8 @@
 * **输出与弹出层**：`cargo test -p aegle-platform-macos --test native -- --ignored` 在实机 GUI 会话通过（该目标 `harness = false`，在主线程运行；此前的 libtest 形式不在主线程，从未能运行）：屏幕列为输出（主屏位于原点、ID 互异）；抓取弹出层取得键盘焦点；弹出层上的被动弹出层；空锚点、层与弹出层同设被拒；在被动子弹出层内按下不撤销，在父窗口按下只对抓取弹出层发一次 `Close` 且父窗口仍收到该按下；父窗口与有子弹出层的弹出层先移除被拒。`tests/placement.rs` 覆盖四个方向、翻转、滑动与超出屏幕的弹出层。
 * **桌面服务**：`cargo test -p aegle-desktop --test macos -- --ignored` 在实机通过（`harness = false`，主线程，由 `aegle-platform-macos` 的循环送达事件；连续 3 次通过）：主线程外创建被拒；保存面板按请求显示标题、文件名与扩展名过滤，在面板就绪后经 HID 输入 Return 返回所选文件夹下的 `notes.txt`；打开面板允许多选、无过滤，Escape 返回 `None`；状态栏按钮带图标与更新后的提示，单击报 `TrayActivated`，移除后不再存在；Ctrl+Alt+Shift+F19 经 HID 真实按下（含 Fn，与 Mac 键盘一致）报 `Shortcut`，F24 报 `Unavailable`，重绑与清空后无事件；`notify` 报 `Unavailable`。进程外面板在显示后需片刻才接收按键，测试等待约 2 秒。
 * **软件呈现与自动释放池**：tiny-skia 下 `showcase` 经 CGImage 呈现正确（Retina 2×、中日韩文字、全部控件，截屏核对）。平台循环不经 `-[NSApplication run]`，此前从不清空自动释放池，绘制保留的每帧图像永不释放：`showcase`（含一直转动的不定进度条）物理内存每秒增长约 300 MB，十余秒到 9.4 GB。现在每轮事件与每次呈现各用一个自动释放池，物理内存稳定在约 113 MB（`vmmap` 物理占用）。release 构建下无动画的 `hello` 空闲 CPU 0%、43 MB；`showcase` 动画时约 30% CPU，主要花在每帧把整幅缓冲拷入新 `CFData`。
-* **未验收**：输入法、拖放、VoiceOver 尚未实机验收；应用失去激活时撤销抓取弹出层未自动化测试。
+* **NSAccessibility**：`controls`（`accessibility` 特性）由外部进程经 AX API（VoiceOver 所用的同一接口）检查：首次查询得到占位、发布后得到完整树（静态文本、`AXTextArea`、各按钮及标题）；`AXPress` 走与指针相同的路径（“Clear text”清空编辑器）；多行编辑器经 `AXNumberOfCharacters`、`AXStringForRange`、`AXSelectedTextRange`、`AXInsertionPointLineNumber` 读出含中日韩文字的全文、光标与行号。此前文字 run 的 `character_lengths` 按每字符 1 字节填写，而 AccessKit 以 UTF-8 字节切分，读取含多字节字符的编辑器时 panic 使应用崩溃（各平台同一缺陷）；现按字节长度填写，`aegle-text/tests/accessibility.rs` 检查其与 run 文字一致。未用 VoiceOver 语音实测。
+* **未验收**：输入法、拖放尚未实机验收；应用失去激活时撤销抓取弹出层未自动化测试。
 
 ---
 
@@ -99,6 +100,7 @@
    * Windows ARM64 尚未完成实机编译与驱动兼容性核验。
 3. **桌面 Shell 表面**：
    * Win32 未实现弹出层（创建返回 `Unsupported`）与输出枚举；`set_layer` 仅 Wayland 后端可用（其他平台无层）。
+   * 文本编辑器不处理辅助技术的 `SetValue` 与 `ReplaceSelectedText`（各平台相同）：读屏用户的键盘与输入法输入不受影响，但经辅助接口直接写值（如 macOS `AXValue` 赋值）被忽略。
    * macOS 弹出层只在创建时定位，父窗口移动时整体跟随，但不随锚点或屏幕变化重新翻转。
    * SDL3 弹出层不按锚定矩形翻转，只由 SDL 滑回屏幕内；显示器名称取决于 SDL 驱动，不保证为连接器名。
    * 控件库的 `Popup`/`Menu`/`Dropdown` 仍是窗口内浮层，尚未改用原生弹出层；标记语言没有弹出层元素，原生弹出层只能由 Rust 的 `Window::popup` 打开。

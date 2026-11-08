@@ -61,6 +61,17 @@ fn selection_round_trip_obeys_run_boundaries_readonly_and_composition() {
     assert_eq!(node.role(), Role::MultilineTextInput);
     let text: String = update.nodes.iter().filter_map(|(_, n)| n.value()).collect();
     assert_eq!(text, editor.display_text());
+    // Character lengths are UTF-8 byte counts that tile each run's value, as
+    // AccessKit slices them; one per character.
+    for (_, run) in &update.nodes {
+        let value = run.value().unwrap();
+        let lengths = run.character_lengths();
+        assert_eq!(
+            lengths.iter().map(|&l| usize::from(l)).sum::<usize>(),
+            value.len()
+        );
+        assert_eq!(lengths.len(), value.chars().count());
+    }
     let saved = *node.text_selection().unwrap();
     system
         .edit(&mut editor)

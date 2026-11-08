@@ -139,7 +139,10 @@ impl EditorDriver<'_> {
                 let run_id = next_node_id();
                 let mut run_node = Node::new(Role::TextRun);
                 run_node.set_value(run_text.to_string());
-                run_node.set_character_lengths(vec![1; chars].into_boxed_slice());
+                // AccessKit measures each character in UTF-8 bytes and slices
+                // the run's value by them.
+                let lengths: Box<[u8]> = run_text.chars().map(|c| c.len_utf8() as u8).collect();
+                run_node.set_character_lengths(lengths);
                 run_node.set_foreground_color(foreground);
                 let underlined = doc
                     .compose
