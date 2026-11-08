@@ -16,8 +16,8 @@ use aegle_platform::{
 };
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
-    NSApplication, NSBackingStoreType, NSCursor, NSPasteboardTypeFileURL, NSPasteboardTypeString,
-    NSWindow, NSWindowOcclusionState, NSWindowStyleMask,
+    NSApplication, NSBackingStoreType, NSColor, NSCursor, NSPasteboardTypeFileURL,
+    NSPasteboardTypeString, NSWindow, NSWindowOcclusionState, NSWindowStyleMask,
 };
 use objc2_foundation::{MainThreadMarker, NSArray, NSPoint, NSRect, NSSize, NSString};
 use raw_window_handle::{
@@ -138,8 +138,10 @@ impl MacOs {
             .ok_or(Error::InvalidWindow)
     }
 
-    /// Creates a hidden opaque titled window; the first successful frame
-    /// shows it, so adapters and GPU surfaces can attach before that.
+    /// Creates a hidden titled window, opaque unless `options.transparent`;
+    /// the first successful frame shows it, so adapters and GPU surfaces can
+    /// attach before that. A transparent window shows only what a GPU layer
+    /// with alpha draws: its own background is clear.
     pub(crate) fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId> {
         if options.layer.is_some() {
             return Err(Error::Unsupported("layer surfaces"));
@@ -179,6 +181,10 @@ impl MacOs {
         };
         // SAFETY: the window is owned by `Native`, not by AppKit's close.
         unsafe { window.setReleasedWhenClosed(false) };
+        if options.transparent {
+            window.setOpaque(false);
+            window.setBackgroundColor(Some(&NSColor::clearColor()));
+        }
         window.setTitle(&NSString::from_str(options.title));
         window.setAcceptsMouseMovedEvents(true);
         let native = Rc::new_cyclic(|weak| Native {

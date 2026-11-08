@@ -303,11 +303,13 @@ pub(crate) fn open(
     ui.set_double_click(runtime.double_click(), 4.0);
     ui.resize(Size::new(options.width as f32, options.height as f32));
     let app_id = runtime.options.app_id.clone();
-    // Only the Vulkan renderer presents a Win32 window's alpha, through
-    // DirectComposition; wgpu keeps an ordinary native surface.
+    // Vulkan presents a Win32 window's alpha through DirectComposition; wgpu
+    // presents it on macOS, where the window composites its Metal layer.
     #[cfg(feature = "vulkan")]
     let transparent = runtime.options.vulkan.transparent;
-    #[cfg(not(feature = "vulkan"))]
+    #[cfg(feature = "wgpu")]
+    let transparent = cfg!(target_os = "macos") && runtime.options.wgpu.transparent;
+    #[cfg(not(any(feature = "vulkan", feature = "wgpu")))]
     let transparent = false;
     let id = runtime
         .backend

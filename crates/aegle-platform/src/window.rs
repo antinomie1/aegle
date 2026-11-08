@@ -42,7 +42,9 @@ pub struct WindowOptions<'a> {
     pub popup: Option<PopupOptions>,
     /// The renderer presents per-pixel alpha that the window system composites
     /// with what lies behind the window. Win32 then gives the window no
-    /// redirection surface, so only a DirectComposition presenter shows it.
+    /// redirection surface, so only a DirectComposition presenter shows it;
+    /// macOS makes the window non-opaque with a clear background, so only a
+    /// GPU layer with alpha shows it.
     pub transparent: bool,
 }
 

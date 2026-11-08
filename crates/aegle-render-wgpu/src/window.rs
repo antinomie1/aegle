@@ -94,8 +94,13 @@ impl<W: HasDisplayHandle + HasWindowHandle> WindowRenderer<W> {
             .find(|format| !format.is_srgb())
             .ok_or(Error::Unsupported("non-sRGB surface format"))?;
         let has = |mode| capabilities.alpha_modes.contains(&mode);
+        // Metal names a non-opaque `CAMetalLayer` post-multiplied, but Core
+        // Animation composites every layer's contents as premultiplied.
+        let metal = gpu.adapter.get_info().backend == wgpu::Backend::Metal;
         let alpha = if options.transparent && has(CompositeAlphaMode::PreMultiplied) {
             CompositeAlphaMode::PreMultiplied
+        } else if options.transparent && metal && has(CompositeAlphaMode::PostMultiplied) {
+            CompositeAlphaMode::PostMultiplied
         } else if has(CompositeAlphaMode::Opaque) {
             CompositeAlphaMode::Opaque
         } else {
@@ -213,7 +218,11 @@ impl<W> WindowRenderer<W> {
 
     /// Whether the swapchain preserves premultiplied window alpha.
     pub fn supports_transparency(&self) -> bool {
-        self.alpha == CompositeAlphaMode::PreMultiplied
+        // Only Metal's non-opaque layer is chosen as post-multiplied.
+        matches!(
+            self.alpha,
+            CompositeAlphaMode::PreMultiplied | CompositeAlphaMode::PostMultiplied
+        )
     }
 
     /// Current physical extent, or `[0, 0]` while suspended or not yet configured.

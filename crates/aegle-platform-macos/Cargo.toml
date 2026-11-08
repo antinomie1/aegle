@@ -19,7 +19,7 @@ raw-window-handle = "0.6.2"
 block2 = "0.6.2"
 objc2 = "0.6.4"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSDate", "NSEnumerator", "NSGeometry", "NSNotification", "NSObject", "NSOperation", "NSRange", "NSRunLoop", "NSString", "NSProcessInfo"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-core-graphics", "NSApplication", "NSCursor", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSAccessibility", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSMenu", "NSMenuItem", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSScreen", "NSTextInputClient", "NSTextInputContext", "NSTrackingArea", "NSView", "NSWindow", "NSWorkspace", "NSAppearance", "NSRunningApplication"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-core-graphics", "NSApplication", "NSCursor", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSAccessibility", "NSColor", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSMenu", "NSMenuItem", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSScreen", "NSTextInputClient", "NSTextInputContext", "NSTrackingArea", "NSView", "NSWindow", "NSWorkspace", "NSAppearance", "NSRunningApplication"] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFData", "CFRunLoop"] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGColorSpace", "CGContext", "CGDataProvider", "CGImage", "CGGeometry"] }
 
