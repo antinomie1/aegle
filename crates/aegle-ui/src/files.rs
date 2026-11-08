@@ -10,6 +10,7 @@ use crate::{Node, Result, State, Ui};
 
 /// What a native file dialog chooses.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FileMode {
     /// One existing file.
     #[default]

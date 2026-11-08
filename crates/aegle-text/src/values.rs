@@ -112,6 +112,7 @@ impl Slant {
 
 /// A CSS generic family that application fonts can stand in for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum GenericFamily {
     /// `serif`.
     Serif,

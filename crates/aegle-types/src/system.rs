@@ -16,6 +16,7 @@ pub struct Preferences {
 /// A mouse button other than the primary one, which custom controls may use
 /// for context actions, panning or navigation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PointerButton {
     /// Usually the right button.
     Secondary,

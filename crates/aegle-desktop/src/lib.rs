@@ -40,6 +40,7 @@ pub use shortcut::Trigger;
 
 /// What the desktop reports. Ids are those the requests returned.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Event {
     /// A file dialog closed: the chosen paths, or `None` when cancelled.
     Files {
@@ -121,6 +122,7 @@ pub struct Icon<'a> {
 
 /// A tray menu entry.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub enum MenuItem<'a> {
     /// A command, or with `checked` a check item, reported by its `id`.
     Item {

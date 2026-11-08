@@ -35,6 +35,7 @@ pub trait Element: 'static {
 
 /// A literal or bound value on its way to an element's constructor or setter.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Arg<'a> {
     /// `bool`.
     Bool(bool),

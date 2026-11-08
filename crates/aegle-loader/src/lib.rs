@@ -111,6 +111,7 @@ macro_rules! element {
 
 /// A runtime value of a state, parameter or expression.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Data {
     /// `bool`.
     Bool(bool),

@@ -16,6 +16,7 @@ use crate::{Node, Ui, callbacks::Handler, state::State};
 
 /// What a drop handler is told.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum DropEvent {
     /// A drag entered the control or a descendant without its own handler.
     Enter,

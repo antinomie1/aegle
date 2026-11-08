@@ -95,6 +95,7 @@ pub(crate) fn check<T: TokenType>(token: Token<T>) -> bool {
 /// the background gradient.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum ColorSlot {
     Background,
     Foreground,
@@ -117,6 +118,7 @@ pub enum ColorSlot {
 /// gap, as `Node::set_padding` and `Node::set_gap` set them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum LengthSlot {
     BorderWidth,
     Radius,
@@ -128,6 +130,7 @@ pub enum LengthSlot {
 
 /// Any property that can follow a token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum TokenSlot {
     /// A color property.
     Color(ColorSlot),

@@ -26,6 +26,7 @@ pub enum Phase {
 
 /// The input an [`InputEvent`] carries.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub enum InputKind<'a> {
     /// A pointer transition in logical window coordinates, with the press
     /// count already counted.

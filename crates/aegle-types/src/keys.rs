@@ -14,6 +14,7 @@ pub struct Modifiers {
 /// Logical keys used by default controls. Platform-specific shortcuts can be
 /// handled before this normalization; text comes separately from key identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Key {
     /// A printable shortcut identity; may differ from produced text.
     Character(char),

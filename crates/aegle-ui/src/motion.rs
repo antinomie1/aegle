@@ -8,6 +8,7 @@ use std::{collections::HashMap, time::Duration};
 
 /// A presented value whose transition timing can be set on its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum TransitionProperty {
     /// Every paint value of the appearance: colors, border and focus widths,
     /// and radius.

@@ -9,6 +9,7 @@ use std::time::Duration;
 /// Bézier curves whose control points leave `0..=1` vertically and
 /// underdamped springs overshoot, so their progress briefly leaves `0..=1`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub enum Easing {
     /// Constant interpolation speed.
     #[default]

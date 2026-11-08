@@ -12,6 +12,7 @@ use crate::{
 
 /// Direction or destination for keyboard/assistive cursor motion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Movement {
     /// Previous visual cluster.
     Left,

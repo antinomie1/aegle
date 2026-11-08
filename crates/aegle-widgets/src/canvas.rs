@@ -26,6 +26,7 @@ handle! {
 
 /// Input received by an interactive canvas, in its local logical coordinates.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CanvasEvent {
     /// The primary button went down; the canvas captures the pointer and
     /// takes focus until the matching release or cancel.

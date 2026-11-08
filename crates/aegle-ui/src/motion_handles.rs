@@ -10,6 +10,7 @@ use std::time::Duration;
 
 /// An explicit animation of one presented property, see [`Node::animate`].
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Animate {
     /// The translation `Node::set_offset` sets.
     Offset(Animation<Point>),

@@ -10,6 +10,7 @@ use crate::{Theme, ThemeOverride};
 
 /// The kinds of value a token holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum TokenKind {
     /// An unpremultiplied sRGB color.
     Color,
@@ -56,6 +57,7 @@ impl Default for Font {
 
 /// A token value of any kind.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum TokenValue {
     /// A color.
     Color(Color),
@@ -96,6 +98,7 @@ impl TokenValue {
 /// How a token's value follows the theme when nothing overrides it: a pure
 /// function, like a [`crate::Skin`], so dark and light themes can differ.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub enum TokenDefault {
     /// A color from the theme.
     Color(fn(&Theme) -> Color),

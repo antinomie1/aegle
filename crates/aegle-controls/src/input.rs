@@ -59,6 +59,7 @@ pub struct PointerInput {
 
 /// Platform-neutral input delivered after routing and default prevention.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub enum Input<'a> {
     /// Primary-pointer interaction.
     Pointer(PointerInput),
@@ -95,6 +96,7 @@ pub enum Input<'a> {
 
 /// Semantic result independent of the input device.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Action {
     /// Button activation.
     Activate,

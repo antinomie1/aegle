@@ -2,6 +2,7 @@
 
 /// A D-Bus value.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Value {
     /// `y`
     Byte(u8),
