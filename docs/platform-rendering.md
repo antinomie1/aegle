@@ -11,7 +11,7 @@ Aegle 的窗口系统接入（平台）与图形绘制（渲染器）分属不�
 | **Linux** | **`aegle-platform-sdl3`** | **默认** | 软件 / Vulkan / wgpu | 运行时加载 `libSDL3.so.0`；自动选 Wayland/X11；无 layer-shell；弹出菜单/提示（只滑动不翻转）；列出显示器；只收拖放 |
 | **Linux** | **`aegle-platform-wayland`** | 可选 (`wayland`) | 软件 / Vulkan / wgpu | 原生 Wayland 客户端（SCTK）；layer-shell 面板（指定输出、原地改放置）、xdg_popup、输出枚举、双向拖放、text-input-v3 周边文字 |
 | **Windows** | **`aegle-platform-win32`** | 原生默认 | 软件 (GDI) / Vulkan / wgpu | Win32 消息循环、DPI 感知、TSF 文本存储输入法、OLE 拖放；弹出层与输出枚举返回 `Unsupported` |
-| **macOS** | **`aegle-platform-macos`** | 原生默认 | 软件 (CGImage) / wgpu (Metal) | AppKit 窗口、NSTextInputClient、NSPasteboard、NSDragging；弹出层与输出枚举返回 `Unsupported` |
+| **macOS** | **`aegle-platform-macos`** | 原生默认 | 软件 (CGImage) / wgpu (Metal) | AppKit 窗口、NSTextInputClient、NSPasteboard、NSDragging；子窗口弹出层（翻转与滑动）、屏幕即输出；无层 |
 
 > **Linux X11 说明**：Aegle 自身不实现 X11 客户端协议。默认的 SDL3 后端会让 SDL 自行选择 Wayland 或 X11 驱动，因此同一二进制可附带在纯 X11 桌面上运行。
 
@@ -99,6 +99,8 @@ pub trait SurfacePlatform: Platform {
 ### 4. macOS 后端 (`aegle-platform-macos`)
 * **AppKit 循环**：以截止时间驱动 `nextEventMatchingMask:`（无截止时间时等到 `distantFuture`），不进入 `NSApplicationMain`；每次分发至少运行一轮 run loop，持续重绘也不会饿死 AppKit。
 * **呈现与输入**：`CGImage` 软件呈现；`NSTextInputClient` 协议映射文本编辑与预编辑；`CAMetalLayer` 原生租约。Metal 在窗口不可见时（包括刚排到前台、窗口服务器尚未确认时）不给 drawable，窗口随即等待遮挡回调再重绘。
+* **输出**：`NSScreen.screens` 即输出，ID 为 `CGDirectDisplayID`，名称为系统本地化的显示器名（无连接器名，`description` 为空）；位置由 AppKit 左下原点换算为主屏左上原点的逻辑坐标。`NSApplicationDidChangeScreenParametersNotification` 合并为一个 `Event::Outputs`。
+* **弹出层**：无边框 `NSWindow`，作为父窗口的子窗口随其移动、排序与最小化。创建时一次定位：锚定矩形换算到屏幕后由 `popup_origin` 放在请求一侧，该侧越出父窗口所在屏幕的可见区域且对侧放得下时翻转，再沿两轴滑入可见区域（与 `xdg_positioner` 的 flip + slide 一致，规则在 `tests/placement.rs` 测试）。抓取弹出层显示时成为 key 窗口；AppKit 没有弹出抓取，平台自己撤销：在弹出链（自身及由它打开的弹出层）之外的窗口按下，或应用失去激活时，对其发一次 `Close`，由内向外；该次按下仍正常投递。被动弹出层从不成为 key。父窗口有未移除的弹出层时不能移除（`InvalidRole`）。
 * **透明**：`WindowOptions::transparent` 使窗口非不透明、背景透明，wgpu 以非不透明 `CAMetalLayer`（wgpu 称 `PostMultiplied`，Core Animation 按预乘合成）呈现预乘 alpha。
 
 ---

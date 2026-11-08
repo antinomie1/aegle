@@ -51,6 +51,10 @@ pub(crate) struct Native {
     pub drag_at: Cell<Option<Point>>,
     /// The latest mouse press or drag, which authorizes a drag session.
     pub last_mouse: RefCell<Option<Retained<NSEvent>>>,
+    /// The window a popup is attached to; `None` for an ordinary window.
+    pub parent: Option<Rc<Native>>,
+    /// Whether a popup grabs the keyboard, as a menu does.
+    pub grab: bool,
 }
 
 /// Milliseconds of an event's timestamp, wrapping like the contract's times.
@@ -207,6 +211,11 @@ impl Native {
     /// accessibility adapters and GPU surfaces attach while it is hidden.
     pub fn show(&self, mtm: MainThreadMarker) {
         if self.shown.replace(true) {
+            return;
+        }
+        if let Some(parent) = &self.parent {
+            self.show_popup(parent);
+            self.refresh();
             return;
         }
         let app = NSApplication::sharedApplication(mtm);

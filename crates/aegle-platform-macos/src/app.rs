@@ -9,7 +9,9 @@ use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
     NSApplicationTerminateReply, NSMenu, NSMenuItem,
 };
-use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSProcessInfo, NSString};
+use objc2_foundation::{
+    MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSProcessInfo, NSString,
+};
 use std::rc::Rc;
 
 define_class!(
@@ -43,6 +45,12 @@ define_class!(
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
+        /// Another application took over: grabbing popups close, as menus do.
+        #[unsafe(method(applicationDidResignActive:))]
+        fn did_resign_active(&self, _notification: &NSNotification) {
+            self.ivars().dismiss(None);
+        }
+
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
         fn terminate_after_last_window(&self, _sender: &NSApplication) -> bool {
             false

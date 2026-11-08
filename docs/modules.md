@@ -25,7 +25,7 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 | **aegle-platform-sdl3** | Linux 默认窗口后端：窗口与弹出层生命周期、显示器枚举、输入分发、系统光标、文本输入、剪贴板、拖入、软件呈现与 GPU 租约 | types, platform, portal |
 | **aegle-platform-wayland** | Linux 原生窗口客户端：xdg-shell、xdg_popup、wlr layer-shell（指定输出、原地改放置）、输出枚举、text-input-v3（周边文字与选区）、双向拖放、SHM 与 GPU 租约 | types, platform, portal |
 | **aegle-platform-win32** | Windows 原生窗口后端：Win32 窗口、DPI 动态感知、TSF 文本存储输入法、OLE 拖放、GDI 呈现与 HWND 租约 | types, platform |
-| **aegle-platform-macos** | macOS 原生窗口后端：AppKit 窗口、NSTextInputClient、NSPasteboard、NSDragging、CGImage 呈现与 Metal 租约 | types, platform |
+| **aegle-platform-macos** | macOS 原生窗口后端：AppKit 窗口与子窗口弹出层、屏幕输出、NSTextInputClient、NSPasteboard、NSDragging、CGImage 呈现与 Metal 租约 | types, platform |
 | **aegle-portal** | Linux 桌面 portal（`org.freedesktop.portal.Settings`）外观偏好读取与 `SettingChanged` 监听 | types, dbus |
 | **aegle-dbus** | Linux 会话总线轻量级客户端：认证、Hello、消息编解码，支持跨线程发送与阻塞/非阻塞读取 | 无 |
 | **aegle-desktop** | 桌面级服务：文件选择对话框、系统通知、托盘图标与菜单、全局快捷键（Linux 经 portal/D-Bus，Windows 经 Win32 API） | Linux: dbus; Windows: Win32 |

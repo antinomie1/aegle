@@ -6,6 +6,8 @@ use crate::{
     frame::Frame,
     ime::Composition,
     native::Native,
+    outputs::ScreenObserver,
+    popup::{self, Popup},
     preferences::{self, Observer},
     shared::Shared,
     view::View,
@@ -48,6 +50,7 @@ pub struct MacOs {
     pub(crate) waker: Option<crate::wake::Waker>,
     _delegate: Retained<AppDelegate>,
     _observer: Observer,
+    _screens: ScreenObserver,
 }
 
 /// Owning main-thread lease on a window's native handles; keeps the view and
@@ -127,6 +130,7 @@ impl MacOs {
             waker: None,
             _delegate: app.1,
             _observer: Observer::new(mtm, shared.clone()),
+            _screens: ScreenObserver::new(shared.clone()),
             shared,
         })
     }
@@ -138,17 +142,24 @@ impl MacOs {
             .ok_or(Error::InvalidWindow)
     }
 
-    /// Creates a hidden titled window, opaque unless `options.transparent`;
-    /// the first successful frame shows it, so adapters and GPU surfaces can
-    /// attach before that. A transparent window shows only what a GPU layer
-    /// with alpha draws: its own background is clear.
+    /// Creates a hidden titled window, or a borderless popup beside its
+    /// parent's anchor, opaque unless `options.transparent`; the first
+    /// successful frame shows it, so adapters and GPU surfaces can attach
+    /// before that. A transparent window shows only what a GPU layer with
+    /// alpha draws: its own background is clear.
     pub(crate) fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId> {
+        if options.layer.is_some() && options.popup.is_some() {
+            return Err(Error::InvalidRole(
+                "a window is a layer or a popup, not both",
+            ));
+        }
         if options.layer.is_some() {
             return Err(Error::Unsupported("layer surfaces"));
         }
-        if options.popup.is_some() {
-            return Err(Error::Unsupported("popup surfaces"));
-        }
+        let parent = match &options.popup {
+            Some(popup) => Some(self.popup_parent(popup)?),
+            None => None,
+        };
         let PixelSize { width, height } = options.size;
         if width == 0 || height == 0 || width > MAX_EDGE || height > MAX_EDGE {
             return Err(Error::InvalidSize);
@@ -165,19 +176,25 @@ impl MacOs {
             NSPoint::new(0.0, 0.0),
             NSSize::new(f64::from(width), f64::from(height)),
         );
-        let style = NSWindowStyleMask::Titled
-            | NSWindowStyleMask::Closable
-            | NSWindowStyleMask::Miniaturizable
-            | NSWindowStyleMask::Resizable;
-        // SAFETY: a standard titled window with a buffered backing store.
-        let window = unsafe {
-            NSWindow::initWithContentRect_styleMask_backing_defer(
-                mtm.alloc(),
-                content,
-                style,
-                NSBackingStoreType::Buffered,
-                false,
-            )
+        let grab = options.popup.is_some_and(|popup| popup.grab.is_some());
+        let window = match parent {
+            Some(_) => popup::window(mtm, content, grab),
+            None => {
+                let style = NSWindowStyleMask::Titled
+                    | NSWindowStyleMask::Closable
+                    | NSWindowStyleMask::Miniaturizable
+                    | NSWindowStyleMask::Resizable;
+                // SAFETY: a standard titled window with a buffered backing store.
+                unsafe {
+                    NSWindow::initWithContentRect_styleMask_backing_defer(
+                        mtm.alloc(),
+                        content,
+                        style,
+                        NSBackingStoreType::Buffered,
+                        false,
+                    )
+                }
+            }
         };
         // SAFETY: the window is owned by `Native`, not by AppKit's close.
         unsafe { window.setReleasedWhenClosed(false) };
@@ -217,6 +234,8 @@ impl MacOs {
             drag_active: Cell::new(false),
             drag_at: Cell::new(None),
             last_mouse: RefCell::new(None),
+            parent,
+            grab,
         });
         native.window.setContentView(Some(&native.view));
         native
@@ -227,7 +246,18 @@ impl MacOs {
         let kinds =
             NSArray::from_slice(&unsafe { [NSPasteboardTypeFileURL, NSPasteboardTypeString] });
         native.view.registerForDraggedTypes(&kinds);
-        native.window.center();
+        match &options.popup {
+            Some(options) => {
+                native.place(mtm, options);
+                self.shared.popups.borrow_mut().push(Popup {
+                    id,
+                    parent: options.parent,
+                    grab,
+                    dismissed: Cell::new(false),
+                });
+            }
+            None => native.window.center(),
+        }
         // Report the real scale and size, which depend on the screen.
         let info = native.measure();
         native.info.set(info);
@@ -240,14 +270,33 @@ impl MacOs {
     }
 
     /// Stops events and hides the window; its view and window are released
-    /// with the last surface lease.
+    /// with the last surface lease. A window with open popups fails, as on
+    /// Wayland: AppKit would otherwise close them behind the host's back.
     pub(crate) fn remove_window(&mut self, id: WindowId) -> Result<()> {
         let index = self
             .windows
             .iter()
             .position(|native| native.id == id)
             .ok_or(Error::InvalidWindow)?;
+        if self
+            .shared
+            .popups
+            .borrow()
+            .iter()
+            .any(|popup| popup.parent == id)
+        {
+            return Err(Error::InvalidRole(
+                "remove a window's popups before the window",
+            ));
+        }
         let native = self.windows.remove(index);
+        if let Some(parent) = &native.parent {
+            parent.window.removeChildWindow(&native.window);
+            self.shared
+                .popups
+                .borrow_mut()
+                .retain(|popup| popup.id != id);
+        }
         native.registered.set(false);
         native.cancel_ime();
         native.window.setDelegate(None);
@@ -345,8 +394,10 @@ impl Native {
 
 impl Drop for MacOs {
     fn drop(&mut self) {
+        // Newest first, so popups go before their parents.
         while let Some(id) = self.windows.last().map(|native| native.id) {
-            let _ = self.remove_window(id);
+            self.remove_window(id)
+                .expect("a popup is newer than its parent");
         }
         CONNECTED.with(|value| value.set(false));
     }

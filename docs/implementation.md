@@ -25,7 +25,7 @@
 | **aegle-platform-sdl3** | Linux 默认后端：普通窗口与弹出菜单/提示窗口、显示器枚举、键盘/指针/触摸/滚轮、系统光标、文本输入与 IME、进程剪贴板、拖入、软件呈现与 GPU 句柄租约 | 运行时加载 `libSDL3.so.0` |
 | **aegle-platform-wayland** | Linux 原生客户端：xdg-shell 顶层窗口、指定输出且可原地改放置的 wlr layer-shell 表面、xdg_popup（父为顶层、弹出层或 layer）、输出枚举、text-input-v3（周边文字与选区）、双向拖放、SHM 呈现与 GPU 租约 | wayland-client 0.31, SCTK 0.21, libxkbcommon |
 | **aegle-platform-win32** | Windows 原生后端：Win32 窗口、DPI 适配、TSF 文本存储输入法、OLE 拖放、GDI 软件呈现与 GPU HWND 租约 | windows 0.62 |
-| **aegle-platform-macos** | macOS 原生后端：AppKit 窗口、NSTextInputClient、NSPasteboard、NSDragging、CGImage 软件呈现与 CAMetalLayer 租约 | objc2 0.6 系列 |
+| **aegle-platform-macos** | macOS 原生后端：AppKit 窗口、子窗口弹出层（翻转与滑动）、屏幕输出枚举、NSTextInputClient、NSPasteboard、NSDragging、CGImage 软件呈现与 CAMetalLayer 租约 | objc2 0.6 系列 |
 | **aegle-portal** | Linux 桌面 portal（`org.freedesktop.portal.Settings`）外观偏好读取与 `SettingChanged` 监听 | aegle-dbus |
 | **aegle-dbus** | Linux 会话总线轻量客户端：认证、Hello、消息编解码、阻塞/非阻塞读写 | Unix 域套接字，无外部依赖 |
 | **aegle-desktop** | 桌面级服务：文件选择对话框、系统通知、托盘图标与菜单、全局快捷键（Linux 经 portal/D-Bus，Windows 经 Win32 API） | Linux: aegle-dbus; Windows: Win32 API |
@@ -82,7 +82,8 @@
 * **状态**：已在 macOS 15（x86_64，Metal）实机运行：`gpu_texture` 示例与 Axo 终端经 wgpu 正常显示、Retina 2× 缩放、空闲 CPU 0%；`opacity` 下的透明窗口（`WgpuOptions::transparent`）合成正确。
 * **已实现边界**：AppKit 窗口、`NSTextInputClient`、CoreText + CoreGraphics 字形渲染（`aegle-text/tests/coretext.rs` 覆盖通用字族、行基线、CJK 回退与光栅化）、`CAMetalLayer` 租约与透明窗口。
 * **CoreText 编辑语义**：`cargo test -p aegle-text --features system-fonts,scene` 全部通过（已加入 macOS CI）。行尾不含硬换行符；末尾硬换行后与空文本各有一条空行承载光标（CoreText 不生成，按前一行或字体度量补出）；单行编辑器不软换行；`TextSystem::new()` 只匹配已注册字体；CoreText 以 `LastResort` 代替缺字，其字形计入缺字数。
-* **未验收**：输入法、拖放、VoiceOver 与软件（CGImage）呈现尚未实机验收。
+* **输出与弹出层**：`cargo test -p aegle-platform-macos --test native -- --ignored` 在实机 GUI 会话通过（该目标 `harness = false`，在主线程运行；此前的 libtest 形式不在主线程，从未能运行）：屏幕列为输出（主屏位于原点、ID 互异）；抓取弹出层取得键盘焦点；弹出层上的被动弹出层；空锚点、层与弹出层同设被拒；在被动子弹出层内按下不撤销，在父窗口按下只对抓取弹出层发一次 `Close` 且父窗口仍收到该按下；父窗口与有子弹出层的弹出层先移除被拒。`tests/placement.rs` 覆盖四个方向、翻转、滑动与超出屏幕的弹出层。
+* **未验收**：输入法、拖放、VoiceOver 与软件（CGImage）呈现尚未实机验收；应用失去激活时撤销抓取弹出层未自动化测试。
 
 ---
 
@@ -95,7 +96,8 @@
    * macOS 平台已实机验证 wgpu 呈现、文字渲染与 CoreText 编辑语义，输入法、拖放与 VoiceOver 尚待验收。
    * Windows ARM64 尚未完成实机编译与驱动兼容性核验。
 3. **桌面 Shell 表面**：
-   * Win32 与 macOS 未实现弹出层（创建返回 `Unsupported`）与输出枚举；`set_layer` 仅 Wayland 后端可用（其他平台无层）。
+   * Win32 未实现弹出层（创建返回 `Unsupported`）与输出枚举；`set_layer` 仅 Wayland 后端可用（其他平台无层）。
+   * macOS 弹出层只在创建时定位，父窗口移动时整体跟随，但不随锚点或屏幕变化重新翻转。
    * SDL3 弹出层不按锚定矩形翻转，只由 SDL 滑回屏幕内；显示器名称取决于 SDL 驱动，不保证为连接器名。
    * 控件库的 `Popup`/`Menu`/`Dropdown` 仍是窗口内浮层，尚未改用原生弹出层；标记语言没有弹出层元素，原生弹出层只能由 Rust 的 `Window::popup` 打开。
    * 输出热插拔时按输出增删面板需由宿主在 `App::on_outputs` 中完成；按 layer-shell 协议，输出断开时合成器关闭其上的层，宿主收到 `Close` 后移除该窗口（此路径尚未实测）。

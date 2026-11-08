@@ -121,9 +121,9 @@ panel.set_layer(LayerOptions { anchor: Anchor::BOTTOM | Anchor::LEFT, ..layer },
 
 | 输出与弹出层 | 说明 |
 |---|---|
-| `app.outputs()`、`app.output(name)` | 已连接输出的 `OutputInfo`（`id`、`name` 如 `DP-1`、`description`、逻辑 `position`/`size`、`scale`）；Win32、macOS 暂返回 `Unsupported` |
+| `app.outputs()`、`app.output(name)` | 已连接输出的 `OutputInfo`（`id`、`name` 如 `DP-1`、`description`、逻辑 `position`/`size`、`scale`）；macOS 为 `NSScreen`（名称为本地化显示器名）；Win32 暂返回 `Unsupported` |
 | `app.on_outputs(\|app\| ...)` | 输出增删或几何变化后，每轮调度最多调用一次，在所有运行时借用之外，可开关窗口（如每个输出一个面板） |
-| `window.popup(PopupOptions::new(anchor, w, h))` | 依附于该窗口（普通窗口、层或另一弹出层）的原生弹出 surface，有自己的控件树，可超出父窗口（如面板的菜单）。`anchor` 为父窗口逻辑坐标矩形（如控件的 `bounds()`），`side` 选 `Side::Below/Above/Left/Right`，越界时由系统翻转或滑动；`grab: true`（默认）取得键盘并在外部按下时关闭，应在按下处理器里打开；`false` 为被动提示。父窗口关闭时其弹出层先关闭；系统撤销弹出层时它自行关闭。Wayland 用 xdg_popup，SDL3 用弹出菜单/提示窗口（只滑动不翻转），Win32、macOS 返回 `Unsupported` |
+| `window.popup(PopupOptions::new(anchor, w, h))` | 依附于该窗口（普通窗口、层或另一弹出层）的原生弹出 surface，有自己的控件树，可超出父窗口（如面板的菜单）。`anchor` 为父窗口逻辑坐标矩形（如控件的 `bounds()`），`side` 选 `Side::Below/Above/Left/Right`，越界时由系统翻转或滑动；`grab: true`（默认）取得键盘并在外部按下时关闭，应在按下处理器里打开；`false` 为被动提示。父窗口关闭时其弹出层先关闭；系统撤销弹出层时它自行关闭。Wayland 用 xdg_popup，SDL3 用弹出菜单/提示窗口（只滑动不翻转），macOS 用无边框子窗口（创建时翻转与滑动），Win32 返回 `Unsupported` |
 
 ## 4. 控件树与句柄
 

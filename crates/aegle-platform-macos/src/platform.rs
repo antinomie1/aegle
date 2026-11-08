@@ -1,12 +1,13 @@
 //! The platform contract on the AppKit event loop. macOS has one seat,
-//! [`crate::SEAT`], and no layer surfaces.
+//! [`crate::SEAT`], screens as outputs, popups as child windows and no
+//! layer surfaces.
 #![allow(unsafe_code)] // AppKit constants and the deprecated activation call need `unsafe`.
 
 use crate::{MacOs, wake::Waker, window::WindowSurface};
 use aegle_platform::{
-    Cursor, DragData, DrawResult, Error, Event, ImeRequest, PixelRect, PixelSize, Platform,
-    Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowId, WindowInfo,
-    WindowOptions,
+    Cursor, DragData, DrawResult, Error, Event, ImeRequest, OutputInfo, PixelRect, PixelSize,
+    Platform, Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowId,
+    WindowInfo, WindowOptions,
 };
 use objc2_app_kit::{NSEventMask, NSEventType};
 use objc2_foundation::{NSDate, NSDefaultRunLoopMode};
@@ -58,6 +59,7 @@ impl MacOs {
                 // A wake; the signal's callback already queued its event.
                 continue;
             }
+            self.press_popups(&event);
             self.app.sendEvent(&event);
             self.refresh();
             if !self.shared.events.borrow().is_empty() {
@@ -109,6 +111,10 @@ impl Platform for MacOs {
 
     fn create_window(&mut self, options: WindowOptions<'_>) -> Result<WindowId> {
         MacOs::create_window(self, options)
+    }
+
+    fn outputs(&self) -> Result<Vec<OutputInfo>> {
+        Ok(crate::outputs::outputs(self.mtm))
     }
 
     fn remove_window(&mut self, window: WindowId) -> Result<()> {

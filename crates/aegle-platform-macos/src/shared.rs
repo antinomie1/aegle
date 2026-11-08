@@ -15,6 +15,8 @@ pub(crate) struct Shared {
     pub windows: RefCell<Vec<WindowId>>,
     /// Last reported preferences, so one system change emits once.
     pub preferences: Cell<Preferences>,
+    /// Live popups in creation order, so a parent precedes its popups.
+    pub popups: RefCell<Vec<crate::popup::Popup>>,
 }
 
 impl Shared {
@@ -23,6 +25,7 @@ impl Shared {
             events: RefCell::new(VecDeque::new()),
             windows: RefCell::new(Vec::new()),
             preferences: Cell::new(preferences),
+            popups: RefCell::new(Vec::new()),
         }
     }
 

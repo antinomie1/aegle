@@ -10,15 +10,18 @@
 //! the window's `NSView` instead, which `wgpu` turns into a `CAMetalLayer`.
 //! Text input goes through `NSTextInputClient`, so dead keys, input methods and
 //! the character palette share one path and the editor's surrounding text.
-//! macOS has one input seat, `SeatId(0)`, and no layer surfaces.
+//! macOS has one input seat, `SeatId(0)`, and no layer surfaces. Screens are
+//! the outputs, and popups are borderless child windows placed beside their
+//! anchor, flipped and slid onto the screen as `xdg_positioner` would.
 //!
 //! Views use a bottom-left origin, as AppKit's own coordinates do, and this
 //! crate converts to the contract's top-left logical coordinates at the edge.
 //!
 //! Everything above compiles only on macOS. [`Composition`], the model that
 //! turns `NSTextInputClient` operations into [`aegle_platform::ImeUpdate`]s
-//! and answers its UTF-16 range queries, is platform-independent so it can be
-//! tested anywhere; the AppKit glue in `ime_client` only forwards to it.
+//! and answers its UTF-16 range queries, and [`popup_origin`], the popup
+//! placement rule, are platform-independent so they can be tested anywhere;
+//! the AppKit glue only forwards to them.
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[cfg(target_os = "macos")]
@@ -40,7 +43,12 @@ mod keys;
 #[cfg(target_os = "macos")]
 mod native;
 #[cfg(target_os = "macos")]
+mod outputs;
+mod placement;
+#[cfg(target_os = "macos")]
 mod platform;
+#[cfg(target_os = "macos")]
+mod popup;
 #[cfg(target_os = "macos")]
 mod preferences;
 #[cfg(target_os = "macos")]
@@ -53,6 +61,7 @@ mod wake;
 mod window;
 
 pub use ime::{Composition, KeyOutcome, Marked};
+pub use placement::popup_origin;
 #[cfg(target_os = "macos")]
 pub use window::{MacOs, WindowSurface};
 
