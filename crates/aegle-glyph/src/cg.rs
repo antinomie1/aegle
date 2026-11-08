@@ -23,7 +23,7 @@
 //! instance and application font included; the rasterizer only resizes it.
 //! Shared font bytes ([`FaceSource`]) open the face at their collection index.
 //! Every font object is reference counted by `CFRetained`, and at most
-//! [`MAX_FONTS`] sized fonts stay alive, evicting the least recently used.
+//! `MAX_FONTS` (four) sized fonts stay alive, evicting the least recently used.
 #![allow(unsafe_code)]
 
 use std::collections::BTreeMap;

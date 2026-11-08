@@ -19,7 +19,7 @@
 //!
 //! Font faces come from the face's file path or, for registered bytes, from an
 //! in-memory font file loader registered with the shared factory on first use
-//! and unregistered when the rasterizer drops. At most [`MAX_FACES`] faces stay
+//! and unregistered when the rasterizer drops. At most `MAX_FACES` (four) faces stay
 //! alive, evicting the least recently used. Font variation coordinates are not
 //! applied, matching the earlier outline path.
 //!

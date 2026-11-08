@@ -10,10 +10,13 @@ keywords.workspace = true
 categories.workspace = true
 description = "Native Windows windows, input, TSF text input and bounded software presentation"
 
-# The crate is empty on other targets.
+[dependencies]
+# The crate documentation links to the contracts on every target.
+aegle-platform.workspace = true
+
+# The implementation; the crate is otherwise empty on other targets.
 [target.'cfg(windows)'.dependencies]
 aegle-types = { workspace = true, features = ["std"] }
-aegle-platform.workspace = true
 raw-window-handle = "0.6.2"
 windows = { version = "0.62.2", default-features = false, features = [
     "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_System_Com",
