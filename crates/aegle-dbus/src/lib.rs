@@ -9,7 +9,7 @@
 //! notifications, status items and system services use, but no Unix file
 //! descriptors: a message carrying them is skipped as undecodable.
 //!
-//! ```no_run
+//! ```no_run,ignore-apple,ignore-windows
 //! use aegle_dbus::{Connection, Message, Value};
 //! let bus = Connection::session(std::time::Duration::from_secs(1))?;
 //! let mut incoming = bus.incoming()?;

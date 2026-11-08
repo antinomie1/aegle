@@ -97,3 +97,8 @@ windows-core = { version = "0.62.2", default-features = false }
 [lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
+
+# docs.rs builds only the listed targets; the platform code is cfg-gated.
+[package.metadata.docs.rs]
+features = ["accessibility", "motion", "system-fonts", "sdl3", "tiny-skia", "shaders", "desktop-services"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]

@@ -32,3 +32,8 @@ aegle-access = { workspace = true, optional = true }
 [lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
+
+# Reduced motion, which the scenario switches, is part of `motion`.
+[[test]]
+name = "shader"
+required-features = ["motion"]

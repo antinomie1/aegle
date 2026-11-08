@@ -10,12 +10,11 @@ keywords.workspace = true
 categories.workspace = true
 description = "Native Windows windows, input, TSF text input and bounded software presentation"
 
-[dependencies]
-aegle-platform.workspace = true
-aegle-types = { workspace = true, features = ["std"] }
-raw-window-handle = "0.6.2"
-
+# The crate is empty on other targets.
 [target.'cfg(windows)'.dependencies]
+aegle-types = { workspace = true, features = ["std"] }
+aegle-platform.workspace = true
+raw-window-handle = "0.6.2"
 windows = { version = "0.62.2", default-features = false, features = [
     "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_System_Com",
     "Win32_System_Com_StructuredStorage", "Win32_System_Ole", "Win32_System_SystemServices", "Win32_UI_Shell", "Win32_UI_Shell_Common",
@@ -31,3 +30,8 @@ windows-core = { version = "0.62.2", default-features = false }
 [lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
+
+# docs.rs builds only the listed targets; the platform code is cfg-gated.
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"]

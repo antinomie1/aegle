@@ -24,3 +24,7 @@ objc2-core-foundation = { version = "0.3.2", default-features = false, features 
 [lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
+
+# docs.rs builds only the listed targets; the platform code is cfg-gated.
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]

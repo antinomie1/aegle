@@ -143,8 +143,10 @@ fn retained_controls_share_state_without_callback_borrows_or_ownership_cycles() 
     let shortcut = |key: char, control: bool| KeyInput {
         key: Key::Character(key),
         text: if control { "" } else { "!" },
+        // The editor's command modifier: Cmd on macOS, Ctrl elsewhere.
         modifiers: Modifiers {
-            control,
+            control: control && !cfg!(target_os = "macos"),
+            meta: control && cfg!(target_os = "macos"),
             ..Modifiers::default()
         },
         pressed: true,

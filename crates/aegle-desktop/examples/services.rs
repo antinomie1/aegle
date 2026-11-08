@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }])?,
     }
     #[cfg(target_os = "macos")]
-    let next = || {
+    let mut next = || {
         use aegle_platform::Platform;
         let deadline = std::time::Instant::now() + Duration::from_secs(60);
         while std::time::Instant::now() < deadline {
@@ -78,7 +78,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     #[cfg(not(target_os = "macos"))]
     let next = || events.recv_timeout(Duration::from_secs(60));
-    let mut next = next;
     while let Ok(event) = next() {
         println!("{event:?}");
         if matches!(event, aegle_desktop::Event::Files { .. }) {

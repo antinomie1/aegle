@@ -11,6 +11,10 @@
 //! portal leaves the corresponding [`Preferences`] fields at `None` instead of
 //! failing. The caller decides how to wait on the returned socket and when to
 //! apply [`Portal::read`]'s changes to the interface.
+//!
+//! Like `aegle-dbus`, the crate is empty on targets other than Linux.
+
+#![cfg(target_os = "linux")]
 
 use aegle_dbus::{Connection, Incoming, Kind, Message, Value};
 use aegle_types::Preferences;

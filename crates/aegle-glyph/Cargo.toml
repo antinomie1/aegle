@@ -18,7 +18,7 @@ scene = []
 # Fallback Rust rasterizer (unmaintained). Linux, Windows and macOS default to
 # their system backends; this feature is how the Rust path is compiled there.
 # It replaces the platform rasterizer, so glyph pixels change.
-swash = ["dep:swash", "dep:skrifa"]
+swash = ["dep:swash", "dep:skrifa", "dep:aegle-image"]
 # COLRv1 gradient/composite color glyphs. Skrifa parses the paint graph and
 # tiny-skia paints it; this does not replace the platform rasterizer. It is the
 # only feature that makes this crate depend on tiny-skia.
@@ -32,7 +32,8 @@ aegle-scene = { workspace = true, features = ["text"] }
 linebender_resource_handle.workspace = true
 swash = { workspace = true, optional = true }
 skrifa = { version = "0.44.0", default-features = false, features = ["std"], optional = true }
-aegle-image.workspace = true
+# Decodes the swash path's PNG bitmap glyphs.
+aegle-image = { workspace = true, optional = true }
 # COLRv1 painting only; plain glyphs come from the platform rasterizer.
 tiny-skia = { workspace = true, optional = true }
 resvg = { version = "0.48.1", default-features = false, features = ["svgz"], optional = true }
@@ -85,3 +86,8 @@ required-features = ["svg"]
 
 [lints.rust]
 unsafe_code = "warn"
+
+# docs.rs builds only the listed targets; the platform code is cfg-gated.
+[package.metadata.docs.rs]
+features = ["scene", "colrv1", "svg"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]

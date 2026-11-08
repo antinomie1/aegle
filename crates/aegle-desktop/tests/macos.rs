@@ -5,10 +5,9 @@
 //! on a session left alone while it runs:
 //! `cargo test -p aegle-desktop --test macos -- --ignored`.
 #![allow(unsafe_code)] // Typing into the panels and pressing the status item's button.
-use std::error::Error;
 
 #[cfg(target_os = "macos")]
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !std::env::args().any(|arg| arg == "--ignored" || arg == "--include-ignored") {
         println!("macos: skipped; pass --ignored on a macOS GUI session");
         return Ok(());

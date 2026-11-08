@@ -74,3 +74,8 @@ icu_provider = { version = "2.3.1", default-features = false, features = ["loggi
 
 [lints.rust]
 unsafe_code = "warn"
+
+# docs.rs builds only the listed targets; the platform code is cfg-gated.
+[package.metadata.docs.rs]
+features = ["system-fonts", "text-a11y", "scene"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]

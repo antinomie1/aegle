@@ -10,7 +10,8 @@ readme.workspace = true
 keywords = ["wayland", "portal", "theme", "dbus", "accessibility"]
 categories = ["gui", "os::linux-apis"]
 
-[dependencies]
+# The crate is empty elsewhere.
+[target.'cfg(target_os = "linux")'.dependencies]
 aegle-types = { workspace = true, features = ["std"] }
 aegle-dbus.workspace = true
 

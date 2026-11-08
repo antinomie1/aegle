@@ -5,9 +5,8 @@
 //! AppKit runs on the main thread only, which libtest never gives a test, so
 //! this target has its own `main` and runs its scenarios in order.
 #![allow(unsafe_code)] // Borrowing the leased view to post events to it.
-use std::error::Error as StdError;
-
-type Outcome = Result<(), Box<dyn StdError>>;
+#[cfg(target_os = "macos")]
+type Outcome = Result<(), Box<dyn std::error::Error>>;
 
 #[cfg(target_os = "macos")]
 fn main() -> Outcome {

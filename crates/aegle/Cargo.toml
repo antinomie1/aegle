@@ -13,7 +13,8 @@ description = "A small retained GUI with imperative controls and composable back
 [features]
 # `desktop` holds everything but the renderer and the Linux window backend, so
 # another renderer replaces tiny-skia with
-# `--no-default-features --features desktop,<renderer>` and the native Wayland
+# `--no-default-features --features desktop,<renderer>` on Windows and macOS
+# (`desktop,sdl3,<renderer>` on Linux) and the native Wayland
 # client replaces SDL3 with
 # `--no-default-features --features desktop,wayland,<renderer>`.
 default = ["desktop", "sdl3", "tiny-skia"]
@@ -143,3 +144,8 @@ required-features = ["native", "wgpu", "system-fonts"]
 [[example]]
 name = "desktop"
 required-features = ["native", "system-fonts", "desktop-services"]
+
+# docs.rs builds only the listed targets; the platform code is cfg-gated.
+[package.metadata.docs.rs]
+features = ["accessibility", "grid", "shaders", "jpeg", "webp", "gif", "svg", "colrv1"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]

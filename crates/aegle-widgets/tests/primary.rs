@@ -31,8 +31,10 @@ fn editors_offer_and_paste_the_primary_selection() -> Result {
         )
     };
     let select_all = |ui: &Ui| -> Result {
+        // The editor's command modifier: Cmd on macOS, Ctrl elsewhere.
         let ctrl = Modifiers {
-            control: true,
+            control: !cfg!(target_os = "macos"),
+            meta: cfg!(target_os = "macos"),
             ..Modifiers::default()
         };
         for pressed in [true, false] {

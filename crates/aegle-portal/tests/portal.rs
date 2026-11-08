@@ -3,6 +3,8 @@
 //! session bus, which a mock portal joins:
 //! `dbus-run-session -- cargo test -p aegle-portal --test portal -- --ignored`.
 
+#![cfg(target_os = "linux")]
+
 use std::time::{Duration, Instant};
 
 use aegle_dbus::{Connection, Message, Value};
