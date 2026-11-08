@@ -11,11 +11,14 @@
 //! A build contains exactly one renderer: `tiny-skia` (the default), `cairo`
 //! (Linux, drawing through the distribution's `libcairo.so.2`), `vulkan` or
 //! `wgpu`. Enabling two is a compile error, so another renderer replaces the
-//! default with `--no-default-features --features desktop,<renderer>`; the
-//! Linux window backend switches the same way with
+//! default with `--no-default-features --features desktop,<renderer>`, plus a
+//! window backend on Linux (`desktop,sdl3,<renderer>`); the Linux window
+//! backend switches the same way with
 //! `--no-default-features --features desktop,wayland,tiny-skia`. `vulkan`
 //! fails at `App` creation on macOS, where `wgpu` reaches Metal. Lower-level
 //! crates remain independent.
+//!
+//! Until 1.0, any 0.x minor release may break this API; patch releases do not.
 //!
 //! [`prelude`] holds the common names; everything else stays under the crate
 //! it comes from: [`ui`](mod@ui), [`widgets`] and [`app`].

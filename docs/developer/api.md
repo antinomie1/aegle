@@ -6,17 +6,18 @@ Aegle 是保留模式 GUI：控件创建一次，之后通过句柄修改，没�
 
 ## 1. 依赖与 feature
 
-当前未发布到 crates.io，以 path 或 git 依赖引入 facade crate `aegle`：
+引入 facade crate `aegle`。1.0 之前每个 0.x 次版本都可能有破坏性变更，补丁版本不会：
 
 ```toml
 [dependencies]
-aegle = { path = "../aegle/crates/aegle" }
+aegle = "0.1"
 ```
 
 | feature | 默认 | 作用 |
 | --- | :---: | --- |
+| `desktop` | ✓ | `native`、`system-fonts`、`markup`、`motion`、`effects` 与 `desktop-services`，即除渲染器与 Linux 窗口后端以外的默认 feature |
 | `native` | ✓ | 原生窗口的宿主；Windows Win32、macOS AppKit 按编译目标选择，Linux 另需 `sdl3`（`aegle` 默认）或 `wayland` |
-| `sdl3` | | Linux：经发行版的 `libSDL3.so.0` 开窗（默认），运行时加载 |
+| `sdl3` | ✓ | Linux：经发行版的 `libSDL3.so.0` 开窗，运行时加载 |
 | `wayland` | | Linux：原生 Wayland 客户端，layer-shell、拖动源与 text-input-v3 周边文字 |
 | `tiny-skia` | ✓ | CPU 软件绘制（默认渲染器） |
 | `system-fonts` | ✓ | 系统字体发现（Linux 用 Pango 的 Fontconfig 配置，运行时加载） |
@@ -33,7 +34,7 @@ aegle = { path = "../aegle/crates/aegle" }
 
 按词移动与双击选词要中日文/泰文分词时，运行环境需要系统分词器：Linux 需安装 `libicu`（多数桌面发行版已随系统安装，程序用 `dlopen` 在运行时查找，`libicui18n.so.<版本>` 与未带版本的 soname 都会探测），Windows 用系统的 `icu.dll`/`icuin.dll`（Windows 10 1903+/1703+），macOS 用系统自带的 `CFStringTokenizer`。都找不到时不报错，也没有回退：按词移动（Ctrl/Alt+←→）与双击选词停用——按键不移动插入点，双击只放置插入点；其余编辑操作不受影响。`aegle_text::segment::available()` 返回当前进程是否找到分词器，环境变量 `AEGLE_SEGMENT=none` 可强制停用以便调试。
 
-Linux 默认后端在运行时加载 `libSDL3.so.0`，构建期不需要任何窗口库头文件；改用 `wayland` 后端时构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon。文字与字形改用系统栈后，运行时还需要 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1` 与 `libfreetype.so.6`（所有桌面发行版都随系统提供，程序用 `dlopen` 查找，构建时不链接）；完全没有 Pango 的环境里 `TextSystem::system()` 报告不可用。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "software"]` 并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。Linux 的 `sdl3` 与 `wayland` 互斥：同时开启是编译错误；`aegle` facade 对“`native` 而没有 Linux 后端”也在编译期报错并给出重建命令（直接用 `aegle-app` 时则保留宿主，`App` 创建时报出缺哪个 feature）。
+Linux 默认后端在运行时加载 `libSDL3.so.0`，构建期不需要任何窗口库头文件；改用 `wayland` 后端时构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon。文字与字形改用系统栈后，运行时还需要 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1` 与 `libfreetype.so.6`（所有桌面发行版都随系统提供，程序用 `dlopen` 查找，构建时不链接）；完全没有 Pango 的环境里 `TextSystem::system()` 报告不可用。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "sdl3", "tiny-skia"]`（`sdl3` 只在 Linux 生效）并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。Linux 的 `sdl3` 与 `wayland` 互斥：同时开启是编译错误；`aegle` facade 对“`native` 而没有 Linux 后端”也在编译期报错并给出重建命令（直接用 `aegle-app` 时则保留宿主，`App` 创建时报出缺哪个 feature）。
 
 `use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入与 `scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口与 `desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
 

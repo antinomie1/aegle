@@ -1,7 +1,7 @@
 //! A wgpu render pass draws into an application texture every frame; a canvas
 //! shows it inside ordinary controls, like a game or 3D viewport in an editor.
 //!
-//! wgpu replaces the default renderer:
+//! wgpu replaces the default renderer (add `sdl3` to the features on Linux):
 //! `cargo run -p aegle --release --no-default-features --features desktop,wgpu --example gpu_texture`
 use std::{cell::Cell, rc::Rc, time::Instant};
 

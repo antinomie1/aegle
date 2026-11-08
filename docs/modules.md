@@ -70,7 +70,7 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 * **Linux 窗口后端互斥**：Linux 上 `sdl3`（默认）与 `wayland` 互斥。同时启用会触发编译期错误。
 * **默认组合**：`aegle` 默认 feature 为 `["desktop", "sdl3", "tiny-skia"]`。
   * `desktop` 包含：`native`、`system-fonts`、`markup`、`motion`、`effects`、`desktop-services`。
-  * 换渲染器：`--no-default-features --features desktop,<renderer>`。
+  * 换渲染器：Windows 与 macOS 用 `--no-default-features --features desktop,<renderer>`；Linux 还要指明窗口后端，用 `desktop,sdl3,<renderer>`，否则 facade 在编译期报错。
   * 换 Linux 窗口后端：`--no-default-features --features desktop,wayland,tiny-skia`。
 
 ### 2. 常用功能 Feature 说明
@@ -92,15 +92,23 @@ cargo run -p aegle --example hello
 cargo run -p aegle --example showcase
 
 # 3. 使用系统 cairo 渲染器（Linux 专用，需运行时有 libcairo.so.2）
-cargo run -p aegle --no-default-features --features desktop,cairo --example showcase
+cargo run -p aegle --no-default-features --features desktop,sdl3,cairo --example showcase
 
 # 4. 改用原生 Wayland 客户端后端（SCTK + layer-shell 支持）
 cargo run -p aegle --no-default-features --features desktop,wayland,tiny-skia --example showcase
 
-# 5. 使用硬件加速渲染器（Vulkan / wgpu）
-cargo run -p aegle --no-default-features --features desktop,vulkan --example showcase
-cargo run -p aegle --no-default-features --features desktop,wgpu --example showcase
+# 5. 使用硬件加速渲染器（Vulkan / wgpu；Windows 与 macOS 去掉 sdl3）
+cargo run -p aegle --no-default-features --features desktop,sdl3,vulkan --example showcase
+cargo run -p aegle --no-default-features --features desktop,sdl3,wgpu --example showcase
 
 # 6. 开启系统无障碍（Linux AT-SPI）
 cargo run -p aegle --features accessibility --example controls
 ```
+
+---
+
+## 四、 版本与公开 API 演进
+
+* **版本**：全部 crate 同号发布（工作区 `version`），1.0 之前每个 0.x 次版本都可能有破坏性变更，补丁版本不会。对外支持的入口是 `aegle` facade，以及编写控件库用的 `aegle-ui`、`aegle-widgets`；其余 crate 是 facade 的组成部分，变动更自由。`aegle-render-wgpu`、`aegle-render-vulkan` 与 `aegle-access` 重导出 `wgpu`、`ash`、`accesskit`，这些依赖的破坏性升级随之成为破坏性版本。
+* **`#[non_exhaustive]`**：应用或控件接收、可以忽略未知情况的枚举加该属性，新增变体不破坏下游，例如平台 `Event` 与各 crate 的错误类型、`Key`、`PointerButton`、控件 `Input`/`Action`、桌面服务 `Event`/`MenuItem`、主题 token、`Easing`、`Movement`、加载器的 `Data`/`Arg`。后端必须逐一实现的枚举保持穷尽，新增变体让每个未处理的后端编译失败，而不是被通配分支静默丢弃：scene 的 `GradientGeometry`/`FontSource`、`FaceSource`、`Cursor`、`DragData`、平台 `PointerKind`/`ImeEvent`、`aegle_access::Event`、`aegle_gpu::Error`、标记的 `ValueType`。
+* **docs.rs**：平台相关的 crate 在 `[package.metadata.docs.rs]` 中列出要构建的目标（三平台，或 macOS/Windows 专用 crate 的本平台），否则 docs.rs 只在 Linux 上构建，平台代码全被 cfg 掉。`aegle-dbus` 与 `aegle-portal` 只在 Linux 上有内容。

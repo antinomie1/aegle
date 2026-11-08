@@ -49,6 +49,7 @@
 * **工作区测试**：`cargo test --workspace` 共计 **213 项通过、0 项失败、22 项 ignored**（需独立显示环境/硬件的集成场景）。
 * **代码规范**：`cargo fmt --all --check` 与 `cargo clippy --workspace --all-targets`（`-D warnings`）零告警。
 * **Feature 组合矩阵**：CI 矩阵包含极简构建、markup 独立、渲染器 4 选 1（tiny-skia / cairo / vulkan / wgpu）、Linux 窗口后端 2 选 1（sdl3 / wayland）及无障碍组合，均通过编译与单测。
+* **发布前检查（2026-11-08，macOS 主机）**：`cargo package -p aegle-types` 打包成功（其余 crate 要等依赖先上 crates.io 才能解析）；`aegle`、`aegle-ui`、`aegle-types`、`aegle-core`、`aegle-text`、`aegle-app` 在 crates.io 上未被占用。每个可在 macOS 编译的 crate 单独 `cargo test -p <crate> --no-run` 均编译通过（此前 `aegle-ui` 的 `shader` 测试在未开 `motion` 时编译失败）。交叉 `cargo check --all-targets`：`x86_64-pc-windows-msvc` 下 Win32、桌面服务、无障碍与 facade（tiny-skia、vulkan、wgpu）通过；`x86_64-unknown-linux-gnu` 下除需要 libxkbcommon pkg-config 的 `aegle-platform-wayland` 外的工作区，以及 facade 的四种渲染器（sdl3）通过。macOS 上 `cargo test --workspace`（排除 Linux 专用 crate 与 facade/宿主）此前因 `aegle-portal` 在非 Linux 编译失败而从未运行；现在 194 项通过、12 项 ignored、1 项失败（`aegle-render-tiny-skia --test text` 的彩色字形部分，见第三节）；两项控件测试此前把快捷键写死为 Ctrl，现按平台用 Cmd/Ctrl。docs.rs 目标配置已写入各平台 crate，尚未在 docs.rs 上实际构建。
 
 ### 2. Linux 平台（真实桌面与无头会话）
 * **SDL3 默认后端验证**：
@@ -107,5 +108,6 @@
    * SDL3 弹出层不按锚定矩形翻转，只由 SDL 滑回屏幕内；显示器名称取决于 SDL 驱动，不保证为连接器名。
    * 控件库的 `Popup`/`Menu`/`Dropdown` 仍是窗口内浮层，尚未改用原生弹出层；标记语言没有弹出层元素，原生弹出层只能由 Rust 的 `Window::popup` 打开。
    * 输出热插拔时按输出增删面板需由宿主在 `App::on_outputs` 中完成；按 layer-shell 协议，输出断开时合成器关闭其上的层，宿主收到 `Close` 后移除该窗口（此路径尚未实测）。
-4. **桌面服务**：
+4. **macOS 彩色字形**：CoreGraphics 光栅器按字体拒绝带彩色字形特征（sbix、COLR、SVG）的字体中的全部字形，返回 `UnsupportedGlyph`，渲染器因此整帧失败。实测：`TextSystem::system()` 排版 `"A 😀"`（回退到 Apple Color Emoji）后 tiny-skia 绘制返回 `Err(Glyph(UnsupportedGlyph))`；`aegle-render-tiny-skia/tests/text.rs` 的彩色位图字形部分在 macOS 上同样失败（Linux 由 FreeType 渲染）。即 macOS 上含 emoji 的文字目前无法绘制。
+5. **桌面服务**：
    * `aegle-desktop` 的 macOS 通知只在应用包内可用（裸二进制报 `Unavailable`），通知验证为手动步骤、未进 CI；全局快捷键按 ANSI 键位匹配，非美式布局下字母键按位置而非字符。
