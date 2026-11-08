@@ -1,5 +1,6 @@
 //! Native lifecycle contract, intentionally opt-in on a macOS GUI session:
-//! `cargo test -p aegle-platform-macos --test native -- --ignored`.
+//! `cargo test -p aegle-platform-macos --test native -- --ignored`. The drag
+//! scenario moves the real pointer, so leave the session alone while it runs.
 //!
 //! AppKit runs on the main thread only, which libtest never gives a test, so
 //! this target has its own `main` and runs its scenarios in order.
@@ -20,6 +21,7 @@ fn main() -> Outcome {
             macos::lifecycle as fn() -> Outcome,
         ),
         ("outputs and popups", macos::outputs_and_popups),
+        ("drag and drop between windows", macos::drag_between_windows),
     ] {
         scenario().map_err(|error| format!("{name}: {error}"))?;
         println!("native: {name} ... ok");
@@ -367,6 +369,181 @@ mod macos {
         backend.remove_window(tip)?;
         backend.remove_window(menu)?;
         backend.remove_window(parent)?;
+        Ok(())
+    }
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGEventCreateMouseEvent(
+            source: *const std::ffi::c_void,
+            kind: u32,
+            at: objc2_foundation::NSPoint,
+            button: u32,
+        ) -> *mut std::ffi::c_void;
+        fn CGEventPost(tap: u32, event: *mut std::ffi::c_void);
+        fn CGEventSourceCreate(state: i32) -> *mut std::ffi::c_void;
+        fn CFRelease(object: *mut std::ffi::c_void);
+    }
+
+    /// Posts a left-button mouse event of `kind` (`kCGEventLeftMouseDown` 1,
+    /// `Up` 2, `MouseMoved` 5, `LeftMouseDragged` 6) at `at`, in the global
+    /// top-left display space, through the window server.
+    fn mouse(kind: u32, at: objc2_foundation::NSPoint) {
+        // SAFETY: the source follows the HID system's state (1), so the
+        // button stays down from press to release, as a drag session checks;
+        // the source and event are released after posting to the HID tap (0).
+        unsafe {
+            let source = CGEventSourceCreate(1);
+            assert!(!source.is_null());
+            let event = CGEventCreateMouseEvent(source, kind, at, 0);
+            assert!(!event.is_null());
+            CGEventPost(0, event);
+            CFRelease(event);
+            CFRelease(source);
+        }
+    }
+
+    /// The window showing `surface`'s view.
+    fn ns_window(
+        surface: &aegle_platform_macos::WindowSurface,
+    ) -> objc2::rc::Retained<objc2_app_kit::NSWindow> {
+        let RawWindowHandle::AppKit(handle) = surface.window_handle().unwrap().as_raw() else {
+            unreachable!()
+        };
+        // SAFETY: the lease keeps the view alive on this, the main thread.
+        let view: &objc2_app_kit::NSView = unsafe { handle.ns_view.cast().as_ref() };
+        view.window().expect("a window shows the view")
+    }
+
+    /// The center of `window` in the global top-left display space.
+    fn center(window: &objc2_app_kit::NSWindow) -> objc2_foundation::NSPoint {
+        let mtm = objc2_foundation::MainThreadMarker::new().unwrap();
+        let primary = objc2_app_kit::NSScreen::screens(mtm)
+            .firstObject()
+            .map_or(0.0, |screen| screen.frame().size.height);
+        let frame = window.frame();
+        objc2_foundation::NSPoint::new(
+            frame.origin.x + frame.size.width / 2.0,
+            primary - (frame.origin.y + frame.size.height / 2.0),
+        )
+    }
+
+    /// Text and then files dragged with the real pointer from one window to
+    /// another: the target reports the drag, takes the host's answer and
+    /// receives the drop.
+    pub fn drag_between_windows() -> Outcome {
+        use aegle_platform::{DragData, PointerKind};
+        let mut backend = MacOs::connect()?;
+        let options = WindowOptions {
+            size: PixelSize {
+                width: 300,
+                height: 200,
+            },
+            ..Default::default()
+        };
+        let source = backend.create_window(WindowOptions {
+            title: "Aegle drag source",
+            ..options
+        })?;
+        let target = backend.create_window(WindowOptions {
+            title: "Aegle drop target",
+            ..options
+        })?;
+        for window in [source, target] {
+            assert!(backend.present(window, None, |pixels, _, _| {
+                pixels.fill(180);
+                Ok(())
+            })?);
+        }
+        let (source_surface, target_surface) = (
+            backend.window_surface(source)?,
+            backend.window_surface(target)?,
+        );
+        let (from, to) = (ns_window(&source_surface), ns_window(&target_surface));
+        from.setFrameOrigin(objc2_foundation::NSPoint::new(120.0, 300.0));
+        to.setFrameOrigin(objc2_foundation::NSPoint::new(520.0, 300.0));
+        let pump = |backend: &mut MacOs, millis: u64, seen: &mut Vec<Event>| -> Outcome {
+            let deadline = std::time::Instant::now() + Duration::from_millis(millis);
+            while std::time::Instant::now() < deadline {
+                backend.dispatch(Some(Duration::from_millis(10)))?;
+                while let Some(event) = backend.next_event() {
+                    if let Event::Drag { window, .. } = event {
+                        backend.accept_drag(window, SeatId(0), window == target)?;
+                    }
+                    seen.push(event);
+                }
+            }
+            Ok(())
+        };
+        let file = std::env::temp_dir().join(format!("aegle-drag-{}.txt", std::process::id()));
+        std::fs::write(&file, "dragged")?;
+        for data in [
+            DragData::Text("拖放 drag".into()),
+            DragData::Files(vec![file.canonicalize()?]),
+        ] {
+            let mut seen = Vec::new();
+            pump(&mut backend, 300, &mut seen)?;
+            let (start, end) = (center(&from), center(&to));
+            mouse(5, start);
+            mouse(1, start);
+            seen.clear();
+            pump(&mut backend, 200, &mut seen)?;
+            assert!(
+            seen.iter().any(|event| matches!(event, Event::Pointer { window, kind: PointerKind::Down { .. }, .. } if *window == source)),
+            "the press reached the source: {seen:?}"
+        );
+            backend.start_drag(source, SeatId(0), &data)?;
+            // AppKit tracks the drag in a loop nested in event delivery, so
+            // the motion comes from another thread, as real input comes from
+            // outside; this one keeps the loop running.
+            let mover = std::thread::spawn(move || {
+                for step in 1..=30 {
+                    let t = f64::from(step) / 30.0;
+                    mouse(
+                        6,
+                        objc2_foundation::NSPoint::new(
+                            start.x + (end.x - start.x) * t,
+                            start.y + (end.y - start.y) * t,
+                        ),
+                    );
+                    std::thread::sleep(Duration::from_millis(15));
+                }
+                std::thread::sleep(Duration::from_millis(200));
+                mouse(2, end);
+            });
+            while !mover.is_finished() {
+                pump(&mut backend, 20, &mut seen)?;
+            }
+            mover.join().expect("the pointer thread finishes");
+            pump(&mut backend, 500, &mut seen)?;
+            assert!(
+                seen.iter()
+                    .any(|event| matches!(event, Event::Drag { window, .. } if *window == target)),
+                "the target saw the drag: {seen:?}"
+            );
+            let dropped = seen.iter().find_map(|event| match event {
+                Event::Drop {
+                    window,
+                    data,
+                    position,
+                    ..
+                } if *window == target => Some((data.clone(), *position)),
+                _ => None,
+            });
+            let (got, position) =
+                dropped.ok_or_else(|| format!("no drop on the target: {seen:?}"))?;
+            assert_eq!(got, data);
+            // The session samples the pointer itself, a little behind the
+            // posted motion; the drop lands inside the target.
+            assert!(
+                (0.0..300.0).contains(&position.x) && (0.0..200.0).contains(&position.y),
+                "{position:?}"
+            );
+        }
+        std::fs::remove_file(&file)?;
+        drop((source_surface, target_surface));
+        backend.remove_window(target)?;
+        backend.remove_window(source)?;
         Ok(())
     }
 }

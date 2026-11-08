@@ -86,7 +86,9 @@
 * **桌面服务**：`cargo test -p aegle-desktop --test macos -- --ignored` 在实机通过（`harness = false`，主线程，由 `aegle-platform-macos` 的循环送达事件；连续 3 次通过）：主线程外创建被拒；保存面板按请求显示标题、文件名与扩展名过滤，在面板就绪后经 HID 输入 Return 返回所选文件夹下的 `notes.txt`；打开面板允许多选、无过滤，Escape 返回 `None`；状态栏按钮带图标与更新后的提示，单击报 `TrayActivated`，移除后不再存在；Ctrl+Alt+Shift+F19 经 HID 真实按下（含 Fn，与 Mac 键盘一致）报 `Shortcut`，F24 报 `Unavailable`，重绑与清空后无事件；`notify` 报 `Unavailable`。进程外面板在显示后需片刻才接收按键，测试等待约 2 秒。
 * **软件呈现与自动释放池**：tiny-skia 下 `showcase` 经 CGImage 呈现正确（Retina 2×、中日韩文字、全部控件，截屏核对）。平台循环不经 `-[NSApplication run]`，此前从不清空自动释放池，绘制保留的每帧图像永不释放：`showcase`（含一直转动的不定进度条）物理内存每秒增长约 300 MB，十余秒到 9.4 GB。现在每轮事件与每次呈现各用一个自动释放池，物理内存稳定在约 113 MB（`vmmap` 物理占用）。release 构建下无动画的 `hello` 空闲 CPU 0%、43 MB；`showcase` 动画时约 30% CPU，主要花在每帧把整幅缓冲拷入新 `CFData`。
 * **NSAccessibility**：`controls`（`accessibility` 特性）由外部进程经 AX API（VoiceOver 所用的同一接口）检查：首次查询得到占位、发布后得到完整树（静态文本、`AXTextArea`、各按钮及标题）；`AXPress` 走与指针相同的路径（“Clear text”清空编辑器）；多行编辑器经 `AXNumberOfCharacters`、`AXStringForRange`、`AXSelectedTextRange`、`AXInsertionPointLineNumber` 读出含中日韩文字的全文、光标与行号。此前文字 run 的 `character_lengths` 按每字符 1 字节填写，而 AccessKit 以 UTF-8 字节切分，读取含多字节字符的编辑器时 panic 使应用崩溃（各平台同一缺陷）；现按字节长度填写，`aegle-text/tests/accessibility.rs` 检查其与 run 文字一致。未用 VoiceOver 语音实测。
-* **未验收**：输入法、拖放尚未实机验收；应用失去激活时撤销抓取弹出层未自动化测试。
+* **输入法**：`controls` 中以系统简体拼音（`com.apple.inputmethod.SCIM.ITABC`）经 HID 键入 `nihao`：预编辑 `ni hao` 带下划线显示在光标处，候选窗紧贴光标下方（截屏核对），空格上屏 `你好`；经 AX 读回的字符数随预编辑与提交变化（23 → 29 → 25）。日文、韩文输入法未测。
+* **拖放**：`aegle-platform-macos` 的 native 场景用真实指针（HID）在两个窗口间拖动：源窗口按下后 `start_drag`，目标收到 `Drag`、宿主回答接受后收到 `Drop`，文字（含中文）与文件各一次，落点位于目标窗口内（会话自行采样指针，略滞后于合成轨迹）。AppKit 在事件投递中嵌套跟踪拖动，宿主循环在拖动期间停在 `dispatch` 内；连续 3 次通过。拖出到其他应用、其他应用拖入未测。
+* **未验收**：应用失去激活时撤销抓取弹出层未自动化测试。
 
 ---
 
@@ -96,7 +98,7 @@
    * SDL3 后端受限于上游 API，不支持拖动发起（只能作为放置目标）、无触摸板松手惯性（缺少滚动结束事件），输入法仅支持候选框定位与提交，不支持传递周边文字。
    * 真实触摸屏多点手势与压感尚未在物理硬件上验收。
 2. **多平台实机**：
-   * macOS 平台已实机验证 wgpu 呈现、文字渲染与 CoreText 编辑语义，输入法、拖放与 VoiceOver 尚待验收。
+   * macOS 平台已实机验证软件与 wgpu 呈现、CoreText 编辑语义、拼音输入法、窗口间拖放与 AX 无障碍接口；VoiceOver 语音、日韩输入法与跨应用拖放尚未实测。
    * Windows ARM64 尚未完成实机编译与驱动兼容性核验。
 3. **桌面 Shell 表面**：
    * Win32 未实现弹出层（创建返回 `Unsupported`）与输出枚举；`set_layer` 仅 Wayland 后端可用（其他平台无层）。
