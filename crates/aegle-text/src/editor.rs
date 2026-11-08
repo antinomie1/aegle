@@ -2,7 +2,7 @@ use std::{fmt, ops::Range};
 
 use crate::{
     TextDiagnostics, TextError, TextStyle, TextSystem,
-    document::{Caret, Document},
+    document::{Block, Caret, Document},
     history::History,
     layout::{Affinity, BoundingBox},
     nav::Selected,
@@ -199,7 +199,7 @@ impl Editor {
     }
     /// Number of laid out lines, counting soft wraps.
     pub fn line_count(&self) -> usize {
-        self.doc.blocks.iter().map(|block| block.layout.len()).sum()
+        self.doc.blocks.iter().map(Block::lines).sum()
     }
     /// Current layout extent, excluding trailing whitespace.
     pub fn size(&self) -> Size {

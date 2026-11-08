@@ -9,11 +9,12 @@
 //!
 //! # Verification
 //!
-//! Run on macOS 15 (x86_64): `tests/coretext.rs` covers generic families,
-//! line baselines, CJK fallback and CoreGraphics rasterization. The
-//! `document`, `editor` and `paragraph` tests still fail here (caret motion
-//! across hard breaks, single-line reflow, missing-glyph counts and an
-//! unfonted `TextSystem::new()`), so those behaviors remain unverified.
+//! Run on macOS 15 (x86_64): every `aegle-text` test passes here.
+//! `tests/coretext.rs` covers generic families, line baselines, CJK fallback
+//! and CoreGraphics rasterization; the shared `document`, `editor` and
+//! `paragraph` tests cover caret motion across hard breaks, the line after a
+//! final break, single-line reflow, missing glyphs (CoreText substitutes
+//! `LastResort` for them) and an unfonted `TextSystem::new()`.
 
 mod fonts;
 mod layout;

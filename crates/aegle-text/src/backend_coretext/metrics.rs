@@ -31,7 +31,13 @@ impl CoreTextLayout {
     /// character box the point fell in, using the offsets on either side.
     pub fn hit_test(&self, x: f32, y: f32) -> (usize, Affinity) {
         let Some((line, line_index)) = self.line_at(y) else {
-            return (0, Affinity::Downstream);
+            // Only the trailing empty line has no `CTLine`; its caret ends the text.
+            let index = if self.trailing_line {
+                self.text.len()
+            } else {
+                0
+            };
+            return (index, Affinity::Downstream);
         };
         // The line's own origin is the baseline point CoreText places it at;
         // both the click and the resulting offsets are relative to it.
@@ -66,15 +72,18 @@ impl CoreTextLayout {
         let Some(metrics) = self.line_containing(index) else {
             return BoundingBox::default();
         };
-        let Some((line, line_index)) = self.line_at(metrics.y + metrics.height / 2.0) else {
-            return BoundingBox::default();
+        let x = match self.line_at(metrics.y + metrics.height / 2.0) {
+            Some((line, line_index)) => {
+                (self.offset_in(&line, offsets::to_utf16(&self.text, index))
+                    + self.origins[line_index].0) as f32
+            }
+            None if self.trailing_line => self.trailing_line_x(),
+            None => return BoundingBox::default(),
         };
-        let x = self.offset_in(&line, offsets::to_utf16(&self.text, index))
-            + self.origins[line_index].0;
         BoundingBox {
-            x0: x as f32,
+            x0: x,
             y0: metrics.y,
-            x1: x as f32 + width,
+            x1: x + width,
             y1: metrics.y + metrics.height,
         }
     }
@@ -169,8 +178,9 @@ impl CoreTextLayout {
     ///
     /// CoreText always falls back, so a created frame leaves no byte unshaped:
     /// `unshaped_bytes` counts only what a failed frame could not shape at all.
-    /// A missing glyph is glyph index zero in a captured run; CoreText draws the
-    /// same `.notdef` the count reports.
+    /// A missing glyph is glyph index zero in a captured run, or any glyph of
+    /// a run CoreText gave to `LastResort`: it substitutes that font's
+    /// placeholders for characters no font covers instead of a `.notdef`.
     pub fn diagnostics(&self, text: &str) -> TextDiagnostics {
         let unshaped_bytes = match self.frame() {
             Some(_) => 0,
@@ -180,9 +190,11 @@ impl CoreTextLayout {
             missing_glyphs: self
                 .runs
                 .iter()
-                .flat_map(|run| run.glyphs.iter())
-                .filter(|glyph| glyph.0 == 0)
-                .count(),
+                .map(|run| match run.last_resort {
+                    true => run.glyphs.len(),
+                    false => run.glyphs.iter().filter(|glyph| glyph.0 == 0).count(),
+                })
+                .sum(),
             unshaped_bytes,
         }
     }

@@ -66,6 +66,9 @@ pub(super) struct StoredRun {
     pub size: f32,
     /// Glyph index, baseline x and baseline y in layout coordinates.
     pub glyphs: Vec<(u16, f32, f32)>,
+    /// Whether CoreText fell back to `LastResort`, whose glyphs are the
+    /// placeholders it draws for characters no font covers.
+    pub last_resort: bool,
 }
 
 impl CoreTextLayout {
@@ -129,6 +132,7 @@ unsafe fn collect_run(run: &CTRun, origin: (f32, f32)) -> Option<StoredRun> {
         let font = attributes.get(objc2_core_text::kCTFontAttributeName)?;
         let font = font.downcast::<CTFont>().ok()?;
         let handle = handle(&font);
+        let last_resort = font.post_script_name().to_string() == "LastResort";
         let size = font.size() as f32;
 
         let mut indices = vec![0u16; count];
@@ -159,6 +163,7 @@ unsafe fn collect_run(run: &CTRun, origin: (f32, f32)) -> Option<StoredRun> {
             font: handle,
             size,
             glyphs,
+            last_resort,
         })
     }
 }

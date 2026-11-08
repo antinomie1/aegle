@@ -56,6 +56,9 @@ pub(crate) struct CoreTextLayout {
     pub(super) origins: Vec<(f64, f64)>,
     /// The frame's total height, for converting to Aegle's top-down space.
     frame_height: f64,
+    /// Whether the last of `lines` is the empty line after a final hard break
+    /// (or of empty text), which has no `CTLine`.
+    pub(super) trailing_line: bool,
 }
 
 impl CoreTextLayout {
@@ -100,6 +103,7 @@ impl CoreTextLayout {
             underline: None,
             origins: Vec::new(),
             frame_height: 0.0,
+            trailing_line: false,
         }
     }
 
@@ -158,7 +162,7 @@ impl CoreTextLayout {
         // frame are reference counted.
         let frame = unsafe {
             let framesetter = CTFramesetter::with_attributed_string(attributed);
-            let path = frame_path(self.width, self.text.len());
+            let path = frame_path(self.width.filter(|_| self.wrap), self.text.len());
             framesetter.frame(CFRangeFor::ALL, &path, None)
         };
         self.frame = Some(frame);
@@ -248,6 +252,9 @@ impl CoreTextLayout {
                 let start = offsets::to_utf8(&self.text, range.location.max(0) as u32);
                 let end =
                     offsets::to_utf8(&self.text, (range.location + range.length).max(0) as u32);
+                // CoreText counts a hard break in its line; the contract's line
+                // ends before it, as DirectWrite's and Pango's do.
+                let end = start.max(end - trailing_break(&self.text[start..end]));
                 let height = ascent + descent + leading;
                 measured.push((start, end, height, ascent, width, origin.y));
                 total = total.max(origin.y + height);
@@ -262,6 +269,10 @@ impl CoreTextLayout {
                     baseline: (top + ascent) as f32,
                 });
             }
+            self.trailing_line = self.text.is_empty() || trailing_break(&self.text) > 0;
+            if self.trailing_line {
+                self.push_trailing_line(total as f32);
+            }
             self.first_baseline = self.lines.first().map(|line| line.baseline);
             self.frame_height = total;
             self.size = (
@@ -272,6 +283,46 @@ impl CoreTextLayout {
                 min: self.measure_min_width(),
                 max: self.size.0,
             };
+        }
+    }
+
+    /// Adds the empty line after a final hard break, or of empty text, at
+    /// `top`. CoreText makes no line there, while the caret needs one and
+    /// Pango and DirectWrite count it; it takes the previous line's height
+    /// and baseline, or the font's for empty text.
+    fn push_trailing_line(&mut self, top: f32) {
+        let (height, ascent) = match self.lines.last() {
+            Some(line) => (line.height, line.baseline - line.y),
+            None => {
+                let Some(font) = &self.font else {
+                    return;
+                };
+                // SAFETY: the font is live; the getters only read metrics.
+                let ascent = unsafe { font.ascent() } as f32;
+                let natural = natural_line_height(font);
+                let height = offsets::line_height(self.line_height, natural, self.font_size)
+                    .unwrap_or(natural);
+                (height, ascent + (height - natural) / 2.0)
+            }
+        };
+        let end = self.text.len();
+        self.lines.push(LineMetrics {
+            start: end,
+            end,
+            y: top,
+            height,
+            baseline: top + ascent,
+        });
+    }
+
+    /// Where the caret sits on the trailing empty line, by alignment.
+    pub(super) fn trailing_line_x(&self) -> f32 {
+        let width = self.width.filter(|_| self.wrap).unwrap_or(0.0);
+        match self.alignment {
+            Alignment::Center => width / 2.0,
+            Alignment::Right | Alignment::End if !self.is_rtl => width,
+            Alignment::Start if self.is_rtl => width,
+            _ => 0.0,
         }
     }
 
@@ -427,6 +478,23 @@ fn frame_path(width: Option<f32>, text_len: usize) -> CFRetained<CGPath> {
     }
     // SAFETY: a mutable path is a `CGPath` at a less specific type.
     unsafe { CFRetained::cast_unchecked(path) }
+}
+
+/// Bytes of the hard line break that ends `line`, if any.
+fn trailing_break(line: &str) -> usize {
+    if line.ends_with("\r\n") {
+        2
+    } else {
+        line.chars()
+            .next_back()
+            .filter(|c| {
+                matches!(
+                    c,
+                    '\n' | '\r' | '\u{0b}' | '\u{0c}' | '\u{85}' | '\u{2028}' | '\u{2029}'
+                )
+            })
+            .map_or(0, char::len_utf8)
+    }
 }
 
 /// The natural line height of `font`, in points.

@@ -424,7 +424,6 @@ dependencies = [
  "icu_segmenter",
  "libloading",
  "linebender_resource_handle",
- "objc2 0.6.4",
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-core-text",

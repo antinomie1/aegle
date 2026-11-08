@@ -116,8 +116,10 @@ jobs:
       - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,wgpu,accessibility" -- -D warnings
       # The window model tests run anywhere; native window tests need a GUI session.
       - run: cargo test -p aegle-platform-macos
-      # CoreText renders the glyph coverage; these tests need the real system.
+      # CoreText renders the glyph coverage and shapes the editor's text; these
+      # tests need the real system.
       - run: cargo test -p aegle-glyph
+      - run: cargo test -p aegle-text --features system-fonts,scene
       - run: cargo test -p aegle --no-default-features --features "native,tiny-skia,markup,motion,accessibility"
   deny:
     runs-on: ubuntu-latest

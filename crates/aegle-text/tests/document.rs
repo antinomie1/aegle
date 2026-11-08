@@ -151,3 +151,38 @@ fn motion_crosses_line_breaks() {
         .unwrap();
     assert_eq!(caret(&editor), 4);
 }
+
+#[test]
+fn a_final_break_and_empty_text_keep_a_line_for_the_caret() {
+    let mut system = system();
+    let mut editor = system.editor("AB\n", &style(), MULTILINE).unwrap();
+    assert_eq!(editor.line_count(), 2);
+    let one = system.editor("AB", &style(), MULTILINE).unwrap();
+    assert!(editor.size().height > one.size().height * 1.5);
+    system
+        .edit(&mut editor)
+        .move_cursor(Movement::TextEnd, false)
+        .unwrap();
+    let caret = editor.caret_rect(1.0).unwrap().unwrap();
+    assert!(caret.size.height > 0.0);
+    assert!(caret.origin.y >= one.size().height - 0.5);
+    // A click below the text lands after the break.
+    let below = editor.size().height - 1.0;
+    system
+        .edit(&mut editor)
+        .move_cursor(Movement::TextStart, false)
+        .unwrap();
+    system
+        .edit(&mut editor)
+        .select_at(
+            aegle_types::Point::new(0.0, below),
+            aegle_text::HitSelection::Caret,
+        )
+        .unwrap();
+    assert_eq!(editor.selection().focus, 3);
+
+    let empty = system.editor("", &style(), MULTILINE).unwrap();
+    assert_eq!(empty.line_count(), 1);
+    assert!(empty.size().height > 0.0);
+    assert!(empty.caret_rect(1.0).unwrap().unwrap().size.height > 0.0);
+}

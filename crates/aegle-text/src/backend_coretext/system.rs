@@ -54,8 +54,10 @@ impl CoreTextSystem {
     /// face for a family it lacks, so the first family of the list that is
     /// installed wins, and a generic family without a registration stands for
     /// the macOS fonts that CSS engines use for it. With none present, the
-    /// first name is kept and CoreText's substitution applies.
-    pub fn family(&self, css: &str) -> String {
+    /// first name is kept and CoreText's substitution applies. A system built
+    /// without the machine's fonts matches registrations only, and has no
+    /// family (`None`) until one exists.
+    pub fn family(&self, css: &str) -> Option<String> {
         let mut first = None;
         for token in css.split(',') {
             let name = token.trim().trim_matches(['"', '\'']);
@@ -79,23 +81,50 @@ impl CoreTextSystem {
                 .and_then(|generic| self.generics.get(&generic))
                 .and_then(|names| names.first())
             {
-                return registered.clone();
+                return Some(registered.clone());
+            }
+            if !self.system_fonts {
+                if generic.is_none()
+                    && let Some(found) = self.registered_family(name)
+                {
+                    return Some(found.to_owned());
+                }
+                continue;
             }
             let candidates = match generic {
                 Some(_) => system,
                 None => std::slice::from_ref(&name),
             };
             if let Some(found) = candidates.iter().find(|family| fonts::installed(family)) {
-                return (*found).to_owned();
+                return Some((*found).to_owned());
             }
             first.get_or_insert(name);
         }
-        first.unwrap_or("sans-serif").to_owned()
+        if !self.system_fonts {
+            // Without the machine's fonts an unmatched list falls back to the
+            // first registration, as CoreText would substitute an installed
+            // face; with none registered nothing can shape.
+            return self
+                .registered
+                .first()
+                .and_then(|registered| registered.families.first())
+                .cloned();
+        }
+        Some(first.unwrap_or("sans-serif").to_owned())
+    }
+
+    /// The registered family named `name`, compared case-insensitively.
+    fn registered_family(&self, name: &str) -> Option<&str> {
+        self.registered
+            .iter()
+            .flat_map(|registered| &registered.families)
+            .find(|family| family.eq_ignore_ascii_case(name))
+            .map(String::as_str)
     }
 
     /// The font for one shaping key, at its size, weight and slant.
     pub fn font(&self, shaping: &Shaping) -> Option<objc2_core_foundation::CFRetained<CTFont>> {
-        let family = self.family(&shaping.families);
+        let family = self.family(&shaping.families)?;
         fonts::font(
             &family,
             f64::from(shaping.size),
