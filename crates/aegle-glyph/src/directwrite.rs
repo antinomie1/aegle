@@ -8,11 +8,12 @@
 //! `RasterOptions::hint` selects grid fitting; synthetic bold is DirectWrite's
 //! bold simulation and synthetic slant is the run's transform.
 //!
-//! A COLR glyph (the system emoji font's representation) is translated with
-//! `IDWriteFactory2::TranslateColorGlyphRun` into its layers; each layer's
-//! alpha texture is composited in its palette color, or in
-//! [`RasterOptions::foreground`] for the text-color entry, into one straight
-//! [`Content::Color`] image. A glyph whose only color representation is SVG or
+//! A glyph of a color font (COLR, the system emoji font's representation) is
+//! translated with `IDWriteFactory2::TranslateColorGlyphRun` into its layers;
+//! each layer's alpha texture is composited in linear light, like the Rust
+//! COLR path, in its palette color or in [`RasterOptions::foreground`] for the
+//! text-color entry, into one straight [`Content::Color`] image. A glyph the
+//! translation reports as having no color layers is drawn as its outline. A glyph whose only color representation is SVG or
 //! a PNG, JPEG, TIFF or BGRA strike returns [`GlyphError::UnsupportedGlyph`]
 //! instead of a monochrome silhouette.
 //!
@@ -32,7 +33,7 @@
 use std::mem::ManuallyDrop;
 
 use aegle_scene::SystemFont;
-use windows::Win32::Foundation::RECT;
+use windows::Win32::Foundation::{DWRITE_E_NOCOLOR, RECT};
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_COLOR_GLYPH_RUN, DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FACE_TYPE,
     DWRITE_FONT_FILE_TYPE, DWRITE_FONT_SIMULATIONS_BOLD, DWRITE_FONT_SIMULATIONS_NONE,
@@ -41,11 +42,12 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_GRID_FIT_MODE_ENABLED, DWRITE_MATRIX, DWRITE_MEASURING_MODE_NATURAL,
     DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE,
     DWRITE_TEXTURE_ALIASED_1x1, DWriteCreateFactory, IDWriteFactory, IDWriteFactory2,
-    IDWriteFactory5, IDWriteFontFace, IDWriteFontFace4, IDWriteFontFile, IDWriteGlyphRunAnalysis,
-    IDWriteInMemoryFontFileLoader,
+    IDWriteFactory5, IDWriteFontFace, IDWriteFontFace2, IDWriteFontFace4, IDWriteFontFile,
+    IDWriteGlyphRunAnalysis, IDWriteInMemoryFontFileLoader,
 };
 use windows::core::{BOOL, IUnknown, Interface, PCWSTR};
 
+use crate::srgb::{encoded, linear};
 use crate::system::{FaceSource, SystemRasterizer, register_system_rasterizer};
 use crate::{CacheLimits, Content, GlyphError, Image, Placement, RasterOptions};
 
@@ -195,11 +197,7 @@ impl SystemRasterizer for DirectWriteRasterizer {
         let source = crate::system_face(*font).ok_or(GlyphError::InvalidFont)?;
         let face = self.face(&source, options.embolden)?;
         let formats = image_formats(&face, glyph)?;
-        let outline = DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE | DWRITE_GLYPH_IMAGE_FORMATS_CFF;
-        let color = (formats & DWRITE_GLYPH_IMAGE_FORMATS_COLR).0 != 0;
-        if !color && (formats & !outline).0 != 0 {
-            return Err(GlyphError::UnsupportedGlyph);
-        }
+        let colr_font = (formats & DWRITE_GLYPH_IMAGE_FORMATS_COLR).0 != 0 || is_color_font(&face);
         let factory = self.factory()?;
         let advance = 0.0f32;
         let run = DWRITE_GLYPH_RUN {
@@ -227,10 +225,19 @@ impl SystemRasterizer for DirectWriteRasterizer {
             transform: transform.as_ref(),
             options,
         };
-        let image = match color {
+        let outline = DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE | DWRITE_GLYPH_IMAGE_FORMATS_CFF;
+        let image = match colr_font {
             true => colr(pen, &run, reserve),
-            false => mask(pen, &run, options.offset, reserve),
-        };
+            false => Ok(None),
+        }
+        .and_then(|layered| match layered {
+            Some(image) => Ok(image),
+            // Whatever is left besides the outline is an SVG or bitmap form.
+            None if (formats & !(outline | DWRITE_GLYPH_IMAGE_FORMATS_COLR)).0 != 0 => {
+                Err(GlyphError::UnsupportedGlyph)
+            }
+            None => mask(pen, &run, options.offset, reserve),
+        });
         // The run borrowed the face; release the reference it was given.
         drop(ManuallyDrop::into_inner(run.fontFace));
         image
@@ -344,12 +351,13 @@ fn mask(
 const FOREGROUND_LAYER: u16 = 0xFFFF;
 
 /// The COLR layers of the glyph, bottom first, composited source-over in
-/// encoded sRGB like the other COLRv0 paths.
+/// premultiplied linear light like the Rust COLR path; `None` when the glyph
+/// has no color layers.
 fn colr(
     pen: Pen<'_>,
     run: &DWRITE_GLYPH_RUN,
     reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
-) -> Result<Image, GlyphError> {
+) -> Result<Option<Image>, GlyphError> {
     let factory2: &IDWriteFactory2 = pen.factory;
     let origin = pen.options.offset;
     // SAFETY: the run is live for the call and the transform pointer, when
@@ -364,8 +372,12 @@ fn colr(
             pen.transform.map(|matrix| matrix as *const DWRITE_MATRIX),
             0,
         )
-    }
-    .map_err(|_| GlyphError::UnsupportedGlyph)?;
+    };
+    let layers = match layers {
+        Ok(layers) => layers,
+        Err(error) if error.code() == DWRITE_E_NOCOLOR => return Ok(None),
+        Err(_) => return Err(GlyphError::UnsupportedGlyph),
+    };
     // Each layer's run is valid only until the next `MoveNext`, so its
     // analysis is made at once; the analyses own what they need.
     let mut drawn = Vec::new();
@@ -382,13 +394,11 @@ fn colr(
                 .map_err(|_| GlyphError::UnsupportedGlyph)?
         };
         let ink = match layer.paletteIndex {
-            FOREGROUND_LAYER => pen
-                .options
-                .foreground
-                .map(|channel| f32::from(channel) / 255.0),
+            FOREGROUND_LAYER => pen.options.foreground,
             _ => {
                 let color = layer.runColor;
                 [color.r, color.g, color.b, color.a]
+                    .map(|channel| (channel.clamp(0.0, 1.0) * 255.0).round() as u8)
             }
         };
         let (analysis, bounds) = pen.analysis(
@@ -396,7 +406,7 @@ fn colr(
             [layer.baselineOriginX, layer.baselineOriginY],
         )?;
         if extent(&bounds).0 > 0 && extent(&bounds).1 > 0 {
-            drawn.push((analysis, bounds, ink));
+            drawn.push((analysis, bounds, linear(ink)));
         }
     }
     let Some(union) = drawn
@@ -409,7 +419,7 @@ fn colr(
             bottom: a.bottom.max(b.bottom),
         })
     else {
-        return empty(reserve);
+        return empty(reserve).map(Some);
     };
     let (width, height) = extent(&union);
     let bytes = width
@@ -417,7 +427,7 @@ fn colr(
         .and_then(|pixels| pixels.checked_mul(4))
         .ok_or(GlyphError::ImageBudget)?;
     reserve(bytes)?;
-    // Premultiplied accumulation in encoded sRGB, one f32 per channel.
+    // Premultiplied linear accumulation, one f32 per channel.
     let mut accumulated = vec![[0f32; 4]; width * height];
     for (analysis, bounds, ink) in &drawn {
         let coverage = alpha(analysis, bounds)?;
@@ -430,32 +440,25 @@ fn colr(
             if cover == 0 {
                 continue;
             }
-            let a = ink[3].clamp(0.0, 1.0) * f32::from(cover) / 255.0;
+            let coverage = f32::from(cover) / 255.0;
+            let alpha = ink[3] * coverage;
             let pixel = &mut accumulated[(dy + i / layer_width) * width + dx + i % layer_width];
-            for channel in 0..3 {
-                pixel[channel] = ink[channel].clamp(0.0, 1.0) * a + pixel[channel] * (1.0 - a);
-            }
-            pixel[3] = a + pixel[3] * (1.0 - a);
+            *pixel = std::array::from_fn(|c| ink[c] * coverage + pixel[c] * (1.0 - alpha));
         }
     }
-    let mut data = Vec::with_capacity(bytes);
-    for [r, g, b, a] in accumulated {
-        let straight = |channel: f32| match a {
-            0.0 => 0,
-            _ => ((channel / a).clamp(0.0, 1.0) * 255.0).round() as u8,
-        };
-        data.extend([
-            straight(r),
-            straight(g),
-            straight(b),
-            (a * 255.0).round() as u8,
-        ]);
-    }
-    Ok(Image {
+    let data: Vec<u8> = accumulated.into_iter().flat_map(encoded).collect();
+    Ok(Some(Image {
         placement: placement(&union),
         content: Content::Color,
         data: data.into_boxed_slice(),
-    })
+    }))
+}
+
+/// Whether the face has color glyphs at all (COLR and CPAL tables).
+fn is_color_font(face: &IDWriteFontFace) -> bool {
+    // SAFETY: the face is live; the query has no other effect.
+    face.cast::<IDWriteFontFace2>()
+        .is_ok_and(|face| unsafe { face.IsColorFont() }.as_bool())
 }
 
 /// Every representation the font gives `glyph`, outline included.

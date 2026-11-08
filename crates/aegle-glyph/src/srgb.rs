@@ -2,12 +2,12 @@
 //!
 //! Decoded font bitmaps and COLR layers composite in linear premultiplied
 //! space; the images Aegle hands to renderers are straight sRGB, so each path
-//! converts in and out. These are shared by the fallback rasterizer and by
-//! `bitmap.rs`/`colrv1.rs`.
+//! converts in and out. These are shared by the fallback rasterizer,
+//! `bitmap.rs`/`colrv1.rs` and the DirectWrite COLR compositor.
 
 /// Premultiplied linear RGBA while sampling/compositing; public images stay
 /// straight sRGB.
-#[cfg_attr(not(feature = "swash"), allow(dead_code))]
+#[cfg_attr(not(any(feature = "swash", windows)), allow(dead_code))]
 pub(crate) fn linear(rgba: [u8; 4]) -> [f32; 4] {
     let a = rgba[3] as f32 / 255.0;
     let decode = |v: u8| {
@@ -27,7 +27,7 @@ pub(crate) fn linear(rgba: [u8; 4]) -> [f32; 4] {
 }
 
 /// Encodes premultiplied linear RGBA back to straight sRGB bytes.
-#[cfg_attr(not(feature = "swash"), allow(dead_code))]
+#[cfg_attr(not(any(feature = "swash", windows)), allow(dead_code))]
 pub(crate) fn encoded(rgba: [f32; 4]) -> [u8; 4] {
     if rgba[3] <= 0.0 {
         return [0; 4];

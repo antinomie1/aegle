@@ -176,8 +176,9 @@ fn color_glyph_fonts_rasterize_strikes_in_color_and_outlines_as_masks() {
     assert_eq!(cache.stats().entries, entries);
 }
 
-/// DirectWrite composites COLR layers: the fixture's A glyph is opaque red
-/// under half-transparent blue on the same outline, so its interior is purple.
+/// DirectWrite composites COLR layers: the fixture's A glyph (glyph 1, the COLR
+/// base) is opaque red under half-transparent blue on the same outline, so its
+/// interior is purple.
 /// Its B glyph has only an sbix strike besides the outline, which this
 /// rasterizer reports instead of drawing a silhouette.
 #[cfg(target_os = "windows")]
@@ -208,10 +209,11 @@ fn colr_layers_composite_in_their_palette_colors() {
         .filter(|pixel| pixel[3] == 255)
         .collect();
     assert!(!interior.is_empty());
-    // Blue at alpha 128/255 over red: 127 red, 128 blue, in straight alpha.
+    // Blue at alpha 128/255 over red, mixed in linear light like the Rust COLR
+    // path (`retained.rs`): about 188 of each in straight sRGB.
     for pixel in interior {
-        assert!(pixel[0].abs_diff(127) <= 1 && pixel[1] == 0, "{pixel:?}");
-        assert!(pixel[2].abs_diff(128) <= 1, "{pixel:?}");
+        assert!((186..=190).contains(&pixel[0]) && pixel[1] == 0, "{pixel:?}");
+        assert!((186..=190).contains(&pixel[2]), "{pixel:?}");
     }
     assert_eq!(
         cache.rasterize(&font, 2, options).err(),
