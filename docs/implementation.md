@@ -110,5 +110,6 @@
    * 控件库的 `Popup`/`Menu`/`Dropdown` 仍是窗口内浮层，尚未改用原生弹出层；标记语言没有弹出层元素，原生弹出层只能由 Rust 的 `Window::popup` 打开。
    * 输出热插拔时按输出增删面板需由宿主在 `App::on_outputs` 中完成；按 layer-shell 协议，输出断开时合成器关闭其上的层，宿主收到 `Close` 后移除该窗口（此路径尚未实测）。
 4. **Windows 彩色字形**：DirectWrite 光栅器此前对一切非轮廓表示返回 `UnsupportedGlyph`，渲染器整帧失败，含 emoji（Segoe UI Emoji 为 COLR）的文字无法绘制。现在彩色字体（`IsColorFont` 或字形格式含 COLR）的字形经 `TranslateColorGlyphRun` 逐层在线性光中合成为彩色图像（与 Rust COLR 路径一致，`DWRITE_E_NOCOLOR` 的字形按轮廓绘制）；该路径只在 macOS 上交叉编译（`x86_64-pc-windows-msvc`，clippy `-D warnings`）通过，`aegle-glyph/tests/platform_raster.rs` 的 Windows 用例（测试字体 A 的红、半透明蓝两层合成为约 188/0/188 的紫色，B 的 sbix 位图报 `UnsupportedGlyph`）由 Windows CI 运行；首次 CI 中 `GetGlyphImageFormats` 未对 A 报告 COLR，因此改为同时按 `IsColorFont` 判断，尚未在实机上看过 emoji。只有 SVG 或 PNG/JPEG/TIFF/BGRA 位图表示的字形仍让该帧失败。
-5. **桌面服务**：
+5. **Pango 尺寸取整**：Pango 后端的布局尺寸取自 `pango_layout_get_pixel_size`（向上取整到整像素），行度量则保留小数；因此多段落编辑器中段落间的位置与单段落的尺寸可差不到 1 px（`aegle-text/tests/document.rs` 改为以首行插入符为基准判断末尾换行后的插入符在下一行）。尚未统一为小数尺寸。
+6. **桌面服务**：
    * `aegle-desktop` 的 macOS 通知只在应用包内可用（裸二进制报 `Unavailable`），通知验证为手动步骤、未进 CI；全局快捷键按 ANSI 键位匹配，非美式布局下字母键按位置而非字符。

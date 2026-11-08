@@ -161,11 +161,22 @@ fn a_final_break_and_empty_text_keep_a_line_for_the_caret() {
     assert!(editor.size().height > one.size().height * 1.5);
     system
         .edit(&mut editor)
+        .move_cursor(Movement::TextStart, false)
+        .unwrap();
+    let first = editor.caret_rect(1.0).unwrap().unwrap();
+    system
+        .edit(&mut editor)
         .move_cursor(Movement::TextEnd, false)
         .unwrap();
     let caret = editor.caret_rect(1.0).unwrap().unwrap();
     assert!(caret.size.height > 0.0);
-    assert!(caret.origin.y >= one.size().height - 0.5);
+    // The caret sits on the line below the first. (Pango rounds a layout's
+    // size up to whole pixels but not its line extents, so this is measured
+    // from the first line's caret rather than from `one`'s size.)
+    assert!(
+        caret.origin.y >= first.origin.y + first.size.height - 0.5,
+        "{first:?} then {caret:?}"
+    );
     // A click below the text lands after the break.
     let below = editor.size().height - 1.0;
     system
