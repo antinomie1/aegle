@@ -84,7 +84,8 @@
 * **CoreText 编辑语义**：`cargo test -p aegle-text --features system-fonts,scene` 全部通过（已加入 macOS CI）。行尾不含硬换行符；末尾硬换行后与空文本各有一条空行承载光标（CoreText 不生成，按前一行或字体度量补出）；单行编辑器不软换行；`TextSystem::new()` 只匹配已注册字体；CoreText 以 `LastResort` 代替缺字，其字形计入缺字数。
 * **输出与弹出层**：`cargo test -p aegle-platform-macos --test native -- --ignored` 在实机 GUI 会话通过（该目标 `harness = false`，在主线程运行；此前的 libtest 形式不在主线程，从未能运行）：屏幕列为输出（主屏位于原点、ID 互异）；抓取弹出层取得键盘焦点；弹出层上的被动弹出层；空锚点、层与弹出层同设被拒；在被动子弹出层内按下不撤销，在父窗口按下只对抓取弹出层发一次 `Close` 且父窗口仍收到该按下；父窗口与有子弹出层的弹出层先移除被拒。`tests/placement.rs` 覆盖四个方向、翻转、滑动与超出屏幕的弹出层。
 * **桌面服务**：`cargo test -p aegle-desktop --test macos -- --ignored` 在实机通过（`harness = false`，主线程，由 `aegle-platform-macos` 的循环送达事件；连续 3 次通过）：主线程外创建被拒；保存面板按请求显示标题、文件名与扩展名过滤，在面板就绪后经 HID 输入 Return 返回所选文件夹下的 `notes.txt`；打开面板允许多选、无过滤，Escape 返回 `None`；状态栏按钮带图标与更新后的提示，单击报 `TrayActivated`，移除后不再存在；Ctrl+Alt+Shift+F19 经 HID 真实按下（含 Fn，与 Mac 键盘一致）报 `Shortcut`，F24 报 `Unavailable`，重绑与清空后无事件；`notify` 报 `Unavailable`。进程外面板在显示后需片刻才接收按键，测试等待约 2 秒。
-* **未验收**：输入法、拖放、VoiceOver 与软件（CGImage）呈现尚未实机验收；应用失去激活时撤销抓取弹出层未自动化测试。
+* **软件呈现与自动释放池**：tiny-skia 下 `showcase` 经 CGImage 呈现正确（Retina 2×、中日韩文字、全部控件，截屏核对）。平台循环不经 `-[NSApplication run]`，此前从不清空自动释放池，绘制保留的每帧图像永不释放：`showcase`（含一直转动的不定进度条）物理内存每秒增长约 300 MB，十余秒到 9.4 GB。现在每轮事件与每次呈现各用一个自动释放池，物理内存稳定在约 113 MB（`vmmap` 物理占用）。release 构建下无动画的 `hello` 空闲 CPU 0%、43 MB；`showcase` 动画时约 30% CPU，主要花在每帧把整幅缓冲拷入新 `CFData`。
+* **未验收**：输入法、拖放、VoiceOver 尚未实机验收；应用失去激活时撤销抓取弹出层未自动化测试。
 
 ---
 

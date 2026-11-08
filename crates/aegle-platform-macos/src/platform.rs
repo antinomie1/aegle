@@ -9,6 +9,7 @@ use aegle_platform::{
     Platform, Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowId,
     WindowInfo, WindowOptions,
 };
+use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSEventMask, NSEventType};
 use objc2_foundation::{NSDate, NSDefaultRunLoopMode};
 use std::time::{Duration, Instant};
@@ -23,49 +24,54 @@ impl MacOs {
     /// deliver its occlusion changes.
     pub(crate) fn dispatch(&mut self, timeout: Option<Duration>) -> Result<()> {
         let deadline = timeout.and_then(|timeout| Instant::now().checked_add(timeout));
-        loop {
-            // Queues due frames; the next one bounds the wait below.
-            let next_frame = self.refresh();
-            let wait = if self.shared.events.borrow().is_empty() {
-                [
-                    deadline.map(|deadline| deadline.saturating_duration_since(Instant::now())),
-                    next_frame.map(|frame| frame.saturating_duration_since(Instant::now())),
-                ]
-                .into_iter()
-                .flatten()
-                .min()
-            } else {
-                Some(Duration::ZERO)
-            };
-            // A nil date would not wait at all.
-            let date = match wait {
-                Some(left) => NSDate::dateWithTimeIntervalSinceNow(left.as_secs_f64()),
-                None => NSDate::distantFuture(),
-            };
-            let event = self.app.nextEventMatchingMask_untilDate_inMode_dequeue(
-                NSEventMask::Any,
-                Some(&date),
-                // SAFETY: a static AppKit run-loop mode constant.
-                unsafe { NSDefaultRunLoopMode },
-                true,
-            );
-            let Some(event) = event else {
-                // The wait ended with nothing to translate; report the frames
-                // its deadline held.
-                self.refresh();
-                return Ok(());
-            };
-            if event.r#type() == NSEventType::ApplicationDefined {
-                // A wake; the signal's callback already queued its event.
-                continue;
-            }
-            self.press_popups(&event);
-            self.app.sendEvent(&event);
+        // Each turn drains its own autorelease pool, as `-[NSApplication run]`
+        // does: AppKit autoreleases events, dates and what drawing retains.
+        while !autoreleasepool(|_| self.turn(deadline)) {}
+        Ok(())
+    }
+
+    /// Waits for and delivers one native event. Returns whether `dispatch`
+    /// is done: the wait ended or the event queued something.
+    fn turn(&mut self, deadline: Option<Instant>) -> bool {
+        // Queues due frames; the next one bounds the wait below.
+        let next_frame = self.refresh();
+        let wait = if self.shared.events.borrow().is_empty() {
+            [
+                deadline.map(|deadline| deadline.saturating_duration_since(Instant::now())),
+                next_frame.map(|frame| frame.saturating_duration_since(Instant::now())),
+            ]
+            .into_iter()
+            .flatten()
+            .min()
+        } else {
+            Some(Duration::ZERO)
+        };
+        // A nil date would not wait at all.
+        let date = match wait {
+            Some(left) => NSDate::dateWithTimeIntervalSinceNow(left.as_secs_f64()),
+            None => NSDate::distantFuture(),
+        };
+        let event = self.app.nextEventMatchingMask_untilDate_inMode_dequeue(
+            NSEventMask::Any,
+            Some(&date),
+            // SAFETY: a static AppKit run-loop mode constant.
+            unsafe { NSDefaultRunLoopMode },
+            true,
+        );
+        let Some(event) = event else {
+            // The wait ended with nothing to translate; report the frames
+            // its deadline held.
             self.refresh();
-            if !self.shared.events.borrow().is_empty() {
-                return Ok(());
-            }
+            return true;
+        };
+        if event.r#type() == NSEventType::ApplicationDefined {
+            // A wake; the signal's callback already queued its event.
+            return false;
         }
+        self.press_popups(&event);
+        self.app.sendEvent(&event);
+        self.refresh();
+        !self.shared.events.borrow().is_empty()
     }
 
     /// Queues due frames. An occluded window waits for its occlusion callback
@@ -177,7 +183,8 @@ impl Platform for MacOs {
     ) -> Result<bool> {
         let mtm = self.mtm;
         let native = self.window(window)?.clone();
-        let presented = native.present(mtm, damage, draw)?;
+        // Drawing autoreleases the frame's image; drain it with the frame.
+        let presented = autoreleasepool(|_| native.present(mtm, damage, draw))?;
         if presented {
             self.refresh();
         }
@@ -197,7 +204,8 @@ impl SurfacePlatform for MacOs {
         window: WindowId,
         present: impl FnOnce(PixelSize) -> DrawResult<bool>,
     ) -> Result<bool> {
-        let presented = MacOs::present_external(self, window, present)?;
+        // Metal autoreleases each drawable; drain it with the frame.
+        let presented = autoreleasepool(|_| MacOs::present_external(self, window, present))?;
         if presented {
             self.refresh();
         }
