@@ -51,13 +51,13 @@ windows = { version = "0.62.2", default-features = false, features = [
 # CoreText draws glyphs into an alpha-only CoreGraphics bitmap context.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
-    "std", "CFData", "CFCGTypes", "CFString",
+    "std", "CFArray", "CFData", "CFCGTypes", "CFString", "CFURL",
 ] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
-    "std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGDataProvider", "CGFont", "CGImage",
+    "std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage",
 ] }
 objc2-core-text = { version = "0.3.2", default-features = false, features = [
-    "std", "CTFont", "CTFontDescriptor", "CTFontTraits", "objc2-core-graphics",
+    "std", "CTFont", "CTFontDescriptor", "CTFontManager", "CTFontTraits", "objc2-core-graphics",
 ] }
 
 # A target with no system glyph backend still needs a rasterizer so glyphs never

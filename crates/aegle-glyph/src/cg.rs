@@ -12,24 +12,27 @@
 //! of a font with the color-glyphs trait returns
 //! [`GlyphError::UnsupportedGlyph`] instead of a monochrome silhouette.
 //!
+//! CoreText's own runs name the `CTFont` they were shaped with through
+//! [`register_font`], so the glyph comes from exactly that face, variable
+//! instance and application font included; the rasterizer only resizes it.
+//! Shared font bytes ([`FaceSource`]) open the face at their collection index.
 //! Every font object is reference counted by `CFRetained`, and at most
-//! [`MAX_FONTS`] stay alive, evicting the least recently used. Font variation
-//! coordinates are not applied, matching the earlier outline path.
-//!
-//! # Verification
-//!
-//! Compile-checked only: cross-compiled for `aarch64-apple-darwin` from Linux
-//! and never run on a Mac.
+//! [`MAX_FONTS`] sized fonts stay alive, evicting the least recently used.
 #![allow(unsafe_code)]
 
+use std::collections::BTreeMap;
 use std::ptr::NonNull;
+use std::sync::{Mutex, OnceLock, PoisonError};
 
 use aegle_scene::SystemFont;
-use objc2_core_foundation::{CFData, CFRetained, CGAffineTransform, CGPoint, CGRect};
-use objc2_core_graphics::{
-    CGBitmapContextCreate, CGContext, CGDataProvider, CGFont, CGImageAlphaInfo, CGTextDrawingMode,
+use objc2_core_foundation::{
+    CFArray, CFData, CFRetained, CFURL, CGAffineTransform, CGPoint, CGRect,
 };
-use objc2_core_text::{CTFont, CTFontOrientation, CTFontSymbolicTraits};
+use objc2_core_graphics::{CGBitmapContextCreate, CGContext, CGImageAlphaInfo, CGTextDrawingMode};
+use objc2_core_text::{
+    CTFont, CTFontDescriptor, CTFontManagerCreateFontDescriptorsFromData,
+    CTFontManagerCreateFontDescriptorsFromURL, CTFontOrientation, CTFontSymbolicTraits,
+};
 
 use crate::system::{FaceSource, SystemRasterizer, register_system_rasterizer};
 use crate::{CacheLimits, Content, GlyphError, Image, Placement, RasterOptions};
@@ -40,9 +43,32 @@ const MAX_FONTS: usize = 4;
 /// device range.
 const MAX_COORD: f64 = 1_048_576.0;
 
-/// One cached font and the face source it was built from.
+/// A registered CoreText font.
+struct Native(CFRetained<CTFont>);
+
+// SAFETY: CoreText documents font objects as immutable and safe to use from
+// any thread; the registry only hands out new references under its lock.
+unsafe impl Send for Native {}
+
+/// Fonts CoreText shaped with, by the handle their runs carry.
+fn natives() -> &'static Mutex<BTreeMap<SystemFont, Native>> {
+    static NATIVES: OnceLock<Mutex<BTreeMap<SystemFont, Native>>> = OnceLock::new();
+    NATIVES.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// Makes `handle` rasterize with `font`'s face at any size, replacing any
+/// earlier registration. The CoreText text backend calls this before a run
+/// naming `handle` is painted.
+pub fn register_font(handle: SystemFont, font: &CTFont) {
+    natives()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(handle, Native(objc2_core_foundation::Type::retain(font)));
+}
+
+/// One cached font, by the handle and size it was created for.
 struct Cached {
-    source: FaceSource,
+    handle: SystemFont,
     font: CFRetained<CTFont>,
     /// Bits of the `f32` pixels per em the font was created at.
     size: u32,
@@ -59,25 +85,25 @@ impl CgRasterizer {
         Self { fonts: Vec::new() }
     }
 
-    /// A font for `source` at `size` pixels per em, reusing or evicting a cache
-    /// entry.
-    fn font(&mut self, source: &FaceSource, size: f32) -> Result<&CFRetained<CTFont>, GlyphError> {
+    /// The font of `handle` at `size` pixels per em, reusing or evicting a
+    /// cache entry.
+    fn font(&mut self, handle: SystemFont, size: f32) -> Result<&CFRetained<CTFont>, GlyphError> {
         let bits = size.to_bits();
         if let Some(index) = self
             .fonts
             .iter()
-            .position(|cached| &cached.source == source && cached.size == bits)
+            .position(|cached| cached.handle == handle && cached.size == bits)
         {
             let cached = self.fonts.remove(index);
             self.fonts.push(cached);
             return Ok(&self.fonts.last().expect("just pushed").font);
         }
-        let font = build_font(source, size)?;
+        let font = build_font(handle, size)?;
         if self.fonts.len() >= MAX_FONTS {
             self.fonts.remove(0);
         }
         self.fonts.push(Cached {
-            source: source.clone(),
+            handle,
             font,
             size: bits,
         });
@@ -106,8 +132,7 @@ impl SystemRasterizer for CgRasterizer {
         _limits: CacheLimits,
         reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
     ) -> Result<Image, GlyphError> {
-        let source = crate::system_face(*font).ok_or(GlyphError::InvalidFont)?;
-        let font = self.font(&source, options.size)?.clone();
+        let font = self.font(*font, options.size)?.clone();
         let mut glyph = glyph;
         let mut bounds = CGRect::default();
         // SAFETY: the font is live; one glyph and one output rectangle are
@@ -261,32 +286,42 @@ fn empty() -> Image {
     }
 }
 
-/// Builds a `CTFont` for `source` at `pixels` pixels per em.
-///
-/// A file-backed face is opened by name; a byte-backed one is turned into a
-/// `CGFont` from a data provider. Both are then sized through
-/// `CTFontCreateWithGraphicsFont`, so the glyph is drawn in the same coordinate
-/// space either way.
-fn build_font(source: &FaceSource, pixels: f32) -> Result<CFRetained<CTFont>, GlyphError> {
-    let graphics = match source {
-        FaceSource::File { path, .. } => {
-            let name = objc2_core_foundation::CFString::from_str(path);
-            CGFont::with_font_name(Some(&name)).ok_or(GlyphError::InvalidFont)?
+/// Builds the font of `handle` at `pixels` pixels per em: a registered
+/// CoreText font resized, or the face a [`FaceSource`] names.
+fn build_font(handle: SystemFont, pixels: f32) -> Result<CFRetained<CTFont>, GlyphError> {
+    let size = f64::from(pixels);
+    let native = natives()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&handle)
+        .map(|native| native.0.clone());
+    if let Some(font) = native {
+        // SAFETY: the font is live; a null matrix keeps its own and no
+        // attributes are added.
+        return Ok(unsafe { font.copy_with_attributes(size, std::ptr::null(), None) });
+    }
+    let source = crate::system_face(handle).ok_or(GlyphError::InvalidFont)?;
+    let (faces, index) = match &source {
+        FaceSource::File { path, index } => {
+            let url = CFURL::from_file_path(&**path).ok_or(GlyphError::InvalidFont)?;
+            // SAFETY: the URL is live; the result is reference counted.
+            let faces = unsafe { CTFontManagerCreateFontDescriptorsFromURL(&url) };
+            (faces.ok_or(GlyphError::InvalidFont)?, *index)
         }
-        FaceSource::Bytes { data, .. } => {
-            // `CFData` copies the bytes, so the provider and font own
-            // everything they need afterwards.
-            let cf_data = CFData::from_bytes(data);
-            let provider =
-                CGDataProvider::with_cf_data(Some(&cf_data)).ok_or(GlyphError::InvalidFont)?;
-            CGFont::with_data_provider(&provider).ok_or(GlyphError::InvalidFont)?
+        FaceSource::Bytes { data, index } => {
+            // `CFData` copies the bytes, and the descriptors retain it.
+            let data = CFData::from_bytes(data);
+            // SAFETY: the data is live; the result is reference counted.
+            let faces = unsafe { CTFontManagerCreateFontDescriptorsFromData(&data) };
+            (faces, *index)
         }
     };
-    // SAFETY: the graphics font is live and owned; the returned font is
-    // reference counted and takes its own reference to the graphics font.
-    let font =
-        unsafe { CTFont::with_graphics_font(&graphics, f64::from(pixels), std::ptr::null(), None) };
-    Ok(font)
+    // SAFETY: CoreText fills these arrays with font descriptors, in the
+    // order of the faces in the file, so a collection index selects one.
+    let faces: CFRetained<CFArray<CTFontDescriptor>> = unsafe { CFRetained::cast_unchecked(faces) };
+    let face = faces.get(index as usize).ok_or(GlyphError::InvalidFont)?;
+    // SAFETY: the descriptor is live; a null matrix is the identity.
+    Ok(unsafe { CTFont::with_font_descriptor(&face, size, std::ptr::null()) })
 }
 
 /// Registers the CoreGraphics rasterizer for [`SystemFont::CORETEXT`].

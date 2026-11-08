@@ -9,7 +9,7 @@
 //!
 //! # Verification
 //!
-//! Compile-checked only; see the module documentation of [`super`].
+//! See the verification notes in the module documentation of [`super`].
 
 use std::collections::BTreeMap;
 
@@ -49,31 +49,48 @@ impl CoreTextSystem {
 
     /// Resolves a CSS family list to the family a `CTFont` is created with,
     /// replacing generic families that a registration stands in for.
+    ///
+    /// CoreText knows no generic names and silently substitutes its default
+    /// face for a family it lacks, so the first family of the list that is
+    /// installed wins, and a generic family without a registration stands for
+    /// the macOS fonts that CSS engines use for it. With none present, the
+    /// first name is kept and CoreText's substitution applies.
     pub fn family(&self, css: &str) -> String {
+        let mut first = None;
         for token in css.split(',') {
             let name = token.trim().trim_matches(['"', '\'']);
             if name.is_empty() {
                 continue;
             }
-            let generic = match name.to_ascii_lowercase().as_str() {
-                "serif" => Some(GenericFamily::Serif),
-                "sans-serif" => Some(GenericFamily::SansSerif),
-                "monospace" => Some(GenericFamily::Monospace),
-                "cursive" => Some(GenericFamily::Cursive),
-                "fantasy" => Some(GenericFamily::Fantasy),
-                "system-ui" => Some(GenericFamily::SystemUi),
-                "emoji" => Some(GenericFamily::Emoji),
-                _ => None,
+            let (generic, system): (_, &[&str]) = match name.to_ascii_lowercase().as_str() {
+                "serif" => (Some(GenericFamily::Serif), &["Times"]),
+                "sans-serif" => (
+                    Some(GenericFamily::SansSerif),
+                    &["Helvetica Neue", "Helvetica"],
+                ),
+                "monospace" => (Some(GenericFamily::Monospace), &["Menlo", "Courier"]),
+                "cursive" => (Some(GenericFamily::Cursive), &["Apple Chancery"]),
+                "fantasy" => (Some(GenericFamily::Fantasy), &["Papyrus"]),
+                "system-ui" => (Some(GenericFamily::SystemUi), &[".AppleSystemUIFont"]),
+                "emoji" => (Some(GenericFamily::Emoji), &["Apple Color Emoji"]),
+                _ => (None, &[]),
             };
-            if let Some(first) = generic
+            if let Some(registered) = generic
                 .and_then(|generic| self.generics.get(&generic))
                 .and_then(|names| names.first())
             {
-                return first.clone();
+                return registered.clone();
             }
-            return name.to_owned();
+            let candidates = match generic {
+                Some(_) => system,
+                None => std::slice::from_ref(&name),
+            };
+            if let Some(found) = candidates.iter().find(|family| fonts::installed(family)) {
+                return (*found).to_owned();
+            }
+            first.get_or_insert(name);
         }
-        "sans-serif".to_owned()
+        first.unwrap_or("sans-serif").to_owned()
     }
 
     /// The font for one shaping key, at its size, weight and slant.

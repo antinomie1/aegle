@@ -75,3 +75,13 @@ pub(crate) fn font(
     // counted. A null matrix asks for the identity transform.
     Some(unsafe { CTFont::with_font_descriptor(&descriptor, size, std::ptr::null()) })
 }
+
+/// Whether CoreText has a face of `family`, rather than a substitute for it.
+pub(crate) fn installed(family: &str) -> bool {
+    let Some(font) = font(family, 12.0, 400.0, crate::Slant::Normal) else {
+        return false;
+    };
+    // SAFETY: the font is live; the name is reference counted.
+    let found = unsafe { font.family_name() }.to_string();
+    found.eq_ignore_ascii_case(family)
+}

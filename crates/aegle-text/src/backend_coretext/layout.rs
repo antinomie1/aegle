@@ -14,7 +14,7 @@ use objc2_core_foundation::{
     CFArray, CFAttributedString, CFDictionary, CFRetained, CGPoint, CGRect,
 };
 use objc2_core_graphics::{CGMutablePath, CGPath};
-use objc2_core_text::{CTFrame, CTFramesetter, CTLine};
+use objc2_core_text::{CTFont, CTFrame, CTFramesetter, CTLine};
 
 use super::sys;
 use super::system::CoreTextSystem;
@@ -42,6 +42,9 @@ pub(crate) struct CoreTextLayout {
     pub(super) alignment: Alignment,
     /// Glyph runs captured for painting and diagnostics.
     pub(super) runs: Vec<super::runs::StoredRun>,
+    /// The font the text system resolved for the shaping key, kept to rebuild
+    /// the attributed string.
+    font: Option<CFRetained<CTFont>>,
     /// Font size and line height, kept to rebuild the attributed string.
     font_size: f32,
     line_height: crate::LineHeight,
@@ -90,6 +93,7 @@ impl CoreTextLayout {
             is_rtl: false,
             alignment: Alignment::Start,
             runs: Vec::new(),
+            font: None,
             font_size: 0.0,
             line_height: crate::LineHeight::default(),
             shaping: None,
@@ -110,7 +114,8 @@ impl CoreTextLayout {
         self.frame = None;
         self.shaping = Some(shaping.clone());
         self.underline = underline;
-        if system.font(shaping).is_none() {
+        self.font = system.font(shaping);
+        if self.font.is_none() {
             return;
         }
         self.build_attributed();
@@ -125,17 +130,9 @@ impl CoreTextLayout {
     /// live here, so a reflow that only changes the width can reuse the string
     /// while a changed alignment or line height rebuilds it.
     fn build_attributed(&mut self) {
-        let Some(shaping) = self.shaping.clone() else {
-            return;
-        };
         self.attributed = None;
         self.frame = None;
-        let Some(font) = super::fonts::font(
-            &shaping.families,
-            f64::from(self.font_size),
-            shaping.weight,
-            shaping.slant,
-        ) else {
+        let Some(font) = self.font.clone() else {
             return;
         };
         let natural = natural_line_height(&font);
@@ -194,6 +191,7 @@ impl CoreTextLayout {
                 rebuilt.width = self.width;
                 rebuilt.wrap = self.wrap;
                 rebuilt.alignment = self.alignment;
+                rebuilt.font = self.font.clone();
                 rebuilt.font_size = self.font_size;
                 rebuilt.line_height = self.line_height;
                 rebuilt.shaping = Some(shaping.clone());

@@ -9,11 +9,11 @@
 //!
 //! # Verification
 //!
-//! This module is **compile-checked only**: it is cross-compiled with
-//! `cargo check`/`clippy` for `aarch64-apple-darwin` from Linux and has never
-//! been run on a Mac. Behavior only a real system can confirm — CoreText's
-//! fallback choices, line breaking and the caret geometry of complex scripts —
-//! is unverified.
+//! Run on macOS 15 (x86_64): `tests/coretext.rs` covers generic families,
+//! line baselines, CJK fallback and CoreGraphics rasterization. The
+//! `document`, `editor` and `paragraph` tests still fail here (caret motion
+//! across hard breaks, single-line reflow, missing-glyph counts and an
+//! unfonted `TextSystem::new()`), so those behaviors remain unverified.
 
 mod fonts;
 mod layout;

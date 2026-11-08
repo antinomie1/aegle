@@ -2,27 +2,18 @@
 //!
 //! `CTLineGetGlyphRuns` hands back `CTRun`s whose attributes name the actual
 //! font CoreText chose for that run, after fallback. The scene must never hold a
-//! native pointer, so each run's `CTFont` becomes a [`SystemFont`] handle: the
-//! process keeps the font in a registry keyed by a monotonically increasing id
-//! and tells `aegle-glyph` where the outline data lives
-//! ([`aegle_glyph::register_system_face`]).
-//!
-//! A font CoreText cannot name by file (an application font registered from
-//! bytes) is registered as [`FaceSource::Bytes`] using the bytes this text
-//! system registered. A run whose font resolves to neither is skipped: painting
-//! it would have no outline source, and silently drawing nothing is worse than
-//! omitting the run.
-//!
-//! # Verification
-//!
-//! Compile-checked only; see the module documentation of [`super`].
+//! native pointer, so each run's `CTFont` becomes a [`SystemFont`] handle, one
+//! per PostScript name, and `aegle-glyph`'s CoreGraphics rasterizer receives
+//! that font ([`aegle_glyph::cg::register_font`]). Every face CoreText can
+//! shape with thereby rasterizes, collection members, variable instances and
+//! application fonts included.
 #![allow(unsafe_code)]
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock, PoisonError};
 
-use aegle_glyph::{FaceSource, SystemFont};
+use aegle_glyph::SystemFont;
 use objc2_core_foundation::{
     CFArray, CFDictionary, CFIndex, CFRange, CFRetained, CFString, CGPoint,
 };
@@ -30,22 +21,15 @@ use objc2_core_text::{CTFont, CTLine, CTRun};
 
 use super::layout::CoreTextLayout;
 
-/// Registered faces, by handle id.
-fn faces() -> &'static Mutex<BTreeMap<u64, Face>> {
-    static FACES: OnceLock<Mutex<BTreeMap<u64, Face>>> = OnceLock::new();
-    FACES.get_or_init(|| Mutex::new(BTreeMap::new()))
-}
-
-/// A face's identity: its font file path and the index inside a collection.
-type FaceKey = (Arc<str>, u32);
-
-/// Handles already issued for one face, keyed by file path and index.
+/// Handles already issued, by PostScript name.
 ///
-/// Keying on the file rather than on the `CTFont` pointer is what keeps this
-/// sound: CoreText returns different objects for the same face, and a freed
-/// pointer value could be reused by another face.
-fn issued() -> &'static Mutex<BTreeMap<FaceKey, SystemFont>> {
-    static ISSUED: OnceLock<Mutex<BTreeMap<FaceKey, SystemFont>>> = OnceLock::new();
+/// Keying on the name rather than on the `CTFont` pointer is what keeps this
+/// sound: CoreText returns different objects for the same face, at every size,
+/// and a freed pointer value could be reused by another face. CoreText treats
+/// PostScript names as unique, and each named instance of a variable font has
+/// its own.
+fn issued() -> &'static Mutex<BTreeMap<String, SystemFont>> {
+    static ISSUED: OnceLock<Mutex<BTreeMap<String, SystemFont>>> = OnceLock::new();
     ISSUED.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
@@ -54,67 +38,19 @@ fn next_id() -> u64 {
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
-/// One registered face: where its outline data lives.
-struct Face {
-    /// Handed to `aegle-glyph`; kept so the registry entry outlives the handle.
-    _source: FaceSource,
-}
-
 /// The stable handle for `font`, registering it on first sight.
-fn handle(font: &CTFont) -> Option<SystemFont> {
-    let key = face_identity(font)?;
-    if let Some(handle) = issued()
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(&key)
-    {
-        return Some(*handle);
-    }
-    let source = FaceSource::File {
-        path: Arc::clone(&key.0),
-        index: key.1,
-    };
-    let handle = SystemFont {
-        backend: SystemFont::CORETEXT,
-        id: next_id(),
-    };
-    faces()
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(
-            handle.id,
-            Face {
-                _source: source.clone(),
-            },
-        );
-    aegle_glyph::register_system_face(handle, source);
-    issued()
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(key, handle);
-    Some(handle)
-}
-
-/// The file path and face index CoreText reports for `font`.
-///
-/// `CTFontCopyAttribute` with `kCTFontURLAttribute` gives the file for an
-/// installed font; an application font registered from bytes has no URL, so it
-/// resolves to `None` and the caller skips the run.
-fn face_identity(font: &CTFont) -> Option<FaceKey> {
-    // SAFETY: the font is live; the returned attribute is reference counted and
-    // is a `CFURL` when present.
-    let url: CFRetained<objc2_core_foundation::CFURL> = unsafe {
-        font.attribute(objc2_core_text::kCTFontURLAttribute)?
-            .downcast()
-            .ok()?
-    };
-    let path = url.path()?;
-    let path = path.to_string();
-    // CoreText does not expose a collection index; registered collections are
-    // addressed by path alone here, so index zero is the only face this path
-    // reports. A collection registered from bytes would need its index kept
-    // alongside the registration, which the byte path below handles instead.
-    Some((Arc::from(path.as_str()), 0))
+fn handle(font: &CTFont) -> SystemFont {
+    // SAFETY: the font is live; the name is reference counted.
+    let name = unsafe { font.post_script_name() }.to_string();
+    let mut issued = issued().lock().unwrap_or_else(PoisonError::into_inner);
+    *issued.entry(name).or_insert_with(|| {
+        let handle = SystemFont {
+            backend: SystemFont::CORETEXT,
+            id: next_id(),
+        };
+        aegle_glyph::cg::register_font(handle, font);
+        handle
+    })
 }
 
 /// One captured run: font handle, size and positioned glyph indices.
@@ -133,7 +69,8 @@ pub(super) struct StoredRun {
 }
 
 impl CoreTextLayout {
-    /// Captures the frame's glyph runs; called whenever the frame is rebuilt.
+    /// Captures the frame's glyph runs; called whenever the frame is rebuilt,
+    /// after `measure`, whose line origins and baselines place them.
     pub(super) fn capture_runs(&mut self) {
         self.runs.clear();
         let Some(frame) = self.frame() else {
@@ -149,11 +86,16 @@ impl CoreTextLayout {
             let mut collected = Vec::new();
             for line_index in 0..lines.len() {
                 let line = lines.get(line_index).expect("in range");
+                // Run positions are relative to the line's origin, y up.
+                let origin = (
+                    self.origins[line_index].0 as f32,
+                    self.lines[line_index].baseline,
+                );
                 let runs: CFRetained<CFArray<CTRun>> =
                     CFRetained::cast_unchecked(line.glyph_runs());
                 for run_index in 0..runs.len() {
                     let run = runs.get(run_index).expect("in range");
-                    let Some(run) = collect_run(&run) else {
+                    let Some(run) = collect_run(&run, origin) else {
                         continue;
                     };
                     collected.push(run);
@@ -164,14 +106,15 @@ impl CoreTextLayout {
     }
 }
 
-/// Copies one `CTRun` into a [`StoredRun`], or `None` when its font has no
-/// outline source.
+/// Copies one `CTRun` of the line whose origin lies at `origin` in layout
+/// coordinates into a [`StoredRun`], or `None` when it has no glyphs or no
+/// font.
 ///
 /// # Safety
 ///
 /// The caller guarantees `run` is live; the function only reads it and the
 /// buffers it fills are its own.
-unsafe fn collect_run(run: &CTRun) -> Option<StoredRun> {
+unsafe fn collect_run(run: &CTRun, origin: (f32, f32)) -> Option<StoredRun> {
     // SAFETY: the caller guarantees `run` is live; every call below only reads
     // it, and the attribute dictionary it returns is a `CFDictionary` of
     // `CFString` keys to `CFType` values, which is what the cast asserts.
@@ -185,7 +128,7 @@ unsafe fn collect_run(run: &CTRun) -> Option<StoredRun> {
             CFRetained::cast_unchecked(run.attributes());
         let font = attributes.get(objc2_core_text::kCTFontAttributeName)?;
         let font = font.downcast::<CTFont>().ok()?;
-        let handle = handle(&font)?;
+        let handle = handle(&font);
         let size = font.size() as f32;
 
         let mut indices = vec![0u16; count];
@@ -207,7 +150,10 @@ unsafe fn collect_run(run: &CTRun) -> Option<StoredRun> {
         let glyphs = indices
             .into_iter()
             .zip(positions)
-            .map(|(id, position)| (id, position.x as f32, position.y as f32))
+            .map(|(id, position)| {
+                let x = origin.0 + position.x as f32;
+                (id, x, origin.1 - position.y as f32)
+            })
             .collect();
         Some(StoredRun {
             font: handle,

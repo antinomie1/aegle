@@ -7,7 +7,7 @@
 //!
 //! # Verification
 //!
-//! Compile-checked only; see the module documentation of [`super`].
+//! See the verification notes in the module documentation of [`super`].
 #![allow(unsafe_code)]
 
 use aegle_scene::{Color, FontSource, Glyph, GlyphRun, Point, SceneBuilder};
