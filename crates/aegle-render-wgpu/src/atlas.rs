@@ -484,6 +484,8 @@ fn write(
         },
     );
     if scratch.capacity() > SCRATCH_RETAIN {
-        *scratch = Vec::new();
+        // Releases the allocation, not just the bytes.
+        scratch.clear();
+        scratch.shrink_to_fit();
     }
 }
