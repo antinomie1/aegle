@@ -28,7 +28,7 @@
 | **aegle-platform-macos** | macOS 原生后端：AppKit 窗口、子窗口弹出层（翻转与滑动）、屏幕输出枚举、NSTextInputClient、NSPasteboard、NSDragging、CGImage 软件呈现与 CAMetalLayer 租约 | objc2 0.6 系列 |
 | **aegle-portal** | Linux 桌面 portal（`org.freedesktop.portal.Settings`）外观偏好读取与 `SettingChanged` 监听 | aegle-dbus |
 | **aegle-dbus** | Linux 会话总线轻量客户端：认证、Hello、消息编解码、阻塞/非阻塞读写 | Unix 域套接字，无外部依赖 |
-| **aegle-desktop** | 桌面级服务：文件选择对话框、系统通知、托盘图标与菜单、全局快捷键（Linux 经 portal/D-Bus，Windows 经 Win32 API） | Linux: aegle-dbus; Windows: Win32 API |
+| **aegle-desktop** | 桌面级服务：文件选择对话框、系统通知、托盘图标与菜单、全局快捷键（Linux 经 portal/D-Bus，Windows 经 Win32 API，macOS 经 AppKit 面板、`NSStatusItem` 与 Carbon 热键；macOS 通知暂缺） | Linux: aegle-dbus; Windows: Win32 API; macOS: objc2 0.6 系列、Carbon |
 | **aegle-access** | 无障碍语义树导出与平台适配器（Linux AT-SPI、Windows UI Automation、macOS NSAccessibility） | AccessKit 0.24 |
 | **aegle-theme** | 无分配主题配置、类 Metro 中性默认样式、`ThemeOverride` 局部覆盖、类型化 Token（颜色、尺寸、字体、阴影） | aegle-types |
 | **aegle-motion** | 补间动画（Tween/Transition）、关键帧动画、Bézier 与阻尼弹簧曲线、属性动画（位移/缩放/旋转/透明度/阴影/颜色/渐变） | 纯数学计算，无定时器依赖 |
@@ -83,6 +83,7 @@
 * **已实现边界**：AppKit 窗口、`NSTextInputClient`、CoreText + CoreGraphics 字形渲染（`aegle-text/tests/coretext.rs` 覆盖通用字族、行基线、CJK 回退与光栅化）、`CAMetalLayer` 租约与透明窗口。
 * **CoreText 编辑语义**：`cargo test -p aegle-text --features system-fonts,scene` 全部通过（已加入 macOS CI）。行尾不含硬换行符；末尾硬换行后与空文本各有一条空行承载光标（CoreText 不生成，按前一行或字体度量补出）；单行编辑器不软换行；`TextSystem::new()` 只匹配已注册字体；CoreText 以 `LastResort` 代替缺字，其字形计入缺字数。
 * **输出与弹出层**：`cargo test -p aegle-platform-macos --test native -- --ignored` 在实机 GUI 会话通过（该目标 `harness = false`，在主线程运行；此前的 libtest 形式不在主线程，从未能运行）：屏幕列为输出（主屏位于原点、ID 互异）；抓取弹出层取得键盘焦点；弹出层上的被动弹出层；空锚点、层与弹出层同设被拒；在被动子弹出层内按下不撤销，在父窗口按下只对抓取弹出层发一次 `Close` 且父窗口仍收到该按下；父窗口与有子弹出层的弹出层先移除被拒。`tests/placement.rs` 覆盖四个方向、翻转、滑动与超出屏幕的弹出层。
+* **桌面服务**：`cargo test -p aegle-desktop --test macos -- --ignored` 在实机通过（`harness = false`，主线程，由 `aegle-platform-macos` 的循环送达事件；连续 3 次通过）：主线程外创建被拒；保存面板按请求显示标题、文件名与扩展名过滤，在面板就绪后经 HID 输入 Return 返回所选文件夹下的 `notes.txt`；打开面板允许多选、无过滤，Escape 返回 `None`；状态栏按钮带图标与更新后的提示，单击报 `TrayActivated`，移除后不再存在；Ctrl+Alt+Shift+F19 经 HID 真实按下（含 Fn，与 Mac 键盘一致）报 `Shortcut`，F24 报 `Unavailable`，重绑与清空后无事件；`notify` 报 `Unavailable`。进程外面板在显示后需片刻才接收按键，测试等待约 2 秒。
 * **未验收**：输入法、拖放、VoiceOver 与软件（CGImage）呈现尚未实机验收；应用失去激活时撤销抓取弹出层未自动化测试。
 
 ---
@@ -102,4 +103,4 @@
    * 控件库的 `Popup`/`Menu`/`Dropdown` 仍是窗口内浮层，尚未改用原生弹出层；标记语言没有弹出层元素，原生弹出层只能由 Rust 的 `Window::popup` 打开。
    * 输出热插拔时按输出增删面板需由宿主在 `App::on_outputs` 中完成；按 layer-shell 协议，输出断开时合成器关闭其上的层，宿主收到 `Close` 后移除该窗口（此路径尚未实测）。
 4. **桌面服务**：
-   * `aegle-desktop` 目前在 macOS 上各服务方法直接返回 `Unavailable`（需要主线程消息循环深度适配）。
+   * `aegle-desktop` 在 macOS 上尚无通知（`UNUserNotificationCenter` 只能在应用包内使用），`notify` 报 `Unavailable`；托盘菜单（右键弹出）未自动化测试；全局快捷键按 ANSI 键位匹配，非美式布局下字母键按位置而非字符。

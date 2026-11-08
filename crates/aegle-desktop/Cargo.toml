@@ -1,6 +1,6 @@
 [package]
 name = "aegle-desktop"
-description = "File dialogs, notifications, a tray icon and global shortcuts for Linux desktops and Windows"
+description = "File dialogs, notifications, a tray icon and global shortcuts for Linux desktops, Windows and macOS"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -20,6 +20,34 @@ windows = { version = "0.62.2", default-features = false, features = [
     "Win32_System_LibraryLoader", "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
+dispatch2 = { version = "0.3.1", default-features = false, features = ["std", "objc2"] }
+objc2 = "0.6.4"
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+    "std", "block2", "NSArray", "NSEnumerator", "NSObject", "NSString", "NSURL",
+] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "std", "block2", "objc2-core-foundation", "objc2-core-graphics", "NSApplication",
+    "NSButton", "NSCell", "NSControl", "NSEvent", "NSImage", "NSMenu", "NSMenuItem",
+    "NSOpenPanel", "NSPanel", "NSResponder", "NSSavePanel", "NSStatusBar",
+    "NSStatusBarButton", "NSStatusItem", "NSView", "NSWindow",
+] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFData"] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+    "std", "CGColorSpace", "CGDataProvider", "CGImage",
+] }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+# Runs the AppKit loop that delivers the services' events.
+aegle-platform.workspace = true
+aegle-platform-macos.workspace = true
+
+[[test]]
+name = "macos"
+# AppKit runs on the main thread only; the target has its own `main`.
+harness = false
 
 [lints.rust]
 unsafe_code = "warn"

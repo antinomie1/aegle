@@ -1,10 +1,15 @@
 //! Requests one desktop service and prints the events that follow:
 //! `cargo run -p aegle-desktop --example services -- open|save|notify|tray|shortcut`.
+//!
+//! macOS delivers the services' events from AppKit, so there the example runs
+//! the macOS platform's loop on the main thread while it waits.
 use std::{sync::mpsc, time::Duration};
 
 use aegle_desktop::{Desktop, FileDialog, Icon, MenuItem, Notification, Shortcut, Tray};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    let mut backend = <aegle_platform_macos::MacOs as aegle_platform::Platform>::connect()?;
     let (tx, events) = mpsc::channel();
     let desktop = Desktop::new("org.aegle.DesktopExample", move |event| {
         let _ = tx.send(event);
@@ -58,7 +63,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             trigger: "Ctrl+Alt+H".parse()?,
         }])?,
     }
-    while let Ok(event) = events.recv_timeout(Duration::from_secs(60)) {
+    #[cfg(target_os = "macos")]
+    let next = || {
+        use aegle_platform::Platform;
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        while std::time::Instant::now() < deadline {
+            if let Ok(event) = events.try_recv() {
+                return Ok(event);
+            }
+            backend.dispatch(Some(Duration::from_millis(50))).ok();
+            while backend.next_event().is_some() {}
+        }
+        Err(mpsc::RecvTimeoutError::Timeout)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let next = || events.recv_timeout(Duration::from_secs(60));
+    let mut next = next;
+    while let Ok(event) = next() {
         println!("{event:?}");
         if matches!(event, aegle_desktop::Event::Files { .. }) {
             break;

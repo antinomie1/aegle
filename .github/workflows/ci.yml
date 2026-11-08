@@ -112,6 +112,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Only the macOS crates: the Wayland crate needs libxkbcommon.
       - run: cargo clippy -p aegle-platform-macos --all-targets -- -D warnings
+      - run: cargo clippy -p aegle-desktop --all-targets -- -D warnings
       - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,tiny-skia,markup,motion" -- -D warnings
       - run: cargo clippy -p aegle --all-targets --no-default-features --features "native,wgpu,accessibility" -- -D warnings
       # The window model tests run anywhere; native window tests need a GUI session.

@@ -9,15 +9,16 @@
 //!
 //! | Service | Linux | Windows | macOS |
 //! |---|---|---|---|
-//! | File dialogs | `org.freedesktop.portal.FileChooser` | `IFileOpenDialog`, `IFileSaveDialog` | not yet |
+//! | File dialogs | `org.freedesktop.portal.FileChooser` | `IFileOpenDialog`, `IFileSaveDialog` | `NSOpenPanel`, `NSSavePanel` |
 //! | Notifications | `org.freedesktop.Notifications` | a tray balloon (a toast on Windows 10 and later) | not yet |
-//! | Tray | `StatusNotifierItem` with `com.canonical.dbusmenu` | `Shell_NotifyIcon` and a popup menu | not yet |
-//! | Global shortcuts | `org.freedesktop.portal.GlobalShortcuts` | `RegisterHotKey` | not yet |
+//! | Tray | `StatusNotifierItem` with `com.canonical.dbusmenu` | `Shell_NotifyIcon` and a popup menu | `NSStatusItem` and an `NSMenu` |
+//! | Global shortcuts | `org.freedesktop.portal.GlobalShortcuts` | `RegisterHotKey` | Carbon `RegisterEventHotKey` |
 //!
 //! A service the desktop does not offer reports [`Event::Unavailable`]
-//! instead of failing silently. macOS panels and status items need the main
-//! thread that the application's event loop owns, so every request there is
-//! reported as unavailable.
+//! instead of failing silently. AppKit owns macOS panels and status items on
+//! the main thread, so there a [`Desktop`] is created and used on the main
+//! thread, other threads get [`std::io::ErrorKind::Unsupported`], and events
+//! arrive while the application's AppKit loop runs (`aegle_app::App`'s does).
 
 use std::path::PathBuf;
 
@@ -172,7 +173,7 @@ impl Desktop {
     /// Connects to the desktop as `app_id` (a reverse-DNS name such as
     /// `org.example.Editor`) and starts the thread that passes events to
     /// `sink`. Fails if there is no desktop session to talk to, such as a
-    /// Linux session without a bus.
+    /// Linux session without a bus, or off the main thread on macOS.
     pub fn new(
         app_id: &str,
         sink: impl Fn(Event) + Send + Sync + 'static,
