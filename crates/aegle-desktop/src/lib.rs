@@ -10,7 +10,7 @@
 //! | Service | Linux | Windows | macOS |
 //! |---|---|---|---|
 //! | File dialogs | `org.freedesktop.portal.FileChooser` | `IFileOpenDialog`, `IFileSaveDialog` | `NSOpenPanel`, `NSSavePanel` |
-//! | Notifications | `org.freedesktop.Notifications` | a tray balloon (a toast on Windows 10 and later) | not yet |
+//! | Notifications | `org.freedesktop.Notifications` | a tray balloon (a toast on Windows 10 and later) | `UNUserNotificationCenter`, in application bundles |
 //! | Tray | `StatusNotifierItem` with `com.canonical.dbusmenu` | `Shell_NotifyIcon` and a popup menu | `NSStatusItem` and an `NSMenu` |
 //! | Global shortcuts | `org.freedesktop.portal.GlobalShortcuts` | `RegisterHotKey` | Carbon `RegisterEventHotKey` |
 //!

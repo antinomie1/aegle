@@ -5,8 +5,8 @@
 //! [`crate::Desktop`] is created and used on the main thread, and its events
 //! come from AppKit callbacks while that loop runs, as `aegle-app`'s does.
 //! Calls from another thread fail rather than block or start a second AppKit
-//! session. Notifications need `UNUserNotificationCenter`, which works only
-//! inside an application bundle, and are not implemented yet.
+//! session. Notifications go through `UNUserNotificationCenter`, which serves
+//! application bundles only.
 use std::{
     cell::RefCell,
     io,
@@ -23,6 +23,7 @@ use crate::{Event, FileDialog, Notification, Shortcut, Tray};
 
 mod files;
 mod hotkeys;
+mod notify;
 mod tray;
 
 pub(crate) type Sink = Box<dyn Fn(Event) + Send + Sync>;
@@ -32,6 +33,7 @@ pub(crate) type Sink = Box<dyn Fn(Event) + Send + Sync>;
 struct Main {
     tray: RefCell<Option<tray::StatusItem>>,
     hot_keys: RefCell<Option<hotkeys::HotKeys>>,
+    notifier: RefCell<Option<notify::Notifier>>,
 }
 
 /// The application's desktop services.
@@ -72,12 +74,23 @@ impl Desktop {
         Ok(request)
     }
 
-    pub fn notify(&self, _notification: &Notification<'_>) -> io::Result<u32> {
-        main_thread()?;
-        (self.sink)(Event::Unavailable(
-            "desktop notifications are not implemented for macOS yet".into(),
-        ));
-        Ok(self.id())
+    pub fn notify(&self, notification: &Notification<'_>) -> io::Result<u32> {
+        let mtm = main_thread()?;
+        let id = self.id();
+        let mut notifier = self.main.get(mtm).notifier.borrow_mut();
+        if notifier.is_none() {
+            match notify::Notifier::new(self.sink.clone()) {
+                Ok(created) => *notifier = Some(created),
+                Err(reason) => {
+                    (self.sink)(Event::Unavailable(reason));
+                    return Ok(id);
+                }
+            }
+        }
+        if let Some(notifier) = notifier.as_mut() {
+            notifier.notify(&self.sink, id, notification);
+        }
+        Ok(id)
     }
 
     pub fn set_tray(&self, tray: Option<&Tray<'_>>) -> io::Result<()> {

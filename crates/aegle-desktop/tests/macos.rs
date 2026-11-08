@@ -391,15 +391,16 @@ mod macos {
             None
         );
 
-        // Notifications are not implemented and say so.
+        // A process outside an application bundle has no notification
+        // center, and says so instead of failing.
         desktop.notify(&Notification {
             summary: "Hello",
             ..Default::default()
         })?;
-        assert!(matches!(
-            next(&mut backend, &events, wait),
-            Some(Event::Unavailable(_))
-        ));
+        let Some(Event::Unavailable(reason)) = next(&mut backend, &events, wait) else {
+            return Err("notify reported nothing".into());
+        };
+        assert!(reason.contains("bundle"), "{reason}");
         drop(desktop);
         std::fs::remove_dir_all(&folder)?;
         Ok(())
