@@ -1,8 +1,8 @@
 //! macOS desktop services against the real system, on the main thread that
 //! AppKit requires, with the macOS platform's loop delivering their events.
 //! It opens panels and a menu bar item, types Return, Escape and a global
-//! shortcut as real keystrokes and right-clicks the item, so it is opt-in, on a session left alone while
-//! it runs:
+//! shortcut as real keystrokes and right-clicks the item, so it is opt-in,
+//! on a session left alone while it runs:
 //! `cargo test -p aegle-desktop --test macos -- --ignored`.
 #![allow(unsafe_code)] // Typing into the panels and pressing the status item's button.
 use std::error::Error;
