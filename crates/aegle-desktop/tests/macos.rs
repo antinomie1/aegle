@@ -1,7 +1,7 @@
 //! macOS desktop services against the real system, on the main thread that
 //! AppKit requires, with the macOS platform's loop delivering their events.
-//! It opens panels and a menu bar item and types Return, Escape and a global
-//! shortcut as real keystrokes, so it is opt-in, on a session left alone while
+//! It opens panels and a menu bar item, types Return, Escape and a global
+//! shortcut as real keystrokes and right-clicks the item, so it is opt-in, on a session left alone while
 //! it runs:
 //! `cargo test -p aegle-desktop --test macos -- --ignored`.
 #![allow(unsafe_code)] // Typing into the panels and pressing the status item's button.
@@ -77,6 +77,13 @@ mod macos {
             down: bool,
         ) -> *mut std::ffi::c_void;
         fn CGEventPost(tap: u32, event: *mut std::ffi::c_void);
+        fn CGEventSourceCreate(state: i32) -> *mut std::ffi::c_void;
+        fn CGEventCreateMouseEvent(
+            source: *mut std::ffi::c_void,
+            kind: u32,
+            at: objc2_foundation::NSPoint,
+            button: u32,
+        ) -> *mut std::ffi::c_void;
         fn CGEventSetFlags(event: *mut std::ffi::c_void, flags: u64);
         fn CFRelease(object: *mut std::ffi::c_void);
     }
@@ -110,6 +117,26 @@ mod macos {
     /// Presses the modifier keys `held` (`kVK_…` codes with their
     /// `CGEventFlags` bits) in order, then presses and releases `code`, then
     /// releases the modifiers, through the window server's HID tap, as typed.
+    /// Posts a mouse event of `kind` at `at`, in the global top-left display
+    /// space, through the window server.
+    fn post_mouse(kind: u32, at: (f64, f64)) {
+        // SAFETY: the source follows the HID system's state (1); the source
+        // and event are released after posting to the HID tap (0).
+        unsafe {
+            let source = CGEventSourceCreate(1);
+            let event = CGEventCreateMouseEvent(
+                source,
+                kind,
+                objc2_foundation::NSPoint::new(at.0, at.1),
+                1,
+            );
+            assert!(!event.is_null());
+            CGEventPost(0, event);
+            CFRelease(event);
+            CFRelease(source);
+        }
+    }
+
     fn post_key(code: u16, held: &[(u16, u64)]) {
         let post = |code: u16, down: bool, flags: u64| {
             // SAFETY: a null source is the default one; the event is released
@@ -280,6 +307,46 @@ mod macos {
             next(&mut backend, &events, wait),
             Some(Event::TrayActivated)
         );
+        // A secondary click opens the menu, whose first item is chosen with
+        // the keyboard. The menu tracks in a loop nested in event delivery,
+        // so the input comes from another thread while this one runs it.
+        // AppKit places the item's window in the menu bar a moment later.
+        let primary = objc2_app_kit::NSScreen::screens(mtm)
+            .firstObject()
+            .map_or(0.0, |screen| screen.frame().size.height);
+        let mut at = None;
+        for _ in 0..50 {
+            let frame = button.window().ok_or("the button has no window")?.frame();
+            let top = primary - (frame.origin.y + frame.size.height);
+            if (-1.0..1.0).contains(&top) {
+                at = Some((
+                    frame.origin.x + frame.size.width / 2.0,
+                    top + frame.size.height / 2.0,
+                ));
+                break;
+            }
+            let _ = next(&mut backend, &events, Duration::from_millis(100));
+        }
+        let at = at.ok_or("the status item never reached the menu bar")?;
+        let input = std::thread::spawn(move || {
+            // `kCGEventRightMouseDown` and `Up`, then Down arrow and Return.
+            for kind in [3, 4] {
+                post_mouse(kind, at);
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            std::thread::sleep(Duration::from_millis(500));
+            for code in [0x7D, 0x24] {
+                post_key(code, &[]);
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        });
+        let mut chosen = None;
+        let deadline = Instant::now() + wait;
+        while chosen.is_none() && Instant::now() < deadline {
+            chosen = next(&mut backend, &events, Duration::from_millis(50));
+        }
+        input.join().expect("the input thread finishes");
+        assert_eq!(chosen, Some(Event::TrayMenu { item: 7 }));
         desktop.set_tray(None)?;
 
         // Hot keys register, a key Mac keyboards lack is reported, and
