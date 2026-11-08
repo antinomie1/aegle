@@ -175,3 +175,46 @@ fn color_glyph_fonts_rasterize_strikes_in_color_and_outlines_as_masks() {
     );
     assert_eq!(cache.stats().entries, entries);
 }
+
+/// DirectWrite composites COLR layers: the fixture's A glyph is opaque red
+/// under half-transparent blue on the same outline, so its interior is purple.
+/// Its B glyph has only an sbix strike besides the outline, which this
+/// rasterizer reports instead of drawing a silhouette.
+#[cfg(target_os = "windows")]
+#[test]
+fn colr_layers_composite_in_their_palette_colors() {
+    register();
+    let font: aegle_glyph::FontSource = FontData::new(
+        Blob::from(include_bytes!("../../../tests/assets/aegle-test-color.otf").to_vec()),
+        0,
+    )
+    .into();
+    let mut cache = cache();
+    let options = RasterOptions {
+        size: 32.0,
+        ..Default::default()
+    };
+    let layered = cache.rasterize(&font, 1, options).expect("COLR glyph");
+    assert_eq!(layered.content, Content::Color);
+    assert_eq!(
+        layered.data.len(),
+        4 * (layered.placement.width * layered.placement.height) as usize
+    );
+    let interior: Vec<_> = layered
+        .data
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|pixel| pixel[3] == 255)
+        .collect();
+    assert!(!interior.is_empty());
+    // Blue at alpha 128/255 over red: 127 red, 128 blue, in straight alpha.
+    for pixel in interior {
+        assert!(pixel[0].abs_diff(127) <= 1 && pixel[1] == 0, "{pixel:?}");
+        assert!(pixel[2].abs_diff(128) <= 1, "{pixel:?}");
+    }
+    assert_eq!(
+        cache.rasterize(&font, 2, options).err(),
+        Some(GlyphError::UnsupportedGlyph)
+    );
+}

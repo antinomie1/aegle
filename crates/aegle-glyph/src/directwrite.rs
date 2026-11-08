@@ -6,10 +6,15 @@
 //! `IDWriteFactory2::CreateGlyphRunAnalysis` with grayscale antialiasing yields
 //! one byte per pixel through the `DWRITE_TEXTURE_ALIASED_1x1` texture.
 //! `RasterOptions::hint` selects grid fitting; synthetic bold is DirectWrite's
-//! bold simulation and synthetic slant is the run's transform. An alpha texture
-//! carries no color, so a glyph whose font gives it a color or bitmap
-//! representation (COLR, SVG, PNG, JPEG, TIFF or BGRA strikes) returns
-//! [`GlyphError::UnsupportedGlyph`] instead of a monochrome silhouette.
+//! bold simulation and synthetic slant is the run's transform.
+//!
+//! A COLR glyph (the system emoji font's representation) is translated with
+//! `IDWriteFactory2::TranslateColorGlyphRun` into its layers; each layer's
+//! alpha texture is composited in its palette color, or in
+//! [`RasterOptions::foreground`] for the text-color entry, into one straight
+//! [`Content::Color`] image. A glyph whose only color representation is SVG or
+//! a PNG, JPEG, TIFF or BGRA strike returns [`GlyphError::UnsupportedGlyph`]
+//! instead of a monochrome silhouette.
 //!
 //! Font faces come from the face's file path or, for registered bytes, from an
 //! in-memory font file loader registered with the shared factory on first use
@@ -20,20 +25,23 @@
 //! # Verification
 //!
 //! Compile-checked only: cross-compiled for `x86_64-pc-windows-gnu` from Linux
-//! and never run on Windows.
+//! and for `x86_64-pc-windows-msvc` from macOS, and never run on Windows; the
+//! COLR layer path likewise.
 #![allow(unsafe_code)]
 
 use std::mem::ManuallyDrop;
 
 use aegle_scene::SystemFont;
+use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::DirectWrite::{
-    DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FACE_TYPE, DWRITE_FONT_FILE_TYPE,
-    DWRITE_FONT_SIMULATIONS_BOLD, DWRITE_FONT_SIMULATIONS_NONE, DWRITE_GLYPH_IMAGE_FORMATS_CFF,
+    DWRITE_COLOR_GLYPH_RUN, DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FACE_TYPE,
+    DWRITE_FONT_FILE_TYPE, DWRITE_FONT_SIMULATIONS_BOLD, DWRITE_FONT_SIMULATIONS_NONE,
+    DWRITE_GLYPH_IMAGE_FORMATS, DWRITE_GLYPH_IMAGE_FORMATS_CFF, DWRITE_GLYPH_IMAGE_FORMATS_COLR,
     DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE, DWRITE_GLYPH_RUN, DWRITE_GRID_FIT_MODE_DISABLED,
     DWRITE_GRID_FIT_MODE_ENABLED, DWRITE_MATRIX, DWRITE_MEASURING_MODE_NATURAL,
     DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE,
     DWRITE_TEXTURE_ALIASED_1x1, DWriteCreateFactory, IDWriteFactory, IDWriteFactory2,
-    IDWriteFactory5, IDWriteFontFace, IDWriteFontFace4, IDWriteFontFile,
+    IDWriteFactory5, IDWriteFontFace, IDWriteFontFace4, IDWriteFontFile, IDWriteGlyphRunAnalysis,
     IDWriteInMemoryFontFileLoader,
 };
 use windows::core::{BOOL, IUnknown, Interface, PCWSTR};
@@ -186,7 +194,10 @@ impl SystemRasterizer for DirectWriteRasterizer {
     ) -> Result<Image, GlyphError> {
         let source = crate::system_face(*font).ok_or(GlyphError::InvalidFont)?;
         let face = self.face(&source, options.embolden)?;
-        if has_color(&face, glyph)? {
+        let formats = image_formats(&face, glyph)?;
+        let outline = DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE | DWRITE_GLYPH_IMAGE_FORMATS_CFF;
+        let color = (formats & DWRITE_GLYPH_IMAGE_FORMATS_COLR).0 != 0;
+        if !color && (formats & !outline).0 != 0 {
             return Err(GlyphError::UnsupportedGlyph);
         }
         let factory = self.factory()?;
@@ -211,74 +222,252 @@ impl SystemRasterizer for DirectWriteRasterizer {
             dx: 0.0,
             dy: 0.0,
         });
-        let grid = match options.hint {
+        let pen = Pen {
+            factory: &factory,
+            transform: transform.as_ref(),
+            options,
+        };
+        let image = match color {
+            true => colr(pen, &run, reserve),
+            false => mask(pen, &run, options.offset, reserve),
+        };
+        // The run borrowed the face; release the reference it was given.
+        drop(ManuallyDrop::into_inner(run.fontFace));
+        image
+    }
+}
+
+/// What every layer of one glyph is drawn with.
+#[derive(Clone, Copy)]
+struct Pen<'a> {
+    factory: &'a IDWriteFactory5,
+    transform: Option<&'a DWRITE_MATRIX>,
+    options: RasterOptions<'a>,
+}
+
+impl Pen<'_> {
+    /// The grayscale analysis of `run` with its baseline at `origin`, and the
+    /// pixel bounds of its alpha texture, y down.
+    fn analysis(
+        self,
+        run: &DWRITE_GLYPH_RUN,
+        origin: [f32; 2],
+    ) -> Result<(IDWriteGlyphRunAnalysis, RECT), GlyphError> {
+        let grid = match self.options.hint {
             true => DWRITE_GRID_FIT_MODE_ENABLED,
             false => DWRITE_GRID_FIT_MODE_DISABLED,
         };
-        let factory2: &IDWriteFactory2 = &factory;
-        // SAFETY: the run's face, glyph index and advance are live for the
-        // call, and the transform pointer, when present, points at a local.
+        let factory2: &IDWriteFactory2 = self.factory;
+        // SAFETY: the run's face, glyph indices and advances are live for the
+        // call, and the transform pointer, when present, points at a value the
+        // pen borrows.
         let analysis = unsafe {
             factory2.CreateGlyphRunAnalysis(
-                &run,
-                transform
-                    .as_ref()
-                    .map(|matrix| matrix as *const DWRITE_MATRIX),
+                run,
+                self.transform.map(|matrix| matrix as *const DWRITE_MATRIX),
                 DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
                 DWRITE_MEASURING_MODE_NATURAL,
                 grid,
                 DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE,
-                options.offset[0],
-                options.offset[1],
+                origin[0],
+                origin[1],
             )
-        };
-        // The run borrowed the face; release the reference it was given.
-        drop(ManuallyDrop::into_inner(run.fontFace));
-        let analysis = analysis.map_err(|_| GlyphError::UnsupportedGlyph)?;
+        }
+        .map_err(|_| GlyphError::UnsupportedGlyph)?;
         // SAFETY: the analysis is live; bounds are in pixels relative to the
         // integral origin, y down.
         let bounds = unsafe { analysis.GetAlphaTextureBounds(DWRITE_TEXTURE_ALIASED_1x1) }
             .map_err(|_| GlyphError::UnsupportedGlyph)?;
-        let width = (bounds.right - bounds.left).max(0) as usize;
-        let height = (bounds.bottom - bounds.top).max(0) as usize;
-        if width == 0 || height == 0 {
-            reserve(0)?;
-            return Ok(Image {
-                placement: Placement::default(),
-                content: Content::Mask,
-                data: Vec::new().into_boxed_slice(),
-            });
-        }
-        let bytes = width.checked_mul(height).ok_or(GlyphError::ImageBudget)?;
-        reserve(bytes)?;
-        let mut data = vec![0u8; bytes];
-        // SAFETY: `data` holds exactly one byte per pixel of `bounds`, the size
-        // an aliased 1x1 texture of those bounds requires.
-        unsafe { analysis.CreateAlphaTexture(DWRITE_TEXTURE_ALIASED_1x1, &bounds, &mut data) }
-            .map_err(|_| GlyphError::UnsupportedGlyph)?;
-        Ok(Image {
-            placement: Placement {
-                left: bounds.left,
-                top: -bounds.top,
-                width: width as u32,
-                height: height as u32,
-            },
-            content: Content::Mask,
-            data: data.into_boxed_slice(),
-        })
+        Ok((analysis, bounds))
     }
 }
 
-/// Whether the font gives `glyph` any representation besides its outline.
-fn has_color(face: &IDWriteFontFace, glyph: u16) -> Result<bool, GlyphError> {
+/// Pixel width and height of `bounds`, zero when empty.
+fn extent(bounds: &RECT) -> (usize, usize) {
+    (
+        (bounds.right - bounds.left).max(0) as usize,
+        (bounds.bottom - bounds.top).max(0) as usize,
+    )
+}
+
+/// One byte of coverage per pixel of `bounds`.
+fn alpha(analysis: &IDWriteGlyphRunAnalysis, bounds: &RECT) -> Result<Vec<u8>, GlyphError> {
+    let (width, height) = extent(bounds);
+    let mut data = vec![0u8; width * height];
+    // SAFETY: `data` holds exactly one byte per pixel of `bounds`, the size
+    // an aliased 1x1 texture of those bounds requires.
+    unsafe { analysis.CreateAlphaTexture(DWRITE_TEXTURE_ALIASED_1x1, bounds, &mut data) }
+        .map_err(|_| GlyphError::UnsupportedGlyph)?;
+    Ok(data)
+}
+
+fn placement(bounds: &RECT) -> Placement {
+    let (width, height) = extent(bounds);
+    Placement {
+        left: bounds.left,
+        top: -bounds.top,
+        width: width as u32,
+        height: height as u32,
+    }
+}
+
+fn empty(reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>) -> Result<Image, GlyphError> {
+    reserve(0)?;
+    Ok(Image {
+        placement: Placement::default(),
+        content: Content::Mask,
+        data: Vec::new().into_boxed_slice(),
+    })
+}
+
+/// The outline's grayscale coverage.
+fn mask(
+    pen: Pen<'_>,
+    run: &DWRITE_GLYPH_RUN,
+    origin: [f32; 2],
+    reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
+) -> Result<Image, GlyphError> {
+    let (analysis, bounds) = pen.analysis(run, origin)?;
+    let (width, height) = extent(&bounds);
+    if width == 0 || height == 0 {
+        return empty(reserve);
+    }
+    reserve(width.checked_mul(height).ok_or(GlyphError::ImageBudget)?)?;
+    Ok(Image {
+        placement: placement(&bounds),
+        content: Content::Mask,
+        data: alpha(&analysis, &bounds)?.into_boxed_slice(),
+    })
+}
+
+/// The palette index of a COLR layer drawn in the text color.
+const FOREGROUND_LAYER: u16 = 0xFFFF;
+
+/// The COLR layers of the glyph, bottom first, composited source-over in
+/// encoded sRGB like the other COLRv0 paths.
+fn colr(
+    pen: Pen<'_>,
+    run: &DWRITE_GLYPH_RUN,
+    reserve: &mut dyn FnMut(usize) -> Result<(), GlyphError>,
+) -> Result<Image, GlyphError> {
+    let factory2: &IDWriteFactory2 = pen.factory;
+    let origin = pen.options.offset;
+    // SAFETY: the run is live for the call and the transform pointer, when
+    // present, points at a value the pen borrows. Palette 0 is the default.
+    let layers = unsafe {
+        factory2.TranslateColorGlyphRun(
+            origin[0],
+            origin[1],
+            run,
+            None,
+            DWRITE_MEASURING_MODE_NATURAL,
+            pen.transform.map(|matrix| matrix as *const DWRITE_MATRIX),
+            0,
+        )
+    }
+    .map_err(|_| GlyphError::UnsupportedGlyph)?;
+    // Each layer's run is valid only until the next `MoveNext`, so its
+    // analysis is made at once; the analyses own what they need.
+    let mut drawn = Vec::new();
+    // SAFETY: the enumerator is live.
+    while unsafe { layers.MoveNext() }
+        .map_err(|_| GlyphError::UnsupportedGlyph)?
+        .as_bool()
+    {
+        // SAFETY: after a `MoveNext` that returned true the current run is
+        // valid until the following `MoveNext`, and this borrow ends before it.
+        let layer: &DWRITE_COLOR_GLYPH_RUN = unsafe {
+            &*layers
+                .GetCurrentRun()
+                .map_err(|_| GlyphError::UnsupportedGlyph)?
+        };
+        let ink = match layer.paletteIndex {
+            FOREGROUND_LAYER => pen
+                .options
+                .foreground
+                .map(|channel| f32::from(channel) / 255.0),
+            _ => {
+                let color = layer.runColor;
+                [color.r, color.g, color.b, color.a]
+            }
+        };
+        let (analysis, bounds) = pen.analysis(
+            &layer.glyphRun,
+            [layer.baselineOriginX, layer.baselineOriginY],
+        )?;
+        if extent(&bounds).0 > 0 && extent(&bounds).1 > 0 {
+            drawn.push((analysis, bounds, ink));
+        }
+    }
+    let Some(union) = drawn
+        .iter()
+        .map(|(_, bounds, _)| *bounds)
+        .reduce(|a, b| RECT {
+            left: a.left.min(b.left),
+            top: a.top.min(b.top),
+            right: a.right.max(b.right),
+            bottom: a.bottom.max(b.bottom),
+        })
+    else {
+        return empty(reserve);
+    };
+    let (width, height) = extent(&union);
+    let bytes = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or(GlyphError::ImageBudget)?;
+    reserve(bytes)?;
+    // Premultiplied accumulation in encoded sRGB, one f32 per channel.
+    let mut accumulated = vec![[0f32; 4]; width * height];
+    for (analysis, bounds, ink) in &drawn {
+        let coverage = alpha(analysis, bounds)?;
+        let (layer_width, _) = extent(bounds);
+        let (dx, dy) = (
+            (bounds.left - union.left) as usize,
+            (bounds.top - union.top) as usize,
+        );
+        for (i, &cover) in coverage.iter().enumerate() {
+            if cover == 0 {
+                continue;
+            }
+            let a = ink[3].clamp(0.0, 1.0) * f32::from(cover) / 255.0;
+            let pixel = &mut accumulated[(dy + i / layer_width) * width + dx + i % layer_width];
+            for channel in 0..3 {
+                pixel[channel] = ink[channel].clamp(0.0, 1.0) * a + pixel[channel] * (1.0 - a);
+            }
+            pixel[3] = a + pixel[3] * (1.0 - a);
+        }
+    }
+    let mut data = Vec::with_capacity(bytes);
+    for [r, g, b, a] in accumulated {
+        let straight = |channel: f32| match a {
+            0.0 => 0,
+            _ => ((channel / a).clamp(0.0, 1.0) * 255.0).round() as u8,
+        };
+        data.extend([
+            straight(r),
+            straight(g),
+            straight(b),
+            (a * 255.0).round() as u8,
+        ]);
+    }
+    Ok(Image {
+        placement: placement(&union),
+        content: Content::Color,
+        data: data.into_boxed_slice(),
+    })
+}
+
+/// Every representation the font gives `glyph`, outline included.
+fn image_formats(
+    face: &IDWriteFontFace,
+    glyph: u16,
+) -> Result<DWRITE_GLYPH_IMAGE_FORMATS, GlyphError> {
     let face = face
         .cast::<IDWriteFontFace4>()
         .map_err(|_| GlyphError::UnsupportedGlyph)?;
     // SAFETY: the face is live; the full ppem range covers every bitmap strike.
-    let formats = unsafe { face.GetGlyphImageFormats(glyph, 0, u32::MAX) }
-        .map_err(|_| GlyphError::InvalidFont)?;
-    let outline = DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE | DWRITE_GLYPH_IMAGE_FORMATS_CFF;
-    Ok((formats & !outline).0 != 0)
+    unsafe { face.GetGlyphImageFormats(glyph, 0, u32::MAX) }.map_err(|_| GlyphError::InvalidFont)
 }
 
 /// Creates the face at `index` of `file`, with bold simulation when asked.
