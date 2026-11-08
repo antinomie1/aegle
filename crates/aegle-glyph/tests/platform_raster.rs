@@ -212,7 +212,10 @@ fn colr_layers_composite_in_their_palette_colors() {
     // Blue at alpha 128/255 over red, mixed in linear light like the Rust COLR
     // path (`retained.rs`): about 188 of each in straight sRGB.
     for pixel in interior {
-        assert!((186..=190).contains(&pixel[0]) && pixel[1] == 0, "{pixel:?}");
+        assert!(
+            (186..=190).contains(&pixel[0]) && pixel[1] == 0,
+            "{pixel:?}"
+        );
         assert!((186..=190).contains(&pixel[2]), "{pixel:?}");
     }
     assert_eq!(
