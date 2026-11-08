@@ -15,7 +15,7 @@ Aegle 的文本策略是：**排版、双向文字（Bidi）、断行与字形�
 * **行高**：`LineHeight` 在三个后端上都是每一行（含首行）的行盒高度，与字体自然行高之差上下各分一半，与 CSS `line-height` 一致；单行标签的高度因此等于所设行高。Linux 用 Pango 1.50 起的行高属性（`pango_attr_line_height_new[_absolute]`）实现，`pango_layout_set_line_spacing` 只拉开基线间距、不改变单行高度，故不使用。
 * **零数据打包**：默认 release 构建不打包任何字体文件或 HarfBuzz/Swash 代码；`text-parley` 为仅在显式开启时编译的非维护回退。
 * **字体身份抽象 (`FontSource`)**：`Scene` 中的字形身份为不透明的 `FontSource::System(SystemFont { backend, id })` 或 `FontSource::Bytes(FontData)`，渲染器不保存任何原生系统指针。
-* **彩色字形**：Linux 下 FreeType 直接支持 COLR 与内嵌位图；macOS 下 CoreGraphics 在 sRGB RGBA 上下文中绘制带彩色字形特征（sbix、COLR、SVG）的字体，以黑、白两种墨色区分彩色字形（非预乘 RGBA）与同一字体中的普通轮廓（覆盖率 mask），用文字色的混合字形按前景色绘制；Windows 下 DirectWrite 经 `TranslateColorGlyphRun` 把 COLR 字形（系统 emoji 字体 Segoe UI Emoji 的表示）拆成层，逐层取灰度覆盖率并按调色板颜色（文字色条目用前景色）合成为非预乘 RGBA，只有 SVG 或 PNG/JPEG/TIFF/BGRA 位图表示的字形仍返回 `UnsupportedGlyph`；若启用 `colrv1` 或 `svg` feature，由 `aegle-glyph` 在光栅化前使用 Skrifa/resvg 解析，未开启对应 feature 的彩色字形安全返回 `UnsupportedGlyph`。
+* **彩色字形**：Linux 下 FreeType 直接支持 COLR 与内嵌位图；macOS 下 CoreGraphics 在 sRGB RGBA 上下文中绘制带彩色字形特征（sbix、COLR、SVG）的字体，以黑、白两种墨色区分彩色字形（非预乘 RGBA）与同一字体中的普通轮廓（覆盖率 mask），用文字色的混合字形按前景色绘制；Windows 下 DirectWrite 经 `TranslateColorGlyphRun` 把 COLR 字形（系统 emoji 字体 Segoe UI Emoji 的表示）拆成层，逐层取灰度覆盖率并按调色板颜色（文字色条目用前景色）合成为非预乘 RGBA，只有 SVG 或 PNG/JPEG/TIFF/BGRA 位图表示的字形仍返回 `UnsupportedGlyph`；若启用 `colrv1` 或 `svg` feature，由 `aegle-glyph` 在光栅化前使用 Skrifa/resvg 解析，未开启对应 feature 时，FreeType 与 DirectWrite 不能绘制的彩色字形返回 `UnsupportedGlyph`（macOS 上 CoreText 自行绘制 SVG 字形）。
 
 ---
 

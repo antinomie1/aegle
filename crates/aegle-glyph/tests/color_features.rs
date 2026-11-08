@@ -100,7 +100,9 @@ fn colrv1_glyphs_render_as_color_bitmaps() {
 #[test]
 fn a_color_glyph_without_its_feature_is_unsupported_not_monochrome() {
     // Without either feature a color glyph must not fall back to its outline:
-    // that would draw the wrong pixels instead of reporting the gap.
+    // that would draw the wrong pixels instead of reporting the gap. CoreText
+    // draws OpenType-SVG itself, so on macOS the platform rasterizer returns
+    // the glyph in color; FreeType and DirectWrite report the gap.
     let font = FontData::new(
         Blob::from(include_bytes!("../../../tests/assets/aegle-test-svg.ttf").to_vec()),
         0,
@@ -111,7 +113,15 @@ fn a_color_glyph_without_its_feature_is_unsupported_not_monochrome() {
         hint: false,
         ..Default::default()
     };
-    match cache.rasterize(&font.clone().into(), glyph_id(&font, 'A'), options) {
+    let glyph = cache.rasterize(&font.clone().into(), glyph_id(&font, 'A'), options);
+    if cfg!(all(target_os = "macos", not(feature = "swash"))) {
+        let glyph = glyph.expect("CoreText draws the SVG glyph");
+        assert_eq!(glyph.content, Content::Color);
+        let colored = glyph.data.as_chunks::<4>().0.iter();
+        assert!(colored.filter(|p| p[3] == 255).any(|p| p[..3] != [0, 0, 0]));
+        return;
+    }
+    match glyph {
         Err(aegle_glyph::GlyphError::UnsupportedGlyph) => {}
         other => panic!("expected UnsupportedGlyph, got {other:?}"),
     }
