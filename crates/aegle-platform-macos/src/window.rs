@@ -118,7 +118,7 @@ impl MacOs {
                 "a macOS event loop already owns this process",
             ));
         }
-        let shared = Rc::new(Shared::new(preferences::read(mtm)));
+        let shared = Rc::new(Shared::new(preferences::read(mtm), mtm));
         let app = crate::app::start(mtm, shared.clone());
         CONNECTED.with(|value| value.set(true));
         Ok(Self {

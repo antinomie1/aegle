@@ -51,6 +51,7 @@ impl MacOs {
             Some(left) => NSDate::dateWithTimeIntervalSinceNow(left.as_secs_f64()),
             None => NSDate::distantFuture(),
         };
+        self.shared.waiting.set(true);
         let event = self.app.nextEventMatchingMask_untilDate_inMode_dequeue(
             NSEventMask::Any,
             Some(&date),
@@ -58,6 +59,7 @@ impl MacOs {
             unsafe { NSDefaultRunLoopMode },
             true,
         );
+        self.shared.waiting.set(false);
         let Some(event) = event else {
             // The wait ended with nothing to translate; report the frames
             // its deadline held.
@@ -65,7 +67,7 @@ impl MacOs {
             return true;
         };
         if event.r#type() == NSEventType::ApplicationDefined {
-            // A wake; the signal's callback already queued its event.
+            // A callback during the fetch already queued its event.
             return false;
         }
         self.press_popups(&event);

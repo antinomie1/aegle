@@ -2,18 +2,14 @@
 //!
 //! A Core Foundation run-loop source is registered in the main run loop's
 //! common modes. Any thread can signal it and wake the loop; its perform
-//! callback runs on the main thread, queues [`Event::Wake`] and posts an
-//! application-defined event, which makes the loop's blocking event fetch
-//! return.
+//! callback runs on the main thread and queues [`Event::Wake`], which makes
+//! the loop's blocking event fetch return.
 #![allow(unsafe_code)]
 use crate::shared::Shared;
 use aegle_platform::{Event, WakeHandle};
-use objc2::MainThreadMarker;
-use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_core_foundation::{
     CFIndex, CFRetained, CFRunLoop, CFRunLoopSource, CFRunLoopSourceContext, kCFRunLoopCommonModes,
 };
-use objc2_foundation::NSPoint;
 use std::{
     ffi::c_void,
     rc::{Rc, Weak},
@@ -30,24 +26,6 @@ unsafe extern "C-unwind" fn perform(info: *mut c_void) {
         return;
     };
     shared.emit(Event::Wake);
-    // The callback runs on the main thread, inside the loop's event fetch.
-    if let Some(mtm) = MainThreadMarker::new() {
-        let app = NSApplication::sharedApplication(mtm);
-        let event = NSEvent::otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2(
-            NSEventType::ApplicationDefined,
-            NSPoint::ZERO,
-            NSEventModifierFlags::empty(),
-            0.0,
-            0,
-            None,
-            0,
-            0,
-            0,
-        );
-        if let Some(event) = event {
-            app.postEvent_atStart(&event, true);
-        }
-    }
 }
 
 unsafe extern "C-unwind" fn release(info: *const c_void) {

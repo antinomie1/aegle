@@ -126,9 +126,49 @@ mod macos {
         while let Some(event) = backend.next_event() {
             assert!(!matches!(event, Event::Error(_)), "{event:?}");
         }
+        // An input method may commit from a run-loop callback instead of a key
+        // press, as a candidate clicked with the mouse does; that ends a
+        // blocking wait like an event.
+        {
+            use objc2_foundation::{NSRange, NSRunLoop, NSString};
+            let RawWindowHandle::AppKit(handle) = handle else {
+                unreachable!()
+            };
+            // SAFETY: the lease keeps the view alive on this, the main thread.
+            let view: objc2::rc::Retained<objc2_app_kit::NSView> = objc2::Message::retain(unsafe {
+                handle.ns_view.cast::<objc2_app_kit::NSView>().as_ref()
+            });
+            let commit = block2::RcBlock::new(move || {
+                let text = NSString::from_str("中文");
+                let replacement = NSRange::new(isize::MAX as usize, 0);
+                // SAFETY: the view implements NSTextInputClient.
+                let () = unsafe {
+                    objc2::msg_send![&*view, insertText: &*text, replacementRange: replacement]
+                };
+            });
+            settle(&mut backend)?;
+            // SAFETY: the block runs on the main thread, where the view lives.
+            unsafe { NSRunLoop::mainRunLoop().performBlock(&commit) };
+        }
+        let started = std::time::Instant::now();
+        backend.dispatch(Some(Duration::from_secs(5)))?;
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "the commit woke the wait"
+        );
+        let mut committed = false;
+        while let Some(event) = backend.next_event() {
+            committed |= matches!(
+                &event,
+                Event::Ime { event: aegle_platform::ImeEvent::Update(update), .. }
+                    if update.commit.as_deref() == Some("中文") && update.preedit.text.is_empty()
+            );
+        }
+        assert!(committed, "the commit is reported");
         backend.configure_ime(first, None)?;
         // A wake from another thread ends a blocking wait.
         let wake = backend.wake_handle()?;
+        settle(&mut backend)?;
         let thread = {
             let wake = wake.clone();
             std::thread::spawn(move || {
@@ -203,6 +243,20 @@ mod macos {
         drop(lease);
         backend.remove_window(first)?;
         Ok(())
+    }
+
+    /// Waits out the window's own AppKit events, such as its activation, so
+    /// the next blocking wait ends only for what the scenario causes.
+    fn settle(backend: &mut MacOs) -> Outcome {
+        let quiet = Duration::from_millis(200);
+        loop {
+            let started = std::time::Instant::now();
+            backend.dispatch(Some(quiet))?;
+            while backend.next_event().is_some() {}
+            if started.elapsed() >= quiet {
+                return Ok(());
+            }
+        }
     }
 
     /// Posts a left press and release at the middle of `surface`'s window.
