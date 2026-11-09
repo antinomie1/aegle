@@ -59,6 +59,7 @@ mod scrollbar;
 #[cfg(feature = "accessibility")]
 mod semantics;
 mod shader;
+mod signal;
 mod skins;
 mod state;
 mod state_api;
@@ -118,6 +119,7 @@ pub use motion::TransitionProperty;
 #[cfg(feature = "motion")]
 pub use motion_handles::Animate;
 pub use propagate::{InputEvent, InputKind, Phase};
+pub use signal::{Binding, Signal};
 pub use state::{Element, State, text_style};
 pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token};
 

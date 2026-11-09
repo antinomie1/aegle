@@ -41,6 +41,11 @@ macro_rules! handle {
                 &self.0
             }
         }
+        impl ::std::convert::AsRef<$crate::Node> for $name {
+            fn as_ref(&self) -> &$crate::Node {
+                &self.0
+            }
+        }
     };
     ($(#[$meta:meta])* $vis:vis $name:ident($control:ty) $(: $($group:ident),+)? $(,)?) => {
         $crate::handle!($(#[$meta])* $vis $name);

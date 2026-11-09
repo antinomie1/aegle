@@ -33,11 +33,11 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 | **aegle-theme** | 无分配主题配置、类 Metro 中性默认样式、`ThemeOverride` 局部覆盖、类型化 Token（颜色、尺寸、字体、阴影） | types |
 | **aegle-motion** | 补间动画、关键帧动画、Bézier/阻尼弹簧曲线、属性动画（位移/缩放/旋转/透明度/阴影/渐变），无自身定时器 | types |
 | **aegle-controls** | 可复用交互行为（点击、悬停、范围、开关、单选、文本编辑），无默认皮肤 | types |
-| **aegle-widgets** | 完整默认控件库（Label、Button、TextField、CheckBox、Switch、Slider、ScrollView、ListView、Table、Dialog 等） | ui, controls, theme, text |
+| **aegle-widgets** | 完整默认控件库（Label、Button、TextField、CheckBox、Switch、Slider、ScrollView、ListView、Table、Dialog 等），输入控件与 `Signal` 的双向绑定 | ui, controls, theme, text |
 | **aegle-markup** | 花括号标记语言解析器、类型与作用域检查、诊断跨度报告 | 纯 Rust 解析器 |
 | **aegle-macros** | `ui!` 声明宏：将标记编译为零开销 Rust 控件树调用代码 | 过程宏 |
 | **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载、layer 窗口文档（面板）、state 变化处理器 | ui, widgets, markup, macros |
-| **aegle-ui** | 无窗口保留式 UI 核心引擎：树生命周期、Taffy 布局调度、输入捕获冒泡路由、焦点管理、动画调度、IME 与语义同步 | core, layout, scene, text, theme, motion |
+| **aegle-ui** | 无窗口保留式 UI 核心引擎：树生命周期、Taffy 布局调度、输入捕获冒泡路由、焦点管理、动画调度、IME 与语义同步、Rust 侧响应式 `Signal` 与控件绑定 | core, layout, scene, text, theme, motion |
 | **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理、后台代理消息传递（`UiProxy`）、输出与原生弹出层 | ui, platform, scene, text |
 | **aegle** | 顶层便捷 Facade：统一默认导出、一键 `App::run_ui` | app, ui, widgets, image |
 

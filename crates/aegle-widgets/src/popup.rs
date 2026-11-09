@@ -55,6 +55,12 @@ impl Deref for Popup {
     }
 }
 
+impl AsRef<Node> for Popup {
+    fn as_ref(&self) -> &Node {
+        &self.0.0
+    }
+}
+
 pub(crate) fn popup(anchor: &Node) -> Popup {
     let id = anchor.change(|state, anchor| {
         state.install(&crate::HOOKS);

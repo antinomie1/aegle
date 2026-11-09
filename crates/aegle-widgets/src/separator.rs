@@ -98,6 +98,12 @@ impl std::ops::Deref for Splitter {
     }
 }
 
+impl AsRef<Node> for Splitter {
+    fn as_ref(&self) -> &Node {
+        &self.root
+    }
+}
+
 /// Handle thickness in logical pixels.
 const GRIP: f32 = 6.0;
 /// Arrow-key adjustment as a fraction of the splitter.

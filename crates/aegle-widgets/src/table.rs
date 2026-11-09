@@ -35,6 +35,12 @@ impl Deref for Table {
     }
 }
 
+impl AsRef<Node> for Table {
+    fn as_ref(&self) -> &Node {
+        &self.table
+    }
+}
+
 impl Table {
     /// The virtual row list: `set_count`, `reload`, scrolling and its size.
     pub fn rows(&self) -> &ListView {

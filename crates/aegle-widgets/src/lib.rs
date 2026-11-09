@@ -22,6 +22,7 @@
 //! without the `aegle` facade or a window; `custom_control` adds a control
 //! with its own behavior through the same `Control` trait.
 
+mod bind;
 mod button;
 mod canvas;
 mod dialog;

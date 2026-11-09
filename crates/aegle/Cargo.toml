@@ -92,6 +92,10 @@ required-features = ["native", "system-fonts"]
 [[example]]
 name = "controls"
 required-features = ["native", "system-fonts"]
+[[example]]
+name = "signals"
+required-features = ["native", "system-fonts"]
+
 
 [[example]]
 name = "hello_markup"

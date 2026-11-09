@@ -466,6 +466,12 @@ impl Deref for Window {
     }
 }
 
+impl AsRef<aegle_ui::Node> for Window {
+    fn as_ref(&self) -> &aegle_ui::Node {
+        &self.root
+    }
+}
+
 impl Runtime {
     /// Closes a window after its popups, innermost first.
     pub(crate) fn close(&mut self, id: WindowId) -> Result<()> {

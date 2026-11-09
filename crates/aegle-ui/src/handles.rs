@@ -23,6 +23,12 @@ pub struct Node {
     pub(crate) id: NodeId,
 }
 
+impl AsRef<Node> for Node {
+    fn as_ref(&self) -> &Node {
+        self
+    }
+}
+
 /// Panics with a misuse error; see [`Node::change`].
 #[cold]
 pub(crate) fn fail(error: Box<dyn std::error::Error>) -> ! {

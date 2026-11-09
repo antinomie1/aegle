@@ -399,6 +399,37 @@ save.on_click(move |_button| status.set_text("Saved"));
 - `set_*` 替换：`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。
 
 ### 逐帧回调与窗口级按键
+### Rust 侧响应式状态（`Signal`）
+
+纯 Rust 应用把状态放进 `Signal<T>`，界面从它派生，不必在每个修改处手写“模型 → 控件”的同步：
+
+```rust
+let name = Signal::new(String::from("世界"));
+let volume = Signal::new(40.0);
+let muted = Signal::new(false);
+
+window.text_field("").bind_text(&name);              // 双向：显示 name，用户编辑写回 name
+window.slider(0.0, 100.0, 0.0).bind_value(&volume);
+window.check_box("静音", false).bind_checked(&muted);
+
+let (who, level) = (name.clone(), volume.clone());
+muted.bind(&window.text(""), move |summary, muted| {  // 读了三个 signal，任一变化都重跑
+    let volume = if *muted { 0.0 } else { level.get() };
+    summary.set_text(&format!("你好，{} — 音量 {volume:.0}", who.get()));
+});
+window.button("重置").on_click(move |_| volume.set(40.0)); // 只改模型，控件随之更新
+```
+
+- `Signal::new(v)` 创建，克隆共享同一个值；`get()`（要求 `Clone`）与 `with(|v| ...)` 读取，`set(v)` 在值相等时什么也不做，`update(|v| ...)` 原地修改并总是通知。Signal 不是 `Send`，后台线程经 `app.proxy` 在 UI 线程里修改。
+- `signal.bind(&控件, |控件, 值| ...)` 立即运行一次，之后在该 signal 或闭包里读到的任何其他 signal 变化时重跑；依赖按最近一次运行实际读到的 signal 计算，未走到的分支不订阅。绑定与控件同生命周期：控件删除或窗口关闭时，闭包与其捕获的值一起释放。闭包不会被自己引起的变化重入，也不能修改它正在读的这个 signal（会 panic）。
+- `signal.on_change(|新值| ...)` 在每次变化、所有绑定重跑之后调用，处理器里的读取不订阅；处理器归 signal 所有，捕获该 signal 自身时会让它一直存活，直到移除。
+- 重跑在 `set` 返回前同步完成，但只是经句柄修改控件并打脏标记，布局与绘制仍在下一次刷新时合并进行一次；同一事件里改多个 signal 不会多画。和句柄一样，不能在绘制器、钩子或场景访问器里修改 signal。
+- 输入控件的双向绑定：`CheckBox`/`Switch::bind_checked(&Signal<bool>)`、`TextField::bind_text(&Signal<String>)`、`Slider`/`NumberField::bind_value(&Signal<f64>)`、`Dropdown`/`Tabs::bind_selected(&Signal<usize>)`。用户修改经控件的 `on_change` 写回；控件已显示的值不会再被设一次，所以正在编辑的文本框保留插入点、选区与撤销历史。滑块与数值框把超出范围的值钳制显示，signal 保留给定值，直到用户改动控件。
+- `bind`、`on_change` 与 `bind_*` 返回 `Binding`，`remove()` 停止它（双向绑定的两个方向一起停止）；丢弃 `Binding` 不会停止。自定义控件库的双向绑定可以用 `Binding::with_subscription` 把写回处理器的 `Subscription` 并入同一个 `Binding`。
+- 标记文档的 `state` 是 `aegle::loader::State<T>`，与 `Signal` 相互独立。
+
+可运行示例：`cargo run -p aegle --example signals`。
+
 
 ```rust
 // 播放头：每帧读音频时钟并移动一个小控件；只改 offset，不重新布局或重画时间轴。

@@ -108,9 +108,10 @@ pub mod prelude {
         Stack, Switch, Tab, Tabs, Text, TextArea, TextField, TreeNode, TreeView,
     };
     pub use aegle_ui::{
-        Align, Appearance, Color, ColorSlot, Container, ControlKind, Cursor, Direction, DragData,
-        DropEvent, Font, Insets, Justify, LayoutDirection, Length, LengthSlot, Node, Point, Result,
-        Shadow, Skin, Style, Theme, Token, TokenSlot, Ui, Visit, VisualState, Wrap, register_token,
+        Align, Appearance, Binding, Color, ColorSlot, Container, ControlKind, Cursor, Direction,
+        DragData, DropEvent, Font, Insets, Justify, LayoutDirection, Length, LengthSlot, Node,
+        Point, Result, Shadow, Signal, Skin, Style, Theme, Token, TokenSlot, Ui, Visit,
+        VisualState, Wrap, register_token,
     };
     #[cfg(feature = "motion")]
     pub use aegle_ui::{

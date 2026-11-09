@@ -38,13 +38,18 @@ impl Rating {
     pub fn set_value(&self, value: u8) {
         self.update(|rating| rating.value = value.clamp(1, 5))
     }
-    pub fn on_change<R: aegle_ui::HandlerResult>(&self, mut f: impl FnMut(Rating) -> R + 'static) {
+    pub fn on_change<R: aegle_ui::HandlerResult>(
+        &self,
+        mut f: impl FnMut(Rating) -> R + 'static,
+    ) -> aegle_ui::Subscription {
         self.on_action(move |node| f(Rating(node)).into_result())
     }
 }
 ```
 
 `read`/`update` 取得控件状态；`update` 之后自动重绘并更新语义。句柄方法直接返回值：控件已删除、在绘制或钩子中调用，或类型不符时它们 panic（经 `Node::change`）；需要拒绝的参数用 `aegle_ui::require(条件)` 检查。处理器类型参数 `R: HandlerResult` 让应用的处理器既能返回 `()` 也能返回 `Result`，`Node::on_action` 把它登记到引擎的处理器表。列出的样式组生成相应 setter（如 `set_indicator_color`），必须与类型的 `accepts` 一致；未列出的 setter 不存在，误用在编译期报错。
+
+`handle!` 还为句柄实现 `AsRef<Node>`，因此应用可以直接 `signal.bind(&rating, |rating, v| rating.set_value(*v))`；不经 `handle!` 定义的组合句柄要自己实现 `AsRef<Node>`。双向绑定照内置控件的做法：`signal.bind` 显示值（与控件当前值相同时不再设置），`on_change` 把用户修改 `set` 回 signal，再用 `Binding::with_subscription` 把这个处理器的 `Subscription` 并入返回的 `Binding`。
 
 ## 4. 皮肤与 token
 

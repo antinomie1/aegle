@@ -49,6 +49,14 @@ fn main() -> Result<()> {
 }
 ```
 
+State in plain Rust lives in signals: a binding follows the signals it reads for as long as its control lives, and input controls write the user's changes back.
+
+```rust
+let name = Signal::new(String::from("世界"));
+window.text_field("").bind_text(&name);
+name.bind(&window.text(""), |label, name| label.set_text(&format!("你好，{name}")));
+```
+
 Try the bundled examples with `cargo run -p aegle --example controls --release`.
 
 ## Features

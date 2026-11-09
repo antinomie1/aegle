@@ -49,6 +49,14 @@ fn main() -> Result<()> {
 }
 ```
 
+纯 Rust 的状态放在 signal 里：绑定在控件存活期间跟随它读到的 signal，输入控件把用户的修改写回。
+
+```rust
+let name = Signal::new(String::from("世界"));
+window.text_field("").bind_text(&name);
+name.bind(&window.text(""), |label, name| label.set_text(&format!("你好，{name}")));
+```
+
 也可以直接运行自带示例：`cargo run -p aegle --example controls --release`。
 
 ## Features
