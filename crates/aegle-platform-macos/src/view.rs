@@ -328,7 +328,10 @@ define_class!(
 
         #[unsafe(method(windowDidMiniaturize:))]
         fn window_did_miniaturize(&self, _notification: &NSNotification) {
-            self.with(Native::refresh);
+            self.with(|native| {
+                native.refresh();
+                native.advance_later();
+            });
         }
 
         #[unsafe(method(windowDidDeminiaturize:))]
@@ -336,7 +339,38 @@ define_class!(
             self.with(|native| {
                 native.dirty.set(true);
                 native.refresh();
+                native.advance_later();
             });
+        }
+
+        #[unsafe(method(windowWillEnterFullScreen:))]
+        fn window_will_enter_full_screen(&self, _notification: &NSNotification) {
+            self.with(|native| native.transitioning.set(true));
+        }
+
+        #[unsafe(method(windowWillExitFullScreen:))]
+        fn window_will_exit_full_screen(&self, _notification: &NSNotification) {
+            self.with(|native| native.transitioning.set(true));
+        }
+
+        #[unsafe(method(windowDidEnterFullScreen:))]
+        fn window_did_enter_full_screen(&self, _notification: &NSNotification) {
+            self.with(Native::full_screen_changed);
+        }
+
+        #[unsafe(method(windowDidExitFullScreen:))]
+        fn window_did_exit_full_screen(&self, _notification: &NSNotification) {
+            self.with(Native::full_screen_changed);
+        }
+
+        #[unsafe(method(windowDidFailToEnterFullScreen:))]
+        fn window_did_fail_to_enter_full_screen(&self, _window: &NSWindow) {
+            self.with(Native::full_screen_changed);
+        }
+
+        #[unsafe(method(windowDidFailToExitFullScreen:))]
+        fn window_did_fail_to_exit_full_screen(&self, _window: &NSWindow) {
+            self.with(Native::full_screen_changed);
         }
 
         #[unsafe(method(windowDidBecomeKey:))]

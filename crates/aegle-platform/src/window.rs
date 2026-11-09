@@ -20,6 +20,42 @@ pub struct PixelSize {
     pub height: u32,
 }
 
+impl PixelSize {
+    /// Whether either extent is zero.
+    pub const fn is_empty(self) -> bool {
+        self.width == 0 || self.height == 0
+    }
+
+    /// This size moved into the limits of
+    /// [`crate::Platform::set_size_limits`], each extent separately.
+    pub fn clamp(self, min: Option<PixelSize>, max: Option<PixelSize>) -> PixelSize {
+        let min = min.unwrap_or_default();
+        let max = max.unwrap_or(PixelSize {
+            width: u32::MAX,
+            height: u32::MAX,
+        });
+        PixelSize {
+            width: self.width.clamp(min.width, max.width),
+            height: self.height.clamp(min.height, max.height),
+        }
+    }
+}
+
+/// Checks the limits of [`crate::Platform::set_size_limits`]: neither may be
+/// empty, and the minimum may not exceed the maximum along either axis.
+pub fn check_size_limits(min: Option<PixelSize>, max: Option<PixelSize>) -> crate::Result<()> {
+    let empty = [min, max].into_iter().flatten().any(PixelSize::is_empty);
+    let inverted = match (min, max) {
+        (Some(min), Some(max)) => min.width > max.width || min.height > max.height,
+        _ => false,
+    };
+    if empty || inverted {
+        Err(crate::Error::InvalidSize)
+    } else {
+        Ok(())
+    }
+}
+
 /// Settings for a new window.
 #[derive(Clone, Copy, Debug)]
 pub struct WindowOptions<'a> {
@@ -220,6 +256,27 @@ pub struct WindowInfo {
     pub active: bool,
     /// Whether the window can present: configured and not minimized.
     pub configured: bool,
+    /// How the window occupies the screen; always [`WindowMode::Normal`] for
+    /// layers and popups.
+    pub mode: WindowMode,
+}
+
+/// How an ordinary window occupies the screen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum WindowMode {
+    /// Its own size and position, which [`crate::Platform::set_size`] and
+    /// [`crate::Platform::set_position`] change.
+    #[default]
+    Normal,
+    /// Filling the work area of its output, title bar and borders kept.
+    Maximized,
+    /// Hidden in the dock or taskbar; it cannot present
+    /// ([`WindowInfo::configured`] is false). Wayland can request it but never
+    /// reports it, as the protocol does not tell a client.
+    Minimized,
+    /// Covering its whole output without decorations.
+    Fullscreen,
 }
 
 /// Cloneable, thread-safe signal that queues [`crate::Event::Wake`] on the

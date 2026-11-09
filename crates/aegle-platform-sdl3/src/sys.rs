@@ -15,6 +15,10 @@ use std::{
 /// `SDL_INIT_VIDEO`.
 pub(crate) const INIT_VIDEO: u32 = 0x0000_0020;
 
+/// `SDL_WINDOW_FULLSCREEN`.
+pub(crate) const WINDOW_FULLSCREEN: u64 = 0x0000_0000_0000_0001;
+/// `SDL_WINDOW_MAXIMIZED`.
+pub(crate) const WINDOW_MAXIMIZED: u64 = 0x0000_0000_0000_0080;
 /// `SDL_WINDOW_HIDDEN`.
 pub(crate) const WINDOW_HIDDEN: u64 = 0x0000_0000_0000_0008;
 /// `SDL_WINDOW_RESIZABLE`.
@@ -366,6 +370,17 @@ pub(crate) struct Lib {
     pub show_window: unsafe extern "C" fn(*mut Window) -> bool,
     pub sync_window: unsafe extern "C" fn(*mut Window) -> bool,
     pub set_window_title: unsafe extern "C" fn(*mut Window, *const c_char) -> bool,
+    pub set_window_size: unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool,
+    pub set_window_minimum_size: unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool,
+    pub set_window_maximum_size: unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool,
+    pub set_window_resizable: unsafe extern "C" fn(*mut Window, bool) -> bool,
+    pub maximize_window: unsafe extern "C" fn(*mut Window) -> bool,
+    pub minimize_window: unsafe extern "C" fn(*mut Window) -> bool,
+    pub restore_window: unsafe extern "C" fn(*mut Window) -> bool,
+    pub set_window_fullscreen: unsafe extern "C" fn(*mut Window, bool) -> bool,
+    pub get_window_position: unsafe extern "C" fn(*mut Window, *mut c_int, *mut c_int) -> bool,
+    pub set_window_position: unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool,
+    pub set_window_always_on_top: unsafe extern "C" fn(*mut Window, bool) -> bool,
     pub get_window_id: unsafe extern "C" fn(*mut Window) -> u32,
     pub get_window_flags: unsafe extern "C" fn(*mut Window) -> u64,
     pub get_window_size: unsafe extern "C" fn(*mut Window, *mut c_int, *mut c_int) -> bool,
@@ -475,6 +490,25 @@ fn load() -> Option<Lib> {
             sync_window: bind!("SDL_SyncWindow" : unsafe extern "C" fn(*mut Window) -> bool),
             set_window_title: bind!("SDL_SetWindowTitle"
                 : unsafe extern "C" fn(*mut Window, *const c_char) -> bool),
+            set_window_size: bind!("SDL_SetWindowSize"
+                : unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool),
+            set_window_minimum_size: bind!("SDL_SetWindowMinimumSize"
+                : unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool),
+            set_window_maximum_size: bind!("SDL_SetWindowMaximumSize"
+                : unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool),
+            set_window_resizable: bind!("SDL_SetWindowResizable"
+                : unsafe extern "C" fn(*mut Window, bool) -> bool),
+            maximize_window: bind!("SDL_MaximizeWindow" : unsafe extern "C" fn(*mut Window) -> bool),
+            minimize_window: bind!("SDL_MinimizeWindow" : unsafe extern "C" fn(*mut Window) -> bool),
+            restore_window: bind!("SDL_RestoreWindow" : unsafe extern "C" fn(*mut Window) -> bool),
+            set_window_fullscreen: bind!("SDL_SetWindowFullscreen"
+                : unsafe extern "C" fn(*mut Window, bool) -> bool),
+            get_window_position: bind!("SDL_GetWindowPosition"
+                : unsafe extern "C" fn(*mut Window, *mut c_int, *mut c_int) -> bool),
+            set_window_position: bind!("SDL_SetWindowPosition"
+                : unsafe extern "C" fn(*mut Window, c_int, c_int) -> bool),
+            set_window_always_on_top: bind!("SDL_SetWindowAlwaysOnTop"
+                : unsafe extern "C" fn(*mut Window, bool) -> bool),
             get_window_id: bind!("SDL_GetWindowID" : unsafe extern "C" fn(*mut Window) -> u32),
             get_window_flags: bind!("SDL_GetWindowFlags" : unsafe extern "C" fn(*mut Window) -> u64),
             get_window_size: bind!("SDL_GetWindowSize"

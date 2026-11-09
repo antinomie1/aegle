@@ -2,10 +2,7 @@
 use crate::{Error, PixelSize, Win32, WindowId};
 use aegle_platform::DrawResult;
 use aegle_types::{PixelRect, Region};
-use windows::Win32::{
-    Graphics::{Dwm::DwmFlush, Gdi::*},
-    UI::WindowsAndMessaging::*,
-};
+use windows::Win32::Graphics::{Dwm::DwmFlush, Gdi::*};
 
 impl Win32 {
     /// Borrows a tightly packed, top-down premultiplied-sRGB BGRA8 framebuffer,
@@ -91,11 +88,9 @@ impl Win32 {
             if rows == 0 {
                 return Err(Error::Backend("GDI bitmap upload failed".into()).into());
             }
-            if !IsWindowVisible(native.hwnd.get()).as_bool() {
-                let _ = ShowWindow(native.hwnd.get(), SW_SHOWNORMAL);
-            }
             DwmFlush().map_err(aegle_platform::Error::backend)?;
         }
+        native.show();
         native.dirty.set(false);
         native.drawn.set(Some(size));
         Ok(true)

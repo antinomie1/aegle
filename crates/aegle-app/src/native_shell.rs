@@ -49,7 +49,7 @@ impl PopupOptions {
 impl App {
     /// The connected display outputs, for placing layers with
     /// [`LayerOptions::output`]. Fails with an unsupported-capability error
-    /// on platforms that cannot enumerate them (Win32 and macOS for now).
+    /// on platforms that cannot enumerate them (Win32 for now).
     pub fn outputs(&self) -> Result<Vec<OutputInfo>> {
         Ok(self.runtime.borrow().backend.outputs()?)
     }
@@ -97,8 +97,8 @@ impl Window {
     /// Opens a native popup attached to this window, with its own control
     /// tree; it closes with this window, and closes itself (removing its
     /// controls) when the window system dismisses it. Platforms without
-    /// popups fail with an unsupported-capability error (Win32 and macOS for
-    /// now); SDL3 slides a popup onto the screen but never flips it.
+    /// popups fail with an unsupported-capability error (Win32 for now); SDL3
+    /// slides a popup onto the screen but never flips it.
     pub fn popup(&self, options: PopupOptions) -> Result<Window> {
         let runtime = self.runtime.upgrade().ok_or(UiError::DeadHandle)?;
         let grab = match options.grab {
@@ -114,7 +114,7 @@ impl Window {
             width: options.width,
             height: options.height,
             buffer_budget: options.buffer_budget,
-            layer: None,
+            ..WindowOptions::default()
         };
         let popup = aegle_platform::PopupOptions {
             parent: self.id,

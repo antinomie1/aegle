@@ -16,6 +16,7 @@ mod gpu;
 mod ime;
 mod ime_types;
 mod input;
+mod manage;
 mod platform;
 mod scale;
 mod shell;

@@ -90,6 +90,22 @@ pub struct WindowOptions {
     /// platform has no layers, including the default SDL3 backend. Default:
     /// `None`.
     pub layer: Option<crate::LayerOptions>,
+    /// Whether the user can resize the window. Default: true.
+    pub resizable: bool,
+    /// The smallest content size the user can resize to, `(width, height)`
+    /// in logical pixels. Default: `None`.
+    pub min_size: Option<(u32, u32)>,
+    /// The largest content size the user can resize to. Default: `None`.
+    pub max_size: Option<(u32, u32)>,
+    /// Where the content's top-left corner starts in the desktop's logical
+    /// coordinates; `None`, the default, lets the platform place it. Fails on
+    /// Wayland, which places windows itself.
+    pub position: Option<aegle_ui::Point>,
+    /// The mode the window opens in, applied after its size and position, so
+    /// a window opened maximized restores to them. Default: normal.
+    pub mode: crate::WindowMode,
+    /// Keeps the window above ordinary windows. Fails on Wayland. Default: false.
+    pub always_on_top: bool,
 }
 
 impl Default for WindowOptions {
@@ -99,6 +115,12 @@ impl Default for WindowOptions {
             height: 480,
             buffer_budget: usize::MAX,
             layer: None,
+            resizable: true,
+            min_size: None,
+            max_size: None,
+            position: None,
+            mode: crate::WindowMode::Normal,
+            always_on_top: false,
         }
     }
 }
@@ -161,6 +183,8 @@ pub(crate) struct Entry {
     pub ready: bool,
     /// The window a popup is attached to.
     pub parent: Option<WindowId>,
+    /// Asked before the window closes at the user's request.
+    pub on_close: Option<crate::native_manage::CloseHandler>,
     #[cfg(access)]
     pub accessibility: crate::native_access::Access,
 }
@@ -325,6 +349,10 @@ pub(crate) fn open(
             popup,
             transparent,
         })?;
+    if let Err(error) = crate::native_manage::apply(&mut runtime, id, &options) {
+        runtime.backend.remove_window(id)?;
+        return Err(error);
+    }
     // The renderer and the platform are separate fields, so they are
     // borrowed separately while the window is handed over. A renderer that
     // cannot take this window must not leave the native window behind, and
@@ -368,6 +396,7 @@ pub(crate) fn open(
         clock: Default::default(),
         ready: false,
         parent: popup.map(|popup| popup.parent),
+        on_close: None,
         #[cfg(access)]
         title: title.into(),
         #[cfg(access)]

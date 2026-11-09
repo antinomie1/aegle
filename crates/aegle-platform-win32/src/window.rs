@@ -191,6 +191,7 @@ impl Win32 {
                 scale,
                 active: false,
                 configured: true,
+                mode: Default::default(),
             }),
             registered: Cell::new(false),
             dirty: Cell::new(true),
@@ -205,6 +206,9 @@ impl Win32 {
             drawn: Cell::new(None),
             budget: options.buffer_budget,
             drag_accept: Cell::new(None),
+            limits: Cell::new((None, None)),
+            pending_mode: Cell::new(Default::default()),
+            fullscreen: Cell::new(None),
         });
         let title: Vec<u16> = options.title.encode_utf16().chain(Some(0)).collect();
         // A transparent window keeps no redirection surface: its renderer shows
@@ -454,12 +458,8 @@ impl Win32 {
             return Ok(false);
         }
         native.dirty.set(false);
-        // SAFETY: owned HWND; first successful frame is now available for display.
-        unsafe {
-            if !IsWindowVisible(native.hwnd.get()).as_bool() {
-                let _ = ShowWindow(native.hwnd.get(), SW_SHOWNORMAL);
-            }
-        }
+        // The first successful frame is now available for display.
+        native.show();
         Ok(true)
     }
 

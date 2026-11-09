@@ -37,6 +37,14 @@ pub trait Platform: Sized {
     fn request_redraw(&mut self, window: WindowId) -> Result<()>;
     fn set_title(&mut self, window: WindowId, title: &str) -> Result<()>;
     fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()>;
+    // 窗口管理，默认 Unsupported
+    fn set_size(&mut self, window: WindowId, size: PixelSize) -> Result<()>;
+    fn set_size_limits(&mut self, window: WindowId, min: Option<PixelSize>, max: Option<PixelSize>) -> Result<()>;
+    fn set_resizable(&mut self, window: WindowId, resizable: bool) -> Result<()>;
+    fn set_mode(&mut self, window: WindowId, mode: WindowMode) -> Result<()>;
+    fn position(&self, window: WindowId) -> Result<Point>;
+    fn set_position(&mut self, window: WindowId, position: Point) -> Result<()>;
+    fn set_always_on_top(&mut self, window: WindowId, on_top: bool) -> Result<()>;
     fn configure_ime(&mut self, window: WindowId, request: Option<ImeRequest>) -> Result<()>;
     fn set_clipboard(&mut self, window: WindowId, seat: SeatId, text: &str) -> Result<()>;
     fn request_clipboard(&mut self, window: WindowId, seat: SeatId) -> Result<()>;
@@ -67,6 +75,7 @@ pub trait SurfacePlatform: Platform {
 * **Seat 机制**：输入事件带有 `SeatId`。多 seat 平台以协议对象区分；单 seat 平台（如 Windows、SDL3）恒为 `SeatId(0)`。
 * **跨线程唤醒**：`WakeHandle` 为可克隆无锁发送句柄，向平台事件循环发送 `Event::Wake`，无轮询定时器。
 * **窗口角色**：`WindowOptions` 的 `layer` 与 `popup` 至多设置一个（否则 `InvalidRole`）。`LayerOptions` 含层级、锚定边、保留区、键盘策略、`margin` 与 `output`；`set_layer` 原地改变层的放置与建议尺寸，几何变化时随后发 `Configure`，换输出或对非层窗口调用返回 `InvalidRole`。`PopupOptions` 含父窗口、父窗口逻辑坐标中的锚定矩形（须非空）、`Side` 与可选的抓取 seat；被系统撤销时发 `Close`。有未移除弹出层的窗口不能移除（`InvalidRole`），宿主须由内向外先移除弹出层。
+* **窗口管理**：只作用于普通窗口，层与弹出层返回 `InvalidRole`。尺寸为内容区逻辑尺寸，空或超出平台上限返回 `InvalidSize`；尺寸约束经 `check_size_limits` 校验（不能为空、最小值不大于最大值），设置后当前尺寸被移入约束，程序调整尺寸同样受约束。位置为内容区左上角在桌面逻辑坐标中的位置，非有限值返回 `InvalidPosition`。`set_size` 与 `set_position` 只用于 `WindowMode::Normal`，其他模式返回 `InvalidRole`。`set_mode` 是请求：尚未显示的窗口在首次显示时进入该模式，过渡可跨多次调度，到达的模式由 `WindowInfo::mode` 随 `Configure` 报告。
 * **输出**：`outputs()` 返回 `OutputInfo`（`OutputId`、名称、描述、逻辑位置与尺寸、缩放）；输出增删或几何、缩放变化发合并后的 `Event::Outputs`。
 
 ---
@@ -79,6 +88,7 @@ pub trait SurfacePlatform: Platform {
 * **文本输入**：获焦时 `SDL_StartTextInput`，失焦时停止并发送 `ImeEvent::Left`；光标区域传给 `SDL_SetTextInputArea`。SDL3 不支持周边文本，`ImeRequest.surrounding` 校验后丢弃。
 * **拖放与剪贴板**：仅支持接收拖入（`start_drag` 返回 `Unsupported`）；剪贴板为进程级全局同步读写。
 * **弹出层与输出**：`SDL_CreatePopupWindow` 创建弹出层，抓取时为弹出菜单、否则为提示；SDL 只接受偏移，弹出层放在锚定矩形的指定一侧并由 SDL 滑回屏幕内，不翻转；不支持弹出层的驱动（dummy、offscreen）返回 `Unsupported`。`SDL_GetDisplays` 列出显示器，名称为驱动所报告的名称；显示器事件合并为 `Event::Outputs`。
+* **窗口管理**：`SDL_SetWindowSize`、最小/最大尺寸、`SDL_SetWindowResizable`、`SDL_MaximizeWindow`/`MinimizeWindow`/`RestoreWindow`/`SetWindowFullscreen`、位置与置顶；模式取自窗口标志，由 SDL 的窗口事件报告。SDL 的 Wayland 驱动不能定位或置顶窗口，这两类请求返回 `Unsupported`，而不是交给 SDL 静默忽略。
 * **GPU 租约**：从 SDL 窗口属性中读取 `wl_display`/`wl_surface` 或 X11 `Display`/`Window`，构造 `raw-window-handle` 租约。
 
 ### 2. Wayland 原生客户端 (`aegle-platform-wayland`)
@@ -88,6 +98,7 @@ pub trait SurfacePlatform: Platform {
 * **输出**：SCTK 输出状态（含 xdg-output 名称）；连接时做两次往返，首次调度前即可列出；缩放由当前模式与逻辑尺寸求得（可为小数）。
 * **IME 事务**：为每个 seat 绑定 `zwp_text_input_v3`，支持完整周边文字切片、选区偏移与变更原因。
 * **双向拖放**：基于 `wl_data_device` 支持非阻塞管道读写的拖入与拖出发起。
+* **窗口管理**：浮动的 toplevel 自定尺寸，`set_size` 直接以新尺寸呈现；尺寸约束为 `xdg_toplevel` 的 min/max 提示，不可调整尺寸时两者都钉在当前尺寸；模式为 `set_maximized`/`set_fullscreen`/`set_minimized` 请求，configure 状态报告最大化与全屏（协议不告诉客户端最小化）；合成器把尺寸留给客户端时（如离开最大化）回到浮动尺寸。协议没有位置与置顶，返回 `Unsupported`。
 * **SHM 呈现**：有界双缓冲 SlotPool 借出，提交后以协议 frame callback 推进动画。
 
 ### 3. Windows 后端 (`aegle-platform-win32`)
@@ -95,12 +106,14 @@ pub trait SurfacePlatform: Platform {
 * **软件呈现**：GDI `SetDIBitsToDevice` 上传 32 位 DIB，等待 `DwmFlush` 同步。
 * **TSF 文本服务**：为每个窗口实现 `ITextStoreACP`，支持输入法读取周边文字并重转换已提交内容。
 * **OLE 拖放**：注册 `IDropTarget`，支持 `CF_HDROP` 与 `CF_UNICODETEXT`。
+* **窗口管理**：尺寸约束在 `WM_GETMINMAXINFO` 中换算为边框尺寸；最大化与最小化用 `ShowWindow`；全屏为覆盖所在显示器的无边框窗口，保存原样式与 `WINDOWPLACEMENT` 以便还原；窗口在首帧前隐藏，此前请求的模式成为首次显示的命令。位置按窗口当前缩放在物理像素与逻辑坐标间换算，跨不同缩放的显示器时只是近似。
 
 ### 4. macOS 后端 (`aegle-platform-macos`)
 * **AppKit 循环**：以截止时间驱动 `nextEventMatchingMask:`（无截止时间时等到 `distantFuture`），不进入 `NSApplicationMain`；每次分发至少运行一轮 run loop，持续重绘也不会饿死 AppKit。等待期间 run loop 回调（跨线程唤醒、输入法异步提交）排入的首个事件补发一个应用自定义事件结束等待。
 * **呈现与输入**：`CGImage` 软件呈现，两块缓冲轮换、图像原地读取缓冲（无每帧整幅拷贝），宿主绘制前只补拷该缓冲落后的区域；事件每轮与每次呈现各有自动释放池；`NSTextInputClient` 协议映射文本编辑与预编辑；`CAMetalLayer` 原生租约。Metal 在窗口不可见时（包括刚排到前台、窗口服务器尚未确认时）不给 drawable，窗口随即等待遮挡回调再重绘。
 * **输出**：`NSScreen.screens` 即输出，ID 为 `CGDirectDisplayID`，名称为系统本地化的显示器名（无连接器名，`description` 为空）；位置由 AppKit 左下原点换算为主屏左上原点的逻辑坐标。`NSApplicationDidChangeScreenParametersNotification` 合并为一个 `Event::Outputs`。
 * **弹出层**：无边框 `NSWindow`，作为父窗口的子窗口随其移动、排序与最小化。创建时一次定位：锚定矩形换算到屏幕后由 `popup_origin` 放在请求一侧，该侧越出父窗口所在屏幕的可见区域且对侧放得下时翻转，再沿两轴滑入可见区域（与 `xdg_positioner` 的 flip + slide 一致，规则在 `tests/placement.rs` 测试）。抓取弹出层显示时成为 key 窗口；AppKit 没有弹出抓取，平台自己撤销：在弹出链（自身及由它打开的弹出层）之外的窗口按下，或应用失去激活时，对其发一次 `Close`，由内向外；该次按下仍正常投递。被动弹出层从不成为 key。父窗口有未移除的弹出层时不能移除（`InvalidRole`）。
+* **窗口管理**：`setContentSize`、`contentMinSize`/`contentMaxSize`、样式位 `Resizable`、窗口级别（置顶为 `NSFloatingWindowLevel`）；最大化即缩放（`zoom:`），最小化进入 Dock，全屏为独立空间（窗口带 `FullScreenPrimary`）。模式请求保存为目标，每次过渡结束的委托回调在下一轮 run loop 推进一步（AppKit 拒绝在结束上一次全屏过渡的回调里开始下一次），因此全屏到最小化会先退出全屏；到达目标的那一步清除目标，被 AppKit 拒绝的请求不会稍后重试。
 * **透明**：`WindowOptions::transparent` 使窗口非不透明、背景透明，wgpu 以非不透明 `CAMetalLayer`（wgpu 称 `PostMultiplied`，Core Animation 按预乘合成）呈现预乘 alpha。
 
 ---

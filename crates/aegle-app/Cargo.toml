@@ -94,6 +94,16 @@ windows = { version = "0.62.2", default-features = false, features = [
 # The `implement` macro of the test text service names windows-core directly.
 windows-core = { version = "0.62.2", default-features = false }
 
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+# Asks a window to close as its close button does.
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSWindow"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSString"] }
+
+[[test]]
+name = "window_management"
+# AppKit runs on the main thread only; the target has its own `main`.
+harness = false
+
 [lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"

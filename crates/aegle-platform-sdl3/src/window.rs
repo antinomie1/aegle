@@ -101,6 +101,8 @@ pub(crate) struct WindowState {
     /// Last known drag position, in logical window coordinates.
     pub(crate) drag_at: Option<Point>,
     pub(crate) composing: bool,
+    /// Logical content size limits, which programmatic resizing respects.
+    pub(crate) limits: (Option<PixelSize>, Option<PixelSize>),
 }
 
 impl WindowState {
@@ -154,6 +156,8 @@ pub struct Sdl3 {
     ime: bool,
     /// The application identifier last given to SDL, which keeps only one.
     app_id: Option<String>,
+    /// SDL drives Wayland, which gives clients no positions or stacking.
+    pub(crate) wayland: bool,
 }
 
 impl Sdl3 {
@@ -221,6 +225,7 @@ impl Sdl3 {
             portal,
             ime: !matches!(driver.as_str(), "" | "dummy" | "offscreen"),
             app_id: None,
+            wayland: driver == "wayland",
         })
     }
 
@@ -318,6 +323,7 @@ impl Sdl3 {
                 scale: 1.0,
                 active: false,
                 configured: false,
+                mode: Default::default(),
             },
             shown: false,
             minimized: false,
@@ -339,6 +345,7 @@ impl Sdl3 {
             drag_text: None,
             drag_at: None,
             composing: false,
+            limits: (None, None),
         };
         self.windows.push(state);
         // A window reports its configure only once it is mapped. Showing blocks
@@ -539,6 +546,10 @@ impl Sdl3 {
             },
             active: flags & sys::WINDOW_INPUT_FOCUS != 0,
             configured: window.shown && flags & sys::WINDOW_MINIMIZED == 0,
+            mode: match window.parent {
+                Some(_) => Default::default(),
+                None => crate::manage::mode(flags),
+            },
         };
         let minimized = flags & sys::WINDOW_MINIMIZED != 0;
         let Some(window) = self.windows.iter_mut().find(|window| window.id == id) else {
@@ -661,7 +672,8 @@ impl Sdl3 {
             // tightly packed BGRA8 scratch buffer and let SDL convert it.
             let scratch = &mut self.windows[index].scratch;
             if scratch.len() != length {
-                *scratch = Vec::new();
+                // Free the old buffer, so a smaller window holds no more.
+                drop(std::mem::take(scratch));
                 scratch.try_reserve_exact(length).map_err(Error::backend)?;
                 scratch.resize(length, 0);
             }

@@ -6,8 +6,8 @@
 use crate::{MacOs, wake::Waker, window::WindowSurface};
 use aegle_platform::{
     Cursor, DragData, DrawResult, Error, Event, ImeRequest, OutputInfo, PixelRect, PixelSize,
-    Platform, Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowId,
-    WindowInfo, WindowOptions,
+    Platform, Point, Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowId,
+    WindowInfo, WindowMode, WindowOptions,
 };
 use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSEventMask, NSEventType};
@@ -152,6 +152,39 @@ impl Platform for MacOs {
 
     fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()> {
         MacOs::set_cursor(self, window, cursor)
+    }
+
+    fn set_size(&mut self, window: WindowId, size: PixelSize) -> Result<()> {
+        MacOs::set_size(self, window, size)
+    }
+
+    fn set_size_limits(
+        &mut self,
+        window: WindowId,
+        min: Option<PixelSize>,
+        max: Option<PixelSize>,
+    ) -> Result<()> {
+        MacOs::set_size_limits(self, window, min, max)
+    }
+
+    fn set_resizable(&mut self, window: WindowId, resizable: bool) -> Result<()> {
+        MacOs::set_resizable(self, window, resizable)
+    }
+
+    fn set_mode(&mut self, window: WindowId, mode: WindowMode) -> Result<()> {
+        MacOs::set_mode(self, window, mode)
+    }
+
+    fn position(&self, window: WindowId) -> Result<Point> {
+        MacOs::position(self, window)
+    }
+
+    fn set_position(&mut self, window: WindowId, position: Point) -> Result<()> {
+        MacOs::set_position(self, window, position)
+    }
+
+    fn set_always_on_top(&mut self, window: WindowId, on_top: bool) -> Result<()> {
+        MacOs::set_always_on_top(self, window, on_top)
     }
 
     fn configure_ime(&mut self, window: WindowId, request: Option<ImeRequest>) -> Result<()> {

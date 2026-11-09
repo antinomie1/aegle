@@ -22,6 +22,8 @@ mod ime_types;
 #[cfg(windows)]
 mod input;
 #[cfg(windows)]
+mod manage;
+#[cfg(windows)]
 mod native;
 #[cfg(windows)]
 mod platform;

@@ -38,6 +38,12 @@ pub(crate) struct Native {
     pub budget: usize,
     /// The host's answer for the current drag, `None` before one.
     pub drag_accept: Cell<Option<bool>>,
+    /// Logical content size limits, answered in `WM_GETMINMAXINFO`.
+    pub limits: Cell<(Option<PixelSize>, Option<PixelSize>)>,
+    /// The mode the first frame shows the window in.
+    pub pending_mode: Cell<aegle_platform::WindowMode>,
+    /// What a full-screen window returns to; `None` when not full screen.
+    pub fullscreen: Cell<Option<crate::manage::Restore>>,
 }
 /// The shared system cursor closest to `cursor`; shared cursors are never destroyed.
 fn system_cursor(cursor: aegle_types::Cursor) -> HCURSOR {
@@ -87,6 +93,7 @@ impl Native {
                 width: (physical.width as f32 / scale).ceil() as u32,
                 height: (physical.height as f32 / scale).ceil() as u32,
             },
+            mode: self.mode(),
         });
         self.dirty.set(true);
         self.emit(Event::Configure {

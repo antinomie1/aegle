@@ -41,6 +41,8 @@ mod input;
 #[cfg(target_os = "macos")]
 mod keys;
 #[cfg(target_os = "macos")]
+mod manage;
+#[cfg(target_os = "macos")]
 mod native;
 #[cfg(target_os = "macos")]
 mod outputs;

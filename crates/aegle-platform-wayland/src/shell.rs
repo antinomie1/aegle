@@ -325,7 +325,7 @@ impl PopupHandler for State {
     ) {
         let extent = |value: i32| (value > 0).then_some(value as u32);
         let size = (extent(configure.width), extent(configure.height));
-        self.configured(popup.wl_surface(), size, true);
+        self.configured(popup.wl_surface(), size, true, Default::default());
     }
 
     fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {

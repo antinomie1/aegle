@@ -68,6 +68,16 @@ pub(crate) struct WindowState {
     pub(crate) cursor: aegle_types::Cursor,
     /// Fractional-scale objects, when the compositor offers the protocol.
     pub(crate) fractional: Option<crate::scale::Fractional>,
+    /// A toplevel's content size limits.
+    pub(crate) limits: (
+        Option<aegle_platform::PixelSize>,
+        Option<aegle_platform::PixelSize>,
+    ),
+    /// Whether the user may resize a toplevel.
+    pub(crate) resizable: bool,
+    /// A toplevel's own size while floating, which it returns to when the
+    /// compositor leaves the size to it, as after leaving maximized.
+    pub(crate) floating: aegle_platform::PixelSize,
 }
 
 impl WindowState {
@@ -112,21 +122,32 @@ impl State {
             .map(|w| w.id)
     }
 
-    /// Applies a configure; `None` keeps the current or preferred extent.
+    /// Applies a configure; `None` keeps the floating, current or preferred extent.
     pub(crate) fn configured(
         &mut self,
         surface: &wl_surface::WlSurface,
         size: (Option<u32>, Option<u32>),
         active: bool,
+        mode: aegle_platform::WindowMode,
     ) {
         if let Some(window) = self
             .windows
             .iter_mut()
             .find(|w| w.window.wl_surface() == surface)
         {
-            window.info.size.width = size.0.unwrap_or(window.info.size.width);
-            window.info.size.height = size.1.unwrap_or(window.info.size.height);
+            let normal = mode == aegle_platform::WindowMode::Normal;
+            let own = if normal {
+                window.floating
+            } else {
+                window.info.size
+            };
+            window.info.size.width = size.0.unwrap_or(own.width);
+            window.info.size.height = size.1.unwrap_or(own.height);
+            if normal {
+                window.floating = window.info.size;
+            }
             window.info.active = active;
+            window.info.mode = mode;
             window.info.configured = true;
             crate::events::rescale(&mut window.info);
             window.dirty = true;
@@ -171,7 +192,14 @@ impl WindowHandler for State {
             configure.new_size.0.map(|v| v.get()),
             configure.new_size.1.map(|v| v.get()),
         );
-        self.configured(native.wl_surface(), size, configure.is_activated());
+        let mode = if configure.is_fullscreen() {
+            aegle_platform::WindowMode::Fullscreen
+        } else if configure.is_maximized() {
+            aegle_platform::WindowMode::Maximized
+        } else {
+            aegle_platform::WindowMode::Normal
+        };
+        self.configured(native.wl_surface(), size, configure.is_activated(), mode);
     }
 }
 
@@ -196,7 +224,7 @@ impl LayerShellHandler for State {
             (width != 0).then_some(width),
             (height != 0).then_some(height),
         );
-        self.configured(layer.wl_surface(), size, true);
+        self.configured(layer.wl_surface(), size, true, Default::default());
     }
 }
 

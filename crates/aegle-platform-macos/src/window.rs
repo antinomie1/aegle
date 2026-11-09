@@ -19,7 +19,8 @@ use aegle_platform::{
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
     NSApplication, NSBackingStoreType, NSColor, NSCursor, NSPasteboardTypeFileURL,
-    NSPasteboardTypeString, NSWindow, NSWindowOcclusionState, NSWindowStyleMask,
+    NSPasteboardTypeString, NSWindow, NSWindowCollectionBehavior, NSWindowOcclusionState,
+    NSWindowStyleMask,
 };
 use objc2_foundation::{MainThreadMarker, NSArray, NSPoint, NSRect, NSSize, NSString};
 use raw_window_handle::{
@@ -35,7 +36,7 @@ use std::{
 thread_local! { static CONNECTED: Cell<bool> = const { Cell::new(false) }; }
 
 /// The most pixels along one window edge the backing store can hold.
-const MAX_EDGE: u32 = 1 << 15;
+pub(crate) const MAX_EDGE: u32 = 1 << 15;
 
 /// The main-thread owner of the AppKit application, its windows and an
 /// event-driven loop. Only one can exist per process.
@@ -215,6 +216,7 @@ impl MacOs {
                 scale: 1.0,
                 active: false,
                 configured: true,
+                mode: Default::default(),
             }),
             registered: Cell::new(false),
             shown: Cell::new(false),
@@ -236,6 +238,9 @@ impl MacOs {
             last_mouse: RefCell::new(None),
             parent,
             grab,
+            limits: Cell::new((None, None)),
+            target_mode: Cell::new(None),
+            transitioning: Cell::new(false),
         });
         native.window.setContentView(Some(&native.view));
         native
@@ -256,7 +261,12 @@ impl MacOs {
                     dismissed: Cell::new(false),
                 });
             }
-            None => native.window.center(),
+            None => {
+                native.window.center();
+                native
+                    .window
+                    .setCollectionBehavior(NSWindowCollectionBehavior::FullScreenPrimary);
+            }
         }
         // Report the real scale and size, which depend on the screen.
         let info = native.measure();

@@ -58,6 +58,8 @@ mod native_input;
 #[cfg(native)]
 mod native_loop;
 #[cfg(native)]
+mod native_manage;
+#[cfg(native)]
 mod native_proxy;
 #[cfg(native)]
 mod native_render;
@@ -99,6 +101,7 @@ type Native = aegle_platform_macos::MacOs;
 pub use aegle_desktop as desktop;
 pub use aegle_platform::{
     Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, Preferences, Side,
+    WindowMode,
 };
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::{

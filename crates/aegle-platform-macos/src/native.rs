@@ -55,6 +55,12 @@ pub(crate) struct Native {
     pub parent: Option<Rc<Native>>,
     /// Whether a popup grabs the keyboard, as a menu does.
     pub grab: bool,
+    /// Content size limits, which programmatic resizing also respects.
+    pub limits: Cell<(Option<PixelSize>, Option<PixelSize>)>,
+    /// The mode requested and not yet reached; see `manage`.
+    pub target_mode: Cell<Option<aegle_platform::WindowMode>>,
+    /// A full-screen transition is animating.
+    pub transitioning: Cell<bool>,
 }
 
 /// Milliseconds of an event's timestamp, wrapping like the contract's times.
@@ -138,6 +144,7 @@ impl Native {
             scale,
             active: self.window.isKeyWindow(),
             configured: !self.window.isMiniaturized() && buffer.width > 0 && buffer.height > 0,
+            mode: self.mode(),
         }
     }
 
@@ -223,5 +230,6 @@ impl Native {
         app.activateIgnoringOtherApps(true);
         self.window.makeKeyAndOrderFront(None);
         self.refresh();
+        self.advance_mode();
     }
 }

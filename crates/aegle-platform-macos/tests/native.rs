@@ -20,6 +20,7 @@ fn main() -> Outcome {
             macos::lifecycle as fn() -> Outcome,
         ),
         ("outputs and popups", macos::outputs_and_popups),
+        ("window management", macos::window_management),
         ("drag and drop between windows", macos::drag_between_windows),
     ] {
         scenario().map_err(|error| format!("{name}: {error}"))?;
@@ -242,6 +243,138 @@ mod macos {
         assert!(kept.configured);
         drop(lease);
         backend.remove_window(first)?;
+        Ok(())
+    }
+
+    /// Dispatches until `window`'s configuration satisfies `done`, for at most
+    /// five seconds; mode transitions animate.
+    fn wait_for(
+        backend: &mut MacOs,
+        window: aegle_platform::WindowId,
+        what: &str,
+        done: impl Fn(&aegle_platform::WindowInfo) -> bool,
+    ) -> Outcome {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !done(&backend.window_info(window)?) {
+            if std::time::Instant::now() > deadline {
+                return Err(format!(
+                    "timed out waiting for {what}: {:?}",
+                    backend.window_info(window)?
+                )
+                .into());
+            }
+            backend.dispatch(Some(Duration::from_millis(20)))?;
+            while let Some(event) = backend.next_event() {
+                if let Event::Redraw { window } = event {
+                    backend.present(window, None, |_, _, _| Ok(()))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Size, limits, position, level and every mode of an ordinary window,
+    /// on the real window server: transitions are animated and reported.
+    pub fn window_management() -> Outcome {
+        use aegle_platform::{Point, WindowMode};
+        let mut backend = MacOs::connect()?;
+        let size = |width, height| PixelSize { width, height };
+        let window = backend.create_window(WindowOptions {
+            title: "Aegle window management",
+            size: size(320, 200),
+            ..Default::default()
+        })?;
+        // A mode requested before the first frame waits for the window to show.
+        backend.set_mode(window, WindowMode::Maximized)?;
+        assert_eq!(backend.window_info(window)?.mode, WindowMode::Normal);
+        assert!(backend.present(window, None, |_, _, _| Ok(()))?);
+        wait_for(&mut backend, window, "maximized", |info| {
+            info.mode == WindowMode::Maximized
+        })?;
+        // A maximized window neither moves nor resizes until restored.
+        assert!(matches!(
+            backend.set_size(window, size(300, 200)),
+            Err(Error::InvalidRole(_))
+        ));
+        assert!(matches!(
+            backend.set_position(window, Point::new(10.0, 10.0)),
+            Err(Error::InvalidRole(_))
+        ));
+        backend.set_mode(window, WindowMode::Normal)?;
+        wait_for(&mut backend, window, "restored", |info| {
+            info.mode == WindowMode::Normal
+        })?;
+        assert_eq!(backend.window_info(window)?.size, size(320, 200));
+
+        backend.set_size(window, size(400, 260))?;
+        wait_for(&mut backend, window, "resized", |info| {
+            info.size == size(400, 260)
+        })?;
+        // Limits clamp the current size and later requests.
+        assert!(matches!(
+            backend.set_size_limits(window, Some(size(500, 100)), Some(size(400, 300))),
+            Err(Error::InvalidSize)
+        ));
+        backend.set_size_limits(window, Some(size(420, 280)), Some(size(600, 400)))?;
+        assert_eq!(backend.window_info(window)?.size, size(420, 280));
+        backend.set_size(window, size(900, 900))?;
+        assert_eq!(backend.window_info(window)?.size, size(600, 400));
+        backend.set_size_limits(window, None, None)?;
+        assert!(matches!(
+            backend.set_size(window, size(0, 10)),
+            Err(Error::InvalidSize)
+        ));
+
+        // The content's top-left corner round-trips through the desktop space.
+        let target = Point::new(120.0, 160.0);
+        backend.set_position(window, target)?;
+        assert_eq!(backend.position(window)?, target);
+        assert!(matches!(
+            backend.set_position(window, Point::new(f32::NAN, 0.0)),
+            Err(Error::InvalidPosition)
+        ));
+        backend.set_always_on_top(window, true)?;
+        backend.set_always_on_top(window, false)?;
+        backend.set_resizable(window, false)?;
+        backend.set_resizable(window, true)?;
+
+        // Full screen, then minimized from it: the window leaves full screen
+        // first, then goes to the Dock; restoring brings it back.
+        backend.set_mode(window, WindowMode::Fullscreen)?;
+        wait_for(&mut backend, window, "full screen", |info| {
+            info.mode == WindowMode::Fullscreen
+        })?;
+        backend.set_mode(window, WindowMode::Minimized)?;
+        wait_for(&mut backend, window, "minimized", |info| {
+            info.mode == WindowMode::Minimized && !info.configured
+        })?;
+        backend.set_mode(window, WindowMode::Normal)?;
+        wait_for(&mut backend, window, "restored", |info| {
+            info.mode == WindowMode::Normal && info.configured
+        })?;
+        assert_eq!(backend.position(window)?, target);
+
+        // Popups are placed by their anchor.
+        let popup = backend.create_window(WindowOptions {
+            size: size(40, 30),
+            popup: Some(PopupOptions {
+                parent: window,
+                anchor: Rect::new(0.0, 0.0, 10.0, 10.0),
+                side: Side::Below,
+                grab: None,
+            }),
+            ..Default::default()
+        })?;
+        assert!(matches!(
+            backend.set_size(popup, size(50, 30)),
+            Err(Error::InvalidRole(_))
+        ));
+        assert!(matches!(
+            backend.set_mode(popup, WindowMode::Maximized),
+            Err(Error::InvalidRole(_))
+        ));
+        backend.remove_window(popup)?;
+        backend.remove_window(window)?;
         Ok(())
     }
 

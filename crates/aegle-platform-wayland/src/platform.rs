@@ -48,6 +48,27 @@ impl Platform for Wayland {
         self.remove_window(window)
     }
 
+    fn set_size(&mut self, window: WindowId, size: PixelSize) -> Result<()> {
+        self.set_size(window, size)
+    }
+
+    fn set_size_limits(
+        &mut self,
+        window: WindowId,
+        min: Option<PixelSize>,
+        max: Option<PixelSize>,
+    ) -> Result<()> {
+        self.set_size_limits(window, min, max)
+    }
+
+    fn set_resizable(&mut self, window: WindowId, resizable: bool) -> Result<()> {
+        self.set_resizable(window, resizable)
+    }
+
+    fn set_mode(&mut self, window: WindowId, mode: aegle_platform::WindowMode) -> Result<()> {
+        self.set_mode(window, mode)
+    }
+
     fn window_info(&self, window: WindowId) -> Result<WindowInfo> {
         self.window_info(window)
     }

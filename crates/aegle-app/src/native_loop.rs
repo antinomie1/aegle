@@ -89,6 +89,8 @@ impl App {
                 self.drain_proxies()?;
             } else if matches!(event, Event::Outputs) {
                 outputs = true;
+            } else if let Event::Close { window } = event {
+                self.close_requested(window)?;
             } else {
                 let result = self.runtime.borrow_mut().event(event);
                 self.report(result)?;
@@ -255,9 +257,8 @@ impl Runtime {
         let Some(index) = self.windows.iter().position(|entry| entry.id == id) else {
             return Ok(());
         };
-        if matches!(event, Event::Close { .. }) {
-            self.close(id)?;
-        } else if let Some(event) =
+        // Close requests reach `App::close_requested` instead.
+        if let Some(event) =
             crate::native_input::drag(&mut self.backend, &self.windows[index], event)?
         {
             self.windows[index].event(event)?;

@@ -154,6 +154,7 @@ impl Wayland {
             scale: 1.0,
             active: false,
             configured: false,
+            mode: Default::default(),
         };
         crate::events::rescale(&mut info);
         if info.buffer.width == 0 || info.buffer.height == 0 {
@@ -217,6 +218,9 @@ impl Wayland {
             frame_requested: false,
             cursor: Cursor::Default,
             fractional,
+            limits: (None, None),
+            resizable: true,
+            floating: options.size,
         });
         Ok(id)
     }
@@ -436,7 +440,7 @@ impl Wayland {
         Ok(true)
     }
 
-    fn window_mut(&mut self, id: WindowId) -> Result<&mut WindowState, Error> {
+    pub(crate) fn window_mut(&mut self, id: WindowId) -> Result<&mut WindowState, Error> {
         self.state
             .windows
             .iter_mut()

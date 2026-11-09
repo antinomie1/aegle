@@ -16,10 +16,11 @@
 //! opens on the requested side and SDL slides it back onto the display, but
 //! never flips it to the other side. Outputs are SDL's displays.
 //!
-//! SDL3 imposes three limits this backend reports rather than hides:
+//! SDL3 imposes four limits this backend reports rather than hides:
 //!
 //! - There are no desktop-shell layers: a [`aegle_platform::WindowOptions`]
 //!   with a layer fails with [`aegle_platform::Error::Unsupported`].
+//! - On its Wayland driver, windows cannot be positioned or kept on top.
 //! - An application cannot begin a drag, only receive one.
 //! - Composition is SDL's own model: the preedit, its selection and the
 //!   committed text are reported, but surrounding text and the editor's
@@ -31,6 +32,7 @@ mod events;
 #[cfg(feature = "gpu")]
 mod gpu;
 mod keys;
+mod manage;
 mod outputs;
 mod platform;
 mod sys;

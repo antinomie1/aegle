@@ -27,7 +27,8 @@ pub use event::{Event, PointerKind};
 pub use ime::{ImeEvent, ImeRequest, ImeUpdate, MAX_SURROUNDING, Preedit};
 pub use window::{
     Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, PixelSize,
-    PopupOptions, SeatId, Side, WakeHandle, WindowId, WindowInfo, WindowOptions,
+    PopupOptions, SeatId, Side, WakeHandle, WindowId, WindowInfo, WindowMode, WindowOptions,
+    check_size_limits,
 };
 
 use std::time::Duration;
@@ -100,6 +101,78 @@ pub trait Platform: Sized {
     /// Sets the pointer shape over a window's content, applied to pointers
     /// inside it now and on every later entry.
     fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()>;
+
+    // Window management. These apply to ordinary windows: layers and popups
+    // fail with [`Error::InvalidRole`]. Sizes are logical content extents
+    // (without title bar or borders); one that is zero or larger than the
+    // platform can show fails with [`Error::InvalidSize`]. Results arrive as
+    // [`Event::Configure`]; the window system may adjust a request, as it
+    // does a user's resize. Platforms without a capability fail with
+    // [`Error::Unsupported`].
+
+    /// Resizes a window's content in [`WindowMode::Normal`]; in another mode
+    /// it fails with [`Error::InvalidRole`], so restore the window first.
+    fn set_size(&mut self, window: WindowId, size: PixelSize) -> Result<()> {
+        self.window_info(window)?;
+        let _ = size;
+        Err(Error::Unsupported("window resizing"))
+    }
+
+    /// Bounds the content size the user can resize a window to, `None`
+    /// leaving that side open, and clamps the current size into them. A
+    /// minimum larger than the maximum fails with [`Error::InvalidSize`].
+    fn set_size_limits(
+        &mut self,
+        window: WindowId,
+        min: Option<PixelSize>,
+        max: Option<PixelSize>,
+    ) -> Result<()> {
+        self.window_info(window)?;
+        let _ = (min, max);
+        Err(Error::Unsupported("window size limits"))
+    }
+
+    /// Whether the user can resize the window, and maximize it from its
+    /// title bar. [`Self::set_size`] and [`Self::set_mode`] still apply.
+    fn set_resizable(&mut self, window: WindowId, resizable: bool) -> Result<()> {
+        self.window_info(window)?;
+        let _ = resizable;
+        Err(Error::Unsupported("window resizability"))
+    }
+
+    /// Requests a mode. A window not yet shown takes it when first shown.
+    /// Transitions can be animated and span several dispatches; the mode
+    /// reached arrives in [`WindowInfo::mode`].
+    fn set_mode(&mut self, window: WindowId, mode: WindowMode) -> Result<()> {
+        self.window_info(window)?;
+        let _ = mode;
+        Err(Error::Unsupported("window modes"))
+    }
+
+    /// The top-left corner of the window's content in the desktop's logical
+    /// coordinates, the space of [`OutputInfo::position`]. Wayland gives
+    /// clients no positions and fails with [`Error::Unsupported`].
+    fn position(&self, window: WindowId) -> Result<Point> {
+        self.window_info(window)?;
+        Err(Error::Unsupported("window positions"))
+    }
+
+    /// Moves a window in [`WindowMode::Normal`] so its content's top-left
+    /// corner lies at `position`, as [`Self::position`] reports it; in
+    /// another mode it fails with [`Error::InvalidRole`]. The window system
+    /// may keep the window on screen.
+    fn set_position(&mut self, window: WindowId, position: Point) -> Result<()> {
+        self.window_info(window)?;
+        let _ = position;
+        Err(Error::Unsupported("window positions"))
+    }
+
+    /// Keeps a window above ordinary windows, as a floating palette.
+    fn set_always_on_top(&mut self, window: WindowId, on_top: bool) -> Result<()> {
+        self.window_info(window)?;
+        let _ = on_top;
+        Err(Error::Unsupported("always-on-top windows"))
+    }
 
     /// Enables, updates or (with `None`) disables native composition for the
     /// focused editor. Disabling discards the window's queued

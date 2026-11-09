@@ -61,3 +61,26 @@ fn events_name_their_window_and_anchors_combine() {
     assert!(!panel.contains(Anchor::BOTTOM));
     assert!(panel.contains(Anchor::NONE));
 }
+
+#[test]
+fn size_limits_reject_empty_or_inverted_bounds_and_clamp_each_axis() {
+    use aegle_platform::{PixelSize, check_size_limits};
+    let size = |width, height| PixelSize { width, height };
+    assert!(check_size_limits(None, None).is_ok());
+    assert!(check_size_limits(Some(size(100, 50)), Some(size(100, 50))).is_ok());
+    for (min, max) in [
+        (Some(size(0, 50)), None),
+        (None, Some(size(10, 0))),
+        (Some(size(200, 50)), Some(size(100, 400))),
+        (Some(size(50, 500)), Some(size(100, 400))),
+    ] {
+        assert!(matches!(
+            check_size_limits(min, max),
+            Err(Error::InvalidSize)
+        ));
+    }
+    let (min, max) = (Some(size(100, 100)), Some(size(400, 300)));
+    assert_eq!(size(50, 900).clamp(min, max), size(100, 300));
+    assert_eq!(size(250, 200).clamp(min, max), size(250, 200));
+    assert_eq!(size(50, 900).clamp(None, max), size(50, 300));
+}

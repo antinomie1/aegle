@@ -17,11 +17,15 @@ pub enum Error {
     Unsupported(&'static str),
     /// An extent is empty or cannot be represented natively.
     InvalidSize,
+    /// A window position is not finite or cannot be represented natively.
+    InvalidPosition,
     /// The window was removed or belongs to another connection.
     InvalidWindow,
     /// The request does not fit the window's role: a layer change for a
     /// window that is not a layer or that moves it to another output, a
-    /// popup that is also a layer, or one whose anchor is empty.
+    /// popup that is also a layer, or one whose anchor is empty; window
+    /// management of a layer or popup, or moving or resizing a window that
+    /// is not in [`crate::WindowMode::Normal`].
     InvalidRole(&'static str),
     /// A title or application identifier contains NUL or exceeds 4000 UTF-8 bytes.
     InvalidString,
@@ -55,6 +59,7 @@ impl fmt::Display for Error {
             Self::Backend(error) => f.write_str(error),
             Self::Unsupported(what) => write!(f, "{what} is unsupported on this platform"),
             Self::InvalidSize => f.write_str("invalid window size"),
+            Self::InvalidPosition => f.write_str("invalid window position"),
             Self::InvalidWindow => f.write_str("unknown window"),
             Self::InvalidRole(reason) => write!(f, "invalid window role: {reason}"),
             Self::InvalidString => {

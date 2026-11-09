@@ -103,7 +103,36 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 
 `AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`vulkan`（Vulkan 预算配置）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。注意：渲染器由构建期 feature 单一决定（`tiny-skia` 默认，或 `cairo`、`vulkan`、`wgpu`），一个构建只编入一个渲染器，`AppOptions` 不包含渲染器选择字段。
 
-`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）与 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（SDL3、Windows、macOS）创建失败并返回 `Unsupported`。`LayerOptions` 实现 `Default`（`Layer::Top`、无锚定、零保留区、不取键盘焦点），另有 `margin: [i32; 4]`（上右下左）与 `output: Option<OutputId>`（所在输出，`None` 由合成器选择）：
+窗口管理作用于普通窗口（层与弹出层返回角色错误）。尺寸指内容区（不含标题栏与边框）的逻辑像素，位置指内容区左上角在桌面逻辑坐标（与 `OutputInfo::position` 同一空间）中的位置；结果随窗口配置异步到达，系统可能调整请求：
+
+```rust
+use aegle::app::WindowMode;
+
+let window = app.window_with_options("Notes", WindowOptions {
+    width: 900,
+    height: 600,
+    min_size: Some((480, 320)),
+    position: Some(saved_position),   // 上次保存的位置
+    mode: WindowMode::Maximized,      // 最后应用：还原时回到上面的尺寸与位置
+    ..Default::default()
+})?;
+window.on_close(move || {
+    save_state(window_handle.position()?, window_handle.size()?)?;
+    Ok(true)                         // Ok(false) 保持窗口打开，如询问是否保存
+})?;
+```
+
+| 窗口管理 | 说明 |
+| --- | --- |
+| `window.size()` / `set_size(w, h)` | 最近配置的内容尺寸 / 调整内容尺寸（限制在尺寸约束内）；最大化、最小化或全屏时返回错误，先还原 |
+| `window.set_size_limits(min, max)` | 用户可调整的内容尺寸范围，`None` 不限该侧，并把当前尺寸移入范围；最小值大于最大值返回错误 |
+| `window.set_resizable(b)` | 用户能否调整尺寸、从标题栏最大化；程序调用不受影响 |
+| `window.mode()` / `set_mode(WindowMode)` | `Normal`、`Maximized`、`Minimized`、`Fullscreen`；过渡可能有动画、在之后的调度中完成，到达后 `mode()` 才报告；尚未显示的窗口在首次显示时进入该模式。Wayland 可请求最小化但从不报告 `Minimized` |
+| `window.position()` / `set_position(Point)` | 内容区左上角的桌面逻辑坐标 / 移动窗口；非 `Normal` 模式下移动返回错误。Wayland 不给客户端位置，返回 `Unsupported`；Windows 用窗口当前缩放换算物理像素 |
+| `window.set_always_on_top(b)` | 保持在普通窗口之上；Wayland 返回 `Unsupported` |
+| `window.on_close(\|\| -> Result<bool>)` | 用户请求关闭（关闭按钮、系统快捷键）时在所有运行时借用之外调用；返回 `Ok(false)` 保持打开，错误交给 `App::on_error` 并保持打开。`window.close()` 不询问，系统撤销的弹出层也不询问；后设置的处理器替换先前的 |
+
+`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）；`resizable`（默认 true）、`min_size`/`max_size: Option<(u32, u32)>`、`position: Option<Point>`（`None` 由平台放置）、`mode: WindowMode`（在尺寸与位置之后应用）与 `always_on_top`，非默认值在窗口创建后依次应用，失败时窗口不创建；以及 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（SDL3、Windows、macOS）创建失败并返回 `Unsupported`。`LayerOptions` 实现 `Default`（`Layer::Top`、无锚定、零保留区、不取键盘焦点），另有 `margin: [i32; 4]`（上右下左）与 `output: Option<OutputId>`（所在输出，`None` 由合成器选择）：
 
 ```rust
 use aegle::app::{Anchor, LayerOptions};

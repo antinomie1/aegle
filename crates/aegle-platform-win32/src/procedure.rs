@@ -65,6 +65,10 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
             }
         }
         WM_ERASEBKGND => return Ok(Some(LRESULT(1))),
+        WM_GETMINMAXINFO => {
+            // SAFETY: the message's LPARAM is a writable MINMAXINFO.
+            native.min_max_info(unsafe { &mut *(l.0 as *mut MINMAXINFO) });
+        }
         // Only the client area uses the host's cursor; borders and the title bar
         // keep the system's resize and arrow shapes.
         WM_SETCURSOR if (l.0 as u32 & 0xffff) == HTCLIENT => {

@@ -4,8 +4,8 @@
 use std::time::Duration;
 
 use aegle_platform::{
-    Cursor, DragData, DrawResult, Error, Event, ImeRequest, PixelRect, Platform, Preferences,
-    Region, Result, SeatId, SurfacePlatform, WakeHandle,
+    Cursor, DragData, DrawResult, Error, Event, ImeRequest, PixelRect, Platform, Point,
+    Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowMode,
 };
 
 use crate::{PixelSize, Win32, WindowId, WindowInfo, WindowOptions, WindowSurface};
@@ -63,6 +63,39 @@ impl Platform for Win32 {
 
     fn set_cursor(&mut self, window: WindowId, cursor: Cursor) -> Result<()> {
         Ok(self.set_cursor(window, cursor)?)
+    }
+
+    fn set_size(&mut self, window: WindowId, size: PixelSize) -> Result<()> {
+        self.set_size(window, size)
+    }
+
+    fn set_size_limits(
+        &mut self,
+        window: WindowId,
+        min: Option<PixelSize>,
+        max: Option<PixelSize>,
+    ) -> Result<()> {
+        self.set_size_limits(window, min, max)
+    }
+
+    fn set_resizable(&mut self, window: WindowId, resizable: bool) -> Result<()> {
+        self.set_resizable(window, resizable)
+    }
+
+    fn set_mode(&mut self, window: WindowId, mode: WindowMode) -> Result<()> {
+        self.set_mode(window, mode)
+    }
+
+    fn position(&self, window: WindowId) -> Result<Point> {
+        self.position(window)
+    }
+
+    fn set_position(&mut self, window: WindowId, position: Point) -> Result<()> {
+        self.set_position(window, position)
+    }
+
+    fn set_always_on_top(&mut self, window: WindowId, on_top: bool) -> Result<()> {
+        self.set_always_on_top(window, on_top)
     }
 
     fn configure_ime(&mut self, window: WindowId, request: Option<ImeRequest>) -> Result<()> {
