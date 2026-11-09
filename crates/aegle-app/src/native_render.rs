@@ -12,7 +12,7 @@
 use crate::renderer::Present;
 #[cfg(any(feature = "vulkan", feature = "wgpu"))]
 use crate::renderer::Setup;
-#[cfg(any(feature = "tiny-skia", feature = "cairo"))]
+#[cfg(any(tiny_skia, feature = "cairo"))]
 use aegle_platform::Platform;
 #[cfg(any(feature = "vulkan", feature = "wgpu"))]
 use aegle_platform::SurfacePlatform;
@@ -69,7 +69,7 @@ macro_rules! target {
 /// `present_cpu` is generic so one function serves both CPU backends; the
 /// frame type it draws into is generic too, so the `Target` bound must hold for
 /// every rasterizer rather than only the two built here.
-#[cfg(any(feature = "tiny-skia", feature = "cairo"))]
+#[cfg(any(tiny_skia, feature = "cairo"))]
 impl<R: aegle_render_cpu::Rasterizer> Target for aegle_render_cpu::Frame<'_, '_, '_, R> {
     fn scene(
         &mut self,
@@ -123,7 +123,7 @@ fn scenes(ui: &Ui, factor: f32, target: &mut impl Target) -> Result<()> {
 
 /// The UI's changed area in buffer pixels of a `width` × `height` window at
 /// `scale`; `None` for all of it.
-#[cfg(any(feature = "tiny-skia", feature = "cairo", feature = "vulkan"))]
+#[cfg(any(tiny_skia, feature = "cairo", feature = "vulkan"))]
 pub(crate) fn device_damage(
     ui: &Ui,
     scale: f32,
@@ -145,7 +145,7 @@ pub(crate) fn device_damage(
 /// renderer composites the changed region into it, and only whole-pixel damage
 /// is redrawn. A window background must be opaque because the XRGB/DIB surface
 /// has no alpha to composite against.
-#[cfg(any(feature = "tiny-skia", feature = "cairo"))]
+#[cfg(any(tiny_skia, feature = "cairo"))]
 pub(crate) fn present_cpu<R: aegle_render_cpu::Rasterizer>(
     renderer: &mut aegle_render_cpu::Renderer<R>,
     window: WindowId,

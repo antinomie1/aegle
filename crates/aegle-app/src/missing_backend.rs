@@ -1,7 +1,7 @@
 //! The platform of a Linux build that selected no window backend.
 //!
 //! `aegle-app`'s `native` feature asks for the native host; the backend crate
-//! comes from `sdl3` or `wayland`, which are exclusive. A dependent crate
+//! comes from `sdl3` or `wayland`, which replaces it. A dependent crate
 //! cannot choose one for its consumers, so this build still provides [`App`]
 //! and fails when it connects, naming the missing feature — the same shape as a
 //! build without a renderer. The `aegle` facade rejects this combination at

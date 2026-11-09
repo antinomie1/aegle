@@ -18,7 +18,7 @@ aegle = "0.1"
 | `desktop` | ✓ | `native`、`system-fonts`、`markup`、`motion`、`effects` 与 `desktop-services`，即除渲染器与 Linux 窗口后端以外的默认 feature |
 | `native` | ✓ | 原生窗口的宿主；Windows Win32、macOS AppKit 按编译目标选择，Linux 另需 `sdl3`（`aegle` 默认）或 `wayland` |
 | `sdl3` | ✓ | Linux：经发行版的 `libSDL3.so.0` 开窗，运行时加载 |
-| `wayland` | | Linux：原生 Wayland 客户端，layer-shell、拖动源与 text-input-v3 周边文字 |
+| `wayland` | | Linux：原生 Wayland 客户端，layer-shell、拖动源与 text-input-v3 周边文字；替换 `sdl3` |
 | `tiny-skia` | ✓ | CPU 软件绘制（默认渲染器） |
 | `system-fonts` | ✓ | 系统字体发现（Linux 用 Pango 的 Fontconfig 配置，运行时加载） |
 | `markup` | ✓ | `ui!` 宏与 `aegle::loader` 动态标记引擎 |
@@ -28,13 +28,14 @@ aegle = "0.1"
 | `jpeg` / `webp` / `gif` |  | `aegle::image::decode` 解码 JPEG、WebP（静态）、GIF（首帧） |
 | `svg` |  | 静态 SVG（无文字）：`aegle::image::svg` 栅格化，并渲染 OpenType-SVG 字形 |
 | `grid` |  | 网格与叠放容器（`grid`、`stack`）及标记的 `Grid`/`Stack`；release 约增加 244 KiB |
-| `vulkan` |  | Vulkan 1.1 硬件加速绘制；每个构建恰好一个渲染器 |
-| `wgpu` |  | 全平台通用的最小 wgpu 硬件绘制（macOS 经 Metal）；每个构建恰好一个渲染器 |
+| `cairo` |  | Linux：经系统 `libcairo.so.2`（运行时加载）的 CPU 绘制，替换 `tiny-skia` |
+| `vulkan` |  | Vulkan 1.1 硬件加速绘制（Linux、Windows），替换 `tiny-skia` |
+| `wgpu` |  | 全平台通用的最小 wgpu 硬件绘制（macOS 经 Metal），替换 `tiny-skia` |
 | `accessibility` |  | 语义树导出，并接上编译目标的系统适配：Linux AT-SPI（引入 zbus）、Windows UI Automation、macOS NSAccessibility。只取语义树而不接系统时直接用 `aegle-ui`/`aegle-widgets` 的同名 feature |
 
 按词移动与双击选词要中日文/泰文分词时，运行环境需要系统分词器：Linux 需安装 `libicu`（多数桌面发行版已随系统安装，程序用 `dlopen` 在运行时查找，`libicui18n.so.<版本>` 与未带版本的 soname 都会探测），Windows 用系统的 `icu.dll`/`icuin.dll`（Windows 10 1903+/1703+），macOS 用系统自带的 `CFStringTokenizer`。都找不到时不报错，也没有回退：按词移动（Ctrl/Alt+←→）与双击选词停用——按键不移动插入点，双击只放置插入点；其余编辑操作不受影响。`aegle_text::segment::available()` 返回当前进程是否找到分词器，环境变量 `AEGLE_SEGMENT=none` 可强制停用以便调试。
 
-Linux 默认后端在运行时加载 `libSDL3.so.0`，构建期不需要任何窗口库头文件；改用 `wayland` 后端时构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon。文字与字形改用系统栈后，运行时还需要 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1` 与 `libfreetype.so.6`（所有桌面发行版都随系统提供，程序用 `dlopen` 查找，构建时不链接）；完全没有 Pango 的环境里 `TextSystem::system()` 报告不可用。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "sdl3", "tiny-skia"]`（`sdl3` 只在 Linux 生效）并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。Linux 的 `sdl3` 与 `wayland` 互斥：同时开启是编译错误；`aegle` facade 对“`native` 而没有 Linux 后端”也在编译期报错并给出重建命令（直接用 `aegle-app` 时则保留宿主，`App` 创建时报出缺哪个 feature）。
+Linux 默认后端在运行时加载 `libSDL3.so.0`，构建期不需要任何窗口库头文件；改用 `wayland` 后端时构建需要 libxkbcommon 开发文件（pkg-config），运行需要 libxkbcommon。文字与字形改用系统栈后，运行时还需要 `libpango-1.0.so.0`、`libpangoft2-1.0.so.0`、`libgobject-2.0.so.0`、`libfontconfig.so.1` 与 `libfreetype.so.6`（所有桌面发行版都随系统提供，程序用 `dlopen` 查找，构建时不链接）；完全没有 Pango 的环境里 `TextSystem::system()` 报告不可用。最小化依赖：`default-features = false` 后按需选择，例如 `features = ["native", "sdl3", "tiny-skia"]`（`sdl3` 只在 Linux 生效）并显式注册字体。`native` 只编译目标平台的窗口 crate（另一个平台的 feature 与依赖不进入构建），`accessibility` 同理只编译目标平台的适配器。默认后端让位于显式选择：在默认 feature 之外加上 `wgpu`、`vulkan` 或 `cairo` 即替换 `tiny-skia`，Linux 上加上 `wayland` 即替换 `sdl3`（`aegle = { version = "0.1", features = ["wgpu"] }`）；被替换的 crate 仍参与编译但不进入二进制，`aegle::app::RENDERER` 给出实际使用的渲染器，`cairo`、`vulkan`、`wgpu` 中同时启用两个是编译错误。`aegle` facade 对“`native` 而没有 Linux 后端”在编译期报错（直接用 `aegle-app` 时则保留宿主，`App` 创建时报出缺哪个 feature）。
 
 `use aegle::prelude::*` 引入常用类型；其余名称按来源 crate 分在 `aegle::ui`（引擎、样式、主题、输入与 `scene`）、`aegle::widgets`（默认控件）和 `aegle::app`（`App`、窗口与 `desktop`）下，另有 `aegle::image` 与 `aegle::loader`。
 
@@ -101,7 +102,7 @@ let window = app.window_with_options("Notes", WindowOptions { width: 640, height
 | `window.scale()` | 窗口最近配置的设备像素比（物理像素/逻辑像素，可为小数），供按设备分辨率渲染的应用纹理使用；窗口关闭后返回错误 |
 | `window.ui()` | 窗口的引擎 `Ui`：窗口级 `on_key`、`set_reduced_motion`、`set_token`、`set_default_transition` 等；主题用根节点的 `window.set_theme(theme)` |
 
-`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`vulkan`（Vulkan 预算配置）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。注意：渲染器由构建期 feature 单一决定（`tiny-skia` 默认，或 `cairo`、`vulkan`、`wgpu`），一个构建只编入一个渲染器，`AppOptions` 不包含渲染器选择字段。
+`AppOptions` 字段：`app_id`；`theme`、`dark_theme: Option<Theme>`、`high_contrast_theme: Option<Theme>`（按系统偏好选择，`None` 忽略该偏好）；`vulkan`（Vulkan 预算配置）；`wgpu`（字形图集尺寸与窗口透明）；`mask_budget`（软件 mask 字节上限，默认不限）；`transition: Option<Transition>`（交互控件默认过渡，默认 120 ms ease-out）；`reduced_motion: Option<bool>`（`None` 跟随系统）。注意：渲染器由构建期 feature 决定（`tiny-skia` 默认，启用 `cairo`、`vulkan` 或 `wgpu` 时用它），一个二进制只链接一个渲染器，`AppOptions` 不包含渲染器选择字段。
 
 窗口管理作用于普通窗口（层与弹出层返回角色错误）。尺寸指内容区（不含标题栏与边框）的逻辑像素，位置指内容区左上角在桌面逻辑坐标（与 `OutputInfo::position` 同一空间）中的位置；结果随窗口配置异步到达，系统可能调整请求：
 
@@ -398,7 +399,6 @@ save.on_click(move |_button| status.set_text("Saved"));
 - 程序 setter（`set_checked`、`set_value`、`set_text` 等）不触发回调，可安全地相互同步；`activate()`、`toggle()`、`increment()`/`decrement()` 模拟用户操作并触发回调。
 - `set_*` 替换：`Canvas::set_input` 与 `set_painter` 一样是画布自身的行为，再次设置会替换。
 
-### 逐帧回调与窗口级按键
 ### Rust 侧响应式状态（`Signal`）
 
 纯 Rust 应用把状态放进 `Signal<T>`，界面从它派生，不必在每个修改处手写“模型 → 控件”的同步：
@@ -430,6 +430,7 @@ window.button("重置").on_click(move |_| volume.set(40.0)); // 只改模型，�
 
 可运行示例：`cargo run -p aegle --example signals`。
 
+### 逐帧回调与窗口级按键
 
 ```rust
 // 播放头：每帧读音频时钟并移动一个小控件；只改 offset，不重新布局或重画时间轴。

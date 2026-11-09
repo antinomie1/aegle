@@ -17,7 +17,7 @@ Aegle 是基于 Rust 2024 的低资源保留模式 GUI 框架，采用单 UI 线
 
 * **[需求、决策与验收标准](requirements.md)**：R01–R23 核心需求、架构关键决策与工程验收边界。
 * **[整体架构与运行契约](architecture.md)**：状态拓扑、生命周期、更新循环管线、线程模型与失效机制。
-* **[模块、依赖与构建组合](modules.md)**：29 个工作区 Crate 职责表、系统运行时依赖基线、Feature 互斥规则与示例运行命令。
+* **[模块、依赖与构建组合](modules.md)**：29 个工作区 Crate 职责表、系统运行时依赖基线、Feature 组合规则与示例运行命令。
 * **[平台与渲染后端](platform-rendering.md)**：平台抽象契约（SDL3 默认、Wayland 原生、Win32、macOS AppKit）与渲染器架构（CPU tiny-skia/cairo、Vulkan 1.1、wgpu）。
 * **[文本、排版与输入法](text-input.md)**：系统文字栈、词边界断词（`aegle-segment`）、多行增量编辑器（`Editor`）与平台 IME 事务。
 * **[系统无障碍](accessibility.md)**：语义树模型、AccessKit 平台适配（Linux AT-SPI、Windows UIA、macOS NSAccessibility）。

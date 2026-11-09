@@ -1,16 +1,19 @@
 //! Native application host: [`App`] owns the platform connection, windows, event
 //! loop, renderers and system preferences, and gives each window an
 //! `aegle-ui` [`Ui`](aegle_ui::Ui). `native` hosts the target's platform crate:
-//! Win32 on Windows and AppKit on macOS, and on Linux exactly one of the
-//! mutually exclusive `sdl3` (windows through the distribution's SDL3) or
-//! `wayland` (the native Wayland client); a Linux build with neither still
-//! compiles and fails when the application connects, naming the missing
-//! feature. It comes with exactly one renderer
-//! feature (`tiny-skia`, `cairo`, `vulkan` or `wgpu`). Both kinds of backend
-//! features are exclusive: enabling two is a compile error, so a binary never
-//! carries a backend it cannot use, and [`RENDERER`] names the renderer it
-//! has. `vulkan` has no macOS backend and fails at `App` creation there, where
-//! `wgpu` presents through Metal.
+//! Win32 on Windows and AppKit on macOS, and on Linux `sdl3` (windows through
+//! the distribution's SDL3) or `wayland` (the native Wayland client); a Linux
+//! build with neither still compiles and fails when the application connects,
+//! naming the missing feature. It comes with one renderer feature
+//! (`tiny-skia`, `cairo`, `vulkan` or `wgpu`).
+//!
+//! The `aegle` facade's defaults give way to an explicit choice: `wayland`
+//! replaces `sdl3`, and `cairo`, `vulkan` or `wgpu` replaces `tiny-skia`, so
+//! adding one feature switches the backend. The replaced crate is compiled but
+//! never linked, so a binary carries no backend it cannot use; two of
+//! `cairo`, `vulkan` and `wgpu` are a compile error. [`RENDERER`] names the
+//! renderer of the build. `vulkan` has no macOS backend and fails at `App`
+//! creation there, where `wgpu` presents through Metal.
 //!
 //! Windows share fonts, the platform connection and (for GPU renderers) one
 //! device; each keeps its own control tree. [`App::proxy`] posts messages from
@@ -24,19 +27,15 @@
 //! the target's platform is chosen in one place, `Native` below.
 
 // One renderer per build: a second backend would only add code the application
-// can never select.
+// can never select. tiny-skia, the default, gives way to the one named
+// alongside it (see `build.rs`); two others conflict.
 #[cfg(any(
-    all(
-        feature = "tiny-skia",
-        any(feature = "cairo", feature = "vulkan", feature = "wgpu")
-    ),
     all(feature = "cairo", any(feature = "vulkan", feature = "wgpu")),
     all(feature = "vulkan", feature = "wgpu"),
 ))]
 compile_error!(
-    "aegle-app: enable exactly one renderer feature (tiny-skia, cairo, vulkan or wgpu). \
-     The `aegle` defaults include tiny-skia; build another renderer with \
-     `--no-default-features --features desktop,<renderer>`."
+    "aegle-app: enable one renderer feature besides the default tiny-skia \
+     (cairo, vulkan or wgpu), not two."
 );
 
 #[cfg(native)]
@@ -68,16 +67,16 @@ mod native_shell;
 #[cfg(native)]
 mod renderer;
 
-// A Linux build carries exactly one window backend; the others pick their
-// target's own. Enabling two is a compile error rather than a silent winner.
-#[cfg(all(feature = "sdl3", feature = "wayland", target_os = "linux"))]
-compile_error!(
-    "aegle-app: `sdl3` and `wayland` are the Linux window backends and are \
-     mutually exclusive. `sdl3` is the default; build the native Wayland client \
-     with `--no-default-features --features desktop,wayland,<renderer>`."
-);
+// A Linux build uses exactly one window backend; the others pick their
+// target's own. `sdl3`, the default, gives way to `wayland`, whose crate is
+// then compiled but never linked.
 /// The target's platform; a new platform adds one line.
-#[cfg(all(native, target_os = "linux", feature = "sdl3"))]
+#[cfg(all(
+    native,
+    target_os = "linux",
+    feature = "sdl3",
+    not(feature = "wayland")
+))]
 type Native = aegle_platform_sdl3::Sdl3;
 #[cfg(all(
     native,
@@ -85,12 +84,7 @@ type Native = aegle_platform_sdl3::Sdl3;
     not(any(feature = "sdl3", feature = "wayland"))
 ))]
 type Native = missing_backend::Missing;
-#[cfg(all(
-    native,
-    target_os = "linux",
-    feature = "wayland",
-    not(feature = "sdl3")
-))]
+#[cfg(all(native, target_os = "linux", feature = "wayland"))]
 type Native = aegle_platform_wayland::Wayland;
 #[cfg(all(native, target_os = "windows"))]
 type Native = aegle_platform_win32::Win32;

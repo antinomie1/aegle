@@ -38,7 +38,7 @@
 | **aegle-macros** | `ui!` 声明宏：将标记直接编译为零开销 Rust 控件树调用代码 | 过程宏 |
 | **aegle-loader** | 运行时动态标记执行引擎：响应式数据绑定、条件与循环渲染、组件插槽、热重载；`layer` 窗口文档直接打开为面板并原地重载；`State::on_change` 状态变化处理器（随重载转移）；弹簧/贝塞尔过渡、缩放/旋转/透明度关键帧动画、`Shape`（SVG 路径）与 `Arc` 元素 | 解释执行引擎 |
 | **aegle-ui** | 无窗口保留式 UI 核心引擎：树生命周期、Taffy 布局调度、输入捕获冒泡路由、焦点管理、动画调度、IME 与语义同步；Rust 侧响应式 `Signal`（按最近一次运行读到的 signal 自动订阅，绑定随控件释放，`on_change` 在绑定之后运行） | 组合核心 |
-| **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理、后台代理消息传递（`UiProxy`）、输出列表与变化回调、`Window::set_layer`、原生弹出层（随父窗口关闭）、窗口管理方法与 `WindowOptions` 初值、关闭请求处理器（`Window::on_close`） | 宿主调度层 |
+| **aegle-app** | 原生应用宿主：单 UI 线程事件循环、平台驱动、单一渲染器生命周期管理（默认 tiny-skia 让位于启用的 cairo/vulkan/wgpu，Linux 的 sdl3 让位于 wayland）、后台代理消息传递（`UiProxy`）、输出列表与变化回调、`Window::set_layer`、原生弹出层（随父窗口关闭）、窗口管理方法与 `WindowOptions` 初值、关闭请求处理器（`Window::on_close`） | 宿主调度层 |
 | **aegle** | 顶层便捷 Facade：统一默认导出、一键 `App::run_ui` | 门面 Crate |
 
 ---
@@ -48,8 +48,9 @@
 ### 1. 自动化测试套件
 * **工作区测试**：`cargo test --workspace` 共计 **213 项通过、0 项失败、22 项 ignored**（需独立显示环境/硬件的集成场景）。
 * **代码规范**：`cargo fmt --all --check` 与 `cargo clippy --workspace --all-targets`（`-D warnings`）零告警。
-* **Feature 组合矩阵**：CI 矩阵包含极简构建、markup 独立、渲染器 4 选 1（tiny-skia / cairo / vulkan / wgpu）、Linux 窗口后端 2 选 1（sdl3 / wayland）及无障碍组合，均通过编译与单测。
+* **Feature 组合矩阵**：CI 矩阵包含极简构建、markup 独立、渲染器 4 选 1（tiny-skia / cairo / vulkan / wgpu）、Linux 窗口后端 2 选 1（sdl3 / wayland）、默认组合加 `wgpu` 与默认组合加 `wayland`（后两项为新增，尚未在 CI 上跑过）及无障碍组合。
 * **Rust 侧 `Signal`**（2026-11-09，macOS 主机）：`aegle-widgets/tests/signals.rs` 两个场景通过：绑定首次立即运行，相等的 `set` 不重跑；只在分支中读到的 signal 在走到该分支后才触发重跑，换回另一分支后不再触发；`on_change` 在绑定之后运行、看到已更新的控件、不被自身修改重入，`remove` 后不再运行；删除控件后绑定闭包及其捕获值被释放，再修改 signal 不重跑。双向绑定：在文本框中间键入两次后 signal 与另一个绑定标签都得到 `Axxd`，随后 Cmd/Ctrl+Z 撤回到 `Ad`（去掉“控件已显示相同值时不再设置”的判断后撤销历史被清空，该断言失败）；滑块把 150 钳制显示为 10、signal 保留 150，用户递减后两者一致；`Binding::remove` 同时停止两个方向；复选框写回。`Signal` 文档示例作为 doctest 通过。`signals` 示例在 macOS 窗口中截屏核对初始值（文本框、滑块 40、未勾选、摘要标签）。
+* **渲染器与窗口后端让位**（2026-11-09，macOS x86_64 主机）：`cargo build --release -p aegle --example hello` 的默认（tiny-skia）为 1,507,096 字节；默认组合加 `--features wgpu` 为 5,132,176 字节，`--no-default-features --features desktop,wgpu` 为 5,132,184 字节，两者二进制中 `tiny-skia` 与 `aegle-render-cpu` 字符串均为 0 次（默认构建中分别 22、12 次），即被替换的渲染器只编译不链接。`cargo check -p aegle -p aegle-app --all-targets` 在 `x86_64-unknown-linux-gnu` 下默认加 `wgpu`、`cairo`、`vulkan`、`wayland`（以只回答 `xkbcommon` 的 pkg-config 替身）与 `x86_64-pc-windows-msvc` 下默认加 `wgpu`、`vulkan` 均通过；`wgpu` 与 `vulkan` 同时启用仍为编译错误。macOS 上默认加 `--features wgpu` 的 `showcase` 启动并持续运行、无错误输出，未截屏核对（当时屏幕被屏保占用）。
 * **发布前检查（2026-11-08，macOS 主机）**：`cargo package -p aegle-types` 打包成功（其余 crate 要等依赖先上 crates.io 才能解析）；`aegle`、`aegle-ui`、`aegle-types`、`aegle-core`、`aegle-text`、`aegle-app` 在 crates.io 上未被占用。每个可在 macOS 编译的 crate 单独 `cargo test -p <crate> --no-run` 均编译通过（此前 `aegle-ui` 的 `shader` 测试在未开 `motion` 时编译失败）。交叉 `cargo check --all-targets`：`x86_64-pc-windows-msvc` 下 Win32、桌面服务、无障碍与 facade（tiny-skia、vulkan、wgpu）通过；`x86_64-unknown-linux-gnu` 下除需要 libxkbcommon pkg-config 的 `aegle-platform-wayland` 外的工作区，以及 facade 的四种渲染器（sdl3）通过。macOS 上 `cargo test --workspace`（排除 Linux 专用 crate 与 facade/宿主）此前因 `aegle-portal` 在非 Linux 编译失败而从未运行；现在全部通过（见下方彩色字形一条）；两项控件测试此前把快捷键写死为 Ctrl，现按平台用 Cmd/Ctrl。docs.rs 目标配置已写入各平台 crate，尚未在 docs.rs 上实际构建。
 
 ### 2. Linux 平台（真实桌面与无头会话）

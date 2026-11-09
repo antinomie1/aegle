@@ -66,12 +66,13 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 ## 三、 Feature 矩阵与构建组合
 
 ### 1. 核心构建规则
-* **单一渲染器互斥**：一个构建**恰好编入一个渲染器**（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）。同时启用两个会触发编译期错误。
-* **Linux 窗口后端互斥**：Linux 上 `sdl3`（默认）与 `wayland` 互斥。同时启用会触发编译期错误。
+* **单一渲染器**：一个二进制**只链接一个渲染器**（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）。默认的 `tiny-skia` 让位于另外三个中启用的那一个（由 `aegle-app/build.rs` 的 `tiny_skia` cfg 决定），被替换的 crate 仍参与编译但不被引用、不进入二进制；`cairo`、`vulkan`、`wgpu` 中同时启用两个会触发编译期错误。
+* **Linux 窗口后端**：Linux 上 `sdl3`（默认）与 `wayland` 同时启用时使用 `wayland`，`sdl3` crate 同样只编译不链接。
 * **默认组合**：`aegle` 默认 feature 为 `["desktop", "sdl3", "tiny-skia"]`。
   * `desktop` 包含：`native`、`system-fonts`、`markup`、`motion`、`effects`、`desktop-services`。
-  * 换渲染器：Windows 与 macOS 用 `--no-default-features --features desktop,<renderer>`；Linux 还要指明窗口后端，用 `desktop,sdl3,<renderer>`，否则 facade 在编译期报错。
-  * 换 Linux 窗口后端：`--no-default-features --features desktop,wayland,tiny-skia`。
+  * 换渲染器：三平台都只加一个 feature，`--features wgpu`（或 `vulkan`、`cairo`）。
+  * 换 Linux 窗口后端：`--features wayland`。
+  * 只要最小组合时仍可 `--no-default-features` 后逐项选择，此时 Linux 必须给出 `sdl3` 或 `wayland`，否则 facade 在编译期报错。
 
 ### 2. 常用功能 Feature 说明
 * `native`：目标平台的原生窗口宿主支持（Windows/macOS 自动匹配自身，Linux 搭配 `sdl3` 或 `wayland`）。
@@ -92,14 +93,14 @@ cargo run -p aegle --example hello
 cargo run -p aegle --example showcase
 
 # 3. 使用系统 cairo 渲染器（Linux 专用，需运行时有 libcairo.so.2）
-cargo run -p aegle --no-default-features --features desktop,sdl3,cairo --example showcase
+cargo run -p aegle --features cairo --example showcase
 
 # 4. 改用原生 Wayland 客户端后端（SCTK + layer-shell 支持）
-cargo run -p aegle --no-default-features --features desktop,wayland,tiny-skia --example showcase
+cargo run -p aegle --features wayland --example showcase
 
-# 5. 使用硬件加速渲染器（Vulkan / wgpu；Windows 与 macOS 去掉 sdl3）
-cargo run -p aegle --no-default-features --features desktop,sdl3,vulkan --example showcase
-cargo run -p aegle --no-default-features --features desktop,sdl3,wgpu --example showcase
+# 5. 使用硬件加速渲染器（Vulkan 不支持 macOS；wgpu 三平台）
+cargo run -p aegle --features vulkan --example showcase
+cargo run -p aegle --features wgpu --example showcase
 
 # 6. 开启系统无障碍（Linux AT-SPI）
 cargo run -p aegle --features accessibility --example controls

@@ -6,10 +6,10 @@
 //! the CPU is not a special case: tiny-skia, cairo, Vulkan and wgpu are four
 //! implementations of the same trait, differing only in what they do internally.
 //!
-//! A build contains exactly one of them. The `tiny-skia`, `cairo`, `vulkan` and
-//! `wgpu` features are mutually exclusive, so the binary carries no backend it
-//! cannot use and an application has nothing to choose at run time;
-//! [`RENDERER`] names the one this build contains.
+//! A build uses exactly one of them: `cairo`, `vulkan` or `wgpu` when one is
+//! enabled (two are a compile error), otherwise `tiny-skia`. The binary
+//! carries no backend it cannot use and an application has nothing to choose
+//! at run time; [`RENDERER`] names the one this build uses.
 
 use aegle_platform::WindowId;
 use aegle_ui::Result;
@@ -86,10 +86,10 @@ pub(crate) trait Renderer {
 
 /// The renderer this build contains, or `None` without a renderer feature.
 ///
-/// The renderer features are mutually exclusive, so this is the backend every
-/// [`App`](crate::App) of the build draws with. A build without one compiles,
+/// This is the backend every [`App`](crate::App) of the build draws with:
+/// `tiny-skia` only when no other renderer feature is enabled. A build without one compiles,
 /// but fails at `App` creation.
-pub const RENDERER: Option<&str> = if cfg!(feature = "tiny-skia") {
+pub const RENDERER: Option<&str> = if cfg!(tiny_skia) {
     Some("tiny-skia")
 } else if cfg!(feature = "cairo") {
     Some("cairo")
@@ -109,7 +109,7 @@ pub const RENDERER: Option<&str> = if cfg!(feature = "tiny-skia") {
 pub(crate) fn create(options: &AppOptions) -> Result<Box<dyn Renderer>> {
     // The GPU backends read their options per window, in `add_window`.
     let _ = options;
-    #[cfg(feature = "tiny-skia")]
+    #[cfg(tiny_skia)]
     return Ok(Box::new(Cpu {
         renderer: aegle_render_tiny_skia::Renderer::new(options.mask_budget),
     }));
@@ -136,12 +136,12 @@ pub(crate) fn create(options: &AppOptions) -> Result<Box<dyn Renderer>> {
 // the host treats them.
 
 /// The shared CPU compositor over tiny-skia coverage.
-#[cfg(feature = "tiny-skia")]
+#[cfg(tiny_skia)]
 struct Cpu {
     renderer: aegle_render_tiny_skia::Renderer,
 }
 
-#[cfg(feature = "tiny-skia")]
+#[cfg(tiny_skia)]
 impl Renderer for Cpu {
     fn add_window(&mut self, _window: WindowId, _setup: &mut Setup<'_>) -> Result<()> {
         // One compositor serves every window: it shares the mask scratch and the

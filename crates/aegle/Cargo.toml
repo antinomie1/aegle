@@ -11,12 +11,10 @@ categories.workspace = true
 description = "A small retained GUI with imperative controls and composable backends"
 
 [features]
-# `desktop` holds everything but the renderer and the Linux window backend, so
-# another renderer replaces tiny-skia with
-# `--no-default-features --features desktop,<renderer>` on Windows and macOS
-# (`desktop,sdl3,<renderer>` on Linux) and the native Wayland
-# client replaces SDL3 with
-# `--no-default-features --features desktop,wayland,<renderer>`.
+# `desktop` holds everything but the renderer and the Linux window backend.
+# The default backends give way to an explicit one, so `--features wgpu`
+# (or `vulkan`, `cairo`) replaces tiny-skia and `--features wayland` replaces
+# SDL3; the replaced crate is compiled but not linked.
 default = ["desktop", "sdl3", "tiny-skia"]
 # System accessibility is opt-in: one feature adds the semantic tree and the
 # adapter of the target (AT-SPI over zbus on Linux, UI Automation on Windows,
@@ -44,7 +42,8 @@ wayland = ["native", "aegle-app/wayland"]
 motion = ["aegle-ui/motion", "aegle-widgets/motion", "aegle-app/motion", "aegle-loader?/motion"]
 effects = ["aegle-image/effects"]
 markup = ["dep:aegle-macros", "dep:aegle-loader"]
-# The renderer: exactly one of these four, enabling two is a compile error.
+# The renderer: tiny-skia unless one of the other three is enabled; enabling
+# two of those is a compile error.
 # CPU rendering with tiny-skia coverage, on every platform.
 tiny-skia = ["aegle-app/tiny-skia"]
 # CPU rendering with system cairo coverage, Linux only. The library is loaded at
@@ -92,10 +91,10 @@ required-features = ["native", "system-fonts"]
 [[example]]
 name = "controls"
 required-features = ["native", "system-fonts"]
+
 [[example]]
 name = "signals"
 required-features = ["native", "system-fonts"]
-
 
 [[example]]
 name = "hello_markup"

@@ -3,7 +3,7 @@
 //! sessions, without keystrokes or an installed input method, but it creates
 //! a native window: `AEGLE_TEST_COMPOSITOR=private cargo test -p aegle-app
 //! --features windows,tiny-skia --test tsf_windows -- --ignored`.
-#![cfg(all(feature = "windows", feature = "tiny-skia", target_os = "windows"))]
+#![cfg(all(feature = "windows", tiny_skia, target_os = "windows"))]
 #![allow(unsafe_code)]
 
 use aegle_app::{App, AppOptions, WindowOptions};

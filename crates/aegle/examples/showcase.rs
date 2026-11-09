@@ -2,9 +2,8 @@
 //!
 //! The window draws with the build's renderer and names it in the title:
 //! `cargo run -p aegle --release --example showcase` uses tiny-skia, and
-//! `--no-default-features --features desktop,sdl3,cairo` (or `vulkan`, `wgpu`;
-//! no `sdl3` on Windows and macOS) builds the same window with another one. A trailing `rtl` argument lays the window
-//! out right to left.
+//! `--features wgpu` (or `vulkan`, `cairo`) builds the same window with
+//! another one. A trailing `rtl` argument lays the window out right to left.
 mod showcase {
     pub mod window;
 }

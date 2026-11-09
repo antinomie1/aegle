@@ -120,7 +120,7 @@ pub trait SurfacePlatform: Platform {
 
 ## 四、 渲染后端架构
 
-一个 Aegle 构建**恰好编入一个渲染器**。四个渲染器实现同一个 `Renderer` trait：
+一个 Aegle 二进制**只链接一个渲染器**：启用 `cairo`、`vulkan` 或 `wgpu` 之一时用它（两个同时启用为编译错误），否则用默认的 `tiny-skia`。四个渲染器实现同一个 `Renderer` trait：
 
 ```rust
 pub(crate) trait Renderer {

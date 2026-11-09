@@ -185,7 +185,7 @@ fn proxy_messages_from_threads_reach_the_ui_thread_in_order() -> Result {
 }
 
 #[test]
-#[cfg(feature = "tiny-skia")]
+#[cfg(tiny_skia)]
 #[ignore = "requires an isolated test desktop; never run on the user's desktop"]
 fn software_windows_reject_a_translucent_background() -> Result {
     assert_eq!(

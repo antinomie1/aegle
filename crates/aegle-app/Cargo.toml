@@ -26,12 +26,14 @@ accessibility = [
 ]
 # Native windows: the host plus the target's window backend. Windows and macOS
 # always use their own crate; a Linux build gets one from `sdl3` (the facade's
-# default) or `wayland`, which are mutually exclusive.
+# default) or `wayland`, which replaces `sdl3` when both are enabled.
 native = ["windows", "macos"]
 sdl3 = ["native", "dep:aegle-platform-sdl3"]
 wayland = ["native", "dep:aegle-platform-wayland"]
 windows = ["dep:aegle-platform-win32"]
 macos = ["dep:aegle-platform-macos"]
+# The renderer. `tiny-skia`, the facade's default, gives way to any of the
+# other three, which exclude each other.
 tiny-skia = ["dep:aegle-render-tiny-skia", "dep:aegle-render-cpu"]
 # System cairo as a second CPU coverage rasterizer; Linux only, loaded at run
 # time, so no build-time dependency on cairo headers or libraries.
@@ -107,6 +109,12 @@ harness = false
 [lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
+
+# A default backend that an explicit one replaces (tiny-skia, SDL3) stays a
+# compiled, unused dependency by design: Cargo cannot disable a feature that
+# another one enables.
+[lints.cargo]
+unused_dependencies = "allow"
 
 # docs.rs builds only the listed targets; the platform code is cfg-gated.
 [package.metadata.docs.rs]

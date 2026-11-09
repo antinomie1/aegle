@@ -8,15 +8,14 @@
 //! `accessibility` feature, which adds the semantic tree and the target's adapter
 //! (AT-SPI, UI Automation or NSAccessibility).
 //!
-//! A build contains exactly one renderer: `tiny-skia` (the default), `cairo`
-//! (Linux, drawing through the distribution's `libcairo.so.2`), `vulkan` or
-//! `wgpu`. Enabling two is a compile error, so another renderer replaces the
-//! default with `--no-default-features --features desktop,<renderer>`, plus a
-//! window backend on Linux (`desktop,sdl3,<renderer>`); the Linux window
-//! backend switches the same way with
-//! `--no-default-features --features desktop,wayland,tiny-skia`. `vulkan`
-//! fails at `App` creation on macOS, where `wgpu` reaches Metal. Lower-level
-//! crates remain independent.
+//! A build uses one renderer: `tiny-skia` (the default), `cairo` (Linux,
+//! drawing through the distribution's `libcairo.so.2`), `vulkan` or `wgpu`.
+//! The defaults give way to an explicit choice, so `--features wgpu` alone
+//! switches to wgpu and, on Linux, `--features wayland` alone switches to the
+//! native Wayland client; the replaced backend is compiled but never linked.
+//! Two of `cairo`, `vulkan` and `wgpu` are a compile error. `vulkan` fails at
+//! `App` creation on macOS, where `wgpu` reaches Metal. Lower-level crates
+//! remain independent.
 //!
 //! Until 1.0, any 0.x minor release may break this API; patch releases do not.
 //!
@@ -32,8 +31,7 @@
 ))]
 compile_error!(
     "aegle: a Linux native build needs a window backend: enable `sdl3` \
-     (the default) or `wayland`, e.g. \
-     `--no-default-features --features desktop,wayland,tiny-skia`."
+     (the default) or `wayland`."
 );
 
 /// Native application host: `App`, windows, the build's renderer and desktop

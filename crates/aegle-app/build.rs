@@ -1,7 +1,7 @@
 //! Names the configurations the sources test: `native` when the target's
 //! platform feature is enabled, `access` when its system accessibility adapter
-//! is too, and `renderer` when the build has its one renderer. A new platform
-//! adds one row here.
+//! is too, `renderer` when the build has a renderer, and `tiny_skia` when that
+//! renderer is tiny-skia. A new platform adds one row here.
 
 fn main() {
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
@@ -17,12 +17,16 @@ fn main() {
         ("windows", "WINDOWS", "ACCESSIBILITY"),
         ("macos", "MACOS", "ACCESSIBILITY"),
     ];
-    println!("cargo::rustc-check-cfg=cfg(native, access, renderer)");
-    if ["TINY_SKIA", "CAIRO", "VULKAN", "WGPU"]
-        .into_iter()
-        .any(feature)
-    {
+    println!("cargo::rustc-check-cfg=cfg(native, access, renderer, tiny_skia)");
+    // tiny-skia is the facade's default renderer and gives way to any other,
+    // so `--features wgpu` alone replaces it; the crate it no longer uses is
+    // compiled but never linked. Two of the others are a compile error.
+    let other = ["CAIRO", "VULKAN", "WGPU"].into_iter().any(feature);
+    if other || feature("TINY_SKIA") {
         println!("cargo::rustc-cfg=renderer");
+    }
+    if feature("TINY_SKIA") && !other {
+        println!("cargo::rustc-cfg=tiny_skia");
     }
     for (target, platform, access) in platforms {
         if os == target && feature(platform) {

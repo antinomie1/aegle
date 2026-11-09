@@ -63,7 +63,7 @@ Try the bundled examples with `cargo run -p aegle --example controls --release`.
 
 Set on the `aegle` crate. The defaults are `desktop`, `sdl3` and `tiny-skia`; `desktop` is `native`, `system-fonts`, `markup`, `motion`, `effects` and `desktop-services`.
 
-A build contains exactly one renderer. The four renderer features (`tiny-skia`, `cairo`, `vulkan`, `wgpu`) are peers and mutually exclusive: enabling two is a compile error, so a binary never carries a backend it cannot use, and `aegle::app::RENDERER` names the one it has. `desktop` holds every default except the renderer and the Linux window backend, so another renderer replaces tiny-skia with `--no-default-features --features desktop,<renderer>` on Windows and macOS, and `desktop,sdl3,<renderer>` (or `desktop,wayland,<renderer>`) on Linux, for example `cargo run -p aegle --release --no-default-features --features desktop,sdl3,cairo --example showcase`.
+A build uses one renderer, and `aegle::app::RENDERER` names it. The defaults give way to an explicit choice: adding `wgpu`, `vulkan` or `cairo` replaces tiny-skia, and on Linux adding `wayland` replaces SDL3, so one feature switches the backend on every platform, for example `cargo run -p aegle --release --features wgpu --example showcase`. The replaced backend is compiled but never linked, so a binary carries no backend it cannot use; two of `cairo`, `vulkan` and `wgpu` are a compile error.
 
 | Feature | Default | Purpose |
 | --- | :---: | --- |
@@ -87,7 +87,7 @@ A build contains exactly one renderer. The four renderer features (`tiny-skia`, 
 | `shaders` |  | Custom fragment programs (`ShaderView`, markup `Shader`), drawn by the `vulkan` and `wgpu` renderers |
 | `accessibility` |  | Semantic tree plus the target's system adapter: AT-SPI on Linux (pulls in zbus), UI Automation on Windows, NSAccessibility on macOS. Implies `native` |
 
-`native` builds only the target's platform crate, and `accessibility` only the target's adapter. On Linux `sdl3` and `wayland` are exclusive: enabling both is a compile error, and so is `native` through this facade without either, which names the rebuild command. The crate-level breakdown is in the [module guide](https://github.com/antinomie1/aegle/blob/main/docs/modules.md).
+`native` builds only the target's platform crate, and `accessibility` only the target's adapter. On Linux `wayland` replaces `sdl3` when both are enabled; `native` through this facade without either is a compile error. The crate-level breakdown is in the [module guide](https://github.com/antinomie1/aegle/blob/main/docs/modules.md).
 
 ## Documentation
 

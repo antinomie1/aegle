@@ -63,7 +63,7 @@ name.bind(&window.text(""), |label, name| label.set_text(&format!("你好，{nam
 
 在 `aegle` crate 上设置。默认启用 `desktop`、`sdl3` 与 `tiny-skia`；`desktop` 即 `native`、`system-fonts`、`markup`、`motion`、`effects` 与 `desktop-services`。
 
-一个构建只包含一个渲染器。四个渲染器 feature（`tiny-skia`、`cairo`、`vulkan`、`wgpu`）平级且互斥：同时启用两个会编译失败，因此二进制里不会带着用不到的后端，`aegle::app::RENDERER` 给出本构建的那一个。`desktop` 是除渲染器与 Linux 窗口后端以外的全部默认 feature，换渲染器时 Windows 与 macOS 用 `--no-default-features --features desktop,<渲染器>`，Linux 用 `desktop,sdl3,<渲染器>`（或 `desktop,wayland,<渲染器>`），例如 `cargo run -p aegle --release --no-default-features --features desktop,sdl3,cairo --example showcase`。
+一个构建使用一个渲染器，`aegle::app::RENDERER` 给出是哪一个。默认后端让位于显式选择：加上 `wgpu`、`vulkan` 或 `cairo` 即替换 tiny-skia，Linux 上加上 `wayland` 即替换 SDL3，因此各平台都只需一个 feature 就能换后端，例如 `cargo run -p aegle --release --features wgpu --example showcase`。被替换的后端仍参与编译但不会链接，二进制里不会带着用不到的后端；`cairo`、`vulkan`、`wgpu` 中同时启用两个会编译失败。
 
 | Feature | 默认 | 作用 |
 | --- | :---: | --- |
@@ -87,7 +87,7 @@ name.bind(&window.text(""), |label, name| label.set_text(&format!("你好，{nam
 | `shaders` |  | 自定义片元程序（`ShaderView`、标记 `Shader`），由 `vulkan` 与 `wgpu` 渲染器绘制 |
 | `accessibility` |  | 语义树与目标平台的系统适配（Linux AT-SPI，引入 zbus；Windows UI Automation；macOS NSAccessibility）；隐含 `native` |
 
-`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；Linux 上 `sdl3` 与 `wayland` 互斥，同时开启是编译错误，经本 facade 只给 `native` 而没有后端同样是带重建命令的编译错误；各 crate 的分工见 [模块、依赖与构建组合](https://github.com/antinomie1/aegle/blob/main/docs/modules.md)。
+`native` 只编译目标平台的窗口 crate，`accessibility` 只编译目标平台的适配器；Linux 上同时开启 `sdl3` 与 `wayland` 时用 `wayland`，经本 facade 只给 `native` 而没有后端是编译错误；各 crate 的分工见 [模块、依赖与构建组合](https://github.com/antinomie1/aegle/blob/main/docs/modules.md)。
 
 ## 文档
 
