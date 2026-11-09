@@ -41,4 +41,6 @@
 * Windows 彩色 emoji 未在实机核对；全局快捷键按 ANSI 键位匹配。
 * VoiceOver 语音、日韩输入法、跨应用拖放未实测。
 * Pango 布局尺寸取整导致段落间最多约 1 px 误差。
-* macOS 上 tiny-skia 渲染 `showcase` 动画时 CPU 约 24%。
+* Windows 软件呈现每帧以 `SetDIBitsToDevice` 上传整幅 DIB，未按损伤区域上传（未在实机测量）。
+* GPU 渲染器（wgpu、Vulkan）每帧整幅重绘：macOS 上 wgpu 的 `showcase` 动画时应用 CPU 用户 11.4% + 内核 7.5%；按损伤局部重绘需要保留离屏目标。
+* macOS 软件呈现的 `showcase` 动画时应用 CPU 约 15%，主要是 Core Animation 每帧提交与后备存储更新，Aegle 自身的布局、场景遍历与光栅化约占 2.5%。

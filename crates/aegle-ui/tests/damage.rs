@@ -83,3 +83,26 @@ fn changes_damage_only_old_and_new_areas() -> Result {
     assert_eq!(damage(&ui), None);
     Ok(())
 }
+
+#[test]
+fn a_repaint_clipped_out_of_view_damages_nothing() -> Result {
+    let ui = Ui::with_fonts(Rc::new(RefCell::new(TextSystem::new())), Theme::light())?;
+    ui.resize(Size::new(200.0, 100.0));
+    let frame = ui.root().column();
+    frame.set_width(80.0);
+    frame.set_height(40.0);
+    frame.set_clip(true);
+    let hidden = frame.column();
+    hidden.set_width(20.0);
+    hidden.set_height(20.0);
+    hidden.set_offset(Point::new(0.0, 200.0));
+    hidden.set_background(Color::BLACK);
+    ui.refresh()?;
+    ui.clear_damage();
+    // An animation behind a clip, as a spinner scrolled out of view: its
+    // record changes, but no presented pixel does, so nothing is redrawn.
+    hidden.set_background(Color::WHITE);
+    ui.refresh()?;
+    assert_eq!(damage(&ui), Some(vec![]));
+    Ok(())
+}

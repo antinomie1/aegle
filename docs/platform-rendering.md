@@ -110,7 +110,7 @@ pub trait SurfacePlatform: Platform {
 
 ### 4. macOS 后端 (`aegle-platform-macos`)
 * **AppKit 循环**：以截止时间驱动 `nextEventMatchingMask:`（无截止时间时等到 `distantFuture`），不进入 `NSApplicationMain`；每次分发至少运行一轮 run loop，持续重绘也不会饿死 AppKit。等待期间 run loop 回调（跨线程唤醒、输入法异步提交）排入的首个事件补发一个应用自定义事件结束等待。
-* **呈现与输入**：`CGImage` 软件呈现，两块缓冲轮换、图像原地读取缓冲（无每帧整幅拷贝），宿主绘制前只补拷该缓冲落后的区域；事件每轮与每次呈现各有自动释放池；`NSTextInputClient` 协议映射文本编辑与预编辑；`CAMetalLayer` 原生租约。Metal 在窗口不可见时（包括刚排到前台、窗口服务器尚未确认时）不给 drawable，窗口随即等待遮挡回调再重绘。
+* **呈现与输入**：软件呈现时宿主画入一块紧密画布，只把损伤区域标为需重画；视图的 `drawRect:` 把 AppKit 正在重画的每个矩形从画布拷成一张自有像素的小 `CGImage` 画入 Core Animation 的后备存储（由 GPU 渲染，只重画标记的区域），因此一帧只上传变化的像素；事件每轮与每次呈现各有自动释放池；`NSTextInputClient` 协议映射文本编辑与预编辑；`CAMetalLayer` 原生租约。Metal 在窗口不可见时（包括刚排到前台、窗口服务器尚未确认时）不给 drawable，窗口随即等待遮挡回调再重绘。
 * **输出**：`NSScreen.screens` 即输出，ID 为 `CGDirectDisplayID`，名称为系统本地化的显示器名（无连接器名，`description` 为空）；位置由 AppKit 左下原点换算为主屏左上原点的逻辑坐标。`NSApplicationDidChangeScreenParametersNotification` 合并为一个 `Event::Outputs`。
 * **弹出层**：无边框 `NSWindow`，作为父窗口的子窗口随其移动、排序与最小化。创建时一次定位：锚定矩形换算到屏幕后由 `popup_origin` 放在请求一侧，该侧越出父窗口所在屏幕的可见区域且对侧放得下时翻转，再沿两轴滑入可见区域（与 `xdg_positioner` 的 flip + slide 一致，规则在 `tests/placement.rs` 测试）。抓取弹出层显示时成为 key 窗口；AppKit 没有弹出抓取，平台自己撤销：在弹出链（自身及由它打开的弹出层）之外的窗口按下，或应用失去激活时，对其发一次 `Close`，由内向外；该次按下仍正常投递。被动弹出层从不成为 key。父窗口有未移除的弹出层时不能移除（`InvalidRole`）。
 * **窗口管理**：`setContentSize`、`contentMinSize`/`contentMaxSize`、样式位 `Resizable`、窗口级别（置顶为 `NSFloatingWindowLevel`）；最大化即缩放（`zoom:`），最小化进入 Dock，全屏为独立空间（窗口带 `FullScreenPrimary`）。模式请求保存为目标，每次过渡结束的委托回调在下一轮 run loop 推进一步（AppKit 拒绝在结束上一次全屏过渡的回调里开始下一次），因此全屏到最小化会先退出全屏；到达目标的那一步清除目标，被 AppKit 拒绝的请求不会稍后重试。

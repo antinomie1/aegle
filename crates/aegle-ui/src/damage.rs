@@ -59,11 +59,13 @@ impl State {
 
 impl Ui {
     /// The rectangles whose pixels changed since [`Self::clear_damage`], in
-    /// logical window coordinates; `None` means the whole window. Hosts that
-    /// keep earlier pixels redraw and present only these after a refresh.
+    /// logical window coordinates; `None` means the whole window, and an
+    /// empty region that no pixel changed, as when a repainting node is
+    /// clipped out of view. Hosts that keep earlier pixels redraw and present
+    /// only these after a refresh.
     pub fn damage(&self) -> Option<Region<Rect>> {
         let state = self.read();
-        Some(state.damage).filter(|d| !state.damage_full && !d.is_empty())
+        (!state.damage_full).then_some(state.damage)
     }
 
     /// Marks the window's pixels as presented, after a successful present.

@@ -1,11 +1,14 @@
-//! Software presentation: the host draws into one of two BGRA8 buffers, which
-//! is shown as an opaque `CGImage` by the view's `drawRect:`.
+//! Software presentation: the host draws into one tightly packed BGRA8
+//! canvas, and the view's `drawRect:` draws the areas AppKit asks for from it.
 //!
-//! The image reads its buffer in place through a data provider that holds a
-//! second reference to it, so nothing is copied per frame. The buffers
-//! alternate: the host draws into the one CoreGraphics has let go of, after
-//! the area that changed since it was last shown is copied over from the
-//! other, so an animation's small damage costs a small copy.
+//! The view's layer keeps a backing store that Core Animation renders with
+//! the GPU and redraws only where the view was marked, so a frame marks its
+//! damage and each rectangle being drawn becomes a small image copied from
+//! the canvas. An image is uploaded whole wherever it is drawn: one the size
+//! of the window per frame cost an upload of every pixel each time, while a
+//! spinner's rectangle costs a few kilobytes. Core Animation may read an
+//! image after `drawRect:` returns, so each owns its copy rather than
+//! reading the canvas, which the next frame overwrites.
 #![allow(unsafe_code)]
 use crate::native::Native;
 use aegle_platform::{DrawResult, Error, PixelRect, PixelSize, Region, Result};
@@ -15,57 +18,46 @@ use objc2_core_graphics::{
     CGBitmapInfo, CGColorRenderingIntent, CGColorSpace, CGContext, CGDataProvider, CGImage,
     CGImageAlphaInfo, CGImageByteOrderInfo, CGInterpolationQuality, kCGColorSpaceSRGB,
 };
-use objc2_foundation::{MainThreadMarker, NSPoint, NSRect, NSSize};
-use std::{ffi::c_void, ptr::NonNull, sync::Arc, time::Instant};
+use objc2_foundation::{MainThreadMarker, NSInteger, NSPoint, NSRect, NSSize};
+use std::{ffi::c_void, ptr::NonNull, time::Instant};
 
-/// One frame of pixels. CoreGraphics holds a second reference while an image
-/// may read it, so the buffer is written only while this one is unique.
-struct Buffer {
-    pixels: Arc<[u8]>,
-    size: PixelSize,
-    /// What the shown frame changed since this buffer held it; `None` when
-    /// unknown, so all of it is copied.
-    behind: Option<Region<PixelRect>>,
-}
-
-/// The retained software framebuffers of a window.
+/// The retained software frame of a window.
 #[derive(Default)]
 pub(crate) struct Frame {
-    /// The buffer of the frame on screen.
-    shown: Option<Buffer>,
-    /// The other buffer, which the next frame is drawn into.
-    spare: Option<Buffer>,
-    /// Size of the complete frame `shown` holds, if the last draw succeeded.
-    pub drawn: Option<PixelSize>,
-    /// The latest frame as the system draws it, with its scale.
-    pub image: Option<(CFRetained<CGImage>, f64)>,
+    /// The latest complete frame, which the host draws into.
+    canvas: Vec<u8>,
+    /// Size and scale of the complete frame `canvas` holds, if the last draw
+    /// succeeded.
+    drawn: Option<(PixelSize, f64)>,
 }
 
-/// Releases the buffer reference a data provider held.
+/// Releases the pixels a data provider held.
 unsafe extern "C-unwind" fn release(info: *mut c_void, _data: NonNull<c_void>, _size: usize) {
-    // SAFETY: `info` is the boxed reference `image` leaked for this provider,
-    // which CoreGraphics releases exactly once.
-    drop(unsafe { Box::from_raw(info.cast::<Arc<[u8]>>()) });
+    // SAFETY: `info` is the boxed copy `image` leaked for this provider, which
+    // CoreGraphics releases exactly once.
+    drop(unsafe { Box::from_raw(info.cast::<Vec<u8>>()) });
 }
 
-/// An image reading `pixels` in place, whose alpha byte is ignored: the
-/// window is opaque, so a translucent pixel shows its premultiplied color as
-/// if over black.
-fn image(pixels: &Arc<[u8]>, size: PixelSize) -> Result<CFRetained<CGImage>> {
-    let held = Box::into_raw(Box::new(pixels.clone()));
-    // SAFETY: the provider reads `pixels.len()` bytes that the leaked
-    // reference keeps alive and unwritten (writes need a unique `Arc`) until
-    // `release` returns it; on failure the reference is reclaimed here.
+/// An image of `rect` of the canvas, a frame `width` pixels wide, that owns a
+/// copy of its pixels. The alpha byte is ignored: the window is opaque, so a
+/// translucent pixel shows its premultiplied color as if over black.
+fn image(canvas: &[u8], width: u32, rect: PixelRect) -> Result<CFRetained<CGImage>> {
+    let (stride, row) = (width as usize * 4, rect.width as usize * 4);
+    let mut pixels = Vec::with_capacity(row * rect.height as usize);
+    for y in rect.y as usize..(rect.y + rect.height) as usize {
+        let at = y * stride + rect.x as usize * 4;
+        pixels.extend_from_slice(&canvas[at..at + row]);
+    }
+    let length = pixels.len();
+    let held = Box::into_raw(Box::new(pixels));
+    // SAFETY: the provider reads the `length` bytes of the leaked copy, which
+    // nothing else touches until `release` frees it; on failure the copy is
+    // reclaimed here.
     let provider = unsafe {
-        CGDataProvider::with_data(
-            held.cast(),
-            pixels.as_ptr().cast(),
-            pixels.len(),
-            Some(release),
-        )
+        CGDataProvider::with_data(held.cast(), (*held).as_ptr().cast(), length, Some(release))
     }
     .ok_or_else(|| {
-        // SAFETY: CoreGraphics did not take the reference.
+        // SAFETY: CoreGraphics did not take the copy.
         drop(unsafe { Box::from_raw(held) });
         Error::backend("CGDataProvider creation failed")
     })?;
@@ -74,16 +66,15 @@ fn image(pixels: &Arc<[u8]>, size: PixelSize) -> Result<CFRetained<CGImage>> {
         .ok_or_else(|| Error::backend("sRGB color space unavailable"))?;
     let bitmap =
         CGBitmapInfo(CGImageAlphaInfo::NoneSkipFirst.0 | CGImageByteOrderInfo::Order32Little.0);
-    let (width, height) = (size.width as usize, size.height as usize);
-    // SAFETY: the provider holds exactly `height` rows of `width * 4` bytes, a
+    // SAFETY: the provider holds exactly `height` rows of `row` bytes, a
     // 32-bit little-endian skip-first layout; no decode array is passed.
     unsafe {
         CGImage::new(
-            width,
-            height,
+            rect.width as usize,
+            rect.height as usize,
             8,
             32,
-            width * 4,
+            row,
             Some(&space),
             bitmap,
             Some(&provider),
@@ -95,26 +86,13 @@ fn image(pixels: &Arc<[u8]>, size: PixelSize) -> Result<CFRetained<CGImage>> {
     .ok_or_else(|| Error::backend("CGImage creation failed"))
 }
 
-/// Copies the rectangles of `area` from `from` to `to`, both full frames of
-/// `width` pixels per row.
-fn copy(area: &Region<PixelRect>, from: &[u8], to: &mut [u8], width: u32) {
-    let stride = width as usize * 4;
-    for rect in area.rects() {
-        let (left, columns) = (rect.x as usize * 4, rect.width as usize * 4);
-        for row in rect.y as usize..(rect.y + rect.height) as usize {
-            let at = row * stride + left;
-            to[at..at + columns].copy_from_slice(&from[at..at + columns]);
-        }
-    }
-}
-
 impl Native {
     /// Lends a tightly packed, top-down premultiplied-sRGB BGRA8 framebuffer.
     /// `damage` is the area changed since the last frame (`None`: all of it);
     /// `draw` must overwrite the region it is given, which is the whole buffer
     /// after a resize or failed frame. Drawing errors retain the last displayed
-    /// frame. `buffer_budget` bounds one frame; the shown buffer, which
-    /// CoreGraphics reads, and compositor storage are outside it.
+    /// frame. `buffer_budget` bounds the canvas; Core Animation's backing
+    /// store is compositor storage outside it.
     pub(crate) fn present(
         &self,
         mtm: MainThreadMarker,
@@ -137,52 +115,24 @@ impl Native {
                 budget: self.budget,
             });
         }
-        let mut full = Region::default();
-        full.add(PixelRect::full(size.width, size.height));
+        let scale = f64::from(info.scale);
         let region = {
             let mut frame = self.frame.borrow_mut();
-            let frame = &mut *frame;
+            let mut full = Region::default();
+            full.add(PixelRect::full(size.width, size.height));
             let region = match frame.drawn.take() {
-                Some(drawn) if drawn == size => damage.unwrap_or(full),
+                Some(drawn) if drawn == (size, scale) => damage.unwrap_or(full),
                 _ => full,
             };
-            // The spare, if it fits and CoreGraphics has let go of it; else a
-            // new buffer, after freeing one of another size.
-            // No weak references exist, so one strong reference is unique.
-            let spare = (frame.spare.take())
-                .filter(|spare| spare.size == size && Arc::strong_count(&spare.pixels) == 1);
-            let mut target = match spare {
-                Some(spare) => spare,
-                None => Buffer {
-                    pixels: std::iter::repeat_n(0, length).collect(),
-                    size,
-                    behind: None,
-                },
-            };
-            let pixels = Arc::get_mut(&mut target.pixels).expect("written only while unique");
-            if region != full
-                && let Some(shown) = &frame.shown
-            {
-                match &target.behind {
-                    Some(behind) => copy(behind, &shown.pixels, pixels, size.width),
-                    None => pixels.copy_from_slice(&shown.pixels),
-                }
+            if frame.canvas.len() != length {
+                // Free the old canvas first, so a resize never holds both.
+                frame.canvas = Vec::new();
+                frame.canvas.resize(length, 0);
             }
-            if let Err(error) = draw(pixels, size, &region) {
-                target.behind = None;
-                frame.spare = Some(target);
-                return Err(Error::Draw(error));
-            }
-            frame.image = Some((image(&target.pixels, size)?, f64::from(info.scale)));
-            target.behind = Some(Region::default());
-            if let Some(mut previous) = frame.shown.replace(target) {
-                previous.behind = Some(region);
-                frame.spare = Some(previous);
-            }
-            frame.drawn = Some(size);
+            draw(&mut frame.canvas, size, &region).map_err(Error::Draw)?;
+            frame.drawn = Some((size, scale));
             region
         };
-        let scale = f64::from(info.scale);
         let height = self.view.bounds().size.height;
         for rect in region.rects() {
             let (x, y) = (f64::from(rect.x) / scale, f64::from(rect.y) / scale);
@@ -201,22 +151,53 @@ impl Native {
         Ok(true)
     }
 
-    /// Draws the latest frame, anchored at the top left at its own scale so a
-    /// resize shows the old frame unscaled until the host redraws.
-    pub(crate) fn draw_rect(&self) {
+    /// Draws the rectangles AppKit is redrawing from the latest frame,
+    /// anchored at the top left at the frame's own scale, so a resize shows
+    /// the old frame unscaled until the host redraws.
+    pub(crate) fn draw_rect(&self) -> Result<()> {
         let frame = self.frame.borrow();
-        let Some((image, scale)) = &frame.image else {
-            return;
+        let Some((size, scale)) = frame.drawn else {
+            return Ok(());
         };
         let Some(context) = NSGraphicsContext::currentContext() else {
-            return;
+            return Ok(());
         };
         let context = context.CGContext();
-        let width = CGImage::width(Some(image)) as f64 / scale;
-        let height = CGImage::height(Some(image)) as f64 / scale;
-        let top = self.view.bounds().size.height;
-        let rect = CGRect::new(CGPoint::new(0.0, top - height), CGSize::new(width, height));
         CGContext::set_interpolation_quality(Some(&context), CGInterpolationQuality::None);
-        CGContext::draw_image(Some(&context), rect, Some(image));
+        let top = self.view.bounds().size.height;
+        let (mut rects, mut count): (*const NSRect, NSInteger) = (std::ptr::null(), 0);
+        // SAFETY: AppKit writes a list it owns for the duration of this draw.
+        unsafe { self.view.getRectsBeingDrawn_count(&mut rects, &mut count) };
+        let rects = match rects.is_null() {
+            true => &[][..],
+            // SAFETY: `count` rectangles at `rects`, valid while drawing.
+            false => unsafe { std::slice::from_raw_parts(rects, count.max(0) as usize) },
+        };
+        for rect in rects {
+            // The dirty rectangle in frame pixels, rounded outward.
+            let logical = aegle_platform::Rect::new(
+                rect.origin.x as f32,
+                (top - rect.origin.y - rect.size.height) as f32,
+                rect.size.width as f32,
+                rect.size.height as f32,
+            );
+            let pixels = PixelRect::covering(logical, scale as f32, size.width, size.height);
+            if pixels.width == 0 || pixels.height == 0 {
+                continue;
+            }
+            let image = image(&frame.canvas, size.width, pixels)?;
+            let at = CGRect::new(
+                CGPoint::new(
+                    f64::from(pixels.x) / scale,
+                    top - f64::from(pixels.y + pixels.height) / scale,
+                ),
+                CGSize::new(
+                    f64::from(pixels.width) / scale,
+                    f64::from(pixels.height) / scale,
+                ),
+            );
+            CGContext::draw_image(Some(&context), at, Some(&image));
+        }
+        Ok(())
     }
 }

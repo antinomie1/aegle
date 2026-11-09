@@ -61,8 +61,10 @@ define_class!(
 
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty: NSRect) {
-            if let Some(native) = self.native() {
-                native.draw_rect();
+            if let Some(native) = self.native()
+                && let Err(error) = native.draw_rect()
+            {
+                native.emit(Event::Error(error));
             }
         }
 
