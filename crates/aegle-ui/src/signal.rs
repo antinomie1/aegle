@@ -23,13 +23,28 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use crate::{Node, Subscription};
+use crate::{HandlerResult, Node, Subscription};
 
 thread_local! {
     /// The reaction whose reads subscribe it, while one runs.
     static CURRENT: RefCell<Option<Rc<Effect>>> = const { RefCell::new(None) };
     /// Reactions waiting for the current pass.
     static QUEUE: Queue = Queue::default();
+    /// Errors returned by change handlers, until a host takes them.
+    static FAILURES: RefCell<VecDeque<Box<dyn std::error::Error>>> =
+        const { RefCell::new(VecDeque::new()) };
+}
+
+/// Takes the oldest error a change handler ([`Signal::on_change`]) returned
+/// on this thread, if any.
+///
+/// A handler fails inside whatever change ran it, which has no error to
+/// return, so the error waits here. [`Ui::dispatch_callbacks`](crate::Ui::dispatch_callbacks)
+/// returns one when no event handler failed, and the native `App` reports
+/// every one to its error handler after each round of callbacks; a host
+/// driving its own loop calls this until it returns `None`.
+pub fn take_reaction_error() -> Option<Box<dyn std::error::Error>> {
+    FAILURES.with_borrow_mut(VecDeque::pop_front)
 }
 
 /// Runs `change`, deferring the reactions to the signals it changes until it
@@ -259,7 +274,7 @@ impl<T: 'static> Signal<T> {
         batch(|| effect.run());
         Binding {
             effect: Rc::downgrade(&effect),
-            subscription: None,
+            cleanup: None,
         }
     }
 
@@ -322,20 +337,27 @@ impl<T: Clone + 'static> Signal<T> {
     /// reactions that read it have rerun, until [`Binding::remove`]. Within a
     /// [`batch`] it runs once, with the final value.
     ///
-    /// The signal owns the handler, so one that captures this signal keeps
-    /// it alive until removed. Reads inside the handler subscribe nothing,
-    /// and changes it makes to this signal do not rerun it.
-    pub fn on_change(&self, mut handler: impl FnMut(T) + 'static) -> Binding {
+    /// The handler may return `()` or a `Result`; an error waits for the host
+    /// (see [`take_reaction_error`]), and the handler stays installed. The
+    /// signal owns the handler, so one that captures this signal keeps it
+    /// alive until removed. Reads inside the handler subscribe nothing, and
+    /// changes it makes to this signal do not rerun it.
+    pub fn on_change<R: HandlerResult>(
+        &self,
+        mut handler: impl FnMut(T) -> R + 'static,
+    ) -> Binding {
         let signal = Rc::downgrade(&self.inner);
         let watcher = Effect::new(Kind::Watcher, move || {
             if let Some(signal) = signal.upgrade() {
                 let value = signal.value.borrow().clone();
-                handler(value);
+                if let Err(error) = handler(value).into_result() {
+                    FAILURES.with_borrow_mut(|failures| failures.push_back(error));
+                }
             }
         });
         let binding = Binding {
             effect: Rc::downgrade(&watcher),
-            subscription: None,
+            cleanup: None,
         };
         self.inner.watchers.borrow_mut().push(watcher);
         binding
@@ -447,7 +469,7 @@ impl<T: Clone + 'static> Derived<T> {
 
     /// Like [`Signal::on_change`]: runs `handler` after each change of the
     /// value.
-    pub fn on_change(&self, handler: impl FnMut(T) + 'static) -> Binding {
+    pub fn on_change<R: HandlerResult>(&self, handler: impl FnMut(T) -> R + 'static) -> Binding {
         self.0.on_change(handler)
     }
 }
@@ -466,7 +488,8 @@ fn current(reader: &Weak<Effect>, run: u64) -> Option<Rc<Effect>> {
 #[derive(Clone)]
 pub struct Binding {
     effect: Weak<Effect>,
-    subscription: Option<Subscription>,
+    /// Removes what [`Binding::on_remove`] tied to the reaction.
+    cleanup: Option<Rc<dyn Fn()>>,
 }
 
 impl fmt::Debug for Binding {
@@ -489,8 +512,8 @@ impl Binding {
             let closure = effect.react.borrow_mut().take();
             drop(closure);
         }
-        if let Some(subscription) = &self.subscription {
-            subscription.remove();
+        if let Some(cleanup) = &self.cleanup {
+            cleanup();
         }
     }
 
@@ -504,8 +527,21 @@ impl Binding {
     /// Ties a handler subscription to this binding, so that
     /// [`Self::remove`] removes both; for two-way bindings of controls, whose
     /// change handler writes the signal back.
-    pub fn with_subscription(mut self, subscription: Subscription) -> Self {
-        self.subscription = Some(subscription);
+    pub fn with_subscription(self, subscription: Subscription) -> Self {
+        self.on_remove(move || subscription.remove())
+    }
+
+    /// Runs `remove` when [`Self::remove`] is called, after any earlier
+    /// cleanup; for links whose other direction is registered elsewhere,
+    /// such as a markup state's change handler.
+    pub fn on_remove(mut self, remove: impl Fn() + 'static) -> Self {
+        let earlier = self.cleanup.take();
+        self.cleanup = Some(Rc::new(move || {
+            if let Some(earlier) = &earlier {
+                earlier();
+            }
+            remove();
+        }));
         self
     }
 }

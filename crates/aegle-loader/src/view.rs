@@ -8,7 +8,7 @@ use std::{
 };
 
 use aegle_markup::{ElementKind, Span, Type};
-use aegle_ui::{Container, HandlerResult, Result};
+use aegle_ui::{Binding, Container, HandlerResult, Result, Signal};
 
 use crate::{
     Data, Program, RuntimeError,
@@ -407,6 +407,41 @@ impl<T: StateValue> State<T> {
             slot: Rc::downgrade(&self.slot),
             id,
         }
+    }
+}
+
+impl<T: StateValue + Clone + PartialEq + 'static> State<T> {
+    /// Links this state to a Rust [`Signal`] in both directions: the state
+    /// takes the signal's value now, then each follows the other's changes,
+    /// whether they come from markup event blocks, bindings' sources or Rust.
+    /// A value that is already equal on the other side stops the echo.
+    ///
+    /// Assigning the signal's value now can fail like [`Self::set`]; later,
+    /// an error from assigning a signal change to the state (a float that is
+    /// not finite, or a failing markup reaction or handler) waits for the host
+    /// like other signal handler errors (see [`aegle_ui::take_reaction_error`];
+    /// the native `App` reports it to its error handler). The link follows the
+    /// state through reloads that keep it. It keeps both the signal and the
+    /// state alive until [`Binding::remove`], which ends both directions.
+    ///
+    /// ```
+    /// # fn link(view: &aegle_loader::View) -> aegle_ui::Result {
+    /// use aegle_ui::Signal;
+    ///
+    /// let count = Signal::new(3_i64);
+    /// let state = view.state::<i64>("count").expect("an int state `count`");
+    /// state.bind_signal(&count)?;
+    /// count.set(4); // Markup bindings reading `count` update.
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn bind_signal(&self, signal: &Signal<T>) -> Result<Binding> {
+        self.set(signal.get())?;
+        let model = signal.clone();
+        let watch = self.on_change(move |value: T| model.set(value));
+        let state = self.clone();
+        let binding = signal.on_change(move |value: T| state.set(value));
+        Ok(binding.on_remove(move || watch.remove()))
     }
 }
 

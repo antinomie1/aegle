@@ -186,6 +186,10 @@ impl App {
             self.report(ui.dispatch_callbacks())?;
             self.file_dialogs(&ui)?;
         }
+        // Signal change handlers fail outside any window's callbacks.
+        while let Some(error) = aegle_ui::take_reaction_error() {
+            self.report(Err(error))?;
+        }
         Ok(())
     }
 }

@@ -119,7 +119,7 @@ pub use motion::TransitionProperty;
 #[cfg(feature = "motion")]
 pub use motion_handles::Animate;
 pub use propagate::{InputEvent, InputKind, Phase};
-pub use signal::{Binding, Derived, Signal, batch};
+pub use signal::{Binding, Derived, Signal, batch, take_reaction_error};
 pub use state::{Element, State, text_style};
 pub use tokens::{ColorSlot, LengthSlot, TokenSlot, Tokens, register_token, token};
 

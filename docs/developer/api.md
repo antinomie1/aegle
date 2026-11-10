@@ -427,14 +427,21 @@ window.button("重置").on_click(move |_| {                // 只改模型，控
 
 - `Signal::new(v)` 创建，克隆共享同一个值；`get()`（要求 `Clone`）与 `with(|v| ...)` 读取，`set(v)` 在值相等时什么也不做，`update(|v| ...)` 原地修改并总是通知。Signal 不是 `Send`，后台线程经 `app.proxy` 在 UI 线程里修改。
 - `signal.bind(&控件, |控件, 值| ...)` 立即运行一次，之后在该 signal 或闭包里读到的任何其他 signal 变化时重跑；依赖按最近一次运行实际读到的 signal 计算，未走到的分支不订阅。绑定与控件同生命周期：控件删除或窗口关闭时，闭包与其捕获的值一起释放。闭包不会被自己引起的变化重入，也不能修改它正在读的这个 signal（会 panic）。
-- `signal.on_change(|新值| ...)` 在每次变化、所有绑定重跑之后以新值调用，处理器里的读取不订阅、自己引起的变化不重入；处理器归 signal 所有，捕获该 signal 自身时会让它一直存活，直到移除。
+- `signal.on_change(|新值| ...)` 在每次变化、所有绑定重跑之后以新值调用，处理器里的读取不订阅、自己引起的变化不重入；处理器归 signal 所有，捕获该 signal 自身时会让它一直存活，直到移除。处理器可以返回 `()` 或 `Result`：修改 signal 的地方没有错误可返回，错误先排在 UI 线程上，原生 App 在每轮回调后交给 `app.on_error`（无窗口宿主由 `Ui::dispatch_callbacks` 在没有事件处理器失败时返回，或自己循环调用 `aegle::ui::take_reaction_error()`）；处理器保留。
 - 派生值：`Derived::new(|| ...)` 或 `signal.map(|v| ...)`（`Derived` 也有 `map`）创建时计算一次，之后在它读到的 signal 或其他派生值变化时重算；结果要求 `PartialEq`，与上次相等时读它的绑定与处理器不重跑。`Derived` 只读，有 `get`、`with`、`bind`、`on_change`；克隆共享同一个值，计算随最后一个克隆或读它的绑定释放。
 - 何时重跑：一次修改把读它的反应排入队列，在修改结束、`set` 返回前运行一轮：先派生值，再绑定，最后 `on_change` 处理器，因此绑定看到的派生值总是最新的；同一反应在运行前被多次排入也只运行一次。反应运行中做的修改并入当前这一轮，在它返回后生效，所以绑定闭包里改了别的 signal 后，立刻读其派生值仍是旧值。
 - 批量修改：`aegle::ui::batch(|| { ... })` 把其中所有修改的反应推迟到它结束时一起运行，读多个 signal 的绑定只重跑一次，`on_change` 只以最终值调用一次；批量可嵌套，最外层结束时运行。批量内部读到的是已修改 signal 的新值，派生值与控件仍是批量开始前的值。事件处理器里一般不需要批量：反应只经句柄打脏标记，布局与绘制本来就在下一次刷新时合并进行一次，批量省下的是绑定闭包的重复运行。
 - 反应 panic 时，这一轮剩下的反应留在队列里，在下一次修改的那一轮运行。和句柄一样，不能在绘制器、钩子或场景访问器里修改 signal。
 - 输入控件的双向绑定：`CheckBox`/`Switch::bind_checked(&Signal<bool>)`、`TextField::bind_text(&Signal<String>)`、`Slider`/`NumberField::bind_value(&Signal<f64>)`、`Dropdown`/`Tabs::bind_selected(&Signal<usize>)`，单选按钮组为每个按钮 `Radio::bind_choice(&Signal<T>, 值)`（signal 等于该值时选中，用户选中时设为该值）。用户修改经控件的 `on_change` 写回；控件已显示的值不会再被设一次，所以正在编辑的文本框保留插入点、选区与撤销历史。滑块与数值框把超出范围的值钳制显示，signal 保留给定值，直到用户改动控件。
 - `bind`、`on_change`（`Derived` 的同名方法同样）与 `bind_*` 返回 `Binding`，`remove()` 停止它（双向绑定的两个方向一起停止）；丢弃 `Binding` 不会停止。自定义控件库的双向绑定可以用 `Binding::with_subscription` 把写回处理器的 `Subscription` 并入同一个 `Binding`。
-- 标记文档的 `state` 是 `aegle::loader::State<T>`，与 `Signal` 相互独立。
+- 与标记互通：标记文档的 `state` 是 `aegle::loader::State<T>`，`state.bind_signal(&signal)?` 把它与同类型的 `Signal<T>` 双向连接（`T` 为 `bool`、`i64`、`f32`、`String`、`Vec<i64>`、`Vec<String>` 或 `Data`）：连接时 state 取 signal 的值，之后事件块、绑定源或 Rust 对任一方的修改都同步到另一方，对方已相等时停止回传。连接跟随保留该 state 的重载；把 signal 的修改写入 state 时的错误（非有限浮点数、标记里的绑定或处理器失败）按上一条交给宿主。返回的 `Binding` 的 `remove()` 同时断开两个方向；连接让 signal 与 state 互相保持存活，直到移除。
+
+  ```rust
+  let view = aegle::ui!(&app, "examples/dynamic.aegle")?;   // 文档里有 state tasks: list<string>
+  let tasks = Signal::new(vec![String::from("Write markup")]);
+  view.tasks.bind_signal(&tasks)?;                         // 标记按钮改 tasks，Rust 这边跟着变
+  tasks.update(|tasks| tasks.sort());                      // 反之亦然
+  ```
 
 可运行示例：`cargo run -p aegle --example signals`。
 
@@ -585,7 +592,7 @@ Column {
 }
 ```
 
-View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。`view.count.on_change(|v| ...)` 在每次变化（来自事件块或 Rust）且绑定更新后调用处理器，返回可 `remove()` 的 `Watch`；处理器不会被自身对该 state 的修改重入。运行时加载与重载：
+View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。`view.count.on_change(|v| ...)` 在每次变化（来自事件块或 Rust）且绑定更新后调用处理器，返回可 `remove()` 的 `Watch`；处理器不会被自身对该 state 的修改重入。`view.count.bind_signal(&signal)?` 把 state 与 Rust 的 `Signal` 双向连接（见第 7 节“Rust 侧响应式状态”）。运行时加载与重载：
 
 ```rust
 use aegle::loader::Program;

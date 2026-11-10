@@ -191,3 +191,4 @@ Window {
 
 * **宿主函数**：事件块中的 `host.name(args)` 调用宿主以 `aegle::loader::action(name, &[Type], f)` 注册的函数（本线程所有程序共享）；构建时校验存在性与参数类型。
 * **状态变化**：`State<T>::on_change(f)` 在 state 每次变化后调用 `f(新值)`，无论变化来自事件块、绑定源还是 Rust；绑定先更新，处理器在所有 UI 借用之外运行，不会被自身对该 state 的修改重入；返回的错误中止本次更新并交给修改方。返回的 `Watch::remove()` 注销处理器。重载后处理器与 `State` 句柄跟随同名同类型的 state。
+* **与 Rust `Signal` 连接**：`State<T>::bind_signal(&signal)` 让 state 取 `aegle_ui::Signal<T>` 的当前值，之后两边的修改互相同步（已相等时停止回传），连接随重载跟随 state；signal 一侧修改写入 state 时的错误交给宿主的错误处理（原生 App 为 `on_error`）。返回的 `Binding::remove()` 断开两个方向。

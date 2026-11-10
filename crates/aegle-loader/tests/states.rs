@@ -1,9 +1,10 @@
 //! Host handlers follow entry states: they run after bindings for changes
 //! from markup and Rust, can be removed, and survive reloads with the
-//! state's typed handles.
+//! state's typed handles. A state linked to a Rust signal follows it both
+//! ways.
 
 use aegle_loader::{Data, Program};
-use aegle_ui::Result;
+use aegle_ui::{Result, Signal};
 use std::{cell::RefCell, rc::Rc};
 
 mod common;
@@ -98,5 +99,71 @@ fn handlers_and_handles_follow_their_state_through_reloads() -> Result {
     assert_eq!(*titles.borrow(), 1);
     ui.refresh()?;
     assert_eq!(names(&ui)?, ["now 9/7", "up"]);
+    Ok(())
+}
+
+#[test]
+fn a_state_linked_to_a_signal_follows_it_both_ways_through_reloads() -> Result {
+    let ui = ui()?;
+    let mut view = program(COUNTER)?.build(&ui.root())?;
+    let count = view.state::<i64>("count").unwrap();
+    let model = Signal::new(3_i64);
+    let doubled = model.map(|n| n * 2);
+    let link = count.bind_signal(&model)?;
+    // The signal's value wins when they are linked.
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["volume 3", "up"]);
+
+    // Markup changes reach Rust, and Rust changes reach markup, once each.
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let (log, again) = (changes.clone(), changes.clone());
+    model.on_change(move |n| log.borrow_mut().push(("signal", n)));
+    count.on_change(move |n| again.borrow_mut().push(("state", n)));
+    click(&ui, "up")?;
+    assert_eq!((model.get(), doubled.get()), (4, 8));
+    model.set(7);
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["volume 7", "up"]);
+    // Each side heard each change once; the order follows registration.
+    changes.borrow_mut().sort();
+    assert_eq!(
+        *changes.borrow(),
+        [("signal", 4), ("signal", 7), ("state", 4), ("state", 7)]
+    );
+
+    // A markup-side failure of a signal change reaches the host.
+    count.on_change(|n| -> Result {
+        if n < 0 {
+            return Err("negative".into());
+        }
+        Ok(())
+    });
+    model.set(-1);
+    assert_eq!(count.get(), -1);
+    assert_eq!(ui.dispatch_callbacks().unwrap_err().to_string(), "negative");
+    assert!(aegle_ui::take_reaction_error().is_none());
+
+    // The link follows the state into the reloaded interface.
+    let next = r#"Column {
+    state count: int = 0
+    Text { text: "now " + str(count) }
+    Button { text: "up"; on clicked { count += 10 } }
+}"#;
+    view.reload(&program(next)?)?;
+    model.set(2);
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["now 2", "up"]);
+    click(&ui, "up")?;
+    assert_eq!(model.get(), 12);
+
+    // Removing the link ends both directions.
+    link.remove();
+    model.set(5);
+    click(&ui, "up")?;
+    ui.refresh()?;
+    assert_eq!(
+        (names(&ui)?, model.get()),
+        (vec!["now 22".to_string(), "up".into()], 5)
+    );
     Ok(())
 }

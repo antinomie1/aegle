@@ -263,7 +263,9 @@ impl Ui {
     /// by another callback waits until the next call, preventing recursive dispatch.
     /// A failing handler stays installed; the other handlers of its event still
     /// run, then the first error is returned and later invocations stay queued
-    /// for the next call. Earlier valid changes remain.
+    /// for the next call. Earlier valid changes remain. When no handler failed,
+    /// the oldest error of a signal change handler on this thread is returned
+    /// instead, if any (see [`take_reaction_error`](crate::take_reaction_error)).
     pub fn dispatch_callbacks(&self) -> Result {
         let count = {
             let mut state = self.write();
@@ -313,7 +315,8 @@ impl Ui {
             }
         }
         self.state.borrow_mut().dispatching = false;
-        failure
+        failure?;
+        crate::take_reaction_error().map_or(Ok(()), Err)
     }
     /// Whether application callbacks still need a dispatch pass before sleeping.
     pub fn has_pending_callbacks(&self) -> bool {
