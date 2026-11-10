@@ -1,8 +1,9 @@
 //! Signals drive controls in Rust: bindings follow the signals they read,
 //! end with their control, and two-way bindings write user changes back
-//! without disturbing an edit in progress.
+//! without disturbing an edit in progress. Derived values settle before the
+//! bindings that read them, and a batch runs each reaction once.
 use aegle_text::GenericFamily;
-use aegle_ui::{Key, KeyInput, Modifiers, Result, Signal, TextSystem, Theme, Ui};
+use aegle_ui::{Derived, Key, KeyInput, Modifiers, Result, Signal, TextSystem, Theme, Ui, batch};
 use aegle_widgets::*;
 use std::{
     cell::{Cell, RefCell},
@@ -149,5 +150,89 @@ fn two_way_bindings_write_user_changes_back() -> Result {
     check.toggle();
     ui.dispatch_callbacks()?;
     assert!(dark.get());
+    Ok(())
+}
+
+#[test]
+fn derived_values_settle_before_bindings_and_batches_run_reactions_once() -> Result {
+    let ui = ui()?;
+    let label = ui.root().text("");
+    let a = Signal::new(1);
+    let b = Signal::new(10);
+    // A diamond: both derived values read `a`; the binding reads both and `b`.
+    let double = a.map(|a| a * 2);
+    let (x, y) = (a.clone(), b.clone());
+    let sum = Derived::new(move || x.get() + y.get());
+    let parity = double.map(|double| double % 4);
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let log = seen.clone();
+    let (s, p) = (sum.clone(), parity.clone());
+    double.bind(&label, move |label, double| {
+        let row = (*double, s.get(), p.get());
+        log.borrow_mut().push(row);
+        label.set_text(&format!("{row:?}"));
+    });
+    // The handles may go: the binding keeps what it reads alive.
+    drop((double, sum));
+    let parity_runs = Rc::new(Cell::new(0));
+    let count = parity_runs.clone();
+    parity.on_change(move |_| count.set(count.get() + 1));
+
+    a.set(2);
+    // One run, and it saw the derived values agree with `a`.
+    assert_eq!(*seen.borrow(), [(2, 11, 2), (4, 12, 0)]);
+    a.set(4); // `parity` stays 0: its readers do not rerun.
+    assert_eq!(parity_runs.get(), 1);
+    assert_eq!(seen.borrow().last(), Some(&(8, 14, 0)));
+
+    // A binding that read `a` before a derived value of `a` existed still
+    // runs after that value is recomputed, and once.
+    let late: Rc<RefCell<Option<Derived<i32>>>> = Rc::default();
+    let rows = Rc::new(RefCell::new(Vec::new()));
+    let (slot, out) = (late.clone(), rows.clone());
+    let early = ui.root().text("");
+    a.bind(&early, move |_, a| {
+        let late = slot.borrow().as_ref().map(Derived::get);
+        out.borrow_mut().push((*a, late));
+    });
+    *late.borrow_mut() = Some(a.map(|a| a + 100));
+    a.set(5); // Reruns the binding, which now reads `late` too.
+    a.set(6);
+    assert_eq!(*rows.borrow(), [(4, None), (5, Some(105)), (6, Some(106))]);
+    a.set(4);
+
+    // A batch defers every reaction to its end; nested batches to the outermost.
+    let before = seen.borrow().len();
+    batch(|| {
+        a.set(5);
+        batch(|| b.set(20));
+        a.set(6);
+        assert_eq!(seen.borrow().len(), before);
+        assert_eq!(label.text(), "(8, 14, 0)");
+    });
+    assert_eq!(seen.borrow().len(), before + 1);
+    assert_eq!(label.text(), "(12, 26, 0)");
+
+    // A change made by a reaction joins the pass in progress.
+    let (source, target) = (b.clone(), a.clone());
+    b.on_change(move |b| target.set(b / 10));
+    b.set(30);
+    assert_eq!((source.get(), label.text()), (30, "(6, 33, 2)".into()));
+
+    // A panicking reaction does not leave later changes waiting.
+    let bomb = Signal::new(false);
+    let fuse = ui.root().text("");
+    bomb.bind(&fuse, |_, armed| assert!(!armed, "boom"));
+    let blast = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        batch(|| {
+            a.set(7);
+            bomb.set(true);
+        })
+    }));
+    assert!(blast.is_err());
+    // The binding queued behind the panicking one waits for the next pass.
+    assert_eq!(label.text(), "(6, 33, 2)");
+    a.set(8);
+    assert_eq!(label.text(), "(16, 38, 0)");
     Ok(())
 }

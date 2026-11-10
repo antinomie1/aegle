@@ -412,20 +412,28 @@ window.text_field("").bind_text(&name);              // 双向：显示 name，�
 window.slider(0.0, 100.0, 0.0).bind_value(&volume);
 window.check_box("静音", false).bind_checked(&muted);
 
-let (who, level) = (name.clone(), volume.clone());
-muted.bind(&window.text(""), move |summary, muted| {  // 读了三个 signal，任一变化都重跑
-    let volume = if *muted { 0.0 } else { level.get() };
+// 派生值：由两个 signal 算出，结果不变时（静音中拖动滑块）读它的绑定不重跑
+let (quiet, level) = (muted.clone(), volume.clone());
+let audible = Derived::new(move || if quiet.get() { 0.0 } else { level.get() });
+
+let who = name.clone();
+audible.bind(&window.text(""), move |summary, volume| { // 读了 audible 与 name，任一变化都重跑
     summary.set_text(&format!("你好，{} — 音量 {volume:.0}", who.get()));
 });
-window.button("重置").on_click(move |_| volume.set(40.0)); // 只改模型，控件随之更新
+window.button("重置").on_click(move |_| {                // 只改模型，控件随之更新
+    aegle::ui::batch(|| { name.set("世界".into()); volume.set(40.0); muted.set(false) })
+});
 ```
 
 - `Signal::new(v)` 创建，克隆共享同一个值；`get()`（要求 `Clone`）与 `with(|v| ...)` 读取，`set(v)` 在值相等时什么也不做，`update(|v| ...)` 原地修改并总是通知。Signal 不是 `Send`，后台线程经 `app.proxy` 在 UI 线程里修改。
 - `signal.bind(&控件, |控件, 值| ...)` 立即运行一次，之后在该 signal 或闭包里读到的任何其他 signal 变化时重跑；依赖按最近一次运行实际读到的 signal 计算，未走到的分支不订阅。绑定与控件同生命周期：控件删除或窗口关闭时，闭包与其捕获的值一起释放。闭包不会被自己引起的变化重入，也不能修改它正在读的这个 signal（会 panic）。
-- `signal.on_change(|新值| ...)` 在每次变化、所有绑定重跑之后调用，处理器里的读取不订阅；处理器归 signal 所有，捕获该 signal 自身时会让它一直存活，直到移除。
-- 重跑在 `set` 返回前同步完成，但只是经句柄修改控件并打脏标记，布局与绘制仍在下一次刷新时合并进行一次；同一事件里改多个 signal 不会多画。和句柄一样，不能在绘制器、钩子或场景访问器里修改 signal。
+- `signal.on_change(|新值| ...)` 在每次变化、所有绑定重跑之后以新值调用，处理器里的读取不订阅、自己引起的变化不重入；处理器归 signal 所有，捕获该 signal 自身时会让它一直存活，直到移除。
+- 派生值：`Derived::new(|| ...)` 或 `signal.map(|v| ...)`（`Derived` 也有 `map`）创建时计算一次，之后在它读到的 signal 或其他派生值变化时重算；结果要求 `PartialEq`，与上次相等时读它的绑定与处理器不重跑。`Derived` 只读，有 `get`、`with`、`bind`、`on_change`；克隆共享同一个值，计算随最后一个克隆或读它的绑定释放。
+- 何时重跑：一次修改把读它的反应排入队列，在修改结束、`set` 返回前运行一轮：先派生值，再绑定，最后 `on_change` 处理器，因此绑定看到的派生值总是最新的；同一反应在运行前被多次排入也只运行一次。反应运行中做的修改并入当前这一轮，在它返回后生效，所以绑定闭包里改了别的 signal 后，立刻读其派生值仍是旧值。
+- 批量修改：`aegle::ui::batch(|| { ... })` 把其中所有修改的反应推迟到它结束时一起运行，读多个 signal 的绑定只重跑一次，`on_change` 只以最终值调用一次；批量可嵌套，最外层结束时运行。批量内部读到的是已修改 signal 的新值，派生值与控件仍是批量开始前的值。事件处理器里一般不需要批量：反应只经句柄打脏标记，布局与绘制本来就在下一次刷新时合并进行一次，批量省下的是绑定闭包的重复运行。
+- 反应 panic 时，这一轮剩下的反应留在队列里，在下一次修改的那一轮运行。和句柄一样，不能在绘制器、钩子或场景访问器里修改 signal。
 - 输入控件的双向绑定：`CheckBox`/`Switch::bind_checked(&Signal<bool>)`、`TextField::bind_text(&Signal<String>)`、`Slider`/`NumberField::bind_value(&Signal<f64>)`、`Dropdown`/`Tabs::bind_selected(&Signal<usize>)`。用户修改经控件的 `on_change` 写回；控件已显示的值不会再被设一次，所以正在编辑的文本框保留插入点、选区与撤销历史。滑块与数值框把超出范围的值钳制显示，signal 保留给定值，直到用户改动控件。
-- `bind`、`on_change` 与 `bind_*` 返回 `Binding`，`remove()` 停止它（双向绑定的两个方向一起停止）；丢弃 `Binding` 不会停止。自定义控件库的双向绑定可以用 `Binding::with_subscription` 把写回处理器的 `Subscription` 并入同一个 `Binding`。
+- `bind`、`on_change`（`Derived` 的同名方法同样）与 `bind_*` 返回 `Binding`，`remove()` 停止它（双向绑定的两个方向一起停止）；丢弃 `Binding` 不会停止。自定义控件库的双向绑定可以用 `Binding::with_subscription` 把写回处理器的 `Subscription` 并入同一个 `Binding`。
 - 标记文档的 `state` 是 `aegle::loader::State<T>`，与 `Signal` 相互独立。
 
 可运行示例：`cargo run -p aegle --example signals`。
