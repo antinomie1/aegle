@@ -286,6 +286,14 @@ impl Runtime {
             if entry.ui.refresh()? {
                 self.backend.request_redraw(entry.id)?;
             }
+            // Controls marked as title bars or grips, where they lie now.
+            if let Some(sent) = &mut entry.areas
+                && entry.ui.take_window_areas(&mut self.areas)
+                && *sent != self.areas
+            {
+                self.backend.set_areas(entry.id, &self.areas)?;
+                std::mem::swap(sent, &mut self.areas);
+            }
             // Layout, visibility and focus can change the control under a
             // stationary pointer, so this runs after every refresh, not only
             // after pointer events.

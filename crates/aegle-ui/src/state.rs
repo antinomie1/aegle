@@ -240,6 +240,8 @@ pub struct State {
     pub(crate) clicks: crate::clicks::Clicks,
     /// Drop targets and a drag waiting for the host.
     pub(crate) drops: crate::drag::Drops,
+    /// Controls that move or resize the window, see [`crate::Node::set_window_area`].
+    pub(crate) window_areas: crate::window_area::WindowAreas,
     /// Nodes with a group effect and what their layer last drew.
     pub(crate) groups: HashMap<NodeId, crate::group::Drawn>,
     /// The time of the frame being produced, see [`crate::Ui::run_frame`].
@@ -426,6 +428,7 @@ impl State {
             self.clicks.handlers.remove(&node);
             self.clicks.menus.remove(&node);
             self.drops.forget(node);
+            self.window_areas.forget(node);
             self.frames.retain(|h| h.id != node);
             self.listeners.forget(node);
             self.idle.forget(node);

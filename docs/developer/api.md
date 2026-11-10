@@ -131,9 +131,35 @@ window.on_close(move || {
 | `window.mode()` / `set_mode(WindowMode)` | `Normal`、`Maximized`、`Minimized`、`Fullscreen`；过渡可能有动画、在之后的调度中完成，到达后 `mode()` 才报告；尚未显示的窗口在首次显示时进入该模式。Wayland 可请求最小化但从不报告 `Minimized` |
 | `window.position()` / `set_position(Point)` | 内容区左上角的桌面逻辑坐标 / 移动窗口；非 `Normal` 模式下移动返回错误。Wayland 不给客户端位置，返回 `Unsupported`；Windows 用窗口当前缩放换算物理像素 |
 | `window.set_always_on_top(b)` | 保持在普通窗口之上；Wayland 返回 `Unsupported` |
+| `window.set_decorations(b)` | 显示或去掉系统标题栏与边框，内容区尺寸与位置不变；全屏窗口在离开全屏时应用。去掉后窗口只有内容，见下文“无边框窗口” |
+| `window.set_icon(Icon)` | 窗口图标（标题栏、任务栏、窗口切换器），非预乘 RGBA 像素（`aegle::app::Icon`，与托盘图标同一类型）。窗口图标取自应用本身的系统返回 `Unsupported`：macOS（应用包的图标）与没有 `xdg-toplevel-icon-v1` 的 Wayland 合成器（`app_id` 对应的 desktop 文件），通常忽略该错误 |
 | `window.on_close(\|\| -> Result<bool>)` | 用户请求关闭（关闭按钮、系统快捷键）时在所有运行时借用之外调用；返回 `Ok(false)` 保持打开，错误交给 `App::on_error` 并保持打开。`window.close()` 不询问，系统撤销的弹出层也不询问；后设置的处理器替换先前的 |
 
-`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）；`resizable`（默认 true）、`min_size`/`max_size: Option<(u32, u32)>`、`position: Option<Point>`（`None` 由平台放置）、`mode: WindowMode`（在尺寸与位置之后应用）与 `always_on_top`，非默认值在窗口创建后依次应用，失败时窗口不创建；以及 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（SDL3、Windows、macOS）创建失败并返回 `Unsupported`。`LayerOptions` 实现 `Default`（`Layer::Top`、无锚定、零保留区、不取键盘焦点），另有 `margin: [i32; 4]`（上右下左）与 `output: Option<OutputId>`（所在输出，`None` 由合成器选择）：
+`WindowOptions` 字段：`width`、`height`（逻辑像素建议值）、`buffer_budget`（软件呈现字节上限，默认不限）；`resizable`（默认 true）、`min_size`/`max_size: Option<(u32, u32)>`、`position: Option<Point>`（`None` 由平台放置）、`mode: WindowMode`（在尺寸与位置之后应用）、`always_on_top` 与 `decorations`（默认 true），非默认值在窗口创建后依次应用，失败时窗口不创建；以及 `layer: Option<LayerOptions>`：用桌面 shell 的层（Wayland wlr layer-shell）创建面板/背景/覆盖层，没有层的平台（SDL3、Windows、macOS）创建失败并返回 `Unsupported`。`LayerOptions` 实现 `Default`（`Layer::Top`、无锚定、零保留区、不取键盘焦点），另有 `margin: [i32; 4]`（上右下左）与 `output: Option<OutputId>`（所在输出，`None` 由合成器选择）：
+
+**无边框窗口**：`decorations: false` 的窗口没有系统标题栏，由应用自绘。把充当标题栏的控件标记为移动区域，窗口系统就在它上面开始原生的窗口拖动；其上可用的交互控件（按钮等）自动排除在外，仍然可以点击：
+
+```rust
+let window = app.window_with_options("Player", WindowOptions {
+    decorations: false,
+    ..Default::default()
+})?;
+let bar = window.row();
+bar.set_window_area(WindowArea::Move);    // 整行拖动窗口
+bar.text("Player");                       // 文字属于标题栏
+let close = bar.button("×");              // 按钮照常点击
+let handle = window.clone();
+close.on_click(move |_| handle.close());
+```
+
+| 窗口区域 | 说明 |
+| --- | --- |
+| `node.set_window_area(WindowArea::Move)` | 在该控件的可见范围内按下主键即拖动窗口（标题栏）。按下与拖动由窗口系统处理，不会送达控件 |
+| `node.set_window_area(WindowArea::Resize(ResizeEdge::BottomRight))` | 按下即从该边或角改尺寸（尺寸手柄）；只在窗口可调整尺寸且未最大化、未全屏时生效 |
+| `node.set_window_area(WindowArea::Client)` | 把一个非交互控件（如带输入监听的画布）从它下面的区域中排除 |
+| `node.set_window_area(None)` / `node.window_area()` | 取消标记 / 读取该控件自身的标记 |
+
+区域按绘制顺序排列、后者盖住前者，取控件的可见边界矩形（旋转的控件取外接矩形）；禁用的交互控件不再排除。可调整尺寸的无边框窗口不需要自己做边框：平台保证其边缘内 6 dp（角上沿边 16 dp）可拖动改尺寸。层与弹出层忽略窗口区域。Windows 上移动区域的行为与系统标题栏相同（贴靠、双击最大化）；macOS、Wayland 与 SDL3 上目前只有拖动。没有命中测试的 SDL 驱动（dummy、offscreen）不支持无边框窗口与窗口区域，返回 `Unsupported`。
 
 ```rust
 use aegle::app::{Anchor, LayerOptions};

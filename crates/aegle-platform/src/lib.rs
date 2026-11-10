@@ -21,9 +21,9 @@ mod window;
 
 pub use aegle_types::{
     Cursor, DragData, Icon, Key, Modifiers, PixelRect, Point, PointerButton, Preferences, Rect,
-    Region, TouchPhase,
+    Region, ResizeEdge, TouchPhase, WindowArea,
 };
-pub use area::{RESIZE_BORDER, ResizeEdge, WindowArea, area_at, border_edge, check_areas};
+pub use area::{RESIZE_BORDER, area_at, border_edge, check_areas};
 pub use error::{DrawResult, Error, Result};
 pub use event::{Event, PointerKind};
 pub use ime::{ImeEvent, ImeRequest, ImeUpdate, MAX_SURROUNDING, Preedit};

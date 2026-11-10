@@ -1,5 +1,5 @@
 //! Window management: size and its limits, resizability, modes, position,
-//! stacking and close requests of ordinary windows.
+//! stacking, decorations, the icon and close requests of ordinary windows.
 
 use crate::native::{App, Runtime, Window, WindowOptions};
 use aegle_platform::{PixelSize, Platform, WindowId, WindowMode};
@@ -17,6 +17,9 @@ fn pixels(size: Option<(u32, u32)>) -> Option<PixelSize> {
 /// maximized keeps the size and position it returns to.
 pub(crate) fn apply(runtime: &mut Runtime, id: WindowId, options: &WindowOptions) -> Result<()> {
     let backend = &mut runtime.backend;
+    if !options.decorations {
+        backend.set_decorations(id, false)?;
+    }
     if options.min_size.is_some() || options.max_size.is_some() {
         backend.set_size_limits(id, pixels(options.min_size), pixels(options.max_size))?;
     }
@@ -149,6 +152,23 @@ impl Window {
     /// Keeps the window above ordinary windows. Fails on Wayland.
     pub fn set_always_on_top(&self, on_top: bool) -> Result<()> {
         self.with(|runtime| Ok(runtime.backend.set_always_on_top(self.id, on_top)?))
+    }
+
+    /// Shows or hides the system's title bar and borders, keeping the
+    /// content's size and position; see [`WindowOptions::decorations`]. A
+    /// full-screen window takes the change when it leaves full screen.
+    pub fn set_decorations(&self, decorated: bool) -> Result<()> {
+        self.with(|runtime| Ok(runtime.backend.set_decorations(self.id, decorated)?))
+    }
+
+    /// Sets the icon the window system shows for the window, in its title
+    /// bar, task bar or window switcher, from straight RGBA pixels. Fails
+    /// with an unsupported-capability error where windows take their icon
+    /// from the application instead: macOS (the bundle's) and Wayland
+    /// compositors without `xdg-toplevel-icon-v1` (the desktop entry of the
+    /// application identifier), so applications usually ignore that error.
+    pub fn set_icon(&self, icon: crate::Icon<'_>) -> Result<()> {
+        self.with(|runtime| Ok(runtime.backend.set_icon(self.id, icon)?))
     }
 
     /// Runs `handler` when the user asks to close the window, from its close

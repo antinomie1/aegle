@@ -6,7 +6,12 @@
 
 ## 一、 优先事项
 
-1. **窗口管理（剩余）**：尺寸、约束、模式、位置、置顶与关闭请求已实现。还缺：无边框窗口与客户区拖动/改尺寸区域（Win32 `WM_NCLBUTTONDOWN`、AppKit `performWindowDragWithEvent:`、`xdg_toplevel.move/resize`；SDL3 只有命中测试回调）、窗口图标、标记语言 `Window` 的对应属性，以及 Win32、SDL3、Wayland 实现的实机验证。
+1. **窗口管理（剩余）**：尺寸、约束、模式、位置、置顶、关闭请求、无边框窗口、移动/改尺寸区域（平台 `set_areas`，控件 `Node::set_window_area`）与窗口图标已实现（macOS 实机验证）。还缺，按顺序：
+   * **标记语言 `Window` 的对应属性**（已暂停，尚未开始）：`min_size`/`max_size`、`resizable`、`mode`、`position`、`always_on_top`、`decorations` 与 `icon`（需在 loader 里解码图像；图标在 macOS 与多数 Wayland 合成器上是 `Unsupported`，要先定下标记里遇到它是忽略还是报错），以及元素属性 `window_area: move | client | resize_*`。涉及 `aegle-markup` 的 schema 与校验、`aegle-loader/src/window.rs`（打开与重载时原地应用）、`aegle-macros/src/generate.rs`（`ui!` 生成 `WindowOptions`）与 `docs/markup.md`。
+   * Win32、SDL3、Wayland 的全部窗口管理实现（含无边框、窗口区域与图标）只经交叉 clippy，需实机验证；重点是 Win32 的 `WM_NCCALCSIZE`（最大化取工作区、自动隐藏任务栏）与切换装饰后的客户区、SDL3 命中测试回调、Wayland 的 `xdg-toplevel-icon-v1`。
+   * 移动区域的标题栏行为：macOS（按系统设置双击缩放或最小化）、Wayland（双击最大化、右键 `show_window_menu`）与 SDL3 上只有拖动；Wayland 的触摸按下不触发窗口区域。
+   * 窗口内浮层（`Popup`、`Menu`）盖在移动区域上时，只有其中的交互控件被排除，浮层的空白处仍会拖动窗口。
+   * macOS：带标题栏窗口的原生改尺寸是 AppKit 的模态循环，期间宿主停在 `dispatch` 内、不重新布局；应用图标（Dock）没有 API。Wayland：合成器没有 `xdg-decoration` 时无法提供装饰，`set_decorations(true)` 不报错。
 2. **原生菜单与弹出层**：macOS 应用菜单只有退出项，没有应用菜单栏、Dock 菜单与原生上下文菜单 API；控件库的 `Popup`/`Menu`/`Dropdown` 仍是窗口内浮层，不能越过窗口边缘；Win32 原生弹出层返回 `Unsupported`；标记语言没有弹出层元素。
 3. **UI 线程定时器**：只有逐帧回调（存在期间持续出帧）或“后台线程 + `UiProxy`”。需要一次性与周期定时器，空闲时按最近截止时间休眠，不轮询。
 4. **应用级测试工具**：`Ui` 可无窗口运行，但没有按文字、无障碍名称或角色查找控件并点击、键入、滚动的辅助；各测试自写 `click`/`key`。

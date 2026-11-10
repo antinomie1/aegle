@@ -16,6 +16,7 @@ mod keys;
 mod region;
 mod shadow;
 mod system;
+mod window_area;
 
 pub use color::Color;
 pub use cursor::Cursor;
@@ -29,3 +30,4 @@ pub use keys::{Key, Modifiers};
 pub use region::{Area, Region};
 pub use shadow::Shadow;
 pub use system::{PointerButton, Preferences, TouchPhase};
+pub use window_area::{ResizeEdge, WindowArea};

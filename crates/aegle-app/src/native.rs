@@ -106,6 +106,11 @@ pub struct WindowOptions {
     pub mode: crate::WindowMode,
     /// Keeps the window above ordinary windows. Fails on Wayland. Default: false.
     pub always_on_top: bool,
+    /// Whether the window has the system's title bar and borders. Without
+    /// them it is content only: mark the controls that move it with
+    /// [`aegle_ui::Node::set_window_area`]; while resizable, the user still
+    /// resizes it by its edges. Default: true.
+    pub decorations: bool,
 }
 
 impl Default for WindowOptions {
@@ -121,6 +126,7 @@ impl Default for WindowOptions {
             position: None,
             mode: crate::WindowMode::Normal,
             always_on_top: false,
+            decorations: true,
         }
     }
 }
@@ -160,6 +166,8 @@ pub(crate) struct Runtime {
     pub proxies: Vec<Rc<RefCell<dyn crate::native_proxy::Drain>>>,
     /// Last system preferences applied to the windows.
     pub preferences: crate::Preferences,
+    /// Scratch for a window's areas while they are compared and sent.
+    pub areas: Vec<(aegle_ui::Rect, aegle_ui::WindowArea)>,
     #[cfg(feature = "motion")]
     pub clock: Instant,
 }
@@ -185,6 +193,9 @@ pub(crate) struct Entry {
     pub parent: Option<WindowId>,
     /// Asked before the window closes at the user's request.
     pub on_close: Option<crate::native_manage::CloseHandler>,
+    /// The move and resize areas last sent to the platform; `None` for
+    /// layers and popups, which their protocols place.
+    pub areas: Option<Vec<(aegle_ui::Rect, aegle_ui::WindowArea)>>,
     #[cfg(access)]
     pub accessibility: crate::native_access::Access,
 }
@@ -259,6 +270,7 @@ impl App {
         let backend = Native::connect()?;
         let runtime = Runtime {
             preferences: backend.preferences(),
+            areas: Vec::new(),
             backend,
             windows: Vec::new(),
             fonts: Rc::new(RefCell::new(fonts)),
@@ -397,6 +409,7 @@ pub(crate) fn open(
         ready: false,
         parent: popup.map(|popup| popup.parent),
         on_close: None,
+        areas: (popup.is_none() && options.layer.is_none()).then(Vec::new),
         #[cfg(access)]
         title: title.into(),
         #[cfg(access)]

@@ -190,6 +190,7 @@ impl Ui {
                     input_time: std::time::Instant::now(),
                     clicks: Default::default(),
                     drops: Default::default(),
+                    window_areas: Default::default(),
                     groups: Default::default(),
                     frame_time: std::time::Instant::now(),
                     animated: Default::default(),
@@ -295,6 +296,9 @@ impl Ui {
                 break;
             }
             repaint |= refresh()?;
+        }
+        if repaint {
+            self.write().window_areas.repainted();
         }
         Ok(repaint)
     }

@@ -94,8 +94,8 @@ type Native = aegle_platform_macos::MacOs;
 #[cfg(feature = "desktop-services")]
 pub use aegle_desktop as desktop;
 pub use aegle_platform::{
-    Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, Preferences, Side,
-    WindowMode,
+    Anchor, Icon, KeyboardInteractivity, Layer, LayerOptions, OutputId, OutputInfo, Preferences,
+    Side, WindowMode,
 };
 #[cfg(feature = "vulkan")]
 pub use aegle_render_vulkan::{

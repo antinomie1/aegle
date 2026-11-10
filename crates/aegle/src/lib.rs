@@ -110,8 +110,8 @@ pub mod prelude {
     pub use aegle_ui::{
         Align, Appearance, Binding, Color, ColorSlot, Container, ControlKind, Cursor, Derived,
         Direction, DragData, DropEvent, Font, Insets, Justify, LayoutDirection, Length, LengthSlot,
-        Node, Point, Result, Shadow, Signal, Skin, Style, Theme, Token, TokenSlot, Ui, Visit,
-        VisualState, Wrap, register_token,
+        Node, Point, ResizeEdge, Result, Shadow, Signal, Skin, Style, Theme, Token, TokenSlot, Ui,
+        Visit, VisualState, WindowArea, Wrap, register_token,
     };
     #[cfg(feature = "motion")]
     pub use aegle_ui::{

@@ -73,6 +73,7 @@ mod tokens;
 mod touch;
 mod transform;
 mod ui;
+mod window_area;
 
 #[cfg(feature = "accessibility")]
 pub use semantics::{Role, SemanticAction, SemanticsCx, Toggled};
@@ -99,7 +100,8 @@ pub use aegle_theme::{
     TokenType, TokenValue, VisualState,
 };
 pub use aegle_types::{
-    Color, Cursor, DragData, Point, Preferences, Rect, Region, Shadow, Size, TouchPhase,
+    Color, Cursor, DragData, Point, Preferences, Rect, Region, ResizeEdge, Shadow, Size,
+    TouchPhase, WindowArea,
 };
 pub use callbacks::{HandlerResult, Subscription};
 pub use control::{CONTAINER, Control, Plain};
