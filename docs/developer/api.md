@@ -434,7 +434,7 @@ window.button("重置").on_click(move |_| {                // 只改模型，控
 - 反应 panic 时，这一轮剩下的反应留在队列里，在下一次修改的那一轮运行。和句柄一样，不能在绘制器、钩子或场景访问器里修改 signal。
 - 输入控件的双向绑定：`CheckBox`/`Switch::bind_checked(&Signal<bool>)`、`TextField::bind_text(&Signal<String>)`、`Slider`/`NumberField::bind_value(&Signal<f64>)`、`Dropdown`/`Tabs::bind_selected(&Signal<usize>)`，单选按钮组为每个按钮 `Radio::bind_choice(&Signal<T>, 值)`（signal 等于该值时选中，用户选中时设为该值）。用户修改经控件的 `on_change` 写回；控件已显示的值不会再被设一次，所以正在编辑的文本框保留插入点、选区与撤销历史。滑块与数值框把超出范围的值钳制显示，signal 保留给定值，直到用户改动控件。
 - `bind`、`on_change`（`Derived` 的同名方法同样）与 `bind_*` 返回 `Binding`，`remove()` 停止它（双向绑定的两个方向一起停止）；丢弃 `Binding` 不会停止。自定义控件库的双向绑定可以用 `Binding::with_subscription` 把写回处理器的 `Subscription` 并入同一个 `Binding`。
-- 与标记互通：标记文档的 `state` 是 `aegle::loader::State<T>`，`state.bind_signal(&signal)?` 把它与同类型的 `Signal<T>` 双向连接（`T` 为 `bool`、`i64`、`f32`、`String`、`Vec<i64>`、`Vec<String>` 或 `Data`）：连接时 state 取 signal 的值，之后事件块、绑定源或 Rust 对任一方的修改都同步到另一方，对方已相等时停止回传。连接跟随保留该 state 的重载；把 signal 的修改写入 state 时的错误（非有限浮点数、标记里的绑定或处理器失败）按上一条交给宿主。返回的 `Binding` 的 `remove()` 同时断开两个方向；连接让 signal 与 state 互相保持存活，直到移除。
+- 与标记互通：标记文档入口与命名组件实例（第 9 节）的 `state` 是 `aegle::loader::State<T>`，`state.bind_signal(&signal)?` 把它与同类型的 `Signal<T>` 双向连接（`T` 为 `bool`、`i64`、`f32`、`String`、`Vec<i64>`、`Vec<String>` 或 `Data`）：连接时 state 取 signal 的值，之后事件块、绑定源或 Rust 对任一方的修改都同步到另一方，对方已相等时停止回传。连接跟随保留该 state 的重载；把 signal 的修改写入 state 时的错误（非有限浮点数、标记里的绑定或处理器失败）按上一条交给宿主。返回的 `Binding` 的 `remove()` 同时断开两个方向；连接让 signal 与 state 互相保持存活，直到移除。
 - 单向驱动标记：`state.follow(&derived)?` 让 state 跟随 `Derived<T>`：现在取它的值，之后它每次变化都写入 state；Rust 计算、标记显示，标记的修改不回传。事件块仍可给该 state 赋值，该值保持到派生值下次变化。界面保持 `derived` 存活，所以可以直接传临时值（`&signal.map(...)`）；连接跟随保留该 state 的重载，随界面移除或 `Binding::remove()` 结束，结束时释放派生值。错误处理与 `bind_signal` 相同。
 
   ```rust
@@ -596,7 +596,7 @@ Column {
 }
 ```
 
-View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。`view.count.on_change(|v| ...)` 在每次变化（来自事件块或 Rust）且绑定更新后调用处理器，返回可 `remove()` 的 `Watch`；处理器不会被自身对该 state 的修改重入。`view.count.bind_signal(&signal)?` 把 state 与 Rust 的 `Signal` 双向连接，`view.count.follow(&derived)?` 让它单向跟随 Rust 的 `Derived`（见第 7 节“Rust 侧响应式状态”）。运行时加载与重载：
+View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。`view.count.on_change(|v| ...)` 在每次变化（来自事件块或 Rust）且绑定更新后调用处理器，返回可 `remove()` 的 `Watch`；处理器不会被自身对该 state 的修改重入。`view.count.bind_signal(&signal)?` 把 state 与 Rust 的 `Signal` 双向连接，`view.count.follow(&derived)?` 让它单向跟随 Rust 的 `Derived`（见第 7 节“Rust 侧响应式状态”）。组件使用处写 `id`（如 `Stepper { id: stepper; step: 2 }`）后，`view.stepper` 是该实例的字段：`view.stepper.root` 为其根控件，`view.stepper.value` 等为它自己 state 的 `State<T>`，用法同上；运行时加载的视图用 `view.instance("stepper")?.state::<i64>("value")`。运行时加载与重载：
 
 ```rust
 use aegle::loader::Program;
@@ -606,7 +606,7 @@ view.set("count", aegle::loader::Data::Int(2))?;
 view.reload(&Program::load("ui/panel.aegle")?);   // 失败时保留旧界面
 ```
 
-重载保留同名同类型 state 的值，其 `State` 句柄与 `on_change` 处理器随之转移。根为带 `layer` 的 `Window` 的文档即一个面板：`Program::open(&app)` 直接创建 layer surface，`program.open_on(&app, output.id)` 放在指定输出（每个输出一个面板），重载原地更新放置而不重建 surface（见[标记语言](../markup.md)第五节）。
+重载保留同名同类型 state 的值，其 `State` 句柄与 `on_change` 处理器随之转移；命名实例的 state 在新文档有同 id、同组件的实例时同样保留和转移。根为带 `layer` 的 `Window` 的文档即一个面板：`Program::open(&app)` 直接创建 layer surface，`program.open_on(&app, output.id)` 放在指定输出（每个输出一个面板），重载原地更新放置而不重建 surface（见[标记语言](../markup.md)第五节）。
 
 还可声明 `record`、写 `for item in items key item.id`、在事件块里用 `let`、`emit` 和 `host.name(args)`（宿主用 `aegle::loader::action(name, &[Type], f)` 为本线程的所有程序注册），组件可有 `slot` 与自己的 `event`。完整语法、可绑定属性、类型规则和限制见[标记语言](../markup.md)。
 

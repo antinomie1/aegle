@@ -4,6 +4,7 @@ Column {
     state tags: list<string> = ["new"]
     Text { id: status; text: "count " + str(count) }
     Button { id: add; text: "add"; on clicked { count += 1; tags += [str(count)] } }
-    Badge { value: count }
+    Badge { id: badge; value: count }
+    Stepper { id: stepper; step: 2 }
     for tag in tags { Text { text: tag } }
 }

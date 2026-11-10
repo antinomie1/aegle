@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Prop, Value};
+use aegle_markup::{Bound, Child, Element, ElementKind, Expr, Prop, Type, Value};
 use aegle_ui::{Container, Result};
 
 use crate::{
@@ -17,6 +17,28 @@ use crate::{
 
 /// Effects owned by one built region; dropping it stops their updates.
 pub(crate) type Block = Vec<Rc<Effect>>;
+
+/// A state value a reload keeps, by owner (`None` for the entry document, or
+/// the id and component name of a named instance), state name and type.
+pub(crate) type Carried<'a> = &'a dyn Fn(Option<(&str, &str)>, &str, &Type) -> Option<Data>;
+
+/// What the entry ids name, by id index.
+#[derive(Default)]
+pub(crate) struct Ids {
+    /// Each named control; a named instance's root control.
+    pub controls: Vec<Option<Handle>>,
+    /// Each named component instance's environment.
+    pub instances: Vec<Option<Env>>,
+}
+
+impl Ids {
+    pub fn new(len: usize) -> Self {
+        Self {
+            controls: vec![None; len],
+            instances: vec![None; len],
+        }
+    }
+}
 
 /// The passes over one built region, in document order: every control is
 /// created, then properties, bindings and nested blocks apply, then
@@ -47,8 +69,10 @@ struct Region<'r> {
     /// Top-level controls, recorded as soon as they exist so a failed build
     /// can still remove them.
     created: &'r mut Vec<Handle>,
-    /// Entry-level named controls, outside blocks and components.
-    ids: Option<&'r mut [Option<Handle>]>,
+    /// Entry-level named controls and instances, outside blocks and components.
+    ids: Option<&'r mut Ids>,
+    /// State values of named instances that a reload keeps.
+    carried: Carried<'r>,
 }
 
 /// Builds `children` into `parent` as one region.
@@ -59,7 +83,7 @@ pub(crate) fn children(
     block: &mut Block,
     created: &mut Vec<Handle>,
 ) -> Result {
-    Region::run(block, created, None, |region| {
+    Region::run(block, created, None, &|_, _, _| None, |region| {
         region.children(children, parent, env, true)
     })
 }
@@ -71,9 +95,10 @@ pub(crate) fn root(
     env: &Env,
     block: &mut Block,
     created: &mut Vec<Handle>,
-    ids: &mut [Option<Handle>],
+    ids: &mut Ids,
+    carried: Carried,
 ) -> Result {
-    Region::run(block, created, Some(ids), |region| {
+    Region::run(block, created, Some(ids), carried, |region| {
         region.element(element, parent, env, true)
     })
 }
@@ -86,9 +111,10 @@ pub(crate) fn window(
     env: &Env,
     block: &mut Block,
     content: &mut Vec<Handle>,
-    ids: &mut [Option<Handle>],
+    ids: &mut Ids,
+    carried: Carried,
 ) -> Result {
-    Region::run(block, content, Some(ids), |region| {
+    Region::run(block, content, Some(ids), carried, |region| {
         region.control(element, window, env, true)
     })
 }
@@ -97,7 +123,8 @@ impl<'r> Region<'r> {
     fn run(
         block: &'r mut Block,
         created: &'r mut Vec<Handle>,
-        ids: Option<&'r mut [Option<Handle>]>,
+        ids: Option<&'r mut Ids>,
+        carried: Carried<'r>,
         walk: impl Fn(&mut Self) -> Result,
     ) -> Result {
         let mut region = Self {
@@ -107,6 +134,7 @@ impl<'r> Region<'r> {
             block,
             created,
             ids,
+            carried,
         };
         for pass in [Pass::Create, Pass::Apply, Pass::Finish] {
             (region.pass, region.next) = (pass, 0);
@@ -177,13 +205,35 @@ impl<'r> Region<'r> {
             ElementKind::Control(index) => env.shared.glue[index],
             ElementKind::Window => unreachable!("windows are opened from the App"),
             ElementKind::Component(template) => {
-                let Made::Instance(inner) =
-                    self.made(|_| instance(element, template, env).map(Made::Instance))?
+                let start = self.made.len();
+                let Made::Instance(inner) = self.made(|region| {
+                    let named = element.id.map(|id| {
+                        let program = &env.shared.checked;
+                        (
+                            program.ids[id].0.as_str(),
+                            program.templates[template].name.as_str(),
+                        )
+                    });
+                    let carried = |name: &str, ty: &Type| (region.carried)(Some(named?), name, ty);
+                    instance(element, template, env, &carried).map(Made::Instance)
+                })?
                 else {
                     unreachable!("replayed in creation order")
                 };
                 let root = &env.shared.checked.templates[template].root;
-                return self.element(root, parent, &inner, top);
+                self.element(root, parent, &inner, top)?;
+                if let (Pass::Create, Some(index), Some(ids)) =
+                    (self.pass, element.id, self.ids.as_deref_mut())
+                {
+                    // The first control made after the instance is its root.
+                    let root = self.made[start..].iter().find_map(|made| match made {
+                        Made::Control(handle) => Some(handle.clone()),
+                        _ => None,
+                    });
+                    ids.controls[index] = root;
+                    ids.instances[index] = Some(inner);
+                }
+                return Ok(());
             }
         };
         let Made::Control(handle) = self.made(|region| {
@@ -203,7 +253,7 @@ impl<'r> Region<'r> {
                 region.created.push(handle.clone());
             }
             if let (Some(index), Some(ids)) = (element.id, region.ids.as_deref_mut()) {
-                ids[index] = Some(handle.clone());
+                ids.controls[index] = Some(handle.clone());
             }
             Ok(Made::Control(handle))
         })?
@@ -250,8 +300,14 @@ impl<'r> Region<'r> {
 }
 
 /// Creates a component instance's environment: its arguments, event handlers,
-/// slot children and states.
-fn instance(element: &Element, template: usize, env: &Env) -> Result<Env> {
+/// slot children and states; `carried` may supply a state's value instead of
+/// its initializer.
+fn instance(
+    element: &Element,
+    template: usize,
+    env: &Env,
+    carried: &dyn Fn(&str, &Type) -> Option<Data>,
+) -> Result<Env> {
     let program = &env.shared.checked;
     let params = program.templates[template]
         .params
@@ -278,7 +334,7 @@ fn instance(element: &Element, template: usize, env: &Env) -> Result<Env> {
                 })
         })
         .collect();
-    let mut inner = Env::instantiate(env.shared.clone(), template, params, emits, &|_, _| None)?;
+    let mut inner = Env::instantiate(env.shared.clone(), template, params, emits, carried)?;
     inner.slot = element.slot.as_ref().map(|children| {
         Rc::new(Slot {
             children: children.clone(),

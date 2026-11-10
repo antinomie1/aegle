@@ -52,7 +52,7 @@ pub use elements::{
     Arc, Column, Grid, Image, RadioButton, Row, ScrollView, Stack, Tab, Text, TextArea,
 };
 pub use handle::Handle;
-pub use view::{State, StateValue, View, Watch};
+pub use view::{Instance, State, StateValue, View, Watch};
 
 /// Declares markup elements: each one's spec, and the glue that creates its
 /// control and applies its properties, events and `self` fields.
@@ -247,7 +247,7 @@ impl Program {
     /// Builds a document whose root is not a Window as the last child of `parent`.
     /// A failure removes everything this call created.
     pub fn build(&self, parent: &Container) -> Result<View> {
-        view::fragment(self, parent, &|_, _| None)
+        view::fragment(self, parent, &|_, _, _| None)
     }
 
     /// Opens a document whose root is a Window. A failure closes that window.

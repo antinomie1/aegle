@@ -97,6 +97,14 @@ fn compiled_dynamic_view_types_states_imports_and_bindings() -> Result {
     ui.dispatch_callbacks()?;
     assert_eq!(view.status.text(), "count 1");
     assert_eq!(view.tags.get(), ["new", "1"]);
+    // A named instance is a field with its root control and typed states.
+    assert_eq!(view.badge.root.text(), "badge 2");
+    let stepper = &view.stepper;
+    stepper.root.activate();
+    ui.dispatch_callbacks()?;
+    assert_eq!((stepper.value.get(), stepper.taps.get()), (2, vec![2]));
+    stepper.value.set(10)?;
+    assert_eq!(stepper.root.text(), "+2 = 10");
     let (count, status) = (view.count.clone(), view.status.clone());
     drop(view); // Bindings live with the controls, not the view.
     count.set(41)?;

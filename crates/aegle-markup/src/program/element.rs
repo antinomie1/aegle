@@ -9,6 +9,35 @@ use crate::schema::{Target, allowed, choices, literal, property_name, valid_id, 
 use crate::{Children, Error, Expr, ExprKind, Item, Node, PropertyName, Type, Value, ValueType};
 
 impl Checker<'_> {
+    /// Records an entry id naming `kind`, a control or component instance
+    /// that exists once per view, and returns its index.
+    pub(super) fn entry_id(
+        &mut self,
+        value: Value,
+        span: crate::Span,
+        scope: &Scope,
+        kind: ElementKind,
+    ) -> Result<usize, Error> {
+        let error = |message: String| Error::new(span, message);
+        let Value::Identifier(id) = value else {
+            return Err(error("id requires a Rust identifier".into()));
+        };
+        if scope.template != 0 || self.in_block {
+            return Err(error(
+                "ids are only available outside blocks and components".into(),
+            ));
+        }
+        if !valid_id(&id) || self.ids.iter().any(|(n, _)| *n == id) {
+            return Err(error(format!("invalid, duplicate or reserved id `{id}`")));
+        }
+        // Views expose entry ids and states as fields of one struct.
+        if scope.states.iter().any(|(state, _)| *state == id) {
+            return Err(error(format!("`{id}` names both a control and a state")));
+        }
+        self.ids.push((id, kind));
+        Ok(self.ids.len() - 1)
+    }
+
     /// Checks a node; `top` marks the template root.
     pub(super) fn element(
         &mut self,
@@ -74,24 +103,11 @@ impl Checker<'_> {
         for property in node.properties {
             let error = |message: String| Error::new(property.value_span, message);
             if property.name == "id" {
-                let Value::Identifier(id) = property.value else {
-                    return Err(error("id requires a Rust identifier".into()));
-                };
-                if scope.template != 0 || self.in_block {
-                    return Err(error(
-                        "ids are only available outside blocks and components".into(),
-                    ));
+                if element.id.is_some() {
+                    return Err(error("duplicate id".into()));
                 }
-                if element.id.is_some() || !valid_id(&id) || self.ids.iter().any(|(n, _)| *n == id)
-                {
-                    return Err(error(format!("invalid, duplicate or reserved id `{id}`")));
-                }
-                // Views expose entry ids and states as fields of one struct.
-                if scope.states.iter().any(|(state, _)| *state == id) {
-                    return Err(error(format!("`{id}` names both a control and a state")));
-                }
-                element.id = Some(self.ids.len());
-                self.ids.push((id, kind));
+                element.id =
+                    Some(self.entry_id(property.value, property.value_span, scope, kind)?);
                 continue;
             }
             let element_property = || match target {

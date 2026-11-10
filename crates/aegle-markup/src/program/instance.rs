@@ -16,7 +16,16 @@ impl Checker<'_> {
         self.uses[scope.template].push((template, node.span));
         let signature = self.signatures[template].clone();
         let mut arguments = vec![None; signature.len()];
+        let mut id = None;
         for property in node.properties {
+            if property.name == "id" {
+                if id.is_some() {
+                    return Err(Error::new(property.span, "duplicate id"));
+                }
+                let kind = ElementKind::Component(template);
+                id = Some(self.entry_id(property.value, property.value_span, scope, kind)?);
+                continue;
+            }
             let index = signature
                 .iter()
                 .position(|(name, _, _)| *name == property.name)
@@ -103,7 +112,7 @@ impl Checker<'_> {
         };
         Ok(Element {
             kind: ElementKind::Component(template),
-            id: None,
+            id,
             properties: Vec::new(),
             arguments,
             events: Vec::new(),

@@ -47,11 +47,20 @@ pub(crate) struct Checker<'s> {
     slot_used: bool,
     /// Nesting below the template root being checked.
     depth: usize,
-    /// Entry ids in declaration order with the spec each names (`None` for
-    /// the window), so handlers can read controls declared after them.
-    pub(crate) named: Vec<(String, Option<usize>)>,
+    /// Entry ids in declaration order with what each names, so handlers can
+    /// read controls declared after them.
+    pub(crate) named: Vec<(String, Named)>,
     /// Checking event statements, where named controls can be read.
     pub(crate) in_handler: bool,
+}
+
+/// What an entry id names, as handlers reading it see it.
+pub(crate) enum Named {
+    Window,
+    /// A control of the element with this spec.
+    Element(usize),
+    /// A component instance.
+    Instance,
 }
 
 /// Checks a program against the elements described by `specs`. `files[0]`
@@ -163,7 +172,7 @@ pub fn check_program(
         .collect();
     let root = entry.unwrap();
     let mut named = Vec::new();
-    entry_ids(&root, specs, &mut named);
+    entry_ids(&root, specs, &names, &mut named);
     let mut checker = Checker {
         names,
         signatures,
@@ -254,16 +263,25 @@ pub fn check_program(
 /// Collects the ids of an entry document in the order the checker assigns
 /// them: each node before its children, outside blocks, including slot
 /// content. Invalid ids are reported when their node is checked.
-fn entry_ids(node: &Node, specs: &[ElementSpec<'_>], ids: &mut Vec<(String, Option<usize>)>) {
+fn entry_ids(
+    node: &Node,
+    specs: &[ElementSpec<'_>],
+    components: &HashMap<String, usize>,
+    ids: &mut Vec<(String, Named)>,
+) {
     for property in &node.properties {
         if let (true, crate::Value::Identifier(id)) = (property.name == "id", &property.value) {
-            let spec = specs.iter().position(|spec| spec.name == node.name);
-            ids.push((id.clone(), spec));
+            let named = match specs.iter().position(|spec| spec.name == node.name) {
+                _ if components.contains_key(&node.name) => Named::Instance,
+                Some(spec) => Named::Element(spec),
+                None => Named::Window,
+            };
+            ids.push((id.clone(), named));
         }
     }
     for item in &node.children {
         if let Item::Node(child) = item {
-            entry_ids(child, specs, ids);
+            entry_ids(child, specs, components, ids);
         }
     }
 }
@@ -353,6 +371,12 @@ impl Checker<'_> {
         for mut param in params {
             if scope.params.iter().any(|(name, _)| *name == param.name) {
                 return Err(Error::new(param.span, "duplicate parameter"));
+            }
+            if param.name == "id" {
+                return Err(Error::new(
+                    param.span,
+                    "`id` names a component instance; a parameter cannot take it",
+                ));
             }
             if let Some(default) = &mut param.default {
                 if !constant(default) {

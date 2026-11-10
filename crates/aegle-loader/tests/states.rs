@@ -2,7 +2,8 @@
 //! from markup and Rust, can be removed, and survive reloads with the
 //! state's typed handles. A state linked to a Rust signal follows it both
 //! ways; one following a derived value follows it one way and keeps it alive
-//! with the interface.
+//! with the interface. A component instance named by an id offers the same
+//! handles to its own states.
 
 use aegle_loader::{Data, Program};
 use aegle_ui::{Derived, Result, Signal};
@@ -237,5 +238,72 @@ fn a_state_follows_a_derived_value_one_way_while_the_interface_lives() -> Result
     assert_eq!((count.get(), Rc::strong_count(&canary)), (7, 2));
     view.root().node().remove();
     assert_eq!(Rc::strong_count(&canary), 1);
+    Ok(())
+}
+
+const TALLIES: &str = r#"component Tally(label: string) {
+    state count: int = 0
+    Button { text: label + " " + str(count); on clicked { count += 1 } }
+}
+Column {
+    state names: list<string> = ["x"]
+    Tally { id: first; label: "a" }
+    for name in names { Tally { label: name } }
+}"#;
+
+#[test]
+fn a_named_instance_offers_its_states_through_reloads() -> Result {
+    let ui = ui()?;
+    let mut view = program(TALLIES)?.build(&ui.root())?;
+    assert!(view.instance("names").is_none());
+    let first = view.instance("first").unwrap();
+    let button = first.root().typed::<aegle_widgets::Button>().unwrap();
+    assert_eq!(button.text(), "a 0");
+    assert!(first.state::<String>("count").is_none());
+    let count = first.state::<i64>("count").unwrap();
+
+    // The instance's own state, from markup and from Rust; other instances
+    // of the component keep theirs.
+    click(&ui, "a 0")?;
+    assert_eq!(count.get(), 1);
+    count.set(5)?;
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["a 5", "x 0"]);
+    let model = Signal::new(7_i64);
+    count.bind_signal(&model)?;
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let log = seen.clone();
+    count.on_change(move |n| log.borrow_mut().push(n));
+    click(&ui, "a 7")?;
+    assert_eq!(model.get(), 8);
+
+    // A reload keeps the value and hands the handles, handler and link to
+    // the instance with the same id and component.
+    let next = TALLIES.replace("label + \" \" + str(count)", "label + \": \" + str(count)");
+    view.reload(&program(&next)?)?;
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["a: 8", "x: 0"]);
+    model.set(9);
+    click(&ui, "a: 9")?;
+    assert_eq!((count.get(), model.get()), (10, 10));
+    assert_eq!(*seen.borrow(), [8, 9, 10]);
+
+    // An id now naming another component's instance starts afresh; the old
+    // handle keeps a detached value.
+    let renamed = next.replace("Tally", "Counter");
+    view.reload(&program(&renamed)?)?;
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["a: 0", "x: 0"]);
+    count.set(3)?;
+    ui.refresh()?;
+    assert_eq!((count.get(), names(&ui)?[0].as_str()), (3, "a: 0"));
+    let fresh = view
+        .instance("first")
+        .unwrap()
+        .state::<i64>("count")
+        .unwrap();
+    fresh.set(4)?;
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["a: 4", "x: 0"]);
     Ok(())
 }

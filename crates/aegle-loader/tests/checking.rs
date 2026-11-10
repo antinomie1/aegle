@@ -433,3 +433,64 @@ fn layer_windows_check_their_placement_and_require_a_layer() {
         assert!(error.contains(message), "{source}: {error}");
     }
 }
+
+#[test]
+fn component_instances_are_named_like_entry_controls() {
+    let component = "component Tally(label: string) { Column { state n: int = 0; Text { text: label } } }\n\
+                     component Box() { Column { slot } }";
+    let source = format!(
+        "{component}\nColumn {{ Tally {{ id: first; label: \"a\" }}; Box {{ Tally {{ id: inner; label: \"b\" }} }} }}"
+    );
+    let program = check(parse(&source).unwrap()).unwrap();
+    let named: Vec<_> = program
+        .ids
+        .iter()
+        .map(|(id, kind)| (id.as_str(), *kind))
+        .collect();
+    assert_eq!(
+        named,
+        [
+            ("first", ElementKind::Component(1)),
+            ("inner", ElementKind::Component(1))
+        ]
+    );
+    for (body, message) in [
+        (
+            "state names: list<string> = []; for name in names { Tally { id: t; label: name } }",
+            "ids are only available",
+        ),
+        ("Text { id: t }; Tally { id: t; label: \"a\" }", "duplicate"),
+        ("Tally { id: t; id: u; label: \"a\" }", "duplicate id"),
+        (
+            "Tally { id: 1; label: \"a\" }",
+            "requires a Rust identifier",
+        ),
+        (
+            "Tally { id: t; label: \"a\" }; Button { on clicked { copy(t.label) } }",
+            "`t` is a component instance",
+        ),
+    ] {
+        let source = format!("{component}\nColumn {{ {body} }}");
+        let error = check(parse(&source).unwrap()).unwrap_err();
+        assert!(error.message.contains(message), "{body}: {}", error.message);
+    }
+    // Only an entry use names an instance; `id` cannot be a parameter.
+    for (source, message) in [
+        (
+            "component Pair() { Column { Tally { id: t; label: \"a\" } } }\nColumn { Pair {} }",
+            "ids are only available",
+        ),
+        (
+            "component Odd(id: int) { Column {} }\nColumn {}",
+            "`id` names a component instance",
+        ),
+    ] {
+        let source = format!("{component}\n{source}");
+        let error = check(parse(&source).unwrap()).unwrap_err();
+        assert!(
+            error.message.contains(message),
+            "{source}: {}",
+            error.message
+        );
+    }
+}

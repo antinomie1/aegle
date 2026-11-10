@@ -2,3 +2,9 @@
 component Badge(value: int) {
     Text { text: "badge " + str(value * 2); visible: value > 0 }
 }
+
+component Stepper(step: int) {
+    state value: int = 0
+    state taps: list<int> = []
+    Button { text: "+" + str(step) + " = " + str(value); on clicked { value += step; taps += [value] } }
+}

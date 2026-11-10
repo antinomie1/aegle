@@ -120,10 +120,18 @@ impl Checker<'_> {
                 if !self.in_handler {
                     return error("named controls can only be read in event handlers".into());
                 }
-                let (id, spec) = &self.named[index];
-                let Some(spec) = spec.map(|spec| &self.specs[spec]) else {
-                    return error(format!("`{id}` is the window, which has no fields"));
+                let spec = match &self.named[index] {
+                    (_, crate::program::Named::Element(spec)) => &self.specs[*spec],
+                    (id, crate::program::Named::Window) => {
+                        return error(format!("`{id}` is the window, which has no fields"));
+                    }
+                    (id, crate::program::Named::Instance) => {
+                        return error(format!(
+                            "`{id}` is a component instance, which has no fields"
+                        ));
+                    }
                 };
+                let id = &self.named[index].0;
                 let found = spec.fields.iter().find(|(name, _)| name == field);
                 let Some(ty) = found.and_then(|(_, ty)| ty.binding()) else {
                     return error(format!("{} `{id}` has no field `{field}`", spec.name));

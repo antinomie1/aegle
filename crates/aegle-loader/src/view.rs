@@ -13,7 +13,7 @@ use aegle_ui::{Binding, Container, Derived, HandlerResult, Node, Result, Signal}
 
 use crate::{
     Data, Program, RuntimeError,
-    build::{self, Block},
+    build::{self, Block, Carried, Ids},
     eval::Env,
     handle::Handle,
     reactive::Cell,
@@ -28,21 +28,54 @@ pub struct View {
     program: Program,
     root: Handle,
     env: Env,
-    ids: Vec<Option<Handle>>,
+    ids: Ids,
     /// Effects of the entry document, also kept alive by the root control.
     effects: Rc<RefCell<Block>>,
     /// Top-level controls of a window's content, replaced by a reload.
     content: Vec<Handle>,
     /// Container of a fragment root.
     parent: Option<Container>,
-    /// Entry states that typed handles share, repointed by a reload.
-    slots: RefCell<Vec<Option<Rc<Slot>>>>,
+    /// States that typed handles share, repointed by a reload.
+    slots: RefCell<Vec<Rc<Slot>>>,
     /// A Window document's role and output, which a reload keeps.
     #[cfg(feature = "window")]
     surface: Option<crate::window::Surface>,
 }
 
-type Carried<'a> = &'a dyn Fn(&str, &Type) -> Option<Data>;
+/// The state values of an interface that a reload keeps: entry states, and
+/// the states of instances named by the same id and component, by name and
+/// type.
+fn carry<'a>(
+    program: &'a Program,
+    env: &'a Env,
+    ids: &'a Ids,
+) -> impl Fn(Option<(&str, &str)>, &str, &Type) -> Option<Data> + 'a {
+    move |owner, name, ty| {
+        let checked = &program.0.checked;
+        let (template, env) = match owner {
+            None => (0, env),
+            Some((id, component)) => {
+                let index = checked.ids.iter().position(|(n, _)| n == id)?;
+                let template = instance_template(checked, index)?;
+                if checked.templates[template].name != component {
+                    return None;
+                }
+                (template, ids.instances[index].as_ref()?)
+            }
+        };
+        let states = &checked.templates[template].states;
+        let index = states.iter().position(|(n, t, _)| n == name && t == ty)?;
+        Some(env.scope.states[index].get(None))
+    }
+}
+
+/// The component that entry id `index` names, if it names an instance.
+fn instance_template(program: &aegle_markup::Program, index: usize) -> Option<usize> {
+    match program.ids[index].1 {
+        ElementKind::Component(template) => Some(template),
+        _ => None,
+    }
+}
 
 pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) -> Result<View> {
     let root = &program.0.checked.templates[0].root;
@@ -50,10 +83,19 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
         return Err("a Window document is opened with Program::open".into());
     }
     crate::actions::validate(&program.0.checked)?;
-    let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), carried)?;
-    let mut ids = vec![None; program.0.checked.ids.len()];
+    let entry = |name: &str, ty: &Type| carried(None, name, ty);
+    let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), &entry)?;
+    let mut ids = Ids::new(program.0.checked.ids.len());
     let (mut block, mut created) = (Block::new(), Vec::new());
-    let result = build::root(root, parent, &env, &mut block, &mut created, &mut ids);
+    let result = build::root(
+        root,
+        parent,
+        &env,
+        &mut block,
+        &mut created,
+        &mut ids,
+        carried,
+    );
     if let Err(error) = result {
         if let Some(root) = created.first() {
             root.node().remove();
@@ -61,7 +103,7 @@ pub(crate) fn fragment(program: &Program, parent: &Container, carried: Carried) 
         return Err(error);
     }
     let root = created.swap_remove(0);
-    let _ = env.scope.named.set(ids.as_slice().into());
+    let _ = env.scope.named.set(ids.controls.as_slice().into());
     let effects = Rc::new(RefCell::new(block));
     root.node().keep_alive(effects.clone());
     Ok(View {
@@ -97,14 +139,14 @@ pub(crate) fn window(
         root: handle.clone(),
         env: Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), &|_, _| None)
             .inspect_err(|_| drop(window.close()))?,
-        ids: Vec::new(),
+        ids: Ids::default(),
         effects: effects.clone(),
         content: Vec::new(),
         parent: None,
         slots: RefCell::new(Vec::new()),
         surface: Some(surface),
     };
-    if let Err(error) = view.fill(program, view.env.clone()) {
+    if let Err(error) = view.fill(program, view.env.clone(), &|_, _, _| None) {
         window.close()?;
         return Err(error);
     }
@@ -127,14 +169,30 @@ impl View {
             .ids
             .iter()
             .position(|(name, _)| name == id)?;
-        self.ids[index].as_ref()
+        self.ids.controls[index].as_ref()
     }
 
-    /// The control with entry ID number `index`, in declaration order.
+    /// The control with entry ID number `index`, in declaration order; for an
+    /// ID naming a component instance, the instance's root control.
     pub fn id(&self, index: usize) -> &Handle {
-        self.ids[index]
+        self.ids.controls[index]
             .as_ref()
             .expect("entry IDs are built with the view")
+    }
+
+    /// The component instance named by `id` in the entry document.
+    pub fn instance(&self, id: &str) -> Option<Instance<'_>> {
+        let ids = &self.program.0.checked.ids;
+        let index = ids.iter().position(|(name, _)| name == id)?;
+        instance_template(&self.program.0.checked, index)?;
+        Some(Instance { view: self, index })
+    }
+
+    /// The component instance with entry ID number `index`; the ID must name
+    /// an instance.
+    pub fn instance_at(&self, index: usize) -> Instance<'_> {
+        debug_assert!(instance_template(&self.program.0.checked, index).is_some());
+        Instance { view: self, index }
     }
 
     /// The current value of an entry-document state.
@@ -167,33 +225,71 @@ impl View {
         debug_assert!(T::accepts(
             &self.program.0.checked.templates[0].states[index].1
         ));
-        let mut slots = self.slots.borrow_mut();
-        if slots.len() <= index {
-            slots.resize(index + 1, None);
-        }
-        let slot = slots[index].get_or_insert_with(|| {
-            Rc::new(Slot {
-                cell: RefCell::new(self.env.scope.states[index].clone()),
-                program: RefCell::new(self.program.clone()),
-                index: std::cell::Cell::new(index),
-                root: RefCell::new(self.root.node().clone()),
-                followed: RefCell::new(Vec::new()),
-            })
-        });
         State {
-            slot: slot.clone(),
+            slot: self.slot(None, index),
             marker: PhantomData,
         }
     }
 
+    /// The slot shared by handles to state `index` of `owner`: the entry
+    /// document, or the instance with that entry id.
+    fn slot(&self, owner: Option<usize>, index: usize) -> Rc<Slot> {
+        let mut slots = self.slots.borrow_mut();
+        let same = |slot: &&Rc<Slot>| slot.owner.get() == owner && slot.index.get() == index;
+        if let Some(slot) = slots.iter().find(same) {
+            return slot.clone();
+        }
+        let env = match owner {
+            None => &self.env,
+            Some(id) => {
+                (self.ids.instances[id].as_ref()).expect("named instances are built with the view")
+            }
+        };
+        let slot = Rc::new(Slot {
+            cell: RefCell::new(env.scope.states[index].clone()),
+            program: RefCell::new(self.program.clone()),
+            owner: std::cell::Cell::new(owner),
+            index: std::cell::Cell::new(index),
+            root: RefCell::new(self.root.node().clone()),
+            followed: RefCell::new(Vec::new()),
+        });
+        slots.push(slot.clone());
+        slot
+    }
+
     /// Hands every typed state handle to the state of the same name and type
-    /// in `next`, with its change handlers; others keep their detached state.
-    fn hand_over(&self, next: &Program, env: &Env) -> Vec<Option<Rc<Slot>>> {
-        let states = &next.0.checked.templates[0].states;
-        let mut slots = vec![None; states.len()];
-        let old = &self.program.0.checked.templates[0].states;
-        for slot in self.slots.borrow().iter().flatten() {
-            let (name, ty, _) = &old[slot.index.get()];
+    /// in `next`, of the entry document or of the instance named by the same
+    /// id and component, with its change handlers; others keep their
+    /// detached state.
+    fn hand_over(&self, next: &Program, env: &Env, ids: &Ids) -> Vec<Rc<Slot>> {
+        let (old, new) = (&self.program.0.checked, &next.0.checked);
+        let mut slots = Vec::new();
+        for slot in self.slots.borrow().iter() {
+            let template = template_of(old, slot.owner.get());
+            let (name, ty, _) = &old.templates[template].states[slot.index.get()];
+            let owner = match slot.owner.get() {
+                None => None,
+                Some(id) => {
+                    let component = &old.templates[template].name;
+                    let found = new.ids.iter().enumerate().position(|(index, (n, _))| {
+                        *n == old.ids[id].0
+                            && instance_template(new, index)
+                                .is_some_and(|t| new.templates[t].name == *component)
+                    });
+                    match found {
+                        Some(index) => Some(index),
+                        None => continue,
+                    }
+                }
+            };
+            let (template, env) = match owner {
+                None => (0, env),
+                Some(id) => (
+                    template_of(new, owner),
+                    (ids.instances[id].as_ref()).expect("named instances are built with the view"),
+                ),
+            };
+            let states = &new.templates[template].states;
             let Some(index) = states.iter().position(|(n, t, _)| n == name && t == ty) else {
                 continue;
             };
@@ -201,8 +297,9 @@ impl View {
             cell.adopt(&slot.cell.borrow());
             *slot.cell.borrow_mut() = cell;
             *slot.program.borrow_mut() = next.clone();
+            slot.owner.set(owner);
             slot.index.set(index);
-            slots[index] = Some(slot.clone());
+            slots.push(slot.clone());
         }
         slots
     }
@@ -218,20 +315,18 @@ impl View {
     /// layer, anchor, zone, keyboard policy, margin and size in place; a
     /// reload that adds or removes `layer` or names another output fails.
     pub fn reload(&mut self, program: &Program) -> Result {
-        let states = &self.program.0.checked.templates[0].states;
-        let carried = |name: &str, ty: &Type| {
-            let index = states.iter().position(|(n, t, _)| n == name && t == ty)?;
-            Some(self.env.scope.states[index].get(None))
-        };
         let window = self.program.0.checked.templates[0].root.kind == ElementKind::Window;
         let fresh = program.0.checked.templates[0].root.kind == ElementKind::Window;
         if window != fresh {
             return Err("a reload cannot change whether the root is a Window".into());
         }
         if let Some(parent) = &self.parent {
-            let view = fragment(program, parent, &carried)?;
-            let slots = self.hand_over(program, &view.env);
-            for slot in slots.iter().flatten() {
+            let carried = carry(&self.program, &self.env, &self.ids);
+            let view = fragment(program, parent, &carried);
+            drop(carried);
+            let view = view?;
+            let slots = self.hand_over(program, &view.env, &view.ids);
+            for slot in &slots {
                 slot.anchor(view.root.node());
             }
             *view.slots.borrow_mut() = slots;
@@ -245,11 +340,15 @@ impl View {
             Some(surface) => surface.reload(&program.0.checked.templates[0].root)?,
             None => None,
         };
-        let env = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), &carried)?;
+        let (previous, old_env) = (self.program.clone(), self.env.clone());
         let old = std::mem::take(&mut self.content);
         let (old_ids, old_block) = (std::mem::take(&mut self.ids), self.effects.take());
-        let previous = self.program.clone();
-        if let Err(error) = self.fill(program, env) {
+        let carried = carry(&previous, &old_env, &old_ids);
+        let entry = |name: &str, ty: &Type| carried(None, name, ty);
+        let built = Env::instantiate(program.0.clone(), 0, Vec::new(), Vec::new(), &entry)
+            .and_then(|env| self.fill(program, env, &carried));
+        drop(carried);
+        if let Err(error) = built {
             for handle in std::mem::replace(&mut self.content, old) {
                 handle.node().remove();
             }
@@ -261,7 +360,7 @@ impl View {
             handle.node().remove();
         }
         let current = std::mem::replace(&mut self.program, previous);
-        let slots = self.hand_over(&current, &self.env);
+        let slots = self.hand_over(&current, &self.env, &self.ids);
         self.program = current;
         *self.slots.borrow_mut() = slots;
         // The surface stays; only its placement changes, in place.
@@ -274,11 +373,11 @@ impl View {
     }
 
     /// Builds a Window document's content and window properties into `self`.
-    fn fill(&mut self, program: &Program, env: Env) -> Result {
+    fn fill(&mut self, program: &Program, env: Env, carried: Carried) -> Result {
         let root = &program.0.checked.templates[0].root;
-        let mut ids = vec![None; program.0.checked.ids.len()];
+        let mut ids = Ids::new(program.0.checked.ids.len());
         if let Some(index) = root.id {
-            ids[index] = Some(self.root.clone());
+            ids.controls[index] = Some(self.root.clone());
         }
         #[cfg(feature = "window")]
         for (prop, bound) in &root.properties {
@@ -303,9 +402,10 @@ impl View {
             &mut block,
             &mut self.content,
             &mut ids,
+            carried,
         )?;
         *self.effects.borrow_mut() = block;
-        let _ = env.scope.named.set(ids.as_slice().into());
+        let _ = env.scope.named.set(ids.controls.as_slice().into());
         self.program = program.clone();
         self.env = env;
         self.ids = ids;
@@ -343,18 +443,28 @@ fn conforms(value: &Data, ty: &Type, program: &aegle_markup::Program) -> bool {
     }
 }
 
-/// One entry state as its typed handles see it. A reload repoints it to
-/// the new interface's state of the same name and type.
+/// One state as its typed handles see it. A reload repoints it to the new
+/// interface's state of the same name and type, and owner.
 pub(crate) struct Slot {
     cell: RefCell<Rc<Cell>>,
     /// The program whose records a value is checked against.
     program: RefCell<Program>,
-    /// The state's index in that program's entry document.
+    /// The entry id of the instance owning the state; `None` for the entry
+    /// document.
+    owner: std::cell::Cell<Option<usize>>,
+    /// The state's index in its owner's template.
     index: std::cell::Cell<usize>,
     /// The interface's root control, which keeps what the state follows.
     root: RefCell<Node>,
     /// What the state follows ([`State::follow`]), to move to a new root.
     followed: RefCell<Vec<Weak<dyn Any>>>,
+}
+
+/// The template declaring the states of `owner`.
+fn template_of(program: &aegle_markup::Program, owner: Option<usize>) -> usize {
+    owner.map_or(0, |id| {
+        instance_template(program, id).expect("instance ids name components")
+    })
 }
 
 impl Slot {
@@ -373,11 +483,50 @@ impl Slot {
 /// until the link is removed.
 type Followed<T> = RefCell<Option<(Derived<T>, State<T>)>>;
 
-/// A typed handle to an entry-document state, as `ui!` views expose them.
+/// A component instance named by an `id` where the entry document uses the
+/// component, outside blocks: its root control and typed handles to its
+/// states. A reload keeps an instance's state values, and hands its handles
+/// over, when the new document names an instance of the same component with
+/// the same id.
+pub struct Instance<'v> {
+    view: &'v View,
+    index: usize,
+}
+
+impl Instance<'_> {
+    /// The root control of the instance's component body.
+    pub fn root(&self) -> &Handle {
+        self.view.id(self.index)
+    }
+
+    /// A typed handle to the instance's state `name`, if `T` matches its type.
+    pub fn state<T: StateValue>(&self, name: &str) -> Option<State<T>> {
+        let program = &self.view.program.0.checked;
+        let states = &program.templates[template_of(program, Some(self.index))].states;
+        let index = states.iter().position(|(n, _, _)| n == name)?;
+        T::accepts(&states[index].1).then(|| self.state_at(index))
+    }
+
+    /// A typed handle to the instance's state number `index`; `T` must match
+    /// its type.
+    pub fn state_at<T: StateValue>(&self, index: usize) -> State<T> {
+        let program = &self.view.program.0.checked;
+        let template = template_of(program, Some(self.index));
+        debug_assert!(T::accepts(&program.templates[template].states[index].1));
+        State {
+            slot: self.view.slot(Some(self.index), index),
+            marker: PhantomData,
+        }
+    }
+}
+
+/// A typed handle to a state of the entry document or of a named component
+/// instance ([`Instance`]), as `ui!` views expose them.
 ///
 /// Handles of one view share the state through every [`View::reload`] that
-/// keeps a state of this name and type; after a reload that drops it, a
-/// handle keeps a detached value that nothing displays.
+/// keeps a state of this name and type, in an instance with the same id and
+/// component for an instance's state; after a reload that drops it, a handle
+/// keeps a detached value that nothing displays.
 pub struct State<T> {
     slot: Rc<Slot>,
     marker: PhantomData<fn() -> T>,
@@ -404,7 +553,8 @@ impl<T: StateValue> State<T> {
     pub fn set(&self, value: T) -> Result {
         let data = value.into_data()?;
         let program = self.slot.program.borrow().clone();
-        let ty = &program.0.checked.templates[0].states[self.slot.index.get()].1;
+        let template = template_of(&program.0.checked, self.slot.owner.get());
+        let ty = &program.0.checked.templates[template].states[self.slot.index.get()].1;
         if !conforms(&data, ty, &program.0.checked) {
             let message = format!("state requires {ty:?}");
             return Err(RuntimeError::new(Span::default(), message).into());

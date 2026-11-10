@@ -62,8 +62,10 @@ pub use aegle_macros::{__ui, __ui_resume};
 ///
 /// The inferred view has a public `root` handle and a public typed field for
 /// every markup `id`, plus a `loader::State<T>` field for every state of a
-/// dynamic document's root. Bind Rust callbacks through those fields after
-/// creation; IDs inside blocks and components are not exposed. Imports resolve
+/// dynamic document's root. An `id` on a component use names the instance:
+/// its field holds the typed `root` control and a `loader::State<T>` field
+/// for every state of the component. Bind Rust callbacks through those fields
+/// after creation; IDs inside blocks and components are not exposed. Imports resolve
 /// against the importing file and are tracked for recompilation too.
 /// Dropping the view keeps its retained controls alive. A construction failure
 /// removes the new subtree; it never removes the parent supplied by the caller.
