@@ -432,7 +432,7 @@ window.button("重置").on_click(move |_| {                // 只改模型，控
 - 何时重跑：一次修改把读它的反应排入队列，在修改结束、`set` 返回前运行一轮：先派生值，再绑定，最后 `on_change` 处理器，因此绑定看到的派生值总是最新的；同一反应在运行前被多次排入也只运行一次。反应运行中做的修改并入当前这一轮，在它返回后生效，所以绑定闭包里改了别的 signal 后，立刻读其派生值仍是旧值。
 - 批量修改：`aegle::ui::batch(|| { ... })` 把其中所有修改的反应推迟到它结束时一起运行，读多个 signal 的绑定只重跑一次，`on_change` 只以最终值调用一次；批量可嵌套，最外层结束时运行。批量内部读到的是已修改 signal 的新值，派生值与控件仍是批量开始前的值。事件处理器里一般不需要批量：反应只经句柄打脏标记，布局与绘制本来就在下一次刷新时合并进行一次，批量省下的是绑定闭包的重复运行。
 - 反应 panic 时，这一轮剩下的反应留在队列里，在下一次修改的那一轮运行。和句柄一样，不能在绘制器、钩子或场景访问器里修改 signal。
-- 输入控件的双向绑定：`CheckBox`/`Switch::bind_checked(&Signal<bool>)`、`TextField::bind_text(&Signal<String>)`、`Slider`/`NumberField::bind_value(&Signal<f64>)`、`Dropdown`/`Tabs::bind_selected(&Signal<usize>)`。用户修改经控件的 `on_change` 写回；控件已显示的值不会再被设一次，所以正在编辑的文本框保留插入点、选区与撤销历史。滑块与数值框把超出范围的值钳制显示，signal 保留给定值，直到用户改动控件。
+- 输入控件的双向绑定：`CheckBox`/`Switch::bind_checked(&Signal<bool>)`、`TextField::bind_text(&Signal<String>)`、`Slider`/`NumberField::bind_value(&Signal<f64>)`、`Dropdown`/`Tabs::bind_selected(&Signal<usize>)`，单选按钮组为每个按钮 `Radio::bind_choice(&Signal<T>, 值)`（signal 等于该值时选中，用户选中时设为该值）。用户修改经控件的 `on_change` 写回；控件已显示的值不会再被设一次，所以正在编辑的文本框保留插入点、选区与撤销历史。滑块与数值框把超出范围的值钳制显示，signal 保留给定值，直到用户改动控件。
 - `bind`、`on_change`（`Derived` 的同名方法同样）与 `bind_*` 返回 `Binding`，`remove()` 停止它（双向绑定的两个方向一起停止）；丢弃 `Binding` 不会停止。自定义控件库的双向绑定可以用 `Binding::with_subscription` 把写回处理器的 `Subscription` 并入同一个 `Binding`。
 - 标记文档的 `state` 是 `aegle::loader::State<T>`，与 `Signal` 相互独立。
 

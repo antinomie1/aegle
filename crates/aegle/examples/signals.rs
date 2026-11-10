@@ -3,6 +3,12 @@
 //! changes the model only.
 use aegle::{prelude::*, ui::batch};
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Output {
+    Speakers,
+    Headphones,
+}
+
 fn main() -> Result<()> {
     let app = App::new()?;
     let window = app.window("Aegle — signals")?;
@@ -16,24 +22,35 @@ fn main() -> Result<()> {
     window.text_field("").bind_text(&name);
     window.slider(0.0, 100.0, 0.0).bind_value(&volume);
     window.check_box("Muted", false).bind_checked(&muted);
+    // One signal for the group, one value per radio button.
+    let output = Signal::new(Output::Speakers);
+    let outputs = window.row();
+    outputs
+        .radio("Speakers", false)
+        .bind_choice(&output, Output::Speakers);
+    outputs
+        .radio("Headphones", false)
+        .bind_choice(&output, Output::Headphones);
 
     // Computed from two signals; its readers rerun only when it changes, so
     // moving the slider while muted leaves the summary alone.
     let (quiet, level) = (muted.clone(), volume.clone());
     let audible = Derived::new(move || if quiet.get() { 0.0 } else { level.get() });
-    let who = name.clone();
+    let (who, device) = (name.clone(), output.clone());
     audible.bind(&window.text(""), move |summary, volume| {
-        summary.set_text(&format!("你好，{} — volume {volume:.0}", who.get()));
+        let (name, device) = (who.get(), device.get());
+        summary.set_text(&format!("你好，{name} — volume {volume:.0} on {device:?}"));
     });
 
     let row = window.row();
     let reset = (name.clone(), volume.clone(), muted.clone());
-    // One pass for the three changes: the summary is set once.
+    // One pass for the four changes: the summary is set once.
     row.button("Reset").on_click(move |_| {
         batch(|| {
             reset.0.set("世界".into());
             reset.1.set(40.0);
             reset.2.set(false);
+            output.set(Output::Speakers);
         })
     });
     row.button("Louder")

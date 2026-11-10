@@ -236,3 +236,63 @@ fn derived_values_settle_before_bindings_and_batches_run_reactions_once() -> Res
     assert_eq!(label.text(), "(16, 38, 0)");
     Ok(())
 }
+
+#[test]
+fn radio_groups_bind_one_signal_with_a_value_per_button() -> Result {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum Size {
+        Small,
+        Medium,
+        Large,
+        Huge,
+    }
+    let ui = ui()?;
+    let group = ui.root().row();
+    let size = Signal::new(Size::Medium);
+    let choices = Rc::new(RefCell::new(Vec::new()));
+    let log = choices.clone();
+    size.on_change(move |size| log.borrow_mut().push(size));
+    let buttons = [Size::Small, Size::Medium, Size::Large].map(|value| {
+        let radio = group.radio(&format!("{value:?}"), value == Size::Small);
+        (radio.clone(), radio.bind_choice(&size, value))
+    });
+    let checked = || buttons.each_ref().map(|(radio, _)| radio.is_checked());
+    // The signal decides, over the initial check.
+    assert_eq!(checked(), [false, true, false]);
+
+    // The user's choice reaches the signal once; the others follow.
+    buttons[2].0.toggle();
+    ui.dispatch_callbacks()?;
+    assert_eq!((size.get(), checked()), (Size::Large, [false, false, true]));
+    // Choosing the chosen button changes nothing.
+    buttons[2].0.toggle();
+    ui.dispatch_callbacks()?;
+    // Arrow keys choose the next button through the same path.
+    buttons[2].0.focus();
+    ui.key(KeyInput {
+        key: Key::Down,
+        text: "",
+        modifiers: Modifiers::default(),
+        pressed: true,
+        repeat: false,
+    })?;
+    ui.dispatch_callbacks()?;
+    assert_eq!((size.get(), checked()), (Size::Small, [true, false, false]));
+    assert_eq!(*choices.borrow(), [Size::Large, Size::Small]);
+
+    // The program sets the model; a value no button has unchecks them all.
+    size.set(Size::Medium);
+    assert_eq!(checked(), [false, true, false]);
+    size.set(Size::Huge);
+    assert_eq!(checked(), [false, false, false]);
+
+    // A removed binding neither follows nor writes back.
+    buttons[0].1.remove();
+    size.set(Size::Small);
+    assert_eq!(checked(), [false, false, false]);
+    size.set(Size::Large);
+    buttons[0].0.toggle();
+    ui.dispatch_callbacks()?;
+    assert_eq!((size.get(), checked()), (Size::Large, [true, false, false]));
+    Ok(())
+}

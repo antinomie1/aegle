@@ -9,7 +9,7 @@
 
 use aegle_ui::{Binding, Node, Signal, Subscription};
 
-use crate::{CheckBox, Dropdown, NumberField, Slider, Switch, Tabs, TextField};
+use crate::{CheckBox, Dropdown, NumberField, Radio, Slider, Switch, Tabs, TextField};
 
 /// Binds `control` to `signal` in both directions; `read` and `show` access the
 /// control's value, `watch` adds its user-change handler.
@@ -59,3 +59,44 @@ bind!(
 );
 bind!(bind_selected(usize) "selected item" "", |c| c.selected(), |c, v| c.set_selected(*v); Dropdown);
 bind!(bind_selected(usize) "selected tab" "", |c| c.selected(), |c, v| c.select(*v); Tabs);
+
+impl Radio {
+    /// Checks this radio button while `signal` equals `value`, and sets
+    /// `signal` to `value` when the user chooses it, until the control is
+    /// removed or [`Binding::remove`]; see [`Signal::bind`].
+    ///
+    /// Bind each radio button of a group (the radio buttons sharing a parent)
+    /// to the same signal with a distinct value. Checking one unchecks its
+    /// siblings, and a signal value that no button has leaves them all
+    /// unchecked.
+    ///
+    /// ```
+    /// # fn group(parent: &aegle_ui::Container) {
+    /// use aegle_ui::Signal;
+    /// use aegle_widgets::Widgets;
+    ///
+    /// #[derive(Clone, Copy, PartialEq)]
+    /// enum Size { Small, Large }
+    ///
+    /// let size = Signal::new(Size::Small);
+    /// parent.radio("Small", false).bind_choice(&size, Size::Small);
+    /// parent.radio("Large", false).bind_choice(&size, Size::Large);
+    /// # }
+    /// ```
+    pub fn bind_choice<T: Clone + PartialEq + 'static>(
+        &self,
+        signal: &Signal<T>,
+        value: T,
+    ) -> Binding {
+        let choice = value.clone();
+        let binding = signal.bind(self, move |radio, current| {
+            let chosen = *current == choice;
+            if radio.is_checked() != chosen {
+                radio.set_checked(chosen);
+            }
+        });
+        // Only the radio button the user newly chooses reports a change.
+        let model = signal.clone();
+        binding.with_subscription(self.on_change(move |_| model.set(value.clone())))
+    }
+}

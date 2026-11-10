@@ -170,6 +170,16 @@ Row { RadioButton { text: "Small" }; RadioButton { text: "Medium"; checked: true
 
 - 同一父容器中的单选按钮构成一组：用户或 `set_checked(true)` 选中一个时其余取消。再次激活已选中的按钮不产生变化。
 - 方法与 CheckBox 相同（无 mixed）；`on_change` 只在该按钮被用户选中时触发。
+- 整组绑定一个 `Signal`：每个按钮 `bind_choice(&signal, 值)`，signal 等于该值时选中，用户选中时把 signal 设为该值；值可为任意 `Clone + PartialEq` 类型（常用枚举），组内各按钮的值应互不相同，signal 取任何按钮都没有的值时全部取消选中（创建时的 `checked` 由 signal 覆盖）：
+
+  ```rust
+  #[derive(Clone, Copy, PartialEq)]
+  enum Size { Small, Medium, Large }
+  let size = Signal::new(Size::Medium);
+  for (text, value) in [("Small", Size::Small), ("Medium", Size::Medium), ("Large", Size::Large)] {
+      group.radio(text, false).bind_choice(&size, value);
+  }
+  ```
 - 聚焦时方向键在组内移动并选择上一个/下一个可用按钮（循环）。
 - 圆形标志 20 dp，选中时为强调色填充上的 on_accent 圆点，与方形复选框可按形状区分。无障碍角色 RadioButton。
 
