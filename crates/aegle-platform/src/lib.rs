@@ -13,15 +13,17 @@
 //! [`Error::Unsupported`] or [`Error::ImeUnavailable`] instead of pretending to
 //! succeed.
 
+mod area;
 mod error;
 mod event;
 mod ime;
 mod window;
 
 pub use aegle_types::{
-    Cursor, DragData, Key, Modifiers, PixelRect, Point, PointerButton, Preferences, Rect, Region,
-    TouchPhase,
+    Cursor, DragData, Icon, Key, Modifiers, PixelRect, Point, PointerButton, Preferences, Rect,
+    Region, TouchPhase,
 };
+pub use area::{RESIZE_BORDER, ResizeEdge, WindowArea, area_at, border_edge, check_areas};
 pub use error::{DrawResult, Error, Result};
 pub use event::{Event, PointerKind};
 pub use ime::{ImeEvent, ImeRequest, ImeUpdate, MAX_SURROUNDING, Preedit};
@@ -172,6 +174,52 @@ pub trait Platform: Sized {
         self.window_info(window)?;
         let _ = on_top;
         Err(Error::Unsupported("always-on-top windows"))
+    }
+
+    /// Shows or hides the window system's title bar and borders; windows are
+    /// created decorated. The content keeps its size and position. An
+    /// undecorated window is content only: the application draws what it
+    /// needs and names the parts that move the window with
+    /// [`Self::set_areas`]. While it is resizable and in
+    /// [`WindowMode::Normal`], the user still resizes it by its edges: where
+    /// the window system keeps no border for it, the platform treats a press
+    /// in the border [`border_edge`] describes as a resize, ahead of the
+    /// window's areas. A full-screen window shows no decorations either way
+    /// and takes the change when it leaves full screen.
+    fn set_decorations(&mut self, window: WindowId, decorated: bool) -> Result<()> {
+        self.window_info(window)?;
+        let _ = decorated;
+        Err(Error::Unsupported("undecorated windows"))
+    }
+
+    /// Replaces the parts of a window's content that move or resize it:
+    /// rectangles in its logical coordinates, resolved by [`area_at`], so a
+    /// later rectangle lies above an earlier one and a
+    /// [`WindowArea::Client`] rectangle keeps a button inside a title bar
+    /// pressable. A primary pointer press in a [`WindowArea::Move`] or
+    /// [`WindowArea::Resize`] area begins the window system's own
+    /// interactive move or resize instead of being reported; resize areas
+    /// act only while the window is resizable and in
+    /// [`WindowMode::Normal`], and none acts in [`WindowMode::Fullscreen`].
+    /// Decorated windows take areas too. A rectangle that is not finite or
+    /// has a negative extent fails with [`Error::InvalidSize`].
+    fn set_areas(&mut self, window: WindowId, areas: &[(Rect, WindowArea)]) -> Result<()> {
+        self.window_info(window)?;
+        let _ = areas;
+        Err(Error::Unsupported("window move and resize areas"))
+    }
+
+    /// Sets the icon the window system shows for the window, in its title
+    /// bar, task bar or window switcher. An icon that is empty or whose
+    /// pixels do not match its extent fails with [`Error::InvalidSize`].
+    /// Window systems that take a window's icon from the application
+    /// instead, as macOS does from its bundle and most Wayland compositors
+    /// from the desktop entry of the application identifier, fail with
+    /// [`Error::Unsupported`].
+    fn set_icon(&mut self, window: WindowId, icon: Icon<'_>) -> Result<()> {
+        self.window_info(window)?;
+        let _ = icon;
+        Err(Error::Unsupported("window icons"))
     }
 
     /// Enables, updates or (with `None`) disables native composition for the

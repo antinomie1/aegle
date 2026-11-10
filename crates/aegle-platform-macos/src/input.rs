@@ -52,6 +52,9 @@ impl Native {
     }
 
     pub(crate) fn mouse_down(&self, event: &NSEvent) {
+        if self.press_area(event) {
+            return;
+        }
         let Some((bit, button)) = button(event) else {
             return;
         };
@@ -67,6 +70,9 @@ impl Native {
     }
 
     pub(crate) fn mouse_up(&self, event: &NSEvent) {
+        if event.r#type() == NSEventType::LeftMouseUp && self.end_resize() {
+            return;
+        }
         let Some((bit, button)) = button(event) else {
             return;
         };
@@ -96,8 +102,13 @@ impl Native {
     /// Motion, with or without a button held; captured motion continues
     /// outside the window.
     pub(crate) fn mouse_move(&self, event: &NSEvent) {
+        if self.drag_resize() {
+            return;
+        }
         if self.held.get() != 0 {
             *self.last_mouse.borrow_mut() = Some(retain(event));
+        } else {
+            self.hover_area(event);
         }
         self.pointer(event, PointerKind::Move);
     }
@@ -109,6 +120,9 @@ impl Native {
 
     pub(crate) fn mouse_exit(&self, event: &NSEvent) {
         self.inside.set(false);
+        if self.resize_cursor.take().is_some() {
+            self.window.invalidateCursorRectsForView(&self.view);
+        }
         // A held button keeps the gesture; its release reports the leave.
         if self.held.get() == 0 {
             self.pointer(event, PointerKind::Leave);

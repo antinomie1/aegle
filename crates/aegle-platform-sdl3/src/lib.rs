@@ -29,6 +29,7 @@
 //!   refresh rate instead.
 
 mod events;
+mod frame;
 #[cfg(feature = "gpu")]
 mod gpu;
 mod keys;

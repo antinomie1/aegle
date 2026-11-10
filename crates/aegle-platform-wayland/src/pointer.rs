@@ -1,6 +1,6 @@
 //! Pointer frames: focus bookkeeping, cursor shape on enter, and window events.
 
-use aegle_platform::{Cursor, Point, PointerKind};
+use aegle_platform::{Cursor, Point, PointerKind, WindowArea};
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer::WlPointer};
 
@@ -40,21 +40,41 @@ impl PointerHandler for State {
                 PointerEventKind::Leave { .. } => None,
                 _ => Some((window, position)),
             };
-            if matches!(event.kind, PointerEventKind::Enter { .. }) {
-                // Entering needs a fresh cursor for the serial; keep the window's.
-                let shape = self
-                    .windows
-                    .iter()
-                    .find(|w| w.id == window)
-                    .map_or(Cursor::Default, |w| w.cursor);
-                if let Err(error) = input
-                    .pointer
-                    .as_ref()
-                    .expect("registered pointer")
-                    .set_cursor(conn, icon(shape))
+            let state = self.windows.iter().find(|w| w.id == window);
+            // The resize cursor over the border and resize areas, the
+            // window's own elsewhere. Entering needs a fresh cursor for the
+            // serial either way.
+            let edge = match event.kind {
+                PointerEventKind::Leave { .. } => None,
+                _ => match state.map(|w| w.acting_area(position)) {
+                    Some(WindowArea::Resize(edge)) => Some(edge),
+                    _ => None,
+                },
+            };
+            let entered = matches!(event.kind, PointerEventKind::Enter { .. });
+            if entered || std::mem::replace(&mut input.resize_cursor, edge) != edge {
+                input.resize_cursor = edge;
+                let shape = match edge {
+                    Some(edge) => crate::frame::resize_icon(edge),
+                    None => icon(state.map_or(Cursor::Default, |w| w.cursor)),
+                };
+                let pointer = input.pointer.as_ref().expect("registered pointer");
+                if !matches!(event.kind, PointerEventKind::Leave { .. })
+                    && let Err(error) = pointer.set_cursor(conn, shape)
                 {
                     self.events.push_back(Event::Error(Error::backend(error)));
                 }
+            }
+            // A primary press in a move or resize area goes to the
+            // compositor, which takes the pointer for the gesture.
+            if let PointerEventKind::Press {
+                button: crate::events::PRIMARY,
+                serial,
+                ..
+            } = event.kind
+                && state.is_some_and(|w| w.press_area(position, &input.seat, serial))
+            {
+                continue;
             }
             let Some((kind, time)) = translate(&event.kind) else {
                 continue;

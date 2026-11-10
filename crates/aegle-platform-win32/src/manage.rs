@@ -16,10 +16,7 @@ use windows::Win32::{
     Graphics::Gdi::{
         ClientToScreen, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
     },
-    UI::{
-        HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow},
-        WindowsAndMessaging::*,
-    },
+    UI::{HiDpi::GetDpiForWindow, WindowsAndMessaging::*},
 };
 
 /// A full-screen window's style and placement before it covered the monitor.
@@ -74,19 +71,12 @@ impl Native {
 
     /// The outer window extent whose client area is `client` physical pixels.
     fn frame(&self, client: PixelSize) -> windows::core::Result<(i32, i32)> {
-        let hwnd = self.hwnd.get();
-        let mut rect = RECT {
+        let rect = self.outer(RECT {
             left: 0,
             top: 0,
             right: client.width as i32,
             bottom: client.height as i32,
-        };
-        // SAFETY: style and DPI queries of this live window; `rect` is writable.
-        unsafe {
-            let style = WINDOW_STYLE(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32);
-            let extended = WINDOW_EX_STYLE(GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32);
-            AdjustWindowRectExForDpi(&mut rect, style, false, extended, GetDpiForWindow(hwnd))?;
-        }
+        })?;
         Ok((rect.right - rect.left, rect.bottom - rect.top))
     }
 

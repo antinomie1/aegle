@@ -61,6 +61,16 @@ pub(crate) struct Native {
     pub target_mode: Cell<Option<aegle_platform::WindowMode>>,
     /// A full-screen transition is animating.
     pub transitioning: Cell<bool>,
+    /// Whether the last zoom brought the window to the screen's frame; see `manage`.
+    pub zoomed: Cell<bool>,
+    /// Whether the window is to show the system's title bar; see `decorations`.
+    pub decorated: Cell<bool>,
+    /// The content that moves or resizes the window; see `area`.
+    pub areas: RefCell<Vec<(aegle_platform::Rect, aegle_platform::WindowArea)>>,
+    /// The resize a press in a resize area began.
+    pub resizing: Cell<Option<crate::area::Resizing>>,
+    /// The edge whose resize cursor the pointer shows over a resize area.
+    pub resize_cursor: Cell<Option<aegle_platform::ResizeEdge>>,
 }
 
 /// Milliseconds of an event's timestamp, wrapping like the contract's times.

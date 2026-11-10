@@ -8,7 +8,7 @@
 
 | 模块 / Crate | 已实现功能与契约 | 依赖与技术基线 |
 |---|---|---|
-| **aegle-types** | 几何（Point/Rect/Size/Region）、紧凑 RGBA 颜色、阴影、光标、输入修饰键、系统偏好、拖放数据结构 | `no_std`，无外部依赖 |
+| **aegle-types** | 几何（Point/Rect/Size/Region）、紧凑 RGBA 颜色、阴影、光标、输入修饰键、系统偏好、拖放数据结构、图标（非预乘 RGBA，托盘与窗口共用） | `no_std`，无外部依赖 |
 | **aegle-core** | 槽位树（NodeId 带槽位与代数）、属性变更与三通道失效标记（布局/绘制/语义）、焦点遍历、事件路由快照 | 纯 Rust，无外部依赖 |
 | **aegle-layout** | Taffy 0.14.0 树适配（Flexbox/Block，可选 Grid）；测量与首基线回调；contents 虚拟节点；自适应滚动视口约束（容器自动收缩） | Taffy 0.14.0 |
 | **aegle-segment** | 词边界断词（中日韩泰分词），供按词移动与选词 | 运行时 `libloading` 系统 ICU（Linux/Windows）或 `CFStringTokenizer`（macOS），无内置词典数据 |
@@ -21,7 +21,7 @@
 | **aegle-render-cairo** | 结合 `render-cpu`，由系统 cairo 提供几何覆盖率（Linux 专用，运行时动态加载） | 运行时加载 `libcairo.so.2` |
 | **aegle-render-vulkan** | Vulkan 1.1 硬件加速渲染：storage buffer 图元合并、按需灰度/彩色字形图集、最多八层裁剪、应用纹理登记、原生 swapchain 呈现；`shaders` 下首次使用时把自定义片元程序编成 SPIR-V 管线（lavapipe 上与同色填充逐像素一致） | ash 0.38, bytemuck 1.25；naga 30（可选） |
 | **aegle-render-wgpu** | 全平台通用 GPU 渲染：WGSL 着色器、多层裁剪、字形/图像专用纹理、FIFO 呈现；`shaders` 下首次使用时编译自定义片元程序 | wgpu 30.0.1 |
-| **aegle-platform** | 统一平台契约：`Platform` 与 `SurfacePlatform` trait、标准事件（`Event`）、窗口选项与角色（层、弹出层）、窗口管理（内容尺寸与约束、可调整尺寸、`WindowMode`、位置、置顶）、输出枚举、IME 事务、剪贴板与拖放契约 | 纯契约抽象，无特定窗口库依赖 |
+| **aegle-platform** | 统一平台契约：`Platform` 与 `SurfacePlatform` trait、标准事件（`Event`）、窗口选项与角色（层、弹出层）、窗口管理（内容尺寸与约束、可调整尺寸、`WindowMode`、位置、置顶、无边框、移动/改尺寸区域及其解析规则 `area_at`/`border_edge`、窗口图标）、输出枚举、IME 事务、剪贴板与拖放契约 | 纯契约抽象，无特定窗口库依赖 |
 | **aegle-platform-sdl3** | Linux 默认后端：普通窗口与弹出菜单/提示窗口、显示器枚举、键盘/指针/触摸/滚轮、系统光标、文本输入与 IME、进程剪贴板、拖入、软件呈现与 GPU 句柄租约 | 运行时加载 `libSDL3.so.0` |
 | **aegle-platform-wayland** | Linux 原生客户端：xdg-shell 顶层窗口、指定输出且可原地改放置的 wlr layer-shell 表面、xdg_popup（父为顶层、弹出层或 layer）、输出枚举、text-input-v3（周边文字与选区）、双向拖放、SHM 呈现与 GPU 租约 | wayland-client 0.31, SCTK 0.21, libxkbcommon |
 | **aegle-platform-win32** | Windows 原生后端：Win32 窗口、DPI 适配、TSF 文本存储输入法、OLE 拖放、GDI 软件呈现与 GPU HWND 租约 | windows 0.62 |
@@ -101,7 +101,9 @@
 * **输入法**：`controls` 中以系统简体拼音（`com.apple.inputmethod.SCIM.ITABC`）经 HID 键入 `nihao`：预编辑 `ni hao` 带下划线显示在光标处，候选窗紧贴光标下方（截屏核对），空格上屏 `你好`；经 AX 读回的字符数随预编辑与提交变化（23 → 29 → 25）。日文、韩文输入法未测。
 * **拖放**：`aegle-platform-macos` 的 native 场景用真实指针（HID）在两个窗口间拖动：源窗口按下后 `start_drag`，目标收到 `Drag`、宿主回答接受后收到 `Drop`，文字（含中文）与文件各一次，落点位于目标窗口内（会话自行采样指针，略滞后于合成轨迹）。AppKit 在事件投递中嵌套跟踪拖动，宿主循环在拖动期间停在 `dispatch` 内；连续 3 次通过。拖出到其他应用、其他应用拖入未测。
 * **窗口管理**：`cargo test -p aegle-platform-macos --test native -- --ignored` 的 window management 场景在实机通过（连续 3 次）：首帧前请求最大化，显示后到达 `Maximized`；最大化时调整尺寸与移动返回 `InvalidRole`；还原后回到 320×200；`set_size` 到 400×260；倒置约束返回 `InvalidSize`，设置约束把当前尺寸移入（420×280），超大请求被限制为 600×400；内容区位置 (120, 160) 往返一致，NaN 返回 `InvalidPosition`；全屏到达后请求最小化，先退出全屏再进入 Dock（`configured` 为 false），再还原到 `Normal` 且位置不变；弹出层的尺寸与模式请求返回 `InvalidRole`。此前在结束全屏过渡的委托回调里直接退出全屏会被 AppKit 拒绝（“not in fullscreen state”），现在下一步排到下一轮 run loop。宿主层 `cargo test -p aegle-app --features macos,tiny-skia --test window_management -- --ignored`（`harness = false`，主线程）在实机通过（连续 3 次）：`WindowOptions` 的最小尺寸、位置与最大化在打开时应用，还原后回到 360×240 与 (80, 120)；`set_size(100, 100)` 被最小尺寸限制为 320×200；经 `performClose:` 发出的第一次关闭请求被 `on_close` 拒绝、窗口与控件保留，第二次接受后窗口关闭、`dispatch` 返回 false。
-* **未验收**：应用失去激活时撤销抓取弹出层未自动化测试。
+* **无边框窗口与窗口区域**（2026-11-10，macOS 15，Retina 2×）：native 的 undecorated windows and window areas 场景在实机通过（连续 2 次；真实指针经 HID 事件，整段手势由另一线程发出）：首帧前去边框，显示后内容区仍为 320×200、位置 (200, 240) 不变，窗口成为 key 窗口且样式不含 `Titled`；最大化、还原与全屏照常；全屏期间请求恢复边框，退出全屏后才带上标题栏，内容区尺寸与位置不变，再去边框亦然。设置 `Move`（标题栏）、其上的 `Client`（按钮）与 `Resize(BottomRight)` 区域后：在 `Move` 区域按下并拖动 (60, 40)，窗口位置恰好移动 (60, 40)、该次按下未上报；`Client` 矩形内的按下照常上报且窗口不动；在 `Resize` 区域拖动 (40, 30) 使尺寸变为 360×230、左上角不动；设最大尺寸 380×240 后拖动 (60, 60) 被限制为 380×240；在右边缘内 2 px 处拖动 30 使宽度变为 410，在左上角 (2, 3) 处拖动 (−20, −10) 使尺寸变为 430×250、位置随之移动 (−20, −10)；设为不可调整尺寸后边框与 `Resize` 区域的按下都作为普通按下上报，尺寸不变；非法矩形返回 `InvalidSize`，弹出层的装饰与区域请求返回 `InvalidRole`。最后两次边缘拖动在这些运行里由 AppKit 自己的改尺寸接管（按下未到达视图），早先一次探测中同样位置的按下则到达视图；两条路径结果相同。场景最初从主线程发后续事件，AppKit 的模态改尺寸循环因此等不到抬起而卡住，现改为由另一线程发出。
+* **缩放状态**：此前 `Maximized` 直接取 `isZoomed`，而 AppKit 对位于最大尺寸约束上的窗口与不可调整尺寸的窗口也报告已缩放：`set_resizable(false)` 之后窗口报 `Maximized`，随后的 `set_size`/`set_position` 返回 `InvalidRole`（宿主的 `WindowOptions { resizable: false, position: Some(..) }` 因此打不开窗口），请求还原还会触发一次缩放把窗口移走。现由平台自己的标记决定；window management 场景新增断言：尺寸等于最大约束 600×400 时仍为 `Normal`；不可调整尺寸的窗口为 `Normal`，可 `set_size` 到 440×300、可移动，请求最大化后到达 `Maximized`，还原后回到 440×300 与原位置。
+* **未验收**：应用失去激活时撤销抓取弹出层未自动化测试；改尺寸光标未截屏核对。
 
 ---
 
@@ -122,6 +124,6 @@
    * 输出热插拔时按输出增删面板需由宿主在 `App::on_outputs` 中完成；按 layer-shell 协议，输出断开时合成器关闭其上的层，宿主收到 `Close` 后移除该窗口（此路径尚未实测）。
 4. **Windows 彩色字形**：DirectWrite 光栅器此前对一切非轮廓表示返回 `UnsupportedGlyph`，渲染器整帧失败，含 emoji（Segoe UI Emoji 为 COLR）的文字无法绘制。现在彩色字体（`IsColorFont` 或字形格式含 COLR）的字形经 `TranslateColorGlyphRun` 逐层在线性光中合成为彩色图像（与 Rust COLR 路径一致，`DWRITE_E_NOCOLOR` 的字形按轮廓绘制）；该路径只在 macOS 上交叉编译（`x86_64-pc-windows-msvc`，clippy `-D warnings`）通过，`aegle-glyph/tests/platform_raster.rs` 的 Windows 用例（测试字体 A 的红、半透明蓝两层合成为约 188/0/188 的紫色，B 的 sbix 位图报 `UnsupportedGlyph`）由 Windows CI 运行；首次 CI 中 `GetGlyphImageFormats` 未对 A 报告 COLR，因此改为同时按 `IsColorFont` 判断，尚未在实机上看过 emoji。只有 SVG 或 PNG/JPEG/TIFF/BGRA 位图表示的字形仍让该帧失败。
 5. **Pango 尺寸取整**：Pango 后端的布局尺寸取自 `pango_layout_get_pixel_size`（向上取整到整像素），行度量则保留小数；因此多段落编辑器中段落间的位置与单段落的尺寸可差不到 1 px（`aegle-text/tests/document.rs` 改为以首行插入符为基准判断末尾换行后的插入符在下一行）。尚未统一为小数尺寸。
-6. **窗口管理的其他平台**：Win32、SDL3 与 Wayland 实现只经编译与 clippy 检查（macOS 主机上交叉 `--target x86_64-pc-windows-msvc`；Linux 目标的 Wayland crate 以只回答 `xkbcommon` 的 pkg-config 替身做类型检查），尚未在实机或测试合成器中运行。Win32 的位置在不同缩放的显示器之间只是近似。
+6. **窗口管理的其他平台**：Win32、SDL3 与 Wayland 实现（含无边框、窗口区域与图标）只经编译与 clippy 检查（macOS 主机上交叉 `--target x86_64-pc-windows-msvc`；Linux 目标的 Wayland crate 以只回答 `xkbcommon` 的 pkg-config 替身做类型检查），尚未在实机或测试合成器中运行。Win32 的位置在不同缩放的显示器之间只是近似；Win32 无边框窗口最大化时取工作区，未处理自动隐藏的任务栏。Wayland 合成器没有 `xdg-decoration` 时（如 GNOME）窗口始终没有装饰，`set_decorations(true)` 无处可送也不报错；Wayland 上触摸按下不触发窗口区域。`Move` 区域的双击只有 Win32 由系统最大化，macOS、Wayland 与 SDL3 上没有标题栏的双击与右键菜单行为。
 7. **桌面服务**：
    * `aegle-desktop` 的 macOS 通知只在应用包内可用（裸二进制报 `Unavailable`），通知验证为手动步骤、未进 CI；全局快捷键按 ANSI 键位匹配，非美式布局下字母键按位置而非字符。

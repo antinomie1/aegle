@@ -11,8 +11,10 @@ mod buffers;
 mod clipboard;
 mod drag;
 mod events;
+mod frame;
 #[cfg(feature = "gpu")]
 mod gpu;
+mod icon;
 mod ime;
 mod ime_types;
 mod input;

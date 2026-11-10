@@ -10,6 +10,10 @@ readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[dependencies]
+# The icon vocabulary shared with window icons.
+aegle-types.workspace = true
+
 [target.'cfg(target_os = "linux")'.dependencies]
 aegle-dbus.workspace = true
 aegle-types = { workspace = true, features = ["std"] }

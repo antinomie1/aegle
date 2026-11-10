@@ -6,8 +6,8 @@
 use crate::{MacOs, wake::Waker, window::WindowSurface};
 use aegle_platform::{
     Cursor, DragData, DrawResult, Error, Event, ImeRequest, OutputInfo, PixelRect, PixelSize,
-    Platform, Point, Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowId,
-    WindowInfo, WindowMode, WindowOptions,
+    Platform, Point, Preferences, Rect, Region, Result, SeatId, SurfacePlatform, WakeHandle,
+    WindowArea, WindowId, WindowInfo, WindowMode, WindowOptions,
 };
 use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSEventMask, NSEventType};
@@ -185,6 +185,14 @@ impl Platform for MacOs {
 
     fn set_always_on_top(&mut self, window: WindowId, on_top: bool) -> Result<()> {
         MacOs::set_always_on_top(self, window, on_top)
+    }
+
+    fn set_decorations(&mut self, window: WindowId, decorated: bool) -> Result<()> {
+        MacOs::set_decorations(self, window, decorated)
+    }
+
+    fn set_areas(&mut self, window: WindowId, areas: &[(Rect, WindowArea)]) -> Result<()> {
+        MacOs::set_areas(self, window, areas)
     }
 
     fn configure_ime(&mut self, window: WindowId, request: Option<ImeRequest>) -> Result<()> {

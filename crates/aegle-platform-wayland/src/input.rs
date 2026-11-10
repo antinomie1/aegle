@@ -54,6 +54,8 @@ struct SeatInput {
     repeat: Repeat,
     /// Serial of the latest key, button or touch press, which popup grabs cite.
     serial: Option<u32>,
+    /// The edge whose resize cursor the pointer shows over a resize area.
+    resize_cursor: Option<aegle_platform::ResizeEdge>,
 }
 
 impl Drop for SeatInput {
@@ -125,8 +127,10 @@ impl State {
             return;
         };
         for input in &self.input.seats {
+            // A resize area under the pointer keeps showing its own cursor.
             if let Some(pointer) = &input.pointer
                 && input.pointer_focus.is_some_and(|(id, _)| id == window)
+                && input.resize_cursor.is_none()
                 && let Err(error) = pointer.set_cursor(conn, icon(shape))
             {
                 self.events.push_back(Event::Error(Error::backend(error)));
@@ -234,6 +238,7 @@ impl SeatHandler for State {
             modifiers: Modifiers::default(),
             repeat: Repeat::new(&self.loop_handle),
             serial: None,
+            resize_cursor: None,
         });
     }
 

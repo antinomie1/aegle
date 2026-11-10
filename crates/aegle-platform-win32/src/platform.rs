@@ -4,8 +4,8 @@
 use std::time::Duration;
 
 use aegle_platform::{
-    Cursor, DragData, DrawResult, Error, Event, ImeRequest, PixelRect, Platform, Point,
-    Preferences, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowMode,
+    Cursor, DragData, DrawResult, Error, Event, Icon, ImeRequest, PixelRect, Platform, Point,
+    Preferences, Rect, Region, Result, SeatId, SurfacePlatform, WakeHandle, WindowArea, WindowMode,
 };
 
 use crate::{PixelSize, Win32, WindowId, WindowInfo, WindowOptions, WindowSurface};
@@ -96,6 +96,18 @@ impl Platform for Win32 {
 
     fn set_always_on_top(&mut self, window: WindowId, on_top: bool) -> Result<()> {
         self.set_always_on_top(window, on_top)
+    }
+
+    fn set_decorations(&mut self, window: WindowId, decorated: bool) -> Result<()> {
+        self.set_decorations(window, decorated)
+    }
+
+    fn set_areas(&mut self, window: WindowId, areas: &[(Rect, WindowArea)]) -> Result<()> {
+        self.set_areas(window, areas)
+    }
+
+    fn set_icon(&mut self, window: WindowId, icon: Icon<'_>) -> Result<()> {
+        self.set_icon(window, icon)
     }
 
     fn configure_ime(&mut self, window: WindowId, request: Option<ImeRequest>) -> Result<()> {

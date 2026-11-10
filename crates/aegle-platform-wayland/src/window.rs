@@ -77,6 +77,7 @@ impl Wayland {
             clipboard,
             windows: Vec::new(),
             scale: crate::scale::ScaleGlobals::bind(&globals, &qh),
+            icons: crate::icon::bind(&globals, &qh),
             events: VecDeque::new(),
             preferences: Default::default(),
         };
@@ -221,6 +222,8 @@ impl Wayland {
             limits: (None, None),
             resizable: true,
             floating: options.size,
+            server_decorated: false,
+            areas: Vec::new(),
         });
         Ok(id)
     }

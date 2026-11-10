@@ -14,7 +14,7 @@ use smithay_client_toolkit::{
         xdg::{
             XdgShell,
             popup::Popup,
-            window::{Window, WindowConfigure, WindowHandler},
+            window::{DecorationMode, Window, WindowConfigure, WindowHandler},
         },
     },
     shm::{Shm, ShmHandler},
@@ -78,6 +78,11 @@ pub(crate) struct WindowState {
     /// A toplevel's own size while floating, which it returns to when the
     /// compositor leaves the size to it, as after leaving maximized.
     pub(crate) floating: aegle_platform::PixelSize,
+    /// Whether the compositor draws a toplevel's title bar and borders, as
+    /// its latest configure said.
+    pub(crate) server_decorated: bool,
+    /// A toplevel's content that moves or resizes it; see `frame`.
+    pub(crate) areas: Vec<(aegle_platform::Rect, aegle_platform::WindowArea)>,
 }
 
 impl WindowState {
@@ -110,6 +115,8 @@ pub(crate) struct State {
     pub(crate) clipboard: ClipboardState,
     pub(crate) windows: Vec<WindowState>,
     pub(crate) scale: Option<crate::scale::ScaleGlobals>,
+    /// The toplevel icon manager, when the compositor has one.
+    pub(crate) icons: Option<wayland_protocols::xdg::toplevel_icon::v1::client::xdg_toplevel_icon_manager_v1::XdgToplevelIconManagerV1>,
     pub(crate) events: VecDeque<Event>,
     pub(crate) preferences: crate::Preferences,
 }
@@ -200,6 +207,13 @@ impl WindowHandler for State {
             aegle_platform::WindowMode::Normal
         };
         self.configured(native.wl_surface(), size, configure.is_activated(), mode);
+        if let Some(window) = self
+            .windows
+            .iter_mut()
+            .find(|w| w.window.wl_surface() == native.wl_surface())
+        {
+            window.server_decorated = configure.decoration_mode == DecorationMode::Server;
+        }
     }
 }
 

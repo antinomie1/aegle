@@ -36,6 +36,7 @@ mod windows;
 use self::windows as imp;
 
 mod shortcut;
+pub use aegle_types::Icon;
 pub use shortcut::Trigger;
 
 /// What the desktop reports. Ids are those the requests returned.
@@ -107,17 +108,6 @@ pub struct Notification<'a> {
     /// Buttons as `(key, label)`; Windows shows none and reports only the
     /// `"default"` action.
     pub actions: &'a [(&'a str, &'a str)],
-}
-
-/// Straight (not premultiplied) RGBA pixels, row by row.
-#[derive(Clone, Copy, Debug)]
-pub struct Icon<'a> {
-    /// Width in pixels.
-    pub width: u32,
-    /// Height in pixels.
-    pub height: u32,
-    /// `width * height * 4` bytes.
-    pub rgba: &'a [u8],
 }
 
 /// A tray menu entry.
@@ -202,14 +192,8 @@ impl Desktop {
 
     /// Shows or updates the tray icon, or with `None` removes it.
     pub fn set_tray(&self, tray: Option<&Tray<'_>>) -> std::io::Result<()> {
-        if let Some(tray) = tray {
-            let icon = tray.icon;
-            let size = (icon.width as usize)
-                .checked_mul(icon.height as usize)
-                .and_then(|pixels| pixels.checked_mul(4));
-            if icon.width == 0 || icon.height == 0 || size != Some(icon.rgba.len()) {
-                return Err(std::io::ErrorKind::InvalidInput.into());
-            }
+        if tray.is_some_and(|tray| !tray.icon.is_valid()) {
+            return Err(std::io::ErrorKind::InvalidInput.into());
         }
         self.0.set_tray(tray)
     }

@@ -222,6 +222,53 @@ fn titles_and_sizes_are_validated() {
 }
 
 #[test]
+fn areas_and_icons_are_validated_before_the_driver_is_asked() {
+    use aegle_platform::{Icon, Rect, WindowArea};
+    let Some((_guard, mut platform)) = platform() else {
+        return;
+    };
+    let window = platform.create_window(options(64, 48)).unwrap();
+    // Clearing areas needs no hit testing, which the dummy driver lacks.
+    platform.set_areas(window, &[]).unwrap();
+    assert!(matches!(
+        platform.set_areas(
+            window,
+            &[(Rect::new(0.0, 0.0, f32::NAN, 8.0), WindowArea::Move)]
+        ),
+        Err(Error::InvalidSize)
+    ));
+    // A driver either hit-tests a window's areas and border or says it cannot.
+    for result in [
+        platform.set_areas(
+            window,
+            &[(Rect::new(0.0, 0.0, 64.0, 8.0), WindowArea::Move)],
+        ),
+        platform.set_decorations(window, false),
+    ] {
+        assert!(matches!(result, Ok(()) | Err(Error::Unsupported(_))));
+    }
+    platform.set_decorations(window, true).unwrap();
+    let icon = |width, height, rgba| Icon {
+        width,
+        height,
+        rgba,
+    };
+    assert!(matches!(
+        platform.set_icon(window, icon(2, 2, &[0; 15])),
+        Err(Error::InvalidSize)
+    ));
+    assert!(matches!(
+        platform.set_icon(window, icon(2, 2, &[255; 16])),
+        Ok(()) | Err(Error::Unsupported(_))
+    ));
+    platform.remove_window(window).unwrap();
+    assert!(matches!(
+        platform.set_areas(window, &[]),
+        Err(Error::InvalidWindow)
+    ));
+}
+
+#[test]
 fn removed_windows_are_invalid() {
     let Some((_guard, mut platform)) = platform() else {
         return;

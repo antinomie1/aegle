@@ -96,7 +96,7 @@ define_class!(
         #[unsafe(method(resetCursorRects))]
         fn reset_cursor_rects(&self) {
             if let Some(native) = self.native() {
-                self.addCursorRect_cursor(self.bounds(), &crate::window::cursor(native.cursor.get()));
+                self.addCursorRect_cursor(self.bounds(), &native.shown_cursor());
             }
         }
 
@@ -311,6 +311,12 @@ define_class!(
             // The host decides whether to remove the window.
             self.with(|native| native.emit(Event::Close { window: native.id }));
             false
+        }
+
+        #[unsafe(method(windowShouldZoom:toFrame:))]
+        fn window_should_zoom(&self, _window: &NSWindow, _frame: NSRect) -> bool {
+            self.with(Native::will_zoom);
+            true
         }
 
         #[unsafe(method(windowDidResize:))]

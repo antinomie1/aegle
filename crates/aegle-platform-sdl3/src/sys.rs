@@ -19,6 +19,8 @@ pub(crate) const INIT_VIDEO: u32 = 0x0000_0020;
 pub(crate) const WINDOW_FULLSCREEN: u64 = 0x0000_0000_0000_0001;
 /// `SDL_WINDOW_MAXIMIZED`.
 pub(crate) const WINDOW_MAXIMIZED: u64 = 0x0000_0000_0000_0080;
+/// `SDL_WINDOW_BORDERLESS`.
+pub(crate) const WINDOW_BORDERLESS: u64 = 0x0000_0000_0000_0010;
 /// `SDL_WINDOW_HIDDEN`.
 pub(crate) const WINDOW_HIDDEN: u64 = 0x0000_0000_0000_0008;
 /// `SDL_WINDOW_RESIZABLE`.
@@ -55,6 +57,24 @@ pub(crate) const PIXELFORMAT_XRGB8888: u32 = 0x1616_1804;
 /// `SDL_PIXELFORMAT_ARGB8888`: memory order B, G, R, A on little-endian, the
 /// byte order the contract's BGRA8 buffers already have.
 pub(crate) const PIXELFORMAT_ARGB8888: u32 = 0x1636_2004;
+
+/// `SDL_PIXELFORMAT_RGBA32`: memory order R, G, B, A on either endianness.
+#[cfg(target_endian = "little")]
+pub(crate) const PIXELFORMAT_RGBA32: u32 = 0x1676_2004;
+#[cfg(target_endian = "big")]
+pub(crate) const PIXELFORMAT_RGBA32: u32 = 0x1646_2004;
+
+// `SDL_HitTestResult`.
+pub(crate) const HITTEST_NORMAL: c_int = 0;
+pub(crate) const HITTEST_DRAGGABLE: c_int = 1;
+pub(crate) const HITTEST_RESIZE_TOPLEFT: c_int = 2;
+pub(crate) const HITTEST_RESIZE_TOP: c_int = 3;
+pub(crate) const HITTEST_RESIZE_TOPRIGHT: c_int = 4;
+pub(crate) const HITTEST_RESIZE_RIGHT: c_int = 5;
+pub(crate) const HITTEST_RESIZE_BOTTOMRIGHT: c_int = 6;
+pub(crate) const HITTEST_RESIZE_BOTTOM: c_int = 7;
+pub(crate) const HITTEST_RESIZE_BOTTOMLEFT: c_int = 8;
+pub(crate) const HITTEST_RESIZE_LEFT: c_int = 9;
 
 /// `SDL_TOUCH_MOUSEID`: synthetic mouse events carrying a finger's contact.
 pub(crate) const TOUCH_MOUSEID: u32 = u32::MAX;
@@ -115,6 +135,17 @@ pub(crate) struct Window {
 pub(crate) struct Cursor {
     _private: [u8; 0],
 }
+
+/// `SDL_Point`.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Point {
+    pub x: c_int,
+    pub y: c_int,
+}
+
+/// `SDL_HitTest`: what a press at a point of a window does.
+pub(crate) type HitTest = unsafe extern "C" fn(*mut Window, *const Point, *mut c_void) -> c_int;
 
 /// `SDL_Rect`.
 #[repr(C)]
@@ -424,6 +455,13 @@ pub(crate) struct Lib {
     pub get_desktop_display_mode: unsafe extern "C" fn(u32) -> *const DisplayMode,
     pub get_display_for_window: unsafe extern "C" fn(*mut Window) -> u32,
     pub set_app_metadata_property: unsafe extern "C" fn(*const c_char, *const c_char) -> bool,
+    pub set_window_bordered: unsafe extern "C" fn(*mut Window, bool) -> bool,
+    pub set_window_hit_test:
+        unsafe extern "C" fn(*mut Window, Option<HitTest>, *mut c_void) -> bool,
+    pub create_surface_from:
+        unsafe extern "C" fn(c_int, c_int, u32, *mut c_void, c_int) -> *mut Surface,
+    pub destroy_surface: unsafe extern "C" fn(*mut Surface),
+    pub set_window_icon: unsafe extern "C" fn(*mut Window, *mut Surface) -> bool,
     _library: libloading::Library,
 }
 
@@ -556,6 +594,15 @@ fn load() -> Option<Lib> {
                 : unsafe extern "C" fn(*mut Window) -> u32),
             set_app_metadata_property: bind!("SDL_SetAppMetadataProperty"
                 : unsafe extern "C" fn(*const c_char, *const c_char) -> bool),
+            set_window_bordered: bind!("SDL_SetWindowBordered"
+                : unsafe extern "C" fn(*mut Window, bool) -> bool),
+            set_window_hit_test: bind!("SDL_SetWindowHitTest"
+                : unsafe extern "C" fn(*mut Window, Option<HitTest>, *mut c_void) -> bool),
+            create_surface_from: bind!("SDL_CreateSurfaceFrom"
+                : unsafe extern "C" fn(c_int, c_int, u32, *mut c_void, c_int) -> *mut Surface),
+            destroy_surface: bind!("SDL_DestroySurface" : unsafe extern "C" fn(*mut Surface)),
+            set_window_icon: bind!("SDL_SetWindowIcon"
+                : unsafe extern "C" fn(*mut Window, *mut Surface) -> bool),
             _library: library,
         };
         Some(lib)

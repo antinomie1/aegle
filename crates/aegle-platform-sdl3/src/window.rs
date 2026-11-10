@@ -8,6 +8,7 @@
 #![allow(unsafe_code)]
 
 use std::{
+    cell::{Cell, RefCell},
     collections::VecDeque,
     ffi::{CStr, c_int},
     os::unix::net::UnixStream,
@@ -43,7 +44,18 @@ const DEFAULT_HZ: f32 = 60.0;
 /// until the presenter is dropped.
 pub(crate) struct NativeWindow {
     window: NonNull<sys::Window>,
-    lib: &'static sys::Lib,
+    pub(crate) lib: &'static sys::Lib,
+    /// The content that moves or resizes the window, which SDL's hit-test
+    /// callback reads through this shared allocation; see `frame`.
+    pub(crate) areas: RefCell<Vec<(aegle_platform::Rect, aegle_platform::WindowArea)>>,
+    /// Whether the hit-test callback is installed.
+    pub(crate) hit_tested: Cell<bool>,
+}
+
+impl NativeWindow {
+    pub(crate) fn ptr(&self) -> *mut sys::Window {
+        self.window.as_ptr()
+    }
 }
 
 impl Drop for NativeWindow {
@@ -107,7 +119,7 @@ pub(crate) struct WindowState {
 
 impl WindowState {
     pub(crate) fn ptr(&self) -> *mut sys::Window {
-        self.native.window.as_ptr()
+        self.native.ptr()
     }
 }
 
@@ -314,7 +326,12 @@ impl Sdl3 {
         let native_id = unsafe { (lib.get_window_id)(window.as_ptr()) };
         let state = WindowState {
             id,
-            native: Rc::new(NativeWindow { window, lib }),
+            native: Rc::new(NativeWindow {
+                window,
+                lib,
+                areas: RefCell::new(Vec::new()),
+                hit_tested: Cell::new(false),
+            }),
             native_id,
             parent: options.popup.map(|popup| popup.parent),
             info: WindowInfo {

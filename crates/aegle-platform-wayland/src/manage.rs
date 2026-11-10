@@ -26,7 +26,10 @@ fn hint(size: Option<PixelSize>) -> Option<(u32, u32)> {
 impl Wayland {
     /// A toplevel's window and its state; layers and popups are placed by
     /// their own protocols.
-    fn toplevel(&mut self, id: WindowId) -> Result<(Window, &mut crate::state::WindowState)> {
+    pub(crate) fn toplevel(
+        &mut self,
+        id: WindowId,
+    ) -> Result<(Window, &mut crate::state::WindowState)> {
         let window = self.window_mut(id)?;
         match &window.window {
             Shell::Xdg(native) => Ok((native.clone(), window)),

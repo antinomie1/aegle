@@ -97,6 +97,22 @@ impl Platform for Sdl3 {
         self.set_always_on_top(window, on_top)
     }
 
+    fn set_decorations(&mut self, window: WindowId, decorated: bool) -> Result<()> {
+        self.set_decorations(window, decorated)
+    }
+
+    fn set_areas(
+        &mut self,
+        window: WindowId,
+        areas: &[(aegle_platform::Rect, aegle_platform::WindowArea)],
+    ) -> Result<()> {
+        self.set_areas(window, areas)
+    }
+
+    fn set_icon(&mut self, window: WindowId, icon: aegle_platform::Icon<'_>) -> Result<()> {
+        self.set_icon(window, icon)
+    }
+
     fn configure_ime(&mut self, window: WindowId, request: Option<ImeRequest>) -> Result<()> {
         self.configure_ime(window, request)
     }

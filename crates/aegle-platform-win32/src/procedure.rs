@@ -65,6 +65,15 @@ fn handle(native: &Native, msg: u32, w: WPARAM, l: LPARAM) -> Result<Option<LRES
             }
         }
         WM_ERASEBKGND => return Ok(Some(LRESULT(1))),
+        WM_NCCALCSIZE if w.0 != 0 => {
+            // SAFETY: with a true WPARAM the LPARAM is a writable
+            // NCCALCSIZE_PARAMS whose first rectangle is the proposed window.
+            let params = unsafe { &mut *(l.0 as *mut NCCALCSIZE_PARAMS) };
+            if !native.client_area(&mut params.rgrc[0]) {
+                return Ok(None);
+            }
+        }
+        WM_NCHITTEST => return Ok(native.hit_test(l).map(LRESULT)),
         WM_GETMINMAXINFO => {
             // SAFETY: the message's LPARAM is a writable MINMAXINFO.
             native.min_max_info(unsafe { &mut *(l.0 as *mut MINMAXINFO) });

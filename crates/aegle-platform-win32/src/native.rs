@@ -44,6 +44,12 @@ pub(crate) struct Native {
     pub pending_mode: Cell<aegle_platform::WindowMode>,
     /// What a full-screen window returns to; `None` when not full screen.
     pub fullscreen: Cell<Option<crate::manage::Restore>>,
+    /// Whether the window shows the system's title bar and borders; see `frame`.
+    pub decorated: Cell<bool>,
+    /// The client areas that move or resize the window.
+    pub areas: RefCell<Vec<(aegle_platform::Rect, aegle_platform::WindowArea)>>,
+    /// The icon set on the window, destroyed with it; null for the class's.
+    pub icon: Cell<HICON>,
 }
 /// The shared system cursor closest to `cursor`; shared cursors are never destroyed.
 fn system_cursor(cursor: aegle_types::Cursor) -> HCURSOR {
@@ -126,6 +132,9 @@ impl Drop for Native {
             if !self.hwnd.get().is_invalid() {
                 SetWindowLongPtrW(self.hwnd.get(), GWLP_USERDATA, 0);
                 let _ = DestroyWindow(self.hwnd.get());
+            }
+            if !self.icon.get().is_invalid() {
+                let _ = DestroyIcon(self.icon.get());
             }
         }
     }

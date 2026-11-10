@@ -32,7 +32,7 @@ fn ns_size(size: PixelSize) -> NSSize {
 impl MacOs {
     /// The window a management request applies to: not a popup, which its
     /// anchor places.
-    fn ordinary(&self, id: WindowId) -> Result<&Rc<Native>> {
+    pub(crate) fn ordinary(&self, id: WindowId) -> Result<&Rc<Native>> {
         let native = self.window(id)?;
         if native.parent.is_some() {
             return Err(Error::InvalidRole("a popup is placed by its anchor"));
@@ -88,10 +88,12 @@ impl MacOs {
     }
 
     pub(crate) fn set_resizable(&mut self, id: WindowId, resizable: bool) -> Result<()> {
-        let window = &self.ordinary(id)?.window;
-        let mut style = window.styleMask();
-        style.set(NSWindowStyleMask::Resizable, resizable);
-        window.setStyleMask(style);
+        let native = self.ordinary(id)?;
+        let mut style = native.window.styleMask();
+        if style.contains(NSWindowStyleMask::Resizable) != resizable {
+            style.set(NSWindowStyleMask::Resizable, resizable);
+            native.restyle(style);
+        }
         Ok(())
     }
 
@@ -148,7 +150,7 @@ impl Native {
             WindowMode::Fullscreen
         } else if self.window.isMiniaturized() {
             WindowMode::Minimized
-        } else if self.window.isZoomed() {
+        } else if self.is_zoomed() {
             WindowMode::Maximized
         } else {
             WindowMode::Normal
@@ -182,13 +184,57 @@ impl Native {
                 self.target_mode.set(None);
                 self.window.miniaturize(None);
             }
-            // Zooming toggles between the user's frame and the screen's.
             _ => {
                 self.target_mode.set(None);
-                self.window.zoom(None);
+                self.zoom_to(target == WindowMode::Maximized);
                 self.refresh();
             }
         }
+    }
+
+    /// Whether the window is zoomed: a zoom brought it to the screen's frame
+    /// and it is still there. AppKit alone also calls a window zoomed that
+    /// sits at its maximum size or that the user cannot resize.
+    fn is_zoomed(&self) -> bool {
+        self.zoomed.get() && (!self.resizable() || self.window.isZoomed())
+    }
+
+    /// AppKit is about to zoom the window at the user's request or ours.
+    pub(crate) fn will_zoom(&self) {
+        self.zoomed.set(!self.window.isZoomed());
+    }
+
+    /// Whether the user can resize the window.
+    pub(crate) fn resizable(&self) -> bool {
+        self.window
+            .styleMask()
+            .contains(NSWindowStyleMask::Resizable)
+    }
+
+    /// Changes the window's style. Restyling hands the first responder back
+    /// to the window, which would end key delivery to the view.
+    pub(crate) fn restyle(&self, style: NSWindowStyleMask) {
+        self.window.setStyleMask(style);
+        self.window.makeFirstResponder(Some(&self.view));
+    }
+
+    /// Zooms the window to the screen's frame or back to the user's. AppKit
+    /// zooms only windows the user can resize, so a fixed one is resizable
+    /// meanwhile.
+    fn zoom_to(&self, zoomed: bool) {
+        let style = self.window.styleMask();
+        let fixed = !self.resizable();
+        if fixed {
+            self.window
+                .setStyleMask(style | NSWindowStyleMask::Resizable);
+        }
+        if self.window.isZoomed() != zoomed {
+            self.window.zoom(None);
+        }
+        if fixed {
+            self.restyle(style);
+        }
+        self.zoomed.set(zoomed);
     }
 
     fn toggle_full_screen(&self) {
@@ -200,6 +246,7 @@ impl Native {
     /// A full-screen transition ended, completed or not.
     pub(crate) fn full_screen_changed(&self) {
         self.transitioning.set(false);
+        self.apply_decorations();
         self.dirty.set(true);
         self.refresh();
         self.advance_later();

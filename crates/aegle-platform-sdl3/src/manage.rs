@@ -41,7 +41,7 @@ fn extent(size: Option<PixelSize>) -> Result<(c_int, c_int)> {
 
 impl Sdl3 {
     /// An ordinary window, not a popup, which its anchor places.
-    fn ordinary(&self, id: WindowId) -> Result<&WindowState> {
+    pub(crate) fn ordinary(&self, id: WindowId) -> Result<&WindowState> {
         let window = self.window(id)?;
         if window.parent.is_some() {
             return Err(Error::InvalidRole("a popup is placed by its anchor"));
@@ -62,7 +62,7 @@ impl Sdl3 {
     }
 
     /// Fails with SDL's message when a call returned false.
-    fn check(&self, done: bool) -> Result<()> {
+    pub(crate) fn check(&self, done: bool) -> Result<()> {
         match done {
             true => Ok(()),
             false => Err(Error::backend(sys::error(self.lib))),

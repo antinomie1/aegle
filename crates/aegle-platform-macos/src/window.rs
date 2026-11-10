@@ -18,9 +18,8 @@ use aegle_platform::{
 };
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
-    NSApplication, NSBackingStoreType, NSColor, NSCursor, NSPasteboardTypeFileURL,
-    NSPasteboardTypeString, NSWindow, NSWindowCollectionBehavior, NSWindowOcclusionState,
-    NSWindowStyleMask,
+    NSApplication, NSColor, NSCursor, NSPasteboardTypeFileURL, NSPasteboardTypeString,
+    NSWindowCollectionBehavior, NSWindowOcclusionState,
 };
 use objc2_foundation::{MainThreadMarker, NSArray, NSPoint, NSRect, NSSize, NSString};
 use raw_window_handle::{
@@ -180,22 +179,7 @@ impl MacOs {
         let grab = options.popup.is_some_and(|popup| popup.grab.is_some());
         let window = match parent {
             Some(_) => popup::window(mtm, content, grab),
-            None => {
-                let style = NSWindowStyleMask::Titled
-                    | NSWindowStyleMask::Closable
-                    | NSWindowStyleMask::Miniaturizable
-                    | NSWindowStyleMask::Resizable;
-                // SAFETY: a standard titled window with a buffered backing store.
-                unsafe {
-                    NSWindow::initWithContentRect_styleMask_backing_defer(
-                        mtm.alloc(),
-                        content,
-                        style,
-                        NSBackingStoreType::Buffered,
-                        false,
-                    )
-                }
-            }
+            None => crate::decorations::window(mtm, content),
         };
         // SAFETY: the window is owned by `Native`, not by AppKit's close.
         unsafe { window.setReleasedWhenClosed(false) };
@@ -241,6 +225,11 @@ impl MacOs {
             limits: Cell::new((None, None)),
             target_mode: Cell::new(None),
             transitioning: Cell::new(false),
+            zoomed: Cell::new(false),
+            decorated: Cell::new(true),
+            areas: RefCell::new(Vec::new()),
+            resizing: Cell::new(None),
+            resize_cursor: Cell::new(None),
         });
         native.window.setContentView(Some(&native.view));
         native
@@ -340,7 +329,8 @@ impl MacOs {
         let native = self.window(id)?;
         native.cursor.set(shape);
         native.window.invalidateCursorRectsForView(&native.view);
-        if native.inside.get() {
+        // A resize area under the pointer keeps showing its own cursor.
+        if native.inside.get() && native.resize_cursor.get().is_none() {
             cursor(shape).set();
         }
         Ok(())

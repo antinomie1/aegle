@@ -27,7 +27,11 @@
 #[cfg(target_os = "macos")]
 mod app;
 #[cfg(target_os = "macos")]
+mod area;
+#[cfg(target_os = "macos")]
 mod clipboard;
+#[cfg(target_os = "macos")]
+mod decorations;
 #[cfg(target_os = "macos")]
 mod drag;
 #[cfg(target_os = "macos")]

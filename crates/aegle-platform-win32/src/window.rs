@@ -209,6 +209,9 @@ impl Win32 {
             limits: Cell::new((None, None)),
             pending_mode: Cell::new(Default::default()),
             fullscreen: Cell::new(None),
+            decorated: Cell::new(true),
+            areas: RefCell::new(Vec::new()),
+            icon: Cell::new(HICON::default()),
         });
         let title: Vec<u16> = options.title.encode_utf16().chain(Some(0)).collect();
         // A transparent window keeps no redirection surface: its renderer shows

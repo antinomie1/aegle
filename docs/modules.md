@@ -8,7 +8,7 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 
 | Crate | 职责与独立用途 | 内部依赖 |
 |---|---|---|
-| **aegle-types** | 几何坐标、RGBA 颜色、阴影、光标、输入修饰键、系统偏好与拖放数据结构（`no_std`，`std` 下增拖放） | 无 |
+| **aegle-types** | 几何坐标、RGBA 颜色、阴影、光标、输入修饰键、系统偏好、图标与拖放数据结构（`no_std`，`std` 下增拖放） | 无 |
 | **aegle-core** | 槽位树（32位索引+32位代数 ID）、属性变更、结构树维护、三通道失效打脏（布局/绘制/语义）、焦点遍历 | types |
 | **aegle-layout** | Taffy 0.14.0 适配（Flexbox/Block，可选 Grid）；首基线与尺寸测量回调；虚拟 contents 节点；自适应滚动视口约束 | types, core |
 | **aegle-segment** | 词边界断词（供按词移动与双击选词）；运行时加载系统 ICU 或 `CFStringTokenizer`，无内置词典数据 | 无 |
@@ -28,7 +28,7 @@ Aegle 采用多 Crate 拆分设计，按可独立使用的能力和后端差异�
 | **aegle-platform-macos** | macOS 原生窗口后端：AppKit 窗口与子窗口弹出层、屏幕输出、NSTextInputClient、NSPasteboard、NSDragging、CGImage 呈现与 Metal 租约 | types, platform |
 | **aegle-portal** | Linux 桌面 portal（`org.freedesktop.portal.Settings`）外观偏好读取与 `SettingChanged` 监听 | types, dbus |
 | **aegle-dbus** | Linux 会话总线轻量级客户端：认证、Hello、消息编解码，支持跨线程发送与阻塞/非阻塞读取 | 无 |
-| **aegle-desktop** | 桌面级服务：文件选择对话框、系统通知、托盘图标与菜单、全局快捷键（Linux 经 portal/D-Bus，Windows 经 Win32 API，macOS 经 AppKit 面板、`NSStatusItem`、Carbon 热键与应用包内的 `UNUserNotificationCenter`） | Linux: dbus; Windows: Win32; macOS: AppKit |
+| **aegle-desktop** | 桌面级服务：文件选择对话框、系统通知、托盘图标与菜单、全局快捷键（Linux 经 portal/D-Bus，Windows 经 Win32 API，macOS 经 AppKit 面板、`NSStatusItem`、Carbon 热键与应用包内的 `UNUserNotificationCenter`） | aegle-types（图标）; Linux: dbus; Windows: Win32; macOS: AppKit |
 | **aegle-access** | 无障碍语义树导出与平台适配（Linux AT-SPI、Windows UI Automation、macOS NSAccessibility） | AccessKit 0.24 |
 | **aegle-theme** | 无分配主题配置、类 Metro 中性默认样式、`ThemeOverride` 局部覆盖、类型化 Token（颜色、尺寸、字体、阴影） | types |
 | **aegle-motion** | 补间动画、关键帧动画、Bézier/阻尼弹簧曲线、属性动画（位移/缩放/旋转/透明度/阴影/渐变），无自身定时器 | types |

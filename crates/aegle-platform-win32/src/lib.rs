@@ -16,6 +16,8 @@ mod drag;
 #[cfg(windows)]
 mod error;
 #[cfg(windows)]
+mod frame;
+#[cfg(windows)]
 mod ime_edit;
 #[cfg(windows)]
 mod ime_types;

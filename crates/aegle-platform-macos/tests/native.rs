@@ -1,6 +1,8 @@
 //! Native lifecycle contract, intentionally opt-in on a macOS GUI session:
-//! `cargo test -p aegle-platform-macos --test native -- --ignored`. The drag
-//! scenario moves the real pointer, so leave the session alone while it runs.
+//! `cargo test -p aegle-platform-macos --test native -- --ignored`, optionally
+//! followed by parts of scenario names to run only those. The window area
+//! and drag scenarios move the real pointer, so leave the session alone
+//! while they run.
 //!
 //! AppKit runs on the main thread only, which libtest never gives a test, so
 //! this target has its own `main` and runs its scenarios in order.
@@ -21,8 +23,20 @@ fn main() -> Outcome {
         ),
         ("outputs and popups", macos::outputs_and_popups),
         ("window management", macos::window_management),
+        (
+            "undecorated windows and window areas",
+            macos::undecorated_and_areas,
+        ),
         ("drag and drop between windows", macos::drag_between_windows),
     ] {
+        // As with libtest, other arguments select scenarios by name.
+        let filters: Vec<_> = std::env::args()
+            .skip(1)
+            .filter(|arg| !arg.starts_with("--"))
+            .collect();
+        if !filters.is_empty() && !filters.iter().any(|filter| name.contains(filter)) {
+            continue;
+        }
         scenario().map_err(|error| format!("{name}: {error}"))?;
         println!("native: {name} ... ok");
     }
@@ -319,6 +333,8 @@ mod macos {
         assert_eq!(backend.window_info(window)?.size, size(420, 280));
         backend.set_size(window, size(900, 900))?;
         assert_eq!(backend.window_info(window)?.size, size(600, 400));
+        // AppKit calls a window at its maximum size zoomed; it is not maximized.
+        assert_eq!(backend.window_info(window)?.mode, WindowMode::Normal);
         backend.set_size_limits(window, None, None)?;
         assert!(matches!(
             backend.set_size(window, size(0, 10)),
@@ -335,8 +351,24 @@ mod macos {
         ));
         backend.set_always_on_top(window, true)?;
         backend.set_always_on_top(window, false)?;
+        // A window the user cannot resize is still normal, and still sized,
+        // moved and maximized by the program.
         backend.set_resizable(window, false)?;
+        assert_eq!(backend.window_info(window)?.mode, WindowMode::Normal);
+        backend.set_size(window, size(440, 300))?;
+        assert_eq!(backend.window_info(window)?.size, size(440, 300));
+        backend.set_position(window, target)?;
+        backend.set_mode(window, WindowMode::Maximized)?;
+        wait_for(&mut backend, window, "fixed and maximized", |info| {
+            info.mode == WindowMode::Maximized && info.size != size(440, 300)
+        })?;
+        backend.set_mode(window, WindowMode::Normal)?;
+        wait_for(&mut backend, window, "fixed and restored", |info| {
+            info.mode == WindowMode::Normal && info.size == size(440, 300)
+        })?;
+        assert_eq!(backend.position(window)?, target);
         backend.set_resizable(window, true)?;
+        assert_eq!(backend.window_info(window)?.mode, WindowMode::Normal);
 
         // Full screen, then minimized from it: the window leaves full screen
         // first, then goes to the Dock; restoring brings it back.
@@ -612,6 +644,235 @@ mod macos {
             frame.origin.x + frame.size.width / 2.0,
             primary - (frame.origin.y + frame.size.height / 2.0),
         )
+    }
+
+    /// An undecorated window keeps its content, modes and key status; with
+    /// the real pointer, a move area drags it, a client rectangle above the
+    /// area still takes presses, and a resize area and the border resize it.
+    pub fn undecorated_and_areas() -> Outcome {
+        use aegle_platform::{Point, PointerKind, ResizeEdge, WindowArea, WindowMode};
+        use objc2_app_kit::NSWindowStyleMask;
+        use objc2_foundation::NSPoint;
+        let mut backend = MacOs::connect()?;
+        let size = |width, height| PixelSize { width, height };
+        let window = backend.create_window(WindowOptions {
+            title: "Aegle undecorated",
+            size: size(320, 200),
+            ..Default::default()
+        })?;
+        // Before the first frame, as a host applies its options.
+        backend.set_decorations(window, false)?;
+        let origin = Point::new(200.0, 240.0);
+        backend.set_position(window, origin)?;
+        assert!(backend.present(window, None, |pixels, _, _| {
+            pixels.fill(200);
+            Ok(())
+        })?);
+        wait_for(&mut backend, window, "activation", |info| info.active)?;
+        assert_eq!(backend.window_info(window)?.size, size(320, 200));
+        assert_eq!(backend.position(window)?, origin);
+        let surface = backend.window_surface(window)?;
+        let native = ns_window(&surface);
+        assert!(!native.styleMask().contains(NSWindowStyleMask::Titled));
+
+        // Modes work without a title bar; decorations requested while full
+        // screen arrive with the return, around the same content.
+        backend.set_mode(window, WindowMode::Maximized)?;
+        wait_for(&mut backend, window, "maximized", |info| {
+            info.mode == WindowMode::Maximized
+        })?;
+        backend.set_mode(window, WindowMode::Normal)?;
+        wait_for(&mut backend, window, "restored", |info| {
+            info.mode == WindowMode::Normal && info.size == size(320, 200)
+        })?;
+        backend.set_mode(window, WindowMode::Fullscreen)?;
+        wait_for(&mut backend, window, "full screen", |info| {
+            info.mode == WindowMode::Fullscreen
+        })?;
+        backend.set_decorations(window, true)?;
+        assert!(!native.styleMask().contains(NSWindowStyleMask::Titled));
+        backend.set_mode(window, WindowMode::Normal)?;
+        wait_for(
+            &mut backend,
+            window,
+            "the title bar after full screen",
+            |info| {
+                info.mode == WindowMode::Normal
+                    && info.size == size(320, 200)
+                    && native.styleMask().contains(NSWindowStyleMask::Titled)
+            },
+        )?;
+        assert_eq!(backend.position(window)?, origin);
+        backend.set_decorations(window, false)?;
+        assert_eq!(backend.window_info(window)?.size, size(320, 200));
+        assert_eq!(backend.position(window)?, origin);
+
+        assert!(matches!(
+            backend.set_areas(
+                window,
+                &[(Rect::new(0.0, 0.0, -1.0, 4.0), WindowArea::Move)]
+            ),
+            Err(Error::InvalidSize)
+        ));
+        backend.set_areas(
+            window,
+            &[
+                (Rect::new(0.0, 0.0, 320.0, 32.0), WindowArea::Move),
+                (Rect::new(280.0, 0.0, 40.0, 32.0), WindowArea::Client),
+                (
+                    Rect::new(150.0, 90.0, 20.0, 20.0),
+                    WindowArea::Resize(ResizeEdge::BottomRight),
+                ),
+            ],
+        )?;
+        settle(&mut backend)?;
+
+        // Presses at `from` in the content, drags by `by` and releases;
+        // returns whether the window reported the press.
+        let drag = |backend: &mut MacOs,
+                    from: Point,
+                    by: Point|
+         -> Result<bool, Box<dyn std::error::Error>> {
+            let corner = backend.position(window)?;
+            let start = NSPoint::new(f64::from(corner.x + from.x), f64::from(corner.y + from.y));
+            let mut pressed = false;
+            let mut pump = |backend: &mut MacOs, millis: u64| -> Outcome {
+                let deadline = std::time::Instant::now() + Duration::from_millis(millis);
+                while std::time::Instant::now() < deadline {
+                    backend.dispatch(Some(Duration::from_millis(10)))?;
+                    while let Some(event) = backend.next_event() {
+                        match event {
+                            Event::Redraw { window } => {
+                                backend.present(window, None, |pixels, _, _| {
+                                    pixels.fill(200);
+                                    Ok(())
+                                })?;
+                            }
+                            Event::Pointer {
+                                kind: PointerKind::Down { .. },
+                                ..
+                            } => pressed = true,
+                            _ => {}
+                        }
+                    }
+                }
+                Ok(())
+            };
+            mouse(5, start);
+            pump(backend, 100)?;
+            // The whole gesture comes from another thread, as real input
+            // comes from outside: AppKit may track a press in a loop nested
+            // in event delivery, which only the release ends.
+            let pointer = std::thread::spawn(move || {
+                mouse(1, start);
+                std::thread::sleep(Duration::from_millis(150));
+                for step in 1..=10 {
+                    let t = f64::from(step) / 10.0;
+                    mouse(
+                        6,
+                        NSPoint::new(start.x + f64::from(by.x) * t, start.y + f64::from(by.y) * t),
+                    );
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                std::thread::sleep(Duration::from_millis(150));
+                mouse(
+                    2,
+                    NSPoint::new(start.x + f64::from(by.x), start.y + f64::from(by.y)),
+                );
+            });
+            while !pointer.is_finished() {
+                pump(backend, 20)?;
+            }
+            pointer.join().expect("the pointer thread finishes");
+            pump(backend, 200)?;
+            Ok(pressed)
+        };
+
+        // The move area hands the drag to the window server.
+        let pressed = drag(
+            &mut backend,
+            Point::new(100.0, 16.0),
+            Point::new(60.0, 40.0),
+        )?;
+        assert!(!pressed, "a press in a move area is not reported");
+        let moved = backend.position(window)?;
+        assert_eq!(moved, Point::new(origin.x + 60.0, origin.y + 40.0));
+        assert_eq!(backend.window_info(window)?.size, size(320, 200));
+        // The client rectangle above it keeps its presses, and the window.
+        let pressed = drag(
+            &mut backend,
+            Point::new(300.0, 16.0),
+            Point::new(10.0, 10.0),
+        )?;
+        assert!(
+            pressed,
+            "a client rectangle above a move area takes presses"
+        );
+        assert_eq!(backend.position(window)?, moved);
+        // The resize area drags the bottom-right corner; the top-left stays.
+        let pressed = drag(
+            &mut backend,
+            Point::new(160.0, 100.0),
+            Point::new(40.0, 30.0),
+        )?;
+        assert!(!pressed, "a press in a resize area is not reported");
+        assert_eq!(backend.window_info(window)?.size, size(360, 230));
+        assert_eq!(backend.position(window)?, moved);
+        // Limits hold against the pointer.
+        backend.set_size_limits(window, None, Some(size(380, 240)))?;
+        drag(
+            &mut backend,
+            Point::new(160.0, 100.0),
+            Point::new(60.0, 60.0),
+        )?;
+        assert_eq!(backend.window_info(window)?.size, size(380, 240));
+        backend.set_size_limits(window, None, None)?;
+        // AppKit resizes only titled windows by their edges, so the platform
+        // gives an undecorated one its border: an edge, then a corner.
+        drag(
+            &mut backend,
+            Point::new(378.0, 150.0),
+            Point::new(30.0, 0.0),
+        )?;
+        assert_eq!(backend.window_info(window)?.size, size(410, 240));
+        assert_eq!(backend.position(window)?, moved);
+        let pressed = drag(&mut backend, Point::new(2.0, 3.0), Point::new(-20.0, -10.0))?;
+        assert!(!pressed, "a press in the resize border is not reported");
+        assert_eq!(backend.window_info(window)?.size, size(430, 250));
+        let corner = Point::new(moved.x - 20.0, moved.y - 10.0);
+        assert_eq!(backend.position(window)?, corner);
+        // A window that is not resizable has neither border nor resize areas.
+        backend.set_resizable(window, false)?;
+        for at in [Point::new(160.0, 100.0), Point::new(428.0, 150.0)] {
+            let pressed = drag(&mut backend, at, Point::new(20.0, 20.0))?;
+            assert!(pressed, "a fixed window's resize areas are content");
+        }
+        assert_eq!(backend.window_info(window)?.size, size(430, 250));
+        assert_eq!(backend.position(window)?, corner);
+        // Popups have neither decorations nor areas of their own.
+        let popup = backend.create_window(WindowOptions {
+            size: size(40, 30),
+            popup: Some(PopupOptions {
+                parent: window,
+                anchor: Rect::new(0.0, 0.0, 10.0, 10.0),
+                side: Side::Below,
+                grab: None,
+            }),
+            ..Default::default()
+        })?;
+        assert!(matches!(
+            backend.set_decorations(popup, true),
+            Err(Error::InvalidRole(_))
+        ));
+        assert!(matches!(
+            backend.set_areas(popup, &[]),
+            Err(Error::InvalidRole(_))
+        ));
+        backend.remove_window(popup)?;
+
+        drop(surface);
+        backend.remove_window(window)?;
+        Ok(())
     }
 
     /// Text and then files dragged with the real pointer from one window to

@@ -84,3 +84,82 @@ fn size_limits_reject_empty_or_inverted_bounds_and_clamp_each_axis() {
     assert_eq!(size(250, 200).clamp(min, max), size(250, 200));
     assert_eq!(size(50, 900).clamp(None, max), size(50, 300));
 }
+
+#[test]
+fn later_areas_lie_above_earlier_ones_and_validate_their_rectangles() {
+    use aegle_platform::{Point, ResizeEdge, WindowArea, area_at, check_areas};
+    // A title bar with a button in it and a grip in the corner below.
+    let areas = [
+        (Rect::new(0.0, 0.0, 300.0, 32.0), WindowArea::Move),
+        (Rect::new(260.0, 0.0, 40.0, 32.0), WindowArea::Client),
+        (
+            Rect::new(284.0, 184.0, 16.0, 16.0),
+            WindowArea::Resize(ResizeEdge::BottomRight),
+        ),
+    ];
+    assert!(check_areas(&areas).is_ok());
+    let at = |x, y| area_at(&areas, Point::new(x, y));
+    assert_eq!(at(10.0, 10.0), WindowArea::Move);
+    assert_eq!(at(270.0, 10.0), WindowArea::Client);
+    assert_eq!(at(10.0, 32.0), WindowArea::Client);
+    assert_eq!(
+        at(290.0, 190.0),
+        WindowArea::Resize(ResizeEdge::BottomRight)
+    );
+    assert_eq!(area_at(&[], Point::new(1.0, 1.0)), WindowArea::Client);
+
+    for rect in [
+        Rect::new(f32::NAN, 0.0, 1.0, 1.0),
+        Rect::new(0.0, 0.0, -1.0, 1.0),
+        Rect::new(0.0, 0.0, 1.0, f32::INFINITY),
+    ] {
+        assert!(matches!(
+            check_areas(&[(rect, WindowArea::Move)]),
+            Err(Error::InvalidSize)
+        ));
+    }
+}
+
+#[test]
+fn the_resize_border_names_edges_and_corners_inside_the_content() {
+    use aegle_platform::{PixelSize, Point, RESIZE_BORDER, ResizeEdge, border_edge};
+    let size = PixelSize {
+        width: 400,
+        height: 300,
+    };
+    let at = |x, y| border_edge(size, Point::new(x, y));
+    assert_eq!(at(200.0, 150.0), None);
+    assert_eq!(at(2.0, 150.0), Some(ResizeEdge::Left));
+    assert_eq!(at(398.0, 150.0), Some(ResizeEdge::Right));
+    assert_eq!(at(200.0, 1.0), Some(ResizeEdge::Top));
+    assert_eq!(at(200.0, 299.0), Some(ResizeEdge::Bottom));
+    // Corners reach further along the edge than the border is thick.
+    assert_eq!(at(2.0, 12.0), Some(ResizeEdge::TopLeft));
+    assert_eq!(at(390.0, 2.0), Some(ResizeEdge::TopRight));
+    assert_eq!(at(3.0, 290.0), Some(ResizeEdge::BottomLeft));
+    assert_eq!(at(399.0, 299.0), Some(ResizeEdge::BottomRight));
+    assert_eq!(at(12.0, 12.0), None);
+    // Both sides are as thick, in whole pixels too, and end with the content.
+    assert_eq!(at(RESIZE_BORDER - 1.0, 150.0), Some(ResizeEdge::Left));
+    assert_eq!(at(RESIZE_BORDER, 150.0), None);
+    assert_eq!(at(400.0 - RESIZE_BORDER, 150.0), Some(ResizeEdge::Right));
+    assert_eq!(at(399.0 - RESIZE_BORDER, 150.0), None);
+    assert_eq!(at(-1.0, 150.0), None);
+    assert_eq!(at(400.0, 150.0), None);
+    assert_eq!(at(200.0, 300.0), None);
+}
+
+#[test]
+fn icons_hold_exactly_their_pixels() {
+    use aegle_platform::Icon;
+    let pixels = [0u8; 2 * 3 * 4];
+    let icon = |width, height, rgba| Icon {
+        width,
+        height,
+        rgba,
+    };
+    assert!(icon(2, 3, &pixels).is_valid());
+    assert!(!icon(3, 3, &pixels).is_valid());
+    assert!(!icon(0, 3, &[]).is_valid());
+    assert!(!icon(u32::MAX, u32::MAX, &pixels).is_valid());
+}
