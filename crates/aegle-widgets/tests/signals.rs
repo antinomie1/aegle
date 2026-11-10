@@ -1,7 +1,8 @@
 //! Signals drive controls in Rust: bindings follow the signals they read,
 //! end with their control, and two-way bindings write user changes back
 //! without disturbing an edit in progress. Derived values settle before the
-//! bindings that read them, and a batch runs each reaction once.
+//! bindings that read them, or when read inside a batch, and a batch runs
+//! each reaction once.
 use aegle_text::GenericFamily;
 use aegle_ui::{Derived, Key, KeyInput, Modifiers, Result, Signal, TextSystem, Theme, Ui, batch};
 use aegle_widgets::*;
@@ -202,16 +203,27 @@ fn derived_values_settle_before_bindings_and_batches_run_reactions_once() -> Res
     a.set(4);
 
     // A batch defers every reaction to its end; nested batches to the outermost.
+    // Derived values read inside it are recomputed then, after the derived
+    // values they read, and not again at the end.
+    let computed = Rc::new(Cell::new(0));
+    let count = computed.clone();
+    let next = a.map(move |a| {
+        count.set(count.get() + 1);
+        a + 1
+    });
     let before = seen.borrow().len();
     batch(|| {
         a.set(5);
+        assert_eq!((parity.get(), next.get()), (2, 6));
         batch(|| b.set(20));
         a.set(6);
+        assert_eq!((parity.get(), next.get(), next.get()), (0, 7, 7));
         assert_eq!(seen.borrow().len(), before);
         assert_eq!(label.text(), "(8, 14, 0)");
     });
     assert_eq!(seen.borrow().len(), before + 1);
     assert_eq!(label.text(), "(12, 26, 0)");
+    assert_eq!(computed.get(), 3);
 
     // A change made by a reaction joins the pass in progress.
     let (source, target) = (b.clone(), a.clone());

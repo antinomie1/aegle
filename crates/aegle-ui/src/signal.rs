@@ -10,13 +10,14 @@
 //! change ends, before [`Signal::set`] returns, or, inside a [`batch`], when
 //! the outermost batch ends. A pass runs derived values first, then bindings,
 //! then change handlers, so a binding never sees a derived value that is out
-//! of date; a reaction queued again before it runs still runs once. Changes
+//! of date; a reaction queued again before it runs still runs once. Reading a
+//! derived value whose recomputation is queued, such as inside a batch,
+//! recomputes it then, after the derived values it reads. Changes
 //! made by a running reaction join the pass in progress. Reactions only
 //! change controls through their handles, which mark the tree dirty, so
 //! layout and painting still happen once, at the next refresh.
 
 use std::{
-    any::Any,
     cell::{Cell, OnceCell, RefCell},
     collections::VecDeque,
     fmt,
@@ -51,8 +52,9 @@ pub fn take_reaction_error() -> Option<Box<dyn std::error::Error>> {
 /// returns, so each reaction runs once with the final values.
 ///
 /// Batches nest: the reactions run when the outermost one ends. Until then,
-/// bindings and derived values keep showing the values from before the batch;
-/// the changed signals themselves read their new values. Event handlers
+/// bindings keep showing the values from before the batch and change handlers
+/// wait; reading a changed signal or a derived value computed from one gives
+/// the new value, the derived value being recomputed on that read. Event handlers
 /// usually need no batch: a change there already runs its reactions once,
 /// and layout and painting wait for the next refresh anyway.
 ///
@@ -68,7 +70,8 @@ pub fn take_reaction_error() -> Option<Box<dyn std::error::Error>> {
 /// batch(|| {
 ///     a.set("Grace");
 ///     last.set("Hopper");
-///     assert_eq!(full.get(), "Ada Lovelace"); // Not yet recomputed.
+///     assert_eq!(full.get(), "Grace Hopper"); // Recomputed on read...
+///     assert_eq!(changes.get(), 0); // ...but handlers wait for the end.
 /// });
 /// assert_eq!((full.get(), changes.get()), ("Grace Hopper".into(), 1));
 /// ```
@@ -123,8 +126,43 @@ fn flush() {
         let mut pending = queue.pending.borrow_mut();
         pending.iter_mut().find_map(VecDeque::pop_front)
     }) {
-        effect.queued.set(false);
-        effect.run();
+        // A derived value read since it was queued has already run.
+        if effect.queued.replace(false) {
+            effect.run();
+        }
+    }
+}
+
+/// Brings the derived value that `compute` computes up to date before it is
+/// read: first the derived values it read, which may queue it, then itself
+/// if queued. Nothing is walked while no derived value waits.
+fn settle(compute: &Rc<Effect>) {
+    let waiting = QUEUE.with(|queue| !queue.pending.borrow()[Kind::Derived as usize].is_empty());
+    if waiting {
+        refresh(compute);
+    }
+}
+
+fn refresh(compute: &Rc<Effect>) {
+    // A running computation reads itself only through a cycle; skip it.
+    if compute.react.borrow().is_none() {
+        return;
+    }
+    // One source at a time, without holding the list: recomputing a source
+    // does not change it.
+    for index in 0.. {
+        let Some(source) = compute.sources.borrow().get(index).cloned() else {
+            break;
+        };
+        if let Some(upstream) = source
+            .upgrade()
+            .and_then(|source| source.compute().cloned())
+        {
+            refresh(&upstream);
+        }
+    }
+    if compute.queued.replace(false) {
+        compute.run();
     }
 }
 
@@ -182,7 +220,19 @@ struct Inner<T> {
     /// Change handlers, owned by the signal and run after the readers.
     watchers: RefCell<Vec<Rc<Effect>>>,
     /// The reaction computing a derived value, owned by its signal.
-    _compute: OnceCell<Rc<Effect>>,
+    compute: OnceCell<Rc<Effect>>,
+}
+
+/// A signal as the reactions that read it see it.
+trait Source {
+    /// The reaction computing it, if it is a derived value.
+    fn compute(&self) -> Option<&Rc<Effect>>;
+}
+
+impl<T> Source for Inner<T> {
+    fn compute(&self) -> Option<&Rc<Effect>> {
+        self.compute.get()
+    }
 }
 
 impl<T> Clone for Signal<T> {
@@ -216,7 +266,7 @@ impl<T: 'static> Signal<T> {
                 value: RefCell::new(value),
                 readers: RefCell::new(Vec::new()),
                 watchers: RefCell::new(Vec::new()),
-                _compute: OnceCell::new(),
+                compute: OnceCell::new(),
             }),
         }
     }
@@ -227,6 +277,9 @@ impl<T: 'static> Signal<T> {
     ///
     /// When `read` changes this signal.
     pub fn with<R>(&self, read: impl FnOnce(&T) -> R) -> R {
+        if let Some(compute) = self.inner.compute.get() {
+            settle(compute);
+        }
         self.track();
         read(&self.inner.value.borrow())
     }
@@ -283,7 +336,7 @@ impl<T: 'static> Signal<T> {
         let Some(effect) = CURRENT.with_borrow(Clone::clone) else {
             return;
         };
-        let source: Weak<dyn Any> = Rc::downgrade(&self.inner) as Weak<dyn Any>;
+        let source: Weak<dyn Source> = Rc::downgrade(&self.inner) as Weak<dyn Source>;
         let mut sources = effect.sources.borrow_mut();
         if sources.iter().any(|known| known.ptr_eq(&source)) {
             return;
@@ -387,7 +440,9 @@ impl<T: PartialEq + 'static> Signal<T> {
 ///
 /// The computation runs once at creation and again in the pass after a value
 /// it read changes, before the bindings, so a binding reading it and its
-/// sources sees them agree. Its readers rerun only when the result differs
+/// sources sees them agree. Read before that pass, inside a [`batch`] or a
+/// change handler, it is recomputed on the read, so it always agrees with
+/// its sources. Its readers rerun only when the result differs
 /// from the previous one. Cloning shares the value; the computation lives as
 /// long as a clone, or a binding reading it.
 ///
@@ -434,7 +489,7 @@ impl<T: PartialEq + 'static> Derived<T> {
         batch(|| effect.run());
         let signal = Signal::new(first.take().expect("the first run computes the value"));
         let _ = target.set(Rc::downgrade(&signal.inner));
-        let _ = signal.inner._compute.set(effect);
+        let _ = signal.inner.compute.set(effect);
         Self(signal)
     }
 }
@@ -556,7 +611,7 @@ struct Effect {
     /// Counts runs; subscriptions of an earlier run are outdated.
     run: Cell<u64>,
     /// The signals read on the latest run, kept to subscribe once per signal.
-    sources: RefCell<Vec<Weak<dyn Any>>>,
+    sources: RefCell<Vec<Weak<dyn Source>>>,
     removed: Cell<bool>,
 }
 
