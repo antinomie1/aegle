@@ -435,12 +435,16 @@ window.button("重置").on_click(move |_| {                // 只改模型，控
 - 输入控件的双向绑定：`CheckBox`/`Switch::bind_checked(&Signal<bool>)`、`TextField::bind_text(&Signal<String>)`、`Slider`/`NumberField::bind_value(&Signal<f64>)`、`Dropdown`/`Tabs::bind_selected(&Signal<usize>)`，单选按钮组为每个按钮 `Radio::bind_choice(&Signal<T>, 值)`（signal 等于该值时选中，用户选中时设为该值）。用户修改经控件的 `on_change` 写回；控件已显示的值不会再被设一次，所以正在编辑的文本框保留插入点、选区与撤销历史。滑块与数值框把超出范围的值钳制显示，signal 保留给定值，直到用户改动控件。
 - `bind`、`on_change`（`Derived` 的同名方法同样）与 `bind_*` 返回 `Binding`，`remove()` 停止它（双向绑定的两个方向一起停止）；丢弃 `Binding` 不会停止。自定义控件库的双向绑定可以用 `Binding::with_subscription` 把写回处理器的 `Subscription` 并入同一个 `Binding`。
 - 与标记互通：标记文档的 `state` 是 `aegle::loader::State<T>`，`state.bind_signal(&signal)?` 把它与同类型的 `Signal<T>` 双向连接（`T` 为 `bool`、`i64`、`f32`、`String`、`Vec<i64>`、`Vec<String>` 或 `Data`）：连接时 state 取 signal 的值，之后事件块、绑定源或 Rust 对任一方的修改都同步到另一方，对方已相等时停止回传。连接跟随保留该 state 的重载；把 signal 的修改写入 state 时的错误（非有限浮点数、标记里的绑定或处理器失败）按上一条交给宿主。返回的 `Binding` 的 `remove()` 同时断开两个方向；连接让 signal 与 state 互相保持存活，直到移除。
+- 单向驱动标记：`state.follow(&derived)?` 让 state 跟随 `Derived<T>`：现在取它的值，之后它每次变化都写入 state；Rust 计算、标记显示，标记的修改不回传。事件块仍可给该 state 赋值，该值保持到派生值下次变化。界面保持 `derived` 存活，所以可以直接传临时值（`&signal.map(...)`）；连接跟随保留该 state 的重载，随界面移除或 `Binding::remove()` 结束，结束时释放派生值。错误处理与 `bind_signal` 相同。
 
   ```rust
-  let view = aegle::ui!(&app, "examples/dynamic.aegle")?;   // 文档里有 state tasks: list<string>
+  let view = aegle::ui!(&app, "examples/dynamic.aegle")?;   // 文档里有 state tasks: list<string> 与 longest: int
   let tasks = Signal::new(vec![String::from("Write markup")]);
   view.tasks.bind_signal(&tasks)?;                         // 标记按钮改 tasks，Rust 这边跟着变
   tasks.update(|tasks| tasks.sort());                      // 反之亦然
+  view.longest.follow(&tasks.map(|tasks| {                 // 标记没有 max，由 Rust 算出后显示
+      tasks.iter().map(|task| task.chars().count() as i64).max().unwrap_or(0)
+  }))?;
   ```
 
 可运行示例：`cargo run -p aegle --example signals`。
@@ -592,7 +596,7 @@ Column {
 }
 ```
 
-View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。`view.count.on_change(|v| ...)` 在每次变化（来自事件块或 Rust）且绑定更新后调用处理器，返回可 `remove()` 的 `Watch`；处理器不会被自身对该 state 的修改重入。`view.count.bind_signal(&signal)?` 把 state 与 Rust 的 `Signal` 双向连接（见第 7 节“Rust 侧响应式状态”）。运行时加载与重载：
+View 为根节点的每个 state 提供 `aegle::loader::State<T>` 字段（`view.count.get()`、`view.count.set(5)?`），设置后相关绑定立即更新。`view.count.on_change(|v| ...)` 在每次变化（来自事件块或 Rust）且绑定更新后调用处理器，返回可 `remove()` 的 `Watch`；处理器不会被自身对该 state 的修改重入。`view.count.bind_signal(&signal)?` 把 state 与 Rust 的 `Signal` 双向连接，`view.count.follow(&derived)?` 让它单向跟随 Rust 的 `Derived`（见第 7 节“Rust 侧响应式状态”）。运行时加载与重载：
 
 ```rust
 use aegle::loader::Program;

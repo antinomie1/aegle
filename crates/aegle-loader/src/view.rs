@@ -1,6 +1,7 @@
 //! Built interfaces: root, named controls, entry states and reloading.
 
 use std::{
+    any::Any,
     cell::RefCell,
     marker::PhantomData,
     rc::{Rc, Weak},
@@ -8,7 +9,7 @@ use std::{
 };
 
 use aegle_markup::{ElementKind, Span, Type};
-use aegle_ui::{Binding, Container, HandlerResult, Result, Signal};
+use aegle_ui::{Binding, Container, Derived, HandlerResult, Node, Result, Signal};
 
 use crate::{
     Data, Program, RuntimeError,
@@ -175,6 +176,8 @@ impl View {
                 cell: RefCell::new(self.env.scope.states[index].clone()),
                 program: RefCell::new(self.program.clone()),
                 index: std::cell::Cell::new(index),
+                root: RefCell::new(self.root.node().clone()),
+                followed: RefCell::new(Vec::new()),
             })
         });
         State {
@@ -227,7 +230,11 @@ impl View {
         }
         if let Some(parent) = &self.parent {
             let view = fragment(program, parent, &carried)?;
-            *view.slots.borrow_mut() = self.hand_over(program, &view.env);
+            let slots = self.hand_over(program, &view.env);
+            for slot in slots.iter().flatten() {
+                slot.anchor(view.root.node());
+            }
+            *view.slots.borrow_mut() = slots;
             self.root.node().remove();
             *self = view;
             return Ok(());
@@ -344,7 +351,27 @@ pub(crate) struct Slot {
     program: RefCell<Program>,
     /// The state's index in that program's entry document.
     index: std::cell::Cell<usize>,
+    /// The interface's root control, which keeps what the state follows.
+    root: RefCell<Node>,
+    /// What the state follows ([`State::follow`]), to move to a new root.
+    followed: RefCell<Vec<Weak<dyn Any>>>,
 }
+
+impl Slot {
+    /// Moves what the state follows to `root`, which replaces the old one.
+    fn anchor(&self, root: &Node) {
+        let mut followed = self.followed.borrow_mut();
+        followed.retain(|held| held.strong_count() > 0);
+        for held in followed.iter().filter_map(Weak::upgrade) {
+            root.keep_alive(held);
+        }
+        *self.root.borrow_mut() = root.clone();
+    }
+}
+
+/// A value a state follows and the state, kept by the interface's root
+/// until the link is removed.
+type Followed<T> = RefCell<Option<(Derived<T>, State<T>)>>;
 
 /// A typed handle to an entry-document state, as `ui!` views expose them.
 ///
@@ -442,6 +469,51 @@ impl<T: StateValue + Clone + PartialEq + 'static> State<T> {
         let state = self.clone();
         let binding = signal.on_change(move |value: T| state.set(value));
         Ok(binding.on_remove(move || watch.remove()))
+    }
+
+    /// Makes this state follow a Rust [`Derived`] value one way: the state
+    /// takes the value now and after each of its changes. A markup event
+    /// block may still assign the state; its value stands until `source`
+    /// next changes.
+    ///
+    /// Assigning the value now can fail like [`Self::set`]; a later failing
+    /// assignment waits for the host like [`Self::bind_signal`]'s. The
+    /// interface keeps `source` alive, so a temporary `Derived` may be passed;
+    /// the link follows the state through reloads that keep it and ends with
+    /// the interface or [`Binding::remove`], which also releases `source`.
+    ///
+    /// ```
+    /// # fn link(view: &aegle_loader::View) -> aegle_ui::Result {
+    /// use aegle_ui::Signal;
+    ///
+    /// let first = Signal::new(String::from("Ada"));
+    /// let title = view.state::<String>("title").expect("a string state `title`");
+    /// title.follow(&first.map(|name| format!("Hello, {name}")))?;
+    /// first.set("Grace".into()); // `title` becomes "Hello, Grace".
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn follow(&self, source: &Derived<T>) -> Result<Binding> {
+        self.set(source.get())?;
+        let held: Rc<Followed<T>> = Rc::new(RefCell::new(Some((source.clone(), self.clone()))));
+        // The source owns its handlers, so this one holds the link weakly.
+        let link = Rc::downgrade(&held);
+        let binding = source.on_change(move |value: T| {
+            let state = link
+                .upgrade()
+                .and_then(|held| Some(held.borrow().as_ref()?.1.clone()));
+            state.map_or(Ok(()), |state| state.set(value))
+        });
+        let mut followed = self.slot.followed.borrow_mut();
+        followed.retain(|held| held.strong_count() > 0);
+        followed.push(Rc::downgrade(&held) as Weak<dyn Any>);
+        let link = Rc::downgrade(&held);
+        self.slot.root.borrow().keep_alive(held);
+        Ok(binding.on_remove(move || {
+            // Dropped outside the borrow: the source's drop may reach the state.
+            let taken = link.upgrade().and_then(|held| held.borrow_mut().take());
+            drop(taken);
+        }))
     }
 }
 

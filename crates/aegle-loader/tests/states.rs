@@ -1,10 +1,11 @@
 //! Host handlers follow entry states: they run after bindings for changes
 //! from markup and Rust, can be removed, and survive reloads with the
 //! state's typed handles. A state linked to a Rust signal follows it both
-//! ways.
+//! ways; one following a derived value follows it one way and keeps it alive
+//! with the interface.
 
 use aegle_loader::{Data, Program};
-use aegle_ui::{Result, Signal};
+use aegle_ui::{Derived, Result, Signal};
 use std::{cell::RefCell, rc::Rc};
 
 mod common;
@@ -165,5 +166,76 @@ fn a_state_linked_to_a_signal_follows_it_both_ways_through_reloads() -> Result {
         (names(&ui)?, model.get()),
         (vec!["now 22".to_string(), "up".into()], 5)
     );
+    Ok(())
+}
+
+#[test]
+fn a_state_follows_a_derived_value_one_way_while_the_interface_lives() -> Result {
+    let ui = ui()?;
+    let mut view = program(COUNTER)?.build(&ui.root())?;
+    let count = view.state::<i64>("count").unwrap();
+    let level = Signal::new(2_i64);
+    // Dropped with the derived value.
+    let canary = Rc::new(());
+    let (held, source) = (canary.clone(), level.clone());
+    // A temporary: the interface keeps it.
+    let link = count.follow(&Derived::new(move || {
+        let _ = &held;
+        source.get() * 10
+    }))?;
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["volume 20", "up"]);
+    level.set(3);
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["volume 30", "up"]);
+
+    // A markup assignment stands until the source next changes; it does not
+    // reach the source.
+    click(&ui, "up")?;
+    assert_eq!((count.get(), level.get()), (31, 3));
+    level.set(4);
+    assert_eq!(count.get(), 40);
+
+    // A failing assignment: now it is returned, later it reaches the host.
+    count.on_change(|n| -> Result {
+        if n < 0 {
+            return Err("negative".into());
+        }
+        Ok(())
+    });
+    assert!(count.follow(&level.map(|n| -n)).is_err());
+    level.set(-1);
+    assert_eq!(ui.dispatch_callbacks().unwrap_err().to_string(), "negative");
+    level.set(5);
+    assert_eq!(count.get(), 50);
+
+    // The link follows the state into a reloaded fragment, whose new root
+    // takes the derived value over from the removed one.
+    let next = r#"Column {
+    state count: int = 0
+    Text { text: "now " + str(count) }
+    Button { text: "up"; on clicked { count += 1 } }
+}"#;
+    view.reload(&program(next)?)?;
+    assert_eq!(Rc::strong_count(&canary), 2);
+    level.set(6);
+    ui.refresh()?;
+    assert_eq!(names(&ui)?, ["now 60", "up"]);
+
+    // Removing the link stops it and releases the derived value.
+    link.remove();
+    assert_eq!(Rc::strong_count(&canary), 1);
+    level.set(7);
+    assert_eq!(count.get(), 60);
+
+    // Removing the interface ends a link too.
+    let (held, source) = (canary.clone(), level.clone());
+    count.follow(&Derived::new(move || {
+        let _ = &held;
+        source.get()
+    }))?;
+    assert_eq!((count.get(), Rc::strong_count(&canary)), (7, 2));
+    view.root().node().remove();
+    assert_eq!(Rc::strong_count(&canary), 1);
     Ok(())
 }

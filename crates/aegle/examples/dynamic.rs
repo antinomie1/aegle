@@ -1,5 +1,6 @@
 //! Compiled dynamic markup, plus a panel loaded and explicitly reloaded at run
-//! time, and a markup state linked to a Rust signal.
+//! time, a markup state linked to a Rust signal and one following a value
+//! Rust derives from it.
 use aegle::{loader::Program, prelude::*};
 use std::{cell::RefCell, rc::Rc};
 
@@ -11,19 +12,14 @@ fn main() -> Result<()> {
     // buttons change it, and so does Rust.
     let tasks = Signal::new(vec![String::from("Write markup"), "Run it".into()]);
     view.tasks.bind_signal(&tasks)?;
-    let rust = view.live.row();
-    rust.set_gap(8.0, 8.0);
-    rust.set_align_items(Align::Center);
     let sorted = tasks.clone();
-    rust.button("Sort (Rust)")
+    view.sort
         .on_click(move |_| sorted.update(|tasks| tasks.sort()));
-    let longest = tasks.map(|tasks| tasks.iter().map(|task| task.chars().count()).max());
-    longest.bind(&rust.text(""), |label, longest| {
-        label.set_text(&format!(
-            "Longest task: {} characters",
-            longest.unwrap_or(0)
-        ));
-    });
+    // Markup has no `max`; Rust computes it and the summary shows it.
+    view.longest.follow(&tasks.map(|tasks| {
+        let lengths = tasks.iter().map(|task| task.chars().count() as i64);
+        lengths.max().unwrap_or(0)
+    }))?;
 
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/panel.aegle");
     let panel = Rc::new(RefCell::new(Program::load(path)?.build(&view.live)?));
